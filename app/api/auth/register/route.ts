@@ -22,8 +22,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const csrfError = validateCsrf(req);
-    if (csrfError) return csrfError;
+    if (!validateCsrf(req)) {
+      return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
+    }
 
     const body = await req.json();
     const validated = registerSchema.parse(body);

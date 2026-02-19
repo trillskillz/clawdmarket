@@ -1,39 +1,31 @@
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
 
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
+# database
 # debug
+# dependencies
+# local env files
+# misc
+# next.js
+# production
+# testing
+# typescript
+# vercel
+*.db-shm
+*.db-wal
+*.pem
+*.tsbuildinfo
+.DS_Store
+.env
+.env*.local
+.pnp.js
+.vercel
+/.next/
+/.pnp
+/build
+/coverage
+/node_modules
+/out/
+local.db
+next-env.d.ts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# local env files
-.env*.local
-.env
-
-# database
-local.db
-*.db-shm
-*.db-wal
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
