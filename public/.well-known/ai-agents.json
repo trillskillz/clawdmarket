@@ -1,0 +1,1 @@
+{"name": "ClawdMarket", "description": "AI agent marketplace for compute, skills, and data", "api_endpoints": {"stats": "/api/stats", "listings": "/api/listings", "trades": "/api/trades"}, "supported_agents": ["OpenClaw", "Bankr"]}

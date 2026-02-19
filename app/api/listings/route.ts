@@ -1,0 +1,265 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { listings, users } from '@/lib/schema';
+import { authenticateRequest } from '@/lib/auth';
+import { createListingSchema, listingsQuerySchema, sanitizeHtml } from '@/lib/validation';
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
+import { validateCsrf } from '@/lib/csrf';
+import { eq, and, like, desc, gte, lte, or, sql } from 'drizzle-orm';
+
+export async function GET(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  const rateLimitResult = rateLimit(`listings-get:${ip}`, { interval: 60 * 1000, maxRequests: 60 });
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: getRateLimitHeaders(rateLimitResult) }
+    );
+  }
+
+  const searchParams = req.nextUrl.searchParams;
+  
+  try {
+    const query = listingsQuerySchema.parse({
+      category: searchParams.get('category') || undefined,
+      status: searchParams.get('status') || undefined,
+      page: searchParams.get('page') || '1',
+      limit: searchParams.get('limit') || '20',
+      search: searchParams.get('search') || undefined,
+      seller_id: searchParams.get('seller_id') || undefined,
+      seller: searchParams.get('seller') || undefined,
+      min_price: searchParams.get('min_price') || undefined,
+      max_price: searchParams.get('max_price') || undefined,
+    });
+
+    let conditions = [];
+    
+    if (query.category) {
+      conditions.push(eq(listings.category, query.category));
+    }
+    
+    if (query.status) {
+      conditions.push(eq(listings.status, query.status));
+    } else {
+      conditions.push(eq(listings.status, 'active'));
+    }
+
+    // Handle seller query
+    if (query.seller === 'me') {
+      const authHeader = req.headers.get('authorization');
+      const cookieToken = req.cookies.get('auth-token')?.value;
+      const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+      
+      if (!auth) {
+        return NextResponse.json(
+          { error: 'Authentication required for seller=me' },
+          { status: 401 }
+        );
+      }
+      
+      conditions.push(eq(listings.seller_id, auth.userId));
+    } else if (query.seller_id) {
+      conditions.push(eq(listings.seller_id, query.seller_id));
+    }
+
+    // Price range filters
+    if (query.min_price !== undefined) {
+      conditions.push(gte(listings.price_clawd, query.min_price));
+    }
+    
+    if (query.max_price !== undefined) {
+      conditions.push(lte(listings.price_clawd, query.max_price));
+    }
+
+    // Server-side search
+    if (query.search) {
+      const searchPattern = `%${query.search}%`;
+      conditions.push(
+        or(
+          like(listings.title, searchPattern),
+          like(listings.description, searchPattern)
+        )
+      );
+    }
+
+    // Get total count
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(listings)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+    
+    const totalCount = countResult[0]?.count || 0;
+
+    // Get paginated results
+    const results = await db
+      .select({
+        id: listings.id,
+        seller_id: listings.seller_id,
+        seller_name: users.name,
+        seller_role: users.role,
+        seller_avatar_url: users.avatar_url,
+        category: listings.category,
+        title: listings.title,
+        description: listings.description,
+        price_clawd: listings.price_clawd,
+        status: listings.status,
+        created_at: listings.created_at,
+      })
+      .from(listings)
+      .leftJoin(users, eq(listings.seller_id, users.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(listings.created_at))
+      .limit(query.limit)
+      .offset((query.page - 1) * query.limit);
+
+    return NextResponse.json({
+      listings: results,
+      page: query.page,
+      limit: query.limit,
+      total: totalCount,
+    });
+  } catch (error: any) {
+    if (error.errors) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      );
+    }
+    console.error('Listings fetch error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const authHeader = req.headers.get('authorization');
+  const cookieToken = req.cookies.get('auth-token')?.value;
+  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+
+  if (!auth) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
+  // Validate CSRF for cookie-based auth (not for API keys)
+  if (!authHeader && !validateCsrf(req)) {
+    return NextResponse.json(
+      { error: 'CSRF validation failed' },
+      { status: 403 }
+    );
+  }
+
+  const rateLimitResult = rateLimit(`create-listing:${auth.userId}`, { 
+    interval: 60 * 1000, 
+    maxRequests: 10 
+  });
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: 'Too many listing creation attempts. Please try again later.' },
+      { 
+        status: 429,
+        headers: getRateLimitHeaders(rateLimitResult),
+      }
+    );
+  }
+
+  try {
+    const body = await req.json();
+
+    // Support bulk creation (array of listings)
+    if (Array.isArray(body)) {
+      if (body.length > 50) {
+        return NextResponse.json(
+          { error: 'Bulk creation limited to 50 listings per request' },
+          { status: 400 }
+        );
+      }
+
+      const results = [];
+      const errors = [];
+
+      for (let i = 0; i < body.length; i++) {
+        try {
+          const validated = createListingSchema.parse(body[i]);
+          const sanitizedTitle = sanitizeHtml(validated.title);
+          const sanitizedDescription = sanitizeHtml(validated.description);
+
+          const [newListing] = await db
+            .insert(listings)
+            .values({
+              seller_id: auth.userId,
+              category: validated.category,
+              title: sanitizedTitle,
+              description: sanitizedDescription,
+              price_clawd: validated.price_clawd,
+            })
+            .returning();
+
+          results.push({ index: i, success: true, listing: newListing });
+        } catch (error: any) {
+          errors.push({ index: i, success: false, error: error.message || 'Validation failed' });
+        }
+      }
+
+      return NextResponse.json(
+        {
+          message: `Created ${results.length} of ${body.length} listings`,
+          results,
+          errors,
+        },
+        { 
+          status: 201,
+          headers: getRateLimitHeaders(rateLimitResult),
+        }
+      );
+    }
+
+    // Single listing creation
+    const validated = createListingSchema.parse(body);
+
+    // Sanitize text inputs
+    const sanitizedTitle = sanitizeHtml(validated.title);
+    const sanitizedDescription = sanitizeHtml(validated.description);
+
+    // Create listing
+    const [newListing] = await db
+      .insert(listings)
+      .values({
+        seller_id: auth.userId,
+        category: validated.category,
+        title: sanitizedTitle,
+        description: sanitizedDescription,
+        price_clawd: validated.price_clawd,
+      })
+      .returning();
+
+    return NextResponse.json(
+      {
+        message: 'Listing created successfully',
+        listing: newListing,
+      },
+      { 
+        status: 201,
+        headers: getRateLimitHeaders(rateLimitResult),
+      }
+    );
+  } catch (error: any) {
+    if (error.errors) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      );
+    }
+    console.error('Listing creation error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
