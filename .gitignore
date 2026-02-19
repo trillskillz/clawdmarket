@@ -16,6 +16,7 @@
 .DS_Store
 .env
 .env*.local
+.env.local
 .pnp.js
 .vercel
 /.next/
