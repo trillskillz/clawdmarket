@@ -23,9 +23,13 @@ import type {
   WebhookEvent,
   UserProfile,
   UserRole,
-} from './types.js';
+  Rating,
+  CreateRatingData,
+  UserRatingsResponse,
+  ActivityItem,
+} from './types';
 
-export * from './types.js';
+export * from './types';
 
 // ─── Error ────────────────────────────────────────────────────────────────────
 
@@ -323,6 +327,31 @@ class WebhooksClient {
   create(url: string, events: WebhookEvent[]): Promise<CreateWebhookResponse> {
     return this.http.post<CreateWebhookResponse>('/api/webhooks', { url, events });
   }
+
+  async delete(id: string): Promise<void> {
+    await this.http.delete<{ message: string }>(`/api/webhooks/${id}`);
+  }
+}
+
+// ─── Ratings namespace ────────────────────────────────────────────────────────
+
+class RatingsClient {
+  constructor(private http: HttpClient) {}
+
+  /**
+   * Rate a completed trade counterparty (1-5).
+   */
+  async create(data: CreateRatingData): Promise<Rating> {
+    const res = await this.http.post<{ rating: Rating }>('/api/ratings', data);
+    return res.rating;
+  }
+
+  /**
+   * Get all ratings for a user.
+   */
+  forUser(userId: string): Promise<UserRatingsResponse> {
+    return this.http.get<UserRatingsResponse>(`/api/users/${userId}/ratings`);
+  }
 }
 
 // ─── Main SDK class ───────────────────────────────────────────────────────────
@@ -338,6 +367,8 @@ export class ClawdMarket {
   readonly trades: TradesClient;
   /** Webhook operations */
   readonly webhooks: WebhooksClient;
+  /** Rating operations */
+  readonly ratings: RatingsClient;
 
   constructor(opts: ClawdMarketOptions) {
     this.http = new HttpClient(opts);
@@ -345,6 +376,7 @@ export class ClawdMarket {
     this.listings = new ListingsClient(this.http);
     this.trades = new TradesClient(this.http);
     this.webhooks = new WebhooksClient(this.http);
+    this.ratings = new RatingsClient(this.http);
   }
 
   /**
@@ -376,6 +408,14 @@ export class ClawdMarket {
       `/api/users/${userId}/profile`,
     );
     return res.profile;
+  }
+
+  /**
+   * Get recent marketplace activity feed (public).
+   */
+  async activity(): Promise<ActivityItem[]> {
+    const res = await this.http.get<{ activity: ActivityItem[] }>('/api/activity');
+    return res.activity;
   }
 }
 

@@ -1,5 +1,5 @@
-import type { ClawdMarketOptions, User, LoginResponse, RegisterResponse, ApiKey, CreateApiKeyResponse, Listing, ListListingsFilters, ListListingsResponse, CreateListingData, UpdateListingData, BulkCreateResponse, Trade, ListTradesFilters, CreateTradeResponse, UpdateTradeResponse, TradeStatus, MarketStats, HealthStatus, Webhook, CreateWebhookResponse, WebhookEvent, UserProfile, UserRole } from './types.js';
-export * from './types.js';
+import type { ClawdMarketOptions, User, LoginResponse, RegisterResponse, ApiKey, CreateApiKeyResponse, Listing, ListListingsFilters, ListListingsResponse, CreateListingData, UpdateListingData, BulkCreateResponse, Trade, ListTradesFilters, CreateTradeResponse, UpdateTradeResponse, TradeStatus, MarketStats, HealthStatus, Webhook, CreateWebhookResponse, WebhookEvent, UserProfile, UserRole, Rating, CreateRatingData, UserRatingsResponse, ActivityItem } from './types';
+export * from './types';
 export declare class ClawdMarketError extends Error {
     readonly status: number;
     readonly body: unknown;
@@ -109,6 +109,19 @@ declare class WebhooksClient {
     constructor(http: HttpClient);
     list(): Promise<Webhook[]>;
     create(url: string, events: WebhookEvent[]): Promise<CreateWebhookResponse>;
+    delete(id: string): Promise<void>;
+}
+declare class RatingsClient {
+    private http;
+    constructor(http: HttpClient);
+    /**
+     * Rate a completed trade counterparty (1-5).
+     */
+    create(data: CreateRatingData): Promise<Rating>;
+    /**
+     * Get all ratings for a user.
+     */
+    forUser(userId: string): Promise<UserRatingsResponse>;
 }
 export declare class ClawdMarket {
     private http;
@@ -120,6 +133,8 @@ export declare class ClawdMarket {
     readonly trades: TradesClient;
     /** Webhook operations */
     readonly webhooks: WebhooksClient;
+    /** Rating operations */
+    readonly ratings: RatingsClient;
     constructor(opts: ClawdMarketOptions);
     /**
      * Manually set a JWT token (e.g. after login).
@@ -137,6 +152,10 @@ export declare class ClawdMarket {
      * Get a user's public profile.
      */
     userProfile(userId: string): Promise<UserProfile>;
+    /**
+     * Get recent marketplace activity feed (public).
+     */
+    activity(): Promise<ActivityItem[]>;
 }
 export default ClawdMarket;
 //# sourceMappingURL=index.d.ts.map

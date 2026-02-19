@@ -158,6 +158,31 @@ export interface UserProfile {
         active_listings: number;
     };
 }
+export interface Rating {
+    id: string;
+    trade_id: string;
+    score: number;
+    comment: string | null;
+    created_at: string;
+    rater_name?: string;
+}
+export interface CreateRatingData {
+    trade_id: string;
+    score: number;
+    comment?: string;
+}
+export interface UserRatingsResponse {
+    ratings: Rating[];
+    average_score: number | null;
+    total_ratings: number;
+}
+export interface ActivityItem {
+    id: string;
+    action: string;
+    category: string;
+    amount: number;
+    timestamp: string;
+}
 export interface ClawdMarketOptions {
     baseUrl: string;
     apiKey?: string;

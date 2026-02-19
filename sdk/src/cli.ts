@@ -22,8 +22,8 @@
  *   clawdmarket trades dispute <id>
  */
 
-import { ClawdMarket, ClawdMarketError } from './index.js';
-import type { ListingCategory, ListingStatus } from './types.js';
+import { ClawdMarket, ClawdMarketError } from './index';
+import type { ListingCategory, ListingStatus } from './types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -93,6 +93,13 @@ Commands:
   trades get <id>
   trades complete <id>
   trades dispute <id>
+  webhooks list
+  webhooks create --url <url> --events <event1,event2>
+  webhooks delete <id>
+  ratings create --trade <trade-id> --score <1-5> [--comment <text>]
+  ratings user <user-id>
+  activity
+  profile <user-id>
 `);
 }
 
@@ -217,6 +224,70 @@ async function cmdTrades(positional: string[]): Promise<void> {
   die(`Unknown trades subcommand: ${sub}. Try list, create, get, complete, dispute`);
 }
 
+async function cmdWebhooks(positional: string[], flags: Record<string, string>): Promise<void> {
+  const sub = positional[0];
+  const client = makeClient();
+
+  if (!sub || sub === 'list') {
+    print(await client.webhooks.list());
+    return;
+  }
+
+  if (sub === 'create') {
+    const { url, events } = flags;
+    if (!url || !events) die('Usage: clawdmarket webhooks create --url <url> --events trade.created,trade.completed,listing.sold');
+    print(await client.webhooks.create(url, events.split(',') as any));
+    return;
+  }
+
+  if (sub === 'delete') {
+    const id = positional[1];
+    if (!id) die('Usage: clawdmarket webhooks delete <id>');
+    await client.webhooks.delete(id);
+    console.log('Webhook deleted.');
+    return;
+  }
+
+  die(`Unknown webhooks subcommand: ${sub}. Try list, create, delete`);
+}
+
+async function cmdRatings(positional: string[], flags: Record<string, string>): Promise<void> {
+  const sub = positional[0];
+  const client = makeClient();
+
+  if (sub === 'create') {
+    const { trade, score, comment } = flags;
+    if (!trade || !score) die('Usage: clawdmarket ratings create --trade <trade-id> --score <1-5> [--comment <text>]');
+    print(await client.ratings.create({
+      trade_id: trade,
+      score: Number(score),
+      comment: comment || undefined,
+    }));
+    return;
+  }
+
+  if (sub === 'user') {
+    const id = positional[1];
+    if (!id) die('Usage: clawdmarket ratings user <user-id>');
+    print(await client.ratings.forUser(id));
+    return;
+  }
+
+  die(`Unknown ratings subcommand: ${sub}. Try create, user`);
+}
+
+async function cmdActivity(): Promise<void> {
+  const client = makeClient();
+  print(await client.activity());
+}
+
+async function cmdProfile(positional: string[]): Promise<void> {
+  const id = positional[0];
+  if (!id) die('Usage: clawdmarket profile <user-id>');
+  const client = makeClient();
+  print(await client.userProfile(id));
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -241,6 +312,18 @@ async function main(): Promise<void> {
         break;
       case 'trades':
         await cmdTrades(rest);
+        break;
+      case 'webhooks':
+        await cmdWebhooks(rest, flags);
+        break;
+      case 'ratings':
+        await cmdRatings(rest, flags);
+        break;
+      case 'activity':
+        await cmdActivity();
+        break;
+      case 'profile':
+        await cmdProfile(rest);
         break;
       case undefined:
       case 'help':

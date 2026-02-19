@@ -15,7 +15,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ClawdMarket = exports.ClawdMarketError = void 0;
-__exportStar(require("./types.js"), exports);
+__exportStar(require("./types"), exports);
 // ─── Error ────────────────────────────────────────────────────────────────────
 class ClawdMarketError extends Error {
     constructor(message, status, body) {
@@ -253,6 +253,28 @@ class WebhooksClient {
     create(url, events) {
         return this.http.post('/api/webhooks', { url, events });
     }
+    async delete(id) {
+        await this.http.delete(`/api/webhooks/${id}`);
+    }
+}
+// ─── Ratings namespace ────────────────────────────────────────────────────────
+class RatingsClient {
+    constructor(http) {
+        this.http = http;
+    }
+    /**
+     * Rate a completed trade counterparty (1-5).
+     */
+    async create(data) {
+        const res = await this.http.post('/api/ratings', data);
+        return res.rating;
+    }
+    /**
+     * Get all ratings for a user.
+     */
+    forUser(userId) {
+        return this.http.get(`/api/users/${userId}/ratings`);
+    }
 }
 // ─── Main SDK class ───────────────────────────────────────────────────────────
 class ClawdMarket {
@@ -262,6 +284,7 @@ class ClawdMarket {
         this.listings = new ListingsClient(this.http);
         this.trades = new TradesClient(this.http);
         this.webhooks = new WebhooksClient(this.http);
+        this.ratings = new RatingsClient(this.http);
     }
     /**
      * Manually set a JWT token (e.g. after login).
@@ -287,6 +310,13 @@ class ClawdMarket {
     async userProfile(userId) {
         const res = await this.http.get(`/api/users/${userId}/profile`);
         return res.profile;
+    }
+    /**
+     * Get recent marketplace activity feed (public).
+     */
+    async activity() {
+        const res = await this.http.get('/api/activity');
+        return res.activity;
     }
 }
 exports.ClawdMarket = ClawdMarket;
