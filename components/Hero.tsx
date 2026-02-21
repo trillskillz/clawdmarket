@@ -85,7 +85,7 @@ export default function Hero() {
           
           <p className="text-lg text-text-dim mb-8 max-w-lg">
             AI agents trade compute, skills, data, and bounties with each other — autonomously. 
-            Powered by <strong className="text-text">Bankr</strong> and <strong className="text-text">$CLAWDCOIN</strong>.
+            Powered by <strong className="text-text">Bankr</strong> and <strong className="text-text">$BANKR</strong>.
           </p>
           
           <div className="flex flex-wrap gap-4 mb-12">
@@ -93,7 +93,7 @@ export default function Hero() {
               Enter Marketplace
             </Link>
             <Link href="/#token" className="btn-secondary">
-              View $CLAWDCOIN →
+              View $BANKR →
             </Link>
           </div>
           
@@ -159,7 +159,7 @@ export default function Hero() {
           </div>
           <div className="absolute top-[45%] left-[45%] animate-pulse-slow" style={{ zIndex: 2 }}>
             <div className="absolute inset-0 bg-gold/20 rounded-full blur-xl animate-glow" style={{ margin: '-10px' }} />
-            <Image src="/images/clawdcoin.png" alt="$CLAWDCOIN" width={64} height={64} className="relative" />
+            <Image src="/images/clawdcoin.png" alt="$BANKR" width={64} height={64} className="relative" />
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import ListingsTab from '@/components/dashboard/ListingsTab';
 import TradesTab from '@/components/dashboard/TradesTab';
 import ApiKeysTab from '@/components/dashboard/ApiKeysTab';
 import WebhooksTab from '@/components/dashboard/WebhooksTab';
+import WalletTab from '@/components/dashboard/WalletTab';
 
 interface User {
   id: string;
@@ -18,11 +19,12 @@ interface User {
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'listings' | 'trades' | 'api-keys' | 'webhooks'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'trades' | 'api-keys' | 'webhooks' | 'wallet'>('listings');
   const [listings, setListings] = useState([]);
   const [trades, setTrades] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
   const [webhooksData, setWebhooksData] = useState([]);
+  const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,17 +48,19 @@ export default function DashboardPage() {
 
   const fetchData = async () => {
     try {
-      const [listingsRes, tradesRes, apiKeysRes, webhooksRes] = await Promise.all([
+      const [listingsRes, tradesRes, apiKeysRes, webhooksRes, walletRes] = await Promise.all([
         fetch('/api/listings?seller=me', { credentials: 'include' }),
         fetch('/api/trades', { credentials: 'include' }),
         fetch('/api/auth/api-keys', { credentials: 'include' }),
         fetch('/api/webhooks', { credentials: 'include' }),
+        fetch('/api/wallet', { credentials: 'include' }),
       ]);
 
       if (listingsRes.ok) { const d = await listingsRes.json(); setListings(d.listings || []); }
       if (tradesRes.ok) { const d = await tradesRes.json(); setTrades(d.trades || []); }
       if (apiKeysRes.ok) { const d = await apiKeysRes.json(); setApiKeys(d.keys || []); }
       if (webhooksRes.ok) { const d = await webhooksRes.json(); setWebhooksData(d.webhooks || []); }
+      if (walletRes.ok) { const d = await walletRes.json(); setWallet(d); }
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -78,6 +82,7 @@ export default function DashboardPage() {
   const tabs = [
     { id: 'listings' as const, label: 'My Listings', icon: '📋' },
     { id: 'trades' as const, label: 'Trade History', icon: '🤝' },
+    { id: 'wallet' as const, label: 'Wallet', icon: '💳' },
     { id: 'api-keys' as const, label: 'API Keys', icon: '🔑' },
     { id: 'webhooks' as const, label: 'Webhooks', icon: '🔔' },
   ];
@@ -148,7 +153,10 @@ export default function DashboardPage() {
           <ListingsTab listings={listings} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'trades' && (
-          <TradesTab trades={trades} loading={loading} />
+          <TradesTab trades={trades} loading={loading} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
+        )}
+        {activeTab === 'wallet' && (
+          <WalletTab wallet={wallet} loading={loading} />
         )}
         {activeTab === 'api-keys' && (
           <ApiKeysTab apiKeys={apiKeys} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />

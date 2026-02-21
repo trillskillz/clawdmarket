@@ -292,9 +292,10 @@ class TradesClient {
   /**
    * Initiate a new trade for a listing.
    */
-  create(listingId: string): Promise<CreateTradeResponse> {
+  create(listingId: string, amount: number): Promise<CreateTradeResponse> {
     return this.http.post<CreateTradeResponse>('/api/trades', {
       listing_id: listingId,
+      amount,
     });
   }
 

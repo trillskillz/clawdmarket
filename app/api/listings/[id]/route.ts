@@ -26,7 +26,7 @@ export async function GET(
         category: listings.category,
         title: listings.title,
         description: listings.description,
-        price_clawd: listings.price_clawd,
+        price_bankr: listings.price_bankr,
         status: listings.status,
         created_at: listings.created_at,
       })
@@ -111,8 +111,8 @@ export async function PUT(
       updateData.description = sanitizeHtml(validated.description);
     }
     
-    if (validated.price_clawd !== undefined) {
-      updateData.price_clawd = validated.price_clawd;
+    if (validated.price_bankr !== undefined) {
+      updateData.price_bankr = validated.price_bankr;
     }
     
     if (validated.category) {

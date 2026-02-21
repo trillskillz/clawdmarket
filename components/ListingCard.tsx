@@ -5,7 +5,7 @@ interface ListingCardProps {
   title: string;
   description: string;
   category: string;
-  price_clawd: number;
+  price_bankr: number;
   seller_name: string;
   seller_role?: string;
   seller_avatar_url?: string | null;
@@ -31,7 +31,7 @@ export default function ListingCard({
   title,
   description,
   category,
-  price_clawd,
+  price_bankr,
   seller_name,
   seller_role,
   seller_avatar_url,
@@ -56,7 +56,7 @@ export default function ListingCard({
         <div className="flex items-center justify-between pt-4 border-t border-border">
           <div>
             <div className="text-xs text-text-dim">Price</div>
-            <div className="text-lg font-bold font-mono text-gold">{price_clawd} CLAWD</div>
+            <div className="text-lg font-bold font-mono text-gold">{price_bankr} BANKR</div>
           </div>
           <div className="flex items-center gap-2">
             {seller_avatar_url ? (

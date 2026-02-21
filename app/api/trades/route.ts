@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users } from '@/lib/schema';
+import { trades, listings, users, wallets, transactions } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
-import { eq, or, desc } from 'drizzle-orm';
+import { eq, or, desc, sql } from 'drizzle-orm';
 
 const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee
 
@@ -78,39 +78,105 @@ export async function POST(req: NextRequest) {
 
     // Calculate fee
     const fee = validated.amount * ECOSYSTEM_FEE_PERCENT;
+    const totalCost = validated.amount + fee;
 
-    // Create trade (in a real app, this would involve escrow logic)
-    const [newTrade] = await db
-      .insert(trades)
-      .values({
-        listing_id: validated.listing_id,
-        buyer_id: auth.userId,
-        seller_id: listing.seller_id,
+    // ─── ESCROW LOGIC START ───
+    
+    // 1. Check buyer balance
+    const [buyerWallet] = await db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.user_id, auth.userId));
+
+    if (!buyerWallet) {
+      return NextResponse.json(
+        { error: 'Buyer wallet not found' },
+        { status: 404 }
+      );
+    }
+
+    if (buyerWallet.balance < totalCost) {
+      return NextResponse.json(
+        { error: `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR` },
+        { status: 402 } // Payment Required
+      );
+    }
+
+    // 2. Perform atomic trade creation & fund locking
+    // Note: Drizzle's `db.transaction` works with @libsql/client (Turso)
+    const newTrade = await db.transaction(async (tx) => {
+      // Deduct from buyer balance, move amount to escrow
+      // Fee is burned (or moved to platform wallet - for now we just deduct it)
+      await tx
+        .update(wallets)
+        .set({
+          balance: sql`${wallets.balance} - ${totalCost}`,
+          escrow: sql`${wallets.escrow} + ${validated.amount}`,
+        })
+        .where(eq(wallets.user_id, auth.userId));
+
+      // Record transaction: Lock funds
+      await tx.insert(transactions).values({
+        from_user_id: auth.userId,
         amount: validated.amount,
-        fee: fee,
-        status: 'pending',
-      })
-      .returning();
+        type: 'escrow_lock',
+        reference_id: validated.listing_id, // temporarily link to listing until trade ID exists
+        memo: `Escrow lock for listing ${listings.title.name || validated.listing_id}`,
+      });
 
-    // Mark listing as sold
-    await db
-      .update(listings)
-      .set({ status: 'sold' })
-      .where(eq(listings.id, validated.listing_id));
+      // Record transaction: Fee
+      await tx.insert(transactions).values({
+        from_user_id: auth.userId,
+        amount: fee,
+        type: 'fee',
+        reference_id: validated.listing_id,
+        memo: 'Marketplace fee (3%)',
+      });
 
-    // Fire webhooks
-    await fireWebhook(auth.userId, 'trade.created', { trade: newTrade });
-    await fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade });
-    await fireWebhook(listing.seller_id, 'listing.sold', { listing_id: validated.listing_id, trade: newTrade });
+      // Create trade record
+      const [trade] = await tx
+        .insert(trades)
+        .values({
+          listing_id: validated.listing_id,
+          buyer_id: auth.userId,
+          seller_id: listing.seller_id,
+          amount: validated.amount,
+          fee: fee,
+          status: 'pending',
+        })
+        .returning();
+
+      // Update transactions to reference the real trade ID
+      await tx
+        .update(transactions)
+        .set({ reference_id: trade.id })
+        .where(eq(transactions.reference_id, validated.listing_id));
+
+      // Mark listing as sold
+      await tx
+        .update(listings)
+        .set({ status: 'sold' })
+        .where(eq(listings.id, validated.listing_id));
+
+      return trade;
+    });
+    // ─── ESCROW LOGIC END ───
+
+    // Fire webhooks (fire-and-forget, don't block response)
+    Promise.all([
+      fireWebhook(auth.userId, 'trade.created', { trade: newTrade }),
+      fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade }),
+      fireWebhook(listing.seller_id, 'listing.sold', { listing_id: validated.listing_id, trade: newTrade })
+    ]).catch(err => console.error('Webhook error:', err));
 
     return NextResponse.json(
       {
-        message: 'Trade initiated successfully',
+        message: 'Trade initiated successfully. Funds locked in escrow.',
         trade: newTrade,
         fee_info: {
           amount: validated.amount,
           ecosystem_fee: fee,
-          seller_receives: validated.amount - fee,
+          seller_receives: validated.amount, // No fee for seller in this model, buyer pays fee
         },
       },
       { 

@@ -51,7 +51,7 @@ export default function Countdown() {
     return (
       <div className="text-center">
         <div className="text-xl md:text-2xl font-bold text-gold mb-4">
-          🚀 $CLAWDCOIN IS LIVE <Image src="/images/clawdcoin.png" alt="$CLAWDCOIN" width={28} height={28} className="inline-block ml-1" />
+          🚀 $BANKR IS LIVE <Image src="/images/clawdcoin.png" alt="$BANKR" width={28} height={28} className="inline-block ml-1" />
         </div>
       </div>
     );

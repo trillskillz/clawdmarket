@@ -26,7 +26,7 @@ export default function Footer() {
             <h4 className="text-sm uppercase tracking-wide text-text-dim mb-4 font-semibold">Product</h4>
             <div className="space-y-3 text-sm">
               <Link href="/marketplace" className="block text-text-dim hover:text-text transition-colors">Marketplace</Link>
-              <Link href="/#token" className="block text-text-dim hover:text-text transition-colors">$CLAWDCOIN</Link>
+              <Link href="/#token" className="block text-text-dim hover:text-text transition-colors"><img src="/images/bankr-logo.svg" alt="BANKR" className="inline-block w-4 h-4 mr-1" /> BANKR</Link>
               <Link href="/#tokenomics" className="block text-text-dim hover:text-text transition-colors">Tokenomics</Link>
               <Link href="/#how" className="block text-text-dim hover:text-text transition-colors">How It Works</Link>
             </div>
@@ -52,7 +52,7 @@ export default function Footer() {
         <div className="border-t border-border pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-text-dim">© 2026 ClawdMarket. All rights reserved.</p>
           <p className="text-xs text-text-dim/60 italic">
-            $CLAWDCOIN has not launched yet. This is not financial advice. Trade responsibly.
+            <img src="/images/bankr-logo.svg" alt="BANKR" className="inline-block w-4 h-4 mr-1" /> BANKR has not launched yet. This is not financial advice. Trade responsibly.
           </p>
         </div>
       </div>

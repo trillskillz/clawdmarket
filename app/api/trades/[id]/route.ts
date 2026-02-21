@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades } from '@/lib/schema';
+import { trades, wallets, transactions } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { updateTradeStatusSchema, isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 export async function PATCH(
   req: NextRequest,
@@ -76,14 +76,49 @@ export async function PATCH(
       }
     }
 
-    const [updatedTrade] = await db
-      .update(trades)
-      .set({
-        status: validated.status,
-        completed_at: validated.status === 'completed' ? new Date() : null,
-      })
-      .where(eq(trades.id, params.id))
-      .returning();
+    // ─── ESCROW RELEASE LOGIC ───
+    const updatedTrade = await db.transaction(async (tx) => {
+      // 1. Update trade status
+      const [t] = await tx
+        .update(trades)
+        .set({
+          status: validated.status,
+          completed_at: validated.status === 'completed' ? new Date() : null,
+        })
+        .where(eq(trades.id, params.id))
+        .returning();
+
+      // 2. Handle funds if completing
+      if (validated.status === 'completed') {
+        // Release from Buyer's Escrow (decrement escrow)
+        await tx
+          .update(wallets)
+          .set({ escrow: sql`${wallets.escrow} - ${trade.amount}` })
+          .where(eq(wallets.user_id, trade.buyer_id));
+
+        // Credit Seller's Balance
+        await tx
+          .update(wallets)
+          .set({ balance: sql`${wallets.balance} + ${trade.amount}` })
+          .where(eq(wallets.user_id, trade.seller_id));
+
+        // Log transaction
+        await tx.insert(transactions).values({
+          from_user_id: trade.buyer_id,
+          to_user_id: trade.seller_id,
+          amount: trade.amount,
+          type: 'escrow_release',
+          reference_id: trade.id,
+          memo: 'Trade completed',
+        });
+      } else if (validated.status === 'disputed') {
+        // For disputes, funds stay in escrow until admin resolution (manual for now)
+        // Or we could auto-refund, but 'dispute' usually means freeze.
+        // We'll leave them in buyer's escrow for now.
+      }
+
+      return t;
+    });
 
     // Fire webhooks
     if (validated.status === 'completed') {

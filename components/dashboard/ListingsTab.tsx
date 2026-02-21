@@ -9,7 +9,7 @@ interface Listing {
   id: string;
   title: string;
   category: string;
-  price_clawd: number;
+  price_bankr: number;
   status: string;
   created_at: string;
 }
@@ -28,7 +28,7 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
     category: 'compute' as 'compute' | 'skills' | 'data' | 'bounties',
     title: '',
     description: '',
-    price_clawd: '',
+    price_bankr: '',
   });
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -43,13 +43,13 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
         },
         body: JSON.stringify({
           ...form,
-          price_clawd: parseFloat(form.price_clawd),
+          price_bankr: parseFloat(form.price_bankr),
         }),
       });
 
       if (res.ok) {
         setShowCreate(false);
-        setForm({ category: 'compute', title: '', description: '', price_clawd: '' });
+        setForm({ category: 'compute', title: '', description: '', price_bankr: '' });
         toast('Listing created successfully!', 'success');
         await onRefresh();
       } else {
@@ -118,12 +118,12 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Price (CLAWD)</label>
+              <label className="block text-sm font-medium mb-2">Price (BANKR)</label>
               <input
                 type="number"
                 step="0.01"
-                value={form.price_clawd}
-                onChange={(e) => setForm({ ...form, price_clawd: e.target.value })}
+                value={form.price_bankr}
+                onChange={(e) => setForm({ ...form, price_bankr: e.target.value })}
                 required
                 className="input-field"
                 placeholder="10.5"
@@ -157,7 +157,7 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-mono font-bold text-gold">{listing.price_clawd} CLAWD</div>
+                  <div className="font-mono font-bold text-gold">{listing.price_bankr} BANKR</div>
                   <div className={`text-xs px-2 py-1 rounded-full inline-block ${
                     listing.status === 'active' ? 'bg-green-400/10 text-green-400' :
                     listing.status === 'sold' ? 'bg-gold/10 text-gold' :

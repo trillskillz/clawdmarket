@@ -175,7 +175,7 @@ async function cmdListings(positional, flags) {
     }
     die(`Unknown listings subcommand: ${sub}. Try list, get, create, update, delete`);
 }
-async function cmdTrades(positional) {
+async function cmdTrades(positional, flags) {
     const sub = positional[0];
     const client = makeClient();
     if (!sub || sub === 'list') {
@@ -184,9 +184,10 @@ async function cmdTrades(positional) {
     }
     if (sub === 'create') {
         const listingId = positional[1];
-        if (!listingId)
-            die('Usage: clawdmarket trades create <listing-id>');
-        print(await client.trades.create(listingId));
+        const amount = flags.amount;
+        if (!listingId || !amount)
+            die('Usage: clawdmarket trades create <listing-id> --amount <price>');
+        print(await client.trades.create(listingId, Number(amount)));
         return;
     }
     if (sub === 'get') {
@@ -291,7 +292,7 @@ async function main() {
                 await cmdListings(rest, flags);
                 break;
             case 'trades':
-                await cmdTrades(rest);
+                await cmdTrades(rest, flags);
                 break;
             case 'webhooks':
                 await cmdWebhooks(rest, flags);

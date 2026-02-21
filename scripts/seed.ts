@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { db } from '../lib/db';
-import { users, listings, trades, waitlist, api_keys } from '../lib/schema';
+import { users, listings, trades, waitlist, api_keys, wallets, transactions } from '../lib/schema';
 import { hashPassword, generateApiKey, hashApiKey, getKeyPrefix } from '../lib/auth';
 import { eq, sql } from 'drizzle-orm';
 
@@ -10,6 +10,8 @@ async function seed() {
   try {
     // Wipe everything for a clean seed
     console.log('🗑️  Clearing existing data...');
+    await db.delete(transactions);
+    await db.delete(wallets);
     await db.delete(trades);
     await db.delete(api_keys);
     await db.delete(listings);
@@ -99,6 +101,27 @@ async function seed() {
     const allUsers = [...agents, ...humans];
     console.log(`✅ Created ${allUsers.length} users (${agents.length} agents, ${humans.length} humans)`);
 
+    // ── Wallets & Faucet ────────────────────────────────────
+    console.log('Creating wallets and funding accounts...');
+    for (const user of allUsers) {
+      const isRich = ['NexusTrader', 'jacob_dev', 'maya.eth'].includes(user.name);
+      const initialBalance = isRich ? 5000 : 500;
+      
+      const [wallet] = await db.insert(wallets).values({
+        user_id: user.id,
+        balance: initialBalance,
+      }).returning();
+
+      // Log the faucet transaction
+      await db.insert(transactions).values({
+        to_user_id: user.id,
+        amount: initialBalance,
+        type: 'faucet',
+        memo: 'Initial seed funding',
+      });
+    }
+    console.log(`✅ Created ${allUsers.length} wallets with funds`);
+
     // ── API Keys ────────────────────────────────────────────
     console.log('Creating API keys...');
     for (const agent of agents) {
@@ -133,38 +156,38 @@ async function seed() {
       category: 'compute' | 'skills' | 'data' | 'bounties';
       title: string;
       description: string;
-      price_clawd: number;
+      price_bankr: number;
     }> = [
       // ── Compute ──
       {
         category: 'compute',
         title: 'GPU Cluster — 4x RTX 4090, 24hr block',
         description: 'High-performance GPU cluster for training LLMs. CUDA toolkit, PyTorch, and TensorFlow pre-installed. SSH access within 5 minutes of purchase. Includes 100GB NVMe scratch space.',
-        price_clawd: 150,
+        price_bankr: 150,
       },
       {
         category: 'compute',
         title: '10K GPT-4o API Calls (Bulk)',
         description: 'Pre-purchased OpenAI credits packaged as CLAWD. Delivered as a proxy endpoint — plug and play. 30-day expiry from activation.',
-        price_clawd: 85,
+        price_bankr: 85,
       },
       {
         category: 'compute',
         title: 'Serverless Compute — 1M Lambda Invocations',
         description: 'AWS Lambda credits for event-driven agent architectures. 256MB memory tier. Perfect for webhook handlers, cron agents, and microservice meshes.',
-        price_clawd: 30,
+        price_bankr: 30,
       },
       {
         category: 'compute',
         title: 'Dedicated VPS — 8 cores / 32GB / 1TB NVMe',
         description: 'Full-month dedicated server. Root access, any OS. Ideal for persistent agents, databases, or running your own inference stack.',
-        price_clawd: 95,
+        price_bankr: 95,
       },
       {
         category: 'compute',
         title: 'Claude Sonnet Credits — 5K Calls',
         description: 'Anthropic API credits at wholesale. Great for agents needing advanced reasoning. Delivered as rotated API key with usage dashboard.',
-        price_clawd: 120,
+        price_bankr: 120,
       },
 
       // ── Skills ──
@@ -172,37 +195,37 @@ async function seed() {
         category: 'skills',
         title: 'Web Scraping Service — 10K Pages',
         description: 'Anti-bot evasion, proxy rotation, CAPTCHA solving included. Returns structured JSON. Supports JS-rendered SPAs. Turnaround: 12 hours.',
-        price_clawd: 50,
+        price_bankr: 50,
       },
       {
         category: 'skills',
         title: 'Custom Model Fine-Tune (LoRA)',
         description: 'Fine-tune Llama 3 or Mistral on your dataset. Includes data cleaning, hyperparameter sweep, eval suite, and quantized GGUF export. 48hr delivery.',
-        price_clawd: 200,
+        price_bankr: 200,
       },
       {
         category: 'skills',
         title: 'Twitter/X Agent Build — Full Stack',
         description: 'Autonomous posting agent with personality engine, engagement tracking, thread generation, and analytics dashboard. Includes 30 days of hosting.',
-        price_clawd: 180,
+        price_bankr: 180,
       },
       {
         category: 'skills',
         title: 'PDF → Structured Data Pipeline',
         description: 'Process up to 1000 PDFs. Advanced OCR for scanned docs, table extraction, and layout analysis. Output as JSON, CSV, or Markdown.',
-        price_clawd: 40,
+        price_bankr: 40,
       },
       {
         category: 'skills',
         title: 'Voice Clone + 1hr Synthesis',
         description: 'Clone any voice from 30s of audio. Generate up to 1 hour of natural speech. Multiple languages. ElevenLabs-grade quality.',
-        price_clawd: 35,
+        price_bankr: 35,
       },
       {
         category: 'skills',
         title: 'CI/CD Pipeline Architect',
         description: 'Design and implement GitHub Actions, Docker builds, and deployment automation for your repo. Includes monitoring and rollback strategy.',
-        price_clawd: 90,
+        price_bankr: 90,
       },
 
       // ── Data ──
@@ -210,37 +233,37 @@ async function seed() {
         category: 'data',
         title: 'S&P 500 OHLCV — 10 Years Daily',
         description: 'Clean, validated historical stock data. All S&P 500 tickers from 2014–2024. Includes adjusted close, splits, and dividends. Parquet + CSV.',
-        price_clawd: 75,
+        price_bankr: 75,
       },
       {
         category: 'data',
         title: 'Twitter Sentiment Corpus — 1M Labeled Tweets',
         description: 'Pre-labeled sentiment (positive/negative/neutral) covering politics, brands, and tech. Full metadata: timestamps, engagement, user bios.',
-        price_clawd: 60,
+        price_bankr: 60,
       },
       {
         category: 'data',
         title: 'E-Commerce Product DB — 500K Listings',
         description: 'Products with images, descriptions, prices, reviews, and categories. Multi-retailer. Perfect for recommendation systems and price intelligence.',
-        price_clawd: 110,
+        price_bankr: 110,
       },
       {
         category: 'data',
         title: 'GitHub Repos Dataset — 100K Repos w/ Metadata',
         description: 'Stars, forks, languages, READMEs, dependency graphs, and commit frequency. Sampled across all major languages. Updated quarterly.',
-        price_clawd: 80,
+        price_bankr: 80,
       },
       {
         category: 'data',
         title: 'arXiv ML Papers — 50K Full Text',
         description: 'Curated ML/AI research papers with full text, abstracts, citations, and author metadata. LaTeX source included where available.',
-        price_clawd: 55,
+        price_bankr: 55,
       },
       {
         category: 'data',
         title: 'Global Weather — 5yr Hourly, 1000 Stations',
         description: 'Temperature, humidity, precipitation, wind, pressure. Clean time series with no gaps. Ideal for forecasting model training.',
-        price_clawd: 45,
+        price_bankr: 45,
       },
 
       // ── Bounties ──
@@ -248,31 +271,31 @@ async function seed() {
         category: 'bounties',
         title: '🏴 OSINT: Map Competitor Tech Stack',
         description: 'Identify the full tech stack (frontend, backend, infra, analytics) of 10 competitor companies. Deliver as structured report with evidence.',
-        price_clawd: 150,
+        price_bankr: 150,
       },
       {
         category: 'bounties',
         title: '⚡ Optimize Python ETL — 2hr → 10min',
         description: 'Data processing pipeline currently takes 2 hours. Need it under 10 minutes while maintaining output parity. Pandas/Polars/DuckDB all fair game.',
-        price_clawd: 100,
+        price_bankr: 100,
       },
       {
         category: 'bounties',
         title: '🧩 Chrome Extension: Web Clipper → Markdown',
         description: 'Build a browser extension that clips highlights, annotations, and full pages to Markdown. Must sync via GitHub Gist and support keyboard shortcuts.',
-        price_clawd: 175,
+        price_bankr: 175,
       },
       {
         category: 'bounties',
         title: '🔓 Reverse Engineer Undocumented API',
         description: 'Document an undocumented web API. Deliver full OpenAPI 3.1 spec with auth flow, rate limits, and example payloads. Ethical use only.',
-        price_clawd: 125,
+        price_bankr: 125,
       },
       {
         category: 'bounties',
         title: '📊 Real-Time D3.js Dashboard',
         description: 'Interactive time-series dashboard with WebSocket updates, zoom/pan, annotations, and PNG/SVG export. Must handle 100K+ data points smoothly.',
-        price_clawd: 140,
+        price_bankr: 140,
       },
     ];
 
@@ -314,8 +337,8 @@ async function seed() {
         listing_id: listing.id,
         buyer_id: buyer.id,
         seller_id: listing.seller_id,
-        amount: listing.price_clawd,
-        fee: Math.round(listing.price_clawd * 0.03 * 100) / 100,
+        amount: listing.price_bankr,
+        fee: Math.round(listing.price_bankr * 0.03 * 100) / 100,
         status: scenario.status,
         completed_at: scenario.status === 'completed'
           ? new Date(Date.now() - scenario.daysAgo * 86400000)

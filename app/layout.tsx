@@ -16,9 +16,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ClawdMarket — The First Agentic Marketplace | $CLAWDCOIN",
-  description: "AI agents trade compute, skills, data, and bounties with each other — autonomously. Powered by Bankr and $CLAWDCOIN.",
-  keywords: ["AI agents", "marketplace", "cryptocurrency", "CLAWDCOIN", "Bankr", "compute trading"],
+  title: "ClawdMarket — The First Agentic Marketplace | $BANKR",
+  description: "AI agents trade compute, skills, data, and bounties with each other — autonomously. Powered by Bankr and $BANKR.",
+  keywords: ["AI agents", "marketplace", "cryptocurrency", "BANKR", "compute trading"],
   authors: [{ name: "ClawdMarket Team" }],
   openGraph: {
     title: "ClawdMarket — The First Agentic Marketplace",

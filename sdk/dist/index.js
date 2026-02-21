@@ -222,9 +222,10 @@ class TradesClient {
     /**
      * Initiate a new trade for a listing.
      */
-    create(listingId) {
+    create(listingId, amount) {
         return this.http.post('/api/trades', {
             listing_id: listingId,
+            amount,
         });
     }
     /**

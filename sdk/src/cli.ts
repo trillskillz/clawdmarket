@@ -184,7 +184,7 @@ async function cmdListings(positional: string[], flags: Record<string, string>):
   die(`Unknown listings subcommand: ${sub}. Try list, get, create, update, delete`);
 }
 
-async function cmdTrades(positional: string[]): Promise<void> {
+async function cmdTrades(positional: string[], flags: Record<string, string>): Promise<void> {
   const sub = positional[0];
   const client = makeClient();
 
@@ -195,8 +195,9 @@ async function cmdTrades(positional: string[]): Promise<void> {
 
   if (sub === 'create') {
     const listingId = positional[1];
-    if (!listingId) die('Usage: clawdmarket trades create <listing-id>');
-    print(await client.trades.create(listingId));
+    const amount = flags.amount;
+    if (!listingId || !amount) die('Usage: clawdmarket trades create <listing-id> --amount <price>');
+    print(await client.trades.create(listingId, Number(amount)));
     return;
   }
 
@@ -311,7 +312,7 @@ async function main(): Promise<void> {
         await cmdListings(rest, flags);
         break;
       case 'trades':
-        await cmdTrades(rest);
+        await cmdTrades(rest, flags);
         break;
       case 'webhooks':
         await cmdWebhooks(rest, flags);

@@ -44,7 +44,7 @@ const openApiSpec = {
           category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties'] },
           title: { type: 'string' },
           description: { type: 'string' },
-          price_clawd: { type: 'number' },
+          price_bankr: { type: 'number' },
           status: { type: 'string', enum: ['active', 'sold', 'expired'] },
           created_at: { type: 'string', format: 'date-time' },
         },
@@ -251,12 +251,12 @@ const openApiSpec = {
                 oneOf: [
                   {
                     type: 'object',
-                    required: ['category', 'title', 'description', 'price_clawd'],
+                    required: ['category', 'title', 'description', 'price_bankr'],
                     properties: {
                       category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties'] },
                       title: { type: 'string', minLength: 5, maxLength: 100 },
                       description: { type: 'string', minLength: 20, maxLength: 1000 },
-                      price_clawd: { type: 'number', minimum: 0 },
+                      price_bankr: { type: 'number', minimum: 0 },
                     },
                   },
                   {
@@ -264,12 +264,12 @@ const openApiSpec = {
                     maxItems: 50,
                     items: {
                       type: 'object',
-                      required: ['category', 'title', 'description', 'price_clawd'],
+                      required: ['category', 'title', 'description', 'price_bankr'],
                       properties: {
                         category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties'] },
                         title: { type: 'string', minLength: 5, maxLength: 100 },
                         description: { type: 'string', minLength: 20, maxLength: 1000 },
-                        price_clawd: { type: 'number', minimum: 0 },
+                        price_bankr: { type: 'number', minimum: 0 },
                       },
                     },
                   },
@@ -317,7 +317,7 @@ const openApiSpec = {
                 properties: {
                   title: { type: 'string', minLength: 5, maxLength: 100 },
                   description: { type: 'string', minLength: 20, maxLength: 1000 },
-                  price_clawd: { type: 'number', minimum: 0 },
+                  price_bankr: { type: 'number', minimum: 0 },
                   category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties'] },
                 },
               },

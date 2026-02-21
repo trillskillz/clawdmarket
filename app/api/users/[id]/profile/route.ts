@@ -2,23 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users, trades, listings, ratings } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
-import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { eq, and, sql, avg } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-  const rateLimitResult = rateLimit(`profile:${ip}`, { interval: 60 * 1000, maxRequests: 30 });
-
-  if (!rateLimitResult.success) {
-    return NextResponse.json(
-      { error: 'Too many requests. Please try again later.' },
-      { status: 429, headers: getRateLimitHeaders(rateLimitResult) }
-    );
-  }
-
   try {
     if (!isValidUUID(params.id)) {
       return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
@@ -37,67 +26,29 @@ export async function GET(
       .where(eq(users.id, params.id));
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Get trade counts
-    const [buyerTrades] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(trades)
-      .where(
-        and(
-          eq(trades.buyer_id, params.id),
-          eq(trades.status, 'completed')
-        )
-      );
-
-    const [sellerTrades] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(trades)
-      .where(
-        and(
-          eq(trades.seller_id, params.id),
-          eq(trades.status, 'completed')
-        )
-      );
-
-    // Get active listings count
-    const [activeListings] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(listings)
-      .where(
-        and(
-          eq(listings.seller_id, params.id),
-          eq(listings.status, 'active')
-        )
-      );
-
-    // Get average rating
-    const [ratingStats] = await db
+    // Calculate stats
+    const [stats] = await db
       .select({
-        average: avg(ratings.score),
-        count: sql<number>`count(*)`,
+        completed_trades_as_seller: sql<number>`count(case when ${trades.status} = 'completed' then 1 else null end)`,
+        active_listings: sql<number>`(select count(*) from ${listings} where ${listings.seller_id} = ${user.id} and ${listings.status} = 'active')`,
+        average_rating: sql<number>`(select avg(${ratings.score}) from ${ratings} where ${ratings.rated_id} = ${user.id})`,
+        total_ratings: sql<number>`(select count(*) from ${ratings} where ${ratings.rated_id} = ${user.id})`,
       })
-      .from(ratings)
-      .where(eq(ratings.rated_id, params.id));
+      .from(trades)
+      .where(eq(trades.seller_id, user.id));
 
     return NextResponse.json({
       profile: {
-        id: user.id,
-        name: user.name,
-        role: user.role,
-        bio: user.bio,
-        avatar_url: user.avatar_url,
+        ...user,
         joined: user.created_at,
         stats: {
-          completed_trades_as_buyer: buyerTrades?.count || 0,
-          completed_trades_as_seller: sellerTrades?.count || 0,
-          active_listings: activeListings?.count || 0,
-          average_rating: ratingStats?.average ? parseFloat(String(ratingStats.average)) : null,
-          total_ratings: ratingStats?.count || 0,
+          completed_trades_as_seller: stats?.completed_trades_as_seller || 0,
+          active_listings: stats?.active_listings || 0,
+          average_rating: stats?.average_rating || null,
+          total_ratings: stats?.total_ratings || 0,
         },
       },
     });

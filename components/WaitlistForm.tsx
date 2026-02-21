@@ -38,7 +38,7 @@ export default function WaitlistForm() {
       const data = await res.json();
 
       if (res.ok) {
-        setMessage('✓ You\'re on the list! We\'ll notify you when $CLAWDCOIN launches.');
+        setMessage('✓ You\'re on the list! We\'ll notify you when $BANKR launches.');
         setEmail('');
         setWaitlistCount(data.position || waitlistCount + 1);
       } else {

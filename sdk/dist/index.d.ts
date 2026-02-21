@@ -94,7 +94,7 @@ declare class TradesClient {
     /**
      * Initiate a new trade for a listing.
      */
-    create(listingId: string): Promise<CreateTradeResponse>;
+    create(listingId: string, amount: number): Promise<CreateTradeResponse>;
     /**
      * Get a single trade by ID.
      */

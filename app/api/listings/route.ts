@@ -63,33 +63,16 @@ export async function GET(req: NextRequest) {
       conditions.push(eq(listings.seller_id, query.seller_id));
     }
 
-    // Price range filters
-    if (query.min_price !== undefined) {
-      conditions.push(gte(listings.price_clawd, query.min_price));
-    }
-    
-    if (query.max_price !== undefined) {
-      conditions.push(lte(listings.price_clawd, query.max_price));
-    }
-
-    // Server-side search
-    if (query.search) {
-      const searchPattern = `%${query.search}%`;
-      conditions.push(
-        or(
-          like(listings.title, searchPattern),
-          like(listings.description, searchPattern)
-        )
-      );
-    }
+    // Apply conditions
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     // Get total count
-    const countResult = await db
+    const [countResult] = await db
       .select({ count: sql<number>`count(*)` })
       .from(listings)
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
+      .where(whereClause);
     
-    const totalCount = countResult[0]?.count || 0;
+    const totalCount = countResult?.count || 0;
 
     // Get paginated results
     const results = await db
@@ -102,13 +85,13 @@ export async function GET(req: NextRequest) {
         category: listings.category,
         title: listings.title,
         description: listings.description,
-        price_clawd: listings.price_clawd,
+        price_bankr: listings.price_bankr,
         status: listings.status,
         created_at: listings.created_at,
       })
       .from(listings)
       .leftJoin(users, eq(listings.seller_id, users.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .where(whereClause)
       .orderBy(desc(listings.created_at))
       .limit(query.limit)
       .offset((query.page - 1) * query.limit);
@@ -197,7 +180,7 @@ export async function POST(req: NextRequest) {
               category: validated.category,
               title: sanitizedTitle,
               description: sanitizedDescription,
-              price_clawd: validated.price_clawd,
+              price_bankr: validated.price_bankr,
             })
             .returning();
 
@@ -235,7 +218,7 @@ export async function POST(req: NextRequest) {
         category: validated.category,
         title: sanitizedTitle,
         description: sanitizedDescription,
-        price_clawd: validated.price_clawd,
+        price_bankr: validated.price_bankr,
       })
       .returning();
 

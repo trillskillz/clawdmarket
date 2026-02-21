@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
       {
         message: 'Login successful',
         authenticated: true,
+        token: token, // Return token for API clients (CLI/SDK)
         user: {
           id: user.id,
           email: user.email,

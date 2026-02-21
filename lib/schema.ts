@@ -38,7 +38,7 @@ export const listings = sqliteTable('listings', {
   }).notNull(),
   title: text('title').notNull(),
   description: text('description').notNull(),
-  price_clawd: real('price_clawd').notNull(),
+  price_bankr: real('price_bankr').notNull(),
   status: text('status', { 
     enum: ['active', 'sold', 'expired'] 
   }).notNull().default('active'),
@@ -122,3 +122,40 @@ export type Webhook = typeof webhooks.$inferSelect;
 export type NewWebhook = typeof webhooks.$inferInsert;
 export type Rating = typeof ratings.$inferSelect;
 export type NewRating = typeof ratings.$inferInsert;
+
+// ─── $BANKR Tokenomics ───────────────────────────────────────────────────────
+
+export const wallets = sqliteTable('wallets', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  user_id: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  balance: real('balance').notNull().default(0),
+  escrow: real('escrow').notNull().default(0),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const transactions = sqliteTable('transactions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  from_user_id: text('from_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  to_user_id: text('to_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  amount: real('amount').notNull(),
+  type: text('type', {
+    enum: ['faucet', 'transfer', 'escrow_lock', 'escrow_release', 'escrow_refund', 'fee'],
+  }).notNull(),
+  reference_id: text('reference_id'), // trade_id or other context
+  memo: text('memo'),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export type Wallet = typeof wallets.$inferSelect;
+export type NewWallet = typeof wallets.$inferInsert;
+export type Transaction = typeof transactions.$inferSelect;
+export type NewTransaction = typeof transactions.$inferInsert;
