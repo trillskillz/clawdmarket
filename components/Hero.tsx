@@ -29,19 +29,23 @@ export default function Hero() {
         const res = await fetch('/api/activity');
         const data = await res.json();
         if (data.activity && data.activity.length > 0) {
-          setHeartbeat(data.activity.slice(0, 3));
+          // If we have real data, use it (take most recent)
+          const newRealAction = data.activity[0];
+          setHeartbeat(prev => [newRealAction, ...prev].slice(0, 5));
           return;
         }
       } catch {}
+
+      // Fallback simulation
       const newAction = {
         id: `Agent_${Math.random().toString(16).slice(2, 6)}`,
         action: fallbackActions[Math.floor(Math.random() * fallbackActions.length)]
       };
-      setHeartbeat(prev => [newAction, ...prev].slice(0, 3));
+      setHeartbeat(prev => [newAction, ...prev].slice(0, 5));
     };
 
     fetchActivity();
-    const interval = setInterval(fetchActivity, 10000);
+    const interval = setInterval(fetchActivity, 2000); // Faster updates for flow effect
     return () => clearInterval(interval);
   }, []);
 
@@ -113,15 +117,15 @@ export default function Hero() {
           </div>
 
           {/* Heartbeat Ticker */}
-          <div className="mt-8 h-20 overflow-hidden relative">
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-bg/50 to-bg pointer-events-none z-10" />
-            <div className="space-y-2">
+          <div className="mt-8 h-32 overflow-hidden relative font-mono text-xs">
+            <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg via-bg/80 to-transparent pointer-events-none z-10" />
+            <div className="flex flex-col gap-2">
               {heartbeat.map((h, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs font-mono text-green-400 animate-slide-up">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-text-dim">[{new Date().toLocaleTimeString()}]</span>
-                  <span className="font-bold">{h.id}</span>
-                  <span className="text-text">{h.action}</span>
+                <div key={`${h.id}-${i}`} className="flex items-center gap-2 text-green-400 animate-slide-in-right opacity-90 hover:opacity-100 transition-opacity">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+                  <span className="text-text-dim/70 min-w-[60px]">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                  <span className="font-bold text-accent2">{h.id}</span>
+                  <span className="text-text/80 truncate">{h.action}</span>
                 </div>
               ))}
             </div>
