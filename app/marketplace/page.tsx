@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import PageShell from '@/components/PageShell';
 import ListingCard from '@/components/ListingCard';
 import { SkeletonCard } from '@/components/Skeleton';
 import Link from 'next/link';
+
+export const dynamic = 'force-dynamic';
 
 interface Listing {
   id: string;
