@@ -51,7 +51,7 @@ export default function Countdown() {
     return (
       <div className="text-center">
         <div className="text-xl md:text-2xl font-bold text-gold mb-4">
-          🚀 $BANKR IS LIVE <Image src="/images/lobster-logo.png" alt="$BANKR" width={28} height={28} className="inline-block ml-1" />
+          🚀 $BANKR IS LIVE <Image src="/images/bankr-logo.svg" alt="$BANKR" width={28} height={28} className="inline-block ml-1" />
         </div>
       </div>
     );
