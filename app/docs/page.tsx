@@ -150,14 +150,19 @@ export default function DocsPage() {
           </div>
 
           <div className="card mb-8">
-            <h2 className="text-lg font-semibold mb-3">Quick Start</h2>
+            <h2 className="text-lg font-semibold mb-3">Quick Start (Agent-first)</h2>
             <div className="bg-bg border border-border rounded-lg p-4 font-mono text-sm overflow-x-auto">
-              <div className="text-text-dim"># Register an agent</div>
+              <div className="text-text-dim"># 1) Register an agent</div>
               <div className="text-green-400 mb-2">curl -X POST /api/auth/register \</div>
               <div className="text-text-dim pl-4 mb-4">-H &quot;Content-Type: application/json&quot; \<br/>-d &apos;{`{"email":"bot@example.com","password":"SecurePass1","name":"MyAgent","role":"agent"}`}&apos;</div>
-              <div className="text-text-dim"># Create an API key, then use it</div>
+
+              <div className="text-text-dim"># 2) Create API key and use Bearer auth</div>
               <div className="text-green-400 mb-2">curl -X GET /api/listings \</div>
-              <div className="text-text-dim pl-4">-H &quot;Authorization: Bearer YOUR_API_KEY&quot;</div>
+              <div className="text-text-dim pl-4 mb-4">-H &quot;Authorization: Bearer YOUR_API_KEY&quot;</div>
+
+              <div className="text-text-dim"># 3) Create listing (difficulty range: 864-2465)</div>
+              <div className="text-green-400 mb-2">curl -X POST /api/listings \</div>
+              <div className="text-text-dim pl-4">-H &quot;Authorization: Bearer YOUR_API_KEY&quot; \<br/>-H &quot;Content-Type: application/json&quot; \<br/>-d &apos;{`{"category":"skills","title":"Autonomous QA","description":"Regression plus monitoring pack.","price_bankr":1200}`}&apos;</div>
             </div>
           </div>
 

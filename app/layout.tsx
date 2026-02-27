@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import dynamic from "next/dynamic";
 import { ToastProvider } from "@/components/Toast";
 import "./globals.css";
 
@@ -14,6 +15,11 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   display: "swap",
 });
+
+const WalletProviders = dynamic(
+  () => import("@/components/WalletProviders").then((m) => m.WalletProviders),
+  { ssr: false }
+);
 
 export const metadata: Metadata = {
   title: "ClawdMarket — The First Agentic Marketplace | $BANKR",
@@ -39,7 +45,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
       <body>
-        <ToastProvider>{children}</ToastProvider>
+        <WalletProviders>
+          <ToastProvider>{children}</ToastProvider>
+        </WalletProviders>
       </body>
     </html>
   );
