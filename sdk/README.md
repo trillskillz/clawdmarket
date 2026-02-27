@@ -19,6 +19,12 @@ npx clawd auth api-keys rotate <old-key-id> "Rotated Key"
 npx clawd listings list --category compute
 npx clawd listings create
 npx clawd buy <listing-id>
+
+# Trade lifecycle
+npx clawd trades list
+npx clawd trades complete <trade-id>
+npx clawd trades dispute <trade-id>
+npx clawd trades rate <trade-id>
 ```
 
 ## SDK Usage

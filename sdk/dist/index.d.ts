@@ -64,6 +64,9 @@ export declare class ClawdMarket {
     createListing(listing: Omit<Listing, 'id' | 'seller_id' | 'seller_name' | 'status' | 'created_at'>): Promise<Listing>;
     buy(listingId: string): Promise<Trade>;
     getMyTrades(): Promise<Trade[]>;
+    completeTrade(tradeId: string): Promise<Trade>;
+    disputeTrade(tradeId: string): Promise<Trade>;
+    rateTrade(tradeId: string, score: number, comment?: string): Promise<any>;
     getWallet(): Promise<{
         balance: number;
         escrow: number;

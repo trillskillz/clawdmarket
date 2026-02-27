@@ -280,6 +280,106 @@ listings
     }
 });
 // ─── Trade Commands ─────────────────────────────────────────────────────────
+const trades = program.command('trades').description('Manage your trades');
+trades
+    .command('list')
+    .description('List your trades')
+    .action(async () => {
+    const session = client.loadSession();
+    if (!session) {
+        console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
+        return;
+    }
+    try {
+        const items = await client.getMyTrades();
+        if (!items.length) {
+            console.log(chalk.yellow('No trades found.'));
+            return;
+        }
+        console.log(chalk.bold('\nYour Trades:\n'));
+        items.forEach((t) => {
+            console.log(`${chalk.cyan(t.id)}  ${chalk.white(t.status.toUpperCase())}  ${chalk.yellow(`${t.amount} BANKR`)}`);
+        });
+        console.log('');
+    }
+    catch (error) {
+        console.error(chalk.red(`Failed to list trades: ${error.message}`));
+    }
+});
+trades
+    .command('complete <trade-id>')
+    .description('Mark a pending trade as completed (buyer only)')
+    .action(async (tradeId) => {
+    const session = client.loadSession();
+    if (!session) {
+        console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
+        return;
+    }
+    const confirm = await inquirer.prompt([
+        { type: 'confirm', name: 'proceed', message: `Mark trade ${tradeId} as completed?`, default: false },
+    ]);
+    if (!confirm.proceed)
+        return console.log(chalk.yellow('Action cancelled.'));
+    try {
+        await client.completeTrade(tradeId);
+        console.log(chalk.green('Trade marked as completed.'));
+    }
+    catch (error) {
+        console.error(chalk.red(`Failed to complete trade: ${error.message}`));
+    }
+});
+trades
+    .command('dispute <trade-id>')
+    .description('Dispute a pending trade')
+    .action(async (tradeId) => {
+    const session = client.loadSession();
+    if (!session) {
+        console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
+        return;
+    }
+    const confirm = await inquirer.prompt([
+        { type: 'confirm', name: 'proceed', message: `Dispute trade ${tradeId}?`, default: false },
+    ]);
+    if (!confirm.proceed)
+        return console.log(chalk.yellow('Action cancelled.'));
+    try {
+        await client.disputeTrade(tradeId);
+        console.log(chalk.green('Trade disputed.'));
+    }
+    catch (error) {
+        console.error(chalk.red(`Failed to dispute trade: ${error.message}`));
+    }
+});
+trades
+    .command('rate <trade-id>')
+    .description('Rate a completed trade counterparty')
+    .action(async (tradeId) => {
+    const session = client.loadSession();
+    if (!session) {
+        console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
+        return;
+    }
+    const answers = await inquirer.prompt([
+        {
+            type: 'number',
+            name: 'score',
+            message: 'Score (1-5):',
+            validate: (input) => Number.isInteger(input) && input >= 1 && input <= 5 || 'Score must be an integer 1-5',
+        },
+        {
+            type: 'input',
+            name: 'comment',
+            message: 'Comment (optional):',
+        },
+    ]);
+    try {
+        await client.rateTrade(tradeId, answers.score, answers.comment || undefined);
+        console.log(chalk.green('Rating submitted.'));
+    }
+    catch (error) {
+        console.error(chalk.red(`Failed to submit rating: ${error.message}`));
+    }
+});
 program
     .command('buy <listing-id>')
     .description('Purchase a listing using your BANKR balance')

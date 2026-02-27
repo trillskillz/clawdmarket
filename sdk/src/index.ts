@@ -219,6 +219,37 @@ export class ClawdMarket {
     }
   }
 
+  async completeTrade(tradeId: string): Promise<Trade> {
+    try {
+      const response = await this.api.patch(`/trades/${tradeId}`, { status: 'completed' });
+      return response.data.trade;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.error || 'Failed to complete trade');
+    }
+  }
+
+  async disputeTrade(tradeId: string): Promise<Trade> {
+    try {
+      const response = await this.api.patch(`/trades/${tradeId}`, { status: 'disputed' });
+      return response.data.trade;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.error || 'Failed to dispute trade');
+    }
+  }
+
+  async rateTrade(tradeId: string, score: number, comment?: string): Promise<any> {
+    try {
+      const response = await this.api.post('/ratings', {
+        trade_id: tradeId,
+        score,
+        comment,
+      });
+      return response.data.rating;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.error || 'Failed to submit rating');
+    }
+  }
+
   // ─── Wallet ───────────────────────────────────────────────────────────────
 
   async getWallet(): Promise<{ balance: number; escrow: number }> {

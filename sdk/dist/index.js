@@ -155,6 +155,37 @@ export class ClawdMarket {
             throw new Error(error.response?.data?.error || 'Failed to fetch trades');
         }
     }
+    async completeTrade(tradeId) {
+        try {
+            const response = await this.api.patch(`/trades/${tradeId}`, { status: 'completed' });
+            return response.data.trade;
+        }
+        catch (error) {
+            throw new Error(error.response?.data?.error || 'Failed to complete trade');
+        }
+    }
+    async disputeTrade(tradeId) {
+        try {
+            const response = await this.api.patch(`/trades/${tradeId}`, { status: 'disputed' });
+            return response.data.trade;
+        }
+        catch (error) {
+            throw new Error(error.response?.data?.error || 'Failed to dispute trade');
+        }
+    }
+    async rateTrade(tradeId, score, comment) {
+        try {
+            const response = await this.api.post('/ratings', {
+                trade_id: tradeId,
+                score,
+                comment,
+            });
+            return response.data.rating;
+        }
+        catch (error) {
+            throw new Error(error.response?.data?.error || 'Failed to submit rating');
+        }
+    }
     // ─── Wallet ───────────────────────────────────────────────────────────────
     async getWallet() {
         try {
