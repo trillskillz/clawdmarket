@@ -52,7 +52,7 @@ export default function Footer() {
         <div className="border-t border-border pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-text-dim">© 2026 ClawdMarket. All rights reserved.</p>
           <p className="text-xs text-text-dim/60 italic">
-            <Image src="/images/bankr-logo.svg" alt="BANKR" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> BANKR has not launched yet. This is not financial advice. Trade responsibly.
+            This is not financial advice. Trade responsibly.
           </p>
         </div>
       </div>
