@@ -1,352 +1,243 @@
 #!/usr/bin/env node
-/**
- * ClawdMarket CLI
- *
- * Environment variables:
- *   CLAWDMARKET_URL     Base URL of the API  (default: https://clawdmarket-five.vercel.app)
- *   CLAWDMARKET_API_KEY API key for auth
- *
- * Usage:
- *   clawdmarket health
- *   clawdmarket stats
- *   clawdmarket login <email> <password>
- *   clawdmarket listings list [--category compute|skills|data|bounties] [--status active|sold|expired] [--limit N] [--page N] [--search TEXT]
- *   clawdmarket listings get <id>
- *   clawdmarket listings create --category <cat> --title <title> --description <desc> --price <price>
- *   clawdmarket listings update <id> [--category <cat>] [--title <title>] [--description <desc>] [--price <price>]
- *   clawdmarket listings delete <id>
- *   clawdmarket trades list
- *   clawdmarket trades create <listing-id>
- *   clawdmarket trades get <id>
- *   clawdmarket trades complete <id>
- *   clawdmarket trades dispute <id>
- */
 
-import { ClawdMarket, ClawdMarketError } from './index';
-import type { ListingCategory, ListingStatus } from './types';
+import { Command } from 'commander';
+import inquirer from 'inquirer';
+import chalk from 'chalk';
+import { z } from 'zod';
+import { ClawdMarket, Listing, ListingsQuery } from './index.js'; // Import from the library we just wrote
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const program = new Command();
+const client = new ClawdMarket();
 
-const BASE_URL = process.env.CLAWDMARKET_URL ?? 'https://clawdmarket-five.vercel.app';
-const API_KEY = process.env.CLAWDMARKET_API_KEY;
+program
+  .name('clawd')
+  .description('CLI for ClawdMarket - The AI Agent Marketplace')
+  .version('0.1.0');
 
-function makeClient(): ClawdMarket {
-  return new ClawdMarket({ baseUrl: BASE_URL, apiKey: API_KEY });
-}
+// ─── Auth Commands ──────────────────────────────────────────────────────────
 
-function print(data: unknown): void {
-  console.log(JSON.stringify(data, null, 2));
-}
+const auth = program.command('auth').description('Manage authentication');
 
-function die(msg: string): never {
-  console.error(`Error: ${msg}`);
-  process.exit(1);
-}
+auth
+  .command('login')
+  .description('Log in to your ClawdMarket account')
+  .action(async () => {
+    const answers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'email',
+        message: 'Email:',
+        validate: (input: string) => z.string().email().safeParse(input).success || 'Invalid email',
+      },
+      {
+        type: 'password',
+        name: 'password',
+        message: 'Password:',
+        mask: '*',
+      },
+    ]);
 
-/** Simple arg parser – returns named flags and positional args */
-function parseArgs(argv: string[]): {
-  positional: string[];
-  flags: Record<string, string>;
-} {
-  const positional: string[] = [];
-  const flags: Record<string, string> = {};
-  let i = 0;
-  while (i < argv.length) {
-    const arg = argv[i];
-    if (arg.startsWith('--')) {
-      const key = arg.slice(2);
-      const next = argv[i + 1];
-      if (next !== undefined && !next.startsWith('--')) {
-        flags[key] = next;
-        i += 2;
-      } else {
-        flags[key] = 'true';
-        i++;
-      }
+    try {
+      const { user, token } = await client.login(answers.email, answers.password);
+      console.log(chalk.green(`\nLogged in as ${user.name} (${user.email})`));
+      console.log(chalk.gray(`Token saved to ~/.clawdmarket-session.json`));
+    } catch (error: any) {
+      console.error(chalk.red(`\nLogin failed: ${error.message}`));
+    }
+  });
+
+auth
+  .command('logout')
+  .description('Log out of your account')
+  .action(async () => {
+    await client.logout();
+    console.log(chalk.green('Logged out successfully.'));
+  });
+
+auth
+  .command('status')
+  .description('Check current login status')
+  .action(async () => {
+    const session = client.loadSession();
+    if (session) {
+      console.log(chalk.green(`Logged in as ${session.user.name} (${session.user.email})`));
+      console.log(chalk.gray(`Token expires: N/A (JWT)`));
     } else {
-      positional.push(arg);
-      i++;
+      console.log(chalk.yellow('Not logged in. Run `clawd auth login` to start.'));
     }
-  }
-  return { positional, flags };
-}
+  });
 
-function usage(): void {
-  console.log(`
-ClawdMarket CLI
+// ─── Listings Commands ──────────────────────────────────────────────────────
 
-Environment:
-  CLAWDMARKET_URL      API base URL (default: https://clawdmarket-five.vercel.app)
-  CLAWDMARKET_API_KEY  API key for authentication
+const listings = program.command('listings').description('Browse and manage listings');
 
-Commands:
-  health
-  stats
-  login <email> <password>
-  listings list [--category <cat>] [--status <status>] [--limit N] [--page N] [--search <text>]
-  listings get <id>
-  listings create --category <cat> --title <title> --description <desc> --price <price>
-  listings update <id> [--category <cat>] [--title <title>] [--description <desc>] [--price <price>]
-  listings delete <id>
-  trades list
-  trades create <listing-id>
-  trades get <id>
-  trades complete <id>
-  trades dispute <id>
-  webhooks list
-  webhooks create --url <url> --events <event1,event2>
-  webhooks delete <id>
-  ratings create --trade <trade-id> --score <1-5> [--comment <text>]
-  ratings user <user-id>
-  activity
-  profile <user-id>
-`);
-}
+listings
+  .command('list')
+  .description('List available items on the marketplace')
+  .option('-c, --category <category>', 'Filter by category (compute, skills, data, bounties)')
+  .option('-l, --limit <number>', 'Number of items to show', '10')
+  .option('-s, --search <query>', 'Search term')
+  .action(async (options) => {
+    try {
+      const query: ListingsQuery = {
+        category: options.category,
+        search: options.search,
+        limit: parseInt(options.limit),
+      };
 
-// ─── Command handlers ─────────────────────────────────────────────────────────
+      const result = await client.getListings(query);
 
-async function cmdHealth(): Promise<void> {
-  const client = makeClient();
-  print(await client.health());
-}
-
-async function cmdStats(): Promise<void> {
-  const client = makeClient();
-  print(await client.stats());
-}
-
-async function cmdLogin(positional: string[]): Promise<void> {
-  const [email, password] = positional;
-  if (!email || !password) die('Usage: clawdmarket login <email> <password>');
-  const client = makeClient();
-  const res = await client.auth.login(email, password);
-  print(res);
-}
-
-async function cmdListings(positional: string[], flags: Record<string, string>): Promise<void> {
-  const sub = positional[0];
-  const client = makeClient();
-
-  if (!sub || sub === 'list') {
-    const filters: Parameters<typeof client.listings.list>[0] = {};
-    if (flags.category) filters.category = flags.category as ListingCategory;
-    if (flags.status) filters.status = flags.status as ListingStatus;
-    if (flags.limit) filters.limit = Number(flags.limit);
-    if (flags.page) filters.page = Number(flags.page);
-    if (flags.search) filters.search = flags.search;
-    print(await client.listings.list(filters));
-    return;
-  }
-
-  if (sub === 'get') {
-    const id = positional[1];
-    if (!id) die('Usage: clawdmarket listings get <id>');
-    print(await client.listings.get(id));
-    return;
-  }
-
-  if (sub === 'create') {
-    const { category, title, description, price } = flags;
-    if (!category || !title || !description || !price) {
-      die('Usage: clawdmarket listings create --category <cat> --title <title> --description <desc> --price <price>');
-    }
-    print(
-      await client.listings.create({
-        category: category as ListingCategory,
-        title,
-        description,
-        price_clawd: Number(price),
-      }),
-    );
-    return;
-  }
-
-  if (sub === 'update') {
-    const id = positional[1];
-    if (!id) die('Usage: clawdmarket listings update <id> [--category] [--title] [--description] [--price]');
-    const data: Parameters<typeof client.listings.update>[1] = {};
-    if (flags.category) data.category = flags.category as ListingCategory;
-    if (flags.title) data.title = flags.title;
-    if (flags.description) data.description = flags.description;
-    if (flags.price) data.price_clawd = Number(flags.price);
-    print(await client.listings.update(id, data));
-    return;
-  }
-
-  if (sub === 'delete') {
-    const id = positional[1];
-    if (!id) die('Usage: clawdmarket listings delete <id>');
-    await client.listings.delete(id);
-    console.log('Listing deleted.');
-    return;
-  }
-
-  die(`Unknown listings subcommand: ${sub}. Try list, get, create, update, delete`);
-}
-
-async function cmdTrades(positional: string[], flags: Record<string, string>): Promise<void> {
-  const sub = positional[0];
-  const client = makeClient();
-
-  if (!sub || sub === 'list') {
-    print(await client.trades.list());
-    return;
-  }
-
-  if (sub === 'create') {
-    const listingId = positional[1];
-    const amount = flags.amount;
-    if (!listingId || !amount) die('Usage: clawdmarket trades create <listing-id> --amount <price>');
-    print(await client.trades.create(listingId, Number(amount)));
-    return;
-  }
-
-  if (sub === 'get') {
-    const id = positional[1];
-    if (!id) die('Usage: clawdmarket trades get <id>');
-    print(await client.trades.get(id));
-    return;
-  }
-
-  if (sub === 'complete') {
-    const id = positional[1];
-    if (!id) die('Usage: clawdmarket trades complete <id>');
-    print(await client.trades.updateStatus(id, 'completed'));
-    return;
-  }
-
-  if (sub === 'dispute') {
-    const id = positional[1];
-    if (!id) die('Usage: clawdmarket trades dispute <id>');
-    print(await client.trades.updateStatus(id, 'disputed'));
-    return;
-  }
-
-  die(`Unknown trades subcommand: ${sub}. Try list, create, get, complete, dispute`);
-}
-
-async function cmdWebhooks(positional: string[], flags: Record<string, string>): Promise<void> {
-  const sub = positional[0];
-  const client = makeClient();
-
-  if (!sub || sub === 'list') {
-    print(await client.webhooks.list());
-    return;
-  }
-
-  if (sub === 'create') {
-    const { url, events } = flags;
-    if (!url || !events) die('Usage: clawdmarket webhooks create --url <url> --events trade.created,trade.completed,listing.sold');
-    print(await client.webhooks.create(url, events.split(',') as any));
-    return;
-  }
-
-  if (sub === 'delete') {
-    const id = positional[1];
-    if (!id) die('Usage: clawdmarket webhooks delete <id>');
-    await client.webhooks.delete(id);
-    console.log('Webhook deleted.');
-    return;
-  }
-
-  die(`Unknown webhooks subcommand: ${sub}. Try list, create, delete`);
-}
-
-async function cmdRatings(positional: string[], flags: Record<string, string>): Promise<void> {
-  const sub = positional[0];
-  const client = makeClient();
-
-  if (sub === 'create') {
-    const { trade, score, comment } = flags;
-    if (!trade || !score) die('Usage: clawdmarket ratings create --trade <trade-id> --score <1-5> [--comment <text>]');
-    print(await client.ratings.create({
-      trade_id: trade,
-      score: Number(score),
-      comment: comment || undefined,
-    }));
-    return;
-  }
-
-  if (sub === 'user') {
-    const id = positional[1];
-    if (!id) die('Usage: clawdmarket ratings user <user-id>');
-    print(await client.ratings.forUser(id));
-    return;
-  }
-
-  die(`Unknown ratings subcommand: ${sub}. Try create, user`);
-}
-
-async function cmdActivity(): Promise<void> {
-  const client = makeClient();
-  print(await client.activity());
-}
-
-async function cmdProfile(positional: string[]): Promise<void> {
-  const id = positional[0];
-  if (!id) die('Usage: clawdmarket profile <user-id>');
-  const client = makeClient();
-  print(await client.userProfile(id));
-}
-
-// ─── Entry point ──────────────────────────────────────────────────────────────
-
-async function main(): Promise<void> {
-  const argv = process.argv.slice(2);
-  const { positional, flags } = parseArgs(argv);
-  const command = positional[0];
-  const rest = positional.slice(1);
-
-  try {
-    switch (command) {
-      case 'health':
-        await cmdHealth();
-        break;
-      case 'stats':
-        await cmdStats();
-        break;
-      case 'login':
-        await cmdLogin(rest);
-        break;
-      case 'listings':
-        await cmdListings(rest, flags);
-        break;
-      case 'trades':
-        await cmdTrades(rest, flags);
-        break;
-      case 'webhooks':
-        await cmdWebhooks(rest, flags);
-        break;
-      case 'ratings':
-        await cmdRatings(rest, flags);
-        break;
-      case 'activity':
-        await cmdActivity();
-        break;
-      case 'profile':
-        await cmdProfile(rest);
-        break;
-      case undefined:
-      case 'help':
-      case '--help':
-      case '-h':
-        usage();
-        break;
-      default:
-        console.error(`Unknown command: ${command}`);
-        usage();
-        process.exit(1);
-    }
-  } catch (err) {
-    if (err instanceof ClawdMarketError) {
-      console.error(`API error (${err.status}): ${err.message}`);
-      if (process.env.DEBUG) {
-        console.error('Body:', JSON.stringify(err.body, null, 2));
+      if (result.listings.length === 0) {
+        console.log(chalk.yellow('No listings found matching your criteria.'));
+        return;
       }
-      process.exit(1);
-    }
-    throw err;
-  }
-}
 
-main();
+      console.log(chalk.bold(`\nFound ${result.total} listings:\n`));
+      
+      result.listings.forEach((listing: Listing) => {
+        const price = `${listing.price_bankr} BANKR`;
+        const title = listing.title.length > 50 ? listing.title.substring(0, 47) + '...' : listing.title;
+        
+        console.log(`${chalk.cyan(listing.id)}  ${chalk.white(title.padEnd(50))}  ${chalk.yellow(price.padStart(10))}`);
+        console.log(`   ${chalk.gray(listing.category)} • sold by ${chalk.gray(listing.seller_name)}\n`);
+      });
+
+    } catch (error: any) {
+      console.error(chalk.red(`Error fetching listings: ${error.message}`));
+    }
+  });
+
+listings
+  .command('show <id>')
+  .description('Show details of a specific listing')
+  .action(async (id) => {
+    try {
+      const listing = await client.getListing(id);
+      
+      console.log(chalk.bold.underline(`\n${listing.title}`));
+      console.log(chalk.gray(`ID: ${listing.id}`));
+      console.log(chalk.yellow(`\nPrice: ${listing.price_bankr} BANKR`));
+      console.log(`Category: ${listing.category}`);
+      console.log(`Seller: ${listing.seller_name}\n`);
+      console.log(chalk.white(listing.description));
+      console.log(chalk.gray(`\nPosted: ${new Date(listing.created_at).toLocaleString()}`));
+
+      // Upsell: Buy command
+      console.log(chalk.green(`\nTo buy this item, run:\n  clawd buy ${listing.id}`));
+
+    } catch (error: any) {
+      console.error(chalk.red(`Error fetching listing: ${error.message}`));
+    }
+  });
+
+listings
+  .command('create')
+  .description('Create a new listing')
+  .action(async () => {
+    const session = client.loadSession();
+    if (!session) {
+      console.error(chalk.red('You must be logged in to create a listing. Run `clawd auth login`.'));
+      return;
+    }
+
+    const answers = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'category',
+        message: 'Category:',
+        choices: ['compute', 'skills', 'data', 'bounties'],
+      },
+      {
+        type: 'input',
+        name: 'title',
+        message: 'Title:',
+        validate: (input: string) => input.length >= 5 || 'Title must be at least 5 characters',
+      },
+      {
+        type: 'input',
+        name: 'description',
+        message: 'Description:',
+        validate: (input: string) => input.length >= 20 || 'Description must be at least 20 characters',
+      },
+      {
+        type: 'number',
+        name: 'price_bankr',
+        message: 'Price (BANKR):',
+        validate: (input: number) => (input >= 864 && input <= 2465) || 'Price must be between 864 and 2465',
+      },
+    ]);
+
+    try {
+      const listing = await client.createListing(answers);
+      console.log(chalk.green(`\nListing created successfully!`));
+      console.log(`ID: ${chalk.cyan(listing.id)}`);
+      console.log(`Run \`clawd listings show ${listing.id}\` to view it.`);
+    } catch (error: any) {
+      console.error(chalk.red(`Error creating listing: ${error.message}`));
+    }
+  });
+
+// ─── Trade Commands ─────────────────────────────────────────────────────────
+
+program
+  .command('buy <listing-id>')
+  .description('Purchase a listing using your BANKR balance')
+  .action(async (id) => {
+    const session = client.loadSession();
+    if (!session) {
+      console.error(chalk.red('You must be logged in to buy items. Run `clawd auth login`.'));
+      return;
+    }
+
+    try {
+      // Fetch details first to confirm price
+      const listing = await client.getListing(id);
+      
+      const confirm = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'proceed',
+          message: `Buy "${listing.title}" for ${listing.price_bankr} BANKR?`,
+          default: false,
+        },
+      ]);
+
+      if (!confirm.proceed) {
+        console.log(chalk.yellow('Purchase cancelled.'));
+        return;
+      }
+
+      const trade = await client.buy(id);
+      console.log(chalk.green(`\nPurchase successful! Trade ID: ${trade.id}`));
+      console.log(chalk.white(`Funds are now in escrow. Waiting for seller to deliver.`));
+      
+    } catch (error: any) {
+      console.error(chalk.red(`Purchase failed: ${error.message}`));
+    }
+  });
+
+// ─── Wallet Commands ────────────────────────────────────────────────────────
+
+const wallet = program.command('wallet').description('Check wallet balance');
+
+wallet
+  .command('balance')
+  .description('Show your current BANKR balance')
+  .action(async () => {
+    const session = client.loadSession();
+    if (!session) {
+      console.error(chalk.red('You must be logged in to check balance. Run `clawd auth login`.'));
+      return;
+    }
+
+    try {
+      const { balance, escrow } = await client.getWallet();
+      console.log(chalk.bold(`\nWallet for ${session.user.email}:`));
+      console.log(`${chalk.yellow(balance)} BANKR (Available)`);
+      console.log(`${chalk.gray(escrow)} BANKR (Locked in Escrow)`);
+    } catch (error: any) {
+      console.error(chalk.red(`Error fetching wallet: ${error.message}`));
+    }
+  });
+
+program.parse(process.argv);

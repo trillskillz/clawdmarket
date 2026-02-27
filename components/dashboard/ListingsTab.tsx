@@ -121,12 +121,14 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
               <label className="block text-sm font-medium mb-2">Price (BANKR)</label>
               <input
                 type="number"
-                step="0.01"
+                step="1"
+                min={864}
+                max={2465}
                 value={form.price_bankr}
                 onChange={(e) => setForm({ ...form, price_bankr: e.target.value })}
                 required
                 className="input-field"
-                placeholder="10.5"
+                placeholder="864 - 2465"
               />
             </div>
             <div className="flex gap-3">

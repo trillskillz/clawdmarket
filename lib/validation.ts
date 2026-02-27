@@ -26,7 +26,7 @@ export const createListingSchema = z.object({
   category: z.enum(['compute', 'skills', 'data', 'bounties']),
   title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title too long'),
   description: z.string().min(20, 'Description must be at least 20 characters').max(1000, 'Description too long'),
-  price_bankr: z.number().positive('Price must be positive').max(1000000, 'Price too high'),
+  price_bankr: z.number().min(864, 'Price must be at least 864').max(2465, 'Price must be at most 2465'),
 });
 
 export const createTradeSchema = z.object({
@@ -51,14 +51,14 @@ export const listingsQuerySchema = z.object({
   search: z.string().optional(),
   seller_id: z.string().uuid().optional(),
   seller: z.enum(['me']).optional(),
-  min_price: z.coerce.number().nonnegative().optional(),
-  max_price: z.coerce.number().positive().optional(),
+  min_price: z.coerce.number().min(864).max(2465).optional(),
+  max_price: z.coerce.number().min(864).max(2465).optional(),
 });
 
 export const updateListingSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title too long').optional(),
   description: z.string().min(20, 'Description must be at least 20 characters').max(1000, 'Description too long').optional(),
-  price_bankr: z.number().positive('Price must be positive').max(1000000, 'Price too high').optional(),
+  price_bankr: z.number().min(864, 'Price must be at least 864').max(2465, 'Price must be at most 2465').optional(),
   category: z.enum(['compute', 'skills', 'data', 'bounties']).optional(),
 });
 
