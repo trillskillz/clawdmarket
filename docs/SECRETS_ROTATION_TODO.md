@@ -2,22 +2,22 @@
 
 Status:
 - ✅ Rotated in Vercel: `JWT_SECRET` (Production)
+- ✅ Rotated in Vercel: `TURSO_AUTH_TOKEN` (Production)
 - ✅ Deleted local leaked file: `.env.production`
-- ⚠️ Still rotate: `TURSO_AUTH_TOKEN` (Production)
 
-## Why
-A local `.env.production` file contained live secret material. Even though it was not committed, rotate tokens as precaution.
+## Completed actions
 
-## Required remaining step
+### JWT secret
+- Removed old `JWT_SECRET` from Vercel Production and added a newly generated value.
 
-### Rotate Turso auth token
-1. Create a new Turso auth token in Turso dashboard/CLI.
-2. Update Vercel env var:
-   - `TURSO_AUTH_TOKEN` (Production)
-3. Redeploy app.
-4. Revoke old Turso token.
+### Turso auth token
+- Replaced Vercel Production `TURSO_AUTH_TOKEN` with newly issued token.
+- Triggered production deployment and alias update.
 
-## Verification
-- `vercel env ls` shows expected Production vars.
-- App health endpoint works after redeploy.
-- DB-backed endpoints still work.
+## Verification completed
+- `GET /api/health` returned OK on production alias.
+- `GET /api/stats` returned valid DB-backed response.
+- `GET /api/listings?limit=2` returned marketplace data.
+
+## Notes
+- If further rotation is desired, repeat token issue/update/redeploy sequence and verify the same endpoints.
