@@ -44,6 +44,9 @@ test.describe('Core smoke matrix', () => {
     await page.getByRole('button', { name: /Webhooks/ }).click();
     await expect(page.getByRole('heading', { name: 'Webhooks' })).toBeVisible();
 
+    await page.getByRole('button', { name: /Analytics/ }).click();
+    await expect(page.getByRole('heading', { name: 'Operator Analytics' })).toBeVisible();
+
     const csrf = await page.evaluate(() =>
       document.cookie.split('; ').find((r) => r.startsWith('csrf-token='))?.split('=')[1] || ''
     );

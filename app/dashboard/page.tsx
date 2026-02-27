@@ -8,6 +8,7 @@ import TradesTab from '@/components/dashboard/TradesTab';
 import ApiKeysTab from '@/components/dashboard/ApiKeysTab';
 import WebhooksTab from '@/components/dashboard/WebhooksTab';
 import WalletTab from '@/components/dashboard/WalletTab';
+import AnalyticsTab from '@/components/dashboard/AnalyticsTab';
 
 interface User {
   id: string;
@@ -20,12 +21,13 @@ interface User {
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'listings' | 'trades' | 'api-keys' | 'webhooks' | 'wallet'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'trades' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics'>('listings');
   const [listings, setListings] = useState([]);
   const [trades, setTrades] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
   const [webhooksData, setWebhooksData] = useState([]);
   const [wallet, setWallet] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const getCsrfToken = () =>
@@ -33,12 +35,13 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [listingsRes, tradesRes, apiKeysRes, webhooksRes, walletRes] = await Promise.all([
+      const [listingsRes, tradesRes, apiKeysRes, webhooksRes, walletRes, analyticsRes] = await Promise.all([
         fetch('/api/listings?seller=me', { credentials: 'include' }),
         fetch('/api/trades', { credentials: 'include' }),
         fetch('/api/auth/api-keys', { credentials: 'include' }),
         fetch('/api/webhooks', { credentials: 'include' }),
         fetch('/api/wallet', { credentials: 'include' }),
+        fetch('/api/analytics/summary', { credentials: 'include' }),
       ]);
 
       if (listingsRes.ok) { const d = await listingsRes.json(); setListings(d.listings || []); }
@@ -46,6 +49,7 @@ export default function DashboardPage() {
       if (apiKeysRes.ok) { const d = await apiKeysRes.json(); setApiKeys(d.keys || []); }
       if (webhooksRes.ok) { const d = await webhooksRes.json(); setWebhooksData(d.webhooks || []); }
       if (walletRes.ok) { const d = await walletRes.json(); setWallet(d); }
+      if (analyticsRes.ok) { const d = await analyticsRes.json(); setAnalytics(d); }
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -84,6 +88,7 @@ export default function DashboardPage() {
     { id: 'listings' as const, label: 'My Listings', icon: '📋' },
     { id: 'trades' as const, label: 'Trade History', icon: '🤝' },
     { id: 'wallet' as const, label: 'Wallet', icon: '💳' },
+    { id: 'analytics' as const, label: 'Analytics', icon: '📊' },
     { id: 'api-keys' as const, label: 'API Keys', icon: '🔑' },
     { id: 'webhooks' as const, label: 'Webhooks', icon: '🔔' },
   ];
@@ -163,6 +168,9 @@ export default function DashboardPage() {
         )}
         {activeTab === 'wallet' && (
           <WalletTab wallet={wallet} loading={loading} />
+        )}
+        {activeTab === 'analytics' && (
+          <AnalyticsTab analytics={analytics} loading={loading} />
         )}
         {activeTab === 'api-keys' && (
           <ApiKeysTab apiKeys={apiKeys} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
