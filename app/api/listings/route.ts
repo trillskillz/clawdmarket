@@ -5,7 +5,13 @@ import { authenticateRequest } from '@/lib/auth';
 import { createListingSchema, listingsQuerySchema, sanitizeHtml } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
-import { eq, and, like, desc, gte, lte, or, sql } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
+
+async function hasPriceBankrColumn() {
+  const columns = await (db as any).$client.execute('PRAGMA table_info(listings)');
+  const names = (columns.rows as any[]).map((r) => String((r as any).name));
+  return names.includes('price_bankr');
+}
 
 export async function GET(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
@@ -74,7 +80,8 @@ export async function GET(req: NextRequest) {
     
     const totalCount = countResult?.count || 0;
 
-    // Get paginated results
+    // Get paginated results (compat with legacy schema that used `price` instead of `price_bankr`)
+    const hasPriceBankr = await hasPriceBankrColumn();
     const results = await db
       .select({
         id: listings.id,
@@ -82,7 +89,7 @@ export async function GET(req: NextRequest) {
         category: listings.category,
         title: listings.title,
         description: listings.description,
-        price_bankr: listings.price_bankr,
+        price_bankr: hasPriceBankr ? listings.price_bankr : sql<number>`price`,
         status: listings.status,
         created_at: listings.created_at,
       })
@@ -163,22 +170,35 @@ export async function POST(req: NextRequest) {
       const results = [];
       const errors = [];
 
+      const hasPriceBankr = await hasPriceBankrColumn();
+
       for (let i = 0; i < body.length; i++) {
         try {
           const validated = createListingSchema.parse(body[i]);
           const sanitizedTitle = sanitizeHtml(validated.title);
           const sanitizedDescription = sanitizeHtml(validated.description);
 
-          const [newListing] = await db
-            .insert(listings)
-            .values({
-              seller_id: auth.userId,
-              category: validated.category,
-              title: sanitizedTitle,
-              description: sanitizedDescription,
-              price_bankr: validated.price_bankr,
-            })
-            .returning();
+          let newListing: any;
+
+          if (hasPriceBankr) {
+            [newListing] = await db
+              .insert(listings)
+              .values({
+                seller_id: auth.userId,
+                category: validated.category,
+                title: sanitizedTitle,
+                description: sanitizedDescription,
+                price_bankr: validated.price_bankr,
+              })
+              .returning();
+          } else {
+            const id = crypto.randomUUID();
+            await (db as any).$client.execute({
+              sql: 'INSERT INTO listings (id, seller_id, category, title, description, price, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              args: [id, auth.userId, validated.category, sanitizedTitle, sanitizedDescription, validated.price_bankr, 'active', new Date().toISOString()],
+            });
+            [newListing] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
+          }
 
           results.push({ index: i, success: true, listing: newListing });
         } catch (error: any) {
@@ -206,17 +226,29 @@ export async function POST(req: NextRequest) {
     const sanitizedTitle = sanitizeHtml(validated.title);
     const sanitizedDescription = sanitizeHtml(validated.description);
 
+    const hasPriceBankr = await hasPriceBankrColumn();
+
     // Create listing
-    const [newListing] = await db
-      .insert(listings)
-      .values({
-        seller_id: auth.userId,
-        category: validated.category,
-        title: sanitizedTitle,
-        description: sanitizedDescription,
-        price_bankr: validated.price_bankr,
-      })
-      .returning();
+    let newListing: any;
+    if (hasPriceBankr) {
+      [newListing] = await db
+        .insert(listings)
+        .values({
+          seller_id: auth.userId,
+          category: validated.category,
+          title: sanitizedTitle,
+          description: sanitizedDescription,
+          price_bankr: validated.price_bankr,
+        })
+        .returning();
+    } else {
+      const id = crypto.randomUUID();
+      await (db as any).$client.execute({
+        sql: 'INSERT INTO listings (id, seller_id, category, title, description, price, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        args: [id, auth.userId, validated.category, sanitizedTitle, sanitizedDescription, validated.price_bankr, 'active', new Date().toISOString()],
+      });
+      [newListing] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
+    }
 
     return NextResponse.json(
       {
