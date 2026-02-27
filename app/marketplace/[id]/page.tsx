@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { SkeletonDetail } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface Listing {
   id: string;
@@ -32,17 +33,7 @@ export default function ListingDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchMe();
-  }, []);
-
-  useEffect(() => {
-    if (params.id) {
-      fetchListing(params.id as string);
-    }
-  }, [params.id]);
-
-  const fetchMe = async () => {
+  const fetchMe = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include' });
       if (res.ok) {
@@ -50,9 +41,9 @@ export default function ListingDetailPage() {
         setCurrentUserId(data.user.id);
       }
     } catch {}
-  };
+  }, []);
 
-  const fetchListing = async (id: string) => {
+  const fetchListing = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/listings/${id}`);
       if (res.ok) {
@@ -67,7 +58,17 @@ export default function ListingDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchMe();
+  }, [fetchMe]);
+
+  useEffect(() => {
+    if (params.id) {
+      fetchListing(params.id as string);
+    }
+  }, [fetchListing, params.id]);
 
   const handleTrade = async () => {
     if (!listing) return;
@@ -196,9 +197,11 @@ export default function ListingDetailPage() {
                 <h3 className="text-sm font-bold uppercase tracking-wider text-text-dim mb-3">Seller</h3>
                 <div className="flex items-center gap-4 bg-bg/50 p-4 rounded-xl border border-border hover:border-accent/50 transition-colors">
                   {listing.seller_avatar_url ? (
-                    <img
+                    <Image
                       src={listing.seller_avatar_url}
                       alt={listing.seller_name}
+                      width={48}
+                      height={48}
                       className="w-12 h-12 rounded-full bg-bg2 object-cover border border-border"
                     />
                   ) : (

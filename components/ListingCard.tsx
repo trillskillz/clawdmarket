@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface ListingCardProps {
   id: string;
@@ -60,10 +61,12 @@ export default function ListingCard({
           </div>
           <div className="flex items-center gap-2">
             {seller_avatar_url ? (
-              <img
+              <Image
                 src={seller_avatar_url}
                 alt={seller_name}
-                className="w-6 h-6 rounded-full bg-bg"
+                width={24}
+                height={24}
+                className="w-6 h-6 rounded-full bg-bg object-cover"
               />
             ) : (
               <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-xs text-accent">

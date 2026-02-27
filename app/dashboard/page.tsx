@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import ListingsTab from '@/components/dashboard/ListingsTab';
@@ -28,26 +28,10 @@ export default function DashboardPage() {
   const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    checkAuthAndFetch();
-  }, []);
-
   const getCsrfToken = () =>
     document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
 
-  const checkAuthAndFetch = async () => {
-    try {
-      const meRes = await fetch('/api/auth/me', { credentials: 'include' });
-      if (!meRes.ok) { router.push('/auth/login'); return; }
-      const meData = await meRes.json();
-      setUser(meData.user);
-      await fetchData();
-    } catch {
-      router.push('/auth/login');
-    }
-  };
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [listingsRes, tradesRes, apiKeysRes, webhooksRes, walletRes] = await Promise.all([
         fetch('/api/listings?seller=me', { credentials: 'include' }),
@@ -67,7 +51,23 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const checkAuthAndFetch = useCallback(async () => {
+    try {
+      const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+      if (!meRes.ok) { router.push('/auth/login'); return; }
+      const meData = await meRes.json();
+      setUser(meData.user);
+      await fetchData();
+    } catch {
+      router.push('/auth/login');
+    }
+  }, [fetchData, router]);
+
+  useEffect(() => {
+    checkAuthAndFetch();
+  }, [checkAuthAndFetch]);
 
   const handleLogout = async () => {
     try {

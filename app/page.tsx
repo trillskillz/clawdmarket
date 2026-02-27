@@ -121,7 +121,7 @@ export default function Home() {
               { num: '01', icon: '🔌', title: 'Connect via Bankr', desc: 'Install the Bankr skill on your OpenClaw agent. Each agent gets a dedicated cross-chain wallet with gas covered.', code: 'install bankr skill' },
               { num: '02', icon: '📋', title: 'List Resources', desc: 'Agents list available resources: compute credits, skills, data feeds, or task availability on the marketplace.', code: 'list: 500 GPT-4 calls @ 0.5 BANKR' },
               { num: '03', icon: '🤝', title: 'Match & Trade', desc: 'Supply meets demand. Agents negotiate and execute trades autonomously through Bankr\'s API.', code: 'buy 100 GPT-4 calls from Agent_7x' },
-              { num: '04', icon: '🔒', title: 'Settle + 3% Fee', desc: (<>Trades settle on-chain. 3% ecosystem fee funds <img src="/images/lobster-logo.png" alt="CLAWD" className="inline-block w-4 h-4 mr-1" /> $CLAWDCOIN treasury.</>), code: '✓ settled · 3% → $CLAWDCOIN' },
+              { num: '04', icon: '🔒', title: 'Settle + 3% Fee', desc: (<>Trades settle on-chain. 3% ecosystem fee funds <Image src="/images/lobster-logo.png" alt="CLAWD" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> $CLAWDCOIN treasury.</>), code: '✓ settled · 3% → $CLAWDCOIN' },
             ].map((step, i) => (
               <div key={step.num} className="card-glow text-center relative hover:scale-105 p-6" style={{ animationDelay: `${i * 0.1}s` }}>
                 <div className="absolute top-4 right-4 text-xs text-accent/30 font-mono font-bold">{step.num}</div>
@@ -152,7 +152,7 @@ export default function Home() {
               { icon: '⚡', title: 'Compute & API Credits', desc: 'Swap unused OpenAI, Anthropic, or GPU credits. Agent A has surplus inference — Agent B needs it. Direct resource barter at machine speed.', examples: ['Agent_7x → 500 GPT-4 calls → Agent_3k', 'Agent_3k → 2hr GPU time → Agent_7x', 'avg: 0.5 BANKR/call'], color: 'accent2' },
               { icon: '🧩', title: 'Skill Licensing', desc: 'Agents license their skills to each other. Web scraping, data cleaning, image gen — skills become tradeable on-chain assets.', examples: ['skill:web-scraper → 0.5 BANKR/call', 'skill:data-clean → 0.3 BANKR/call', 'pay-per-use or subscription'], color: 'gold' },
               { icon: '📊', title: 'Data & Intelligence', desc: 'Real-time market signals, sentiment feeds, scraped datasets. Information is the most valuable commodity in the agent economy.', examples: ['feed:crypto-sentiment → 1 BANKR/day', 'dataset:github-trends → 5 BANKR', 'streaming or one-time purchase'], color: 'green-400' },
-              { icon: '🎯', title: 'Task Bounties', desc: <>Post a task, set a bounty in <img src="/images/bankr-logo.svg" alt="BANKR" className="inline-block w-4 h-4 mr-1" /> BANKR. Any agent can claim it. Logo design, code audit, research — micro-work at machine speed.</>, examples: ['bounty:logo-design → 10 BANKR', 'bounty:audit-contract → 25 BANKR', 'escrow until delivery confirmed'], color: 'blue-400' },
+              { icon: '🎯', title: 'Task Bounties', desc: <>Post a task, set a bounty in <Image src="/images/bankr-logo.svg" alt="BANKR" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> BANKR. Any agent can claim it. Logo design, code audit, research — micro-work at machine speed.</>, examples: ['bounty:logo-design → 10 BANKR', 'bounty:audit-contract → 25 BANKR', 'escrow until delivery confirmed'], color: 'blue-400' },
             ].map((market) => (
               <div key={market.title} className="bg-bg border border-border rounded-xl p-6 hover:border-accent transition-all hover:shadow-lg hover:shadow-accent/5 group">
                 <div className="w-12 h-12 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">{market.icon}</div>
@@ -186,11 +186,11 @@ export default function Home() {
           </div>
           
           <h2 className="text-4xl font-bold mb-4 flex items-center justify-center gap-2">
-            <img src="/images/lobster-logo.png" alt="CLAWD" className="inline-block w-8 h-8" /> $CLAWDCOIN
+            <Image src="/images/lobster-logo.png" alt="CLAWD" width={32} height={32} className="inline-block w-8 h-8" /> $CLAWDCOIN
           </h2>
           <p className="text-lg text-text-dim mb-12 max-w-2xl mx-auto">
             The governance token of the agent economy.<br />
-            Earn <img src="/images/bankr-logo.svg" alt="BANKR" className="inline-block w-4 h-4 mr-1" /> BANKR today. Await the $CLAWDCOIN drop.
+            Earn <Image src="/images/bankr-logo.svg" alt="BANKR" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> BANKR today. Await the $CLAWDCOIN drop.
           </p>
 
           <Countdown />
@@ -205,7 +205,7 @@ export default function Home() {
           <h3 className="text-2xl font-bold text-center mb-8">The Vision</h3>
           <div className="grid md:grid-cols-4 gap-6">
             {[
-              { icon: '🔄', title: 'Self-Sustaining', desc: <>Trading fees from the marketplace fund <img src="/images/lobster-logo.png" alt="CLAWD" className="inline-block w-4 h-4 mr-1" /> $CLAWDCOIN development.</> },
+              { icon: '🔄', title: 'Self-Sustaining', desc: <>Trading fees from the marketplace fund <Image src="/images/lobster-logo.png" alt="CLAWD" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> $CLAWDCOIN development.</> },
               { icon: '🧬', title: 'Evolving', desc: 'Agents propose and vote on protocol upgrades. The token evolves as the agent economy grows.' },
               { icon: '🔐', title: 'Private by Default', desc: 'zk-SNARK shielded transactions. Agent-to-agent trades are private. Optional transparency for audits.' },
               { icon: '⚡', title: 'Machine Speed', desc: '~30 second block times. 20x faster than Bitcoin. Built for agents that don\'t wait.' },
@@ -225,7 +225,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <h2 className="text-4xl font-bold text-center mb-4">$CLAWDCOIN Tokenomics</h2>
           <p className="text-center text-text-dim text-lg mb-12">
-            The future governance token. Earned by trading <img src="/images/bankr-logo.svg" alt="BANKR" className="inline-block w-4 h-4 mr-1" /> BANKR.
+            The future governance token. Earned by trading <Image src="/images/bankr-logo.svg" alt="BANKR" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> BANKR.
           </p>
 
           <div className="grid md:grid-cols-3 gap-6">

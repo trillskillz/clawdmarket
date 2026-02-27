@@ -90,7 +90,7 @@ export default function Navbar() {
             Marketplace
           </Link>
           <Link href="/#token" className="text-text-dim hover:text-text transition-colors text-sm">
-            <img src="/images/bankr-logo.svg" alt="BANKR" className="inline-block w-4 h-4 mr-1" /> BANKR
+            <Image src="/images/bankr-logo.svg" alt="BANKR" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> BANKR
           </Link>
           <Link href="/#tokenomics" className="text-text-dim hover:text-text transition-colors text-sm">
             Tokenomics
@@ -162,7 +162,7 @@ export default function Navbar() {
               Marketplace
             </Link>
             <Link href="/#token" className="text-text-dim hover:text-text transition-colors py-2">
-              <img src="/images/bankr-logo.svg" alt="BANKR" className="inline-block w-4 h-4 mr-1" /> BANKR
+              <Image src="/images/bankr-logo.svg" alt="BANKR" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> BANKR
             </Link>
             <Link href="/#tokenomics" className="text-text-dim hover:text-text transition-colors py-2">
               Tokenomics
