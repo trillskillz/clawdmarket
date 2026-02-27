@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 type EthereumProvider = {
   isMetaMask?: boolean;
@@ -15,20 +15,13 @@ declare global {
   }
 }
 
-const DISMISS_KEY = 'wallet-popup-dismissed';
-
 const truncateAddress = (value: string) => `${value.slice(0, 6)}...${value.slice(-4)}`;
 
 export default function WalletLoginPopup() {
-  const [dismissed, setDismissed] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const wasDismissed = localStorage.getItem(DISMISS_KEY) === '1';
-    setDismissed(wasDismissed);
-  }, []);
 
   const providers = useMemo(() => {
     const root = window.ethereum;
@@ -63,7 +56,6 @@ export default function WalletLoginPopup() {
   };
 
   const closePopup = () => {
-    localStorage.setItem(DISMISS_KEY, '1');
     setDismissed(true);
   };
 
