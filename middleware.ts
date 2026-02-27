@@ -17,8 +17,9 @@ export function middleware(req: NextRequest) {
 
   const alreadySeenJoin = req.cookies.get(FIRST_VISIT_COOKIE)?.value === '1';
   const alreadyOnJoinFlow = pathname.startsWith('/auth/register');
+  const hasAuthToken = Boolean(req.cookies.get('auth-token')?.value);
 
-  if (!alreadySeenJoin && !alreadyOnJoinFlow && req.method === 'GET') {
+  if (!hasAuthToken && !alreadySeenJoin && !alreadyOnJoinFlow && req.method === 'GET') {
     const url = req.nextUrl.clone();
     url.pathname = '/auth/register';
     url.searchParams.set('first_visit', '1');
