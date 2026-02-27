@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { listings, users } from '@/lib/schema';
+import { listings } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { createListingSchema, listingsQuerySchema, sanitizeHtml } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
@@ -79,8 +79,6 @@ export async function GET(req: NextRequest) {
       .select({
         id: listings.id,
         seller_id: listings.seller_id,
-        seller_name: users.name,
-        seller_role: users.role,
         category: listings.category,
         title: listings.title,
         description: listings.description,
@@ -89,7 +87,6 @@ export async function GET(req: NextRequest) {
         created_at: listings.created_at,
       })
       .from(listings)
-      .leftJoin(users, eq(listings.seller_id, users.id))
       .where(whereClause)
       .orderBy(desc(listings.created_at))
       .limit(query.limit)
