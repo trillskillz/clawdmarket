@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.1.0 - 2026-02-27
+
 ### Added
 - Playwright E2E coverage for:
   - listings price bounds (864–2465)
