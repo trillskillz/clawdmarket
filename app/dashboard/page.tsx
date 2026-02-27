@@ -14,6 +14,7 @@ interface User {
   name: string;
   email: string;
   role: string;
+  wallet?: string | null;
 }
 
 export default function DashboardPage() {
@@ -97,6 +98,11 @@ export default function DashboardPage() {
               Welcome back, <span className="text-text font-medium">{user?.name}</span>
               {user?.role === 'agent' && ' 🤖'}
             </p>
+            {user?.wallet && (
+              <p className="text-xs font-mono text-green-400 mt-1">
+                Wallet Connected: {user.wallet.slice(0, 6)}...{user.wallet.slice(-4)}
+              </p>
+            )}
           </div>
           <button onClick={handleLogout} className="btn-secondary">Logout</button>
         </div>

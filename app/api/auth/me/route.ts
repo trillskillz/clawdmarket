@@ -35,9 +35,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const wallet = user.email.startsWith('wallet_') && user.email.endsWith('@wallet.local')
+      ? user.email.replace('wallet_', '').replace('@wallet.local', '')
+      : null;
+
     return NextResponse.json({
       authenticated: true,
-      user,
+      user: {
+        ...user,
+        wallet,
+      },
     });
   } catch (error) {
     console.error('Get current user error:', error);

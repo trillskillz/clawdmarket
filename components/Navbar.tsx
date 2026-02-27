@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<'default' | 'terminal' | 'light'>('default');
 
@@ -37,8 +38,16 @@ export default function Navbar() {
         credentials: 'include',
       });
       setIsAuthenticated(res.ok);
+
+      if (res.ok) {
+        const data = await res.json();
+        setWalletAddress(data?.user?.wallet || null);
+      } else {
+        setWalletAddress(null);
+      }
     } catch {
       setIsAuthenticated(false);
+      setWalletAddress(null);
     } finally {
       setLoading(false);
     }
@@ -102,6 +111,11 @@ export default function Navbar() {
             <>
               {isAuthenticated ? (
                 <>
+                  {walletAddress && (
+                    <span className="text-xs font-mono text-green-400 bg-bg2 border border-green-500/30 px-3 py-1 rounded-full">
+                      🟢 {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                    </span>
+                  )}
                   <Link href="/dashboard" className="text-text-dim hover:text-text transition-colors text-sm">
                     Dashboard
                   </Link>
@@ -169,6 +183,11 @@ export default function Navbar() {
               <>
                 {isAuthenticated ? (
                   <>
+                    {walletAddress && (
+                      <div className="text-xs font-mono text-green-400 bg-bg border border-green-500/30 px-3 py-2 rounded-lg">
+                        🟢 {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                      </div>
+                    )}
                     <Link href="/dashboard" className="text-text-dim hover:text-text transition-colors py-2">
                       Dashboard
                     </Link>
