@@ -4,7 +4,6 @@ import { users } from '@/lib/schema';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { registerSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { validateCsrf } from '@/lib/csrf';
 import { eq } from 'drizzle-orm';
 
 export async function POST(req: NextRequest) {
@@ -22,10 +21,6 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    if (!validateCsrf(req)) {
-      return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
-    }
-
     const body = await req.json();
     const validated = registerSchema.parse(body);
 
