@@ -17,6 +17,7 @@ export default function Hero() {
     volume_24h: 0,
   });
   const [heartbeat, setHeartbeat] = useState<{id: string, action: string, timestamp?: string}[]>([]);
+  const blockedTickerPhrase = 'cli test gpu';
 
   useEffect(() => {
     const fallbackActions = [
@@ -34,18 +35,25 @@ export default function Hero() {
         const data = await res.json();
         
         if (data.activity && data.activity.length > 0) {
-          const shuffled = [...data.activity].sort(() => Math.random() - 0.5);
-          const selected = shuffled[0];
+          const filtered = data.activity.filter((item: { action: string }) =>
+            !item.action.toLowerCase().includes(blockedTickerPhrase)
+          );
 
-          setHeartbeat(prev => {
-            const recent = new Set(prev.slice(0, 3).map(item => item.action.toLowerCase()));
-            if (recent.has(selected.action.toLowerCase())) {
-              const alt = shuffled.find(item => !recent.has(item.action.toLowerCase()));
-              if (alt) return [alt, ...prev].slice(0, 5);
-            }
-            return [selected, ...prev].slice(0, 5);
-          });
-          return;
+          if (filtered.length > 0) {
+            const shuffled = [...filtered].sort(() => Math.random() - 0.5);
+            const selected = shuffled[0];
+
+            setHeartbeat(prev => {
+              const cleanedPrev = prev.filter(item => !item.action.toLowerCase().includes(blockedTickerPhrase));
+              const recent = new Set(cleanedPrev.slice(0, 3).map(item => item.action.toLowerCase()));
+              if (recent.has(selected.action.toLowerCase())) {
+                const alt = shuffled.find(item => !recent.has(item.action.toLowerCase()));
+                if (alt) return [alt, ...cleanedPrev].slice(0, 5);
+              }
+              return [selected, ...cleanedPrev].slice(0, 5);
+            });
+            return;
+          }
         }
       } catch {}
 
@@ -54,7 +62,7 @@ export default function Hero() {
         id: `Agent_${Math.random().toString(16).slice(2, 6)}`,
         action: fallbackActions[Math.floor(Math.random() * fallbackActions.length)]
       };
-      setHeartbeat(prev => [newAction, ...prev].slice(0, 5));
+      setHeartbeat(prev => [newAction, ...prev.filter(item => !item.action.toLowerCase().includes(blockedTickerPhrase))].slice(0, 5));
     };
 
     fetchActivity();

@@ -12,6 +12,10 @@ type ActivityItem = {
   timestamp: Date | null;
 };
 
+const BLOCKED_LISTING_PHRASE = 'cli test gpu';
+const includesBlockedPhrase = (value?: string | null) =>
+  (value ?? '').toLowerCase().includes(BLOCKED_LISTING_PHRASE);
+
 export async function GET(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
   const rateLimitResult = rateLimit(`activity:${ip}`, { interval: 60 * 1000, maxRequests: 30 });
@@ -56,7 +60,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     const tradeActivity: ActivityItem[] = recentTrades
-      .filter((t) => (t.listing_title ?? '').toLowerCase() !== 'cli test gpu')
+      .filter((t) => !includesBlockedPhrase(t.listing_title))
       .map((t) => ({
         id: `Agent_${t.id.slice(0, 4)}`,
         action:
@@ -70,13 +74,15 @@ export async function GET(req: NextRequest) {
         timestamp: t.created_at,
       }));
 
-    const bountyActivity: ActivityItem[] = recentBounties.map((b) => ({
-      id: b.seller_id ? `Agent_${b.seller_id.slice(0, 4)}` : `Agent_${b.id.slice(0, 4)}`,
-      action: `posted bounty "${b.title}" for ${b.price_bankr} BANKR`,
-      category: b.category,
-      amount: b.price_bankr,
-      timestamp: b.created_at,
-    }));
+    const bountyActivity: ActivityItem[] = recentBounties
+      .filter((b) => !includesBlockedPhrase(b.title))
+      .map((b) => ({
+        id: b.seller_id ? `Agent_${b.seller_id.slice(0, 4)}` : `Agent_${b.id.slice(0, 4)}`,
+        action: `posted bounty "${b.title}" for ${b.price_bankr} BANKR`,
+        category: b.category,
+        amount: b.price_bankr,
+        timestamp: b.created_at,
+      }));
 
     // Bias the feed toward bounty posts, keep only a light touch of trade events.
     const prioritized = [...bountyActivity, ...tradeActivity.slice(0, 2)]
