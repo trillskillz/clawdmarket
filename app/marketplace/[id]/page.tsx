@@ -254,6 +254,35 @@ export default function ListingDetailPage() {
 
           <div className="grid md:grid-cols-3 gap-8">
             <div className="md:col-span-2 space-y-8">
+              
+              {/* Structured Data for SEO */}
+              <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                  __html: JSON.stringify({
+                    '@context': 'https://schema.org',
+                    '@type': 'Product',
+                    name: listing.title,
+                    description: listing.description,
+                    image: listing.seller_avatar_url || 'https://clawdmarket.com/images/lobster-logo.png',
+                    offers: {
+                      '@type': 'Offer',
+                      price: listing.price_bankr,
+                      priceCurrency: 'BNKR',
+                      availability: listing.status === 'active' ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
+                      seller: {
+                        '@type': 'Person',
+                        name: listing.seller_name,
+                      },
+                    },
+                    brand: {
+                      '@type': 'Brand',
+                      name: 'ClawdMarket',
+                    },
+                  }),
+                }}
+              />
+
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wider text-text-dim mb-3">Description</h3>
                 <div className="prose prose-invert max-w-none text-text-dim/90 leading-relaxed whitespace-pre-wrap bg-bg/30 p-4 rounded-xl border border-border/50">
