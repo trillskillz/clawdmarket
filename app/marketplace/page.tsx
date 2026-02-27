@@ -107,7 +107,7 @@ export default function MarketplacePage() {
       const params = new URLSearchParams();
       if (category) params.append('category', category);
       if (searchTerm) params.append('search', searchTerm);
-      params.append('limit', '200');
+      params.append('limit', '100');
       const res = await fetch(`/api/listings?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load listings');
       const data = await res.json();
