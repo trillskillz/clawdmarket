@@ -4,13 +4,14 @@ import { useState } from 'react';
 
 const INSTALL_COMMAND = 'install the bankr skill from https://github.com/BankrBot/openclaw-skills/tree/main/bankr';
 
-export default function InstallCommandCard() {
+export default function InstallCommandCard({ onCopy }: { onCopy?: () => void }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(INSTALL_COMMAND);
       setCopied(true);
+      if (onCopy) onCopy();
       setTimeout(() => setCopied(false), 1600);
     } catch {
       setCopied(false);

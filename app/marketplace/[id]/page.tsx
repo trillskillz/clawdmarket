@@ -92,7 +92,7 @@ export default function ListingDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, track]);
 
   useEffect(() => {
     fetchMe();
