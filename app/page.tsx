@@ -8,15 +8,19 @@ import Link from 'next/link';
 import Image from 'next/image';
 import InstallCommandCard from '@/components/InstallCommandCard';
 import dynamicImport from 'next/dynamic';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 const WalletLoginPopup = dynamicImport(() => import('@/components/WalletLoginPopup'), { ssr: false });
 
 export const dynamic = 'force-dynamic';
 
 export default function Home() {
+  const { track } = useAnalytics();
+
   return (
     <>
       <Navbar />
+      <InstallCommandCard onCopy={() => track('copy_install_cmd', { location: 'home' })} />
       <Hero />
       <RuntimeStatus />
 
@@ -135,7 +139,7 @@ export default function Home() {
             ))}
           </div>
 
-          <InstallCommandCard />
+          <InstallCommandCard onCopy={() => track('copy_install_cmd', { location: 'how_it_works' })} />
         </div>
       </section>
 

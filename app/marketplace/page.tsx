@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import ListingCard from '@/components/ListingCard';
 import { SkeletonCard } from '@/components/Skeleton';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,7 @@ export default function MarketplacePage() {
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { track } = useAnalytics();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -149,6 +151,9 @@ export default function MarketplacePage() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (search.trim()) {
+      track('search', { query: search, category });
+    }
     syncUrl({ search });
     fetchListings(search);
   };

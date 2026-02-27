@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { SkeletonDetail } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -43,6 +44,7 @@ export default function ListingDetailPage() {
   const [sellerProfile, setSellerProfile] = useState<SellerTrustProfile | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const { track } = useAnalytics();
 
   const fetchMe = useCallback(async () => {
     try {
@@ -66,6 +68,13 @@ export default function ListingDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setListing(data.listing);
+
+        // Track view
+        track('view_listing', { 
+          listing_id: data.listing.id, 
+          category: data.listing.category, 
+          price: data.listing.price_bankr 
+        });
 
         if (data?.listing?.seller_id) {
           const sellerRes = await fetch(`/api/users/${data.listing.seller_id}/profile`);
@@ -120,6 +129,7 @@ export default function ListingDetailPage() {
 
       setIsFavorite(!isFavorite);
       toast(isFavorite ? 'Removed from favorites' : 'Added to favorites', 'success');
+      track(isFavorite ? 'remove_favorite' : 'add_favorite', { listing_id: listing.id });
     } catch (err: any) {
       toast(err?.message || 'Failed to update favorites', 'error');
     } finally {
@@ -137,6 +147,7 @@ export default function ListingDetailPage() {
       return;
     }
 
+    track('trade_init', { listing_id: listing.id, amount: listing.price_bankr });
     setTradeLoading(true);
 
     try {

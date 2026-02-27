@@ -121,6 +121,17 @@ export const watchlist = sqliteTable('watchlist', {
     .$defaultFn(() => new Date()),
 });
 
+export const analytics_events = sqliteTable('analytics_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  user_id: text('user_id'), // Nullable for anonymous visitors
+  event_type: text('event_type').notNull(), // view_listing, trade_init, search, etc.
+  metadata: text('metadata'), // JSON string of extras
+  ip_hash: text('ip_hash'), // Anonymized IP for unique visitor counting
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type ApiKey = typeof api_keys.$inferSelect;
@@ -135,6 +146,8 @@ export type Webhook = typeof webhooks.$inferSelect;
 export type NewWebhook = typeof webhooks.$inferInsert;
 export type WatchlistEntry = typeof watchlist.$inferSelect;
 export type NewWatchlistEntry = typeof watchlist.$inferInsert;
+export type AnalyticsEvent = typeof analytics_events.$inferSelect;
+export type NewAnalyticsEvent = typeof analytics_events.$inferInsert;
 export type Rating = typeof ratings.$inferSelect;
 export type NewRating = typeof ratings.$inferInsert;
 
