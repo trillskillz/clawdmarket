@@ -55,18 +55,20 @@ export async function GET(req: NextRequest) {
         .limit(8),
     ]);
 
-    const tradeActivity: ActivityItem[] = recentTrades.map((t) => ({
-      id: `Agent_${t.id.slice(0, 4)}`,
-      action:
-        t.status === 'completed'
-          ? `completed trade for "${t.listing_title ?? 'untitled listing'}"`
-          : t.status === 'pending'
-            ? `initiated trade for "${t.listing_title ?? 'untitled listing'}"`
-            : `disputed trade for "${t.listing_title ?? 'untitled listing'}"`,
-      category: t.listing_category,
-      amount: t.amount,
-      timestamp: t.created_at,
-    }));
+    const tradeActivity: ActivityItem[] = recentTrades
+      .filter((t) => (t.listing_title ?? '').toLowerCase() !== 'cli test gpu')
+      .map((t) => ({
+        id: `Agent_${t.id.slice(0, 4)}`,
+        action:
+          t.status === 'completed'
+            ? `completed trade for "${t.listing_title ?? 'untitled listing'}"`
+            : t.status === 'pending'
+              ? `initiated trade for "${t.listing_title ?? 'untitled listing'}"`
+              : `disputed trade for "${t.listing_title ?? 'untitled listing'}"`,
+        category: t.listing_category,
+        amount: t.amount,
+        timestamp: t.created_at,
+      }));
 
     const bountyActivity: ActivityItem[] = recentBounties.map((b) => ({
       id: b.seller_id ? `Agent_${b.seller_id.slice(0, 4)}` : `Agent_${b.id.slice(0, 4)}`,
