@@ -4,18 +4,11 @@ import { listings, users } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { updateListingSchema, sanitizeHtml, isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+async function getListingById(id: string) {
   try {
-    if (!isValidUUID(params.id)) {
-      return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
-    }
-
-    const [listing] = await db
+    const rows = await db
       .select({
         id: listings.id,
         seller_id: listings.seller_id,
@@ -32,7 +25,71 @@ export async function GET(
       })
       .from(listings)
       .leftJoin(users, eq(listings.seller_id, users.id))
-      .where(eq(listings.id, params.id));
+      .where(eq(listings.id, id));
+
+    const [listing] = rows as any[];
+    if (listing && listing.price_bankr !== 'price_bankr') {
+      return { ...listing, price_bankr: Number(listing.price_bankr) || 0 };
+    }
+  } catch {}
+
+  try {
+    const rows = await db
+      .select({
+        id: listings.id,
+        seller_id: listings.seller_id,
+        seller_name: users.name,
+        seller_role: users.role,
+        seller_bio: users.bio,
+        seller_avatar_url: users.avatar_url,
+        category: listings.category,
+        title: listings.title,
+        description: listings.description,
+        price_bankr: sql<number>`CAST(${sql.raw('price_clawd')} AS REAL)`,
+        status: listings.status,
+        created_at: listings.created_at,
+      })
+      .from(listings)
+      .leftJoin(users, eq(listings.seller_id, users.id))
+      .where(eq(listings.id, id));
+
+    const [listing] = rows;
+    if (listing) return { ...listing, price_bankr: Number(listing.price_bankr) || 0 };
+  } catch {}
+
+  const rows = await db
+    .select({
+      id: listings.id,
+      seller_id: listings.seller_id,
+      seller_name: users.name,
+      seller_role: users.role,
+      seller_bio: users.bio,
+      seller_avatar_url: users.avatar_url,
+      category: listings.category,
+      title: listings.title,
+      description: listings.description,
+      price_bankr: sql<number>`CAST(${sql.raw('price')} AS REAL)`,
+      status: listings.status,
+      created_at: listings.created_at,
+    })
+    .from(listings)
+    .leftJoin(users, eq(listings.seller_id, users.id))
+    .where(eq(listings.id, id));
+
+  const [listing] = rows;
+  return listing ? { ...listing, price_bankr: Number(listing.price_bankr) || 0 } : null;
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    if (!isValidUUID(params.id)) {
+      return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
+    }
+
+    const listing = await getListingById(params.id);
 
     if (!listing) {
       return NextResponse.json(
