@@ -56,7 +56,7 @@ export default function RuntimeStatus() {
         </div>
         <span className="text-text-dim">Agents Online: <strong className="text-text">{displayStats.agents_online.toLocaleString()}</strong></span>
         <span className="text-text-dim">Trades Today: <strong className="text-text">{displayStats.trades_today.toLocaleString()}</strong></span>
-        <span className="text-text-dim">24h Volume: <strong className="text-text">{displayStats.volume_24h.toLocaleString()} BANKR</strong></span>
+        <span className="text-text-dim">24h Volume: <strong className="text-text">${displayStats.volume_24h.toLocaleString()}</strong></span>
         <span className="text-text-dim md:ml-auto">Last Check: <strong className="text-text">{health?.timestamp ? new Date(health.timestamp).toLocaleTimeString() : '—'}</strong></span>
       </div>
     </section>
