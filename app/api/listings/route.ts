@@ -7,10 +7,75 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { eq, and, desc, sql } from 'drizzle-orm';
 
-async function hasPriceBankrColumn() {
-  // Production DB currently uses legacy `price` column.
-  // Keep this explicit until schema is fully migrated.
-  return false;
+function isMissingColumnError(error: any, column: string) {
+  const msg = String(error?.message || error || '').toLowerCase();
+  return msg.includes('no column named') && msg.includes(column.toLowerCase());
+}
+
+async function selectListings(whereClause: any, limit: number, offset: number) {
+  try {
+    return await db
+      .select({
+        id: listings.id,
+        seller_id: listings.seller_id,
+        category: listings.category,
+        title: listings.title,
+        description: listings.description,
+        price_bankr: listings.price_bankr,
+        status: listings.status,
+        created_at: listings.created_at,
+      })
+      .from(listings)
+      .where(whereClause)
+      .orderBy(desc(listings.created_at))
+      .limit(limit)
+      .offset(offset);
+  } catch (error) {
+    if (!isMissingColumnError(error, 'price_bankr')) throw error;
+
+    return await db
+      .select({
+        id: listings.id,
+        seller_id: listings.seller_id,
+        category: listings.category,
+        title: listings.title,
+        description: listings.description,
+        price_bankr: sql<number>`price`,
+        status: listings.status,
+        created_at: listings.created_at,
+      })
+      .from(listings)
+      .where(whereClause)
+      .orderBy(desc(listings.created_at))
+      .limit(limit)
+      .offset(offset);
+  }
+}
+
+async function insertListing(values: {
+  seller_id: string;
+  category: 'compute' | 'skills' | 'data' | 'bounties';
+  title: string;
+  description: string;
+  price_bankr: number;
+}) {
+  try {
+    const [row] = await db
+      .insert(listings)
+      .values(values)
+      .returning();
+    return row;
+  } catch (error) {
+    if (!isMissingColumnError(error, 'price_bankr')) throw error;
+
+    const id = crypto.randomUUID();
+    await (db as any).$client.execute({
+      sql: 'INSERT INTO listings (id, seller_id, category, title, description, price, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],
+    });
+    const [row] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
+    return row;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -80,24 +145,7 @@ export async function GET(req: NextRequest) {
     
     const totalCount = countResult?.count || 0;
 
-    // Get paginated results (compat with legacy schema that used `price` instead of `price_bankr`)
-    const hasPriceBankr = await hasPriceBankrColumn();
-    const results = await db
-      .select({
-        id: listings.id,
-        seller_id: listings.seller_id,
-        category: listings.category,
-        title: listings.title,
-        description: listings.description,
-        price_bankr: hasPriceBankr ? listings.price_bankr : sql<number>`price`,
-        status: listings.status,
-        created_at: listings.created_at,
-      })
-      .from(listings)
-      .where(whereClause)
-      .orderBy(desc(listings.created_at))
-      .limit(query.limit)
-      .offset((query.page - 1) * query.limit);
+    const results = await selectListings(whereClause, query.limit, (query.page - 1) * query.limit);
 
     return NextResponse.json({
       listings: results,
@@ -170,35 +218,19 @@ export async function POST(req: NextRequest) {
       const results = [];
       const errors = [];
 
-      const hasPriceBankr = await hasPriceBankrColumn();
-
       for (let i = 0; i < body.length; i++) {
         try {
           const validated = createListingSchema.parse(body[i]);
           const sanitizedTitle = sanitizeHtml(validated.title);
           const sanitizedDescription = sanitizeHtml(validated.description);
 
-          let newListing: any;
-
-          if (hasPriceBankr) {
-            [newListing] = await db
-              .insert(listings)
-              .values({
-                seller_id: auth.userId,
-                category: validated.category,
-                title: sanitizedTitle,
-                description: sanitizedDescription,
-                price_bankr: validated.price_bankr,
-              })
-              .returning();
-          } else {
-            const id = crypto.randomUUID();
-            await (db as any).$client.execute({
-              sql: 'INSERT INTO listings (id, seller_id, category, title, description, price, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-              args: [id, auth.userId, validated.category, sanitizedTitle, sanitizedDescription, validated.price_bankr, 'active', new Date().toISOString()],
-            });
-            [newListing] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
-          }
+          const newListing = await insertListing({
+            seller_id: auth.userId,
+            category: validated.category,
+            title: sanitizedTitle,
+            description: sanitizedDescription,
+            price_bankr: validated.price_bankr,
+          });
 
           results.push({ index: i, success: true, listing: newListing });
         } catch (error: any) {
@@ -226,29 +258,13 @@ export async function POST(req: NextRequest) {
     const sanitizedTitle = sanitizeHtml(validated.title);
     const sanitizedDescription = sanitizeHtml(validated.description);
 
-    const hasPriceBankr = await hasPriceBankrColumn();
-
-    // Create listing
-    let newListing: any;
-    if (hasPriceBankr) {
-      [newListing] = await db
-        .insert(listings)
-        .values({
-          seller_id: auth.userId,
-          category: validated.category,
-          title: sanitizedTitle,
-          description: sanitizedDescription,
-          price_bankr: validated.price_bankr,
-        })
-        .returning();
-    } else {
-      const id = crypto.randomUUID();
-      await (db as any).$client.execute({
-        sql: 'INSERT INTO listings (id, seller_id, category, title, description, price, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        args: [id, auth.userId, validated.category, sanitizedTitle, sanitizedDescription, validated.price_bankr, 'active', new Date().toISOString()],
-      });
-      [newListing] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
-    }
+    const newListing = await insertListing({
+      seller_id: auth.userId,
+      category: validated.category,
+      title: sanitizedTitle,
+      description: sanitizedDescription,
+      price_bankr: validated.price_bankr,
+    });
 
     return NextResponse.json(
       {
