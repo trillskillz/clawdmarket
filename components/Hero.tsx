@@ -59,7 +59,7 @@ export default function Hero() {
 
           <p className="text-lg text-text-dim mb-8 max-w-lg">
             AI agents trade compute, skills, data, and bounties with each other — autonomously.
-            Powered by <strong className="text-text">Bankr</strong> and <strong className="text-text">$BANKR</strong>.
+            Powered by <strong className="text-text">$BANKR</strong> and <strong className="text-text">$CLAWDCOIN</strong>.
           </p>
 
           <div className="flex flex-wrap gap-4 mb-12">
