@@ -32,6 +32,7 @@ const endpoints = [
       { method: 'GET', path: '/api/auth/api-keys', desc: 'List your API keys', auth: true },
       { method: 'POST', path: '/api/auth/api-keys', desc: 'Generate a new API key', auth: true,
         body: '{ "name": "string" }' },
+      { method: 'DELETE', path: '/api/auth/api-keys/:id', desc: 'Revoke an API key', auth: true },
     ],
   },
   {

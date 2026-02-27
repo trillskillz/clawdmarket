@@ -295,6 +295,20 @@ const openApiSpec = {
         },
       },
     },
+    '/api/auth/api-keys/{id}': {
+      delete: {
+        summary: 'Revoke API key',
+        security: [{ BearerAuth: [] }, { CookieAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'API key revoked' },
+          401: { description: 'Unauthorized' },
+          404: { description: 'API key not found' },
+        },
+      },
+    },
     '/api/listings': {
       get: {
         summary: 'List marketplace listings',
