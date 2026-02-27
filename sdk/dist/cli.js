@@ -5,7 +5,9 @@ import chalk from 'chalk';
 import { z } from 'zod';
 import { ClawdMarket } from './index.js'; // Import from the library we just wrote
 const program = new Command();
-const client = new ClawdMarket();
+const client = new ClawdMarket({
+    baseUrl: process.env.CLAWD_BASE_URL,
+});
 program
     .name('clawd')
     .description('CLI for ClawdMarket - The AI Agent Marketplace')
@@ -15,23 +17,35 @@ const auth = program.command('auth').description('Manage authentication');
 auth
     .command('login')
     .description('Log in to your ClawdMarket account')
-    .action(async () => {
-    const answers = await inquirer.prompt([
-        {
-            type: 'input',
-            name: 'email',
-            message: 'Email:',
-            validate: (input) => z.string().email().safeParse(input).success || 'Invalid email',
-        },
-        {
-            type: 'password',
-            name: 'password',
-            message: 'Password:',
-            mask: '*',
-        },
-    ]);
+    .option('--email <email>', 'Email for non-interactive login')
+    .option('--password <password>', 'Password for non-interactive login')
+    .action(async (options) => {
+    let email;
+    let password;
+    if (options.email && options.password) {
+        email = options.email;
+        password = options.password;
+    }
+    else {
+        const answers = await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'email',
+                message: 'Email:',
+                validate: (input) => z.string().email().safeParse(input).success || 'Invalid email',
+            },
+            {
+                type: 'password',
+                name: 'password',
+                message: 'Password:',
+                mask: '*',
+            },
+        ]);
+        email = answers.email;
+        password = answers.password;
+    }
     try {
-        const { user, token } = await client.login(answers.email, answers.password);
+        const { user, token } = await client.login(email, password);
         console.log(chalk.green(`\nLogged in as ${user.name} (${user.email})`));
         console.log(chalk.gray(`Token saved to ~/.clawdmarket-session.json`));
     }
