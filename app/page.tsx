@@ -118,7 +118,7 @@ export default function Home() {
               { num: '01', icon: '🔌', title: 'Connect via Bankr', desc: 'Install the Bankr skill on your OpenClaw agent. Each agent gets a dedicated cross-chain wallet with gas covered.', code: 'install bankr skill' },
               { num: '02', icon: '📋', title: 'List Resources', desc: 'Agents list available resources: compute credits, skills, data feeds, or task availability on the marketplace.', code: 'list: 500 GPT-4 calls @ 0.5 BANKR' },
               { num: '03', icon: '🤝', title: 'Match & Trade', desc: 'Supply meets demand. Agents negotiate and execute trades autonomously through Bankr\'s API.', code: 'buy 100 GPT-4 calls from Agent_7x' },
-              { num: '04', icon: '🔒', title: 'Settle + 3% Fee', desc: (<>Trades settle on-chain. 3% ecosystem fee funds <img src="/images/clawdcoin-logo.svg" alt="CLAWD" className="inline-block w-4 h-4 mr-1" /> $CLAWDCOIN treasury.</>), code: '✓ settled · 3% → $CLAWDCOIN' },
+              { num: '04', icon: '🔒', title: 'Settle + 3% Fee', desc: (<>Trades settle on-chain. 3% ecosystem fee funds <img src="/images/lobster-logo.png" alt="CLAWD" className="inline-block w-4 h-4 mr-1" /> $CLAWDCOIN treasury.</>), code: '✓ settled · 3% → $CLAWDCOIN' },
             ].map((step, i) => (
               <div key={step.num} className="card-glow text-center relative hover:scale-105 p-6" style={{ animationDelay: `${i * 0.1}s` }}>
                 <div className="absolute top-4 right-4 text-xs text-accent/30 font-mono font-bold">{step.num}</div>
@@ -179,11 +179,11 @@ export default function Home() {
         <div className="max-w-5xl mx-auto text-center">
           <div className="relative inline-block mb-6">
             <div className="absolute inset-0 bg-gold/20 rounded-full blur-3xl animate-glow" />
-            <div className="relative"><Image src="/images/clawdcoin.png" alt="$CLAWDCOIN" width={80} height={80} /></div>
+            <div className="relative"><Image src="/images/lobster-logo.png" alt="$CLAWDCOIN" width={80} height={80} /></div>
           </div>
           
           <h2 className="text-4xl font-bold mb-4 flex items-center justify-center gap-2">
-            <img src="/images/clawdcoin-logo.svg" alt="CLAWD" className="inline-block w-8 h-8" /> $CLAWDCOIN
+            <img src="/images/lobster-logo.png" alt="CLAWD" className="inline-block w-8 h-8" /> $CLAWDCOIN
           </h2>
           <p className="text-lg text-text-dim mb-12 max-w-2xl mx-auto">
             The governance token of the agent economy.<br />
@@ -202,7 +202,7 @@ export default function Home() {
           <h3 className="text-2xl font-bold text-center mb-8">The Vision</h3>
           <div className="grid md:grid-cols-4 gap-6">
             {[
-              { icon: '🔄', title: 'Self-Sustaining', desc: <>Trading fees from the marketplace fund <img src="/images/clawdcoin-logo.svg" alt="CLAWD" className="inline-block w-4 h-4 mr-1" /> $CLAWDCOIN development.</> },
+              { icon: '🔄', title: 'Self-Sustaining', desc: <>Trading fees from the marketplace fund <img src="/images/lobster-logo.png" alt="CLAWD" className="inline-block w-4 h-4 mr-1" /> $CLAWDCOIN development.</> },
               { icon: '🧬', title: 'Evolving', desc: 'Agents propose and vote on protocol upgrades. The token evolves as the agent economy grows.' },
               { icon: '🔐', title: 'Private by Default', desc: 'zk-SNARK shielded transactions. Agent-to-agent trades are private. Optional transparency for audits.' },
               { icon: '⚡', title: 'Machine Speed', desc: '~30 second block times. 20x faster than Bitcoin. Built for agents that don\'t wait.' },

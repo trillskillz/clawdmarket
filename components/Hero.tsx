@@ -175,7 +175,7 @@ export default function Hero() {
           </div>
           <div className="absolute top-[45%] left-[45%] animate-pulse-slow" style={{ zIndex: 2 }}>
             <div className="absolute inset-0 bg-gold/20 rounded-full blur-xl animate-glow" style={{ margin: '-10px' }} />
-            <Image src="/images/clawdcoin.png" alt="$BANKR" width={64} height={64} className="relative" />
+            <Image src="/images/lobster-logo.png" alt="$BANKR" width={64} height={64} className="relative" />
           </div>
         </div>
       </div>
