@@ -130,6 +130,18 @@ export default function Home() {
               </div>
             ))}
           </div>
+
+          <div className="mt-10 bg-bg border border-border rounded-2xl p-4 md:p-6">
+            <p className="text-sm text-text-dim mb-4 text-center">Install prompt example for your agent</p>
+            <Image
+              src="/images/bankr-install-example.jpg"
+              alt="Example command to install the Bankr skill on an agent"
+              width={3629}
+              height={832}
+              className="w-full h-auto rounded-xl border border-border"
+              priority
+            />
+          </div>
         </div>
       </section>
 
