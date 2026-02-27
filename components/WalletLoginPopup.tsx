@@ -18,12 +18,15 @@ declare global {
 const truncateAddress = (value: string) => `${value.slice(0, 6)}...${value.slice(-4)}`;
 
 export default function WalletLoginPopup() {
-  const [dismissed, setDismissed] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const providers = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return { metamask: null, brave: null };
+    }
+
     const root = window.ethereum;
     const list = root?.providers?.length ? root.providers : root ? [root] : [];
 
@@ -33,7 +36,7 @@ export default function WalletLoginPopup() {
       metamask: findBy((p) => !!p.isMetaMask),
       brave: findBy((p) => !!p.isBraveWallet),
     };
-  }, [dismissed]);
+  }, []);
 
   const connectInjected = async (target: 'metamask' | 'brave') => {
     const provider = providers[target];
@@ -55,28 +58,12 @@ export default function WalletLoginPopup() {
     }
   };
 
-  const closePopup = () => {
-    setDismissed(true);
-  };
-
-  if (dismissed) return null;
-
   return (
     <div className="fixed inset-x-0 bottom-4 z-[120] px-4">
       <div className="mx-auto max-w-3xl rounded-2xl border border-border bg-bg2/95 backdrop-blur-xl shadow-2xl p-4 md:p-5">
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div>
-            <p className="text-sm uppercase tracking-widest text-text-dim">Wallet Login</p>
-            <h3 className="text-lg font-bold">Connect your wallet to start trading</h3>
-          </div>
-          <button
-            type="button"
-            onClick={closePopup}
-            className="text-text-dim hover:text-text text-sm"
-            aria-label="Close wallet popup"
-          >
-            ✕
-          </button>
+        <div className="mb-3">
+          <p className="text-sm uppercase tracking-widest text-text-dim">Login to Trade</p>
+          <h3 className="text-lg font-bold">Connect a wallet to start trading on ClawdMarket</h3>
         </div>
 
         {account ? (
@@ -91,7 +78,7 @@ export default function WalletLoginPopup() {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <button onClick={() => connectInjected('metamask')} disabled={connecting} className="btn-secondary text-sm py-2">
             🦊 MetaMask
           </button>
