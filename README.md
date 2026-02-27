@@ -264,6 +264,11 @@ npm run db:studio
 npm run db:push
 ```
 
+**Apply hardening migration (agent sessions/nonces/event stream):**
+```bash
+npm run db:migrate:agent-env
+```
+
 **Query directly with Turso CLI:**
 ```bash
 turso db shell clawdmarket
