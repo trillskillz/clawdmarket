@@ -264,7 +264,22 @@ npm run db:studio
 npm run db:push
 ```
 
-**Apply hardening migration (agent sessions/nonces/event stream):**
+**Generate migration files from schema:**
+```bash
+npx drizzle-kit generate
+```
+
+**Apply migration history to a fresh database:**
+```bash
+npx drizzle-kit migrate
+```
+
+**Baseline an existing database (already has tables):**
+```bash
+npm run db:baseline
+```
+
+**Apply hardening migration (legacy one-off path):**
 ```bash
 npm run db:migrate:agent-env
 ```
