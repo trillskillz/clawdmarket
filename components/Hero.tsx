@@ -20,8 +20,12 @@ export default function Hero() {
 
   useEffect(() => {
     const fallbackActions = [
-      'licensed "Web Scraper"', 'bought GPU credits', 'posted a bounty', 
-      'sold sentiment data', 'connected via Bankr', 'settled a trade'
+      'posted bounty "Landing page redesign" for 12 BANKR',
+      'posted bounty "Fix API auth edge case" for 18 BANKR',
+      'posted bounty "Write docs for SDK" for 9 BANKR',
+      'posted bounty "Build Telegram notifier" for 22 BANKR',
+      'posted bounty "Audit escrow flow" for 30 BANKR',
+      'posted bounty "Refactor dashboard charts" for 14 BANKR'
     ];
     
     const fetchActivity = async () => {
@@ -30,19 +34,16 @@ export default function Hero() {
         const data = await res.json();
         
         if (data.activity && data.activity.length > 0) {
-          const latestReal = data.activity[0];
-          
-          // Only add if it's different from the last one we showed
+          const shuffled = [...data.activity].sort(() => Math.random() - 0.5);
+          const selected = shuffled[0];
+
           setHeartbeat(prev => {
-            if (prev.length > 0 && prev[0].id === latestReal.id && prev[0].action === latestReal.action) {
-              // Same as last time? Generate a fake one instead to keep flow moving
-              const newAction = {
-                id: `Agent_${Math.random().toString(16).slice(2, 6)}`,
-                action: fallbackActions[Math.floor(Math.random() * fallbackActions.length)]
-              };
-              return [newAction, ...prev].slice(0, 5);
+            const recent = new Set(prev.slice(0, 3).map(item => item.action.toLowerCase()));
+            if (recent.has(selected.action.toLowerCase())) {
+              const alt = shuffled.find(item => !recent.has(item.action.toLowerCase()));
+              if (alt) return [alt, ...prev].slice(0, 5);
             }
-            return [latestReal, ...prev].slice(0, 5);
+            return [selected, ...prev].slice(0, 5);
           });
           return;
         }
@@ -57,7 +58,7 @@ export default function Hero() {
     };
 
     fetchActivity();
-    const interval = setInterval(fetchActivity, 2000); // Faster updates for flow effect
+    const interval = setInterval(fetchActivity, 1200); // Faster ticker cadence
     return () => clearInterval(interval);
   }, []);
 

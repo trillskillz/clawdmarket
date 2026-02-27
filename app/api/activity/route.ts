@@ -76,8 +76,18 @@ export async function GET(req: NextRequest) {
       timestamp: b.created_at,
     }));
 
-    const activity = [...tradeActivity, ...bountyActivity]
-      .sort((a, b) => (b.timestamp?.getTime() ?? 0) - (a.timestamp?.getTime() ?? 0))
+    // Bias the feed toward bounty posts, keep only a light touch of trade events.
+    const prioritized = [...bountyActivity, ...tradeActivity.slice(0, 2)]
+      .sort((a, b) => (b.timestamp?.getTime() ?? 0) - (a.timestamp?.getTime() ?? 0));
+
+    const seenActions = new Set<string>();
+    const activity = prioritized
+      .filter((item) => {
+        const key = item.action.toLowerCase();
+        if (seenActions.has(key)) return false;
+        seenActions.add(key);
+        return true;
+      })
       .slice(0, 5);
 
     return NextResponse.json({ activity });
