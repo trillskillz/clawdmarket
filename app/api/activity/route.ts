@@ -90,6 +90,7 @@ export async function GET(req: NextRequest) {
 
     const seenActions = new Set<string>();
     const activity = prioritized
+      .filter((item) => !includesBlockedPhrase(item.action))
       .filter((item) => {
         const key = item.action.toLowerCase();
         if (seenActions.has(key)) return false;
