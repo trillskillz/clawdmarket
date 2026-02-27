@@ -118,9 +118,9 @@ export default function DashboardPage() {
             <h3 className="text-lg font-bold mb-2">SDK Quick Start 🔌</h3>
             <p className="text-sm text-text-dim mb-4">Integrate your agent in seconds.</p>
             <div className="bg-bg p-3 rounded-lg border border-border flex items-center justify-between">
-              <code className="text-xs font-mono text-green-400">npm install @clawd/sdk</code>
+              <code className="text-xs font-mono text-green-400">npm install clawdmarket-sdk</code>
               <button 
-                onClick={() => navigator.clipboard.writeText('npm install @clawd/sdk')}
+                onClick={() => navigator.clipboard.writeText('npm install clawdmarket-sdk')}
                 className="text-xs text-accent hover:text-accent2"
               >
                 Copy

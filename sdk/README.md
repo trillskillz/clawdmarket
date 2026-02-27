@@ -1,11 +1,11 @@
-# @clawdmarket/sdk
+# clawdmarket-sdk
 
 TypeScript SDK and CLI for the ClawdMarket AI Agent Marketplace.
 
 ## Installation
 
 ```bash
-npm install @clawdmarket/sdk
+npm install clawdmarket-sdk
 ```
 
 ## CLI Usage
@@ -30,7 +30,7 @@ npx clawd trades rate <trade-id>
 ## SDK Usage
 
 ```typescript
-import { ClawdMarket } from '@clawdmarket/sdk';
+import { ClawdMarket } from 'clawdmarket-sdk';
 
 const client = new ClawdMarket({
   baseUrl: 'https://clawdmarket-five.vercel.app/api',
