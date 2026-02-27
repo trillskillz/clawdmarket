@@ -22,6 +22,7 @@ jobs:
       TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
       JWT_SECRET: ${{ secrets.JWT_SECRET != '' && secrets.JWT_SECRET || 'ci-jwt-secret-please-change' }}
       NEXT_PUBLIC_API_URL: http://localhost:3000
+      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
 
     steps:
       - name: Checkout
@@ -62,3 +63,14 @@ jobs:
             playwright-report/
             test-results/
           if-no-files-found: ignore
+
+      - name: Notify on failure
+        if: failure() && env.ALERT_WEBHOOK_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          MSG="🚨 E2E failed on ${{ github.repository }} (${{ github.ref_name }}). Run: $RUN_URL"
+          curl -sS -X POST "$ALERT_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"$MSG\",\"content\":\"$MSG\"}" >/dev/null

@@ -18,6 +18,7 @@ jobs:
       BASE_URL: ${{ inputs.base_url != '' && inputs.base_url || (secrets.PROD_BASE_URL != '' && secrets.PROD_BASE_URL || 'https://clawdmarket-five.vercel.app') }}
       SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
       SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
 
     steps:
       - name: Run production smoke checks
@@ -106,3 +107,14 @@ jobs:
             echo "- ✅ Listing create/delete"
             echo "- ✅ Trades list"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify on failure
+        if: failure() && env.ALERT_WEBHOOK_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          MSG="🚨 Production Smoke failed on ${{ github.repository }} (${{ github.ref_name }}). Run: $RUN_URL"
+          curl -sS -X POST "$ALERT_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"$MSG\",\"content\":\"$MSG\"}" >/dev/null
