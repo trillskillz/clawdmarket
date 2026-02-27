@@ -116,8 +116,10 @@ async function insertListing(values: {
 }
 
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-  const rateLimitResult = rateLimit(`listings-get:${ip}`, { interval: 60 * 1000, maxRequests: 60 });
+  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || 'unknown';
+  const userAgent = req.headers.get('user-agent') || 'unknown';
+  const rateKey = `listings-get:${ip}:${userAgent.slice(0, 80)}`;
+  const rateLimitResult = rateLimit(rateKey, { interval: 60 * 1000, maxRequests: 1000 });
 
   if (!rateLimitResult.success) {
     return NextResponse.json(
