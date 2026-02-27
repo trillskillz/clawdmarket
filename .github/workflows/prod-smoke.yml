@@ -61,6 +61,10 @@ jobs:
           [ "$code" = "200" ] || fail "/api/auth/me expected 200 got $code"
           pass "auth me"
 
+          code=$(curl -sS -b "$COOKIES" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/analytics/summary")
+          [ "$code" = "200" ] || fail "/api/analytics/summary expected 200 got $code"
+          pass "analytics summary"
+
           key_name="Smoke Key $(date +%s)"
           code=$(curl -sS -b "$COOKIES" -c "$COOKIES" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" -d "{\"name\":\"$key_name\"}" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/auth/api-keys")
           [ "$code" = "201" ] || fail "api key create expected 201 got $code"
@@ -97,6 +101,7 @@ jobs:
             echo "- Base URL: \\`$BASE_URL\\`"
             echo "- ✅ Health/docs/discovery"
             echo "- ✅ Auth login/me/logout"
+            echo "- ✅ Analytics summary"
             echo "- ✅ API key create/revoke"
             echo "- ✅ Listing create/delete"
             echo "- ✅ Trades list"
