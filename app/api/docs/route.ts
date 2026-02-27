@@ -72,6 +72,42 @@ const openApiSpec = {
           created_at: { type: 'string', format: 'date-time' },
         },
       },
+      AgentSessionInitRequest: {
+        type: 'object',
+        properties: {
+          declared_parameters: { type: 'object', additionalProperties: true },
+          ttl_seconds: { type: 'integer', minimum: 1, maximum: 86400, default: 3600 },
+        },
+      },
+      AgentSessionInitResponse: {
+        type: 'object',
+        properties: {
+          message: { type: 'string' },
+          code: { type: 'string', example: 'SESSION_INITIALIZED' },
+          session: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              declared_params_hash: { type: 'string' },
+              expires_at: { type: 'string', format: 'date-time' },
+              immutable: { type: 'boolean' },
+            },
+          },
+          source: { type: 'string' },
+          timestamp: { type: 'string', format: 'date-time' },
+          environment_version: { type: 'string' },
+        },
+      },
+      AgentEnvironmentDeclaration: {
+        type: 'object',
+        properties: {
+          environment_declaration: { type: 'object', additionalProperties: true },
+          snapshot: { type: 'object', additionalProperties: true },
+          source: { type: 'string' },
+          timestamp: { type: 'string', format: 'date-time' },
+          environment_version: { type: 'string' },
+        },
+      },
     },
   },
   paths: {
@@ -94,6 +130,58 @@ const openApiSpec = {
               },
             },
           },
+        },
+      },
+    },
+    '/api/agent/environment': {
+      get: {
+        summary: 'Get agent environment declaration and optional reconciliation snapshot',
+        security: [{ BearerAuth: [] }, { CookieAuth: [] }],
+        parameters: [
+          {
+            name: 'snapshot',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['1'] },
+            description: 'Set snapshot=1 to include reconciliation snapshot payload',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Environment declaration (and optional snapshot)',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AgentEnvironmentDeclaration' },
+              },
+            },
+          },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/agent/session': {
+      post: {
+        summary: 'Initialize immutable agent session contract',
+        security: [{ BearerAuth: [] }, { CookieAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AgentSessionInitRequest' },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Agent session initialized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AgentSessionInitResponse' },
+              },
+            },
+          },
+          400: { description: 'Validation failed' },
+          401: { description: 'Unauthorized' },
         },
       },
     },
