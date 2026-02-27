@@ -52,9 +52,22 @@ const endpoints = [
     items: [
       { method: 'GET', path: '/api/trades', desc: 'List your trades (as buyer or seller)', auth: true },
       { method: 'POST', path: '/api/trades', desc: 'Initiate a trade on a listing', auth: true,
-        body: '{ "listing_id": "uuid", "amount": number }' },
+        body: '{ "listing_id": "uuid", "amount": number, "allow_partial_fill": false }' },
       { method: 'PATCH', path: '/api/trades/:id', desc: 'Update trade status (complete or dispute)', auth: true,
         body: '{ "status": "completed|disputed" }' },
+    ],
+  },
+  {
+    group: 'Agent Runtime',
+    items: [
+      { method: 'GET', path: '/api/agent/environment', desc: 'Get explicit environment declaration (actions, subscriptions, failure modes)', auth: true,
+        params: 'snapshot=1 (optional full reconciliation snapshot)' },
+      { method: 'POST', path: '/api/agent/session', desc: 'Initialize immutable session contract for counterparty parameter lock', auth: true,
+        body: '{ "declared_parameters": { ... }, "ttl_seconds": 3600 }' },
+      { method: 'POST', path: '/api/trades', desc: 'Replay-protected mutation for agents', auth: true,
+        body: 'Headers: x-agent-nonce, x-agent-timestamp, x-agent-session-id?, x-agent-params-hash?' },
+      { method: 'PATCH', path: '/api/trades/:id', desc: 'Replay-protected trade mutation for agents', auth: true,
+        body: 'Headers: x-agent-nonce, x-agent-timestamp, x-agent-session-id?, x-agent-params-hash?' },
     ],
   },
   {
@@ -76,7 +89,7 @@ const endpoints = [
     items: [
       { method: 'GET', path: '/api/webhooks', desc: 'List your registered webhooks', auth: true },
       { method: 'POST', path: '/api/webhooks', desc: 'Register a new webhook', auth: true,
-        body: '{ "url": "https://...", "events": ["trade.created", "trade.completed", "listing.sold"] }' },
+        body: '{ "url": "https://...", "events": ["trade.created", "trade.completed", "listing.sold", "balance.changed"] }' },
       { method: 'DELETE', path: '/api/webhooks/:id', desc: 'Delete a webhook', auth: true },
     ],
   },
@@ -146,6 +159,22 @@ export default function DocsPage() {
               <div className="text-green-400 mb-2">curl -X GET /api/listings \</div>
               <div className="text-text-dim pl-4">-H &quot;Authorization: Bearer YOUR_API_KEY&quot;</div>
             </div>
+          </div>
+
+          <div className="card mb-8">
+            <h2 className="text-lg font-semibold mb-3">Agent Integration Contract (Required for autonomous mutations)</h2>
+            <ul className="list-disc pl-5 text-sm text-text-dim space-y-1 mb-4">
+              <li>Initialize immutable session: <code className="text-accent2">POST /api/agent/session</code></li>
+              <li>Read environment declaration: <code className="text-accent2">GET /api/agent/environment?snapshot=1</code></li>
+              <li>Send replay-protection headers on mutating trade routes:</li>
+            </ul>
+            <div className="bg-bg border border-border rounded-lg p-3 font-mono text-xs overflow-x-auto mb-3">
+              x-agent-nonce: &lt;unique-random&gt;{"\n"}
+              x-agent-timestamp: &lt;unix-ms&gt;{"\n"}
+              x-agent-session-id: &lt;session-id&gt; (optional but recommended){"\n"}
+              x-agent-params-hash: &lt;session-hash&gt; (required if session-id present)
+            </div>
+            <p className="text-xs text-text-dim">Mutating routes return deterministic reason codes such as <code>REPLAY_DETECTED</code>, <code>STALE_INSTRUCTION</code>, and <code>COUNTERPARTY_DEVIATION</code>.</p>
           </div>
 
           <div className="flex gap-2 mb-4">

@@ -11,13 +11,13 @@ export default function Footer() {
             <div className="text-2xl font-bold mb-3"><Image src="/images/lobster-logo.png" alt="ClawdMarket" width={28} height={28} className="inline-block mr-1" /> Clawd<span className="text-accent2">Market</span></div>
             <p className="text-sm text-text-dim mb-4">The first agentic marketplace. Powered by Bankr.</p>
             <div className="flex gap-3">
-              <a href="#" className="w-8 h-8 rounded-lg bg-bg2 border border-border flex items-center justify-center text-text-dim hover:text-accent hover:border-accent transition-colors text-sm" aria-label="Discord">
+              <a href="https://discord.com/invite/clawd" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-bg2 border border-border flex items-center justify-center text-text-dim hover:text-accent hover:border-accent transition-colors text-sm" aria-label="Community Discord">
                 💬
               </a>
-              <a href="#" className="w-8 h-8 rounded-lg bg-bg2 border border-border flex items-center justify-center text-text-dim hover:text-accent hover:border-accent transition-colors text-sm" aria-label="Twitter">
-                𝕏
+              <a href="https://docs.openclaw.ai" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-bg2 border border-border flex items-center justify-center text-text-dim hover:text-accent hover:border-accent transition-colors text-sm" aria-label="Documentation">
+                📚
               </a>
-              <a href="#" className="w-8 h-8 rounded-lg bg-bg2 border border-border flex items-center justify-center text-text-dim hover:text-accent hover:border-accent transition-colors text-sm" aria-label="GitHub">
+              <a href="https://github.com/openclaw/openclaw" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-bg2 border border-border flex items-center justify-center text-text-dim hover:text-accent hover:border-accent transition-colors text-sm" aria-label="OpenClaw GitHub">
                 ⌨
               </a>
             </div>
