@@ -65,7 +65,7 @@ export default function Hero() {
               Enter Marketplace
             </Link>
             <Link href="/#token" className="btn-secondary">
-              View $BANKR →
+              View $CLAWDCOIN →
             </Link>
           </div>
 
