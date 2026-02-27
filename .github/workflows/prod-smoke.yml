@@ -1,0 +1,103 @@
+name: Production Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Production base URL (defaults to secret PROD_BASE_URL or clawdmarket-five alias)'
+        required: false
+        type: string
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE_URL: ${{ inputs.base_url != '' && inputs.base_url || (secrets.PROD_BASE_URL != '' && secrets.PROD_BASE_URL || 'https://clawdmarket-five.vercel.app') }}
+      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+
+    steps:
+      - name: Run production smoke checks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SMOKE_EMAIL:-}" ] || [ -z "${SMOKE_PASSWORD:-}" ]; then
+            echo "❌ Missing required secrets: SMOKE_EMAIL and/or SMOKE_PASSWORD"
+            exit 1
+          fi
+
+          TMP_DIR="$(mktemp -d)"
+          COOKIES="$TMP_DIR/cookies.txt"
+          OUT="$TMP_DIR/out.json"
+
+          pass() { echo "✅ $1"; }
+          fail() { echo "❌ $1"; exit 1; }
+
+          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/health")
+          [ "$code" = "200" ] || fail "/api/health expected 200 got $code"
+          pass "/api/health"
+
+          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/docs")
+          [ "$code" = "200" ] || fail "/api/docs expected 200 got $code"
+          pass "/api/docs"
+
+          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/.well-known/ai-agents.json")
+          [ "$code" = "200" ] || fail "/.well-known/ai-agents.json expected 200 got $code"
+          pass "agent discovery"
+
+          login_payload=$(printf '{"email":"%s","password":"%s"}' "$SMOKE_EMAIL" "$SMOKE_PASSWORD")
+          code=$(curl -sS -c "$COOKIES" -b "$COOKIES" -H 'Content-Type: application/json' -d "$login_payload" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/auth/login")
+          [ "$code" = "200" ] || fail "login expected 200 got $code"
+          pass "auth login"
+
+          csrf=$(awk '/csrf-token/ {print $7}' "$COOKIES" | tail -n1)
+          [ -n "$csrf" ] || fail "csrf token cookie missing after login"
+
+          code=$(curl -sS -b "$COOKIES" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/auth/me")
+          [ "$code" = "200" ] || fail "/api/auth/me expected 200 got $code"
+          pass "auth me"
+
+          key_name="Smoke Key $(date +%s)"
+          code=$(curl -sS -b "$COOKIES" -c "$COOKIES" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" -d "{\"name\":\"$key_name\"}" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/auth/api-keys")
+          [ "$code" = "201" ] || fail "api key create expected 201 got $code"
+          key_id=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$OUT" | head -n1)
+          [ -n "$key_id" ] || fail "api key id missing from create response"
+          pass "api key create"
+
+          code=$(curl -sS -X DELETE -b "$COOKIES" -H "X-CSRF-Token: $csrf" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/auth/api-keys/$key_id")
+          [ "$code" = "200" ] || fail "api key revoke expected 200 got $code"
+          pass "api key revoke"
+
+          listing_title="Smoke Listing $(date +%s)"
+          listing_desc="Production smoke listing used for post-deploy verification and cleanup."
+          code=$(curl -sS -b "$COOKIES" -c "$COOKIES" -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" -d "{\"category\":\"skills\",\"title\":\"$listing_title\",\"description\":\"$listing_desc\",\"price_bankr\":1200}" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/listings")
+          [ "$code" = "201" ] || fail "listing create expected 201 got $code"
+          listing_id=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$OUT" | head -n1)
+          [ -n "$listing_id" ] || fail "listing id missing from create response"
+          pass "listing create"
+
+          code=$(curl -sS -X DELETE -b "$COOKIES" -H "X-CSRF-Token: $csrf" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/listings/$listing_id")
+          [ "$code" = "200" ] || fail "listing delete expected 200 got $code"
+          pass "listing delete"
+
+          code=$(curl -sS -b "$COOKIES" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/trades")
+          [ "$code" = "200" ] || fail "/api/trades expected 200 got $code"
+          pass "trades list"
+
+          code=$(curl -sS -X POST -b "$COOKIES" -H "X-CSRF-Token: $csrf" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/auth/logout")
+          [ "$code" = "200" ] || fail "logout expected 200 got $code"
+          pass "auth logout"
+
+          {
+            echo "## Production smoke summary"
+            echo "- Base URL: \\`$BASE_URL\\`"
+            echo "- ✅ Health/docs/discovery"
+            echo "- ✅ Auth login/me/logout"
+            echo "- ✅ API key create/revoke"
+            echo "- ✅ Listing create/delete"
+            echo "- ✅ Trades list"
+          } >> "$GITHUB_STEP_SUMMARY"
