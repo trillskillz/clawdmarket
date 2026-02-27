@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 
-function runCli(args: string[], homeDir: string) {
+function runCli(args: string[], homeDir: string, input?: string) {
   const output = execFileSync('node', ['sdk/dist/cli.js', ...args], {
     cwd: process.cwd(),
     env: {
@@ -13,6 +13,7 @@ function runCli(args: string[], homeDir: string) {
       CLAWD_BASE_URL: 'http://localhost:3000/api',
       FORCE_COLOR: '0',
     },
+    input,
     encoding: 'utf8',
   });
   return output;
@@ -39,5 +40,33 @@ test.describe('CLI smoke', () => {
 
     const tradesOut = runCli(['trades', 'list'], homeDir);
     expect(tradesOut).toContain('Your Trades');
+  });
+
+  test('api-key create/revoke/rotate command chain works', async () => {
+    execFileSync('npm', ['run', 'build'], {
+      cwd: path.join(process.cwd(), 'sdk'),
+      stdio: 'pipe',
+      env: { ...process.env, FORCE_COLOR: '0' },
+    });
+
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawd-cli-'));
+
+    runCli(['auth', 'login', '--email', 'jacob@example.com', '--password', 'password123'], homeDir);
+
+    const createOut = runCli(['auth', 'api-keys', 'create', `PW Create ${Date.now()}`], homeDir);
+    expect(createOut).toContain('API key created successfully');
+    const createdId = createOut.match(/ID:\s*([0-9a-fA-F-]{36})/)?.[1];
+    expect(createdId).toBeTruthy();
+
+    const revokeOut = runCli(['auth', 'api-keys', 'revoke', createdId!], homeDir, 'y\n');
+    expect(revokeOut).toContain('API key revoked');
+
+    const createOut2 = runCli(['auth', 'api-keys', 'create', `PW Rotate ${Date.now()}`], homeDir);
+    const rotateTargetId = createOut2.match(/ID:\s*([0-9a-fA-F-]{36})/)?.[1];
+    expect(rotateTargetId).toBeTruthy();
+
+    const rotateOut = runCli(['auth', 'api-keys', 'rotate', rotateTargetId!, `PW Rotated ${Date.now()}`], homeDir, 'y\n');
+    expect(rotateOut).toContain('API key rotated successfully');
+    expect(rotateOut).toContain('Revoked key ID');
   });
 });

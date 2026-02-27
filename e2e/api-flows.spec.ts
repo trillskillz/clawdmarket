@@ -48,8 +48,8 @@ test.describe('API lifecycle matrix', () => {
   });
 
   test('trade + completion + rating lifecycle', async ({ request }) => {
-    const sellerToken = await loginToken(request, 'jacob@example.com', 'password123');
-    const buyerToken = await loginToken(request, 'maya@startup.io', 'password123');
+    const sellerToken = await loginToken(request, 'maya@startup.io', 'password123');
+    const buyerToken = await loginToken(request, 'jacob@example.com', 'password123');
 
     const listingTitle = `PW Trade Listing ${Date.now()}`;
 
