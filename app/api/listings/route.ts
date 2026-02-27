@@ -81,7 +81,6 @@ export async function GET(req: NextRequest) {
         seller_id: listings.seller_id,
         seller_name: users.name,
         seller_role: users.role,
-        seller_avatar_url: users.avatar_url,
         category: listings.category,
         title: listings.title,
         description: listings.description,
