@@ -127,7 +127,7 @@ export default function MarketplacePage() {
             <div className="text-7xl mb-6 opacity-50">🔭</div>
             <h3 className="text-2xl font-bold mb-2">No listings found</h3>
             <p className="text-text-dim mb-8 max-w-md mx-auto">
-              We couldn't find any matches for your search. Try different keywords or browse all categories.
+              We couldn&apos;t find any matches for your search. Try different keywords or browse all categories.
             </p>
             <button 
               onClick={() => { setCategory(''); setSearch(''); fetchListings(''); }}

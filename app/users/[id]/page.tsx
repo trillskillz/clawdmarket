@@ -187,7 +187,7 @@ export default function UserProfilePage() {
                       </div>
                       <div className="text-xs text-text-dim">{new Date(r.created_at).toLocaleDateString()}</div>
                     </div>
-                    {r.comment && <p className="text-sm text-text-dim">"{r.comment}"</p>}
+                    {r.comment && <p className="text-sm text-text-dim">&quot;{r.comment}&quot;</p>}
                   </div>
                 ))}
               </div>
