@@ -1,27 +1,11 @@
 'use client';
 
-import '@rainbow-me/rainbowkit/styles.css';
-import { ConnectButton, RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { WagmiProvider, createStorage, cookieStorage, useAccount, useDisconnect, useSignMessage } from 'wagmi';
-import { mainnet, base, polygon, optimism, arbitrum } from 'wagmi/chains';
+import { useAccount, useDisconnect, useSignMessage } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo';
-const usingDemoProjectId = projectId === 'demo';
-
-const config = getDefaultConfig({
-  appName: 'ClawdMarket',
-  projectId,
-  chains: [mainnet, base, polygon, optimism, arbitrum],
-  ssr: true,
-  storage: createStorage({ storage: cookieStorage }),
-});
-
-const queryClient = new QueryClient();
-
-function WalletLoginInner() {
+export default function WalletLoginPopup() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
@@ -29,6 +13,16 @@ function WalletLoginInner() {
 
   const [status, setStatus] = useState<'idle' | 'signing' | 'authenticating' | 'done' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [shouldShow, setShouldShow] = useState(false);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => {
+        if (!res.ok) setShouldShow(true);
+      })
+      .catch(() => setShouldShow(true));
+  }, []);
 
   const completeWalletLogin = useCallback(async () => {
     if (!address || !isConnected) return;
@@ -68,8 +62,10 @@ function WalletLoginInner() {
     } catch (err: any) {
       setStatus('error');
       setError(err?.message || 'Wallet login failed');
+      // Disconnect on failure so user can retry cleanly
+      disconnect();
     }
-  }, [address, isConnected, signMessageAsync, router]);
+  }, [address, isConnected, signMessageAsync, router, disconnect]);
 
   useEffect(() => {
     if (isConnected && address && status === 'idle') {
@@ -77,24 +73,21 @@ function WalletLoginInner() {
     }
   }, [isConnected, address, status, completeWalletLogin]);
 
+  if (!shouldShow) return null;
+
   return (
-    <div className="fixed inset-x-0 bottom-4 z-[120] px-4">
-      <div className="mx-auto max-w-3xl rounded-2xl border border-border bg-bg2/95 backdrop-blur-xl shadow-2xl p-4 md:p-5">
-        <div className="mb-3">
-          <p className="text-sm uppercase tracking-widest text-text-dim">Login to Trade</p>
-          <h3 className="text-lg font-bold">Connect your wallet (MetaMask, Brave, Coinbase, WalletConnect + more)</h3>
+    <div className="fixed inset-x-0 bottom-0 sm:bottom-4 z-[120] sm:px-4">
+      <div className="mx-auto w-full sm:max-w-xl rounded-t-2xl sm:rounded-2xl border-t sm:border border-border bg-bg2/95 backdrop-blur-xl shadow-2xl p-6 sm:p-5 pb-8 sm:pb-5">
+        <div className="mb-4 sm:mb-3">
+          <p className="text-xs sm:text-sm uppercase tracking-widest text-text-dim">Login to Trade</p>
+          <h3 className="text-base sm:text-lg font-bold">Connect your wallet</h3>
         </div>
 
         {status === 'signing' && <p className="text-xs text-accent2 mb-2">Please sign the wallet message to continue…</p>}
         {status === 'authenticating' && <p className="text-xs text-accent2 mb-2">Verifying signature and signing you in…</p>}
         {status === 'done' && <p className="text-xs text-green-400 mb-2">Wallet connected and authenticated ✅</p>}
         {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
-        {usingDemoProjectId && (
-          <p className="text-[11px] text-yellow-300 mb-2">
-            WalletConnect is in demo mode. Set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID for production reliability.
-          </p>
-        )}
-
+        
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
           <p className="text-xs text-text-dim">Seamless wallet login for browser wallets and desktop/mobile wallets via QR.</p>
           <div className="flex items-center gap-2">
@@ -106,22 +99,5 @@ function WalletLoginInner() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function WalletLoginPopup() {
-  return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider
-          theme={darkTheme({
-            accentColor: '#7c3aed',
-            borderRadius: 'medium',
-          })}
-        >
-          <WalletLoginInner />
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
   );
 }

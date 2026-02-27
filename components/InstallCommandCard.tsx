@@ -1,16 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 const INSTALL_COMMAND = 'install the bankr skill from https://github.com/BankrBot/openclaw-skills/tree/main/bankr';
 
 export default function InstallCommandCard({ onCopy }: { onCopy?: () => void }) {
   const [copied, setCopied] = useState(false);
+  const { track } = useAnalytics();
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(INSTALL_COMMAND);
       setCopied(true);
+      track('copy_install_cmd', { location: 'card' });
       if (onCopy) onCopy();
       setTimeout(() => setCopied(false), 1600);
     } catch {

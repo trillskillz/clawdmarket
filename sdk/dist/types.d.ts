@@ -192,4 +192,3 @@ export interface ApiErrorBody {
     error: string;
     details?: unknown;
 }
-//# sourceMappingURL=types.d.ts.map
