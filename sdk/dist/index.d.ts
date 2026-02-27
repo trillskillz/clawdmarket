@@ -1,161 +1,71 @@
-import type { ClawdMarketOptions, User, LoginResponse, RegisterResponse, ApiKey, CreateApiKeyResponse, Listing, ListListingsFilters, ListListingsResponse, CreateListingData, UpdateListingData, BulkCreateResponse, Trade, ListTradesFilters, CreateTradeResponse, UpdateTradeResponse, TradeStatus, MarketStats, HealthStatus, Webhook, CreateWebhookResponse, WebhookEvent, UserProfile, UserRole, Rating, CreateRatingData, UserRatingsResponse, ActivityItem } from './types';
-export * from './types';
-export declare class ClawdMarketError extends Error {
-    readonly status: number;
-    readonly body: unknown;
-    constructor(message: string, status: number, body: unknown);
+export interface ClawdConfig {
+    baseUrl?: string;
+    apiKey?: string;
+    authToken?: string;
 }
-declare class HttpClient {
-    private baseUrl;
-    private apiKey?;
-    private token?;
-    constructor(opts: ClawdMarketOptions);
-    setToken(token: string): void;
-    clearToken(): void;
-    private buildHeaders;
-    request<T>(method: string, path: string, body?: unknown, queryParams?: Record<string, string | number | boolean | undefined>): Promise<T>;
-    get<T>(path: string, query?: Record<string, string | number | boolean | undefined>): Promise<T>;
-    post<T>(path: string, body?: unknown): Promise<T>;
-    put<T>(path: string, body?: unknown): Promise<T>;
-    patch<T>(path: string, body?: unknown): Promise<T>;
-    delete<T>(path: string): Promise<T>;
+export interface Listing {
+    id: string;
+    seller_id: string;
+    seller_name: string;
+    category: 'compute' | 'skills' | 'data' | 'bounties';
+    title: string;
+    description: string;
+    price_bankr: number;
+    status: 'active' | 'sold' | 'expired';
+    created_at: string;
 }
-declare class AuthClient {
-    private http;
-    constructor(http: HttpClient);
-    /**
-     * Log in with email + password.
-     * The returned token (if present) is automatically set on the client.
-     */
-    login(email: string, password: string): Promise<LoginResponse>;
-    /**
-     * Register a new account.
-     */
-    register(email: string, password: string, name: string, role?: UserRole): Promise<RegisterResponse>;
-    /**
-     * Get the currently authenticated user.
-     */
-    me(): Promise<{
-        authenticated: boolean;
-        user: User;
-    }>;
-    /**
-     * Log out (clears server cookie; also clears local token).
-     */
-    logout(): Promise<{
-        message: string;
-    }>;
-    /**
-     * List API keys for the authenticated user.
-     */
-    listApiKeys(): Promise<{
-        keys: ApiKey[];
-    }>;
-    /**
-     * Create a new API key. The plaintext key is only returned once.
-     */
-    createApiKey(name: string): Promise<CreateApiKeyResponse>;
+export interface ListingsQuery {
+    category?: 'compute' | 'skills' | 'data' | 'bounties';
+    search?: string;
+    limit?: number;
+    page?: number;
 }
-declare class ListingsClient {
-    private http;
-    constructor(http: HttpClient);
-    /**
-     * List marketplace listings with optional filters.
-     */
-    list(filters?: ListListingsFilters): Promise<ListListingsResponse>;
-    /**
-     * Get a single listing by ID.
-     */
-    get(id: string): Promise<Listing>;
-    /**
-     * Create a single listing.
-     */
-    create(data: CreateListingData): Promise<Listing>;
-    /**
-     * Bulk-create up to 50 listings at once.
-     */
-    createBulk(data: CreateListingData[]): Promise<BulkCreateResponse>;
-    /**
-     * Update a listing by ID (must be the seller).
-     */
-    update(id: string, data: UpdateListingData): Promise<Listing>;
-    /**
-     * Delete (soft-expire) a listing by ID (must be the seller).
-     */
-    delete(id: string): Promise<void>;
+export interface Trade {
+    id: string;
+    listing_id: string;
+    buyer_id: string;
+    seller_id: string;
+    amount: number;
+    fee: number;
+    status: 'pending' | 'completed' | 'disputed';
+    created_at: string;
 }
-declare class TradesClient {
-    private http;
-    constructor(http: HttpClient);
-    /**
-     * List trades for the authenticated user.
-     */
-    list(filters?: ListTradesFilters): Promise<Trade[]>;
-    /**
-     * Initiate a new trade for a listing.
-     */
-    create(listingId: string, amount: number): Promise<CreateTradeResponse>;
-    /**
-     * Get a single trade by ID.
-     */
-    get(id: string): Promise<Trade>;
-    /**
-     * Update trade status (buyer can set 'completed'; either party can set 'disputed').
-     */
-    updateStatus(id: string, status: TradeStatus): Promise<UpdateTradeResponse>;
-}
-declare class WebhooksClient {
-    private http;
-    constructor(http: HttpClient);
-    list(): Promise<Webhook[]>;
-    create(url: string, events: WebhookEvent[]): Promise<CreateWebhookResponse>;
-    delete(id: string): Promise<void>;
-}
-declare class RatingsClient {
-    private http;
-    constructor(http: HttpClient);
-    /**
-     * Rate a completed trade counterparty (1-5).
-     */
-    create(data: CreateRatingData): Promise<Rating>;
-    /**
-     * Get all ratings for a user.
-     */
-    forUser(userId: string): Promise<UserRatingsResponse>;
+export interface ApiKeyInfo {
+    id: string;
+    name: string;
+    last_used: string | null;
+    created_at: string;
 }
 export declare class ClawdMarket {
-    private http;
-    /** Authentication operations */
-    readonly auth: AuthClient;
-    /** Listings operations */
-    readonly listings: ListingsClient;
-    /** Trades operations */
-    readonly trades: TradesClient;
-    /** Webhook operations */
-    readonly webhooks: WebhooksClient;
-    /** Rating operations */
-    readonly ratings: RatingsClient;
-    constructor(opts: ClawdMarketOptions);
-    /**
-     * Manually set a JWT token (e.g. after login).
-     */
-    setToken(token: string): void;
-    /**
-     * Get platform-wide market statistics (public).
-     */
-    stats(): Promise<MarketStats>;
-    /**
-     * Check API health (public).
-     */
-    health(): Promise<HealthStatus>;
-    /**
-     * Get a user's public profile.
-     */
-    userProfile(userId: string): Promise<UserProfile>;
-    /**
-     * Get recent marketplace activity feed (public).
-     */
-    activity(): Promise<ActivityItem[]>;
+    private api;
+    private config;
+    constructor(config?: ClawdConfig);
+    private updateHeaders;
+    login(email: string, password: string): Promise<{
+        user: any;
+        token: string;
+    }>;
+    logout(): Promise<void>;
+    listApiKeys(): Promise<ApiKeyInfo[]>;
+    createApiKey(name: string): Promise<{
+        api_key: string;
+        key_info: ApiKeyInfo;
+    }>;
+    revokeApiKey(id: string): Promise<void>;
+    private getSessionPath;
+    private saveSession;
+    private clearSession;
+    loadSession(): any;
+    getListings(query?: ListingsQuery): Promise<{
+        listings: Listing[];
+        total: number;
+    }>;
+    getListing(id: string): Promise<Listing>;
+    createListing(listing: Omit<Listing, 'id' | 'seller_id' | 'seller_name' | 'status' | 'created_at'>): Promise<Listing>;
+    buy(listingId: string): Promise<Trade>;
+    getMyTrades(): Promise<Trade[]>;
+    getWallet(): Promise<{
+        balance: number;
+        escrow: number;
+    }>;
 }
-export default ClawdMarket;
-//# sourceMappingURL=index.d.ts.map
