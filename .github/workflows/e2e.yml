@@ -36,6 +36,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install SDK dependencies
+        run: npm ci --prefix sdk
+
+      - name: Initialize CI database
+        run: |
+          npm run db:push
+          npm run db:seed
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
