@@ -52,6 +52,31 @@ export default function ApiKeysTab({ apiKeys, loading, onRefresh, getCsrfToken }
     }
   };
 
+  const handleRevoke = async (id: string) => {
+    if (!confirm('Revoke this API key? Any integrations using it will immediately stop working.')) return;
+
+    try {
+      const res = await fetch(`/api/auth/api-keys/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'X-CSRF-Token': getCsrfToken(),
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast(data.error || 'Failed to revoke API key', 'error');
+        return;
+      }
+
+      toast('API key revoked', 'success');
+      await onRefresh();
+    } catch {
+      toast('Network error. Please try again.', 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -129,7 +154,7 @@ export default function ApiKeysTab({ apiKeys, loading, onRefresh, getCsrfToken }
       ) : (
         <div className="space-y-4">
           {apiKeys.map((key) => (
-            <div key={key.id} className="card flex justify-between items-center">
+            <div key={key.id} className="card flex justify-between items-center gap-3">
               <div>
                 <div className="font-semibold mb-1">{key.name}</div>
                 <div className="text-sm text-text-dim">
@@ -137,9 +162,17 @@ export default function ApiKeysTab({ apiKeys, loading, onRefresh, getCsrfToken }
                 </div>
               </div>
               <div className="text-right text-sm text-text-dim">
-                {key.last_used
-                  ? `Last used ${new Date(key.last_used).toLocaleDateString()}`
-                  : 'Never used'}
+                <div>
+                  {key.last_used
+                    ? `Last used ${new Date(key.last_used).toLocaleDateString()}`
+                    : 'Never used'}
+                </div>
+                <button
+                  onClick={() => handleRevoke(key.id)}
+                  className="mt-2 text-xs text-red-400 hover:text-red-300"
+                >
+                  Revoke
+                </button>
               </div>
             </div>
           ))}

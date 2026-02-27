@@ -9,7 +9,7 @@ async function loginToken(request: any, email: string, password: string) {
 }
 
 test.describe('API lifecycle matrix', () => {
-  test('api key lifecycle (create + list)', async ({ request }) => {
+  test('api key lifecycle (create + list + revoke)', async ({ request }) => {
     const token = await loginToken(request, 'jacob@example.com', 'password123');
 
     const create = await request.post('/api/auth/api-keys', {
@@ -33,6 +33,18 @@ test.describe('API lifecycle matrix', () => {
     const listed = await list.json();
     expect(Array.isArray(listed.keys)).toBeTruthy();
     expect(listed.keys.some((k: any) => k.id === created.key_info.id)).toBeTruthy();
+
+    const revoke = await request.delete(`/api/auth/api-keys/${created.key_info.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(revoke.ok()).toBeTruthy();
+
+    const listAfter = await request.get('/api/auth/api-keys', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(listAfter.ok()).toBeTruthy();
+    const after = await listAfter.json();
+    expect(after.keys.some((k: any) => k.id === created.key_info.id)).toBeFalsy();
   });
 
   test('trade + completion + rating lifecycle', async ({ request }) => {
