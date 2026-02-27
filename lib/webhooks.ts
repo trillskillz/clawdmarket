@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import dns from 'dns/promises';
 import { db } from './db';
-import { webhooks } from './schema';
-import { eq } from 'drizzle-orm';
+import { event_stream, webhooks } from './schema';
+import { eq, sql } from 'drizzle-orm';
 
 export type WebhookEvent = 'trade.created' | 'trade.completed' | 'listing.sold' | 'balance.changed';
 
@@ -10,6 +10,7 @@ export interface WebhookPayload {
   event: WebhookEvent;
   data: any;
   timestamp: string;
+  sequence_id: number;
 }
 
 function generateSignature(payload: string, secret: string): string {
@@ -20,6 +21,19 @@ export async function fireWebhook(userId: string, event: WebhookEvent, data: any
   // Non-blocking - fire and forget
   setImmediate(async () => {
     try {
+      const [maxSeqRow] = await db
+        .select({ max: sql<number>`coalesce(max(${event_stream.sequence_id}), 0)` })
+        .from(event_stream)
+        .where(eq(event_stream.user_id, userId));
+
+      const nextSequenceId = (maxSeqRow?.max ?? 0) + 1;
+      await db.insert(event_stream).values({
+        user_id: userId,
+        event,
+        sequence_id: nextSequenceId,
+        payload: JSON.stringify(data),
+      });
+
       // Get all webhooks for this user that subscribe to this event
       const userWebhooks = await db.select()
         .from(webhooks)
@@ -35,6 +49,7 @@ export async function fireWebhook(userId: string, event: WebhookEvent, data: any
           event,
           data,
           timestamp: new Date().toISOString(),
+          sequence_id: nextSequenceId,
         };
         
         const payloadString = JSON.stringify(payload);

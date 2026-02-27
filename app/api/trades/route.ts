@@ -8,6 +8,7 @@ import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
 import { eq, or, desc, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
+import { validateAgentInstruction } from '@/lib/agent-security';
 
 const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee
 
@@ -30,6 +31,9 @@ export async function POST(req: NextRequest) {
       { status: 403 }
     );
   }
+
+  const replayValidation = await validateAgentInstruction(req, auth.userId, authHeader || null);
+  if (replayValidation) return replayValidation;
 
   const rateLimitResult = rateLimit(`trade:${auth.userId}`, { 
     interval: 60 * 1000, 

@@ -22,12 +22,23 @@ export const ACTIONS = [
     notes: 'Returns listing state with source + timestamp.',
   },
   {
+    action: 'session.init',
+    endpoint: 'POST /api/agent/session',
+    parameters: {
+      declared_parameters: 'object',
+      ttl_seconds: 'number<=86400',
+    },
+    atomic: true,
+    notes: 'Returns immutable session hash used to detect counterparty deviation.',
+  },
+  {
     action: 'trade.create',
     endpoint: 'POST /api/trades',
     parameters: {
       listing_id: 'uuid',
       amount: 'number',
       allow_partial_fill: 'boolean=false',
+      headers: 'x-agent-nonce, x-agent-timestamp, optional session headers',
     },
     atomic: true,
     notes: 'Trade + escrow lock + fee are committed atomically or rejected.',

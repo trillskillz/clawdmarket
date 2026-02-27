@@ -7,6 +7,7 @@ import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
 import { eq, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
+import { validateAgentInstruction } from '@/lib/agent-security';
 
 export async function PATCH(
   req: NextRequest,
@@ -30,6 +31,9 @@ export async function PATCH(
       { status: 403 }
     );
   }
+
+  const replayValidation = await validateAgentInstruction(req, auth.userId, authHeader || null);
+  if (replayValidation) return replayValidation;
 
   try {
     if (!isValidUUID(params.id)) {

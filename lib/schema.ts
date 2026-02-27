@@ -155,7 +155,51 @@ export const transactions = sqliteTable('transactions', {
     .$defaultFn(() => new Date()),
 });
 
+export const agent_sessions = sqliteTable('agent_sessions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  user_id: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  declared_params: text('declared_params').notNull(),
+  declared_hash: text('declared_hash').notNull(),
+  status: text('status', { enum: ['active', 'closed'] }).notNull().default('active'),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  expires_at: integer('expires_at', { mode: 'timestamp' }),
+});
+
+export const agent_instruction_nonces = sqliteTable('agent_instruction_nonces', {
+  id: text('id').primaryKey(), // ${user_id}:${nonce}
+  user_id: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  nonce: text('nonce').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const event_stream = sqliteTable('event_stream', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  user_id: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  sequence_id: integer('sequence_id').notNull(),
+  event: text('event').notNull(),
+  payload: text('payload').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
 export type Wallet = typeof wallets.$inferSelect;
 export type NewWallet = typeof wallets.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
+export type AgentSession = typeof agent_sessions.$inferSelect;
+export type NewAgentSession = typeof agent_sessions.$inferInsert;
+export type AgentInstructionNonce = typeof agent_instruction_nonces.$inferSelect;
+export type NewAgentInstructionNonce = typeof agent_instruction_nonces.$inferInsert;
+export type EventStreamRow = typeof event_stream.$inferSelect;
+export type NewEventStreamRow = typeof event_stream.$inferInsert;

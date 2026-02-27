@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { listings, trades, transactions } from '@/lib/schema';
+import { event_stream, listings, trades, transactions } from '@/lib/schema';
 import { getBalance } from '@/lib/wallet';
 import {
   ACTIONS,
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(base);
   }
 
-  const [balance, openTrades, recentTransactions, activeListings] = await Promise.all([
+  const [balance, openTrades, recentTransactions, activeListings, eventTail] = await Promise.all([
     getBalance(auth.userId),
     db
       .select()
@@ -78,7 +78,16 @@ export async function GET(req: NextRequest) {
       .where(eq(listings.seller_id, auth.userId))
       .orderBy(desc(listings.created_at))
       .limit(100),
+    db
+      .select()
+      .from(event_stream)
+      .where(eq(event_stream.user_id, auth.userId))
+      .orderBy(desc(event_stream.sequence_id))
+      .limit(50),
   ]);
+
+  const seqs = eventTail.map((e) => e.sequence_id).sort((a, b) => a - b);
+  const contiguous = seqs.every((seq, idx) => idx === 0 || seq === seqs[idx - 1] + 1);
 
   return NextResponse.json({
     ...base,
@@ -87,10 +96,16 @@ export async function GET(req: NextRequest) {
       trades: openTrades,
       listings: activeListings,
       transactions: recentTransactions,
+      event_stream_tail: eventTail,
       reconciliation: {
-        gap_detected: false,
-        gap_reason: null,
-        requires_resubscribe: false,
+        gap_detected: !contiguous,
+        gap_reason: contiguous ? null : 'SEQUENCE_DISCONTINUITY',
+        requires_resubscribe: !contiguous,
+        proof: {
+          first_sequence_id: seqs[0] ?? null,
+          last_sequence_id: seqs[seqs.length - 1] ?? null,
+          sample_size: seqs.length,
+        },
       },
     },
   });
