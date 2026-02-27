@@ -59,6 +59,94 @@ auth
         console.log(chalk.yellow('Not logged in. Run `clawd auth login` to start.'));
     }
 });
+const apiKeys = auth.command('api-keys').description('Manage API keys');
+apiKeys
+    .command('list')
+    .description('List your API keys')
+    .action(async () => {
+    const session = client.loadSession();
+    if (!session) {
+        console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
+        return;
+    }
+    try {
+        const keys = await client.listApiKeys();
+        if (!keys.length) {
+            console.log(chalk.yellow('No API keys found.'));
+            return;
+        }
+        console.log(chalk.bold('\nYour API Keys:\n'));
+        keys.forEach((key) => {
+            console.log(`${chalk.cyan(key.id)}  ${chalk.white(key.name)}`);
+            console.log(`   ${chalk.gray(`Created: ${new Date(key.created_at).toLocaleString()}`)}`);
+            console.log(`   ${chalk.gray(key.last_used ? `Last used: ${new Date(key.last_used).toLocaleString()}` : 'Last used: Never')}\n`);
+        });
+    }
+    catch (error) {
+        console.error(chalk.red(`Failed to list API keys: ${error.message}`));
+    }
+});
+apiKeys
+    .command('create [name]')
+    .description('Create a new API key')
+    .action(async (name) => {
+    const session = client.loadSession();
+    if (!session) {
+        console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
+        return;
+    }
+    let keyName = name;
+    if (!keyName) {
+        const answer = await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'name',
+                message: 'API key name:',
+                validate: (input) => input.trim().length >= 3 || 'Name must be at least 3 characters',
+            },
+        ]);
+        keyName = answer.name;
+    }
+    try {
+        const result = await client.createApiKey(keyName);
+        console.log(chalk.green('\nAPI key created successfully!'));
+        console.log(chalk.yellow('Save this now. You will not be able to see it again:\n'));
+        console.log(chalk.white(result.api_key));
+        console.log(chalk.gray(`\nID: ${result.key_info.id}`));
+    }
+    catch (error) {
+        console.error(chalk.red(`Failed to create API key: ${error.message}`));
+    }
+});
+apiKeys
+    .command('revoke <id>')
+    .description('Revoke an API key by id')
+    .action(async (id) => {
+    const session = client.loadSession();
+    if (!session) {
+        console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
+        return;
+    }
+    const confirm = await inquirer.prompt([
+        {
+            type: 'confirm',
+            name: 'proceed',
+            message: `Revoke API key ${id}? This cannot be undone.`,
+            default: false,
+        },
+    ]);
+    if (!confirm.proceed) {
+        console.log(chalk.yellow('Revocation cancelled.'));
+        return;
+    }
+    try {
+        await client.revokeApiKey(id);
+        console.log(chalk.green('API key revoked.'));
+    }
+    catch (error) {
+        console.error(chalk.red(`Failed to revoke API key: ${error.message}`));
+    }
+});
 // ─── Listings Commands ──────────────────────────────────────────────────────
 const listings = program.command('listings').description('Browse and manage listings');
 listings

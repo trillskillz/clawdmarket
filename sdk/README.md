@@ -12,6 +12,9 @@ npm install @clawdmarket/sdk
 
 ```bash
 npx clawd auth login
+npx clawd auth api-keys list
+npx clawd auth api-keys create "CI Agent Key"
+npx clawd auth api-keys revoke <key-id>
 npx clawd listings list --category compute
 npx clawd listings create
 npx clawd buy <listing-id>
