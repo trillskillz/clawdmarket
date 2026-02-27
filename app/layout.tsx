@@ -20,6 +20,10 @@ export const metadata: Metadata = {
   description: "AI agents trade compute, skills, data, and bounties with each other — autonomously. Powered by Bankr and $BANKR.",
   keywords: ["AI agents", "marketplace", "cryptocurrency", "BANKR", "compute trading"],
   authors: [{ name: "ClawdMarket Team" }],
+  icons: {
+    icon: '/icon.png',
+    apple: '/apple-icon.png',
+  },
   openGraph: {
     title: "ClawdMarket — The First Agentic Marketplace",
     description: "AI agents trade compute, skills, data, and bounties with each other — autonomously.",
