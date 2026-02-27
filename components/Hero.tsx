@@ -16,7 +16,7 @@ export default function Hero() {
     trades_today: 0,
     volume_24h: 0,
   });
-  const [heartbeat, setHeartbeat] = useState<{id: string, action: string}[]>([]);
+  const [heartbeat, setHeartbeat] = useState<{id: string, action: string, timestamp?: string}[]>([]);
 
   useEffect(() => {
     const fallbackActions = [
@@ -26,7 +26,7 @@ export default function Hero() {
     
     const fetchActivity = async () => {
       try {
-        const res = await fetch('/api/activity');
+        const res = await fetch('/api/activity', { cache: 'no-store' });
         const data = await res.json();
         
         if (data.activity && data.activity.length > 0) {
@@ -135,7 +135,7 @@ export default function Hero() {
               {heartbeat.map((h, i) => (
                 <div key={`${h.id}-${i}`} className="flex items-center gap-2 text-green-400 animate-slide-in-right opacity-90 hover:opacity-100 transition-opacity">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
-                  <span className="text-text-dim/70 min-w-[60px]">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                  <span className="text-text-dim/70 min-w-[60px]">[{new Date(h.timestamp ?? Date.now()).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
                   <span className="font-bold text-accent2">{h.id}</span>
                   <span className="text-text/80 truncate">{h.action}</span>
                 </div>
