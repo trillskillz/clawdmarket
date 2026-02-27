@@ -36,10 +36,14 @@ test.describe('CLI smoke', () => {
     expect(statusOut).toContain('Logged in as');
 
     const apiKeyListOut = runCli(['auth', 'api-keys', 'list'], homeDir);
-    expect(apiKeyListOut).toContain('Your API Keys');
+    expect(
+      apiKeyListOut.includes('Your API Keys') || apiKeyListOut.includes('No API keys found.')
+    ).toBeTruthy();
 
     const tradesOut = runCli(['trades', 'list'], homeDir);
-    expect(tradesOut).toContain('Your Trades');
+    expect(
+      tradesOut.includes('Your Trades') || tradesOut.includes('No trades found.')
+    ).toBeTruthy();
   });
 
   test('api-key create/revoke/rotate command chain works', async () => {

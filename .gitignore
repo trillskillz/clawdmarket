@@ -30,6 +30,7 @@
 /node_modules
 /out/
 local.db
+ci.db
 next-env.d.ts
 npm-debug.log*
 yarn-debug.log*
