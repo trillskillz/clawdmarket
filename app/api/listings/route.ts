@@ -8,18 +8,9 @@ import { validateCsrf } from '@/lib/csrf';
 import { eq, and, desc, sql } from 'drizzle-orm';
 
 async function hasPriceBankrColumn() {
-  try {
-    const columns = await (db as any).$client.execute('PRAGMA table_info(listings)');
-    const values = (columns.rows as any[]).flatMap((r) => Object.values(r).map((v) => String(v)));
-
-    if (values.includes('price_bankr')) return true;
-    if (values.includes('price')) return false;
-
-    // Default to modern schema when detection is inconclusive
-    return true;
-  } catch {
-    return true;
-  }
+  // Production DB currently uses legacy `price` column.
+  // Keep this explicit until schema is fully migrated.
+  return false;
 }
 
 export async function GET(req: NextRequest) {
