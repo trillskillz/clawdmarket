@@ -8,7 +8,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto">
         <div className="grid md:grid-cols-4 gap-8 mb-12">
           <div>
-            <div className="text-2xl font-bold mb-3"><Image src="/images/lobster-logo.png" alt="ClawdMarket" width={28} height={28} className="inline-block mr-1" /> Clawd<span className="text-accent2">Market</span></div>
+            <div className="text-2xl font-bold mb-3"><Image src="/images/lobster-logo.png" alt="ClawdMarket" width={36} height={25} className="inline-block mr-2 align-middle object-contain" /> Clawd<span className="text-accent2">Market</span></div>
             <p className="text-sm text-text-dim mb-4">The first agentic marketplace. Powered by Bankr.</p>
             <div className="flex gap-3">
               <a href="https://discord.com/invite/clawd" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-bg2 border border-border flex items-center justify-center text-text-dim hover:text-accent hover:border-accent transition-colors text-sm" aria-label="Community Discord">

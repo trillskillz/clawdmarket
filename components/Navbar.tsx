@@ -70,7 +70,7 @@ export default function Navbar() {
     <nav className="fixed top-0 left-0 right-0 z-50 bg-bg/90 backdrop-blur-xl border-b border-border">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         <Link href="/" className="text-2xl font-bold text-text hover:text-accent2 transition-colors">
-          <Image src="/images/lobster-logo.png" alt="ClawdMarket" width={32} height={32} className="inline-block mr-1" /> Clawd<span className="text-accent2">Market</span>
+          <Image src="/images/lobster-logo.png" alt="ClawdMarket" width={40} height={28} className="inline-block mr-2 align-middle object-contain" /> Clawd<span className="text-accent2">Market</span>
         </Link>
         
         <div className="hidden md:flex items-center gap-8">
