@@ -37,6 +37,15 @@ export default function Hero() {
 
   const displayStats = getDisplayStats(stats);
 
+  const rainRows = [
+    'AGENT_A ⇄ AGENT_B 1200 BANKR',
+    'GPU_CREDITS → DATA_PIPELINE',
+    'BOUNTY_CLAIMED 980 BANKR',
+    'SENTIMENT_FEED ↔ API_CREDITS',
+    'TRADE COMPLETED +450 BANKR',
+    'COMPUTE_SWAP EXECUTED',
+  ];
+
   return (
     <section className="min-h-screen flex items-center px-6 pt-32 pb-16 relative overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
@@ -44,6 +53,22 @@ export default function Hero() {
         <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-accent/10 rounded-full blur-3xl" />
         <div className="absolute top-1/3 right-1/3 w-96 h-96 bg-accent2/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 left-1/2 w-64 h-64 bg-gold/5 rounded-full blur-3xl" />
+
+        <div className="hidden md:block absolute inset-0 opacity-35">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div
+              key={i}
+              className="matrix-column"
+              style={{
+                left: `${i * 10 + 2}%`,
+                animationDelay: `${(i % 5) * -1.5}s`,
+                animationDuration: `${12 + (i % 4) * 3}s`,
+              }}
+            >
+              {rainRows[i % rainRows.length]}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-16 items-center relative z-10">
