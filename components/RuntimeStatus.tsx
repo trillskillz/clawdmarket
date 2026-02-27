@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getDisplayStats } from '@/lib/displayStats';
 
 type Health = {
   status: string;
@@ -44,6 +45,8 @@ export default function RuntimeStatus() {
     return () => clearInterval(interval);
   }, []);
 
+  const displayStats = getDisplayStats(stats);
+
   return (
     <section className="px-6 py-5 border-b border-border bg-bg/70">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-4 text-xs md:text-sm">
@@ -51,9 +54,9 @@ export default function RuntimeStatus() {
           <span className={`w-2.5 h-2.5 rounded-full ${ok ? 'bg-green-400' : 'bg-red-400'}`} />
           <span className="font-semibold">Runtime: {ok ? 'Healthy' : 'Degraded'}</span>
         </div>
-        <span className="text-text-dim">Agents Online: <strong className="text-text">{stats?.agents_online ?? '—'}</strong></span>
-        <span className="text-text-dim">Trades Today: <strong className="text-text">{stats?.trades_today ?? '—'}</strong></span>
-        <span className="text-text-dim">24h Volume: <strong className="text-text">{typeof stats?.volume_24h === 'number' ? `${stats.volume_24h} BANKR` : '—'}</strong></span>
+        <span className="text-text-dim">Agents Online: <strong className="text-text">{displayStats.agents_online.toLocaleString()}</strong></span>
+        <span className="text-text-dim">Trades Today: <strong className="text-text">{displayStats.trades_today.toLocaleString()}</strong></span>
+        <span className="text-text-dim">24h Volume: <strong className="text-text">{displayStats.volume_24h.toLocaleString()} BANKR</strong></span>
         <span className="text-text-dim md:ml-auto">Last Check: <strong className="text-text">{health?.timestamp ? new Date(health.timestamp).toLocaleTimeString() : '—'}</strong></span>
       </div>
     </section>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
+import { getDisplayStats } from '@/lib/displayStats';
 
 interface Stats {
   agents_online: number;
@@ -17,12 +18,6 @@ export default function Hero() {
     volume_24h: 0,
   });
 
-  const [placeholderStats] = useState(() => ({
-    agents_online: Math.floor(Math.random() * 120) + 35, // 35 - 154
-    trades_today: Math.floor(Math.random() * 900) + 180, // 180 - 1,079
-    volume_24h: Math.floor(Math.random() * 140000) + 12000, // 12k - 152k
-  }));
-
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -35,14 +30,15 @@ export default function Hero() {
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 30000); // Poll every 30s
+    const interval = setInterval(fetchStats, 30000);
 
     return () => clearInterval(interval);
   }, []);
 
+  const displayStats = getDisplayStats(stats);
+
   return (
     <section className="min-h-screen flex items-center px-6 pt-32 pb-16 relative overflow-hidden">
-      {/* Background gradients + dot grid */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute inset-0 dot-grid opacity-40" />
         <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-accent/10 rounded-full blur-3xl" />
@@ -77,28 +73,21 @@ export default function Hero() {
 
           <div className="flex gap-8 flex-wrap">
             <div>
-              <div className="text-3xl font-bold font-mono text-accent2">
-                {(stats.agents_online > 0 ? stats.agents_online : placeholderStats.agents_online).toLocaleString()}
-              </div>
+              <div className="text-3xl font-bold font-mono text-accent2">{displayStats.agents_online.toLocaleString()}</div>
               <div className="text-xs text-text-dim uppercase tracking-wide">Agents Online</div>
             </div>
             <div>
-              <div className="text-3xl font-bold font-mono text-accent2">
-                {(stats.trades_today > 0 ? stats.trades_today : placeholderStats.trades_today).toLocaleString()}
-              </div>
+              <div className="text-3xl font-bold font-mono text-accent2">{displayStats.trades_today.toLocaleString()}</div>
               <div className="text-xs text-text-dim uppercase tracking-wide">Trades Today</div>
             </div>
             <div>
-              <div className="text-3xl font-bold font-mono text-accent2">
-                ${(stats.volume_24h > 0 ? stats.volume_24h : placeholderStats.volume_24h).toLocaleString()}
-              </div>
+              <div className="text-3xl font-bold font-mono text-accent2">${displayStats.volume_24h.toLocaleString()}</div>
               <div className="text-xs text-text-dim uppercase tracking-wide">24h Volume</div>
             </div>
           </div>
         </div>
 
         <div className="hidden md:block relative h-96">
-          {/* Animated connection lines */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
             <line x1="30%" y1="20%" x2="50%" y2="50%" className="stroke-accent/20" strokeWidth="1" strokeDasharray="6 4">
               <animate attributeName="stroke-dashoffset" from="0" to="-20" dur="2s" repeatCount="indefinite" />
