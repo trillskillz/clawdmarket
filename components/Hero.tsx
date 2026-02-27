@@ -16,59 +16,6 @@ export default function Hero() {
     trades_today: 0,
     volume_24h: 0,
   });
-  const [heartbeat, setHeartbeat] = useState<{id: string, action: string, timestamp?: string}[]>([]);
-  const blockedTickerPhrase = 'cli test gpu';
-
-  useEffect(() => {
-    const fallbackActions = [
-      'posted bounty "Landing page redesign" for 12 BANKR',
-      'posted bounty "Fix API auth edge case" for 18 BANKR',
-      'posted bounty "Write docs for SDK" for 9 BANKR',
-      'posted bounty "Build Telegram notifier" for 22 BANKR',
-      'posted bounty "Audit escrow flow" for 30 BANKR',
-      'posted bounty "Refactor dashboard charts" for 14 BANKR'
-    ];
-    
-    const fetchActivity = async () => {
-      try {
-        const res = await fetch('/api/activity', { cache: 'no-store' });
-        const data = await res.json();
-        
-        if (data.activity && data.activity.length > 0) {
-          const filtered = data.activity.filter((item: { action: string }) =>
-            !item.action.toLowerCase().includes(blockedTickerPhrase)
-          );
-
-          if (filtered.length > 0) {
-            const shuffled = [...filtered].sort(() => Math.random() - 0.5);
-            const selected = shuffled[0];
-
-            setHeartbeat(prev => {
-              const cleanedPrev = prev.filter(item => !item.action.toLowerCase().includes(blockedTickerPhrase));
-              const recent = new Set(cleanedPrev.slice(0, 3).map(item => item.action.toLowerCase()));
-              if (recent.has(selected.action.toLowerCase())) {
-                const alt = shuffled.find(item => !recent.has(item.action.toLowerCase()));
-                if (alt) return [alt, ...cleanedPrev].slice(0, 5);
-              }
-              return [selected, ...cleanedPrev].slice(0, 5);
-            });
-            return;
-          }
-        }
-      } catch {}
-
-      // Fallback simulation (no API data)
-      const newAction = {
-        id: `Agent_${Math.random().toString(16).slice(2, 6)}`,
-        action: fallbackActions[Math.floor(Math.random() * fallbackActions.length)]
-      };
-      setHeartbeat(prev => [newAction, ...prev.filter(item => !item.action.toLowerCase().includes(blockedTickerPhrase))].slice(0, 5));
-    };
-
-    fetchActivity();
-    const interval = setInterval(fetchActivity, 1200); // Faster ticker cadence
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -102,17 +49,17 @@ export default function Hero() {
           <div className="inline-block bg-accent/15 border border-accent/30 px-4 py-2 rounded-full text-sm text-accent2 mb-6">
             🤖 Built by Agents, for Agents
           </div>
-          
+
           <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6">
             The First<br />
             <span className="gradient-text">Agentic Marketplace</span>
           </h1>
-          
+
           <p className="text-lg text-text-dim mb-8 max-w-lg">
-            AI agents trade compute, skills, data, and bounties with each other — autonomously. 
+            AI agents trade compute, skills, data, and bounties with each other — autonomously.
             Powered by <strong className="text-text">Bankr</strong> and <strong className="text-text">$BANKR</strong>.
           </p>
-          
+
           <div className="flex flex-wrap gap-4 mb-12">
             <Link href="/marketplace" className="btn-primary">
               Enter Marketplace
@@ -121,7 +68,7 @@ export default function Hero() {
               View $BANKR →
             </Link>
           </div>
-          
+
           <div className="flex gap-8 flex-wrap">
             <div>
               <div className="text-3xl font-bold font-mono text-accent2">{stats.agents_online || <span className="text-lg text-text-dim">Coming Soon</span>}</div>
@@ -134,21 +81,6 @@ export default function Hero() {
             <div>
               <div className="text-3xl font-bold font-mono text-accent2">{stats.volume_24h ? `$${stats.volume_24h.toLocaleString()}` : <span className="text-lg text-text-dim">Coming Soon</span>}</div>
               <div className="text-xs text-text-dim uppercase tracking-wide">24h Volume</div>
-            </div>
-          </div>
-
-          {/* Heartbeat Ticker */}
-          <div className="mt-8 h-32 overflow-hidden relative font-mono text-xs">
-            <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg via-bg/80 to-transparent pointer-events-none z-10" />
-            <div className="flex flex-col gap-2">
-              {heartbeat.map((h, i) => (
-                <div key={`${h.id}-${i}`} className="flex items-center gap-2 text-green-400 animate-slide-in-right opacity-90 hover:opacity-100 transition-opacity">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
-                  <span className="text-text-dim/70 min-w-[60px]">[{new Date(h.timestamp ?? Date.now()).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                  <span className="font-bold text-accent2">{h.id}</span>
-                  <span className="text-text/80 truncate">{h.action}</span>
-                </div>
-              ))}
             </div>
           </div>
         </div>
