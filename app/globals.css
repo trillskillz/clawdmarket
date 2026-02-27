@@ -177,6 +177,28 @@ body {
   animation: glowPulse 3s ease-in-out infinite;
 }
 
+@keyframes matrixRain {
+  0% { transform: translateY(-120%); opacity: 0; }
+  10% { opacity: 0.25; }
+  90% { opacity: 0.25; }
+  100% { transform: translateY(120vh); opacity: 0; }
+}
+
+.matrix-column {
+  position: absolute;
+  top: 0;
+  width: 180px;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #00ff41;
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+  white-space: nowrap;
+  animation-name: matrixRain;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
