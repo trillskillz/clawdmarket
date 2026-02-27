@@ -163,6 +163,46 @@ apiKeys
     }
   });
 
+apiKeys
+  .command('rotate <id> [name]')
+  .description('Rotate an API key (create replacement, then revoke old)')
+  .action(async (id: string, name?: string) => {
+    const session = client.loadSession();
+    if (!session) {
+      console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
+      return;
+    }
+
+    const keyName = name || `Rotated Key ${new Date().toISOString().slice(0, 10)}`;
+
+    const confirm = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'proceed',
+        message: `Rotate API key ${id} using new key name "${keyName}"?`,
+        default: false,
+      },
+    ]);
+
+    if (!confirm.proceed) {
+      console.log(chalk.yellow('Rotation cancelled.'));
+      return;
+    }
+
+    try {
+      const replacement = await client.createApiKey(keyName);
+      await client.revokeApiKey(id);
+
+      console.log(chalk.green('\nAPI key rotated successfully.'));
+      console.log(chalk.yellow('Save this new key now. You will not be able to see it again:\n'));
+      console.log(chalk.white(replacement.api_key));
+      console.log(chalk.gray(`\nNew key ID: ${replacement.key_info.id}`));
+      console.log(chalk.gray(`Revoked key ID: ${id}`));
+    } catch (error: any) {
+      console.error(chalk.red(`Failed to rotate API key: ${error.message}`));
+    }
+  });
+
 // ─── Listings Commands ──────────────────────────────────────────────────────
 
 const listings = program.command('listings').description('Browse and manage listings');

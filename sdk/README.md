@@ -15,6 +15,7 @@ npx clawd auth login
 npx clawd auth api-keys list
 npx clawd auth api-keys create "CI Agent Key"
 npx clawd auth api-keys revoke <key-id>
+npx clawd auth api-keys rotate <old-key-id> "Rotated Key"
 npx clawd listings list --category compute
 npx clawd listings create
 npx clawd buy <listing-id>
