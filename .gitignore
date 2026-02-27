@@ -14,9 +14,13 @@
 *.pem
 *.tsbuildinfo
 .DS_Store
+
+# env/secrets (allow examples only)
 .env
-.env*.local
-.env.local
+.env.*
+!.env.example
+!.env.*.example
+
 .pnp.js
 .vercel
 /.next/
@@ -30,3 +34,8 @@ next-env.d.ts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# local-only infra/artifacts
+cloudflared
+agents/
+
