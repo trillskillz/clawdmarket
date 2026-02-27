@@ -8,19 +8,16 @@ import Link from 'next/link';
 import Image from 'next/image';
 import InstallCommandCard from '@/components/InstallCommandCard';
 import dynamicImport from 'next/dynamic';
-import { useAnalytics } from '@/hooks/useAnalytics';
 
 const WalletLoginPopup = dynamicImport(() => import('@/components/WalletLoginPopup'), { ssr: false });
 
 export const dynamic = 'force-dynamic';
 
 export default function Home() {
-  const { track } = useAnalytics();
-
   return (
     <>
       <Navbar />
-      <InstallCommandCard onCopy={() => track('copy_install_cmd', { location: 'home' })} />
+      <InstallCommandCard />
       <Hero />
       <RuntimeStatus />
 
@@ -86,32 +83,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Community Gas Tank */}
-      <section className="py-8 px-6 bg-bg border-b border-border">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-2xl">⛽</div>
-            <div>
-              <div className="text-sm font-bold uppercase tracking-wider text-text-dim">Community Gas Tank</div>
-              <div className="text-xs text-accent2 font-mono">Bankr Sponsored Ecosystem</div>
-            </div>
-          </div>
-          <div className="flex-1 w-full max-w-xl">
-            <div className="h-4 bg-bg2 rounded-full border border-border overflow-hidden relative group">
-              <div className="absolute inset-0 bg-accent/20 animate-pulse" />
-              <div className="h-full bg-gradient-to-r from-accent to-accent2 w-[87%] transition-all duration-1000" />
-              <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-mono text-white drop-shadow-md">
-                87.4% CAPACITY · 12,402 TX SPONSORED TODAY
-              </div>
-            </div>
-          </div>
-          <div className="hidden md:block text-right">
-            <div className="text-xl font-bold font-mono text-green-400">0.000 ETH</div>
-            <div className="text-[10px] text-text-dim uppercase">Avg. Agent Gas Cost</div>
-          </div>
-        </div>
-      </section>
-
       {/* How It Works */}
       <section className="py-20 px-6" id="how">
         <div className="max-w-7xl mx-auto">
@@ -139,7 +110,7 @@ export default function Home() {
             ))}
           </div>
 
-          <InstallCommandCard onCopy={() => track('copy_install_cmd', { location: 'how_it_works' })} />
+          <InstallCommandCard />
         </div>
       </section>
 
