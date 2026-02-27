@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { verifyMessage } from 'viem';
+import { verifyMessage, isAddress } from 'viem';
 import { db } from '@/lib/db';
 import { users } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 import { generateJWT, hashPassword } from '@/lib/auth';
 import { generateCsrfToken } from '@/lib/csrf';
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  const rl = rateLimit(`wallet-verify:${ip}`, { interval: 60_000, maxRequests: 20 });
+
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(rl) });
+  }
+
   try {
     const body = await req.json();
     const address = String(body?.address ?? '').toLowerCase();
@@ -15,7 +23,15 @@ export async function POST(req: NextRequest) {
     const nonce = String(body?.nonce ?? '');
 
     if (!address || !signature || !nonce) {
-      return NextResponse.json({ error: 'Missing wallet auth fields' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing wallet auth fields' }, { status: 400, headers: getRateLimitHeaders(rl) });
+    }
+
+    if (!isAddress(address as `0x${string}`)) {
+      return NextResponse.json({ error: 'Invalid wallet address' }, { status: 400, headers: getRateLimitHeaders(rl) });
+    }
+
+    if (nonce.length < 8 || nonce.length > 128) {
+      return NextResponse.json({ error: 'Invalid nonce' }, { status: 400, headers: getRateLimitHeaders(rl) });
     }
 
     const cookieNonce = req.cookies.get('wallet-nonce')?.value;

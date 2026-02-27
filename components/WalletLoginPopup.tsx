@@ -6,8 +6,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, createStorage, cookieStorage, useAccount, useDisconnect, useSignMessage } from 'wagmi';
 import { mainnet, base, polygon, optimism, arbitrum } from 'wagmi/chains';
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo';
+const usingDemoProjectId = projectId === 'demo';
 
 const config = getDefaultConfig({
   appName: 'ClawdMarket',
@@ -20,6 +22,7 @@ const config = getDefaultConfig({
 const queryClient = new QueryClient();
 
 function WalletLoginInner() {
+  const router = useRouter();
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
@@ -59,11 +62,14 @@ function WalletLoginInner() {
       }
 
       setStatus('done');
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 500);
     } catch (err: any) {
       setStatus('error');
       setError(err?.message || 'Wallet login failed');
     }
-  }, [address, isConnected, signMessageAsync]);
+  }, [address, isConnected, signMessageAsync, router]);
 
   useEffect(() => {
     if (isConnected && address && status === 'idle') {
@@ -83,6 +89,11 @@ function WalletLoginInner() {
         {status === 'authenticating' && <p className="text-xs text-accent2 mb-2">Verifying signature and signing you in…</p>}
         {status === 'done' && <p className="text-xs text-green-400 mb-2">Wallet connected and authenticated ✅</p>}
         {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+        {usingDemoProjectId && (
+          <p className="text-[11px] text-yellow-300 mb-2">
+            WalletConnect is in demo mode. Set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID for production reliability.
+          </p>
+        )}
 
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
           <p className="text-xs text-text-dim">Seamless wallet login for browser wallets and desktop/mobile wallets via QR.</p>
