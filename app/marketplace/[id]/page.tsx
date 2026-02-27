@@ -23,6 +23,14 @@ interface Listing {
   created_at: string;
 }
 
+interface SellerTrustProfile {
+  stats?: {
+    completed_trades_as_seller: number;
+    average_rating: number | null;
+    total_ratings: number;
+  };
+}
+
 export default function ListingDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -32,6 +40,7 @@ export default function ListingDetailPage() {
   const [tradeLoading, setTradeLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [sellerProfile, setSellerProfile] = useState<SellerTrustProfile | null>(null);
 
   const fetchMe = useCallback(async () => {
     try {
@@ -49,6 +58,14 @@ export default function ListingDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setListing(data.listing);
+
+        if (data?.listing?.seller_id) {
+          const sellerRes = await fetch(`/api/users/${data.listing.seller_id}/profile`);
+          if (sellerRes.ok) {
+            const sellerData = await sellerRes.json();
+            setSellerProfile(sellerData.profile || null);
+          }
+        }
       } else {
         setNotFound(true);
       }
@@ -222,6 +239,16 @@ export default function ListingDetailPage() {
                     </div>
                     {listing.seller_bio && (
                       <p className="text-sm text-text-dim mt-0.5 line-clamp-1">{listing.seller_bio}</p>
+                    )}
+                    {sellerProfile?.stats && (
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-text-dim">
+                        <span className="px-2 py-0.5 rounded-full border border-border bg-bg/40">
+                          {sellerProfile.stats.completed_trades_as_seller} completed sales
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full border border-border bg-bg/40">
+                          {sellerProfile.stats.average_rating ? sellerProfile.stats.average_rating.toFixed(1) : '-'}★ avg rating ({sellerProfile.stats.total_ratings})
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
