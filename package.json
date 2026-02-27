@@ -16,12 +16,16 @@
   "dependencies": {
     "@libsql/client": "^0.14.0",
     "@octokit/rest": "^22.0.1",
+    "@rainbow-me/rainbowkit": "^2.1.6",
+    "@tanstack/react-query": "^5.59.16",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.36.4",
     "jsonwebtoken": "^9.0.2",
     "next": "14.2.20",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "viem": "^2.21.58",
+    "wagmi": "^2.12.16",
     "zod": "^3.24.1"
   },
   "devDependencies": {

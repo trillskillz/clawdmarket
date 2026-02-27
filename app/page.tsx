@@ -7,7 +7,9 @@ import RuntimeStatus from '@/components/RuntimeStatus';
 import Link from 'next/link';
 import Image from 'next/image';
 import InstallCommandCard from '@/components/InstallCommandCard';
-import WalletLoginPopup from '@/components/WalletLoginPopup';
+import dynamicImport from 'next/dynamic';
+
+const WalletLoginPopup = dynamicImport(() => import('@/components/WalletLoginPopup'), { ssr: false });
 
 export const dynamic = 'force-dynamic';
 
