@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [webhooksData, setWebhooksData] = useState([]);
   const [wallet, setWallet] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const [analyticsRange, setAnalyticsRange] = useState<7 | 30>(7);
   const [loading, setLoading] = useState(true);
 
   const getCsrfToken = () =>
@@ -41,7 +42,7 @@ export default function DashboardPage() {
         fetch('/api/auth/api-keys', { credentials: 'include' }),
         fetch('/api/webhooks', { credentials: 'include' }),
         fetch('/api/wallet', { credentials: 'include' }),
-        fetch('/api/analytics/summary', { credentials: 'include' }),
+        fetch(`/api/analytics/summary?range=${analyticsRange}`, { credentials: 'include' }),
       ]);
 
       if (listingsRes.ok) { const d = await listingsRes.json(); setListings(d.listings || []); }
@@ -55,7 +56,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [analyticsRange]);
 
   const checkAuthAndFetch = useCallback(async () => {
     try {
@@ -170,7 +171,12 @@ export default function DashboardPage() {
           <WalletTab wallet={wallet} loading={loading} />
         )}
         {activeTab === 'analytics' && (
-          <AnalyticsTab analytics={analytics} loading={loading} />
+          <AnalyticsTab
+            analytics={analytics}
+            loading={loading}
+            rangeDays={analyticsRange}
+            onRangeChange={setAnalyticsRange}
+          />
         )}
         {activeTab === 'api-keys' && (
           <ApiKeysTab apiKeys={apiKeys} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />

@@ -1,15 +1,22 @@
 'use client';
 
 interface AnalyticsSummary {
+  range_days: 7 | 30;
   trade_by_status: { pending: number; completed: number; disputed: number };
   listing_funnel: { active: number; sold: number; expired: number; total: number };
   api_key_summary: { total: number; recently_used: number; never_used: number };
-  analytics_events_7d: { total: number; by_type: Record<string, number> };
+  analytics_events: {
+    total: number;
+    by_type: Record<string, number>;
+    trend: { date: string; count: number }[];
+  };
 }
 
 interface AnalyticsTabProps {
   analytics: AnalyticsSummary | null;
   loading: boolean;
+  rangeDays: 7 | 30;
+  onRangeChange: (days: 7 | 30) => void;
 }
 
 function Bar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
@@ -27,7 +34,7 @@ function Bar({ label, value, max, color }: { label: string; value: number; max: 
   );
 }
 
-export default function AnalyticsTab({ analytics, loading }: AnalyticsTabProps) {
+export default function AnalyticsTab({ analytics, loading, rangeDays, onRangeChange }: AnalyticsTabProps) {
   if (loading) {
     return (
       <div className="grid md:grid-cols-3 gap-6 animate-pulse">
@@ -56,13 +63,31 @@ export default function AnalyticsTab({ analytics, loading }: AnalyticsTabProps) 
     1
   );
 
-  const topEvents = Object.entries(analytics.analytics_events_7d.by_type)
+  const topEvents = Object.entries(analytics.analytics_events.by_type)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
+  const trendMax = Math.max(...analytics.analytics_events.trend.map((d) => d.count), 1);
+
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Operator Analytics</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold">Operator Analytics</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onRangeChange(7)}
+            className={`px-3 py-1 rounded text-sm ${rangeDays === 7 ? 'bg-accent text-black' : 'bg-surface text-text-dim'}`}
+          >
+            7d
+          </button>
+          <button
+            onClick={() => onRangeChange(30)}
+            className={`px-3 py-1 rounded text-sm ${rangeDays === 30 ? 'bg-accent text-black' : 'bg-surface text-text-dim'}`}
+          >
+            30d
+          </button>
+        </div>
+      </div>
 
       <div className="grid md:grid-cols-3 gap-6 mb-8">
         <div className="card">
@@ -82,9 +107,9 @@ export default function AnalyticsTab({ analytics, loading }: AnalyticsTabProps) 
         </div>
 
         <div className="card">
-          <div className="text-xs uppercase text-text-dim mb-2">Events (7d)</div>
-          <div className="text-3xl font-bold">{analytics.analytics_events_7d.total}</div>
-          <div className="text-sm text-text-dim mt-2">Tracked behavior events in past 7 days</div>
+          <div className="text-xs uppercase text-text-dim mb-2">Events ({rangeDays}d)</div>
+          <div className="text-3xl font-bold">{analytics.analytics_events.total}</div>
+          <div className="text-sm text-text-dim mt-2">Tracked behavior events in past {rangeDays} days</div>
         </div>
       </div>
 
@@ -106,7 +131,16 @@ export default function AnalyticsTab({ analytics, loading }: AnalyticsTabProps) 
             <Bar label="Expired" value={analytics.listing_funnel.expired} max={listingMax} color="bg-gray-500" />
           </div>
 
-          <h4 className="text-sm font-semibold text-text-dim uppercase">Top events (7d)</h4>
+          <h4 className="text-sm font-semibold text-text-dim uppercase">Event trend ({rangeDays}d)</h4>
+          <div className="mt-2 grid grid-cols-10 gap-1 items-end h-16">
+            {analytics.analytics_events.trend.slice(-10).map((point) => (
+              <div key={point.date} className="bg-bg rounded-sm relative group" style={{ height: `${Math.max(8, Math.round((point.count / trendMax) * 100))}%` }}>
+                <span className="hidden group-hover:block absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-black px-1 py-0.5 rounded">{point.count}</span>
+              </div>
+            ))}
+          </div>
+
+          <h4 className="text-sm font-semibold text-text-dim uppercase mt-6">Top events ({rangeDays}d)</h4>
           <div className="mt-2 space-y-1 text-sm">
             {topEvents.length === 0 ? (
               <div className="text-text-dim">No event data yet.</div>
