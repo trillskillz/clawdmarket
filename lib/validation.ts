@@ -35,6 +35,10 @@ export const createTradeSchema = z.object({
   allow_partial_fill: z.boolean().optional().default(false),
 });
 
+export const watchlistItemSchema = z.object({
+  listing_id: z.string().uuid('Invalid listing ID'),
+});
+
 export const waitlistSchema = z.object({
   email: z.string().email('Invalid email address'),
 });

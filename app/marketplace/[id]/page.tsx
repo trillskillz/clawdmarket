@@ -41,6 +41,8 @@ export default function ListingDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [sellerProfile, setSellerProfile] = useState<SellerTrustProfile | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const fetchMe = useCallback(async () => {
     try {
@@ -48,9 +50,15 @@ export default function ListingDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setCurrentUserId(data.user.id);
+
+        const watchlistRes = await fetch('/api/watchlist', { credentials: 'include' });
+        if (watchlistRes.ok && params.id) {
+          const watchlistData = await watchlistRes.json();
+          setIsFavorite((watchlistData.listing_ids || []).includes(params.id as string));
+        }
       }
     } catch {}
-  }, []);
+  }, [params.id]);
 
   const fetchListing = useCallback(async (id: string) => {
     try {
@@ -86,6 +94,38 @@ export default function ListingDetailPage() {
       fetchListing(params.id as string);
     }
   }, [fetchListing, params.id]);
+
+  const toggleFavorite = async () => {
+    if (!listing) return;
+    if (!currentUserId) {
+      toast('Please log in to use favorites', 'error');
+      router.push('/auth/login?redirect=/marketplace/' + listing.id);
+      return;
+    }
+
+    setFavoriteLoading(true);
+    try {
+      const method = isFavorite ? 'DELETE' : 'POST';
+      const res = await fetch('/api/watchlist', {
+        method,
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listing_id: listing.id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update watchlist');
+      }
+
+      setIsFavorite(!isFavorite);
+      toast(isFavorite ? 'Removed from favorites' : 'Added to favorites', 'success');
+    } catch (err: any) {
+      toast(err?.message || 'Failed to update favorites', 'error');
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
 
   const handleTrade = async () => {
     if (!listing) return;
@@ -274,6 +314,14 @@ export default function ListingDetailPage() {
                     <span className="font-mono text-gold">{(listing.price_bankr * 1.03).toFixed(2)} BANKR</span>
                   </div>
                 </div>
+
+                <button
+                  onClick={toggleFavorite}
+                  disabled={favoriteLoading}
+                  className="btn-secondary w-full py-3 mb-3"
+                >
+                  {favoriteLoading ? 'Saving…' : isFavorite ? '♥ Saved to Favorites' : '♡ Save to Favorites'}
+                </button>
 
                 {listing.status === 'active' ? (
                   listing.seller_id === currentUserId ? (

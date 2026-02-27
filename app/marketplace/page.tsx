@@ -36,6 +36,9 @@ export default function MarketplacePage() {
   const [sort, setSort] = useState<'newest' | 'price_asc' | 'price_desc'>('newest');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -45,31 +48,55 @@ export default function MarketplacePage() {
     const initialSort = (params.get('sort') as 'newest' | 'price_asc' | 'price_desc') || 'newest';
     const initialMin = params.get('min') || '';
     const initialMax = params.get('max') || '';
+    const initialFav = params.get('fav') === '1';
 
     setCategory(initialCategory);
     setSearch(initialSearch);
     setSort(initialSort);
     setMinPrice(initialMin);
     setMaxPrice(initialMax);
+    setShowFavoritesOnly(initialFav);
   }, []);
 
-  const syncUrl = useCallback((overrides?: Partial<Record<'category' | 'search' | 'sort' | 'min' | 'max', string>>) => {
+  const fetchWatchlist = useCallback(async () => {
+    try {
+      const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+      if (!meRes.ok) {
+        setIsAuthenticated(false);
+        setFavoriteIds([]);
+        return;
+      }
+
+      setIsAuthenticated(true);
+      const watchlistRes = await fetch('/api/watchlist', { credentials: 'include' });
+      if (!watchlistRes.ok) return;
+      const watchlistData = await watchlistRes.json();
+      setFavoriteIds(watchlistData.listing_ids || []);
+    } catch {
+      setIsAuthenticated(false);
+      setFavoriteIds([]);
+    }
+  }, []);
+
+  const syncUrl = useCallback((overrides?: Partial<Record<'category' | 'search' | 'sort' | 'min' | 'max' | 'fav', string>>) => {
     const params = new URLSearchParams();
     const nextCategory = overrides?.category ?? category;
     const nextSearch = overrides?.search ?? search;
     const nextSort = overrides?.sort ?? sort;
     const nextMin = overrides?.min ?? minPrice;
     const nextMax = overrides?.max ?? maxPrice;
+    const nextFav = overrides?.fav ?? (showFavoritesOnly ? '1' : '0');
 
     if (nextCategory) params.set('category', nextCategory);
     if (nextSearch) params.set('search', nextSearch);
     if (nextSort && nextSort !== 'newest') params.set('sort', nextSort);
     if (nextMin) params.set('min', nextMin);
     if (nextMax) params.set('max', nextMax);
+    if (nextFav === '1') params.set('fav', '1');
 
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [category, search, sort, minPrice, maxPrice, pathname, router]);
+  }, [category, search, sort, minPrice, maxPrice, showFavoritesOnly, pathname, router]);
 
   const fetchListings = useCallback(async (searchTerm = search) => {
     setLoading(true);
@@ -97,6 +124,10 @@ export default function MarketplacePage() {
       if (sort === 'price_desc') nextListings.sort((a, b) => b.price_bankr - a.price_bankr);
       if (sort === 'newest') nextListings.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+      if (showFavoritesOnly) {
+        nextListings = nextListings.filter((l) => favoriteIds.includes(l.id));
+      }
+
       setListings(nextListings);
     } catch (fetchError) {
       console.error('Failed to fetch listings:', fetchError);
@@ -105,12 +136,16 @@ export default function MarketplacePage() {
     } finally {
       setLoading(false);
     }
-  }, [category, maxPrice, minPrice, search, sort]);
+  }, [category, maxPrice, minPrice, search, sort, showFavoritesOnly, favoriteIds]);
+
+  useEffect(() => {
+    fetchWatchlist();
+  }, [fetchWatchlist]);
 
   useEffect(() => {
     fetchListings();
     syncUrl();
-  }, [category, sort, minPrice, maxPrice, fetchListings, syncUrl]);
+  }, [category, sort, minPrice, maxPrice, showFavoritesOnly, favoriteIds, fetchListings, syncUrl]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +159,8 @@ export default function MarketplacePage() {
     setSort('newest');
     setMinPrice('');
     setMaxPrice('');
-    syncUrl({ category: '', search: '', sort: 'newest', min: '', max: '' });
+    setShowFavoritesOnly(false);
+    syncUrl({ category: '', search: '', sort: 'newest', min: '', max: '', fav: '0' });
     fetchListings('');
   };
 
@@ -168,15 +204,31 @@ export default function MarketplacePage() {
                 <span className="absolute left-4 top-3.5 text-text-dim">🔍</span>
               </form>
 
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as 'newest' | 'price_asc' | 'price_desc')}
-                className="bg-bg border border-border rounded-xl px-4 py-3 min-w-[180px]"
-              >
-                <option value="newest">Sort: Newest</option>
-                <option value="price_asc">Sort: Price Low → High</option>
-                <option value="price_desc">Sort: Price High → Low</option>
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as 'newest' | 'price_asc' | 'price_desc')}
+                  className="bg-bg border border-border rounded-xl px-4 py-3 min-w-[180px]"
+                >
+                  <option value="newest">Sort: Newest</option>
+                  <option value="price_asc">Sort: Price Low → High</option>
+                  <option value="price_desc">Sort: Price High → Low</option>
+                </select>
+
+                <button
+                  type="button"
+                  disabled={!isAuthenticated}
+                  onClick={() => {
+                    const next = !showFavoritesOnly;
+                    setShowFavoritesOnly(next);
+                    syncUrl({ fav: next ? '1' : '0' });
+                  }}
+                  className={`px-4 py-3 rounded-xl border text-sm whitespace-nowrap ${showFavoritesOnly ? 'bg-pink-500/20 border-pink-500/40 text-pink-200' : 'bg-bg border-border text-text-dim'} ${!isAuthenticated ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={isAuthenticated ? 'Show watchlist only' : 'Log in to use watchlist'}
+                >
+                  {showFavoritesOnly ? '♥ Favorites' : '♡ Favorites'}
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-col md:flex-row gap-4 md:items-center">

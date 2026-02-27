@@ -108,6 +108,19 @@ export const webhooks = sqliteTable('webhooks', {
     .$defaultFn(() => new Date()),
 });
 
+export const watchlist = sqliteTable('watchlist', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  user_id: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  listing_id: text('listing_id')
+    .notNull()
+    .references(() => listings.id, { onDelete: 'cascade' }),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type ApiKey = typeof api_keys.$inferSelect;
@@ -120,6 +133,8 @@ export type WaitlistEntry = typeof waitlist.$inferSelect;
 export type NewWaitlistEntry = typeof waitlist.$inferInsert;
 export type Webhook = typeof webhooks.$inferSelect;
 export type NewWebhook = typeof webhooks.$inferInsert;
+export type WatchlistEntry = typeof watchlist.$inferSelect;
+export type NewWatchlistEntry = typeof watchlist.$inferInsert;
 export type Rating = typeof ratings.$inferSelect;
 export type NewRating = typeof ratings.$inferInsert;
 
