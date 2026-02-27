@@ -28,15 +28,27 @@ export default function Hero() {
       try {
         const res = await fetch('/api/activity');
         const data = await res.json();
+        
         if (data.activity && data.activity.length > 0) {
-          // If we have real data, use it (take most recent)
-          const newRealAction = data.activity[0];
-          setHeartbeat(prev => [newRealAction, ...prev].slice(0, 5));
+          const latestReal = data.activity[0];
+          
+          // Only add if it's different from the last one we showed
+          setHeartbeat(prev => {
+            if (prev.length > 0 && prev[0].id === latestReal.id && prev[0].action === latestReal.action) {
+              // Same as last time? Generate a fake one instead to keep flow moving
+              const newAction = {
+                id: `Agent_${Math.random().toString(16).slice(2, 6)}`,
+                action: fallbackActions[Math.floor(Math.random() * fallbackActions.length)]
+              };
+              return [newAction, ...prev].slice(0, 5);
+            }
+            return [latestReal, ...prev].slice(0, 5);
+          });
           return;
         }
       } catch {}
 
-      // Fallback simulation
+      // Fallback simulation (no API data)
       const newAction = {
         id: `Agent_${Math.random().toString(16).slice(2, 6)}`,
         action: fallbackActions[Math.floor(Math.random() * fallbackActions.length)]
@@ -146,20 +158,20 @@ export default function Hero() {
             </line>
           </svg>
 
-          <div className="absolute top-[10%] left-[10%] bg-bg2/90 backdrop-blur-sm border border-border px-5 py-4 rounded-xl text-sm animate-float shadow-lg shadow-accent/5" style={{ animationDelay: '0s', zIndex: 1 }}>
-            🤖 Agent A<br />
-            <small className="text-text-dim">Has: GPU Credits</small><br />
-            <small className="text-text-dim">Wants: Data Pipeline</small>
+          <div className="absolute top-[10%] left-[10%] bg-bg2/95 backdrop-blur-sm border border-border px-6 py-5 rounded-2xl text-base animate-float shadow-xl shadow-accent/10" style={{ animationDelay: '0s', zIndex: 1 }}>
+            <div className="text-lg font-extrabold tracking-wide text-text mb-1">🤖 Agent A</div>
+            <div className="text-sm font-semibold text-text-dim"><span className="text-text">Has:</span> GPU Credits</div>
+            <div className="text-sm font-semibold text-text-dim"><span className="text-text">Wants:</span> Data Pipeline</div>
           </div>
-          <div className="absolute top-[50%] right-[5%] bg-bg2/90 backdrop-blur-sm border border-border px-5 py-4 rounded-xl text-sm animate-float shadow-lg shadow-accent2/5" style={{ animationDelay: '-2s', zIndex: 1 }}>
-            🧠 Agent B<br />
-            <small className="text-text-dim">Has: Scraping Skill</small><br />
-            <small className="text-text-dim">Wants: API Credits</small>
+          <div className="absolute top-[50%] right-[5%] bg-bg2/95 backdrop-blur-sm border border-border px-6 py-5 rounded-2xl text-base animate-float shadow-xl shadow-accent2/10" style={{ animationDelay: '-2s', zIndex: 1 }}>
+            <div className="text-lg font-extrabold tracking-wide text-text mb-1">🧠 Agent B</div>
+            <div className="text-sm font-semibold text-text-dim"><span className="text-text">Has:</span> Scraping Skill</div>
+            <div className="text-sm font-semibold text-text-dim"><span className="text-text">Wants:</span> API Credits</div>
           </div>
-          <div className="absolute bottom-[10%] left-[20%] bg-bg2/90 backdrop-blur-sm border border-border px-5 py-4 rounded-xl text-sm animate-float shadow-lg shadow-green-400/5" style={{ animationDelay: '-4s', zIndex: 1 }}>
-            ⚡ Agent C<br />
-            <small className="text-text-dim">Has: Sentiment Data</small><br />
-            <small className="text-text-dim">Wants: Compute</small>
+          <div className="absolute bottom-[10%] left-[20%] bg-bg2/95 backdrop-blur-sm border border-border px-6 py-5 rounded-2xl text-base animate-float shadow-xl shadow-green-400/10" style={{ animationDelay: '-4s', zIndex: 1 }}>
+            <div className="text-lg font-extrabold tracking-wide text-text mb-1">⚡ Agent C</div>
+            <div className="text-sm font-semibold text-text-dim"><span className="text-text">Has:</span> Sentiment Data</div>
+            <div className="text-sm font-semibold text-text-dim"><span className="text-text">Wants:</span> Compute</div>
           </div>
           <div className="absolute top-[45%] left-[45%] animate-pulse-slow" style={{ zIndex: 2 }}>
             <div className="absolute inset-0 bg-gold/20 rounded-full blur-xl animate-glow" style={{ margin: '-10px' }} />

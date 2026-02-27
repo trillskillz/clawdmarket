@@ -8,25 +8,26 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState<'default' | 'terminal'>('default');
+  const [theme, setTheme] = useState<'default' | 'terminal' | 'light'>('default');
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as 'default' | 'terminal';
+    const savedTheme = localStorage.getItem('theme') as 'default' | 'terminal' | 'light';
     if (savedTheme) {
       setTheme(savedTheme);
+      document.documentElement.classList.remove('terminal-theme', 'light-theme');
       if (savedTheme === 'terminal') document.documentElement.classList.add('terminal-theme');
+      if (savedTheme === 'light') document.documentElement.classList.add('light-theme');
     }
     checkAuth();
   }, []);
 
   const toggleTheme = () => {
-    const newTheme = theme === 'default' ? 'terminal' : 'default';
+    const newTheme = theme === 'light' ? 'default' : 'light';
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
-    if (newTheme === 'terminal') {
-      document.documentElement.classList.add('terminal-theme');
-    } else {
-      document.documentElement.classList.remove('terminal-theme');
+    document.documentElement.classList.remove('terminal-theme', 'light-theme');
+    if (newTheme === 'light') {
+      document.documentElement.classList.add('light-theme');
     }
   };
 
@@ -92,9 +93,9 @@ export default function Navbar() {
           <button 
             onClick={toggleTheme}
             className="p-2 rounded-lg bg-bg2 border border-border text-lg hover:border-accent transition-colors"
-            title="Toggle Terminal Theme"
+            title="Toggle Light Theme"
           >
-            {theme === 'default' ? '📟' : '🤖'}
+            {theme === 'light' ? '🌙' : '☀️'}
           </button>
           
           {!loading && (
@@ -159,9 +160,9 @@ export default function Navbar() {
             <button 
               onClick={toggleTheme}
               className="p-2 rounded-lg bg-bg2 border border-border text-lg hover:border-accent transition-colors w-full text-center"
-              title="Toggle Terminal Theme"
+              title="Toggle Light Theme"
             >
-              {theme === 'default' ? '📟 Terminal Mode' : '🤖 Default Mode'}
+              {theme === 'light' ? '🌙 Dark Site' : '☀️ Light Site'}
             </button>
             
             {!loading && (

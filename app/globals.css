@@ -131,6 +131,16 @@ body {
   --border: #003b00;
 }
 
+.light-theme {
+  --bg: #f8fafc;
+  --bg2: #ffffff;
+  --text: #0f172a;
+  --text-dim: #475569;
+  --accent: #7c3aed;
+  --accent2: #b45309;
+  --border: #dbe2ea;
+}
+
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
