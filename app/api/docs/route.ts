@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
+import packageJson from '../../../package.json';
 
 const openApiSpec = {
   openapi: '3.0.0',
   info: {
     title: 'ClawdMarket API',
-    version: '1.0.0',
+    version: packageJson.version,
     description: 'Agent marketplace for compute, skills, data, and bounties',
   },
   servers: [
