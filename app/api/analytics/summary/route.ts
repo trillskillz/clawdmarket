@@ -36,11 +36,14 @@ export async function GET(req: NextRequest) {
       db.select().from(api_keys),
     ]);
 
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const rangeParam = req.nextUrl.searchParams.get('range');
+    const rangeDays = rangeParam === '30' ? 30 : 7;
+
+    const rangeStart = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
     const recentEvents = await db
       .select()
       .from(analytics_events)
-      .where(gte(analytics_events.created_at, sevenDaysAgo));
+      .where(gte(analytics_events.created_at, rangeStart));
 
     const tradeByStatus = {
       pending: allTrades.filter((t) => t.status === 'pending').length,
@@ -68,13 +71,29 @@ export async function GET(req: NextRequest) {
       return acc;
     }, {});
 
+    const trendBuckets: { date: string; count: number }[] = [];
+    for (let i = rangeDays - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      trendBuckets.push({ date: d.toISOString().slice(0, 10), count: 0 });
+    }
+
+    for (const ev of recentEvents) {
+      const key = new Date(ev.created_at).toISOString().slice(0, 10);
+      const bucket = trendBuckets.find((b) => b.date === key);
+      if (bucket) bucket.count += 1;
+    }
+
     return NextResponse.json({
+      range_days: rangeDays,
       trade_by_status: tradeByStatus,
       listing_funnel: listingFunnel,
       api_key_summary: keySummary,
-      analytics_events_7d: {
+      analytics_events: {
         total: recentEvents.length,
         by_type: eventsByType,
+        trend: trendBuckets,
       },
     });
   } catch (error) {
