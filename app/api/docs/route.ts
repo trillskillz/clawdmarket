@@ -495,7 +495,7 @@ const openApiSpec = {
                   url: { type: 'string', format: 'uri' },
                   events: {
                     type: 'array',
-                    items: { type: 'string', enum: ['trade.created', 'trade.completed', 'listing.sold'] },
+                    items: { type: 'string', enum: ['trade.created', 'trade.completed', 'listing.sold', 'balance.changed'] },
                     minItems: 1,
                   },
                 },

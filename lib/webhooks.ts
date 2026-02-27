@@ -4,7 +4,7 @@ import { db } from './db';
 import { webhooks } from './schema';
 import { eq } from 'drizzle-orm';
 
-export type WebhookEvent = 'trade.created' | 'trade.completed' | 'listing.sold';
+export type WebhookEvent = 'trade.created' | 'trade.completed' | 'listing.sold' | 'balance.changed';
 
 export interface WebhookPayload {
   event: WebhookEvent;

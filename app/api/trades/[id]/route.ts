@@ -6,6 +6,7 @@ import { updateTradeStatusSchema, isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
 import { eq, sql } from 'drizzle-orm';
+import { envMeta } from '@/lib/agent-environment';
 
 export async function PATCH(
   req: NextRequest,
@@ -124,11 +125,15 @@ export async function PATCH(
     if (validated.status === 'completed') {
       await fireWebhook(trade.buyer_id, 'trade.completed', { trade: updatedTrade });
       await fireWebhook(trade.seller_id, 'trade.completed', { trade: updatedTrade });
+      await fireWebhook(trade.buyer_id, 'balance.changed', { reason: 'escrow_release', trade_id: trade.id });
+      await fireWebhook(trade.seller_id, 'balance.changed', { reason: 'escrow_release', trade_id: trade.id });
     }
 
     return NextResponse.json({
       message: `Trade status updated to ${validated.status}`,
+      code: 'TRADE_STATUS_UPDATED',
       trade: updatedTrade,
+      ...envMeta('clawdmarket/api/trades/:id'),
     });
   } catch (error: any) {
     if (error.errors) {

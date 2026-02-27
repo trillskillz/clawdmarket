@@ -32,6 +32,7 @@ export const createListingSchema = z.object({
 export const createTradeSchema = z.object({
   listing_id: z.string().uuid('Invalid listing ID'),
   amount: z.number().positive('Amount must be positive'),
+  allow_partial_fill: z.boolean().optional().default(false),
 });
 
 export const waitlistSchema = z.object({
@@ -99,7 +100,7 @@ export const createWebhookSchema = z.object({
     (url) => !isBlockedWebhookUrl(url),
     'Webhook URL must use HTTPS and cannot point to internal/private networks'
   ),
-  events: z.array(z.enum(['trade.created', 'trade.completed', 'listing.sold'])).min(1, 'At least one event required'),
+  events: z.array(z.enum(['trade.created', 'trade.completed', 'listing.sold', 'balance.changed'])).min(1, 'At least one event required'),
 });
 
 export function sanitizeHtml(input: string): string {

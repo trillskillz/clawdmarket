@@ -5,6 +5,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { getBalance } from '@/lib/wallet';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq, or, desc } from 'drizzle-orm';
+import { envMeta } from '@/lib/agent-environment';
 
 /**
  * GET /api/wallet — Get authenticated user's wallet balance + recent transactions
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest) {
       ticker: '$BANKR',
       ...balance,
       transactions: recentTx,
+      ...envMeta('clawdmarket/api/wallet'),
     }, { headers: getRateLimitHeaders(rateLimitResult) });
   } catch (error) {
     console.error('Wallet fetch error:', error);
