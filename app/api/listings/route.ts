@@ -14,7 +14,7 @@ function isMissingColumnError(error: any, column: string) {
 
 async function selectListings(whereClause: any, limit: number, offset: number) {
   try {
-    return await db
+    const rows = await db
       .select({
         id: listings.id,
         seller_id: listings.seller_id,
@@ -30,8 +30,34 @@ async function selectListings(whereClause: any, limit: number, offset: number) {
       .orderBy(desc(listings.created_at))
       .limit(limit)
       .offset(offset);
+
+    const looksLikeLiteralProjection = rows.length > 0 && rows.every((r: any) => r.price_bankr === 'price_bankr');
+    if (!looksLikeLiteralProjection) {
+      return rows;
+    }
   } catch (error) {
     if (!isMissingColumnError(error, 'price_bankr')) throw error;
+  }
+
+  try {
+    return await db
+      .select({
+        id: listings.id,
+        seller_id: listings.seller_id,
+        category: listings.category,
+        title: listings.title,
+        description: listings.description,
+        price_bankr: sql<number>`CAST(${sql.raw('price_clawd')} AS REAL)`,
+        status: listings.status,
+        created_at: listings.created_at,
+      })
+      .from(listings)
+      .where(whereClause)
+      .orderBy(desc(listings.created_at))
+      .limit(limit)
+      .offset(offset);
+  } catch (legacyError) {
+    if (!isMissingColumnError(legacyError, 'price_clawd')) throw legacyError;
 
     return await db
       .select({
@@ -40,7 +66,7 @@ async function selectListings(whereClause: any, limit: number, offset: number) {
         category: listings.category,
         title: listings.title,
         description: listings.description,
-        price_bankr: sql<number>`price`,
+        price_bankr: sql<number>`CAST(${sql.raw('price')} AS REAL)`,
         status: listings.status,
         created_at: listings.created_at,
       })
@@ -69,10 +95,21 @@ async function insertListing(values: {
     if (!isMissingColumnError(error, 'price_bankr')) throw error;
 
     const id = crypto.randomUUID();
-    await (db as any).$client.execute({
-      sql: 'INSERT INTO listings (id, seller_id, category, title, description, price, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],
-    });
+
+    try {
+      await (db as any).$client.execute({
+        sql: 'INSERT INTO listings (id, seller_id, category, title, description, price_clawd, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],
+      });
+    } catch (legacyError) {
+      if (!isMissingColumnError(legacyError, 'price_clawd')) throw legacyError;
+
+      await (db as any).$client.execute({
+        sql: 'INSERT INTO listings (id, seller_id, category, title, description, price, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],
+      });
+    }
+
     const [row] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
     return row;
   }
@@ -147,8 +184,15 @@ export async function GET(req: NextRequest) {
 
     const results = await selectListings(whereClause, query.limit, (query.page - 1) * query.limit);
 
+    const normalizedResults = results.map((listing: any) => ({
+      ...listing,
+      price_bankr: Number.isFinite(Number(listing.price_bankr))
+        ? Number(listing.price_bankr)
+        : 0,
+    }));
+
     return NextResponse.json({
-      listings: results,
+      listings: normalizedResults,
       page: query.page,
       limit: query.limit,
       total: totalCount,
