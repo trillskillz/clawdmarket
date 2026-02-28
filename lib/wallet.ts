@@ -4,8 +4,8 @@ import { eq, sql } from 'drizzle-orm';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** Starting balance for new users */
-export const FAUCET_AMOUNT = 500;
+/** Starting balance for new users (faucet removed) */
+export const FAUCET_AMOUNT = 0;
 /** Ecosystem fee on trades (3%) */
 export const ECOSYSTEM_FEE_RATE = 0.03;
 /** Treasury address (null = system/burn) */
@@ -23,7 +23,7 @@ export class WalletError extends Error {
 // ─── Wallet CRUD ──────────────────────────────────────────────────────────────
 
 /**
- * Get or create a wallet for a user. New wallets receive the faucet amount.
+ * Get or create a wallet for a user.
  */
 export async function getOrCreateWallet(userId: string) {
   const [existing] = await db
@@ -33,20 +33,11 @@ export async function getOrCreateWallet(userId: string) {
 
   if (existing) return existing;
 
-  // Create wallet with faucet
+  // Create wallet with zero starting balance (no faucet)
   const [wallet] = await db
     .insert(wallets)
-    .values({ user_id: userId, balance: FAUCET_AMOUNT, escrow: 0 })
+    .values({ user_id: userId, balance: 0, escrow: 0 })
     .returning();
-
-  // Log faucet transaction
-  await db.insert(transactions).values({
-    from_user_id: null,
-    to_user_id: userId,
-    amount: FAUCET_AMOUNT,
-    type: 'faucet',
-    memo: `Welcome bonus: ${FAUCET_AMOUNT} $CLAWD`,
-  });
 
   return wallet;
 }
