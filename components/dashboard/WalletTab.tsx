@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAccount, useBalance } from 'wagmi';
 
 interface Transaction {
@@ -34,6 +35,15 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
     query: { enabled: Boolean(isConnected && address && bankrToken) },
   });
 
+  const onchainBankr = tokenBalance ? Number(tokenBalance.formatted) : null;
+  const canUseOnchain = onchainBankr !== null;
+  const [source, setSource] = useState<'onchain' | 'ledger'>(canUseOnchain ? 'onchain' : 'ledger');
+
+  useEffect(() => {
+    if (!canUseOnchain && source === 'onchain') setSource('ledger');
+    if (canUseOnchain && !isConnected) setSource('ledger');
+  }, [canUseOnchain, isConnected, source]);
+
   if (loading) {
     return (
       <div className="grid md:grid-cols-3 gap-6 mb-8 animate-pulse">
@@ -47,20 +57,36 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
   if (!wallet) return <div className="text-center py-12">Failed to load wallet data.</div>;
 
   const ledgerTotal = wallet.available + wallet.escrow;
-  const onchainBankr = tokenBalance ? Number(tokenBalance.formatted) : null;
+  const usingOnchain = source === 'onchain' && canUseOnchain;
 
-  const total = onchainBankr ?? ledgerTotal;
-  const available = onchainBankr ?? wallet.available;
-  const usingOnchain = onchainBankr !== null;
+  const total = usingOnchain ? (onchainBankr as number) : ledgerTotal;
+  const available = usingOnchain ? (onchainBankr as number) : wallet.available;
 
   return (
     <div>
       <h2 className="text-2xl font-bold mb-2">My Wallet 💳</h2>
-      <p className="text-sm text-text-dim mb-4">
+      <p className="text-sm text-text-dim mb-3">
         {usingOnchain && address
           ? `Connected wallet: ${address.slice(0, 6)}...${address.slice(-4)} (on-chain BANKR)`
           : 'Showing internal ledger balance (connect wallet to view on-chain BANKR).'}
       </p>
+
+      <div className="flex items-center gap-2 mb-6">
+        <span className="text-xs uppercase tracking-wider text-text-dim">Balance Source</span>
+        <button
+          onClick={() => setSource('ledger')}
+          className={`px-3 py-1 rounded text-xs ${source === 'ledger' ? 'bg-accent text-black' : 'bg-surface text-text-dim'}`}
+        >
+          Internal Ledger
+        </button>
+        <button
+          onClick={() => canUseOnchain && setSource('onchain')}
+          disabled={!canUseOnchain}
+          className={`px-3 py-1 rounded text-xs ${source === 'onchain' && canUseOnchain ? 'bg-accent text-black' : 'bg-surface text-text-dim'} ${!canUseOnchain ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          On-Chain BANKR
+        </button>
+      </div>
 
       {/* Balance Cards */}
       <div className="grid md:grid-cols-3 gap-6 mb-12">
