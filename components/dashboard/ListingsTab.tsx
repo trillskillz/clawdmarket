@@ -123,13 +123,13 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
               <input
                 type="number"
                 step="1"
-                min={864}
-                max={2465}
+                min={1}
+                max={1000000000000}
                 value={form.price_bankr}
                 onChange={(e) => setForm({ ...form, price_bankr: e.target.value })}
                 required
                 className="input-field"
-                placeholder="864 - 2465"
+                placeholder="1 - 1,000,000,000,000"
               />
             </div>
             <div className="flex gap-3">

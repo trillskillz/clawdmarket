@@ -259,8 +259,8 @@ export default function MarketplacePage() {
               <div className="flex gap-2 md:ml-auto">
                 <input
                   type="number"
-                  min={864}
-                  max={2465}
+                  min={1}
+                  max={1000000000000}
                   value={minPrice}
                   onChange={(e) => setMinPrice(e.target.value)}
                   placeholder="Min BANKR"
@@ -268,8 +268,8 @@ export default function MarketplacePage() {
                 />
                 <input
                   type="number"
-                  min={864}
-                  max={2465}
+                  min={1}
+                  max={1000000000000}
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(e.target.value)}
                   placeholder="Max BANKR"
