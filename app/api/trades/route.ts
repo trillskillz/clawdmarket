@@ -1,16 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { trades, listings, users, wallets, transactions } from '@/lib/schema';
-import { authenticateRequest } from '@/lib/auth';
+import { authenticateRequest, hashPassword } from '@/lib/auth';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
 import { eq, or, desc, sql } from 'drizzle-orm';
+import crypto from 'crypto';
+import { isAddress } from 'viem';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
 
 const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee
+
+async function ensureAdminFeeRecipient(): Promise<string | null> {
+  const adminWalletAddress = (process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim().toLowerCase();
+  if (!adminWalletAddress) return null;
+  if (!isAddress(adminWalletAddress as `0x${string}`)) {
+    console.error('Invalid ADMIN_BANKR_WALLET_ADDRESS configured');
+    return null;
+  }
+
+  const syntheticEmail = `wallet_${adminWalletAddress}@wallet.local`;
+
+  let [adminUser] = await db.select().from(users).where(eq(users.email, syntheticEmail));
+  if (!adminUser) {
+    const passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
+    const inserted = await db
+      .insert(users)
+      .values({
+        email: syntheticEmail,
+        password_hash: passwordHash,
+        name: `AdminWallet_${adminWalletAddress.slice(2, 8)}`,
+        role: 'human',
+        bio: `Admin fee wallet ${adminWalletAddress}`,
+      })
+      .returning();
+    adminUser = inserted[0];
+  }
+
+  const [existingWallet] = await db.select().from(wallets).where(eq(wallets.user_id, adminUser.id));
+  if (!existingWallet) {
+    await db.insert(wallets).values({
+      user_id: adminUser.id,
+      balance: 0,
+      escrow: 0,
+    });
+  }
+
+  return adminUser.id;
+}
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -118,6 +158,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
+
     // 2. Perform atomic trade creation & fund locking
     // Note: Drizzle's `db.transaction` works with @libsql/client (Turso)
     const newTrade = await db.transaction(async (tx) => {
@@ -140,14 +182,26 @@ export async function POST(req: NextRequest) {
         memo: `Escrow lock for listing ${listings.title.name || validated.listing_id}`,
       });
 
-      // Record transaction: Fee
-      await tx.insert(transactions).values({
-        from_user_id: auth.userId,
-        amount: fee,
-        type: 'fee',
-        reference_id: validated.listing_id,
-        memo: 'Marketplace fee (3%)',
-      });
+      // Record transaction: Fee (credited to configured admin fee wallet when available)
+      if (fee > 0) {
+        if (adminFeeRecipientUserId) {
+          await tx
+            .update(wallets)
+            .set({ balance: sql`${wallets.balance} + ${fee}` })
+            .where(eq(wallets.user_id, adminFeeRecipientUserId));
+        }
+
+        await tx.insert(transactions).values({
+          from_user_id: auth.userId,
+          to_user_id: adminFeeRecipientUserId,
+          amount: fee,
+          type: 'fee',
+          reference_id: validated.listing_id,
+          memo: adminFeeRecipientUserId
+            ? 'Marketplace fee (3%) credited to admin wallet'
+            : 'Marketplace fee (3%) with no admin wallet configured',
+        });
+      }
 
       // Create trade record
       const [trade] = await tx
@@ -195,6 +249,7 @@ export async function POST(req: NextRequest) {
           amount: validated.amount,
           ecosystem_fee: fee,
           seller_receives: validated.amount, // No fee for seller in this model, buyer pays fee
+          admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),
         },
         ...envMeta('clawdmarket/api/trades'),
       },
