@@ -1,0 +1,4 @@
+# ClawdMarket Autonomous Update Cron
+# Every hour at :00
+
+0 * * * * /home/void/.openclaw/workspace2/agents/coder/clawdmarket/scripts/cron-update.sh
