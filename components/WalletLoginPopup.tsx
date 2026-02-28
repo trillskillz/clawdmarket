@@ -33,19 +33,48 @@ export default function WalletLoginPopup({
       return;
     }
 
-    fetch('/api/auth/me')
-      .then(res => {
-        if (!res.ok) setShouldShow(true);
-      })
-      .catch(() => setShouldShow(true));
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          // Already authenticated on server
+          setShouldShow(false);
+          setStatus('done'); 
+        } else {
+          // Not authenticated
+          setShouldShow(true);
+        }
+      } catch {
+        setShouldShow(true);
+      }
+    };
+    
+    checkAuth();
   }, [forceShow]);
 
   const completeWalletLogin = useCallback(async () => {
     if (!address || !isConnected) return;
+    
+    // Don't re-run if already authenticated or in progress
+    if (status !== 'idle') return;
 
     try {
       setStatus('signing');
       setError(null);
+
+      // Check if we already have a session valid for this address before signing again?
+      // Actually, if we are here, checkAuth failed or forceShow is true.
+      // But let's double check if the server already knows us to avoid unnecessary signing.
+      const meRes = await fetch('/api/auth/me');
+      if (meRes.ok) {
+         const data = await meRes.json();
+         if (data.user.wallet?.toLowerCase() === address.toLowerCase()) {
+            setStatus('done');
+            setShouldShow(false);
+            onAuthenticated?.();
+            return;
+         }
+      }
 
       const nonceRes = await fetch('/api/auth/wallet/nonce', {
         method: 'POST',
