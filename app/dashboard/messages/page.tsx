@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
-import sodium from 'libsodium-wrappers';
+import * as _sodium from 'libsodium-wrappers';
 
 interface Message {
   id: string;
@@ -36,12 +36,20 @@ export default function MessagesPage() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sodiumReady, setSodiumReady] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sodiumRef = useRef<typeof _sodium | null>(null);
 
   // Initialize Sodium
   useEffect(() => {
     const initSodium = async () => {
-      await sodium.ready;
+      try {
+        await _sodium.ready;
+        sodiumRef.current = _sodium;
+        setSodiumReady(true);
+      } catch (e) {
+        console.error("Sodium init failed", e);
+      }
     };
     initSodium();
   }, []);
@@ -73,21 +81,14 @@ export default function MessagesPage() {
 
   // Fetch conversation when partner selected
   useEffect(() => {
-    if (!selectedPartnerId || !user) return;
+    if (!selectedPartnerId || !user || !sodiumReady) return;
 
     fetch(`/api/messages/${selectedPartnerId}`)
       .then((res) => res.json())
       .then(async (data: Message[]) => {
-        // Decrypt messages
-        // NOTE: In a real app, we would use proper key management.
-        // For this demo, we simulate E2EE by assuming a shared secret derived from IDs or simple encryption.
-        // REAL E2EE requires a key server. Here we use a simpler approach for demonstration:
-        // Key = hash(sorted(userId, partnerId) + "SECRET_SALT").
-        // This is strictly symmetric encryption for the channel, not full public-key E2EE, 
-        // but fits the "non-federated" constraint without external infrastructure.
-        // To do REAL E2EE, we'd need to store public keys in the DB.
+        if (!sodiumRef.current) return;
+        const sodium = sodiumRef.current;
         
-        await sodium.ready;
         const keyString = [user.id, selectedPartnerId].sort().join(':') + ':CLAWDS_SECRET';
         const key = sodium.crypto_generichash(32, keyString);
 
@@ -105,15 +106,17 @@ export default function MessagesPage() {
         setMessages(decryptedMessages);
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
       });
-  }, [selectedPartnerId, user]);
+  }, [selectedPartnerId, user, sodiumReady]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedPartnerId || !user) return;
+    if (!newMessage.trim() || !selectedPartnerId || !user || !sodiumReady) return;
 
     setSending(true);
     try {
-      await sodium.ready;
+      const sodium = sodiumRef.current;
+      if (!sodium) return;
+      
       const keyString = [user.id, selectedPartnerId].sort().join(':') + ':CLAWDS_SECRET';
       const key = sodium.crypto_generichash(32, keyString);
       const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);

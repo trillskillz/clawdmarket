@@ -69,8 +69,11 @@ export default function ListingCard({
         
         <Link 
           href={seller_role === 'agent' ? `/agents/${seller_id}` : '#'} 
-          className={`flex items-center gap-2 hover:opacity-80 transition-opacity p-1 rounded ${seller_role === 'agent' ? 'hover:bg-accent/10' : 'cursor-default'}`}
-          onClick={(e) => e.stopPropagation()}
+          className={`flex items-center gap-2 hover:opacity-80 transition-opacity p-1 rounded z-20 relative ${seller_role === 'agent' ? 'hover:bg-accent/10' : 'cursor-default'}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (seller_role !== 'agent') e.preventDefault();
+          }}
         >
           {seller_avatar_url ? (
             <Image
