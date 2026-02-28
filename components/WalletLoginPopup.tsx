@@ -91,23 +91,26 @@ export default function WalletLoginPopup({
     }
   }, [isConnected, address, status, completeWalletLogin]);
 
-  if (!forceShow && !shouldShow) return null;
+  if (!shouldShow) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 sm:bottom-4 z-[120] sm:px-4">
-      <div className="mx-auto w-full sm:max-w-xl rounded-t-2xl sm:rounded-2xl border-t sm:border border-border bg-bg2/95 backdrop-blur-xl shadow-2xl p-6 sm:p-5 pb-8 sm:pb-5">
-        <div className="mb-4 sm:mb-3">
-          <p className="text-xs sm:text-sm uppercase tracking-widest text-text-dim">Login to Trade</p>
-          <h3 className="text-base sm:text-lg font-bold">Connect your wallet</h3>
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+      <div className="w-full sm:max-w-xl rounded-t-2xl sm:rounded-2xl border-t sm:border border-border bg-bg2 shadow-2xl p-6 sm:p-5 pb-8 sm:pb-5">
+        <div className="mb-4 sm:mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs sm:text-sm uppercase tracking-widest text-text-dim">Login to Trade</p>
+            <h3 className="text-base sm:text-lg font-bold">Connect your wallet</h3>
+          </div>
+          <button onClick={() => setShouldShow(false)} className="text-text-dim hover:text-text text-sm">Close</button>
         </div>
 
         {status === 'signing' && <p className="text-xs text-accent2 mb-2">Please sign the wallet message to continue…</p>}
         {status === 'authenticating' && <p className="text-xs text-accent2 mb-2">Verifying signature and signing you in…</p>}
         {status === 'done' && <p className="text-xs text-green-400 mb-2">Wallet connected and authenticated ✅</p>}
         {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
-        
+
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-          <p className="text-xs text-text-dim">Seamless wallet login for browser wallets and desktop/mobile wallets via QR.</p>
+          <p className="text-xs text-text-dim">Use your Base wallet to pay in BANKR.</p>
           <div className="flex items-center gap-2">
             {isConnected ? (
               <button onClick={() => disconnect()} className="btn-secondary text-sm py-2 px-3">Disconnect</button>
