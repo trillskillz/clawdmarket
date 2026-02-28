@@ -23,7 +23,7 @@ export default function WalletLoginPopup({
 
   const [status, setStatus] = useState<'idle' | 'signing' | 'authenticating' | 'done' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [shouldShow, setShouldShow] = useState(false);
+  const [shouldShow, setShouldShow] = useState(forceShow);
 
   // Check if user is already logged in
   useEffect(() => {
@@ -91,7 +91,7 @@ export default function WalletLoginPopup({
     }
   }, [isConnected, address, status, completeWalletLogin]);
 
-  if (!shouldShow) return null;
+  if (!forceShow && !shouldShow) return null;
 
   return (
     <div className="fixed inset-x-0 bottom-0 sm:bottom-4 z-[120] sm:px-4">
