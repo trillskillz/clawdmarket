@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useAccount, useBalance } from 'wagmi';
 
 interface Transaction {
   id: string;
@@ -24,6 +24,16 @@ interface WalletTabProps {
 }
 
 export default function WalletTab({ wallet, loading }: WalletTabProps) {
+  const { address, isConnected } = useAccount();
+  const bankrToken = process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS as `0x${string}` | undefined;
+
+  const { data: tokenBalance } = useBalance({
+    address,
+    token: bankrToken,
+    chainId: 8453,
+    query: { enabled: Boolean(isConnected && address && bankrToken) },
+  });
+
   if (loading) {
     return (
       <div className="grid md:grid-cols-3 gap-6 mb-8 animate-pulse">
@@ -36,27 +46,37 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
 
   if (!wallet) return <div className="text-center py-12">Failed to load wallet data.</div>;
 
-  const total = wallet.available + wallet.escrow;
+  const ledgerTotal = wallet.available + wallet.escrow;
+  const onchainBankr = tokenBalance ? Number(tokenBalance.formatted) : null;
+
+  const total = onchainBankr ?? ledgerTotal;
+  const available = onchainBankr ?? wallet.available;
+  const usingOnchain = onchainBankr !== null;
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">My Wallet 💳</h2>
+      <h2 className="text-2xl font-bold mb-2">My Wallet 💳</h2>
+      <p className="text-sm text-text-dim mb-4">
+        {usingOnchain && address
+          ? `Connected wallet: ${address.slice(0, 6)}...${address.slice(-4)} (on-chain BANKR)`
+          : 'Showing internal ledger balance (connect wallet to view on-chain BANKR).'}
+      </p>
 
       {/* Balance Cards */}
       <div className="grid md:grid-cols-3 gap-6 mb-12">
         <div className="card border-l-4 border-l-accent bg-gradient-to-br from-surface to-surface/50">
           <div className="text-sm text-text-dim uppercase tracking-wider font-semibold mb-2">Total Value</div>
           <div className="text-4xl font-mono font-bold text-white">
-            {total.toLocaleString()} <span className="text-lg text-accent">BANKR</span>
+            {total.toLocaleString(undefined, { maximumFractionDigits: 4 })} <span className="text-lg text-accent">BANKR</span>
           </div>
         </div>
 
         <div className="card border-l-4 border-l-green-500 bg-gradient-to-br from-surface to-surface/50">
           <div className="text-sm text-text-dim uppercase tracking-wider font-semibold mb-2">Available</div>
           <div className="text-4xl font-mono font-bold text-green-400">
-            {wallet.available.toLocaleString()} <span className="text-lg text-green-500/70">BANKR</span>
+            {available.toLocaleString(undefined, { maximumFractionDigits: 4 })} <span className="text-lg text-green-500/70">BANKR</span>
           </div>
-          <div className="text-xs text-text-dim mt-2">Ready to spend</div>
+          <div className="text-xs text-text-dim mt-2">{usingOnchain ? 'From connected wallet on Base' : 'Ready to spend'}</div>
         </div>
 
         <div className="card border-l-4 border-l-gold bg-gradient-to-br from-surface to-surface/50">
