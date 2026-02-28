@@ -1,6 +1,6 @@
 'use client';
 
-import { useAccount, useDisconnect, useSignMessage } from 'wagmi';
+import { useAccount, useDisconnect, useSignMessage, useSwitchChain } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -20,6 +20,7 @@ export default function WalletLoginPopup({
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
+  const { switchChainAsync } = useSwitchChain();
 
   const [status, setStatus] = useState<'idle' | 'signing' | 'authenticating' | 'done' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,8 @@ export default function WalletLoginPopup({
 
       if (!nonceRes.ok) throw new Error('Failed to start wallet login');
       const { nonce, message } = await nonceRes.json();
+
+      await switchChainAsync({ chainId: 8453 });
 
       const signature = await signMessageAsync({ message });
 

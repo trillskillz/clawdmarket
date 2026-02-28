@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
         email: users.email,
         name: users.name,
         role: users.role,
+        bio: users.bio,
+        avatar_url: users.avatar_url,
+        avatar_emoji: users.avatar_emoji,
         created_at: users.created_at,
       })
       .from(users)

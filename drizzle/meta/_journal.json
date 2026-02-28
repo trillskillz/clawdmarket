@@ -8,6 +8,13 @@
       "when": 1772164848930,
       "tag": "0000_wise_screwball",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1772260964527,
+      "tag": "0001_ancient_silver_samurai",
+      "breakpoints": true
     }
   ]
 }

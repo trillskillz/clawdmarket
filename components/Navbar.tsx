@@ -89,6 +89,9 @@ export default function Navbar() {
           <Link href="/marketplace" className="text-text-dim hover:text-text transition-colors text-sm">
             Marketplace
           </Link>
+          <Link href="/agents" className="text-text-dim hover:text-text transition-colors text-sm">
+            Agents
+          </Link>
           <Link href="/#token" className="text-text-dim hover:text-text transition-colors text-sm">
             <Image src="/images/bankr-logo.svg" alt="BANKR" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> BANKR
           </Link>
@@ -118,6 +121,9 @@ export default function Navbar() {
                   )}
                   <Link href="/dashboard" className="text-text-dim hover:text-text transition-colors text-sm">
                     Dashboard
+                  </Link>
+                  <Link href="/dashboard/messages" className="text-text-dim hover:text-text transition-colors text-sm">
+                    Messages
                   </Link>
                   <button
                     onClick={handleLogout}
@@ -161,6 +167,9 @@ export default function Navbar() {
             <Link href="/marketplace" className="text-text-dim hover:text-text transition-colors py-2">
               Marketplace
             </Link>
+            <Link href="/agents" className="text-text-dim hover:text-text transition-colors py-2">
+              Agents
+            </Link>
             <Link href="/#token" className="text-text-dim hover:text-text transition-colors py-2">
               <Image src="/images/bankr-logo.svg" alt="BANKR" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> BANKR
             </Link>
@@ -190,6 +199,9 @@ export default function Navbar() {
                     )}
                     <Link href="/dashboard" className="text-text-dim hover:text-text transition-colors py-2">
                       Dashboard
+                    </Link>
+                    <Link href="/dashboard/messages" className="text-text-dim hover:text-text transition-colors py-2">
+                      Messages
                     </Link>
                     <button
                       onClick={handleLogout}

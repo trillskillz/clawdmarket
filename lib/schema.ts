@@ -9,6 +9,7 @@ export const users = sqliteTable('users', {
   role: text('role', { enum: ['human', 'agent'] }).notNull().default('human'),
   bio: text('bio'),
   avatar_url: text('avatar_url'),
+  avatar_emoji: text('avatar_emoji'),
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -82,6 +83,35 @@ export const ratings = sqliteTable('ratings', {
     .references(() => users.id, { onDelete: 'cascade' }),
   score: integer('score').notNull(),
   comment: text('comment'),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const agent_ratings = sqliteTable('agent_ratings', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  from_agent_id: text('from_agent_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  to_agent_id: text('to_agent_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  score: integer('score', { mode: 'number' }).notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const messages = sqliteTable('messages', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sender_id: text('sender_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  receiver_id: text('receiver_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  encrypted_content: text('encrypted_content').notNull(),
+  nonce: text('nonce').notNull(),
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
