@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import PageShell from '@/components/PageShell';
 import ListingsTab from '@/components/dashboard/ListingsTab';
 import TradesTab from '@/components/dashboard/TradesTab';
@@ -21,8 +22,9 @@ interface User {
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'listings' | 'trades' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics'>('listings');
-  const [listings, setListings] = useState([]);
+  const [activeTab, setActiveTab] = useState<'listings' | 'marketplace' | 'trades' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics'>('listings');
+  const [listings, setListings] = useState<any[]>([]);
+  const [marketplaceListings, setMarketplaceListings] = useState<any[]>([]);
   const [trades, setTrades] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
   const [webhooksData, setWebhooksData] = useState([]);
@@ -36,8 +38,9 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [listingsRes, tradesRes, apiKeysRes, webhooksRes, walletRes, analyticsRes] = await Promise.all([
+      const [listingsRes, marketplaceRes, tradesRes, apiKeysRes, webhooksRes, walletRes, analyticsRes] = await Promise.all([
         fetch('/api/listings?seller=me', { credentials: 'include' }),
+        fetch('/api/listings?status=active&limit=6', { credentials: 'include' }),
         fetch('/api/trades', { credentials: 'include' }),
         fetch('/api/auth/api-keys', { credentials: 'include' }),
         fetch('/api/webhooks', { credentials: 'include' }),
@@ -46,6 +49,7 @@ export default function DashboardPage() {
       ]);
 
       if (listingsRes.ok) { const d = await listingsRes.json(); setListings(d.listings || []); }
+      if (marketplaceRes.ok) { const d = await marketplaceRes.json(); setMarketplaceListings(d.listings || []); }
       if (tradesRes.ok) { const d = await tradesRes.json(); setTrades(d.trades || []); }
       if (apiKeysRes.ok) { const d = await apiKeysRes.json(); setApiKeys(d.keys || []); }
       if (webhooksRes.ok) { const d = await webhooksRes.json(); setWebhooksData(d.webhooks || []); }
@@ -87,6 +91,7 @@ export default function DashboardPage() {
 
   const tabs = [
     { id: 'listings' as const, label: 'My Listings', icon: '📋' },
+    { id: 'marketplace' as const, label: 'Marketplace', icon: '🛒' },
     { id: 'trades' as const, label: 'Trade History', icon: '🤝' },
     { id: 'wallet' as const, label: 'Wallet', icon: '💳' },
     { id: 'analytics' as const, label: 'Analytics', icon: '📊' },
@@ -163,6 +168,36 @@ export default function DashboardPage() {
 
         {activeTab === 'listings' && (
           <ListingsTab listings={listings} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
+        )}
+        {activeTab === 'marketplace' && (
+          <div>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-2xl font-bold">Marketplace</h2>
+              <Link href="/marketplace" className="btn-primary py-2 text-sm">Open Full Marketplace</Link>
+            </div>
+            {loading ? (
+              <div className="grid md:grid-cols-2 gap-4 animate-pulse">
+                <div className="h-28 bg-surface rounded-xl" />
+                <div className="h-28 bg-surface rounded-xl" />
+              </div>
+            ) : marketplaceListings.length === 0 ? (
+              <div className="card text-text-dim">No active listings right now.</div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {marketplaceListings.map((listing) => (
+                  <Link key={listing.id} href={`/marketplace/${listing.id}`} className="card hover:border-accent/40 transition-colors">
+                    <div className="flex justify-between items-start gap-3">
+                      <div>
+                        <h3 className="font-semibold text-white">{listing.title}</h3>
+                        <p className="text-xs text-text-dim mt-1 uppercase tracking-wide">{listing.category}</p>
+                      </div>
+                      <span className="font-mono text-gold text-sm">{listing.price_bankr} BANKR</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         )}
         {activeTab === 'trades' && (
           <TradesTab trades={trades} loading={loading} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
