@@ -260,7 +260,7 @@ export default function MarketplacePage() {
                 <input
                   type="number"
                   min={1}
-                  max={1000000000000}
+                  max={1000000000}
                   value={minPrice}
                   onChange={(e) => setMinPrice(e.target.value)}
                   placeholder="Min BANKR"
@@ -269,7 +269,7 @@ export default function MarketplacePage() {
                 <input
                   type="number"
                   min={1}
-                  max={1000000000000}
+                  max={1000000000}
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(e.target.value)}
                   placeholder="Max BANKR"
