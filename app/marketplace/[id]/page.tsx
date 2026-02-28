@@ -44,6 +44,7 @@ export default function ListingDetailPage() {
   const [tradeLoading, setTradeLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserWallet, setCurrentUserWallet] = useState<string | null>(null);
   const [sellerProfile, setSellerProfile] = useState<SellerTrustProfile | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
@@ -59,6 +60,7 @@ export default function ListingDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setCurrentUserId(data.user.id);
+        setCurrentUserWallet(data.user.wallet || null);
 
         const watchlistRes = await fetch('/api/watchlist', { credentials: 'include' });
         if (watchlistRes.ok && params.id) {
@@ -147,9 +149,9 @@ export default function ListingDetailPage() {
   const handleTrade = async () => {
     if (!listing) return;
 
-    if (!currentUserId) {
+    if (!currentUserId || !currentUserWallet) {
       setShowWalletLogin(true);
-      toast('Connect your wallet to buy with BANKR', 'error');
+      toast('Connect your crypto wallet to buy with BANKR', 'error');
       return;
     }
 
@@ -412,7 +414,17 @@ export default function ListingDetailPage() {
             </div>
           </div>
         </div>
-        {showWalletLogin && <WalletLoginPopup />}
+        {showWalletLogin && (
+          <WalletLoginPopup
+            forceShow
+            redirectToDashboard={false}
+            onAuthenticated={async () => {
+              setShowWalletLogin(false);
+              await fetchMe();
+              toast('Wallet connected. You can complete your BANKR purchase now.', 'success');
+            }}
+          />
+        )}
       </div>
     </PageShell>
   );

@@ -5,7 +5,17 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function WalletLoginPopup() {
+interface WalletLoginPopupProps {
+  forceShow?: boolean;
+  redirectToDashboard?: boolean;
+  onAuthenticated?: () => void;
+}
+
+export default function WalletLoginPopup({
+  forceShow = false,
+  redirectToDashboard = true,
+  onAuthenticated,
+}: WalletLoginPopupProps) {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
@@ -17,12 +27,17 @@ export default function WalletLoginPopup() {
 
   // Check if user is already logged in
   useEffect(() => {
+    if (forceShow) {
+      setShouldShow(true);
+      return;
+    }
+
     fetch('/api/auth/me')
       .then(res => {
         if (!res.ok) setShouldShow(true);
       })
       .catch(() => setShouldShow(true));
-  }, []);
+  }, [forceShow]);
 
   const completeWalletLogin = useCallback(async () => {
     if (!address || !isConnected) return;
@@ -57,7 +72,10 @@ export default function WalletLoginPopup() {
 
       setStatus('done');
       setTimeout(() => {
-        router.push('/dashboard');
+        onAuthenticated?.();
+        if (redirectToDashboard) {
+          router.push('/dashboard');
+        }
       }, 500);
     } catch (err: any) {
       setStatus('error');
@@ -65,7 +83,7 @@ export default function WalletLoginPopup() {
       // Disconnect on failure so user can retry cleanly
       disconnect();
     }
-  }, [address, isConnected, signMessageAsync, router, disconnect]);
+  }, [address, isConnected, signMessageAsync, router, disconnect, onAuthenticated, redirectToDashboard]);
 
   useEffect(() => {
     if (isConnected && address && status === 'idle') {
