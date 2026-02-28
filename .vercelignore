@@ -1,0 +1,7 @@
+# Ignore agent scripts and SDK source
+sdk/
+agents/
+scripts/
+test/
+.git/
+node_modules/
