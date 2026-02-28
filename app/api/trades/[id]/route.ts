@@ -5,7 +5,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { updateTradeStatusSchema, isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
 
@@ -95,27 +95,43 @@ export async function PATCH(
 
       // 2. Handle funds if completing
       if (validated.status === 'completed') {
-        // Release from Buyer's Escrow (decrement escrow)
-        await tx
-          .update(wallets)
-          .set({ escrow: sql`${wallets.escrow} - ${trade.amount}` })
-          .where(eq(wallets.user_id, trade.buyer_id));
+        const [escrowLockTx] = await tx
+          .select()
+          .from(transactions)
+          .where(and(eq(transactions.reference_id, trade.id), eq(transactions.type, 'escrow_lock')))
+          .limit(1);
 
-        // Credit Seller's Balance
-        await tx
-          .update(wallets)
-          .set({ balance: sql`${wallets.balance} + ${trade.amount}` })
-          .where(eq(wallets.user_id, trade.seller_id));
+        if (escrowLockTx) {
+          // Legacy internal-ledger settlement path
+          await tx
+            .update(wallets)
+            .set({ escrow: sql`${wallets.escrow} - ${trade.amount}` })
+            .where(eq(wallets.user_id, trade.buyer_id));
 
-        // Log transaction
-        await tx.insert(transactions).values({
-          from_user_id: trade.buyer_id,
-          to_user_id: trade.seller_id,
-          amount: trade.amount,
-          type: 'escrow_release',
-          reference_id: trade.id,
-          memo: 'Trade completed',
-        });
+          await tx
+            .update(wallets)
+            .set({ balance: sql`${wallets.balance} + ${trade.amount}` })
+            .where(eq(wallets.user_id, trade.seller_id));
+
+          await tx.insert(transactions).values({
+            from_user_id: trade.buyer_id,
+            to_user_id: trade.seller_id,
+            amount: trade.amount,
+            type: 'escrow_release',
+            reference_id: trade.id,
+            memo: 'Trade completed',
+          });
+        } else {
+          // On-chain settlement path: funds already moved on-chain at purchase time.
+          await tx.insert(transactions).values({
+            from_user_id: trade.buyer_id,
+            to_user_id: trade.seller_id,
+            amount: trade.amount,
+            type: 'transfer',
+            reference_id: trade.id,
+            memo: 'Trade completed (on-chain settlement already recorded)',
+          });
+        }
       } else if (validated.status === 'disputed') {
         // For disputes, funds stay in escrow until admin resolution (manual for now)
         // Or we could auto-refund, but 'dispute' usually means freeze.

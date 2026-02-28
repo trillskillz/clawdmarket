@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
+import { erc20Abi, parseUnits } from 'viem';
 import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { SkeletonDetail } from '@/components/Skeleton';
@@ -50,6 +52,9 @@ export default function ListingDetailPage() {
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [showWalletLogin, setShowWalletLogin] = useState(false);
   const { track } = useAnalytics();
+  const { address: connectedAddress, isConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
 
   const getCsrfToken = () =>
     document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
@@ -149,16 +154,25 @@ export default function ListingDetailPage() {
   const handleTrade = async () => {
     if (!listing) return;
 
-    if (!currentUserId || !currentUserWallet) {
+    if (!currentUserId || !currentUserWallet || !isConnected || !connectedAddress) {
       setShowWalletLogin(true);
       toast('Connect your crypto wallet to buy with BANKR', 'error');
+      return;
+    }
+
+    const bankrToken = process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS;
+    const escrowWallet = process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS;
+    const devFeeWallet = process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS;
+
+    if (!bankrToken || !escrowWallet || !devFeeWallet) {
+      toast('On-chain payment configuration is missing. Contact admin.', 'error');
       return;
     }
 
     const fee = listing.price_bankr * 0.03;
     const total = listing.price_bankr + fee;
 
-    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${listing.price_bankr} BANKR\nFee (3%): ${fee.toFixed(2)} BANKR\nTotal: ${total.toFixed(2)} BANKR\n\nFunds will be locked in escrow until you confirm receipt.`)) {
+    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${listing.price_bankr} BANKR\nFee (3%): ${fee.toFixed(2)} BANKR\nTotal: ${total.toFixed(2)} BANKR\n\nYou will sign on-chain BANKR transfers for escrow and fee.`)) {
       return;
     }
 
@@ -166,6 +180,27 @@ export default function ListingDetailPage() {
     setTradeLoading(true);
 
     try {
+      const escrowAmount = parseUnits(listing.price_bankr.toFixed(18), 18);
+      const feeAmount = parseUnits(fee.toFixed(18), 18);
+
+      const escrowTxHash = await writeContractAsync({
+        address: bankrToken as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [escrowWallet as `0x${string}`, escrowAmount],
+      });
+
+      await publicClient?.waitForTransactionReceipt({ hash: escrowTxHash });
+
+      const feeTxHash = await writeContractAsync({
+        address: bankrToken as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [devFeeWallet as `0x${string}`, feeAmount],
+      });
+
+      await publicClient?.waitForTransactionReceipt({ hash: feeTxHash });
+
       const csrfToken = getCsrfToken();
       const res = await fetch('/api/trades', {
         method: 'POST',
@@ -177,27 +212,35 @@ export default function ListingDetailPage() {
         body: JSON.stringify({
           listing_id: listing.id,
           amount: listing.price_bankr,
+          payment_mode: 'onchain',
+          onchain: {
+            chain: 'base',
+            token_address: bankrToken,
+            buyer_wallet: connectedAddress,
+            escrow_wallet: escrowWallet,
+            fee_wallet: devFeeWallet,
+            escrow_tx_hash: escrowTxHash,
+            fee_tx_hash: feeTxHash,
+          },
         }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        toast('Trade successful! Funds locked in escrow.', 'success');
+        toast('Trade successful! On-chain BANKR payment confirmed.', 'success');
         router.push('/dashboard');
       } else {
         if (res.status === 401 || res.status === 403) {
           setShowWalletLogin(true);
           toast('Please connect your wallet to continue', 'error');
-        } else if (res.status === 402) {
-          toast(`Insufficient funds. ${data.error}`, 'error');
         } else {
           toast(data.error || 'Trade failed', 'error');
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast('Network error. Please try again.', 'error');
+      toast(err?.shortMessage || err?.message || 'On-chain transaction failed', 'error');
     } finally {
       setTradeLoading(false);
     }

@@ -12,6 +12,8 @@ import { isAddress } from 'viem';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
 
+const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
+
 const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee
 
 async function ensureAdminFeeRecipient(): Promise<string | null> {
@@ -132,8 +134,116 @@ export async function POST(req: NextRequest) {
     const fee = validated.amount * ECOSYSTEM_FEE_PERCENT;
     const totalCost = validated.amount + fee;
 
-    // ─── ESCROW LOGIC START ───
-    
+    const bodyPaymentMode = (body?.payment_mode || '').toString();
+    const onchain = body?.onchain || null;
+
+    if (bodyPaymentMode === 'onchain') {
+      const expectedToken = (process.env.BANKR_TOKEN_ADDRESS || '').toLowerCase();
+      const expectedEscrow = (process.env.ESCROW_WALLET_ADDRESS || '').toLowerCase();
+      const expectedFeeWallet = (process.env.DEV_FEE_WALLET_ADDRESS || '').toLowerCase();
+
+      if (!expectedToken || !expectedEscrow || !expectedFeeWallet) {
+        return NextResponse.json(
+          { error: 'On-chain payment is not configured on server' },
+          { status: 500 }
+        );
+      }
+
+      if (!onchain || onchain.chain !== 'base') {
+        return NextResponse.json({ error: 'Invalid on-chain payment payload (chain)' }, { status: 400 });
+      }
+
+      if (
+        String(onchain.token_address || '').toLowerCase() !== expectedToken ||
+        String(onchain.escrow_wallet || '').toLowerCase() !== expectedEscrow ||
+        String(onchain.fee_wallet || '').toLowerCase() !== expectedFeeWallet
+      ) {
+        return NextResponse.json({ error: 'On-chain payment destination mismatch' }, { status: 400 });
+      }
+
+      if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || '')) || !TX_HASH_RE.test(String(onchain.fee_tx_hash || ''))) {
+        return NextResponse.json({ error: 'Invalid on-chain transaction hash format' }, { status: 400 });
+      }
+
+      const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
+
+      const newTrade = await db.transaction(async (tx) => {
+        const [trade] = await tx
+          .insert(trades)
+          .values({
+            listing_id: validated.listing_id,
+            buyer_id: auth.userId,
+            seller_id: listing.seller_id,
+            amount: validated.amount,
+            fee,
+            status: 'pending',
+          })
+          .returning();
+
+        await tx.update(listings).set({ status: 'sold' }).where(eq(listings.id, validated.listing_id));
+
+        await tx.insert(transactions).values({
+          from_user_id: auth.userId,
+          to_user_id: null,
+          amount: validated.amount,
+          type: 'transfer',
+          reference_id: trade.id,
+          memo: `On-chain escrow transfer (${onchain.escrow_tx_hash})`,
+        });
+
+        if (fee > 0) {
+          if (adminFeeRecipientUserId) {
+            await tx
+              .update(wallets)
+              .set({ balance: sql`${wallets.balance} + ${fee}` })
+              .where(eq(wallets.user_id, adminFeeRecipientUserId));
+          }
+
+          await tx.insert(transactions).values({
+            from_user_id: auth.userId,
+            to_user_id: adminFeeRecipientUserId,
+            amount: fee,
+            type: 'fee',
+            reference_id: trade.id,
+            memo: `On-chain fee transfer (${onchain.fee_tx_hash})`,
+          });
+        }
+
+        return trade;
+      });
+
+      Promise.all([
+        fireWebhook(auth.userId, 'trade.created', { trade: newTrade }),
+        fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade }),
+        fireWebhook(listing.seller_id, 'listing.sold', { listing_id: validated.listing_id, trade: newTrade }),
+      ]).catch(err => console.error('Webhook error:', err));
+
+      return NextResponse.json(
+        {
+          message: 'Trade initiated successfully with on-chain BANKR payment.',
+          trade: newTrade,
+          code: 'TRADE_CREATED_ONCHAIN',
+          fee_info: {
+            amount: validated.amount,
+            ecosystem_fee: fee,
+            seller_receives: validated.amount,
+            admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),
+          },
+          onchain_receipts: {
+            escrow_tx_hash: onchain.escrow_tx_hash,
+            fee_tx_hash: onchain.fee_tx_hash,
+          },
+          ...envMeta('clawdmarket/api/trades'),
+        },
+        {
+          status: 201,
+          headers: getRateLimitHeaders(rateLimitResult),
+        }
+      );
+    }
+
+    // ─── LEDGER ESCROW LOGIC (legacy fallback) ───
+
     // 1. Check buyer balance
     const [buyerWallet] = await db
       .select()
