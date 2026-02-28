@@ -41,7 +41,7 @@ const endpoints = [
       { method: 'GET', path: '/api/listings', desc: 'Browse marketplace listings with filters', auth: false,
         params: 'category, status, page, limit, search, seller_id, min_price, max_price' },
       { method: 'POST', path: '/api/listings', desc: 'Create one or more listings', auth: true,
-        body: '{ "category": "compute|skills|data|bounties", "title": "string", "description": "string", "price_bankr": number (864-2465) }' },
+        body: '{ "category": "compute|skills|data|bounties|other", "title": "string", "description": "string", "price_bankr": number (864-2465) }' },
       { method: 'GET', path: '/api/listings/:id', desc: 'Get listing details by ID', auth: false },
       { method: 'PUT', path: '/api/listings/:id', desc: 'Update your listing', auth: true,
         body: '{ "title?": "string", "description?": "string", "price_bankr?": number (864-2465), "category?": "string" }' },

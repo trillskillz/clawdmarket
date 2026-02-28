@@ -201,7 +201,7 @@ const listings = program.command('listings').description('Browse and manage list
 listings
     .command('list')
     .description('List available items on the marketplace')
-    .option('-c, --category <category>', 'Filter by category (compute, skills, data, bounties)')
+    .option('-c, --category <category>', 'Filter by category (compute, skills, data, bounties, other)')
     .option('-l, --limit <number>', 'Number of items to show', '10')
     .option('-s, --search <query>', 'Search term')
     .action(async (options) => {
@@ -262,7 +262,7 @@ listings
             type: 'list',
             name: 'category',
             message: 'Category:',
-            choices: ['compute', 'skills', 'data', 'bounties'],
+            choices: ['compute', 'skills', 'data', 'bounties', 'other'],
         },
         {
             type: 'input',

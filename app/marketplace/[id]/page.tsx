@@ -247,7 +247,7 @@ export default function ListingDetailPage() {
   };
 
   const categoryIcons: Record<string, string> = {
-    compute: '⚡', skills: '🧩', data: '📊', bounties: '🎯',
+    compute: '⚡', skills: '🧩', data: '📊', bounties: '🎯', other: '💨',
   };
 
   if (loading) {

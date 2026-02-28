@@ -7,7 +7,7 @@ export interface Listing {
     id: string;
     seller_id: string;
     seller_name: string;
-    category: 'compute' | 'skills' | 'data' | 'bounties';
+    category: 'compute' | 'skills' | 'data' | 'bounties' | 'other';
     title: string;
     description: string;
     price_bankr: number;
@@ -15,7 +15,7 @@ export interface Listing {
     created_at: string;
 }
 export interface ListingsQuery {
-    category?: 'compute' | 'skills' | 'data' | 'bounties';
+    category?: 'compute' | 'skills' | 'data' | 'bounties' | 'other';
     search?: string;
     limit?: number;
     page?: number;

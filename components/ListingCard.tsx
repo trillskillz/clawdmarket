@@ -18,6 +18,7 @@ const categoryIcons: Record<string, string> = {
   skills: '🧩',
   data: '📊',
   bounties: '🎯',
+  other: '💨',
 };
 
 const categoryColors: Record<string, string> = {
@@ -25,6 +26,7 @@ const categoryColors: Record<string, string> = {
   skills: 'text-gold border-gold/30',
   data: 'text-green-400 border-green-400/30',
   bounties: 'text-blue-400 border-blue-400/30',
+  other: 'text-gray-300 border-gray-300/30',
 };
 
 export default function ListingCard({
