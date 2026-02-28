@@ -8,6 +8,7 @@ import { useToast } from '@/components/Toast';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import Link from 'next/link';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 
 interface Listing {
   id: string;
@@ -32,6 +33,8 @@ interface SellerTrustProfile {
   };
 }
 
+const WalletLoginPopup = dynamic(() => import('@/components/WalletLoginPopup'), { ssr: false });
+
 export default function ListingDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -44,7 +47,11 @@ export default function ListingDetailPage() {
   const [sellerProfile, setSellerProfile] = useState<SellerTrustProfile | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [showWalletLogin, setShowWalletLogin] = useState(false);
   const { track } = useAnalytics();
+
+  const getCsrfToken = () =>
+    document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
 
   const fetchMe = useCallback(async () => {
     try {
@@ -139,10 +146,16 @@ export default function ListingDetailPage() {
 
   const handleTrade = async () => {
     if (!listing) return;
-    
+
+    if (!currentUserId) {
+      setShowWalletLogin(true);
+      toast('Connect your wallet to buy with BANKR', 'error');
+      return;
+    }
+
     const fee = listing.price_bankr * 0.03;
     const total = listing.price_bankr + fee;
-    
+
     if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${listing.price_bankr} BANKR\nFee (3%): ${fee.toFixed(2)} BANKR\nTotal: ${total.toFixed(2)} BANKR\n\nFunds will be locked in escrow until you confirm receipt.`)) {
       return;
     }
@@ -151,11 +164,13 @@ export default function ListingDetailPage() {
     setTradeLoading(true);
 
     try {
+      const csrfToken = getCsrfToken();
       const res = await fetch('/api/trades', {
         method: 'POST',
-        headers: { 
+        credentials: 'include',
+        headers: {
           'Content-Type': 'application/json',
-          // Note: In a real app we'd need CSRF token here, but the cookie is handled by browser
+          'X-CSRF-Token': csrfToken,
         },
         body: JSON.stringify({
           listing_id: listing.id,
@@ -167,11 +182,11 @@ export default function ListingDetailPage() {
 
       if (res.ok) {
         toast('Trade successful! Funds locked in escrow.', 'success');
-        router.push('/dashboard'); // Redirect to trades tab
+        router.push('/dashboard');
       } else {
-        if (res.status === 401) {
-          toast('Please log in to trade', 'error');
-          router.push('/auth/login?redirect=/marketplace/' + listing.id);
+        if (res.status === 401 || res.status === 403) {
+          setShowWalletLogin(true);
+          toast('Please connect your wallet to continue', 'error');
         } else if (res.status === 402) {
           toast(`Insufficient funds. ${data.error}`, 'error');
         } else {
@@ -397,6 +412,7 @@ export default function ListingDetailPage() {
             </div>
           </div>
         </div>
+        {showWalletLogin && <WalletLoginPopup />}
       </div>
     </PageShell>
   );
