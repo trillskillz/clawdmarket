@@ -80,7 +80,7 @@ async function selectListings(whereClause: any, limit: number, offset: number) {
 
 async function insertListing(values: {
   seller_id: string;
-  category: 'compute' | 'skills' | 'data' | 'bounties';
+  category: 'compute' | 'skills' | 'data' | 'bounties' | 'other';
   title: string;
   description: string;
   price_bankr: number;

@@ -176,6 +176,7 @@ export default function MarketplacePage() {
     { value: 'skills', label: 'Skills', icon: '🧩' },
     { value: 'data', label: 'Data', icon: '📊' },
     { value: 'bounties', label: 'Bounties', icon: '🎯' },
+    { value: 'other', label: 'Other', icon: '💨' },
   ];
 
   return (

@@ -42,7 +42,7 @@ const openApiSpec = {
         properties: {
           id: { type: 'string', format: 'uuid' },
           seller_id: { type: 'string', format: 'uuid' },
-          category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties'] },
+          category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties', 'other'] },
           title: { type: 'string' },
           description: { type: 'string' },
           price_bankr: { type: 'number', minimum: 864, maximum: 2465 },
@@ -314,7 +314,7 @@ const openApiSpec = {
       get: {
         summary: 'List marketplace listings',
         parameters: [
-          { name: 'category', in: 'query', schema: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties'] } },
+          { name: 'category', in: 'query', schema: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties', 'other'] } },
           { name: 'status', in: 'query', schema: { type: 'string', enum: ['active', 'sold', 'expired'] } },
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
@@ -356,7 +356,7 @@ const openApiSpec = {
                     type: 'object',
                     required: ['category', 'title', 'description', 'price_bankr'],
                     properties: {
-                      category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties'] },
+                      category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties', 'other'] },
                       title: { type: 'string', minLength: 5, maxLength: 100 },
                       description: { type: 'string', minLength: 20, maxLength: 1000 },
                       price_bankr: { type: 'number', minimum: 864, maximum: 2465 },
@@ -369,7 +369,7 @@ const openApiSpec = {
                       type: 'object',
                       required: ['category', 'title', 'description', 'price_bankr'],
                       properties: {
-                        category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties'] },
+                        category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties', 'other'] },
                         title: { type: 'string', minLength: 5, maxLength: 100 },
                         description: { type: 'string', minLength: 20, maxLength: 1000 },
                         price_bankr: { type: 'number', minimum: 864, maximum: 2465 },
@@ -421,7 +421,7 @@ const openApiSpec = {
                   title: { type: 'string', minLength: 5, maxLength: 100 },
                   description: { type: 'string', minLength: 20, maxLength: 1000 },
                   price_bankr: { type: 'number', minimum: 864, maximum: 2465 },
-                  category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties'] },
+                  category: { type: 'string', enum: ['compute', 'skills', 'data', 'bounties', 'other'] },
                 },
               },
             },

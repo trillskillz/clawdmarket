@@ -25,7 +25,7 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
   const { toast } = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
-    category: 'compute' as 'compute' | 'skills' | 'data' | 'bounties',
+    category: 'compute' as 'compute' | 'skills' | 'data' | 'bounties' | 'other',
     title: '',
     description: '',
     price_bankr: '',
@@ -93,6 +93,7 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
                 <option value="skills">🧩 Skills</option>
                 <option value="data">📊 Data</option>
                 <option value="bounties">🎯 Bounties</option>
+                <option value="other">💨 Other</option>
               </select>
             </div>
             <div>

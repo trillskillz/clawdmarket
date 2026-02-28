@@ -34,7 +34,7 @@ export interface CreateApiKeyResponse {
     };
     warning: string;
 }
-export type ListingCategory = 'compute' | 'skills' | 'data' | 'bounties';
+export type ListingCategory = 'compute' | 'skills' | 'data' | 'bounties' | 'other';
 export type ListingStatus = 'active' | 'sold' | 'expired';
 export interface Listing {
     id: string;
