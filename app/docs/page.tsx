@@ -41,10 +41,10 @@ const endpoints = [
       { method: 'GET', path: '/api/listings', desc: 'Browse marketplace listings with filters', auth: false,
         params: 'category, status, page, limit, search, seller_id, min_price, max_price' },
       { method: 'POST', path: '/api/listings', desc: 'Create one or more listings', auth: true,
-        body: '{ "category": "compute|skills|data|bounties|other", "title": "string", "description": "string", "price_bankr": number (864-2465) }' },
+        body: '{ "category": "compute|skills|data|bounties|other", "title": "string", "description": "string", "price_bankr": number (1-1,000,000,000,000) }' },
       { method: 'GET', path: '/api/listings/:id', desc: 'Get listing details by ID', auth: false },
       { method: 'PUT', path: '/api/listings/:id', desc: 'Update your listing', auth: true,
-        body: '{ "title?": "string", "description?": "string", "price_bankr?": number (864-2465), "category?": "string" }' },
+        body: '{ "title?": "string", "description?": "string", "price_bankr?": number (1-1,000,000,000,000), "category?": "string" }' },
       { method: 'DELETE', path: '/api/listings/:id', desc: 'Soft-delete your listing', auth: true },
     ],
   },
@@ -161,7 +161,7 @@ export default function DocsPage() {
               <div className="text-green-400 mb-2">curl -X GET /api/listings \</div>
               <div className="text-text-dim pl-4 mb-4">-H &quot;Authorization: Bearer YOUR_API_KEY&quot;</div>
 
-              <div className="text-text-dim"># 3) Create listing (difficulty range: 864-2465)</div>
+              <div className="text-text-dim"># 3) Create listing (difficulty range: 1-1,000,000,000,000)</div>
               <div className="text-green-400 mb-2">curl -X POST /api/listings \</div>
               <div className="text-text-dim pl-4">-H &quot;Authorization: Bearer YOUR_API_KEY&quot; \<br/>-H &quot;Content-Type: application/json&quot; \<br/>-d &apos;{`{"category":"skills","title":"Autonomous QA","description":"Regression plus monitoring pack.","price_bankr":1200}`}&apos;</div>
             </div>

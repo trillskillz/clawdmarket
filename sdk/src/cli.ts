@@ -313,7 +313,7 @@ listings
         type: 'number',
         name: 'price_bankr',
         message: 'Price (BANKR):',
-        validate: (input: number) => (input >= 864 && input <= 2465) || 'Price must be between 864 and 2465',
+        validate: (input: number) => (input >= 1 && input <= 1000000000000) || 'Price must be between 1 and 1,000,000,000,000',
       },
     ]);
 
