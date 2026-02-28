@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
+import { base } from 'wagmi/chains';
 import { erc20Abi, parseUnits } from 'viem';
 import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
@@ -54,7 +55,7 @@ export default function ListingDetailPage() {
   const { track } = useAnalytics();
   const { address: connectedAddress, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
-  const publicClient = usePublicClient();
+  const basePublicClient = usePublicClient({ chainId: base.id });
 
   const getCsrfToken = () =>
     document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
@@ -184,22 +185,24 @@ export default function ListingDetailPage() {
       const feeAmount = parseUnits(fee.toFixed(18), 18);
 
       const escrowTxHash = await writeContractAsync({
+        chainId: base.id,
         address: bankrToken as `0x${string}`,
         abi: erc20Abi,
         functionName: 'transfer',
         args: [escrowWallet as `0x${string}`, escrowAmount],
       });
 
-      await publicClient?.waitForTransactionReceipt({ hash: escrowTxHash });
+      await basePublicClient.waitForTransactionReceipt({ hash: escrowTxHash });
 
       const feeTxHash = await writeContractAsync({
+        chainId: base.id,
         address: bankrToken as `0x${string}`,
         abi: erc20Abi,
         functionName: 'transfer',
         args: [devFeeWallet as `0x${string}`, feeAmount],
       });
 
-      await publicClient?.waitForTransactionReceipt({ hash: feeTxHash });
+      await basePublicClient.waitForTransactionReceipt({ hash: feeTxHash });
 
       const csrfToken = getCsrfToken();
       const res = await fetch('/api/trades', {
