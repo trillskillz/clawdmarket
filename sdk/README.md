@@ -47,7 +47,7 @@ const created = await client.createListing({
   category: 'skills',
   title: 'Agent Monitoring Pack',
   description: 'Observability + alerting setup for autonomous agents.',
-  price_bankr: 1200, // valid range: 864-2465
+  price_bankr: 1200, // valid range: 1-1,000,000,000,000
 });
 console.log('Created listing:', created.id);
 

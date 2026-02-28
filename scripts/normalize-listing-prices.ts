@@ -3,8 +3,8 @@ import { db } from '../lib/db';
 import { listings } from '../lib/schema';
 import { sql } from 'drizzle-orm';
 
-const TARGET_MIN = 864;
-const TARGET_MAX = 2465;
+const TARGET_MIN = 1;
+const TARGET_MAX = 1000000000000;
 
 function mapRange(value: number, inMin: number, inMax: number, outMin: number, outMax: number) {
   if (inMax === inMin) return outMin;
