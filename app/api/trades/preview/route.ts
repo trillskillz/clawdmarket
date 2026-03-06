@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { listings } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
+import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
 const DEV_FEE_PERCENT = 0.03;
 
@@ -17,7 +18,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'listing_id is required' }, { status: 400 });
     }
 
-    const [listing] = await db.select({ id: listings.id, price_bankr: listings.price_bankr }).from(listings).where(eq(listings.id, listingId)).limit(1);
+    let [listing] = await db.select({ id: listings.id, price_bankr: listings.price_bankr }).from(listings).where(eq(listings.id, listingId)).limit(1);
+
+    if (!listing && listingId.startsWith('fb-')) {
+      const fallback = FALLBACK_LISTINGS.find((l) => l.id === listingId);
+      if (fallback) {
+        listing = { id: fallback.id, price_bankr: fallback.price_bankr };
+      }
+    }
+
     if (!listing) {
       return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
     }
