@@ -29,14 +29,19 @@ export const createListingSchema = z.object({
   price_bankr: z.number().min(1, 'Price must be at least 1').max(1000000000, 'Price must be at most 1,000,000,000'),
 });
 
+const listingIdSchema = z.string().refine(
+  (id) => UUID_REGEX.test(id) || id.startsWith('fb-'),
+  'Invalid listing ID',
+);
+
 export const createTradeSchema = z.object({
-  listing_id: z.string().uuid('Invalid listing ID'),
+  listing_id: listingIdSchema,
   amount: z.number().positive('Amount must be positive'),
   allow_partial_fill: z.boolean().optional().default(false),
 });
 
 export const watchlistItemSchema = z.object({
-  listing_id: z.string().uuid('Invalid listing ID'),
+  listing_id: listingIdSchema,
 });
 
 export const waitlistSchema = z.object({

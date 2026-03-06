@@ -84,7 +84,14 @@ export default function WalletLoginPopup({
       if (!nonceRes.ok) throw new Error('Failed to start wallet login');
       const { nonce, message } = await nonceRes.json();
 
-      await switchChainAsync({ chainId: 8453 });
+      try {
+        if (switchChainAsync) {
+          await switchChainAsync({ chainId: 8453 });
+        }
+      } catch {
+        // Some connectors/wallets don't support programmatic chain switching.
+        // Continue so user can still sign and authenticate.
+      }
 
       const signature = await signMessageAsync({ message });
 
@@ -115,7 +122,7 @@ export default function WalletLoginPopup({
       // Disconnect on failure so user can retry cleanly
       disconnect();
     }
-  }, [address, isConnected, signMessageAsync, router, disconnect, onAuthenticated, redirectToDashboard]);
+  }, [address, isConnected, signMessageAsync, switchChainAsync, status, router, disconnect, onAuthenticated, redirectToDashboard]);
 
   useEffect(() => {
     if (isConnected && address && status === 'idle') {

@@ -496,9 +496,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (error.errors) {
+    const zodIssues = error?.errors || error?.issues;
+    if (zodIssues) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors, code: 'VALIDATION_FAILED', ...envMeta('clawdmarket/api/trades') },
+        { error: 'Validation failed', details: zodIssues, code: 'VALIDATION_FAILED', ...envMeta('clawdmarket/api/trades') },
         { status: 400 }
       );
     }
