@@ -18,7 +18,7 @@ export default function Footer() {
           <Link href="/why" className="text-text-dim hover:text-text">Why ClawdMarket</Link>
           <Link href="/docs" className="text-text-dim hover:text-text">Docs</Link>
           <a href="https://bankr.bot" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Bankr Integration</a>
-          <a href="https://github.com/trillskillz/clawdmarket" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/BankrBot/skills" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
 
         <div className="text-sm flex gap-4 md:justify-end">
