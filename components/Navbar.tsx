@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import WalletLoginPopup from '@/components/WalletLoginPopup';
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(true);
+  const [showWalletLogin, setShowWalletLogin] = useState(false);
 
   useEffect(() => {
     const dismissed = localStorage.getItem('launch-banner-dismissed');
@@ -46,7 +48,7 @@ export default function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
-            <Link href="/auth/login" className="btn-secondary">Connect Wallet</Link>
+            <button onClick={() => setShowWalletLogin(true)} className="btn-secondary">Connect Wallet</button>
             <Link href="/marketplace" className="btn-primary">Enter App</Link>
           </div>
 
@@ -59,12 +61,23 @@ export default function Navbar() {
               <Link href="/marketplace" className="text-text-dim py-2">Marketplace</Link>
               <Link href="/docs" className="text-text-dim py-2">Docs</Link>
               <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim py-2">Bankr Integration</a>
-              <Link href="/auth/login" className="btn-secondary text-center">Connect Wallet</Link>
+              <button onClick={() => setShowWalletLogin(true)} className="btn-secondary text-center">Connect Wallet</button>
               <Link href="/marketplace" className="btn-primary text-center">Enter App</Link>
             </div>
           </div>
         )}
       </nav>
+
+      {showWalletLogin && (
+        <WalletLoginPopup
+          forceShow
+          redirectToDashboard={false}
+          onAuthenticated={() => {
+            setShowWalletLogin(false);
+            window.location.href = '/dashboard';
+          }}
+        />
+      )}
     </>
   );
 }
