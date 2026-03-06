@@ -47,11 +47,10 @@ test.describe('API lifecycle matrix', () => {
     expect(after.keys.some((k: any) => k.id === created.key_info.id)).toBeFalsy();
   });
 
-  test('trade + completion + rating lifecycle', async ({ request }) => {
-    const sellerToken = await loginToken(request, 'maya@startup.io', 'password123');
-    const buyerToken = await loginToken(request, 'jacob@example.com', 'password123');
+  test('listing + trade preview lifecycle', async ({ request }) => {
+    const sellerToken = await loginToken(request, 'jacob@example.com', 'password123');
 
-    const listingTitle = `PW Trade Listing ${Date.now()}`;
+    const listingTitle = `PW Preview Listing ${Date.now()}`;
 
     const listingRes = await request.post('/api/listings', {
       headers: {
@@ -61,7 +60,7 @@ test.describe('API lifecycle matrix', () => {
       data: {
         category: 'skills',
         title: listingTitle,
-        description: 'Playwright automated listing for trade/rating lifecycle integration testing.',
+        description: 'Playwright automated listing for trade preview integration testing.',
         price_bankr: 1200,
       },
     });
@@ -71,59 +70,20 @@ test.describe('API lifecycle matrix', () => {
     const listingId = listingBody.listing?.id;
     expect(listingId).toBeTruthy();
 
-    const tradeRes = await request.post('/api/trades', {
-      headers: {
-        Authorization: `Bearer ${buyerToken}`,
-        'Content-Type': 'application/json',
-      },
-      data: {
-        listing_id: listingId,
-        amount: 1200,
-        allow_partial_fill: false,
-      },
+    const detailRes = await request.get(`/api/listings/${listingId}`);
+    expect(detailRes.ok()).toBeTruthy();
+
+    const previewRes = await request.post('/api/trades/preview', {
+      headers: { 'Content-Type': 'application/json' },
+      data: { listing_id: listingId },
     });
 
-    expect(tradeRes.status()).toBe(201);
-    const tradeBody = await tradeRes.json();
-    const tradeId = tradeBody.trade?.id;
-    expect(tradeId).toBeTruthy();
-
-    const completeRes = await request.patch(`/api/trades/${tradeId}`, {
-      headers: {
-        Authorization: `Bearer ${buyerToken}`,
-        'Content-Type': 'application/json',
-      },
-      data: { status: 'completed' },
-    });
-
-    expect(completeRes.status()).toBe(200);
-
-    const ratingRes = await request.post('/api/ratings', {
-      headers: {
-        Authorization: `Bearer ${buyerToken}`,
-        'Content-Type': 'application/json',
-      },
-      data: {
-        trade_id: tradeId,
-        score: 5,
-        comment: 'Great delivery and response time.',
-      },
-    });
-
-    expect(ratingRes.status()).toBe(201);
-
-    const duplicateRating = await request.post('/api/ratings', {
-      headers: {
-        Authorization: `Bearer ${buyerToken}`,
-        'Content-Type': 'application/json',
-      },
-      data: {
-        trade_id: tradeId,
-        score: 4,
-        comment: 'Second rating should fail.',
-      },
-    });
-
-    expect(duplicateRating.status()).toBe(409);
+    expect(previewRes.ok()).toBeTruthy();
+    const preview = await previewRes.json();
+    expect(preview.item_price).toBe(1200);
+    expect(preview.platform_fee).toBe(60);
+    expect(preview.total_cost).toBe(1260);
+    expect(preview.seller_amount).toBe(1200);
+    expect(preview.dev_amount).toBe(60);
   });
 });

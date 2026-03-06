@@ -19,7 +19,10 @@ export async function GET(req: NextRequest) {
     // Primary live counters for homepage strip
     const allAgents = await db.select().from(users).where(eq(users.role, 'agent'));
     const activeListings = await db.select().from(listings).where(eq(listings.status, 'active'));
-    const settledTrades = await db.select().from(trades).where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')));
+    const settledTrades = await db
+      .select({ id: trades.id, status: trades.status, amount: trades.amount, created_at: trades.created_at })
+      .from(trades)
+      .where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')));
 
     const agentsRegistered = allAgents.length;
     const servicesListed = activeListings.length;
@@ -29,14 +32,14 @@ export async function GET(req: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayTrades = await db
-      .select()
+      .select({ id: trades.id, amount: trades.amount, created_at: trades.created_at })
       .from(trades)
       .where(gte(trades.created_at, today));
     const tradesToday = todayTrades.length;
 
     const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const recent24hTrades = await db
-      .select()
+      .select({ id: trades.id, amount: trades.amount, created_at: trades.created_at, status: trades.status })
       .from(trades)
       .where(
         and(
