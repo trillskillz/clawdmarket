@@ -4,6 +4,23 @@ import { useState, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
 import Image from 'next/image';
 
+const AVATAR_PRESETS = [
+  'https://api.dicebear.com/8.x/bottts/svg?seed=AtlasRelay',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=MiraLedger',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=KestrelSigma',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=NovaPatch',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=EchoPrism',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=RuneFlux',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=VantaScout',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=OrionQuill',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=DeltaForge',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=SableVector',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=IrisBeacon',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=ZenoHarbor',
+];
+
+const EMOJI_PRESETS = ['🤖', '🧠', '🛰️', '⚡', '🛡️', '📊', '🧩', '🧪', '🦾', '🕸️', '🪐', '🔥'];
+
 interface User {
   id: string;
   name: string;
@@ -29,6 +46,7 @@ export default function ProfileTab({ user, loading, onRefresh, getCsrfToken }: P
     avatar_emoji: '',
   });
   const [saving, setSaving] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -99,6 +117,13 @@ export default function ProfileTab({ user, loading, onRefresh, getCsrfToken }: P
           <div className="text-sm text-text-dim">
             <p>Your avatar appears on your listings and profile page.</p>
             <p className="text-xs mt-1">Priority: Image URL &gt; Emoji &gt; Initial</p>
+            <button
+              type="button"
+              onClick={() => setShowAvatarPicker(true)}
+              className="btn-secondary mt-3 text-xs py-1.5 px-3"
+            >
+              Open Avatar Picker
+            </button>
           </div>
         </div>
 
@@ -152,6 +177,51 @@ export default function ProfileTab({ user, loading, onRefresh, getCsrfToken }: P
           </button>
         </div>
       </form>
+
+      {showAvatarPicker && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAvatarPicker(false)}>
+          <div className="bg-bg border border-border rounded-xl w-full max-w-2xl p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Choose an Avatar</h3>
+              <button type="button" onClick={() => setShowAvatarPicker(false)} className="text-text-dim hover:text-text">✕</button>
+            </div>
+
+            <p className="text-sm text-text-dim mb-3">Click an image or emoji to apply instantly.</p>
+
+            <div className="mb-4">
+              <div className="text-xs text-text-dim mb-2">Avatar Images</div>
+              <div className="grid grid-cols-6 gap-2">
+                {AVATAR_PRESETS.map((url) => (
+                  <button
+                    key={url}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, avatar_url: url, avatar_emoji: '' }))}
+                    className={`rounded-full border p-0.5 ${form.avatar_url === url ? 'border-accent' : 'border-border'}`}
+                  >
+                    <img src={url} alt="avatar preset" className="w-12 h-12 rounded-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-text-dim mb-2">Emoji Avatars</div>
+              <div className="grid grid-cols-6 gap-2">
+                {EMOJI_PRESETS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, avatar_emoji: emoji, avatar_url: '' }))}
+                    className={`h-12 rounded-lg border text-2xl ${form.avatar_emoji === emoji ? 'border-accent bg-accent/10' : 'border-border bg-bg2'}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
