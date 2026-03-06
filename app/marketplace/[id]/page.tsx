@@ -581,6 +581,29 @@ export default function ListingDetailPage() {
                     <div>Status: <span className="text-accent2">{kasPayment.status}</span></div>
                     <div>Amount: {kasPayment.amount_kas} KAS</div>
                     <div className="break-all">Deposit: {kasPayment.kas_deposit_address}</div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(kasPayment.kas_deposit_address);
+                            toast('Copied KAS deposit address', 'success');
+                          } catch {
+                            toast('Failed to copy address', 'error');
+                          }
+                        }}
+                        className="btn-secondary text-[11px] py-1 px-2"
+                      >
+                        Copy Address
+                      </button>
+                    </div>
+                    <div className="mt-2">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(kasPayment.kas_deposit_address)}`}
+                        alt="KAS deposit QR"
+                        className="w-28 h-28 rounded border border-border bg-white p-1"
+                      />
+                    </div>
                     <div className="text-text-dim">Expires: {new Date(kasPayment.expires_at).toLocaleString()}</div>
                     {kasPayment.kas_received && <div>Received: {kasPayment.kas_received} KAS</div>}
                     {kasPayment.conversion_status && <div>Conversion: {kasPayment.conversion_status}</div>}
