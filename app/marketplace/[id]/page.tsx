@@ -255,28 +255,18 @@ export default function ListingDetailPage() {
         return;
       }
 
-      const escrowAmount = parseUnits(listing.price_bankr.toFixed(18), 18);
-      const feeAmount = parseUnits(fee.toFixed(18), 18);
+      // Single-transfer checkout to escrow prevents partial loss if user rejects second signature.
+      const totalAmount = parseUnits(total.toFixed(18), 18);
 
       const escrowTxHash = await writeContractAsync({
         chainId: base.id,
         address: bankrToken as `0x${string}`,
         abi: erc20Abi,
         functionName: 'transfer',
-        args: [escrowWallet as `0x${string}`, escrowAmount],
+        args: [escrowWallet as `0x${string}`, totalAmount],
       });
 
       await basePublicClient.waitForTransactionReceipt({ hash: escrowTxHash });
-
-      const feeTxHash = await writeContractAsync({
-        chainId: base.id,
-        address: bankrToken as `0x${string}`,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [devFeeWallet as `0x${string}`, feeAmount],
-      });
-
-      await basePublicClient.waitForTransactionReceipt({ hash: feeTxHash });
 
       const csrfToken = getCsrfToken();
       const res = await fetch('/api/trades', {
@@ -288,7 +278,7 @@ export default function ListingDetailPage() {
         },
         body: JSON.stringify({
           listing_id: listing.id,
-          amount: listing.price_bankr,
+          amount: 1,
           payment_mode: 'onchain',
           onchain: {
             chain: 'base',
@@ -297,7 +287,7 @@ export default function ListingDetailPage() {
             escrow_wallet: escrowWallet,
             fee_wallet: devFeeWallet,
             escrow_tx_hash: escrowTxHash,
-            fee_tx_hash: feeTxHash,
+            fee_tx_hash: null,
           },
         }),
       });

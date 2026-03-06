@@ -255,8 +255,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'On-chain payment destination mismatch' }, { status: 400 });
       }
 
-      if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || '')) || !TX_HASH_RE.test(String(onchain.fee_tx_hash || ''))) {
-        return NextResponse.json({ error: 'Invalid on-chain transaction hash format' }, { status: 400 });
+      if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || ''))) {
+        return NextResponse.json({ error: 'Invalid on-chain escrow transaction hash format' }, { status: 400 });
+      }
+      if (onchain.fee_tx_hash && !TX_HASH_RE.test(String(onchain.fee_tx_hash))) {
+        return NextResponse.json({ error: 'Invalid optional on-chain fee transaction hash format' }, { status: 400 });
       }
 
       const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
@@ -284,16 +287,20 @@ export async function POST(req: NextRequest) {
           })
           .returning();
 
+        const escrowTransferAmount = onchain.fee_tx_hash ? tradeAmount : totalCost;
+
         await tx.insert(transactions).values({
           from_user_id: auth.userId,
           to_user_id: null,
-          amount: tradeAmount,
+          amount: escrowTransferAmount,
           type: 'transfer',
           reference_id: trade.id,
-          memo: `On-chain escrow transfer (${onchain.escrow_tx_hash})`,
+          memo: onchain.fee_tx_hash
+            ? `On-chain escrow transfer (${onchain.escrow_tx_hash})`
+            : `On-chain total transfer (escrow+fee) (${onchain.escrow_tx_hash})`,
         });
 
-        if (fee > 0) {
+        if (fee > 0 && onchain.fee_tx_hash) {
           if (adminFeeRecipientUserId) {
             await tx
               .update(wallets)
@@ -326,9 +333,9 @@ export async function POST(req: NextRequest) {
           trade: newTrade,
           code: 'TRADE_CREATED_ONCHAIN',
           fee_info: {
-            amount: validated.amount,
+            amount: tradeAmount,
             ecosystem_fee: fee,
-            seller_receives: validated.amount,
+            seller_receives: tradeAmount,
             admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),
           },
           onchain_receipts: {
