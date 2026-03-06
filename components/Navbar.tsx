@@ -71,7 +71,14 @@ export default function Navbar() {
             <Link href="/marketplace" className="btn-primary">Enter App</Link>
           </div>
 
-          <button className="md:hidden text-text text-2xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Menu">☰</button>
+          <div className="md:hidden flex items-center gap-2">
+            {!isWalletLoggedIn ? (
+              <button onClick={() => setShowWalletLogin(true)} className="btn-secondary text-xs py-1.5 px-2">Connect Wallet</button>
+            ) : (
+              <Link href="/dashboard" className="btn-secondary text-xs py-1.5 px-2">Dashboard</Link>
+            )}
+            <button className="text-text text-2xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Menu">☰</button>
+          </div>
         </div>
 
         {mobileMenuOpen && (
