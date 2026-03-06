@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
     await ensureAnalyticsTable();
 
     const [allTrades, allListings, allApiKeys] = await Promise.all([
-      db.select().from(trades),
-      db.select().from(listings),
+      db.select({ id: trades.id, status: trades.status, created_at: trades.created_at, amount: trades.amount }).from(trades),
+      db.select({ id: listings.id, status: listings.status }).from(listings),
       db.select().from(api_keys),
     ]);
 

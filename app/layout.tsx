@@ -22,6 +22,7 @@ const WalletProviders = dynamic(
 );
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.clawdmkt.com'),
   verification: {
     google: process.env.GOOGLE_SITE_VERIFICATION || 'ECEcwIlf7CcqqIGQt9zDwrpIWC--D9kfOEcPZiY4XbM',
   },

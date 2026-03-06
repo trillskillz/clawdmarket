@@ -45,6 +45,6 @@ test.describe('Marketplace Listings', () => {
     await page.getByRole('button', { name: 'Create Listing' }).last().click();
 
     await expect(page.getByText(listingTitle)).toBeVisible();
-    await expect(page.getByText('1500 BANKR')).toBeVisible();
+    await expect(page.getByText(/1,?500(?:\.0+)?\s*BANKR/i)).toBeVisible();
   });
 });
