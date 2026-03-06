@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import { isAddress } from 'viem';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
+import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
@@ -110,15 +111,36 @@ export async function POST(req: NextRequest) {
       .where(eq(listings.id, validated.listing_id));
 
     if (!listing) {
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        amount: validated.amount,
+        token: 'bnkr',
+        route: 'POST /api/trades',
+        listing_id: validated.listing_id,
+        error_code: 'LISTING_NOT_FOUND',
+        message: 'Listing not found',
+        state: 'no_funds_moved',
+      });
       return NextResponse.json(
-        { error: 'Listing not found', code: 'LISTING_NOT_FOUND', ...envMeta('clawdmarket/api/trades') },
+        { ...paymentError('LISTING_NOT_FOUND', 'Listing not found'), ...envMeta('clawdmarket/api/trades') },
         { status: 404 }
       );
     }
 
     if (listing.status !== 'active') {
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        seller_id: listing.seller_id,
+        amount: validated.amount,
+        token: 'bnkr',
+        route: 'POST /api/trades',
+        listing_id: validated.listing_id,
+        error_code: 'LISTING_NOT_ACTIVE',
+        message: 'Listing is not active',
+        state: 'no_funds_moved',
+      });
       return NextResponse.json(
-        { error: 'Listing is not active', code: 'LISTING_NOT_ACTIVE', ...envMeta('clawdmarket/api/trades') },
+        { ...paymentError('LISTING_NOT_ACTIVE', 'Listing is not active'), ...envMeta('clawdmarket/api/trades') },
         { status: 400 }
       );
     }
@@ -273,10 +295,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (buyerWallet.balance < totalCost) {
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        seller_id: listing.seller_id,
+        amount: totalCost,
+        token: 'bnkr',
+        route: 'POST /api/trades',
+        listing_id: validated.listing_id,
+        error_code: 'INSUFFICIENT_FUNDS',
+        message: `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`,
+        state: 'no_funds_moved',
+      });
       return NextResponse.json(
         {
-          error: `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`,
-          code: 'INSUFFICIENT_FUNDS',
+          ...paymentError('INSUFFICIENT_FUNDS', `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`),
           ...envMeta('clawdmarket/api/trades'),
         },
         { status: 402 } // Payment Required
@@ -386,8 +418,16 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     if (error instanceof TradeRaceError) {
       const status = error.code === 'LISTING_ALREADY_CLAIMED' ? 409 : 402;
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        token: 'bnkr',
+        route: 'POST /api/trades',
+        error_code: error.code,
+        message: error.message,
+        state: 'no_funds_moved',
+      });
       return NextResponse.json(
-        { error: error.message, code: error.code, ...envMeta('clawdmarket/api/trades') },
+        { ...paymentError(error.code, error.message), ...envMeta('clawdmarket/api/trades') },
         { status }
       );
     }
@@ -399,8 +439,16 @@ export async function POST(req: NextRequest) {
       );
     }
     console.error('Trade creation error:', error);
+    await logPaymentFailure({
+      buyer_id: auth.userId,
+      token: 'bnkr',
+      route: 'POST /api/trades',
+      error_code: 'INTERNAL_ERROR',
+      message: error?.message || 'Internal server error',
+      state: 'no_funds_moved',
+    });
     return NextResponse.json(
-      { error: 'Internal server error', code: 'INTERNAL_ERROR', ...envMeta('clawdmarket/api/trades') },
+      { ...paymentError('INTERNAL_ERROR', 'Internal server error'), ...envMeta('clawdmarket/api/trades') },
       { status: 500 }
     );
   }
