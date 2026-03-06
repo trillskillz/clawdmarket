@@ -40,6 +40,9 @@ interface SellerTrustProfile {
     disputed_trades_as_seller?: number;
     average_rating: number | null;
     total_ratings: number;
+    likes?: number;
+    dislikes?: number;
+    effective_dislikes?: number;
   };
 }
 
@@ -89,6 +92,7 @@ export default function ListingDetailPage() {
   const [kasPayment, setKasPayment] = useState<KasPaymentState | null>(null);
   const [onchainConfig, setOnchainConfig] = useState<OnchainConfig | null>(null);
   const [tradePreview, setTradePreview] = useState<TradePreview | null>(null);
+  const [showTrustBreakdown, setShowTrustBreakdown] = useState(false);
   const { track } = useAnalytics();
   const { address: connectedAddress, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
@@ -554,6 +558,12 @@ export default function ListingDetailPage() {
                         Based on: {sellerProfile.trust_drivers[0]}
                       </p>
                     ) : null}
+                    <button
+                      onClick={() => setShowTrustBreakdown(true)}
+                      className="mt-1 text-[11px] text-accent2 hover:text-accent3"
+                    >
+                      View trust breakdown
+                    </button>
                     {sellerProfile?.stats && (
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-text-dim">
                         <span className="px-2 py-0.5 rounded-full border border-border bg-bg/40">
@@ -680,6 +690,34 @@ export default function ListingDetailPage() {
             </div>
           </div>
         </div>
+        {showTrustBreakdown && (
+          <div className="fixed inset-0 z-[210] bg-black/60 flex items-center justify-center p-4">
+            <div className="w-full max-w-lg rounded-2xl border border-border bg-bg p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-bold">Trust Breakdown</h3>
+                <button className="text-text-dim hover:text-text" onClick={() => setShowTrustBreakdown(false)}>Close</button>
+              </div>
+              <div className="space-y-2 text-sm">
+                <p><span className="text-text-dim">Score:</span> <span className={trustScoreClass(sellerProfile?.trust_score ?? 70)}>{sellerProfile?.trust_score ?? 70}</span></p>
+                <p><span className="text-text-dim">Confidence:</span> {sellerProfile?.trust_confidence || 'low'}</p>
+                <p><span className="text-text-dim">Completed sales:</span> {sellerProfile?.stats?.completed_trades_as_seller ?? 0}</p>
+                <p><span className="text-text-dim">Disputes:</span> {sellerProfile?.stats?.disputed_trades_as_seller ?? 0}</p>
+                <p><span className="text-text-dim">Ratings:</span> {sellerProfile?.stats?.total_ratings ?? 0} ({sellerProfile?.stats?.average_rating ? sellerProfile.stats.average_rating.toFixed(1) : '-' } avg)</p>
+                <p><span className="text-text-dim">Likes / Dislikes:</span> {sellerProfile?.stats?.likes ?? 0} / {sellerProfile?.stats?.dislikes ?? 0}</p>
+                <p><span className="text-text-dim">Effective dislikes:</span> {sellerProfile?.stats?.effective_dislikes ?? 0}</p>
+                {sellerProfile?.trust_drivers?.length ? (
+                  <div className="pt-2">
+                    <p className="text-text-dim mb-1">Score drivers:</p>
+                    <ul className="list-disc ml-5 space-y-1 text-xs text-text-dim">
+                      {sellerProfile.trust_drivers.map((d, i) => <li key={i}>{d}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+
         {showWalletLogin && (
           <WalletLoginPopup
             forceShow
