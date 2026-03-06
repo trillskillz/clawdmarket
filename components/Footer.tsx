@@ -21,7 +21,7 @@ export default function Footer() {
         </div>
 
         <div className="text-sm flex gap-4 md:justify-end">
-          <a href="https://x.com" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Twitter/X</a>
+          <a href="https://x.com/BankQuote" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Twitter/X</a>
           <a href="https://farcaster.xyz" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Farcaster</a>
           <a href="https://t.me" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Telegram</a>
         </div>
