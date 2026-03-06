@@ -22,7 +22,7 @@ export default function Footer() {
         </div>
 
         <div className="text-sm flex gap-4 md:justify-end">
-          <a href="https://x.com/BankQuote" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Twitter/X</a>
+          <a href="https://github.com/BankrBot/skills" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Twitter/X</a>
           <a href="https://t.me" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Telegram</a>
         </div>
       </div>
