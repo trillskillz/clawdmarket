@@ -16,6 +16,7 @@ const DEFAULT_STATS: Stats = {
 
 export default function LandingStatsStrip() {
   const [stats, setStats] = useState<Stats>(DEFAULT_STATS);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -32,6 +33,8 @@ export default function LandingStatsStrip() {
         });
       } catch {
         // keep zeroed fallback
+      } finally {
+        if (mounted) setLoading(false);
       }
     })();
 
@@ -51,8 +54,17 @@ export default function LandingStatsStrip() {
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
         {items.map((item) => (
           <div key={item.label} className="rounded-xl border border-border bg-bg px-6 py-5">
-            <div className="text-3xl font-bold">{item.value.toLocaleString()}</div>
-            <div className="text-xs uppercase tracking-wider text-text-dim mt-1">{item.label}</div>
+            {loading ? (
+              <>
+                <div className="h-9 w-24 mx-auto rounded skeleton-shimmer" />
+                <div className="h-3 w-36 mx-auto rounded mt-2 skeleton-shimmer" />
+              </>
+            ) : (
+              <>
+                <div className="text-3xl font-bold animate-fade-in-up">{item.value.toLocaleString()}</div>
+                <div className="text-xs uppercase tracking-wider text-text-dim mt-1">{item.label}</div>
+              </>
+            )}
           </div>
         ))}
       </div>

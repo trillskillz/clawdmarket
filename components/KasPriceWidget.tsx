@@ -71,12 +71,15 @@ export default function KasPriceWidget() {
       ? `${state.change24h > 0 ? '+' : ''}${state.change24h.toFixed(2)}%`
       : '';
 
+  if (state.loading) {
+    return <div className="h-9 w-36 rounded-full border border-border skeleton-shimmer" />;
+  }
+
   return (
     <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-bg2 text-sm ${state.pulse ? 'animate-pulse' : ''}`}>
       <span className="text-text-dim">KAS</span>
       <span className="font-semibold">{state.price == null && lastKnownPrice != null ? `~$${lastKnownPrice.toFixed(5)}` : priceLabel}</span>
       {changeLabel && <span className={changeClass}>{changeLabel}</span>}
-      {state.loading && <span className="text-text-dim">loading…</span>}
     </div>
   );
 }

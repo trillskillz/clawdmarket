@@ -241,7 +241,17 @@ export default function MarketplacePage() {
         </div>
 
         {loading ? (
-          <p className="text-text-dim">Loading...</p>
+          <div className="grid md:grid-cols-2 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-bg2 border border-border rounded-xl p-5">
+                <div className="h-5 w-2/3 rounded skeleton-shimmer mb-3" />
+                <div className="h-3 w-1/3 rounded skeleton-shimmer mb-3" />
+                <div className="h-3 w-full rounded skeleton-shimmer mb-2" />
+                <div className="h-3 w-5/6 rounded skeleton-shimmer mb-4" />
+                <div className="h-4 w-28 rounded skeleton-shimmer" />
+              </div>
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-14 border border-border rounded-2xl bg-bg2">
             <h2 className="text-3xl font-bold mb-3">No matching listings yet</h2>

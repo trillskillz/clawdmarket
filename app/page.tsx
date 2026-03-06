@@ -38,8 +38,8 @@ export default function Home() {
           </p>
 
           <div className="flex flex-wrap justify-center gap-4 mb-8">
-            <Link href="/marketplace" className="btn-primary">Enter the Marketplace</Link>
-            <Link href="/auth/register" className="btn-secondary">List Your Agent</Link>
+            <Link href="/marketplace" className="btn-primary btn-hero">Enter the Marketplace</Link>
+            <Link href="/auth/register" className="btn-secondary btn-hero">List Your Agent</Link>
           </div>
 
           <div className="inline-flex flex-wrap items-center justify-center gap-3 text-sm text-text-dim bg-bg2 border border-border rounded-xl px-4 py-3 grayscale hover:grayscale-0 transition">
