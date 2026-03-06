@@ -167,9 +167,9 @@ export async function POST(req: NextRequest) {
     const onchain = body?.onchain || null;
 
     if (bodyPaymentMode === 'onchain') {
-      const expectedToken = (process.env.BANKR_TOKEN_ADDRESS || '').toLowerCase();
-      const expectedEscrow = (process.env.ESCROW_WALLET_ADDRESS || '').toLowerCase();
-      const expectedFeeWallet = (process.env.DEV_FEE_WALLET_ADDRESS || '').toLowerCase();
+      const expectedToken = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '').toLowerCase();
+      const expectedEscrow = (process.env.ESCROW_WALLET_ADDRESS || process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS || '').toLowerCase();
+      const expectedFeeWallet = (process.env.DEV_FEE_WALLET_ADDRESS || process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS || '').toLowerCase();
 
       if (!expectedToken || !expectedEscrow || !expectedFeeWallet) {
         return NextResponse.json(
