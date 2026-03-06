@@ -17,33 +17,62 @@ type Listing = MarketplaceListing & {
 const primaryFilters = ['All', 'Data', 'Skills', 'Compute', 'Bounties', 'Other', 'Code', 'Analysis', 'Content', 'DeFi', 'Trading', 'Custom'];
 const paymentFilters = ['Any payment', 'BNKR', 'KAS'];
 
+const CATEGORY_CANONICAL: Record<string, string> = {
+  data: 'Data',
+  skills: 'Skills',
+  compute: 'Compute',
+  bounties: 'Bounties',
+  other: 'Other',
+  code: 'Code',
+  analysis: 'Analysis',
+  content: 'Content',
+  defi: 'DeFi',
+  trading: 'Trading',
+  custom: 'Custom',
+};
+
+const CATEGORY_ORDER = primaryFilters.slice(1);
+
+function canonicalizeCategory(category: string): string {
+  const normalized = category.trim().toLowerCase();
+  return CATEGORY_CANONICAL[normalized] || category;
+}
+
 function buildMarketplaceSeed(fetched: Listing[]): Listing[] {
   const byCategory = new Map<string, Listing[]>();
 
   for (const listing of fetched) {
-    const key = listing.category;
+    const key = canonicalizeCategory(listing.category);
     const arr = byCategory.get(key) ?? [];
-    arr.push(listing);
+    arr.push({ ...listing, category: key });
     byCategory.set(key, arr);
   }
 
   for (const fallback of FALLBACK_LISTINGS) {
-    const arr = byCategory.get(fallback.category) ?? [];
+    const key = canonicalizeCategory(fallback.category);
+    const arr = byCategory.get(key) ?? [];
     if (arr.length < 30) {
       const seller = fallbackAgentForListingId(fallback.id);
       arr.push({
         ...fallback,
+        category: key,
         seller_id: seller.id,
         seller_name: seller.name,
         seller_avatar_url: seller.avatar_url,
         seller_bio: seller.bio,
       });
-      byCategory.set(fallback.category, arr);
+      byCategory.set(key, arr);
     }
   }
 
-  const merged = Array.from(byCategory.values()).flatMap((arr) => arr.slice(0, 50));
-  return merged.length > 0 ? merged : FALLBACK_LISTINGS;
+  const merged = CATEGORY_ORDER.flatMap((category) => {
+    const arr = (byCategory.get(category) ?? []).slice(0, 50);
+    return arr.sort((a, b) => a.title.localeCompare(b.title));
+  });
+
+  return merged.length > 0
+    ? merged
+    : FALLBACK_LISTINGS.map((l) => ({ ...l, category: canonicalizeCategory(l.category) }));
 }
 
 export default function MarketplacePage() {
@@ -121,7 +150,7 @@ export default function MarketplacePage() {
   const filtered = useMemo(() => {
     const normalizeCategory = (c: string) => c.trim().toLowerCase();
 
-    return listings.filter((l) => {
+    const result = listings.filter((l) => {
       const q = search.trim().toLowerCase();
       if (q && !`${l.title} ${l.description} ${l.seller_name || ''}`.toLowerCase().includes(q)) return false;
 
@@ -141,6 +170,12 @@ export default function MarketplacePage() {
         if (!listingFav && !agentFav) return false;
       }
       return true;
+    });
+
+    return result.sort((a, b) => {
+      const catDiff = CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category);
+      if (catDiff !== 0) return catDiff;
+      return a.title.localeCompare(b.title);
     });
   }, [listings, primary, search, payment, viewMode, favoriteListingIds, favoriteAgentIds]);
 
