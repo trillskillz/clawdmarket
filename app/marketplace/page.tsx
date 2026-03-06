@@ -4,27 +4,36 @@ import { useEffect, useMemo, useState } from 'react';
 import PageShell from '@/components/PageShell';
 import Countdown from '@/components/Countdown';
 import Link from 'next/link';
+import { FALLBACK_LISTINGS, type MarketplaceListing } from '@/lib/marketplace-fallback';
 
-type Listing = {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  price_bankr: number;
-};
+type Listing = MarketplaceListing;
 
 const primaryFilters = ['All', 'Data', 'Code', 'Analysis', 'Content', 'DeFi', 'Trading', 'Custom'];
 const paymentFilters = ['Any payment', 'BNKR', 'KAS'];
 
-const fallbackListings: Listing[] = [
-  { id: 'fb-data-1', title: 'On-chain Wallet Intelligence Feed', description: 'Daily categorized wallet flow intelligence and alerts.', category: 'Data', price_bankr: 1200 },
-  { id: 'fb-code-1', title: 'Smart Contract Security Review', description: 'Targeted code audit and exploit surface review.', category: 'Code', price_bankr: 2450 },
-  { id: 'fb-analysis-1', title: 'Token Narrative & Positioning Analysis', description: 'Narrative map + competitor breakdown + messaging recommendations.', category: 'Analysis', price_bankr: 980 },
-  { id: 'fb-content-1', title: 'Technical Thread + Launch Post Pack', description: 'X thread + docs snippet + launch copy kit.', category: 'Content', price_bankr: 864 },
-  { id: 'fb-defi-1', title: 'Yield Strategy Optimizer Agent', description: 'Automated strategy suggestions across supported pools.', category: 'DeFi', price_bankr: 1775 },
-  { id: 'fb-trading-1', title: 'Intraday Signal Agent (Risk-Capped)', description: 'Machine-readable signal feed with position sizing metadata.', category: 'Trading', price_bankr: 2100 },
-  { id: 'fb-custom-1', title: 'Custom Agent Workflow Build', description: 'End-to-end custom agent workflow design + implementation support.', category: 'Custom', price_bankr: 2465 },
-];
+function buildMarketplaceSeed(fetched: Listing[]): Listing[] {
+  const byCategory = new Map<string, Listing[]>();
+
+  for (const listing of fetched) {
+    const key = listing.category;
+    const arr = byCategory.get(key) ?? [];
+    arr.push(listing);
+    byCategory.set(key, arr);
+  }
+
+  for (const fallback of FALLBACK_LISTINGS) {
+    const arr = byCategory.get(fallback.category) ?? [];
+    if (arr.length < 30) {
+      arr.push(fallback);
+      byCategory.set(fallback.category, arr);
+    }
+  }
+
+  const merged = Array.from(byCategory.values())
+    .flatMap((arr) => arr.slice(0, 50));
+
+  return merged.length > 0 ? merged : FALLBACK_LISTINGS;
+}
 
 export default function MarketplacePage() {
   const [search, setSearch] = useState('');
@@ -39,9 +48,9 @@ export default function MarketplacePage() {
         const res = await fetch('/api/listings?limit=50');
         const data = await res.json();
         const fetched = data.listings || [];
-        setListings(fetched.length > 0 ? fetched : fallbackListings);
+        setListings(buildMarketplaceSeed(fetched));
       } catch {
-        setListings(fallbackListings);
+        setListings(FALLBACK_LISTINGS);
       } finally {
         setLoading(false);
       }
