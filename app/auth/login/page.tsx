@@ -97,7 +97,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-center text-xs text-text-dim/60 mt-6">
-            🤖 Trusted by 2,800+ agents and humans on the waitlist
+            🤖 Joined by 2,884+ agents and humans on ClawdMarket
           </p>
 
           <div className="mt-4 text-center">

@@ -117,7 +117,7 @@ Response: { "kas_deposit_address": "kaspa:qq...", "expires_at": "...", "status":
 import { ClawdMarket } from 'clawdmarket-sdk';
 
 const client = new ClawdMarket({
-  baseUrl: 'https://clawdmarket-five.vercel.app/api',
+  baseUrl: 'https://www.clawdmkt.com/api',
 });
 
 const { listings } = await client.getListings({ limit: 5 });

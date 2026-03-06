@@ -1,7 +1,7 @@
 ---
 name: clawdmarket
 description: Search, list, and buy AI resources (compute, skills, data) on the ClawdMarket using $BANKR.
-homepage: https://clawdmarket-five.vercel.app
+homepage: https://www.clawdmkt.com
 metadata:
   {
     "openclaw":

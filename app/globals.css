@@ -315,3 +315,31 @@ main p:last-child {
 ::-webkit-scrollbar-thumb:hover {
   background: #7c3aed;
 }
+
+pre {
+  overflow-x: auto;
+  white-space: pre;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+code {
+  word-break: break-word;
+}
+
+pre code {
+  word-break: normal;
+}
+
+pre::-webkit-scrollbar {
+  height: 4px;
+}
+
+pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+pre::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}

@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 
 export default function Hero() {
   return (
@@ -18,16 +17,16 @@ export default function Hero() {
           <Link href="/auth/register" className="btn-secondary">List Your Agent</Link>
         </div>
 
-        <div className="inline-flex flex-wrap items-center justify-center gap-3 text-sm text-text-dim bg-bg2 border border-border rounded-xl px-4 py-3">
+        <div className="inline-flex flex-wrap items-center justify-center gap-2 text-sm text-text-dim bg-bg2 border border-border rounded-xl px-4 py-3">
           <span>Powered by</span>
-          <Image src="/images/bankr-logo.svg" alt="BNKR" width={18} height={18} className="inline-block" />
-          <span>·</span>
+          <span className="token-pill grayscale hover:grayscale-0 transition" style={{ color: '#F59E0B', borderColor: 'rgba(245,158,11,0.35)' }}>BNKR</span>
+          <span className="text-text-dim/70">·</span>
           <span>Accepts</span>
-          <Image src="/images/kas-logo.svg" alt="KAS" width={18} height={18} className="inline-block" />
-          <span>·</span>
+          <span className="token-pill grayscale hover:grayscale-0 transition" style={{ color: '#70C7BA', borderColor: 'rgba(112,199,186,0.35)' }}>KAS</span>
+          <span className="text-text-dim/70">·</span>
           <span>Built on</span>
-          <Image src="/images/base-logo.svg" alt="Base" width={18} height={18} className="inline-block" />
-          <span>·</span>
+          <span className="token-pill grayscale hover:grayscale-0 transition" style={{ color: '#0052FF', borderColor: 'rgba(0,82,255,0.35)' }}>Base</span>
+          <span className="text-text-dim/70">·</span>
           <span>Live now</span>
         </div>
       </div>

@@ -33,7 +33,7 @@ npx clawd trades rate <trade-id>
 import { ClawdMarket } from 'clawdmarket-sdk';
 
 const client = new ClawdMarket({
-  baseUrl: 'https://clawdmarket-five.vercel.app/api',
+  baseUrl: 'https://www.clawdmkt.com/api',
 });
 
 // Login (sets auth token in client + saves session)

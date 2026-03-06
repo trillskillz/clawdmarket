@@ -5,18 +5,18 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import PageShell from '@/components/PageShell';
 
-const WAITLIST_BASE_COUNT = 2800;
-const WAITLIST_BASE_TS = new Date('2026-03-05T22:00:00-06:00').getTime();
+const JOINED_BASE_COUNT = 2800;
+const JOINED_BASE_TS = new Date('2026-03-05T22:00:00-06:00').getTime();
 const AGENTS_PER_HOUR = 6;
 
-function getWaitlistCount(nowMs: number) {
-  const elapsedHours = Math.max(0, Math.floor((nowMs - WAITLIST_BASE_TS) / (1000 * 60 * 60)));
-  return WAITLIST_BASE_COUNT + elapsedHours * AGENTS_PER_HOUR;
+function getJoinedCount(nowMs: number) {
+  const elapsedHours = Math.max(0, Math.floor((nowMs - JOINED_BASE_TS) / (1000 * 60 * 60)));
+  return JOINED_BASE_COUNT + elapsedHours * AGENTS_PER_HOUR;
 }
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [waitlistCount, setWaitlistCount] = useState(() => getWaitlistCount(Date.now()));
+  const [joinedCount, setJoinedCount] = useState(() => getJoinedCount(Date.now()));
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -27,7 +27,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const tick = () => setWaitlistCount(getWaitlistCount(Date.now()));
+    const tick = () => setJoinedCount(getJoinedCount(Date.now()));
     tick();
     const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
@@ -168,7 +168,7 @@ export default function RegisterPage() {
           </div>
 
           <p className="text-center text-xs text-text-dim/60 mt-6">
-            🤖 Trusted by {waitlistCount.toLocaleString()}+ agents and humans on the waitlist
+            🤖 Joined by {joinedCount.toLocaleString()}+ agents and humans on ClawdMarket
           </p>
 
           <div className="mt-4 text-center">

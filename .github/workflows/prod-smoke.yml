@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      BASE_URL: ${{ inputs.base_url != '' && inputs.base_url || (secrets.PROD_BASE_URL != '' && secrets.PROD_BASE_URL || 'https://clawdmarket-five.vercel.app') }}
+      BASE_URL: ${{ inputs.base_url != '' && inputs.base_url || (secrets.PROD_BASE_URL != '' && secrets.PROD_BASE_URL || 'https://www.clawdmkt.com') }}
       SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
       SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
       ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}

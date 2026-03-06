@@ -62,10 +62,45 @@ export default function WhyPage() {
 
         <section className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold mb-6">The Architecture</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="bg-bg2 border border-border rounded-xl p-5">Agent queries ClawdMarket</div>
-            <div className="bg-bg2 border border-border rounded-xl p-5">Finds a service, initiates payment</div>
-            <div className="bg-bg2 border border-border rounded-xl p-5">x402 verifies on Base → Service released</div>
+
+          <div className="lg:hidden space-y-2">
+            <div className="bg-bg2 border border-border border-l-4 border-l-accent rounded-xl p-5 relative overflow-hidden">
+              <div className="text-5xl font-extrabold text-white/10 absolute -top-1 right-3">01</div>
+              <p className="font-semibold text-accent2 mb-1">Query</p>
+              <p className="text-text">Agent queries ClawdMarket</p>
+            </div>
+            <div className="text-center text-text-dim">↓</div>
+            <div className="bg-bg2 border border-border border-l-4 border-l-accent2 rounded-xl p-5 relative overflow-hidden">
+              <div className="text-5xl font-extrabold text-white/10 absolute -top-1 right-3">02</div>
+              <p className="font-semibold text-accent2 mb-1">Transact</p>
+              <p className="text-text">Finds a service, initiates payment</p>
+            </div>
+            <div className="text-center text-text-dim">↓</div>
+            <div className="bg-bg2 border border-border border-l-4 border-l-accent rounded-xl p-5 relative overflow-hidden">
+              <div className="text-5xl font-extrabold text-white/10 absolute -top-1 right-3">03</div>
+              <p className="font-semibold text-accent2 mb-1">Settle</p>
+              <p className="text-text">x402 verifies on Base → Service released</p>
+            </div>
+          </div>
+
+          <div className="hidden lg:grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-stretch">
+            <div className="bg-bg2 border border-border border-l-4 border-l-accent rounded-xl p-5 relative overflow-hidden">
+              <div className="text-5xl font-extrabold text-white/10 absolute -top-1 right-3">01</div>
+              <p className="font-semibold text-accent2 mb-1">Query</p>
+              <p className="text-text">Agent queries ClawdMarket</p>
+            </div>
+            <div className="flex items-center justify-center text-text-dim text-xl">→</div>
+            <div className="bg-bg2 border border-border border-l-4 border-l-accent2 rounded-xl p-5 relative overflow-hidden">
+              <div className="text-5xl font-extrabold text-white/10 absolute -top-1 right-3">02</div>
+              <p className="font-semibold text-accent2 mb-1">Transact</p>
+              <p className="text-text">Finds a service, initiates payment</p>
+            </div>
+            <div className="flex items-center justify-center text-text-dim text-xl">→</div>
+            <div className="bg-bg2 border border-border border-l-4 border-l-accent rounded-xl p-5 relative overflow-hidden">
+              <div className="text-5xl font-extrabold text-white/10 absolute -top-1 right-3">03</div>
+              <p className="font-semibold text-accent2 mb-1">Settle</p>
+              <p className="text-text">x402 verifies on Base → Service released</p>
+            </div>
           </div>
         </section>
 

@@ -43,6 +43,17 @@ export default function Navbar() {
     };
   }, [pathname]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
   return (
     <>
       <nav className={`fixed top-0 left-0 right-0 z-50 border-b transition-all duration-200 ${scrolled ? 'bg-bg/95 backdrop-blur-[12px] border-border' : 'bg-bg/80 backdrop-blur-md border-border'}`}>
@@ -70,26 +81,32 @@ export default function Navbar() {
             {!isWalletLoggedIn && (
               <button onClick={() => setShowWalletLogin(true)} className="btn-secondary text-xs py-1.5 px-2">Connect Wallet</button>
             )}
-            <button className="text-text text-2xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Menu">☰</button>
+            <button className="text-text text-2xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Menu" aria-expanded={mobileMenuOpen}>{mobileMenuOpen ? '✕' : '☰'}</button>
           </div>
         </div>
 
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-bg2 border-t border-border">
-            <div className="flex flex-col p-4 gap-3">
-              <Link href="/marketplace" className="text-text-dim min-h-11 flex items-center py-2">Marketplace</Link>
-              <Link href="/why" className="text-text-dim min-h-11 flex items-center py-2">Why ClawdMarket</Link>
-              <Link href="/docs" className="text-text-dim min-h-11 flex items-center py-2">Docs</Link>
-              <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim min-h-11 flex items-center py-2">Bankr Integration</a>
-              {!isWalletLoggedIn ? (
-                <button onClick={() => setShowWalletLogin(true)} className="btn-secondary text-center">Connect Wallet</button>
-              ) : (
-                <Link href="/dashboard" className="btn-secondary text-center">Dashboard</Link>
-              )}
-              <Link href="/marketplace" className="btn-primary text-center">Enter App</Link>
-            </div>
+        <div
+          className={`md:hidden fixed inset-0 top-[73px] bg-black z-40 transition-opacity motion-safe:duration-200 motion-reduce:transition-none ${mobileMenuOpen ? 'opacity-60 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden
+        />
+
+        <div
+          className={`md:hidden fixed top-[73px] left-0 z-50 h-[calc(100vh-73px)] w-[85%] max-w-sm bg-bg2 border-r border-border transform transition-all motion-safe:duration-200 motion-safe:ease-out motion-reduce:transition-none ${mobileMenuOpen ? 'translate-x-0 opacity-100 pointer-events-auto' : '-translate-x-full opacity-0 pointer-events-none'}`}
+        >
+          <div className="flex flex-col p-4 gap-3">
+            <Link href="/marketplace" onClick={() => setMobileMenuOpen(false)} className="text-text-dim min-h-11 flex items-center py-2">Marketplace</Link>
+            <Link href="/why" onClick={() => setMobileMenuOpen(false)} className="text-text-dim min-h-11 flex items-center py-2">Why ClawdMarket</Link>
+            <Link href="/docs" onClick={() => setMobileMenuOpen(false)} className="text-text-dim min-h-11 flex items-center py-2">Docs</Link>
+            <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim min-h-11 flex items-center py-2">Bankr Integration</a>
+            {!isWalletLoggedIn ? (
+              <button onClick={() => { setShowWalletLogin(true); setMobileMenuOpen(false); }} className="btn-secondary text-center">Connect Wallet</button>
+            ) : (
+              <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} className="btn-secondary text-center">Dashboard</Link>
+            )}
+            <Link href="/marketplace" onClick={() => setMobileMenuOpen(false)} className="btn-primary text-center">Enter App</Link>
           </div>
-        )}
+        </div>
       </nav>
 
       {showWalletLogin && (

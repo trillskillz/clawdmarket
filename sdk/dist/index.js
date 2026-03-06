@@ -7,7 +7,7 @@ import * as os from 'os';
 export class ClawdMarket {
     constructor(config = {}) {
         this.config = {
-            baseUrl: config.baseUrl || 'https://clawdmarket-five.vercel.app/api', // Default to prod
+            baseUrl: config.baseUrl || 'https://www.clawdmkt.com/api', // Default to prod
             apiKey: config.apiKey,
             authToken: config.authToken,
         };

@@ -84,22 +84,24 @@ export default function LandingStatsStrip() {
 
   return (
     <section ref={ref} className="px-6 py-8 border-b border-border bg-bg2/60">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-        {items.map((item) => (
-          <div key={item.label} className="rounded-xl border border-border bg-bg px-6 py-5">
-            {loading ? (
-              <>
-                <div className="h-9 w-24 mx-auto rounded skeleton-shimmer" />
-                <div className="h-3 w-36 mx-auto rounded mt-2 skeleton-shimmer" />
-              </>
-            ) : (
-              <>
-                <div className="text-3xl font-bold animate-fade-in-up">{item.value.toLocaleString()}</div>
-                <div className="text-xs uppercase tracking-wider text-text-dim mt-1">{item.label}</div>
-              </>
-            )}
-          </div>
-        ))}
+      <div className="max-w-6xl mx-auto rounded-xl border border-border bg-bg px-3 sm:px-6 py-5">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center items-center">
+          {items.map((item, idx) => (
+            <div key={item.label} className={`px-1 sm:px-4 ${idx !== 2 ? 'border-r border-border' : ''}`}>
+              {loading ? (
+                <>
+                  <div className="h-8 sm:h-9 w-14 sm:w-20 mx-auto rounded skeleton-shimmer" />
+                  <div className="h-2.5 sm:h-3 w-16 sm:w-28 mx-auto rounded mt-2 skeleton-shimmer" />
+                </>
+              ) : (
+                <>
+                  <div className="text-[28px] sm:text-3xl font-bold leading-none animate-fade-in-up">{item.value.toLocaleString()}</div>
+                  <div className="text-[10px] sm:text-xs uppercase tracking-wider text-text-dim mt-1">{item.label}</div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
