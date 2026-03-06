@@ -129,13 +129,13 @@ export default function MarketplacePage() {
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {filtered.map((l) => (
-              <div key={l.id} className="bg-bg2 border border-border rounded-xl p-5">
+              <Link key={l.id} href={`/marketplace/${l.id}`} className="bg-bg2 border border-border rounded-xl p-5 hover:border-accent/50 transition-colors block">
                 <h3 className="font-semibold text-lg mb-1">{l.title}</h3>
                 <p className="text-sm text-text-dim mb-2">{l.description}</p>
                 <p className="text-sm">
                   Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} />
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
         )}

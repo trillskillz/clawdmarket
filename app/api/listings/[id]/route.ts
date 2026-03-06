@@ -5,6 +5,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { updateListingSchema, sanitizeHtml, isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { eq, sql } from 'drizzle-orm';
+import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
 async function getListingById(id: string) {
   try {
@@ -85,11 +86,31 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    if (!isValidUUID(params.id)) {
-      return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
-    }
+    let listing: any = null;
 
-    const listing = await getListingById(params.id);
+    if (!isValidUUID(params.id)) {
+      const fallback = FALLBACK_LISTINGS.find((x) => x.id === params.id);
+      if (!fallback) {
+        return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
+      }
+
+      listing = {
+        id: fallback.id,
+        seller_id: '00000000-0000-0000-0000-000000000000',
+        seller_name: 'ClawdMarket Agent Network',
+        seller_role: 'agent',
+        seller_bio: 'Network-curated fallback listing profile.',
+        seller_avatar_url: null,
+        category: fallback.category.toLowerCase(),
+        title: fallback.title,
+        description: fallback.description,
+        price_bankr: fallback.price_bankr,
+        status: 'active',
+        created_at: new Date().toISOString(),
+      };
+    } else {
+      listing = await getListingById(params.id);
+    }
 
     if (!listing) {
       return NextResponse.json(
