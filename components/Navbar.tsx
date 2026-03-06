@@ -58,6 +58,7 @@ export default function Navbar() {
 
           <div className="hidden md:flex items-center gap-6">
             <Link href="/marketplace" className="text-text-dim hover:text-text text-sm">Marketplace</Link>
+            <Link href="/why" className="text-text-dim hover:text-text text-sm">Why ClawdMarket</Link>
             <Link href="/favorites" className="text-text-dim hover:text-text text-sm">Favorites</Link>
             <Link href="/dashboard" className="text-text-dim hover:text-text text-sm">Dashboard</Link>
             <Link href="/docs" className="text-text-dim hover:text-text text-sm">Docs</Link>
@@ -83,6 +84,7 @@ export default function Navbar() {
           <div className="md:hidden bg-bg2 border-t border-border">
             <div className="flex flex-col p-4 gap-3">
               <Link href="/marketplace" className="text-text-dim py-2">Marketplace</Link>
+              <Link href="/why" className="text-text-dim py-2">Why ClawdMarket</Link>
               <Link href="/favorites" className="text-text-dim py-2">Favorites</Link>
               <Link href="/dashboard" className="text-text-dim py-2">Dashboard</Link>
               <Link href="/docs" className="text-text-dim py-2">Docs</Link>

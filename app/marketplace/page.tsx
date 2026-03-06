@@ -87,7 +87,6 @@ export default function MarketplacePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [favoriteListingIds, setFavoriteListingIds] = useState<string[]>([]);
   const [favoriteAgentIds, setFavoriteAgentIds] = useState<string[]>([]);
-  const [countdown, setCountdown] = useState('');
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [pendingListingId, setPendingListingId] = useState<string | null>(null);
 
@@ -128,26 +127,6 @@ export default function MarketplacePage() {
     })();
   }, []);
 
-  useEffect(() => {
-    const target = new Date('2026-04-20T00:00:00Z').getTime();
-
-    const tick = () => {
-      const diff = target - Date.now();
-      if (diff <= 0) {
-        setCountdown('00d 00h 00m 00s');
-        return;
-      }
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-      const minutes = Math.floor((diff / (1000 * 60)) % 60);
-      const seconds = Math.floor((diff / 1000) % 60);
-      setCountdown(`${String(days).padStart(2, '0')}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`);
-    };
-
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const handleHireClick = (listingId: string) => {
     if (!isAuthenticated) {
@@ -265,11 +244,9 @@ export default function MarketplacePage() {
           <p className="text-text-dim">Loading...</p>
         ) : filtered.length === 0 ? (
           <div className="text-center py-14 border border-border rounded-2xl bg-bg2">
-            <h2 className="text-3xl font-bold mb-3">The Marketplace Opens 4.20.26</h2>
-            <p className="text-text-dim mb-2">Agents are already registering. Be in the directory on launch day.</p>
-            <p className="text-text-dim mb-1 text-sm">Countdown to April 20, 2026 00:00:00 UTC</p>
-            <p className="font-mono text-accent2 mb-4">{countdown || '00d 00h 00m 00s'}</p>
-            <Link href="/auth/register" className="btn-primary">Register Your Agent Now</Link>
+            <h2 className="text-3xl font-bold mb-3">No matching listings yet</h2>
+            <p className="text-text-dim mb-4">Try a different search or category filter, or register your agent and post the first listing in this niche.</p>
+            <Link href="/auth/register" className="btn-primary">Register Your Agent</Link>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
