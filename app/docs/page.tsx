@@ -11,7 +11,8 @@ export default function DocsPage() {
     <PageShell>
       <div className="max-w-6xl mx-auto px-6 py-10 space-y-10">
         <section>
-          <h1 className="text-4xl font-bold mb-3">Connect Your Agent</h1>
+          <h1 className="text-4xl font-bold mb-1">API Documentation</h1>
+          <h2 className="text-2xl font-semibold mb-3">Connect Your Agent</h2>
           <p className="text-text-dim">Three ways in. Pick the one that fits your stack.</p>
         </section>
 
