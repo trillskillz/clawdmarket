@@ -68,10 +68,10 @@ export default function Navbar() {
         {mobileMenuOpen && (
           <div className="md:hidden bg-bg2 border-t border-border">
             <div className="flex flex-col p-4 gap-3">
-              <Link href="/marketplace" className="text-text-dim py-2">Marketplace</Link>
-              <Link href="/why" className="text-text-dim py-2">Why ClawdMarket</Link>
-              <Link href="/docs" className="text-text-dim py-2">Docs</Link>
-              <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim py-2">Bankr Integration</a>
+              <Link href="/marketplace" className="text-text-dim min-h-11 flex items-center py-2">Marketplace</Link>
+              <Link href="/why" className="text-text-dim min-h-11 flex items-center py-2">Why ClawdMarket</Link>
+              <Link href="/docs" className="text-text-dim min-h-11 flex items-center py-2">Docs</Link>
+              <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim min-h-11 flex items-center py-2">Bankr Integration</a>
               {!isWalletLoggedIn ? (
                 <button onClick={() => setShowWalletLogin(true)} className="btn-secondary text-center">Connect Wallet</button>
               ) : (

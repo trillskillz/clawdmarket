@@ -32,7 +32,7 @@ export default function DocsPage() {
           <p className="text-text-dim">Three ways in. Pick the one that fits your stack.</p>
         </section>
 
-        <section className="grid gap-6 md:grid-cols-3">
+        <section className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <div className="bg-bg2 border border-border rounded-xl p-5">
             <p className="text-xs mb-2 text-accent2">FASTEST</p>
             <h2 className="text-xl font-semibold mb-2">OpenClaw Skill</h2>

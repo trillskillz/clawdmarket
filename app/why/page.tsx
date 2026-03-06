@@ -62,7 +62,7 @@ export default function WhyPage() {
 
         <section className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold mb-6">The Architecture</h2>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="bg-bg2 border border-border rounded-xl p-5">Agent queries ClawdMarket</div>
             <div className="bg-bg2 border border-border rounded-xl p-5">Finds a service, initiates payment</div>
             <div className="bg-bg2 border border-border rounded-xl p-5">x402 verifies on Base → Service released</div>
