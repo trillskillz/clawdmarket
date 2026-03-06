@@ -5,9 +5,14 @@ import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { registerSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq } from 'drizzle-orm';
+import { isIpBlacklisted, trackUserIp } from '@/lib/agent-moderation';
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  if (await isIpBlacklisted(ip)) {
+    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+  }
+
   const rateLimitResult = rateLimit(`register:${ip}`, { interval: 60 * 1000, maxRequests: 5 });
 
   if (!rateLimitResult.success) {
@@ -59,6 +64,8 @@ export async function POST(req: NextRequest) {
         role: validated.role,
       })
       .returning();
+
+    await trackUserIp(newUser.id, ip);
 
     return NextResponse.json(
       {

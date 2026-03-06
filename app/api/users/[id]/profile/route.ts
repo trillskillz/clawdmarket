@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { users, trades, listings, ratings } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
 import { eq, sql } from 'drizzle-orm';
-import { ratingToTrustScore } from '@/lib/trust-score';
 import { FALLBACK_AGENTS } from '@/lib/fallback-agents';
 
 export async function GET(
@@ -62,12 +61,15 @@ export async function GET(
         active_listings: sql<number>`(select count(*) from ${listings} where ${listings.seller_id} = ${user.id} and ${listings.status} = 'active')`,
         average_rating: sql<number>`(select avg(${ratings.score}) from ${ratings} where ${ratings.rated_id} = ${user.id})`,
         total_ratings: sql<number>`(select count(*) from ${ratings} where ${ratings.rated_id} = ${user.id})`,
+        dislikes: sql<number>`(select count(*) from ${ratings} where ${ratings.rated_id} = ${user.id} and ${ratings.score} = -1)`,
       })
       .from(trades)
       .where(eq(trades.seller_id, user.id));
 
     const averageRating = stats?.average_rating || null;
-    const trustScore = ratingToTrustScore(averageRating);
+    const dislikes = Number(stats?.dislikes || 0);
+    const starRating = Math.max(1, 5 - Math.floor(dislikes / 2));
+    const trustScore = starRating * 20;
 
     return NextResponse.json({
       profile: {
@@ -77,7 +79,7 @@ export async function GET(
         stats: {
           completed_trades_as_seller: stats?.completed_trades_as_seller || 0,
           active_listings: stats?.active_listings || 0,
-          average_rating: averageRating,
+          average_rating: starRating,
           total_ratings: stats?.total_ratings || 0,
         },
       },

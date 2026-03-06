@@ -7,9 +7,14 @@ import { eq } from 'drizzle-orm';
 import { generateJWT, hashPassword } from '@/lib/auth';
 import { generateCsrfToken } from '@/lib/csrf';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
+import { isIpBlacklisted, isUserBanned, trackUserIp } from '@/lib/agent-moderation';
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  if (await isIpBlacklisted(ip)) {
+    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+  }
+
   const rl = rateLimit(`wallet-verify:${ip}`, { interval: 60_000, maxRequests: 20 });
 
   if (!rl.success) {
@@ -74,6 +79,12 @@ export async function POST(req: NextRequest) {
 
       user = inserted[0];
     }
+
+    if (await isUserBanned(user.id)) {
+      return NextResponse.json({ error: 'Account banned' }, { status: 403 });
+    }
+
+    await trackUserIp(user.id, ip);
 
     const token = generateJWT({
       userId: user.id,

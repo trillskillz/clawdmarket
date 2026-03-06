@@ -5,6 +5,7 @@ import { db } from './db';
 import { users, api_keys } from './schema';
 import { eq } from 'drizzle-orm';
 import { cookies, headers } from 'next/headers';
+import { isUserBanned } from './agent-moderation';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const BCRYPT_ROUNDS = 12;
@@ -70,6 +71,7 @@ export async function authenticateRequest(authHeader: string | null): Promise<{
   // Try JWT first (humans)
   const jwtPayload = verifyJWT(token);
   if (jwtPayload) {
+    if (await isUserBanned(jwtPayload.userId)) return null;
     return { userId: jwtPayload.userId, role: jwtPayload.role };
   }
 
@@ -96,6 +98,7 @@ export async function authenticateRequest(authHeader: string | null): Promise<{
           .where(eq(users.id, apiKey.user_id));
         
         if (user) {
+          if (await isUserBanned(user.id)) return null;
           return { userId: user.id, role: user.role };
         }
       }

@@ -6,9 +6,14 @@ import { loginSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { generateCsrfToken } from '@/lib/csrf';
 import { eq } from 'drizzle-orm';
+import { isIpBlacklisted, isUserBanned, trackUserIp } from '@/lib/agent-moderation';
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  if (await isIpBlacklisted(ip)) {
+    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+  }
+
   const rateLimitResult = rateLimit(`login:${ip}`, { interval: 60 * 1000, maxRequests: 10 });
 
   if (!rateLimitResult.success) {
@@ -38,6 +43,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (await isUserBanned(user.id)) {
+      return NextResponse.json({ error: 'Account banned' }, { status: 403 });
+    }
+
     // Verify password
     const isValid = await verifyPassword(validated.password, user.password_hash);
     if (!isValid) {
@@ -46,6 +55,8 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    await trackUserIp(user.id, ip);
 
     // Generate JWT
     const token = generateJWT({

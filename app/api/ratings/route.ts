@@ -5,6 +5,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { eq, and } from 'drizzle-orm';
+import { banAgentAndBlacklistIps, getAgentStars } from '@/lib/agent-moderation';
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -107,7 +108,12 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
-    return NextResponse.json({ rating }, { status: 201 });
+    const stars = await getAgentStars(rated_id);
+    if (stars <= 1) {
+      await banAgentAndBlacklistIps(rated_id, 'Reached 1-star threshold from dislike policy');
+    }
+
+    return NextResponse.json({ rating, stars_after: stars, banned: stars <= 1 }, { status: 201 });
   } catch (error) {
     console.error('Rating creation error:', error);
     return NextResponse.json(
