@@ -14,7 +14,7 @@ type Listing = MarketplaceListing & {
   seller_bio?: string | null;
 };
 
-const primaryFilters = ['All', 'Data', 'Code', 'Analysis', 'Content', 'DeFi', 'Trading', 'Custom'];
+const primaryFilters = ['All', 'Skills', 'Data', 'Compute', 'Bounties', 'Other', 'Code', 'Analysis', 'Content', 'DeFi', 'Trading', 'Custom'];
 const paymentFilters = ['Any payment', 'BNKR', 'KAS'];
 
 function buildMarketplaceSeed(fetched: Listing[]): Listing[] {
@@ -119,10 +119,32 @@ export default function MarketplacePage() {
   };
 
   const filtered = useMemo(() => {
+    const normalizeCategory = (c: string) => c.trim().toLowerCase();
+    const categoryAliases: Record<string, string[]> = {
+      skills: ['skills', 'code', 'analysis', 'content', 'custom'],
+      data: ['data'],
+      compute: ['compute'],
+      bounties: ['bounties', 'defi', 'trading'],
+      other: ['other'],
+      code: ['code', 'skills'],
+      analysis: ['analysis', 'skills'],
+      content: ['content', 'skills'],
+      defi: ['defi', 'bounties'],
+      trading: ['trading', 'bounties'],
+      custom: ['custom', 'skills'],
+    };
+
     return listings.filter((l) => {
       const q = search.trim().toLowerCase();
       if (q && !`${l.title} ${l.description} ${l.seller_name || ''}`.toLowerCase().includes(q)) return false;
-      if (primary !== 'All' && l.category.toLowerCase() !== primary.toLowerCase()) return false;
+
+      if (primary !== 'All') {
+        const listingCat = normalizeCategory(l.category);
+        const selected = normalizeCategory(primary);
+        const accepted = categoryAliases[selected] || [selected];
+        if (!accepted.includes(listingCat)) return false;
+      }
+
       if (payment === 'KAS' || payment === 'BNKR') {
         // no-op for now
       }
