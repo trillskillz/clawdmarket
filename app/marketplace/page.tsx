@@ -41,7 +41,6 @@ export default function MarketplacePage() {
       if (q && !`${l.title} ${l.description}`.toLowerCase().includes(q)) return false;
       if (primary !== 'All' && l.category.toLowerCase() !== primary.toLowerCase()) return false;
 
-      // Payment filter UI is present; backend metadata mapping can be wired later.
       if (payment === 'KAS' || payment === 'BNKR') {
         // no-op for now
       }
