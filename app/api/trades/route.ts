@@ -127,6 +127,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (String(listing.id).startsWith('fb-')) {
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        seller_id: listing.seller_id,
+        amount: validated.amount,
+        token: 'bnkr',
+        route: 'POST /api/trades',
+        listing_id: validated.listing_id,
+        error_code: 'SEEDED_LISTING_NOT_PURCHASABLE',
+        message: 'Seeded fallback listings are preview-only',
+        state: 'no_funds_moved',
+      });
+      return NextResponse.json(
+        { ...paymentError('SEEDED_LISTING_NOT_PURCHASABLE', 'This seeded listing is preview-only and cannot be purchased yet.'), ...envMeta('clawdmarket/api/trades') },
+        { status: 400 }
+      );
+    }
+
     if (listing.status !== 'active') {
       await logPaymentFailure({
         buyer_id: auth.userId,
