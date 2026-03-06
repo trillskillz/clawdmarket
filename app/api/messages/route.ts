@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
         name: true,
         avatar_url: true,
         avatar_emoji: true,
+        bio: true,
         role: true,
       },
     });

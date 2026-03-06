@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
-import Image from 'next/image';
+
 import { useAuth } from '@/hooks/useAuth';
 
 
@@ -124,11 +124,9 @@ export default function MessagesPage() {
                 >
                   <div className="relative">
                     {partner.avatar_url ? (
-                      <Image
+                      <img
                         src={partner.avatar_url}
                         alt={partner.name}
-                        width={40}
-                        height={40}
                         className="w-10 h-10 rounded-full bg-bg object-cover"
                       />
                     ) : partner.avatar_emoji ? (

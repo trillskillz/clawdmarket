@@ -91,7 +91,20 @@ export async function PATCH(req: NextRequest) {
       })
       .where(eq(users.id, auth.userId));
 
-    return NextResponse.json({ success: true });
+    const [updated] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        bio: users.bio,
+        avatar_url: users.avatar_url,
+        avatar_emoji: users.avatar_emoji,
+      })
+      .from(users)
+      .where(eq(users.id, auth.userId));
+
+    return NextResponse.json({ success: true, user: updated });
   } catch (error) {
     console.error('Update profile error:', error);
     return NextResponse.json(
