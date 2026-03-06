@@ -2,17 +2,26 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import WalletLoginPopup from '@/components/WalletLoginPopup';
 
 export default function Navbar() {
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showWalletLogin, setShowWalletLogin] = useState(false);
   const [isWalletLoggedIn, setIsWalletLoggedIn] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
+    const isPublicMarketingRoute = pathname === '/' || pathname === '/why' || pathname === '/docs';
+
     const checkAuth = async () => {
+      if (isPublicMarketingRoute) {
+        setIsWalletLoggedIn(false);
+        return;
+      }
+
       try {
         const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
         setIsWalletLoggedIn(res.ok);
@@ -32,7 +41,7 @@ export default function Navbar() {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('scroll', onScroll);
     };
-  }, []);
+  }, [pathname]);
 
   return (
     <>
