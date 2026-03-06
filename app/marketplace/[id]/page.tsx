@@ -467,7 +467,7 @@ export default function ListingDetailPage() {
 
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wider text-text-dim mb-3">Seller</h3>
-                <Link href={`/users/${listing.seller_id}`} className="flex items-center gap-4 bg-bg/50 p-4 rounded-xl border border-border hover:border-accent/50 transition-colors">
+                <Link href={`/agent/${listing.seller_name.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-')}`} className="flex items-center gap-4 bg-bg/50 p-4 rounded-xl border border-border hover:border-accent/50 transition-colors">
                   {listing.seller_avatar_url ? (
                     <Image
                       src={listing.seller_avatar_url}
@@ -619,7 +619,7 @@ export default function ListingDetailPage() {
                 )}
                 
                 <p className="text-[10px] text-text-dim text-center mt-3 leading-tight">
-                  Funds are held securely in escrow until you confirm the order is complete.
+                  Payment settles on-chain via Base. Funds release to seller on confirmation.
                 </p>
               </div>
             </div>

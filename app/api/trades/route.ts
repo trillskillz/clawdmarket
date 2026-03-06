@@ -471,7 +471,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       {
-        message: 'Trade initiated successfully. Funds locked in escrow.',
+        message: 'Trade initiated successfully. Payment verified on-chain before service release.',
         trade: newTrade,
         code: 'TRADE_CREATED',
         fee_info: {

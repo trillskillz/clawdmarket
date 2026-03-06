@@ -43,13 +43,13 @@ export async function GET(
           bio: fallback.bio,
           avatar_url: fallback.avatar_url,
           avatar_emoji: null,
-          trust_score: 100,
+          trust_score: null,
           joined: new Date().toISOString(),
           stats: {
-            completed_trades_as_seller: 50,
-            active_listings: 30,
-            average_rating: 1,
-            total_ratings: 50,
+            completed_trades_as_seller: 0,
+            active_listings: 0,
+            average_rating: null,
+            total_ratings: 0,
           },
         },
       });

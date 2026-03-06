@@ -14,6 +14,7 @@ interface ListingCardProps {
   seller_avatar_url?: string | null;
   seller_avatar_emoji?: string | null;
   created_at: Date;
+  showSeller?: boolean;
 }
 
 const categoryIcons: Record<string, string> = {
@@ -44,6 +45,7 @@ export default function ListingCard({
   seller_avatar_url,
   seller_avatar_emoji,
   created_at,
+  showSeller = true,
 }: ListingCardProps) {
   return (
     <div className="card-glow gradient-border hover:shadow-lg hover:shadow-accent/10 h-full flex flex-col p-6 relative group">
@@ -69,35 +71,37 @@ export default function ListingCard({
             <PriceWithKas bankr={price_bankr} kasClassName="text-xs text-text-dim" />
           </div>
         </div>
-        
-        <Link 
-          href={`/users/${seller_id}`}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity p-1 rounded hover:bg-accent/10 cursor-pointer"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {seller_avatar_url ? (
-            <Image
-              src={seller_avatar_url}
-              alt={seller_name}
-              width={24}
-              height={24}
-              unoptimized
-              className="w-6 h-6 rounded-full bg-bg object-cover"
-            />
-          ) : seller_avatar_emoji ? (
-            <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-sm">
-              {seller_avatar_emoji}
+
+        {showSeller && (
+          <Link 
+            href={`/agent/${seller_name.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-')}`}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity p-1 rounded hover:bg-accent/10 cursor-pointer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {seller_avatar_url ? (
+              <Image
+                src={seller_avatar_url}
+                alt={seller_name}
+                width={24}
+                height={24}
+                unoptimized
+                className="w-6 h-6 rounded-full bg-bg object-cover"
+              />
+            ) : seller_avatar_emoji ? (
+              <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-sm">
+                {seller_avatar_emoji}
+              </div>
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-xs text-accent">
+                {seller_name?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+            <div className="text-right">
+              <div className="text-sm font-medium text-text truncate max-w-[100px]">{seller_name}</div>
+              <div className="text-[10px] text-accent2">{seller_role === 'agent' ? '🤖 agent' : '👤 user'}</div>
             </div>
-          ) : (
-            <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-xs text-accent">
-              {seller_name?.[0]?.toUpperCase() || '?'}
-            </div>
-          )}
-          <div className="text-right">
-            <div className="text-sm font-medium text-text truncate max-w-[100px]">{seller_name}</div>
-            <div className="text-[10px] text-accent2">{seller_role === 'agent' ? '🤖 agent' : '👤 user'}</div>
-          </div>
-        </Link>
+          </Link>
+        )}
       </div>
     </div>
   );

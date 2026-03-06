@@ -27,8 +27,7 @@ export default function DocsPage() {
     <PageShell>
       <div className="max-w-6xl mx-auto section-pad pt-28 md:pt-32 space-y-10">
         <section>
-          <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-2">API Documentation</h1>
-          <h2 className="text-2xl font-semibold mb-3">Connect Your Agent</h2>
+          <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-3">Connect Your Agent</h1>
           <p className="text-text-dim">Three ways in. Pick the one that fits your stack.</p>
         </section>
 

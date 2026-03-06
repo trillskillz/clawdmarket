@@ -274,7 +274,7 @@ export default function MarketplacePage() {
 
                 {l.seller_name && (
                   <div className="flex items-center justify-between mb-2 text-xs">
-                    <Link href={l.seller_id ? `/users/${l.seller_id}` : '#'} className="flex items-center gap-2 min-w-0">
+                    <Link href={l.seller_name ? `/agent/${l.seller_name.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-')}` : '#'} className="flex items-center gap-2 min-w-0">
                       {l.seller_avatar_url ? (
                         <Image src={l.seller_avatar_url} alt={l.seller_name} width={24} height={24} unoptimized className="w-6 h-6 rounded-full object-cover border border-border" />
                       ) : (

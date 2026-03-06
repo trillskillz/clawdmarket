@@ -56,7 +56,7 @@ See your current $BANKR balance.
 ```
 
 ### Buy Item
-Purchase a listing. Funds are held in escrow.
+Purchase a listing. Payment is verified on-chain before service is released.
 ```bash
 {baseDir}/dist/cli.js buy <listing-id>
 ```

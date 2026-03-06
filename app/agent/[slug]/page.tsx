@@ -4,6 +4,8 @@ import AgentServicesList from '@/components/AgentServicesList';
 import { db } from '@/lib/db';
 import { users, listings, trades } from '@/lib/schema';
 import { and, desc, eq } from 'drizzle-orm';
+import { FALLBACK_AGENTS, fallbackAgentForListingId } from '@/lib/fallback-agents';
+import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
@@ -21,17 +23,41 @@ function shortWallet(wallet?: string | null) {
   return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
 }
 
-async function resolveAgent(slug: string) {
+type ResolvedAgent = {
+  id: string;
+  name: string;
+  email: string;
+  bio: string | null;
+  avatar_url?: string | null;
+  created_at: Date;
+  isFallback?: boolean;
+};
+
+async function resolveAgent(slug: string): Promise<ResolvedAgent | null> {
   const isWallet = /^0x[a-fA-F0-9]{40}$/.test(slug);
 
   if (isWallet) {
     const candidateEmail = `wallet_${slug.toLowerCase()}@wallet.local`;
     const [user] = await db.select().from(users).where(eq(users.email, candidateEmail)).limit(1);
-    if (user && user.role === 'agent') return user;
+    if (user && user.role === 'agent') return user as ResolvedAgent;
   }
 
   const allAgents = await db.select().from(users).where(eq(users.role, 'agent'));
-  return allAgents.find((a) => toHandle(a.name) === slug || a.id === slug) || null;
+  const dbAgent = allAgents.find((a) => toHandle(a.name) === slug || a.id === slug);
+  if (dbAgent) return dbAgent as ResolvedAgent;
+
+  const fallback = FALLBACK_AGENTS.find((a) => toHandle(a.name) === slug || a.id === slug);
+  if (!fallback) return null;
+
+  return {
+    id: fallback.id,
+    name: fallback.name,
+    email: `wallet_${toHandle(fallback.name)}@wallet.local`,
+    bio: fallback.bio,
+    avatar_url: fallback.avatar_url,
+    created_at: new Date(),
+    isFallback: true,
+  };
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
@@ -43,12 +69,14 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   }
 
   const wallet = walletFromEmail(agent.email);
-  const agentListings = await db
-    .select()
-    .from(listings)
-    .where(and(eq(listings.seller_id, agent.id), eq(listings.status, 'active')));
-
-  const services = agentListings.length;
+  const services = agent.isFallback
+    ? FALLBACK_LISTINGS.filter((l) => fallbackAgentForListingId(l.id).id === agent.id).length
+    : (
+        await db
+          .select()
+          .from(listings)
+          .where(and(eq(listings.seller_id, agent.id), eq(listings.status, 'active')))
+      ).length;
   const name = agent.name;
   const profileSlug = wallet || toHandle(name);
 
@@ -80,22 +108,32 @@ export default async function AgentProfilePage({ params }: { params: { slug: str
 
   const wallet = walletFromEmail(agent.email);
 
-  const agentListings = await db
-    .select({
-      id: listings.id,
-      title: listings.title,
-      description: listings.description,
-      category: listings.category,
-      price_bankr: listings.price_bankr,
-    })
-    .from(listings)
-    .where(and(eq(listings.seller_id, agent.id), eq(listings.status, 'active')))
-    .orderBy(desc(listings.created_at));
+  const agentListings = agent.isFallback
+    ? FALLBACK_LISTINGS.filter((l) => fallbackAgentForListingId(l.id).id === agent.id).map((l) => ({
+        id: l.id,
+        title: l.title,
+        description: l.description,
+        category: l.category,
+        price_bankr: l.price_bankr,
+      }))
+    : await db
+        .select({
+          id: listings.id,
+          title: listings.title,
+          description: listings.description,
+          category: listings.category,
+          price_bankr: listings.price_bankr,
+        })
+        .from(listings)
+        .where(and(eq(listings.seller_id, agent.id), eq(listings.status, 'active')))
+        .orderBy(desc(listings.created_at));
 
-  const completedTrades = await db
-    .select({ id: trades.id })
-    .from(trades)
-    .where(and(eq(trades.seller_id, agent.id), eq(trades.status, 'completed')));
+  const completedTrades = agent.isFallback
+    ? []
+    : await db
+        .select({ id: trades.id })
+        .from(trades)
+        .where(and(eq(trades.seller_id, agent.id), eq(trades.status, 'completed')));
 
   return (
     <>

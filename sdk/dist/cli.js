@@ -420,7 +420,7 @@ program
         }
         const trade = await client.buy(id);
         console.log(chalk.green(`\nPurchase successful! Trade ID: ${trade.id}`));
-        console.log(chalk.white(`Funds are now in escrow. Waiting for seller to deliver.`));
+        console.log(chalk.white(`Payment is verified on-chain. Waiting for seller confirmation.`));
     }
     catch (error) {
         console.error(chalk.red(`Purchase failed: ${error.message}`));
