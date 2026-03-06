@@ -24,7 +24,13 @@ export default function WalletLoginPopup({
 
   const [status, setStatus] = useState<'idle' | 'signing' | 'authenticating' | 'done' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [showWalletMenu, setShowWalletMenu] = useState(false);
   const [shouldShow, setShouldShow] = useState(forceShow);
+
+  const browserWalletConnectors = connectors.filter((c) => {
+    const name = c.name.toLowerCase();
+    return name.includes('metamask') || name.includes('rabby') || name.includes('injected');
+  });
 
   // Check if user is already logged in
   useEffect(() => {
@@ -150,34 +156,20 @@ export default function WalletLoginPopup({
 
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
           <p className="text-xs text-text-dim">Use your Base wallet to pay in BANKR.</p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 relative">
             {isConnected ? (
               <button onClick={() => disconnect()} className="btn-secondary text-sm py-2 px-3">Disconnect</button>
             ) : (
               <>
                 <button
-                  onClick={async () => {
-                    try {
-                      setError(null);
-                      const hasInjected = typeof window !== 'undefined' && !!(window as any).ethereum;
-                      if (!hasInjected) {
-                        setError('No browser wallet detected. Install MetaMask/Rabby or use WalletConnect.');
-                        return;
-                      }
-
-                      const connector =
-                        connectors.find((c) => c.id === 'injected') ||
-                        connectors.find((c) => c.name.toLowerCase().includes('injected')) ||
-                        connectors[0];
-
-                      if (!connector) {
-                        setError('No wallet connector available');
-                        return;
-                      }
-                      await connectAsync({ connector });
-                    } catch (e: any) {
-                      setError(e?.message || 'Wallet connection failed');
+                  onClick={() => {
+                    setError(null);
+                    const hasInjected = typeof window !== 'undefined' && !!(window as any).ethereum;
+                    if (!hasInjected) {
+                      setError('No browser wallet detected. Install MetaMask/Rabby or use WalletConnect.');
+                      return;
                     }
+                    setShowWalletMenu((v) => !v);
                   }}
                   disabled={isConnecting}
                   className="btn-primary text-sm py-2 px-3"
@@ -222,6 +214,33 @@ export default function WalletLoginPopup({
                 >
                   WalletConnect
                 </button>
+
+                {showWalletMenu && (
+                  <div className="absolute mt-14 right-6 bg-bg border border-border rounded-lg shadow-xl p-2 z-10 min-w-[210px]">
+                    <div className="text-[11px] text-text-dim px-2 py-1">Detected browser wallets</div>
+                    {browserWalletConnectors.length === 0 ? (
+                      <div className="px-2 py-1 text-xs text-text-dim">No injected wallets detected</div>
+                    ) : (
+                      browserWalletConnectors.map((connector) => (
+                        <button
+                          key={connector.uid}
+                          className="w-full text-left px-2 py-2 text-sm rounded hover:bg-bg2"
+                          onClick={async () => {
+                            try {
+                              setError(null);
+                              await connectAsync({ connector });
+                              setShowWalletMenu(false);
+                            } catch (e: any) {
+                              setError(e?.message || `Failed to connect ${connector.name}`);
+                            }
+                          }}
+                        >
+                          {connector.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
