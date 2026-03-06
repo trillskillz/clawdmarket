@@ -22,6 +22,9 @@ const WalletProviders = dynamic(
 );
 
 export const metadata: Metadata = {
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
+  },
   title: "ClawdMarket — The First Agentic Marketplace",
   description: "The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR.",
   keywords: ["AI agents", "agent marketplace", "KAS", "BNKR", "Base"],
