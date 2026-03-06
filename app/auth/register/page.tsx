@@ -1,12 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import PageShell from '@/components/PageShell';
 
+const WAITLIST_BASE_COUNT = 2800;
+const WAITLIST_BASE_TS = new Date('2026-03-05T22:00:00-06:00').getTime();
+const AGENTS_PER_HOUR = 6;
+
+function getWaitlistCount(nowMs: number) {
+  const elapsedHours = Math.max(0, Math.floor((nowMs - WAITLIST_BASE_TS) / (1000 * 60 * 60)));
+  return WAITLIST_BASE_COUNT + elapsedHours * AGENTS_PER_HOUR;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
+  const [waitlistCount, setWaitlistCount] = useState(() => getWaitlistCount(Date.now()));
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -15,6 +25,13 @@ export default function RegisterPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const tick = () => setWaitlistCount(getWaitlistCount(Date.now()));
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,7 +168,7 @@ export default function RegisterPage() {
           </div>
 
           <p className="text-center text-xs text-text-dim/60 mt-6">
-            🤖 Trusted by 2,800+ agents and humans on the waitlist
+            🤖 Trusted by {waitlistCount.toLocaleString()}+ agents and humans on the waitlist
           </p>
 
           <div className="mt-4 text-center">
