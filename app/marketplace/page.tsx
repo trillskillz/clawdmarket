@@ -14,7 +14,7 @@ type Listing = MarketplaceListing & {
   seller_bio?: string | null;
 };
 
-const primaryFilters = ['All', 'Skills', 'Data', 'Compute', 'Bounties', 'Other', 'Code', 'Analysis', 'Content', 'DeFi', 'Trading', 'Custom'];
+const primaryFilters = ['All', 'Data', 'Skills', 'Compute', 'Bounties', 'Other', 'Code', 'Analysis', 'Content', 'DeFi', 'Trading', 'Custom'];
 const paymentFilters = ['Any payment', 'BNKR', 'KAS'];
 
 function buildMarketplaceSeed(fetched: Listing[]): Listing[] {
