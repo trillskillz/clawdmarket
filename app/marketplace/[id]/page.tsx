@@ -13,6 +13,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { trustScoreClass } from '@/lib/trust-score';
 import PriceWithKas from '@/components/PriceWithKas';
+import { useKasRate } from '@/components/providers/KasRateProvider';
 
 interface Listing {
   id: string;
@@ -38,6 +39,17 @@ interface SellerTrustProfile {
   };
 }
 
+interface KasPaymentState {
+  payment_id: string;
+  kas_deposit_address: string;
+  amount_kas: string;
+  expires_at: string;
+  status: 'awaiting_kas' | 'confirming' | 'converting' | 'settled' | 'expired' | 'manual_review';
+  kas_received?: string;
+  conversion_status?: string;
+  settled_at?: string | null;
+}
+
 const WalletLoginPopup = dynamic(() => import('@/components/WalletLoginPopup'), { ssr: false });
 
 export default function ListingDetailPage() {
@@ -54,10 +66,13 @@ export default function ListingDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [showWalletLogin, setShowWalletLogin] = useState(false);
+  const [kasLoading, setKasLoading] = useState(false);
+  const [kasPayment, setKasPayment] = useState<KasPaymentState | null>(null);
   const { track } = useAnalytics();
   const { address: connectedAddress, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const basePublicClient = usePublicClient({ chainId: base.id });
+  const { bankrToKas } = useKasRate();
 
   const getCsrfToken = () =>
     document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
@@ -120,6 +135,29 @@ export default function ListingDetailPage() {
       fetchListing(params.id as string);
     }
   }, [fetchListing, params.id]);
+
+  useEffect(() => {
+    if (!kasPayment?.payment_id) return;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/payments/kas/${kasPayment.payment_id}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        setKasPayment((prev) => prev ? {
+          ...prev,
+          status: data.status || prev.status,
+          kas_received: data.kas_received,
+          conversion_status: data.conversion_status,
+          settled_at: data.settled_at,
+        } : prev);
+      } catch {}
+    };
+
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, [kasPayment?.payment_id]);
 
   const toggleFavorite = async () => {
     if (!listing) return;
@@ -262,6 +300,52 @@ export default function ListingDetailPage() {
       toast(err?.shortMessage || err?.message || 'On-chain transaction failed', 'error');
     } finally {
       setTradeLoading(false);
+    }
+  };
+
+  const handleBuyWithKas = async () => {
+    if (!listing) return;
+
+    if (!isConnected || !connectedAddress) {
+      setShowWalletLogin(true);
+      toast('Connect your wallet first to start KAS checkout.', 'error');
+      return;
+    }
+
+    setKasLoading(true);
+    try {
+      const totalBankr = listing.price_bankr * 1.03;
+      const amountKas = (totalBankr * bankrToKas).toFixed(6);
+
+      const res = await fetch('/api/payments/kas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service_id: listing.id,
+          buyer_agent_address: connectedAddress,
+          amount_kas: amountKas,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast(data?.message || data?.error || 'Failed to start KAS payment', 'error');
+        return;
+      }
+
+      setKasPayment({
+        payment_id: data.payment_id,
+        kas_deposit_address: data.kas_deposit_address,
+        amount_kas: String(data.amount_kas),
+        expires_at: data.expires_at,
+        status: data.status,
+      });
+
+      toast('KAS payment created. Send KAS to the shown deposit address.', 'success');
+    } catch (e: any) {
+      toast(e?.message || 'Failed to start KAS payment', 'error');
+    } finally {
+      setKasLoading(false);
     }
   };
 
@@ -451,25 +535,48 @@ export default function ListingDetailPage() {
                       You own this listing
                     </button>
                   ) : (
-                    <button
-                      onClick={handleTrade}
-                      disabled={tradeLoading}
-                      className="btn-primary w-full py-3 text-base shadow-lg shadow-accent/20 hover:shadow-accent/40 transition-all"
-                    >
-                      {tradeLoading ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                          Processing...
-                        </span>
-                      ) : (
-                        'Buy Now 🚀'
-                      )}
-                    </button>
+                    <>
+                      <button
+                        onClick={handleTrade}
+                        disabled={tradeLoading}
+                        className="btn-primary w-full py-3 text-base shadow-lg shadow-accent/20 hover:shadow-accent/40 transition-all"
+                      >
+                        {tradeLoading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                            Processing...
+                          </span>
+                        ) : (
+                          'Buy with BANKR 🚀'
+                        )}
+                      </button>
+
+                      <button
+                        onClick={handleBuyWithKas}
+                        disabled={kasLoading}
+                        className="btn-secondary w-full py-3 mt-2"
+                      >
+                        {kasLoading ? 'Preparing KAS checkout…' : 'Buy with KAS'}
+                      </button>
+                    </>
                   )
                 ) : (
                   <button disabled className="btn-secondary w-full py-3 opacity-50 cursor-not-allowed">
                     {listing.status === 'sold' ? 'Sold Out' : 'Unavailable'}
                   </button>
+                )}
+
+                {kasPayment && (
+                  <div className="mt-3 p-3 rounded-lg border border-border bg-bg/40 text-xs space-y-1">
+                    <div className="font-semibold text-text">KAS Checkout</div>
+                    <div>Status: <span className="text-accent2">{kasPayment.status}</span></div>
+                    <div>Amount: {kasPayment.amount_kas} KAS</div>
+                    <div className="break-all">Deposit: {kasPayment.kas_deposit_address}</div>
+                    <div className="text-text-dim">Expires: {new Date(kasPayment.expires_at).toLocaleString()}</div>
+                    {kasPayment.kas_received && <div>Received: {kasPayment.kas_received} KAS</div>}
+                    {kasPayment.conversion_status && <div>Conversion: {kasPayment.conversion_status}</div>}
+                    {kasPayment.settled_at && <div className="text-green-400">Settled at {new Date(kasPayment.settled_at).toLocaleString()}</div>}
+                  </div>
                 )}
                 
                 <p className="text-[10px] text-text-dim text-center mt-3 leading-tight">
