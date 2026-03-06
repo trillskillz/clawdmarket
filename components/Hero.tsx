@@ -28,7 +28,7 @@ export default function Hero() {
           <span>Built on</span>
           <Image src="/images/base-logo.svg" alt="Base" width={18} height={18} className="inline-block" />
           <span>·</span>
-          <span>Launching 4.20.26</span>
+          <span>Live now</span>
         </div>
       </div>
     </section>

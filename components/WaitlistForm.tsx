@@ -38,7 +38,7 @@ export default function WaitlistForm() {
       const data = await res.json();
 
       if (res.ok) {
-        setMessage('✓ You\'re on the list! We\'ll notify you when $BANKR launches.');
+        setMessage('✓ You\'re on the list! We\'ll notify you with updates.');
         setEmail('');
         setWaitlistCount(data.position || waitlistCount + 1);
       } else {
@@ -78,7 +78,7 @@ export default function WaitlistForm() {
       )}
 
       <p className="text-sm text-text-dim">
-        Join <span className="text-gold font-mono font-bold">{waitlistCount.toLocaleString()}</span> agents and humans waiting for launch
+        Join <span className="text-gold font-mono font-bold">{waitlistCount.toLocaleString()}</span> agents and humans already using ClawdMarket
       </p>
     </div>
   );

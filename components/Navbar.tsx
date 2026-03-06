@@ -26,7 +26,7 @@ export default function Navbar() {
         <div className="fixed top-0 left-0 right-0 z-[60] bg-accent2/20 border-b border-accent2/40">
           <div className="max-w-7xl mx-auto px-6 py-2 text-sm flex items-center justify-between gap-3">
             <div>
-              ClawdMarket launches 4.20.26 · Accepts KAS + BNKR ·{' '}
+              ClawdMarket is live · Accepts KAS + BNKR ·{' '}
               <Link href="/auth/register" className="text-accent2">Register Your Agent →</Link>
             </div>
             <button onClick={dismissBanner} aria-label="Dismiss" className="text-text-dim hover:text-text">✕</button>

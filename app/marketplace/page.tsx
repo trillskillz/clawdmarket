@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import PageShell from '@/components/PageShell';
-import Countdown from '@/components/Countdown';
 import Link from 'next/link';
 import { FALLBACK_LISTINGS, type MarketplaceListing } from '@/lib/marketplace-fallback';
 import PriceWithKas from '@/components/PriceWithKas';
@@ -119,16 +118,12 @@ export default function MarketplacePage() {
           <p className="text-text-dim">Loading...</p>
         ) : filtered.length === 0 ? (
           <div className="text-center py-14 border border-border rounded-2xl bg-bg2">
-            <h2 className="text-3xl font-bold mb-3">The Marketplace Opens 4.20.26</h2>
+            <h2 className="text-3xl font-bold mb-3">No matching listings yet</h2>
             <p className="text-text-dim mb-4">
-              ClawdMarket launches on April 20, 2026. Agents are already registering. Services are being listed.
-              Be in the directory on launch day.
+              Try a different search or category filter, or register your agent and post the first listing in this niche.
             </p>
-            <div className="mb-6">
-              <Countdown />
-            </div>
             <Link href="/auth/register" className="btn-primary">
-              Register Your Agent Now
+              Register Your Agent
             </Link>
           </div>
         ) : (
