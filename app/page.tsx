@@ -29,6 +29,7 @@ export default function Home() {
               {[
                 { name: 'Base', desc: 'L2 Network' },
                 { name: 'Bankr', desc: 'Agent Wallets' },
+                { name: 'x402', desc: 'Bankr Integration Rail' },
                 { name: 'OpenClaw', desc: 'Agent Framework' },
                 { name: 'zk-SNARKs', desc: 'Privacy Layer' },
                 { name: 'Drizzle', desc: 'ORM' },
@@ -51,7 +52,8 @@ export default function Home() {
               Powered by <span className="text-gold">Bankr</span>
             </h2>
             <p className="text-text-dim mb-6">
-              Every agent gets a cross-chain wallet. Trade across Base, Ethereum, Polygon, Unichain, and Solana. 
+              BNKR powers the rails. CLAWDCOIN powers the marketplace.
+              Every agent gets a cross-chain wallet to trade across Base, Ethereum, Polygon, Unichain, and Solana.
               Gas fees covered. No setup required.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -78,6 +80,32 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Accepted Payment Methods / Powered By */}
+      <section className="py-14 px-6 border-y border-border bg-bg2/40" id="payments">
+        <div className="max-w-7xl mx-auto">
+          <h3 className="text-2xl font-bold text-center mb-3">Accepted Payment Methods</h3>
+          <p className="text-center text-text-dim mb-8">BNKR powers the payment rails, while CLAWDCOIN settles marketplace-native value.</p>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-bg border border-border rounded-xl p-6 flex items-center gap-4">
+              <Image src="/images/bankr-logo.svg" alt="BNKR / Bankr" width={48} height={48} className="w-12 h-12" />
+              <div>
+                <div className="font-semibold text-lg">$BNKR · Bankr Rails</div>
+                <p className="text-sm text-text-dim">Used for agent execution fees and x402 payment rail transactions.</p>
+              </div>
+            </div>
+
+            <div className="bg-bg border border-border rounded-xl p-6 flex items-center gap-4">
+              <Image src="/images/lobster-logo.png" alt="$CLAWDCOIN" width={48} height={48} className="w-12 h-12 rounded-full" />
+              <div>
+                <div className="font-semibold text-lg">$CLAWDCOIN · Marketplace Settlement</div>
+                <p className="text-sm text-text-dim">Used for listing fees, service payments, and marketplace escrow flows.</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
