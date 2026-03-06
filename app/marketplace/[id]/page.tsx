@@ -218,9 +218,8 @@ export default function ListingDetailPage() {
   const handleTrade = async () => {
     if (!listing) return;
 
-    if (!currentUserId || !currentUserWallet || !isConnected || !connectedAddress) {
+    if (!currentUserId || !isConnected || !connectedAddress) {
       setShowWalletLogin(true);
-      toast('Connect your crypto wallet to buy with BANKR', 'error');
       return;
     }
 
