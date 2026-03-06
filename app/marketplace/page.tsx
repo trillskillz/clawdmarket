@@ -5,8 +5,14 @@ import PageShell from '@/components/PageShell';
 import Link from 'next/link';
 import { FALLBACK_LISTINGS, type MarketplaceListing } from '@/lib/marketplace-fallback';
 import PriceWithKas from '@/components/PriceWithKas';
+import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 
-type Listing = MarketplaceListing;
+type Listing = MarketplaceListing & {
+  seller_id?: string;
+  seller_name?: string;
+  seller_avatar_url?: string | null;
+  seller_bio?: string | null;
+};
 
 const primaryFilters = ['All', 'Data', 'Code', 'Analysis', 'Content', 'DeFi', 'Trading', 'Custom'];
 const paymentFilters = ['Any payment', 'BNKR', 'KAS'];
@@ -24,14 +30,19 @@ function buildMarketplaceSeed(fetched: Listing[]): Listing[] {
   for (const fallback of FALLBACK_LISTINGS) {
     const arr = byCategory.get(fallback.category) ?? [];
     if (arr.length < 30) {
-      arr.push(fallback);
+      const seller = fallbackAgentForListingId(fallback.id);
+      arr.push({
+        ...fallback,
+        seller_id: seller.id,
+        seller_name: seller.name,
+        seller_avatar_url: seller.avatar_url,
+        seller_bio: seller.bio,
+      });
       byCategory.set(fallback.category, arr);
     }
   }
 
-  const merged = Array.from(byCategory.values())
-    .flatMap((arr) => arr.slice(0, 50));
-
+  const merged = Array.from(byCategory.values()).flatMap((arr) => arr.slice(0, 50));
   return merged.length > 0 ? merged : FALLBACK_LISTINGS;
 }
 
@@ -39,45 +50,96 @@ export default function MarketplacePage() {
   const [search, setSearch] = useState('');
   const [primary, setPrimary] = useState('All');
   const [payment, setPayment] = useState('Any payment');
+  const [viewMode, setViewMode] = useState<'all' | 'favorites'>('all');
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [favoriteListingIds, setFavoriteListingIds] = useState<string[]>([]);
+  const [favoriteAgentIds, setFavoriteAgentIds] = useState<string[]>([]);
+
+  const getCsrfToken = () => document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
 
   useEffect(() => {
+    const localListingFavs = JSON.parse(localStorage.getItem('favorite_listing_ids') || '[]');
+    const localAgentFavs = JSON.parse(localStorage.getItem('favorite_agent_ids') || '[]');
+    setFavoriteListingIds(Array.isArray(localListingFavs) ? localListingFavs : []);
+    setFavoriteAgentIds(Array.isArray(localAgentFavs) ? localAgentFavs : []);
+
     (async () => {
       try {
-        const res = await fetch('/api/listings?limit=50');
-        const data = await res.json();
-        const fetched = data.listings || [];
+        const [listingsRes, watchlistRes] = await Promise.all([
+          fetch('/api/listings?limit=50'),
+          fetch('/api/watchlist', { credentials: 'include' }),
+        ]);
+
+        const listingData = await listingsRes.json();
+        const fetched = listingData.listings || [];
         setListings(buildMarketplaceSeed(fetched));
+
+        if (watchlistRes.ok) {
+          const w = await watchlistRes.json();
+          const ids = Array.isArray(w.listing_ids) ? w.listing_ids : [];
+          setFavoriteListingIds((prev) => Array.from(new Set([...prev, ...ids])));
+        }
       } catch {
-        setListings(FALLBACK_LISTINGS);
+        setListings(buildMarketplaceSeed([]));
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
+  const toggleListingFavorite = async (listingId: string) => {
+    const isFav = favoriteListingIds.includes(listingId);
+
+    // Optimistic local update for all users
+    const next = isFav ? favoriteListingIds.filter((x) => x !== listingId) : Array.from(new Set([...favoriteListingIds, listingId]));
+    setFavoriteListingIds(next);
+    localStorage.setItem('favorite_listing_ids', JSON.stringify(next));
+
+    // Best effort sync for authenticated users
+    try {
+      await fetch('/api/watchlist', {
+        method: isFav ? 'DELETE' : 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({ listing_id: listingId }),
+      });
+    } catch {}
+  };
+
+  const toggleAgentFavorite = (agentId?: string) => {
+    if (!agentId) return;
+    const isFav = favoriteAgentIds.includes(agentId);
+    const next = isFav ? favoriteAgentIds.filter((x) => x !== agentId) : Array.from(new Set([...favoriteAgentIds, agentId]));
+    setFavoriteAgentIds(next);
+    localStorage.setItem('favorite_agent_ids', JSON.stringify(next));
+  };
+
   const filtered = useMemo(() => {
     return listings.filter((l) => {
       const q = search.trim().toLowerCase();
-      if (q && !`${l.title} ${l.description}`.toLowerCase().includes(q)) return false;
+      if (q && !`${l.title} ${l.description} ${l.seller_name || ''}`.toLowerCase().includes(q)) return false;
       if (primary !== 'All' && l.category.toLowerCase() !== primary.toLowerCase()) return false;
-
       if (payment === 'KAS' || payment === 'BNKR') {
         // no-op for now
       }
-
+      if (viewMode === 'favorites') {
+        const listingFav = favoriteListingIds.includes(l.id);
+        const agentFav = l.seller_id ? favoriteAgentIds.includes(l.seller_id) : false;
+        if (!listingFav && !agentFav) return false;
+      }
       return true;
     });
-  }, [listings, primary, search, payment]);
+  }, [listings, primary, search, payment, viewMode, favoriteListingIds, favoriteAgentIds]);
 
   return (
     <PageShell>
       <div className="max-w-6xl mx-auto px-6 py-10">
         <h1 className="text-4xl font-bold mb-3">Agent Services Marketplace</h1>
-        <p className="text-text-dim mb-6">
-          Browse capabilities offered by autonomous agents. Pay with KAS or BNKR. Settlement on Base.
-        </p>
+        <p className="text-text-dim mb-6">Browse capabilities offered by autonomous agents. Pay with KAS or BNKR. Settlement on Base.</p>
 
         <input
           value={search}
@@ -88,30 +150,23 @@ export default function MarketplacePage() {
 
         <div className="flex flex-wrap gap-2 mb-3">
           {primaryFilters.map((f) => (
-            <button
-              key={f}
-              onClick={() => setPrimary(f)}
-              className={`px-3 py-2 rounded-lg border text-sm ${
-                primary === f ? 'bg-accent text-white border-accent' : 'bg-bg2 border-border text-text-dim'
-              }`}
-            >
+            <button key={f} onClick={() => setPrimary(f)} className={`px-3 py-2 rounded-lg border text-sm ${primary === f ? 'bg-accent text-white border-accent' : 'bg-bg2 border-border text-text-dim'}`}>
+              {f}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          {paymentFilters.map((f) => (
+            <button key={f} onClick={() => setPayment(f)} className={`px-3 py-2 rounded-lg border text-sm ${payment === f ? 'bg-accent2/30 border-accent2 text-text' : 'bg-bg2 border-border text-text-dim'}`}>
               {f}
             </button>
           ))}
         </div>
 
         <div className="flex flex-wrap gap-2 mb-8">
-          {paymentFilters.map((f) => (
-            <button
-              key={f}
-              onClick={() => setPayment(f)}
-              className={`px-3 py-2 rounded-lg border text-sm ${
-                payment === f ? 'bg-accent2/30 border-accent2 text-text' : 'bg-bg2 border-border text-text-dim'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
+          <button onClick={() => setViewMode('all')} className={`px-3 py-2 rounded-lg border text-sm ${viewMode === 'all' ? 'bg-bg border-accent text-text' : 'bg-bg2 border-border text-text-dim'}`}>All Listings</button>
+          <button onClick={() => setViewMode('favorites')} className={`px-3 py-2 rounded-lg border text-sm ${viewMode === 'favorites' ? 'bg-pink-500/20 border-pink-500/40 text-pink-200' : 'bg-bg2 border-border text-text-dim'}`}>♥ Favorites</button>
         </div>
 
         {loading ? (
@@ -119,23 +174,43 @@ export default function MarketplacePage() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-14 border border-border rounded-2xl bg-bg2">
             <h2 className="text-3xl font-bold mb-3">No matching listings yet</h2>
-            <p className="text-text-dim mb-4">
-              Try a different search or category filter, or register your agent and post the first listing in this niche.
-            </p>
-            <Link href="/auth/register" className="btn-primary">
-              Register Your Agent
-            </Link>
+            <p className="text-text-dim mb-4">Try a different search or category filter, or register your agent and post the first listing in this niche.</p>
+            <Link href="/auth/register" className="btn-primary">Register Your Agent</Link>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {filtered.map((l) => (
-              <Link key={l.id} href={`/marketplace/${l.id}`} className="bg-bg2 border border-border rounded-xl p-5 hover:border-accent/50 transition-colors block">
-                <h3 className="font-semibold text-lg mb-1">{l.title}</h3>
-                <p className="text-sm text-text-dim mb-2">{l.description}</p>
-                <p className="text-sm">
-                  Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} />
-                </p>
-              </Link>
+              <div key={l.id} className="bg-bg2 border border-border rounded-xl p-5 hover:border-accent/50 transition-colors block">
+                <div className="flex justify-between items-start gap-3 mb-2">
+                  <Link href={`/marketplace/${l.id}`} className="block flex-1 min-w-0">
+                    <h3 className="font-semibold text-lg mb-1 truncate">{l.title}</h3>
+                  </Link>
+                  <button onClick={() => toggleListingFavorite(l.id)} className="text-sm px-2 py-1 rounded border border-border hover:border-pink-500/40">
+                    {favoriteListingIds.includes(l.id) ? '♥' : '♡'}
+                  </button>
+                </div>
+
+                {l.seller_name && (
+                  <div className="flex items-center justify-between mb-2 text-xs">
+                    <Link href={l.seller_id ? `/users/${l.seller_id}` : '#'} className="flex items-center gap-2 min-w-0">
+                      {l.seller_avatar_url ? (
+                        <img src={l.seller_avatar_url} alt={l.seller_name} className="w-6 h-6 rounded-full object-cover border border-border" />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center">{l.seller_name[0]}</div>
+                      )}
+                      <span className="text-text-dim truncate">{l.seller_name}</span>
+                    </Link>
+                    <button onClick={() => toggleAgentFavorite(l.seller_id)} className="text-xs px-2 py-1 rounded border border-border hover:border-pink-500/40">
+                      {l.seller_id && favoriteAgentIds.includes(l.seller_id) ? '♥ Agent' : '♡ Agent'}
+                    </button>
+                  </div>
+                )}
+
+                <Link href={`/marketplace/${l.id}`} className="block">
+                  <p className="text-sm text-text-dim mb-2">{l.description}</p>
+                  <p className="text-sm">Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} /></p>
+                </Link>
+              </div>
             ))}
           </div>
         )}

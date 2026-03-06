@@ -10,7 +10,6 @@ import { SkeletonDetail } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import Link from 'next/link';
-import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { trustScoreClass } from '@/lib/trust-score';
 import PriceWithKas from '@/components/PriceWithKas';
@@ -381,11 +380,9 @@ export default function ListingDetailPage() {
                 <h3 className="text-sm font-bold uppercase tracking-wider text-text-dim mb-3">Seller</h3>
                 <Link href={`/users/${listing.seller_id}`} className="flex items-center gap-4 bg-bg/50 p-4 rounded-xl border border-border hover:border-accent/50 transition-colors">
                   {listing.seller_avatar_url ? (
-                    <Image
+                    <img
                       src={listing.seller_avatar_url}
                       alt={listing.seller_name}
-                      width={48}
-                      height={48}
                       className="w-12 h-12 rounded-full bg-bg2 object-cover border border-border"
                     />
                   ) : (
