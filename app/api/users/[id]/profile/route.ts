@@ -4,6 +4,7 @@ import { users, trades, listings, ratings } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
 import { eq, sql } from 'drizzle-orm';
 import { FALLBACK_AGENTS } from '@/lib/fallback-agents';
+import { getAgentRatingState } from '@/lib/agent-moderation';
 
 export async function GET(
   req: NextRequest,
@@ -61,14 +62,13 @@ export async function GET(
         active_listings: sql<number>`(select count(*) from ${listings} where ${listings.seller_id} = ${user.id} and ${listings.status} = 'active')`,
         average_rating: sql<number>`(select avg(${ratings.score}) from ${ratings} where ${ratings.rated_id} = ${user.id})`,
         total_ratings: sql<number>`(select count(*) from ${ratings} where ${ratings.rated_id} = ${user.id})`,
-        dislikes: sql<number>`(select count(*) from ${ratings} where ${ratings.rated_id} = ${user.id} and ${ratings.score} = -1)`,
       })
       .from(trades)
       .where(eq(trades.seller_id, user.id));
 
     const averageRating = stats?.average_rating || null;
-    const dislikes = Number(stats?.dislikes || 0);
-    const starRating = Math.max(1, 5 - Math.floor(dislikes / 2));
+    const ratingState = await getAgentRatingState(user.id);
+    const starRating = ratingState.stars;
     const trustScore = starRating * 20;
 
     return NextResponse.json({
@@ -81,6 +81,9 @@ export async function GET(
           active_listings: stats?.active_listings || 0,
           average_rating: starRating,
           total_ratings: stats?.total_ratings || 0,
+          likes: ratingState.likes,
+          dislikes: ratingState.dislikes,
+          effective_dislikes: ratingState.effectiveDislikes,
         },
       },
     });

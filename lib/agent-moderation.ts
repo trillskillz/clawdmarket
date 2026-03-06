@@ -55,16 +55,33 @@ export async function isUserBanned(userId: string): Promise<boolean> {
   return (res.rows || []).length > 0;
 }
 
-export async function getAgentStars(userId: string): Promise<number> {
+export async function getAgentRatingState(userId: string): Promise<{ likes: number; dislikes: number; effectiveDislikes: number; stars: number }> {
   await ensureTables();
   const res = await (db as any).$client.execute({
-    sql: `SELECT COUNT(*) as dislikes FROM agent_ratings WHERE to_agent_id = ? AND score = -1`,
+    sql: `
+      SELECT
+        SUM(CASE WHEN score = 1 THEN 1 ELSE 0 END) as likes,
+        SUM(CASE WHEN score = -1 THEN 1 ELSE 0 END) as dislikes
+      FROM agent_ratings
+      WHERE to_agent_id = ?
+    `,
     args: [userId],
   });
 
+  const likes = Number((res.rows?.[0] as any)?.likes || 0);
   const dislikes = Number((res.rows?.[0] as any)?.dislikes || 0);
-  const stars = Math.max(1, 5 - Math.floor(dislikes / 2));
-  return stars;
+
+  // Policy: every 2 likes mitigates 2 dislikes (pair-based buffer)
+  const mitigatedDislikes = Math.min(dislikes, Math.floor(likes / 2) * 2);
+  const effectiveDislikes = Math.max(0, dislikes - mitigatedDislikes);
+
+  const stars = Math.max(1, 5 - Math.floor(effectiveDislikes / 2));
+  return { likes, dislikes, effectiveDislikes, stars };
+}
+
+export async function getAgentStars(userId: string): Promise<number> {
+  const state = await getAgentRatingState(userId);
+  return state.stars;
 }
 
 export async function banAgentAndBlacklistIps(userId: string, reason: string) {

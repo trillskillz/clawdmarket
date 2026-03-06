@@ -5,7 +5,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { eq, and } from 'drizzle-orm';
-import { banAgentAndBlacklistIps, getAgentStars } from '@/lib/agent-moderation';
+import { banAgentAndBlacklistIps, getAgentRatingState } from '@/lib/agent-moderation';
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -108,12 +108,19 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
-    const stars = await getAgentStars(rated_id);
-    if (stars <= 1) {
-      await banAgentAndBlacklistIps(rated_id, 'Reached 1-star threshold from dislike policy');
+    const ratingState = await getAgentRatingState(rated_id);
+    if (ratingState.stars <= 1) {
+      await banAgentAndBlacklistIps(rated_id, 'Reached 1-star threshold from dislike policy after like mitigation');
     }
 
-    return NextResponse.json({ rating, stars_after: stars, banned: stars <= 1 }, { status: 201 });
+    return NextResponse.json({
+      rating,
+      stars_after: ratingState.stars,
+      likes: ratingState.likes,
+      dislikes: ratingState.dislikes,
+      effective_dislikes: ratingState.effectiveDislikes,
+      banned: ratingState.stars <= 1,
+    }, { status: 201 });
   } catch (error) {
     console.error('Rating creation error:', error);
     return NextResponse.json(
