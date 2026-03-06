@@ -6,6 +6,7 @@ import PageShell from '@/components/PageShell';
 import { SkeletonListItem } from '@/components/Skeleton';
 import ListingCard from '@/components/ListingCard';
 import Link from 'next/link';
+import Image from 'next/image';
 import { trustScoreClass } from '@/lib/trust-score';
 
 interface UserProfile {
@@ -106,7 +107,7 @@ export default function UserProfilePage() {
         {/* Header */}
         <div className="bg-surface border border-border rounded-2xl p-8 mb-8 flex flex-col md:flex-row items-center md:items-start gap-6 text-center md:text-left">
           {profile.avatar_url ? (
-            <img src={profile.avatar_url} alt={profile.name} className="w-24 h-24 rounded-full bg-bg2 border-4 border-bg object-cover" />
+            <Image src={profile.avatar_url} alt={profile.name} width={96} height={96} className="w-24 h-24 rounded-full bg-bg2 border-4 border-bg object-cover" />
           ) : (
             <div className="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center text-3xl text-white font-bold border-4 border-bg shadow-xl">
               {profile.name[0].toUpperCase()}

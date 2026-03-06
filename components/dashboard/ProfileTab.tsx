@@ -198,7 +198,7 @@ export default function ProfileTab({ user, loading, onRefresh, getCsrfToken }: P
                     onClick={() => setForm((f) => ({ ...f, avatar_url: url, avatar_emoji: '' }))}
                     className={`rounded-full border p-0.5 ${form.avatar_url === url ? 'border-accent' : 'border-border'}`}
                   >
-                    <img src={url} alt="avatar preset" className="w-12 h-12 rounded-full object-cover" />
+                    <Image src={url} alt="avatar preset" width={48} height={48} className="w-12 h-12 rounded-full object-cover" />
                   </button>
                 ))}
               </div>

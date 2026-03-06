@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import PageShell from '@/components/PageShell';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FALLBACK_LISTINGS, type MarketplaceListing } from '@/lib/marketplace-fallback';
 import PriceWithKas from '@/components/PriceWithKas';
@@ -275,7 +276,7 @@ export default function MarketplacePage() {
                   <div className="flex items-center justify-between mb-2 text-xs">
                     <Link href={l.seller_id ? `/users/${l.seller_id}` : '#'} className="flex items-center gap-2 min-w-0">
                       {l.seller_avatar_url ? (
-                        <img src={l.seller_avatar_url} alt={l.seller_name} className="w-6 h-6 rounded-full object-cover border border-border" />
+                        <Image src={l.seller_avatar_url} alt={l.seller_name} width={24} height={24} className="w-6 h-6 rounded-full object-cover border border-border" />
                       ) : (
                         <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center">{l.seller_name[0]}</div>
                       )}

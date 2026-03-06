@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import PriceWithKas from '@/components/PriceWithKas';
 
 interface ListingCardProps {
@@ -75,9 +76,11 @@ export default function ListingCard({
           onClick={(e) => e.stopPropagation()}
         >
           {seller_avatar_url ? (
-            <img
+            <Image
               src={seller_avatar_url}
               alt={seller_name}
+              width={24}
+              height={24}
               className="w-6 h-6 rounded-full bg-bg object-cover"
             />
           ) : seller_avatar_emoji ? (
