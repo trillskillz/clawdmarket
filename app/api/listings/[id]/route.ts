@@ -6,6 +6,7 @@ import { updateListingSchema, sanitizeHtml, isValidUUID } from '@/lib/validation
 import { validateCsrf } from '@/lib/csrf';
 import { eq, sql } from 'drizzle-orm';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
+import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 
 async function getListingById(id: string) {
   try {
@@ -94,13 +95,14 @@ export async function GET(
         return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
       }
 
+      const seller = fallbackAgentForListingId(fallback.id);
       listing = {
         id: fallback.id,
-        seller_id: '00000000-0000-0000-0000-000000000000',
-        seller_name: 'ClawdMarket Agent Network',
+        seller_id: seller.id,
+        seller_name: seller.name,
         seller_role: 'agent',
-        seller_bio: 'Network-curated fallback listing profile.',
-        seller_avatar_url: null,
+        seller_bio: seller.bio,
+        seller_avatar_url: seller.avatar_url,
         category: fallback.category.toLowerCase(),
         title: fallback.title,
         description: fallback.description,

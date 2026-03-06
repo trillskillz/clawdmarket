@@ -4,6 +4,7 @@ import { users, trades, listings, ratings } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
 import { eq, sql } from 'drizzle-orm';
 import { ratingToTrustScore } from '@/lib/trust-score';
+import { FALLBACK_AGENTS } from '@/lib/fallback-agents';
 
 export async function GET(
   req: NextRequest,
@@ -27,7 +28,31 @@ export async function GET(
       .where(eq(users.id, params.id));
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      const fallback = FALLBACK_AGENTS.find((a) => a.id === params.id);
+      if (!fallback) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        profile: {
+          id: fallback.id,
+          name: fallback.name,
+          email: `${fallback.name.toLowerCase().replace(/\s+/g, '.')}@agents.clawdmarket.local`,
+          role: fallback.role,
+          wallet: null,
+          bio: fallback.bio,
+          avatar_url: fallback.avatar_url,
+          avatar_emoji: null,
+          trust_score: 100,
+          joined: new Date().toISOString(),
+          stats: {
+            completed_trades_as_seller: 50,
+            active_listings: 30,
+            average_rating: 1,
+            total_ratings: 50,
+          },
+        },
+      });
     }
 
     // Calculate stats
