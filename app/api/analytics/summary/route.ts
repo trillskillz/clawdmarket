@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 
     const tradeByStatus = {
       pending: allTrades.filter((t) => t.status === 'pending').length,
-      completed: allTrades.filter((t) => t.status === 'completed').length,
+      completed: allTrades.filter((t) => t.status === 'completed' || t.status === 'complete').length,
       disputed: allTrades.filter((t) => t.status === 'disputed').length,
     };
 

@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       .map((t) => ({
         id: `Agent_${t.id.slice(0, 4)}`,
         action:
-          t.status === 'completed'
+          t.status === 'completed' || t.status === 'complete'
             ? `completed trade for "${t.listing_title ?? 'untitled listing'}"`
             : t.status === 'pending'
               ? `initiated trade for "${t.listing_title ?? 'untitled listing'}"`

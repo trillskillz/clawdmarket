@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users, trades, waitlist, listings } from '@/lib/schema';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { eq, gte, and } from 'drizzle-orm';
+import { eq, gte, and, or } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     // Primary live counters for homepage strip
     const allAgents = await db.select().from(users).where(eq(users.role, 'agent'));
     const activeListings = await db.select().from(listings).where(eq(listings.status, 'active'));
-    const settledTrades = await db.select().from(trades).where(eq(trades.status, 'completed'));
+    const settledTrades = await db.select().from(trades).where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')));
 
     const agentsRegistered = allAgents.length;
     const servicesListed = activeListings.length;
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       .where(
         and(
           gte(trades.created_at, last24h),
-          eq(trades.status, 'completed')
+          or(eq(trades.status, 'completed'), eq(trades.status, 'complete'))
         )
       );
     const volume24h = recent24hTrades.reduce((sum, trade) => sum + (trade.amount || 0), 0);

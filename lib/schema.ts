@@ -61,8 +61,16 @@ export const trades = sqliteTable('trades', {
     .references(() => users.id, { onDelete: 'cascade' }),
   amount: real('amount').notNull(),
   fee: real('fee').notNull(),
+  item_price: real('item_price').notNull().default(0),
+  platform_fee: real('platform_fee').notNull().default(0),
+  total_cost: real('total_cost').notNull().default(0),
+  seller_amount: real('seller_amount').notNull().default(0),
+  dev_amount: real('dev_amount').notNull().default(0),
+  dev_wallet: text('dev_wallet'),
+  fee_tx_hash: text('fee_tx_hash'),
+  payout_status: text('payout_status', { enum: ['pending', 'fee_sent', 'seller_paid', 'complete'] }).notNull().default('pending'),
   status: text('status', { 
-    enum: ['pending', 'completed', 'disputed'] 
+    enum: ['pending', 'completed', 'complete', 'disputed'] 
   }).notNull().default('pending'),
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
@@ -251,6 +259,18 @@ export const event_stream = sqliteTable('event_stream', {
     .$defaultFn(() => new Date()),
 });
 
+export const fee_errors = sqliteTable('fee_errors', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trade_id: text('trade_id'),
+  listing_id: text('listing_id'),
+  buyer_id: text('buyer_id'),
+  item_price: real('item_price').notNull(),
+  expected_dev_fee: real('expected_dev_fee').notNull(),
+  actual_dev_fee: real('actual_dev_fee').notNull(),
+  message: text('message').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 export type Wallet = typeof wallets.$inferSelect;
 export type NewWallet = typeof wallets.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;
@@ -261,3 +281,5 @@ export type AgentInstructionNonce = typeof agent_instruction_nonces.$inferSelect
 export type NewAgentInstructionNonce = typeof agent_instruction_nonces.$inferInsert;
 export type EventStreamRow = typeof event_stream.$inferSelect;
 export type NewEventStreamRow = typeof event_stream.$inferInsert;
+export type FeeError = typeof fee_errors.$inferSelect;
+export type NewFeeError = typeof fee_errors.$inferInsert;

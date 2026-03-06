@@ -68,7 +68,7 @@ export const updateListingSchema = z.object({
 });
 
 export const updateTradeStatusSchema = z.object({
-  status: z.enum(['completed', 'disputed']),
+  status: z.enum(['completed', 'complete', 'disputed']),
 });
 
 function isPrivateIP(ip: string): boolean {

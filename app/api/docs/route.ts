@@ -59,7 +59,7 @@ const openApiSpec = {
           seller_id: { type: 'string', format: 'uuid' },
           amount: { type: 'number' },
           fee: { type: 'number' },
-          status: { type: 'string', enum: ['pending', 'completed', 'disputed'] },
+          status: { type: 'string', enum: ['pending', 'completed', 'complete', 'disputed'] },
           created_at: { type: 'string', format: 'date-time' },
           completed_at: { type: 'string', format: 'date-time', nullable: true },
         },

@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       total_cost,
       seller_amount: item_price,
       dev_amount: platform_fee,
-      dev_wallet: process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || null,
+      dev_wallet: (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim() || null,
       fee_percent: DEV_FEE_PERCENT,
     });
   } catch (e: any) {

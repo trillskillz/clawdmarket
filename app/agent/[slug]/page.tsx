@@ -3,7 +3,7 @@ import Footer from '@/components/Footer';
 import AgentServicesList from '@/components/AgentServicesList';
 import { db } from '@/lib/db';
 import { users, listings, trades } from '@/lib/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, or } from 'drizzle-orm';
 import { FALLBACK_AGENTS, fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import type { Metadata } from 'next';
@@ -133,7 +133,7 @@ export default async function AgentProfilePage({ params }: { params: { slug: str
     : await db
         .select({ id: trades.id })
         .from(trades)
-        .where(and(eq(trades.seller_id, agent.id), eq(trades.status, 'completed')));
+        .where(and(eq(trades.seller_id, agent.id), or(eq(trades.status, 'completed'), eq(trades.status, 'complete'))));
 
   return (
     <>

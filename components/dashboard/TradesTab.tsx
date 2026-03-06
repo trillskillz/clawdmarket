@@ -30,7 +30,7 @@ export default function TradesTab({ trades, loading, currentUserId, onRefresh, g
   const { toast } = useToast();
   const [actionId, setActionId] = useState<string | null>(null);
   const [filterRole, setFilterRole] = useState<'all' | 'bought' | 'sold'>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed' | 'disputed'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed' | 'complete' | 'disputed'>('all');
   
   // Rating Modal state
   const [ratingTradeId, setRatingTradeId] = useState<string | null>(null);
@@ -179,7 +179,7 @@ export default function TradesTab({ trades, loading, currentUserId, onRefresh, g
                   <div className="flex items-center gap-3 justify-between md:justify-end w-full">
                     <div className="font-mono font-bold text-gold"><PriceWithKas bankr={trade.amount} kasClassName="text-xs text-text-dim" /></div>
                     <div className={`text-xs px-2 py-1 rounded-full inline-block text-center min-w-[80px] ${
-                      trade.status === 'completed' ? 'bg-green-400/10 text-green-400' :
+                      (trade.status === 'completed' || trade.status === 'complete') ? 'bg-green-400/10 text-green-400' :
                       trade.status === 'pending' ? 'bg-gold/10 text-gold' :
                       'bg-red-400/10 text-red-400'
                     }`}>
@@ -223,7 +223,7 @@ export default function TradesTab({ trades, loading, currentUserId, onRefresh, g
                       </div>
                     )}
 
-                    {trade.status === 'completed' && (isBuyer || isSeller) && (
+                    {(trade.status === 'completed' || trade.status === 'complete') && (isBuyer || isSeller) && (
                       <button
                         onClick={() => setRatingTradeId(trade.id)}
                         className="btn-secondary py-1.5 px-3 text-xs whitespace-nowrap"

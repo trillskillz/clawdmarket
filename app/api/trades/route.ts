@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users, wallets, transactions } from '@/lib/schema';
+import { trades, listings, users, wallets, transactions, fee_errors } from '@/lib/schema';
 import { authenticateRequest, hashPassword } from '@/lib/auth';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
@@ -246,6 +246,7 @@ export async function POST(req: NextRequest) {
 
     const itemPrice = Number(listing.price_bankr);
     const { itemPrice: tradeAmount, platformFee: fee, totalCost, sellerAmount, devAmount } = calculateTradeFinancials(itemPrice);
+    const devWalletAddress = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim() || null;
 
     const bodyPaymentMode = (body?.payment_mode || '').toString();
     const onchain = body?.onchain || null;
@@ -300,8 +301,16 @@ export async function POST(req: NextRequest) {
             listing_id: validated.listing_id,
             buyer_id: auth.userId,
             seller_id: listing.seller_id,
-            amount: tradeAmount,
-            fee,
+            amount: sellerAmount,
+            fee: devAmount,
+            item_price: itemPrice,
+            platform_fee: devAmount,
+            total_cost: totalCost,
+            seller_amount: sellerAmount,
+            dev_amount: devAmount,
+            dev_wallet: devWalletAddress,
+            fee_tx_hash: onchain.fee_tx_hash,
+            payout_status: 'seller_paid',
             status: 'pending',
           })
           .returning();
@@ -441,6 +450,13 @@ export async function POST(req: NextRequest) {
           seller_id: listing.seller_id,
           amount: sellerAmount,
           fee: devAmount,
+          item_price: itemPrice,
+          platform_fee: devAmount,
+          total_cost: totalCost,
+          seller_amount: sellerAmount,
+          dev_amount: devAmount,
+          dev_wallet: devWalletAddress,
+          payout_status: devAmount > 0 ? 'fee_sent' : 'pending',
           status: 'pending',
         })
         .returning();
@@ -509,6 +525,22 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error: any) {
+    if (error?.message === 'DEV_FEE_MISMATCH') {
+      await db.insert(fee_errors).values({
+        trade_id: null,
+        listing_id: null,
+        buyer_id: auth.userId,
+        item_price: 0,
+        expected_dev_fee: 0,
+        actual_dev_fee: 0,
+        message: 'Dev fee mismatch — transaction halted',
+      });
+      return NextResponse.json(
+        { ...paymentError('DEV_FEE_MISMATCH', 'Dev fee mismatch — transaction halted'), ...envMeta('clawdmarket/api/trades') },
+        { status: 500 }
+      );
+    }
+
     if (error instanceof TradeRaceError) {
       const status = error.code === 'LISTING_ALREADY_CLAIMED' ? 409 : 402;
       await logPaymentFailure({
@@ -571,6 +603,14 @@ export async function GET(req: NextRequest) {
         seller_id: trades.seller_id,
         amount: trades.amount,
         fee: trades.fee,
+        item_price: trades.item_price,
+        platform_fee: trades.platform_fee,
+        total_cost: trades.total_cost,
+        seller_amount: trades.seller_amount,
+        dev_amount: trades.dev_amount,
+        dev_wallet: trades.dev_wallet,
+        fee_tx_hash: trades.fee_tx_hash,
+        payout_status: trades.payout_status,
         status: trades.status,
         created_at: trades.created_at,
         completed_at: trades.completed_at,

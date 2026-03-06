@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, wallets, transactions } from '@/lib/schema';
+import { trades, wallets, transactions, fee_errors } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { updateTradeStatusSchema, isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
@@ -72,8 +72,9 @@ export async function PATCH(
 
     const body = await req.json();
     const validated = updateTradeStatusSchema.parse(body);
+    const targetStatus = validated.status === 'completed' ? 'complete' : validated.status;
 
-    if (validated.status === 'completed') {
+    if (targetStatus === 'complete') {
       if (trade.buyer_id !== auth.userId) {
         return NextResponse.json(
           { error: 'Only the buyer can mark a trade as completed' },
@@ -88,8 +89,9 @@ export async function PATCH(
       const [t] = await tx
         .update(trades)
         .set({
-          status: validated.status,
-          completed_at: validated.status === 'completed' ? new Date() : null,
+          status: targetStatus,
+          payout_status: targetStatus === 'complete' ? 'complete' : trade.payout_status,
+          completed_at: targetStatus === 'complete' ? new Date() : null,
         })
         .where(and(eq(trades.id, params.id), eq(trades.status, 'pending')))
         .returning();
@@ -99,7 +101,22 @@ export async function PATCH(
       }
 
       // 2. Handle funds if completing
-      if (validated.status === 'completed') {
+      if (targetStatus === 'complete') {
+        const expectedDevFee = Math.round(Number(trade.amount) * 0.03 * 100) / 100;
+        const actualDevFee = Math.round(Number(trade.fee) * 100) / 100;
+        if (actualDevFee !== expectedDevFee) {
+          await tx.insert(fee_errors).values({
+            trade_id: trade.id,
+            listing_id: trade.listing_id,
+            buyer_id: trade.buyer_id,
+            item_price: Number(trade.amount),
+            expected_dev_fee: expectedDevFee,
+            actual_dev_fee: actualDevFee,
+            message: 'Dev fee mismatch — transaction halted',
+          });
+          throw new Error('DEV_FEE_MISMATCH');
+        }
+
         const [escrowLockTx] = await tx
           .select()
           .from(transactions)
@@ -137,7 +154,7 @@ export async function PATCH(
             memo: 'Trade completed (on-chain settlement already recorded)',
           });
         }
-      } else if (validated.status === 'disputed') {
+      } else if (targetStatus === 'disputed') {
         // For disputes, funds stay in escrow until admin resolution (manual for now)
         // Or we could auto-refund, but 'dispute' usually means freeze.
         // We'll leave them in buyer's escrow for now.
@@ -147,7 +164,7 @@ export async function PATCH(
     });
 
     // Fire webhooks
-    if (validated.status === 'completed') {
+    if (targetStatus === 'complete') {
       await fireWebhook(trade.buyer_id, 'trade.completed', { trade: updatedTrade });
       await fireWebhook(trade.seller_id, 'trade.completed', { trade: updatedTrade });
       await fireWebhook(trade.buyer_id, 'balance.changed', { reason: 'escrow_release', trade_id: trade.id });
@@ -155,12 +172,19 @@ export async function PATCH(
     }
 
     return NextResponse.json({
-      message: `Trade status updated to ${validated.status}`,
+      message: `Trade status updated to ${targetStatus}`,
       code: 'TRADE_STATUS_UPDATED',
       trade: updatedTrade,
       ...envMeta('clawdmarket/api/trades/:id'),
     });
   } catch (error: any) {
+    if (error?.message === 'DEV_FEE_MISMATCH') {
+      return NextResponse.json(
+        { ...paymentError('DEV_FEE_MISMATCH', 'Dev fee mismatch — transaction halted'), ...envMeta('clawdmarket/api/trades/:id') },
+        { status: 500 }
+      );
+    }
+
     if (error?.message === 'TRADE_NOT_PENDING_AT_COMMIT') {
       await logPaymentFailure({
         buyer_id: auth.userId,
