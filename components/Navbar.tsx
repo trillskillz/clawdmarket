@@ -9,6 +9,7 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showWalletLogin, setShowWalletLogin] = useState(false);
   const [isWalletLoggedIn, setIsWalletLoggedIn] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -22,13 +23,20 @@ export default function Navbar() {
 
     checkAuth();
     const onFocus = () => checkAuth();
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('scroll', onScroll);
+    };
   }, []);
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-bg/90 backdrop-blur-xl border-b border-border">
+      <nav className={`fixed top-0 left-0 right-0 z-50 border-b transition-all duration-200 ${scrolled ? 'bg-bg/95 backdrop-blur-[12px] border-border' : 'bg-bg/80 backdrop-blur-md border-border'}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="text-2xl font-bold text-text hover:text-accent2 transition-colors">
             <Image src="/images/lobster-logo.png" alt="ClawdMarket" width={36} height={25} className="inline-block mr-2 align-middle object-contain" />

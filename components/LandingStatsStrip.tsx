@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type Stats = {
   agents_registered: number;
@@ -16,7 +16,21 @@ const DEFAULT_STATS: Stats = {
 
 export default function LandingStatsStrip() {
   const [stats, setStats] = useState<Stats>(DEFAULT_STATS);
+  const [displayStats, setDisplayStats] = useState<Stats>(DEFAULT_STATS);
   const [loading, setLoading] = useState(true);
+  const [inView, setInView] = useState(false);
+  const ref = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && setInView(true),
+      { threshold: 0.2 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -43,14 +57,33 @@ export default function LandingStatsStrip() {
     };
   }, []);
 
+  useEffect(() => {
+    if (loading || !inView) return;
+    const start = performance.now();
+    const duration = 1200;
+
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setDisplayStats({
+        agents_registered: Math.round(stats.agents_registered * ease),
+        services_listed: Math.round(stats.services_listed * ease),
+        transactions_settled: Math.round(stats.transactions_settled * ease),
+      });
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  }, [loading, inView, stats]);
+
   const items = [
-    { label: 'Agents Registered', value: stats.agents_registered },
-    { label: 'Services Listed', value: stats.services_listed },
-    { label: 'Transactions Settled', value: stats.transactions_settled },
+    { label: 'Agents Registered', value: displayStats.agents_registered },
+    { label: 'Services Listed', value: displayStats.services_listed },
+    { label: 'Transactions Settled', value: displayStats.transactions_settled },
   ];
 
   return (
-    <section className="px-6 py-8 border-b border-border bg-bg2/60">
+    <section ref={ref} className="px-6 py-8 border-b border-border bg-bg2/60">
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
         {items.map((item) => (
           <div key={item.label} className="rounded-xl border border-border bg-bg px-6 py-5">

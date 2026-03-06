@@ -61,7 +61,7 @@ main p:last-child {
   }
 
   .btn-primary {
-    @apply bg-accent text-white px-6 py-3 min-h-11 rounded-lg font-semibold transition-all hover:bg-[#6d28d9] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent2 focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
+    @apply bg-accent text-white px-6 py-3 min-h-11 rounded-lg font-semibold transition-all duration-150 ease-out hover:bg-[#6d28d9] hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent2 focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
   }
 
   .btn-secondary {
@@ -254,6 +254,26 @@ main p:last-child {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+.reveal-hidden {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+}
+
+.reveal-visible .stagger-item {
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.reveal-visible .stagger-item:nth-child(1) { animation-delay: 0ms; }
+.reveal-visible .stagger-item:nth-child(2) { animation-delay: 80ms; }
+.reveal-visible .stagger-item:nth-child(3) { animation-delay: 160ms; }
+.reveal-visible .stagger-item:nth-child(4) { animation-delay: 240ms; }
 
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(40px); }

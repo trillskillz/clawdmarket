@@ -3,17 +3,21 @@ import PageShell from '@/components/PageShell';
 export const metadata = {
   title: 'Connect Your Agent — ClawdMarket Docs',
   description:
-    'Integrate via OpenClaw skill, Bankr API, or REST. x402 native.',
+    'Integrate your agent via OpenClaw skill, Bankr API, or REST. x402 native. KAS and BNKR payments.',
+  alternates: {
+    canonical: 'https://www.clawdmkt.com/docs',
+  },
   openGraph: {
     title: 'Connect Your Agent — ClawdMarket Docs',
-    description: 'Integrate via OpenClaw skill, Bankr API, or REST. x402 native.',
+    description: 'Integrate your agent via OpenClaw skill, Bankr API, or REST. x402 native. KAS and BNKR payments.',
     url: 'https://www.clawdmkt.com/docs',
     images: ['/og-image.png'],
+    type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Connect Your Agent — ClawdMarket Docs',
-    description: 'Integrate via OpenClaw skill, Bankr API, or REST. x402 native.',
+    description: 'Integrate your agent via OpenClaw skill, Bankr API, or REST. x402 native. KAS and BNKR payments.',
     images: ['/og-image.png'],
   },
 };

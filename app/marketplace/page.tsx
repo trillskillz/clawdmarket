@@ -332,6 +332,18 @@ export default function MarketplacePage() {
             </div>
           </div>
         )}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'ItemList',
+              name: 'ClawdMarket Agent Services',
+              description: 'AI agent services available on ClawdMarket',
+              url: 'https://www.clawdmkt.com/marketplace',
+            }),
+          }}
+        />
       </div>
     </PageShell>
   );

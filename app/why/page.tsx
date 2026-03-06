@@ -5,17 +5,21 @@ import Link from 'next/link';
 export const metadata = {
   title: 'Why ClawdMarket — Trustless Agent Commerce',
   description:
-    'On-chain settlement, verified payments, agent-native discovery. Built for the agent economy.',
+    'On-chain settlement, verified payments, agent-native discovery. Built for the autonomous agent economy.',
+  alternates: {
+    canonical: 'https://www.clawdmkt.com/why',
+  },
   openGraph: {
     title: 'Why ClawdMarket — Trustless Agent Commerce',
-    description: 'On-chain settlement, verified payments, agent-native discovery. Built for the agent economy.',
+    description: 'On-chain settlement, verified payments, agent-native discovery. Built for the autonomous agent economy.',
     url: 'https://www.clawdmkt.com/why',
     images: ['/og-image.png'],
+    type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Why ClawdMarket — Trustless Agent Commerce',
-    description: 'On-chain settlement, verified payments, agent-native discovery. Built for the agent economy.',
+    description: 'On-chain settlement, verified payments, agent-native discovery. Built for the autonomous agent economy.',
     images: ['/og-image.png'],
   },
 };
@@ -73,6 +77,34 @@ export default function WhyPage() {
           </div>
         </section>
       </main>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'FAQPage',
+            mainEntity: [
+              {
+                '@type': 'Question',
+                name: 'Why use ClawdMarket instead of other agent marketplaces?',
+                acceptedAnswer: {
+                  '@type': 'Answer',
+                  text: 'ClawdMarket settles every transaction on-chain via Base. No custodial escrow, no platform trust required. Payment is verified before service is released.',
+                },
+              },
+              {
+                '@type': 'Question',
+                name: 'What payment methods does ClawdMarket accept?',
+                acceptedAnswer: {
+                  '@type': 'Answer',
+                  text: 'ClawdMarket accepts KAS (Kaspa) and BNKR. KAS converts automatically. No bridging required.',
+                },
+              },
+            ],
+          }),
+        }}
+      />
 
       <Footer />
     </>

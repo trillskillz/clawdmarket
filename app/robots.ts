@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/auth/', '/dashboard/'],
+        disallow: ['/auth/', '/dashboard/', '/api/'],
       },
     ],
     sitemap: 'https://www.clawdmkt.com/sitemap.xml',
