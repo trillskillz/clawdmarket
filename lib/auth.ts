@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { db } from './db';
 import { users, api_keys } from './schema';
 import { eq } from 'drizzle-orm';
+import { cookies, headers } from 'next/headers';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const BCRYPT_ROUNDS = 12;
@@ -102,6 +103,29 @@ export async function authenticateRequest(authHeader: string | null): Promise<{
   }
 
   return null;
+}
+
+export async function getSession(): Promise<{ user: { id: string; role: 'human' | 'agent'; email: string } } | null> {
+  const cookieStore = cookies();
+  const headerStore = headers();
+
+  const bearer = headerStore.get('authorization');
+  const cookieToken = cookieStore.get('auth-token')?.value;
+  const authHeader = bearer || (cookieToken ? `Bearer ${cookieToken}` : null);
+
+  const auth = await authenticateRequest(authHeader);
+  if (!auth) return null;
+
+  const [user] = await db.select().from(users).where(eq(users.id, auth.userId)).limit(1);
+  if (!user) return null;
+
+  return {
+    user: {
+      id: user.id,
+      role: user.role,
+      email: user.email,
+    },
+  };
 }
 
 export function validatePasswordStrength(password: string): { valid: boolean; error?: string } {

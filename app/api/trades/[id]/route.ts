@@ -8,6 +8,7 @@ import { fireWebhook } from '@/lib/webhooks';
 import { and, eq, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
+import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
 
 export async function PATCH(
   req: NextRequest,
@@ -83,15 +84,19 @@ export async function PATCH(
 
     // ─── ESCROW RELEASE LOGIC ───
     const updatedTrade = await db.transaction(async (tx) => {
-      // 1. Update trade status
+      // 1. Update trade status atomically only if still pending.
       const [t] = await tx
         .update(trades)
         .set({
           status: validated.status,
           completed_at: validated.status === 'completed' ? new Date() : null,
         })
-        .where(eq(trades.id, params.id))
+        .where(and(eq(trades.id, params.id), eq(trades.status, 'pending')))
         .returning();
+
+      if (!t) {
+        throw new Error('TRADE_NOT_PENDING_AT_COMMIT');
+      }
 
       // 2. Handle funds if completing
       if (validated.status === 'completed') {
@@ -156,6 +161,22 @@ export async function PATCH(
       ...envMeta('clawdmarket/api/trades/:id'),
     });
   } catch (error: any) {
+    if (error?.message === 'TRADE_NOT_PENDING_AT_COMMIT') {
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        token: 'bnkr',
+        route: 'PATCH /api/trades/:id',
+        trade_id: params.id,
+        error_code: 'TRADE_ALREADY_UPDATED',
+        message: 'Trade was already updated by another request',
+        state: 'escrow_held',
+      });
+      return NextResponse.json(
+        { ...paymentError('TRADE_ALREADY_UPDATED', 'Trade was already updated by another request'), ...envMeta('clawdmarket/api/trades/:id') },
+        { status: 409 }
+      );
+    }
+
     if (error.errors) {
       return NextResponse.json(
         { error: 'Validation failed', details: error.errors },
@@ -163,8 +184,17 @@ export async function PATCH(
       );
     }
     console.error('Trade update error:', error);
+    await logPaymentFailure({
+      buyer_id: auth.userId,
+      token: 'bnkr',
+      route: 'PATCH /api/trades/:id',
+      trade_id: params.id,
+      error_code: 'INTERNAL_ERROR',
+      message: error?.message || 'Internal server error',
+      state: 'escrow_held',
+    });
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { ...paymentError('INTERNAL_ERROR', 'Internal server error') },
       { status: 500 }
     );
   }

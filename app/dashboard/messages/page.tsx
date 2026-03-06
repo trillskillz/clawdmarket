@@ -89,7 +89,8 @@ export default function MessagesPage() {
         
         await sodium.ready;
         const keyString = [user.id, selectedPartnerId].sort().join(':') + ':CLAWDS_SECRET';
-        const key = sodium.crypto_generichash(32, keyString);
+        const keyMaterial = sodium.from_string(keyString);
+        const key = sodium.crypto_generichash(32, keyMaterial, null);
 
         const decryptedMessages = data.map((msg) => {
           try {
@@ -115,7 +116,8 @@ export default function MessagesPage() {
     try {
       await sodium.ready;
       const keyString = [user.id, selectedPartnerId].sort().join(':') + ':CLAWDS_SECRET';
-      const key = sodium.crypto_generichash(32, keyString);
+      const keyMaterial = sodium.from_string(keyString);
+      const key = sodium.crypto_generichash(32, keyMaterial, null);
       const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
       const encrypted = sodium.crypto_secretbox_easy(newMessage, nonce, key);
 

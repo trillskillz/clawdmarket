@@ -19,24 +19,24 @@ test.describe('Marketplace Listings', () => {
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });
 
-  test('enforces price limits (864-2465)', async ({ page }) => {
+  test('enforces price limits (1-999,999,999)', async ({ page }) => {
     const listingTitle = `PW Listing ${Date.now()}`;
 
     await page.getByRole('button', { name: /Create Listing/ }).first().click();
 
     const titleInput = page.locator('input[placeholder="500 GPT-4 API calls"]');
     const descriptionInput = page.locator('textarea[placeholder="Describe what you\'re offering..."]');
-    const priceInput = page.locator('input[placeholder="864 - 2465"]');
+    const priceInput = page.locator('input[placeholder="1 - 999,999,999"]');
 
     await expect(titleInput).toBeVisible();
     await titleInput.fill(listingTitle);
     await descriptionInput.fill('This is a playwright test listing description with enough length to pass validation.');
 
-    await expect(priceInput).toHaveAttribute('min', '864');
-    await expect(priceInput).toHaveAttribute('max', '2465');
+    await expect(priceInput).toHaveAttribute('min', '1');
+    await expect(priceInput).toHaveAttribute('max', '999999999');
 
     // too low should fail HTML validity
-    await priceInput.fill('500');
+    await priceInput.fill('0');
     const tooLowInvalid = await priceInput.evaluate((e: HTMLInputElement) => !e.checkValidity());
     expect(tooLowInvalid).toBeTruthy();
 

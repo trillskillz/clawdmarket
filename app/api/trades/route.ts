@@ -6,15 +6,23 @@ import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
-import { eq, or, desc, sql } from 'drizzle-orm';
+import { and, eq, or, desc, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { isAddress } from 'viem';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
+import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
 const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee
+
+class TradeRaceError extends Error {
+  constructor(public readonly code: 'LISTING_ALREADY_CLAIMED' | 'INSUFFICIENT_FUNDS_AT_COMMIT', message: string) {
+    super(message);
+    this.name = 'TradeRaceError';
+  }
+}
 
 async function ensureAdminFeeRecipient(): Promise<string | null> {
   const adminWalletAddress = (process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim().toLowerCase();
@@ -103,15 +111,36 @@ export async function POST(req: NextRequest) {
       .where(eq(listings.id, validated.listing_id));
 
     if (!listing) {
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        amount: validated.amount,
+        token: 'bnkr',
+        route: 'POST /api/trades',
+        listing_id: validated.listing_id,
+        error_code: 'LISTING_NOT_FOUND',
+        message: 'Listing not found',
+        state: 'no_funds_moved',
+      });
       return NextResponse.json(
-        { error: 'Listing not found', code: 'LISTING_NOT_FOUND', ...envMeta('clawdmarket/api/trades') },
+        { ...paymentError('LISTING_NOT_FOUND', 'Listing not found'), ...envMeta('clawdmarket/api/trades') },
         { status: 404 }
       );
     }
 
     if (listing.status !== 'active') {
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        seller_id: listing.seller_id,
+        amount: validated.amount,
+        token: 'bnkr',
+        route: 'POST /api/trades',
+        listing_id: validated.listing_id,
+        error_code: 'LISTING_NOT_ACTIVE',
+        message: 'Listing is not active',
+        state: 'no_funds_moved',
+      });
       return NextResponse.json(
-        { error: 'Listing is not active', code: 'LISTING_NOT_ACTIVE', ...envMeta('clawdmarket/api/trades') },
+        { ...paymentError('LISTING_NOT_ACTIVE', 'Listing is not active'), ...envMeta('clawdmarket/api/trades') },
         { status: 400 }
       );
     }
@@ -168,6 +197,16 @@ export async function POST(req: NextRequest) {
       const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
 
       const newTrade = await db.transaction(async (tx) => {
+        const claimedRows = await tx
+          .update(listings)
+          .set({ status: 'sold' })
+          .where(and(eq(listings.id, validated.listing_id), eq(listings.status, 'active')))
+          .returning({ id: listings.id });
+
+        if (claimedRows.length === 0) {
+          throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
+        }
+
         const [trade] = await tx
           .insert(trades)
           .values({
@@ -179,8 +218,6 @@ export async function POST(req: NextRequest) {
             status: 'pending',
           })
           .returning();
-
-        await tx.update(listings).set({ status: 'sold' }).where(eq(listings.id, validated.listing_id));
 
         await tx.insert(transactions).values({
           from_user_id: auth.userId,
@@ -258,10 +295,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (buyerWallet.balance < totalCost) {
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        seller_id: listing.seller_id,
+        amount: totalCost,
+        token: 'bnkr',
+        route: 'POST /api/trades',
+        listing_id: validated.listing_id,
+        error_code: 'INSUFFICIENT_FUNDS',
+        message: `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`,
+        state: 'no_funds_moved',
+      });
       return NextResponse.json(
         {
-          error: `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`,
-          code: 'INSUFFICIENT_FUNDS',
+          ...paymentError('INSUFFICIENT_FUNDS', `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`),
           ...envMeta('clawdmarket/api/trades'),
         },
         { status: 402 } // Payment Required
@@ -273,23 +320,48 @@ export async function POST(req: NextRequest) {
     // 2. Perform atomic trade creation & fund locking
     // Note: Drizzle's `db.transaction` works with @libsql/client (Turso)
     const newTrade = await db.transaction(async (tx) => {
-      // Deduct from buyer balance, move amount to escrow
-      // Fee is burned (or moved to platform wallet - for now we just deduct it)
-      await tx
+      const claimedRows = await tx
+        .update(listings)
+        .set({ status: 'sold' })
+        .where(and(eq(listings.id, validated.listing_id), eq(listings.status, 'active')))
+        .returning({ id: listings.id });
+
+      if (claimedRows.length === 0) {
+        throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
+      }
+
+      const walletUpdateRows = await tx
         .update(wallets)
         .set({
           balance: sql`${wallets.balance} - ${totalCost}`,
           escrow: sql`${wallets.escrow} + ${validated.amount}`,
         })
-        .where(eq(wallets.user_id, auth.userId));
+        .where(and(eq(wallets.user_id, auth.userId), sql`${wallets.balance} >= ${totalCost}`))
+        .returning({ user_id: wallets.user_id });
+
+      if (walletUpdateRows.length === 0) {
+        throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient funds at commit time. Required ${totalCost} BANKR.`);
+      }
+
+      const [trade] = await tx
+        .insert(trades)
+        .values({
+          listing_id: validated.listing_id,
+          buyer_id: auth.userId,
+          seller_id: listing.seller_id,
+          amount: validated.amount,
+          fee: fee,
+          status: 'pending',
+        })
+        .returning();
 
       // Record transaction: Lock funds
       await tx.insert(transactions).values({
         from_user_id: auth.userId,
         amount: validated.amount,
         type: 'escrow_lock',
-        reference_id: validated.listing_id, // temporarily link to listing until trade ID exists
-        memo: `Escrow lock for listing ${listings.title.name || validated.listing_id}`,
+        reference_id: trade.id,
+        memo: `Escrow lock for listing ${validated.listing_id}`,
       });
 
       // Record transaction: Fee (credited to configured admin fee wallet when available)
@@ -306,37 +378,12 @@ export async function POST(req: NextRequest) {
           to_user_id: adminFeeRecipientUserId,
           amount: fee,
           type: 'fee',
-          reference_id: validated.listing_id,
+          reference_id: trade.id,
           memo: adminFeeRecipientUserId
             ? 'Marketplace fee (3%) credited to admin wallet'
             : 'Marketplace fee (3%) with no admin wallet configured',
         });
       }
-
-      // Create trade record
-      const [trade] = await tx
-        .insert(trades)
-        .values({
-          listing_id: validated.listing_id,
-          buyer_id: auth.userId,
-          seller_id: listing.seller_id,
-          amount: validated.amount,
-          fee: fee,
-          status: 'pending',
-        })
-        .returning();
-
-      // Update transactions to reference the real trade ID
-      await tx
-        .update(transactions)
-        .set({ reference_id: trade.id })
-        .where(eq(transactions.reference_id, validated.listing_id));
-
-      // Mark listing as sold
-      await tx
-        .update(listings)
-        .set({ status: 'sold' })
-        .where(eq(listings.id, validated.listing_id));
 
       return trade;
     });
@@ -369,6 +416,22 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error: any) {
+    if (error instanceof TradeRaceError) {
+      const status = error.code === 'LISTING_ALREADY_CLAIMED' ? 409 : 402;
+      await logPaymentFailure({
+        buyer_id: auth.userId,
+        token: 'bnkr',
+        route: 'POST /api/trades',
+        error_code: error.code,
+        message: error.message,
+        state: 'no_funds_moved',
+      });
+      return NextResponse.json(
+        { ...paymentError(error.code, error.message), ...envMeta('clawdmarket/api/trades') },
+        { status }
+      );
+    }
+
     if (error.errors) {
       return NextResponse.json(
         { error: 'Validation failed', details: error.errors, code: 'VALIDATION_FAILED', ...envMeta('clawdmarket/api/trades') },
@@ -376,8 +439,16 @@ export async function POST(req: NextRequest) {
       );
     }
     console.error('Trade creation error:', error);
+    await logPaymentFailure({
+      buyer_id: auth.userId,
+      token: 'bnkr',
+      route: 'POST /api/trades',
+      error_code: 'INTERNAL_ERROR',
+      message: error?.message || 'Internal server error',
+      state: 'no_funds_moved',
+    });
     return NextResponse.json(
-      { error: 'Internal server error', code: 'INTERNAL_ERROR', ...envMeta('clawdmarket/api/trades') },
+      { ...paymentError('INTERNAL_ERROR', 'Internal server error'), ...envMeta('clawdmarket/api/trades') },
       { status: 500 }
     );
   }

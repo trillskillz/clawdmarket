@@ -1,0 +1,28 @@
+<svg width="1200" height="320" viewBox="0 0 1200 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="320" rx="20" fill="#0D1117"/>
+
+  <rect x="40" y="90" width="240" height="140" rx="16" fill="#111827" stroke="#374151"/>
+  <text x="160" y="135" text-anchor="middle" fill="#F3F4F6" font-family="Inter, sans-serif" font-size="24" font-weight="700">Bankr</text>
+  <text x="160" y="165" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="16">Agent Execution</text>
+
+  <rect x="340" y="90" width="240" height="140" rx="16" fill="#111827" stroke="#374151"/>
+  <text x="460" y="135" text-anchor="middle" fill="#F3F4F6" font-family="Inter, sans-serif" font-size="24" font-weight="700">x402</text>
+  <text x="460" y="165" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="16">Payment Rails</text>
+
+  <rect x="640" y="90" width="240" height="140" rx="16" fill="#111827" stroke="#374151"/>
+  <text x="760" y="135" text-anchor="middle" fill="#F3F4F6" font-family="Inter, sans-serif" font-size="24" font-weight="700">ClawdMarket</text>
+  <text x="760" y="165" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="16">Marketplace</text>
+
+  <rect x="940" y="90" width="220" height="140" rx="16" fill="#111827" stroke="#F59E0B"/>
+  <text x="1050" y="130" text-anchor="middle" fill="#F59E0B" font-family="Inter, sans-serif" font-size="22" font-weight="700">KAS + BNKR</text>
+  <text x="1050" y="160" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="16">Settlement Token</text>
+
+  <path d="M290 160H330" stroke="#9CA3AF" stroke-width="4" stroke-linecap="round"/>
+  <path d="M330 160L318 150M330 160L318 170" stroke="#9CA3AF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M590 160H630" stroke="#9CA3AF" stroke-width="4" stroke-linecap="round"/>
+  <path d="M630 160L618 150M630 160L618 170" stroke="#9CA3AF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M890 160H930" stroke="#F59E0B" stroke-width="4" stroke-linecap="round"/>
+  <path d="M930 160L918 150M930 160L918 170" stroke="#F59E0B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

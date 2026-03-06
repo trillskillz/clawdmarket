@@ -1,0 +1,74 @@
+{
+  "kas_references": [
+    {
+      "file": "app/page.tsx",
+      "line": 98,
+      "description": "Homepage copy references 3% fee funding KAS + BNKR treasury."
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 159,
+      "description": "Token section logo alt text references KAS + BNKR."
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 163,
+      "description": "Hero token label renders KAS + BNKR branding."
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 167,
+      "description": "Marketing copy references future KAS + BNKR drop."
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 182,
+      "description": "Feature copy says trading fees fund KAS + BNKR development."
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 200,
+      "description": "Tokenomics heading for KAS + BNKR page section."
+    }
+  ],
+  "payment_logic_locations": [
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line_range": "160-236",
+      "description": "Client-side BANKR on-chain transfer flow (escrow + fee transfers) using wagmi/viem, then POST to /api/trades with payment metadata."
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line_range": "130-366",
+      "description": "Trade creation endpoint handling both on-chain payment_mode validation and internal-ledger escrow lock/fee accounting transaction paths."
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line_range": "90-149",
+      "description": "Trade status transitions; escrow release/refund behavior for legacy internal ledger and on-chain completion bookkeeping."
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line_range": "60-210",
+      "description": "Internal wallet ledger primitives: escrowLock, escrowRelease, escrowRefund, transfer with balance checks and transaction logs."
+    },
+    {
+      "file": "lib/schema.ts",
+      "line_range": "186-229",
+      "description": "Wallet/transaction/trade schema, including escrow fields and transaction type enums that define settlement states."
+    }
+  ],
+  "abstraction_assessment": {
+    "assessment": "partially_abstracted",
+    "details": [
+      "Internal ledger operations are abstracted in lib/wallet.ts.",
+      "Core payment routing decisions are still embedded in API route handlers and UI flow (payment_mode branching in app/api/trades/route.ts and transfer prep in app/marketplace/[id]/page.tsx).",
+      "No single PaymentService/SettlementService interface currently encapsulates both on-chain and internal ledger flows."
+    ],
+    "risk": "medium"
+  },
+  "multi_token_readiness": {
+    "score": 5,
+    "explanation": "The code already supports more than one settlement path (on-chain BANKR vs internal ledger) and stores payment metadata, so groundwork exists. However, token-specific routing is hardcoded across UI/API layers, and there is no unified settlement abstraction yet. BNKR + KAS dual-token support is feasible without a full rewrite, but it needs targeted refactor into shared payment interfaces and middleware before scaling safely."
+  }
+}

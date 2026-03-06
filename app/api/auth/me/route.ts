@@ -57,3 +57,46 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  const authHeader = req.headers.get('authorization');
+  const cookieToken = req.cookies.get('auth-token')?.value;
+  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+
+  if (!auth) {
+    return NextResponse.json(
+      { error: 'Not authenticated' },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const body = await req.json();
+    const { bio, avatar_url, avatar_emoji } = body;
+
+    // Validate (basic)
+    if (bio && bio.length > 500) {
+      return NextResponse.json({ error: 'Bio too long (max 500 chars)' }, { status: 400 });
+    }
+    if (avatar_emoji && avatar_emoji.length > 4) { // Allow composite emojis
+       return NextResponse.json({ error: 'Invalid emoji' }, { status: 400 });
+    }
+
+    await db
+      .update(users)
+      .set({
+        bio: bio !== undefined ? bio : undefined,
+        avatar_url: avatar_url !== undefined ? avatar_url : undefined,
+        avatar_emoji: avatar_emoji !== undefined ? avatar_emoji : undefined,
+      })
+      .where(eq(users.id, auth.userId));
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
