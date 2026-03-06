@@ -1,7 +1,6 @@
 'use client';
 
-import { useAccount, useDisconnect, useSignMessage, useSwitchChain } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount, useConnect, useDisconnect, useSignMessage, useSwitchChain } from 'wagmi';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -19,6 +18,7 @@ export default function WalletLoginPopup({
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
+  const { connectors, connectAsync, isPending: isConnecting } = useConnect();
   const { signMessageAsync } = useSignMessage();
   const { switchChainAsync } = useSwitchChain();
 
@@ -153,8 +153,38 @@ export default function WalletLoginPopup({
           <div className="flex items-center gap-2">
             {isConnected ? (
               <button onClick={() => disconnect()} className="btn-secondary text-sm py-2 px-3">Disconnect</button>
-            ) : null}
-            <ConnectButton accountStatus="address" chainStatus="icon" showBalance={false} />
+            ) : (
+              <>
+                <button
+                  onClick={async () => {
+                    const connector = connectors.find((c) => c.id === 'injected') || connectors[0];
+                    if (!connector) {
+                      setError('No wallet connector available');
+                      return;
+                    }
+                    await connectAsync({ connector });
+                  }}
+                  disabled={isConnecting}
+                  className="btn-primary text-sm py-2 px-3"
+                >
+                  {isConnecting ? 'Connecting…' : 'Connect Browser Wallet'}
+                </button>
+                <button
+                  onClick={async () => {
+                    const connector = connectors.find((c) => c.id.includes('coinbase') || c.name.toLowerCase().includes('coinbase'));
+                    if (!connector) {
+                      setError('Coinbase Wallet connector unavailable');
+                      return;
+                    }
+                    await connectAsync({ connector });
+                  }}
+                  disabled={isConnecting}
+                  className="btn-secondary text-sm py-2 px-3"
+                >
+                  Coinbase Wallet
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
