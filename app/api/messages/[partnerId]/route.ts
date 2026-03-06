@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { messages } from '@/lib/schema';
 import { eq, or, and, asc } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
+import { decryptMessage } from '@/lib/chat-crypto';
 
 // GET /api/messages/[partnerId]
 // Fetch conversation history with a specific partner
@@ -35,7 +36,18 @@ export async function GET(
       },
     });
 
-    return NextResponse.json(conversation);
+    const withPlaintext = await Promise.all(
+      conversation.map(async (m) => {
+        try {
+          const content = await decryptMessage(m.encrypted_content, m.nonce);
+          return { ...m, content };
+        } catch {
+          return { ...m, content: '[Decryption Error]' };
+        }
+      })
+    );
+
+    return NextResponse.json(withPlaintext);
   } catch (error) {
     console.error('Error fetching conversation:', error);
     return NextResponse.json(

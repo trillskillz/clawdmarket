@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
-import sodium from 'libsodium-wrappers';
+
 
 interface Message {
   id: string;
@@ -14,7 +14,7 @@ interface Message {
   encrypted_content: string;
   nonce: string;
   created_at: string;
-  decrypted?: string;
+  content?: string;
 }
 
 interface Partner {
@@ -38,13 +38,6 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Initialize Sodium
-  useEffect(() => {
-    const initSodium = async () => {
-      await sodium.ready;
-    };
-    initSodium();
-  }, []);
 
   // Fetch partners
   useEffect(() => {
@@ -77,33 +70,8 @@ export default function MessagesPage() {
 
     fetch(`/api/messages/${selectedPartnerId}`)
       .then((res) => res.json())
-      .then(async (data: Message[]) => {
-        // Decrypt messages
-        // NOTE: In a real app, we would use proper key management.
-        // For this demo, we simulate E2EE by assuming a shared secret derived from IDs or simple encryption.
-        // REAL E2EE requires a key server. Here we use a simpler approach for demonstration:
-        // Key = hash(sorted(userId, partnerId) + "SECRET_SALT").
-        // This is strictly symmetric encryption for the channel, not full public-key E2EE, 
-        // but fits the "non-federated" constraint without external infrastructure.
-        // To do REAL E2EE, we'd need to store public keys in the DB.
-        
-        await sodium.ready;
-        const keyString = [user.id, selectedPartnerId].sort().join(':') + ':CLAWDS_SECRET';
-        const keyMaterial = sodium.from_string(keyString);
-        const key = sodium.crypto_generichash(32, keyMaterial, null);
-
-        const decryptedMessages = data.map((msg) => {
-          try {
-            const nonce = sodium.from_base64(msg.nonce);
-            const cipherText = sodium.from_base64(msg.encrypted_content);
-            const decrypted = sodium.crypto_secretbox_open_easy(cipherText, nonce, key);
-            return { ...msg, decrypted: sodium.to_string(decrypted) };
-          } catch (e) {
-            return { ...msg, decrypted: '[Decryption Error]' };
-          }
-        });
-        
-        setMessages(decryptedMessages);
+      .then((data: Message[]) => {
+        setMessages(data);
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
       });
   }, [selectedPartnerId, user]);
@@ -114,26 +82,18 @@ export default function MessagesPage() {
 
     setSending(true);
     try {
-      await sodium.ready;
-      const keyString = [user.id, selectedPartnerId].sort().join(':') + ':CLAWDS_SECRET';
-      const keyMaterial = sodium.from_string(keyString);
-      const key = sodium.crypto_generichash(32, keyMaterial, null);
-      const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
-      const encrypted = sodium.crypto_secretbox_easy(newMessage, nonce, key);
-
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           receiverId: selectedPartnerId,
-          encryptedContent: sodium.to_base64(encrypted),
-          nonce: sodium.to_base64(nonce),
+          content: newMessage,
         }),
       });
 
       if (res.ok) {
         const sentMsg = await res.json();
-        setMessages([...messages, { ...sentMsg, decrypted: newMessage }]);
+        setMessages([...messages, { ...sentMsg, content: newMessage }]);
         setNewMessage('');
         setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
       }
@@ -207,7 +167,7 @@ export default function MessagesPage() {
                     {partners.find((p) => p.id === selectedPartnerId)?.name || 'Chat'}
                   </div>
                   <div className="text-xs text-accent2 flex items-center gap-1">
-                     🔒 E2EE Active
+                     🔒 Encrypted chat storage active
                   </div>
                 </div>
 
@@ -227,7 +187,7 @@ export default function MessagesPage() {
                               : 'bg-surface border border-border text-text rounded-bl-none'
                           }`}
                         >
-                          <div className="text-sm break-words">{msg.decrypted}</div>
+                          <div className="text-sm break-words">{msg.content}</div>
                           <div className={`text-[10px] mt-1 ${isMe ? 'text-white/70' : 'text-text-dim'}`}>
                             {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>

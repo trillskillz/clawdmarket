@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { messages, users } from '@/lib/schema';
 import { desc, eq, inArray } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
+import { encryptMessage } from '@/lib/chat-crypto';
 
 // POST /api/messages
 // Send an encrypted message
@@ -13,20 +14,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { receiverId, encryptedContent, nonce } = await req.json();
+    const { receiverId, content, encryptedContent, nonce } = await req.json();
 
-    if (!receiverId || !encryptedContent || !nonce) {
+    if (!receiverId || (!content && (!encryptedContent || !nonce))) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
+    const payload = content
+      ? await encryptMessage(content)
+      : { encrypted_content: encryptedContent, nonce };
+
     const message = await db.insert(messages).values({
       sender_id: session.user.id,
       receiver_id: receiverId,
-      encrypted_content: encryptedContent,
-      nonce: nonce,
+      encrypted_content: payload.encrypted_content,
+      nonce: payload.nonce,
     }).returning();
 
     return NextResponse.json(message[0]);
