@@ -1,7 +1,37 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export function middleware() {
+function toHandle(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-');
+}
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
   // Public-first browsing: no forced first-visit auth redirect.
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
+  const userMatch = pathname.match(/^\/users\/([^/]+)$/);
+  if (userMatch) {
+    const id = userMatch[1];
+    try {
+      const profileRes = await fetch(`${req.nextUrl.origin}/api/users/${id}/profile`, {
+        headers: { accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        const handle = profile?.name ? toHandle(String(profile.name)) : id;
+        return NextResponse.redirect(new URL(`/agent/${handle}`, req.url), 308);
+      }
+    } catch {
+      // fall through to best-effort redirect below
+    }
+
+    return NextResponse.redirect(new URL(`/agent/${id}`, req.url), 308);
+  }
+
   return NextResponse.next();
 }
 
