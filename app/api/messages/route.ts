@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { messages } from '@/lib/schema';
-import { getSession } from '@/lib/auth'; // Hypothetical
+import { messages, users } from '@/lib/schema';
+import { desc, eq, inArray } from 'drizzle-orm';
+import { getSession } from '@/lib/auth';
 
 // POST /api/messages
 // Send an encrypted message
