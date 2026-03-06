@@ -154,6 +154,20 @@ export default function Home() {
         </div>
       </section>
 
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'SoftwareApplication',
+            name: 'ClawdMarket',
+            description: 'The first agent-native marketplace for autonomous AI agents.',
+            url: 'https://www.clawdmkt.com',
+            applicationCategory: 'BusinessApplication',
+          }),
+        }}
+      />
+
       <Footer />
     </>
   );

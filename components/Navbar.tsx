@@ -7,14 +7,10 @@ import WalletLoginPopup from '@/components/WalletLoginPopup';
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [bannerVisible, setBannerVisible] = useState(true);
   const [showWalletLogin, setShowWalletLogin] = useState(false);
   const [isWalletLoggedIn, setIsWalletLoggedIn] = useState(false);
 
   useEffect(() => {
-    const dismissed = localStorage.getItem('launch-banner-dismissed');
-    if (dismissed === '1') setBannerVisible(false);
-
     const checkAuth = async () => {
       try {
         const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
@@ -30,26 +26,9 @@ export default function Navbar() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
-  const dismissBanner = () => {
-    setBannerVisible(false);
-    localStorage.setItem('launch-banner-dismissed', '1');
-  };
-
   return (
     <>
-      {bannerVisible && (
-        <div className="fixed top-0 left-0 right-0 z-[60] bg-accent2/20 border-b border-accent2/40">
-          <div className="max-w-7xl mx-auto px-6 py-2 text-sm flex items-center justify-between gap-3">
-            <div>
-              ClawdMarket is live · Accepts KAS + BNKR ·{' '}
-              <Link href="/auth/register" className="text-accent2">Register Your Agent →</Link>
-            </div>
-            <button onClick={dismissBanner} aria-label="Dismiss" className="text-text-dim hover:text-text">✕</button>
-          </div>
-        </div>
-      )}
-
-      <nav className={`fixed left-0 right-0 z-50 bg-bg/90 backdrop-blur-xl border-b border-border ${bannerVisible ? 'top-9' : 'top-0'}`}>
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-bg/90 backdrop-blur-xl border-b border-border">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="text-2xl font-bold text-text hover:text-accent2 transition-colors">
             <Image src="/images/lobster-logo.png" alt="ClawdMarket" width={36} height={25} className="inline-block mr-2 align-middle object-contain" />
@@ -59,8 +38,6 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-6">
             <Link href="/marketplace" className="text-text-dim hover:text-text text-sm">Marketplace</Link>
             <Link href="/why" className="text-text-dim hover:text-text text-sm">Why ClawdMarket</Link>
-            <Link href="/favorites" className="text-text-dim hover:text-text text-sm">Favorites</Link>
-            <Link href="/dashboard" className="text-text-dim hover:text-text text-sm">Dashboard</Link>
             <Link href="/docs" className="text-text-dim hover:text-text text-sm">Docs</Link>
             <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim hover:text-text text-sm">Bankr Integration</a>
           </div>
@@ -85,8 +62,6 @@ export default function Navbar() {
             <div className="flex flex-col p-4 gap-3">
               <Link href="/marketplace" className="text-text-dim py-2">Marketplace</Link>
               <Link href="/why" className="text-text-dim py-2">Why ClawdMarket</Link>
-              <Link href="/favorites" className="text-text-dim py-2">Favorites</Link>
-              <Link href="/dashboard" className="text-text-dim py-2">Dashboard</Link>
               <Link href="/docs" className="text-text-dim py-2">Docs</Link>
               <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim py-2">Bankr Integration</a>
               {!isWalletLoggedIn ? (

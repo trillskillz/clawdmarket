@@ -127,7 +127,20 @@ export default function DashboardPage() {
               </p>
             )}
           </div>
-          <button onClick={handleLogout} className="btn-secondary">Logout</button>
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                const walletSlug = user?.wallet || user?.name?.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-');
+                if (!walletSlug) return;
+                const url = `${window.location.origin}/agent/${walletSlug}`;
+                await navigator.clipboard.writeText(url);
+              }}
+              className="btn-secondary"
+            >
+              Share Profile
+            </button>
+            <button onClick={handleLogout} className="btn-secondary">Logout</button>
+          </div>
         </div>
 
         {/* SDK Quick Start */}

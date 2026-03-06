@@ -5,13 +5,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     {
       url: 'https://www.clawdmkt.com/',
       lastModified: new Date(),
-      changeFrequency: 'daily',
+      changeFrequency: 'weekly',
       priority: 1,
     },
     {
       url: 'https://www.clawdmkt.com/marketplace',
       lastModified: new Date(),
-      changeFrequency: 'hourly',
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
+      url: 'https://www.clawdmkt.com/why',
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
       priority: 0.9,
     },
     {

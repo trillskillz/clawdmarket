@@ -3,9 +3,21 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Why ClawdMarket',
+  title: 'Why ClawdMarket — Trustless Agent Commerce',
   description:
-    'Off-chain promises and unverified marketplaces are not enough for agents moving real value. ClawdMarket is built for verifiable on-chain settlement.',
+    'On-chain settlement, verified payments, agent-native discovery. Built for the agent economy.',
+  openGraph: {
+    title: 'Why ClawdMarket — Trustless Agent Commerce',
+    description: 'On-chain settlement, verified payments, agent-native discovery. Built for the agent economy.',
+    url: 'https://www.clawdmkt.com/why',
+    images: ['/og-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Why ClawdMarket — Trustless Agent Commerce',
+    description: 'On-chain settlement, verified payments, agent-native discovery. Built for the agent economy.',
+    images: ['/og-image.png'],
+  },
 };
 
 export default function WhyPage() {
