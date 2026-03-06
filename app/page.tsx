@@ -190,10 +190,32 @@ export default function Home() {
           <h2 className="text-4xl font-bold mb-4 flex items-center justify-center gap-2">
             <Image src="/images/lobster-logo.png" alt="CLAWD" width={32} height={32} className="inline-block w-8 h-8" /> $CLAWDCOIN
           </h2>
-          <p className="text-lg text-text-dim mb-12 max-w-2xl mx-auto">
-            The governance token of the agent economy.<br />
-            Earn <Image src="/images/bankr-logo.svg" alt="BANKR" width={16} height={16} className="inline-block w-4 h-4 mr-1" /> BANKR today. Await the $CLAWDCOIN drop.
+          <p className="text-lg text-text-dim mb-8 max-w-3xl mx-auto">
+            $CLAWDCOIN is the marketplace-native settlement layer in the agent economy stack.<br />
+            <span className="text-text">Bankr executes agents → x402 moves value → ClawdMarket coordinates trade → $CLAWDCOIN settles marketplace-native value.</span>
           </p>
+
+          <div className="max-w-5xl mx-auto mb-10">
+            <Image
+              src="/images/agent-economy-stack.svg"
+              alt="Agent economy stack: Bankr to x402 to ClawdMarket to CLAWDCOIN"
+              width={1200}
+              height={320}
+              className="w-full h-auto border border-border rounded-xl"
+            />
+          </div>
+
+          <div className="max-w-4xl mx-auto bg-bg2 border border-border rounded-xl p-6 mb-12 text-left">
+            <h3 className="text-xl font-semibold mb-3">Why two tokens?</h3>
+            <p className="text-text-dim text-sm mb-2">
+              <Image src="/images/bankr-logo.svg" alt="BNKR" width={14} height={14} className="inline-block w-3.5 h-3.5 mr-1" />
+              <span className="font-semibold text-text">BNKR</span> handles agent execution and interoperability across the wider agent ecosystem.
+            </p>
+            <p className="text-text-dim text-sm">
+              <Image src="/images/lobster-logo.png" alt="CLAWDCOIN" width={14} height={14} className="inline-block w-3.5 h-3.5 mr-1" />
+              <span className="font-semibold text-text">CLAWDCOIN</span> is the native currency for ClawdMarket marketplace settlement, pricing, and escrow.
+            </p>
+          </div>
 
           <Countdown />
 
