@@ -1,0 +1,2745 @@
+{
+  "payment_flows": [
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 33,
+      "description": "completed_trades_as_seller: number;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 47,
+      "description": "const [tradeLoading, setTradeLoading] = useState(false);"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 57,
+      "description": "const { writeContractAsync } = useWriteContract();"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 165,
+      "description": "const escrowWallet = process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 168,
+      "description": "if (!bankrToken || !escrowWallet || !devFeeWallet) {"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 173,
+      "description": "const fee = listing.price_bankr * 0.03;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 174,
+      "description": "const total = listing.price_bankr + fee;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 176,
+      "description": "if (!confirm(`Are you sure you want to buy this item?\\n\\nPrice: ${listing.price_bankr} BANKR\\nFee (3%): ${fee.toFixed(2)} BANKR\\nTotal: ${total.toFixed(2)} BANKR\\n\\nYou will sign o"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 180,
+      "description": "track('trade_init', { listing_id: listing.id, amount: listing.price_bankr });"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 184,
+      "description": "const escrowAmount = parseUnits(listing.price_bankr.toFixed(18), 18);"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 185,
+      "description": "const feeAmount = parseUnits(fee.toFixed(18), 18);"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 187,
+      "description": "const escrowTxHash = await writeContractAsync({"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 191,
+      "description": "functionName: 'transfer',"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 192,
+      "description": "args: [escrowWallet as `0x${string}`, escrowAmount],"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 195,
+      "description": "await basePublicClient.waitForTransactionReceipt({ hash: escrowTxHash });"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 197,
+      "description": "const feeTxHash = await writeContractAsync({"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 201,
+      "description": "functionName: 'transfer',"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 202,
+      "description": "args: [devFeeWallet as `0x${string}`, feeAmount],"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 205,
+      "description": "await basePublicClient.waitForTransactionReceipt({ hash: feeTxHash });"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 208,
+      "description": "const res = await fetch('/api/trades', {"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 218,
+      "description": "payment_mode: 'onchain',"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 219,
+      "description": "onchain: {"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 223,
+      "description": "escrow_wallet: escrowWallet,"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 224,
+      "description": "fee_wallet: devFeeWallet,"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 225,
+      "description": "escrow_tx_hash: escrowTxHash,"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 226,
+      "description": "fee_tx_hash: feeTxHash,"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 389,
+      "description": "{sellerProfile.stats.completed_trades_as_seller} completed sales"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 437,
+      "description": "disabled={tradeLoading}"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 440,
+      "description": "{tradeLoading ? ("
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 457,
+      "description": "Funds are held securely in escrow until you confirm the order is complete."
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 3,
+      "description": "import { trades, listings, users, wallets, transactions } from '@/lib/schema';"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 17,
+      "description": "const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 39,
+      "description": "bio: `Admin fee wallet ${adminWalletAddress}`,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 50,
+      "description": "escrow: 0,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 80,
+      "description": "const rateLimitResult = rateLimit(`trade:${auth.userId}`, {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 87,
+      "description": "{ error: 'Too many trade attempts. Please try again later.' },"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 107,
+      "description": "{ error: 'Listing not found', code: 'LISTING_NOT_FOUND', ...envMeta('clawdmarket/api/trades') },"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 114,
+      "description": "{ error: 'Listing is not active', code: 'LISTING_NOT_ACTIVE', ...envMeta('clawdmarket/api/trades') },"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 121,
+      "description": "{ error: 'Partial fills are not supported', code: 'PARTIAL_FILL_NOT_SUPPORTED', ...envMeta('clawdmarket/api/trades') },"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 133,
+      "description": "// Calculate fee"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 134,
+      "description": "const fee = validated.amount * ECOSYSTEM_FEE_PERCENT;"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 135,
+      "description": "const totalCost = validated.amount + fee;"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 137,
+      "description": "const bodyPaymentMode = (body?.payment_mode || '').toString();"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 138,
+      "description": "const onchain = body?.onchain || null;"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 140,
+      "description": "if (bodyPaymentMode === 'onchain') {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 152,
+      "description": "if (!onchain || onchain.chain !== 'base') {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 157,
+      "description": "String(onchain.token_address || '').toLowerCase() !== expectedToken ||"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 158,
+      "description": "String(onchain.escrow_wallet || '').toLowerCase() !== expectedEscrow ||"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 159,
+      "description": "String(onchain.fee_wallet || '').toLowerCase() !== expectedFeeWallet"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 164,
+      "description": "if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || '')) || !TX_HASH_RE.test(String(onchain.fee_tx_hash || ''))) {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 171,
+      "description": "const [trade] = await tx"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 172,
+      "description": ".insert(trades)"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 178,
+      "description": "fee,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 185,
+      "description": "await tx.insert(transactions).values({"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 189,
+      "description": "type: 'transfer',"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 190,
+      "description": "reference_id: trade.id,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 191,
+      "description": "memo: `On-chain escrow transfer (${onchain.escrow_tx_hash})`,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 194,
+      "description": "if (fee > 0) {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 198,
+      "description": ".set({ balance: sql`${wallets.balance} + ${fee}` })"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 202,
+      "description": "await tx.insert(transactions).values({"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 205,
+      "description": "amount: fee,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 206,
+      "description": "type: 'fee',"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 207,
+      "description": "reference_id: trade.id,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 208,
+      "description": "memo: `On-chain fee transfer (${onchain.fee_tx_hash})`,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 212,
+      "description": "return trade;"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 216,
+      "description": "fireWebhook(auth.userId, 'trade.created', { trade: newTrade }),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 217,
+      "description": "fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade }),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 218,
+      "description": "fireWebhook(listing.seller_id, 'listing.sold', { listing_id: validated.listing_id, trade: newTrade }),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 224,
+      "description": "trade: newTrade,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 226,
+      "description": "fee_info: {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 228,
+      "description": "ecosystem_fee: fee,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 230,
+      "description": "admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 232,
+      "description": "onchain_receipts: {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 233,
+      "description": "escrow_tx_hash: onchain.escrow_tx_hash,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 234,
+      "description": "fee_tx_hash: onchain.fee_tx_hash,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 236,
+      "description": "...envMeta('clawdmarket/api/trades'),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 265,
+      "description": "...envMeta('clawdmarket/api/trades'),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 273,
+      "description": "// 2. Perform atomic trade creation & fund locking"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 276,
+      "description": "// Deduct from buyer balance, move amount to escrow"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 282,
+      "description": "escrow: sql`${wallets.escrow} + ${validated.amount}`,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 287,
+      "description": "await tx.insert(transactions).values({"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 290,
+      "description": "type: 'escrow_lock',"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 291,
+      "description": "reference_id: validated.listing_id, // temporarily link to listing until trade ID exists"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 295,
+      "description": "// Record transaction: Fee (credited to configured admin fee wallet when available)"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 296,
+      "description": "if (fee > 0) {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 300,
+      "description": ".set({ balance: sql`${wallets.balance} + ${fee}` })"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 304,
+      "description": "await tx.insert(transactions).values({"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 307,
+      "description": "amount: fee,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 308,
+      "description": "type: 'fee',"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 311,
+      "description": "? 'Marketplace fee (3%) credited to admin wallet'"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 312,
+      "description": ": 'Marketplace fee (3%) with no admin wallet configured',"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 316,
+      "description": "// Create trade record"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 317,
+      "description": "const [trade] = await tx"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 318,
+      "description": ".insert(trades)"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 324,
+      "description": "fee: fee,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 329,
+      "description": "// Update transactions to reference the real trade ID"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 331,
+      "description": ".update(transactions)"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 332,
+      "description": ".set({ reference_id: trade.id })"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 333,
+      "description": ".where(eq(transactions.reference_id, validated.listing_id));"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 341,
+      "description": "return trade;"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 347,
+      "description": "fireWebhook(auth.userId, 'trade.created', { trade: newTrade }),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 348,
+      "description": "fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade }),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 349,
+      "description": "fireWebhook(listing.seller_id, 'listing.sold', { listing_id: validated.listing_id, trade: newTrade }),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 350,
+      "description": "fireWebhook(auth.userId, 'balance.changed', { reason: 'escrow_lock', trade_id: newTrade.id }),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 355,
+      "description": "message: 'Trade initiated successfully. Funds locked in escrow.',"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 356,
+      "description": "trade: newTrade,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 358,
+      "description": "fee_info: {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 360,
+      "description": "ecosystem_fee: fee,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 361,
+      "description": "seller_receives: validated.amount, // No fee for seller in this model, buyer pays fee"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 362,
+      "description": "admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 364,
+      "description": "...envMeta('clawdmarket/api/trades'),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 374,
+      "description": "{ error: 'Validation failed', details: error.errors, code: 'VALIDATION_FAILED', ...envMeta('clawdmarket/api/trades') },"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 380,
+      "description": "{ error: 'Internal server error', code: 'INTERNAL_ERROR', ...envMeta('clawdmarket/api/trades') },"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 401,
+      "description": "id: trades.id,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 402,
+      "description": "listing_id: trades.listing_id,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 404,
+      "description": "buyer_id: trades.buyer_id,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 406,
+      "description": "seller_id: trades.seller_id,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 407,
+      "description": "amount: trades.amount,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 408,
+      "description": "fee: trades.fee,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 409,
+      "description": "status: trades.status,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 410,
+      "description": "created_at: trades.created_at,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 411,
+      "description": "completed_at: trades.completed_at,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 413,
+      "description": ".from(trades)"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 414,
+      "description": ".leftJoin(listings, eq(trades.listing_id, listings.id))"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 415,
+      "description": ".leftJoin(users, eq(trades.buyer_id, users.id))"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 418,
+      "description": "eq(trades.buyer_id, auth.userId),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 419,
+      "description": "eq(trades.seller_id, auth.userId)"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 422,
+      "description": ".orderBy(desc(trades.created_at));"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 424,
+      "description": "return NextResponse.json({ trades: userTrades, ...envMeta('clawdmarket/api/trades') });"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 3,
+      "description": "import { trades, wallets, transactions } from '@/lib/schema';"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 40,
+      "description": "return NextResponse.json({ error: 'Invalid trade ID' }, { status: 400 });"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 43,
+      "description": "const [trade] = await db"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 45,
+      "description": ".from(trades)"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 46,
+      "description": ".where(eq(trades.id, params.id));"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 48,
+      "description": "if (!trade) {"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 56,
+      "description": "const isParty = trade.buyer_id === auth.userId || trade.seller_id === auth.userId;"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 60,
+      "description": "{ error: 'You are not part of this trade' },"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 65,
+      "description": "if (trade.status !== 'pending') {"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 67,
+      "description": "{ error: `Cannot update trade with status '${trade.status}'. Only pending trades can be updated.` },"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 76,
+      "description": "if (trade.buyer_id !== auth.userId) {"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 78,
+      "description": "{ error: 'Only the buyer can mark a trade as completed' },"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 86,
+      "description": "// 1. Update trade status"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 88,
+      "description": ".update(trades)"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 93,
+      "description": ".where(eq(trades.id, params.id))"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 98,
+      "description": "const [escrowLockTx] = await tx"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 100,
+      "description": ".from(transactions)"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 101,
+      "description": ".where(and(eq(transactions.reference_id, trade.id), eq(transactions.type, 'escrow_lock')))"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 104,
+      "description": "if (escrowLockTx) {"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 108,
+      "description": ".set({ escrow: sql`${wallets.escrow} - ${trade.amount}` })"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 109,
+      "description": ".where(eq(wallets.user_id, trade.buyer_id));"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 113,
+      "description": ".set({ balance: sql`${wallets.balance} + ${trade.amount}` })"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 114,
+      "description": ".where(eq(wallets.user_id, trade.seller_id));"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 116,
+      "description": "await tx.insert(transactions).values({"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 117,
+      "description": "from_user_id: trade.buyer_id,"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 118,
+      "description": "to_user_id: trade.seller_id,"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 119,
+      "description": "amount: trade.amount,"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 120,
+      "description": "type: 'escrow_release',"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 121,
+      "description": "reference_id: trade.id,"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 126,
+      "description": "await tx.insert(transactions).values({"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 127,
+      "description": "from_user_id: trade.buyer_id,"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 128,
+      "description": "to_user_id: trade.seller_id,"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 129,
+      "description": "amount: trade.amount,"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 130,
+      "description": "type: 'transfer',"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 131,
+      "description": "reference_id: trade.id,"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 136,
+      "description": "// For disputes, funds stay in escrow until admin resolution (manual for now)"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 138,
+      "description": "// We'll leave them in buyer's escrow for now."
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 146,
+      "description": "await fireWebhook(trade.buyer_id, 'trade.completed', { trade: updatedTrade });"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 147,
+      "description": "await fireWebhook(trade.seller_id, 'trade.completed', { trade: updatedTrade });"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 148,
+      "description": "await fireWebhook(trade.buyer_id, 'balance.changed', { reason: 'escrow_release', trade_id: trade.id });"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 149,
+      "description": "await fireWebhook(trade.seller_id, 'balance.changed', { reason: 'escrow_release', trade_id: trade.id });"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 155,
+      "description": "trade: updatedTrade,"
+    },
+    {
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 156,
+      "description": "...envMeta('clawdmarket/api/trades/:id'),"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 2,
+      "description": "import { wallets, transactions } from './schema';"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 9,
+      "description": "/** Ecosystem fee on trades (3%) */"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 39,
+      "description": ".values({ user_id: userId, balance: 0, escrow: 0 })"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 46,
+      "description": "* Get wallet balance (returns { balance, escrow, available })."
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 52,
+      "description": "escrow: wallet.escrow,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 53,
+      "description": "available: wallet.balance - wallet.escrow,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 60,
+      "description": "* Lock funds in escrow when a trade is initiated."
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 61,
+      "description": "* Deducts from buyer's available balance into escrow."
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 63,
+      "description": "export async function escrowLock(buyerId: string, amount: number, tradeId: string) {"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 65,
+      "description": "const available = wallet.balance - wallet.escrow;"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 74,
+      "description": "// Increase escrow hold"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 77,
+      "description": ".set({ escrow: sql`${wallets.escrow} + ${amount}` })"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 80,
+      "description": "await db.insert(transactions).values({"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 84,
+      "description": "type: 'escrow_lock',"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 85,
+      "description": "reference_id: tradeId,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 86,
+      "description": "memo: `Escrow locked for trade`,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 91,
+      "description": "* Release escrow on trade completion."
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 92,
+      "description": "* Moves funds from buyer \u2192 seller (minus fee) and buyer \u2192 treasury (fee)."
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 94,
+      "description": "export async function escrowRelease("
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 98,
+      "description": "fee: number,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 99,
+      "description": "tradeId: string,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 101,
+      "description": "const sellerReceives = amount - fee;"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 103,
+      "description": "// Remove from buyer's balance + escrow"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 108,
+      "description": "escrow: sql`${wallets.escrow} - ${amount}`,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 120,
+      "description": "await db.insert(transactions).values({"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 124,
+      "description": "type: 'escrow_release',"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 125,
+      "description": "reference_id: tradeId,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 129,
+      "description": "// Log fee (burned / treasury)"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 130,
+      "description": "if (fee > 0) {"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 131,
+      "description": "await db.insert(transactions).values({"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 134,
+      "description": "amount: fee,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 135,
+      "description": "type: 'fee',"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 136,
+      "description": "reference_id: tradeId,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 137,
+      "description": "memo: `Ecosystem fee: ${fee.toFixed(2)} $CLAWD (${(ECOSYSTEM_FEE_RATE * 100).toFixed(0)}%)`,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 143,
+      "description": "* Refund escrow on trade dispute/cancellation."
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 146,
+      "description": "export async function escrowRefund(buyerId: string, amount: number, tradeId: string) {"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 149,
+      "description": ".set({ escrow: sql`${wallets.escrow} - ${amount}` })"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 152,
+      "description": "await db.insert(transactions).values({"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 156,
+      "description": "type: 'escrow_refund',"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 157,
+      "description": "reference_id: tradeId,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 158,
+      "description": "memo: `Escrow refunded \u2014 trade disputed`,"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 167,
+      "description": "export async function transfer("
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 178,
+      "description": "throw new WalletError('Cannot transfer to yourself', 'SELF_TRANSFER');"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 182,
+      "description": "const available = fromWallet.balance - fromWallet.escrow;"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 204,
+      "description": "const [tx] = await db.insert(transactions).values({"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 208,
+      "description": "type: 'transfer',"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 209,
+      "description": "memo: memo || `P2P transfer: ${amount.toFixed(2)} $CLAWD`,"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 51,
+      "description": "export const trades = sqliteTable('trades', {"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 63,
+      "description": "fee: real('fee').notNull(),"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 75,
+      "description": "trade_id: text('trade_id')"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 77,
+      "description": ".references(() => trades.id, { onDelete: 'cascade' }),"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 157,
+      "description": "event_type: text('event_type').notNull(), // view_listing, trade_init, search, etc."
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 171,
+      "description": "export type Trade = typeof trades.$inferSelect;"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 172,
+      "description": "export type NewTrade = typeof trades.$inferInsert;"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 193,
+      "description": "escrow: real('escrow').notNull().default(0),"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 199,
+      "description": "export const transactions = sqliteTable('transactions', {"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 207,
+      "description": "enum: ['faucet', 'transfer', 'escrow_lock', 'escrow_release', 'escrow_refund', 'fee'],"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 209,
+      "description": "reference_id: text('reference_id'), // trade_id or other context"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 256,
+      "description": "export type Transaction = typeof transactions.$inferSelect;"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 257,
+      "description": "export type NewTransaction = typeof transactions.$inferInsert;"
+    }
+  ],
+  "token_references": [
+    {
+      "file": "replit.md",
+      "line": 4,
+      "description": "ClawdMarket is an AI agent marketplace built with Next.js 14, where AI agents can trade compute, skills, data, and bounties autonomously. Powered by Bankr and $CLAWDCOIN."
+    },
+    {
+      "file": "replit.md",
+      "line": 10,
+      "description": "- Added frosted glass effect + glow to agent cards and $CLAWDCOIN coin"
+    },
+    {
+      "file": "README.md",
+      "line": 3,
+      "description": "The first agentic marketplace where AI agents trade compute, skills, data, and bounties with each other \u2014 autonomously. Powered by **Bankr** and **$CLAWDCOIN**."
+    },
+    {
+      "file": "README.md",
+      "line": 11,
+      "description": "- **Waitlist System**: Email collection for $CLAWDCOIN launch"
+    },
+    {
+      "file": "ROADMAP.md",
+      "line": 8,
+      "description": "## Phase 2: The Testnet ($BANKR)"
+    },
+    {
+      "file": "ROADMAP.md",
+      "line": 9,
+      "description": "- **Currency:** $BANKR (Precursor Token)"
+    },
+    {
+      "file": "ROADMAP.md",
+      "line": 12,
+      "description": "- Faucet for new agents (free $BANKR to start)."
+    },
+    {
+      "file": "ROADMAP.md",
+      "line": 14,
+      "description": "- \"The Countdown\": A visualized timer to the end of the $BANKR era."
+    },
+    {
+      "file": "ROADMAP.md",
+      "line": 16,
+      "description": "## Phase 3: The Mainnet ($CLAWDCOIN)"
+    },
+    {
+      "file": "ROADMAP.md",
+      "line": 17,
+      "description": "- **Currency:** $CLAWDCOIN"
+    },
+    {
+      "file": "ROADMAP.md",
+      "line": 22,
+      "description": "- Conversion rate for top $BANKR holders? (Gamification)"
+    },
+    {
+      "file": "static-backup/js/main.js",
+      "line": 15,
+      "description": "document.querySelector('.countdown-label-top').textContent = '$CLAWDCOIN IS LIVE';"
+    },
+    {
+      "file": "static-backup/js/main.js",
+      "line": 101,
+      "description": "alert('\ud83d\udc3e You\\'re on the list! We\\'ll notify ' + email + ' when $CLAWDCOIN launches.');"
+    },
+    {
+      "file": "app/layout.tsx",
+      "line": 25,
+      "description": "title: \"ClawdMarket \u2014 The First Agentic Marketplace | $BANKR\","
+    },
+    {
+      "file": "app/layout.tsx",
+      "line": 26,
+      "description": "description: \"AI agents trade compute, skills, data, and bounties with each other \u2014 autonomously. Powered by Bankr and $BANKR.\","
+    },
+    {
+      "file": "app/layout.tsx",
+      "line": 27,
+      "description": "keywords: [\"AI agents\", \"marketplace\", \"cryptocurrency\", \"BANKR\", \"compute trading\"],"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 96,
+      "description": "{ num: '02', icon: '\ud83d\udccb', title: 'List Resources', desc: 'Agents list available resources: compute credits, skills, data feeds, or task availability on the marketplace.', code: 'list"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 98,
+      "description": "{ num: '04', icon: '\ud83d\udd12', title: 'Settle + 3% Fee', desc: (<>Trades settle on-chain. 3% ecosystem fee funds <Image src=\"/images/lobster-logo.png\" alt=\"CLAWD\" width={16} height={16} c"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 126,
+      "description": "{ icon: '\u26a1', title: 'Compute & API Credits', desc: 'Swap unused OpenAI, Anthropic, or GPU credits. Agent A has surplus inference \u2014 Agent B needs it. Direct resource barter at machi"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 127,
+      "description": "{ icon: '\ud83e\udde9', title: 'Skill Licensing', desc: 'Agents license their skills to each other. Web scraping, data cleaning, image gen \u2014 skills become tradeable on-chain assets.', example"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 128,
+      "description": "{ icon: '\ud83d\udcca', title: 'Data & Intelligence', desc: 'Real-time market signals, sentiment feeds, scraped datasets. Information is the most valuable commodity in the agent economy.', ex"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 129,
+      "description": "{ icon: '\ud83c\udfaf', title: 'Task Bounties', desc: <>Post a task, set a bounty in <Image src=\"/images/bankr-logo.svg\" alt=\"BANKR\" width={16} height={16} className=\"inline-block w-4 h-4 mr-"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 154,
+      "description": "{/* <img src=\"/images/bankr-logo.svg\" alt=\"BANKR\" className=\"inline-block w-4 h-4 mr-1\" /> BANKR Section */}"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 159,
+      "description": "<div className=\"relative\"><Image src=\"/images/lobster-logo.png\" alt=\"$CLAWDCOIN\" width={80} height={80} /></div>"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 163,
+      "description": "<Image src=\"/images/lobster-logo.png\" alt=\"CLAWD\" width={32} height={32} className=\"inline-block w-8 h-8\" /> $CLAWDCOIN"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 167,
+      "description": "Earn <Image src=\"/images/bankr-logo.svg\" alt=\"BANKR\" width={16} height={16} className=\"inline-block w-4 h-4 mr-1\" /> BANKR today. Await the $CLAWDCOIN drop."
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 182,
+      "description": "{ icon: '\ud83d\udd04', title: 'Self-Sustaining', desc: <>Trading fees from the marketplace fund <Image src=\"/images/lobster-logo.png\" alt=\"CLAWD\" width={16} height={16} className=\"inline-blo"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 200,
+      "description": "<h2 className=\"text-4xl font-bold text-center mb-4\">$CLAWDCOIN Tokenomics</h2>"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 202,
+      "description": "The future governance token. Earned by trading <Image src=\"/images/bankr-logo.svg\" alt=\"BANKR\" width={16} height={16} className=\"inline-block w-4 h-4 mr-1\" /> BANKR."
+    },
+    {
+      "file": "app/marketplace/page.tsx",
+      "line": 266,
+      "description": "placeholder=\"Min BANKR\""
+    },
+    {
+      "file": "app/marketplace/page.tsx",
+      "line": 275,
+      "description": "placeholder=\"Max BANKR\""
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 160,
+      "description": "toast('Connect your crypto wallet to buy with BANKR', 'error');"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 164,
+      "description": "const bankrToken = process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 165,
+      "description": "const escrowWallet = process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 166,
+      "description": "const devFeeWallet = process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 176,
+      "description": "if (!confirm(`Are you sure you want to buy this item?\\n\\nPrice: ${listing.price_bankr} BANKR\\nFee (3%): ${fee.toFixed(2)} BANKR\\nTotal: ${total.toFixed(2)} BANKR\\n\\nYou will sign o"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 234,
+      "description": "toast('Trade successful! On-chain BANKR payment confirmed.', 'success');"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 314,
+      "description": "<div className=\"text-4xl font-mono font-bold text-gold tracking-tight\">{listing.price_bankr} <span className=\"text-lg text-gold/70\">BANKR</span></div>"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 334,
+      "description": "priceCurrency: 'BNKR',"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 408,
+      "description": "<span className=\"font-mono\">{listing.price_bankr} BANKR</span>"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 412,
+      "description": "<span className=\"font-mono text-text-dim\">{(listing.price_bankr * 0.03).toFixed(2)} BANKR</span>"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 417,
+      "description": "<span className=\"font-mono text-gold\">{(listing.price_bankr * 1.03).toFixed(2)} BANKR</span>"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 470,
+      "description": "toast('Wallet connected. You can complete your BANKR purchase now.', 'success');"
+    },
+    {
+      "file": "app/api/activity/route.ts",
+      "line": 81,
+      "description": "action: `posted bounty \"${b.title}\" for ${b.price_bankr} BANKR`,"
+    },
+    {
+      "file": "app/api/wallet/route.ts",
+      "line": 44,
+      "description": "ticker: '$BANKR',"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 20,
+      "description": "const adminWalletAddress = (process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim().toLowerCase();"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 23,
+      "description": "console.error('Invalid ADMIN_BANKR_WALLET_ADDRESS configured');"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 141,
+      "description": "const expectedToken = (process.env.BANKR_TOKEN_ADDRESS || '').toLowerCase();"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 223,
+      "description": "message: 'Trade initiated successfully with on-chain BANKR payment.',"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 230,
+      "description": "admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 263,
+      "description": "error: `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 362,
+      "description": "admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),"
+    },
+    {
+      "file": "app/dashboard/page.tsx",
+      "line": 199,
+      "description": "<span className=\"font-mono text-gold text-sm\">{listing.price_bankr} BANKR</span>"
+    },
+    {
+      "file": "sdk/SKILL.md",
+      "line": 3,
+      "description": "description: Search, list, and buy AI resources (compute, skills, data) on the ClawdMarket using $BANKR."
+    },
+    {
+      "file": "sdk/SKILL.md",
+      "line": 53,
+      "description": "See your current $BANKR balance."
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 248,
+      "description": "const price = `${listing.price_bankr} BANKR`;"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 269,
+      "description": "console.log(chalk.yellow(`\\nPrice: ${listing.price_bankr} BANKR`));"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 315,
+      "description": "message: 'Price (BANKR):',"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 353,
+      "description": "console.log(`${chalk.cyan(t.id)}  ${chalk.white(t.status.toUpperCase())}  ${chalk.yellow(`${t.amount} BANKR`)}`);"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 441,
+      "description": ".description('Purchase a listing using your BANKR balance')"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 457,
+      "description": "message: `Buy \"${listing.title}\" for ${listing.price_bankr} BANKR?`,"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 482,
+      "description": ".description('Show your current BANKR balance')"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 493,
+      "description": "console.log(`${chalk.yellow(balance)} BANKR (Available)`);"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 494,
+      "description": "console.log(`${chalk.gray(escrow)} BANKR (Locked in Escrow)`);"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 221,
+      "description": "const price = `${listing.price_bankr} BANKR`;"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 239,
+      "description": "console.log(chalk.yellow(`\\nPrice: ${listing.price_bankr} BANKR`));"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 282,
+      "description": "message: 'Price (BANKR):',"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 315,
+      "description": "console.log(`${chalk.cyan(t.id)}  ${chalk.white(t.status.toUpperCase())}  ${chalk.yellow(`${t.amount} BANKR`)}`);"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 399,
+      "description": ".description('Purchase a listing using your BANKR balance')"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 413,
+      "description": "message: `Buy \"${listing.title}\" for ${listing.price_bankr} BANKR?`,"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 433,
+      "description": ".description('Show your current BANKR balance')"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 443,
+      "description": "console.log(`${chalk.yellow(balance)} BANKR (Available)`);"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 444,
+      "description": "console.log(`${chalk.gray(escrow)} BANKR (Locked in Escrow)`);"
+    },
+    {
+      "file": "components/Hero.tsx",
+      "line": 41,
+      "description": "'AGENT_A \u21c4 AGENT_B 1200 BANKR',"
+    },
+    {
+      "file": "components/Hero.tsx",
+      "line": 43,
+      "description": "'BOUNTY_CLAIMED 980 BANKR',"
+    },
+    {
+      "file": "components/Hero.tsx",
+      "line": 45,
+      "description": "'TRADE COMPLETED +450 BANKR',"
+    },
+    {
+      "file": "components/Hero.tsx",
+      "line": 87,
+      "description": "Powered by <strong className=\"text-text\">$BANKR</strong> and <strong className=\"text-text\">$CLAWDCOIN</strong>."
+    },
+    {
+      "file": "components/Hero.tsx",
+      "line": 95,
+      "description": "View $CLAWDCOIN \u2192"
+    },
+    {
+      "file": "components/Hero.tsx",
+      "line": 145,
+      "description": "<Image src=\"/images/bankr-logo.svg\" alt=\"$BANKR\" width={64} height={64} className=\"relative\" />"
+    },
+    {
+      "file": "components/WaitlistForm.tsx",
+      "line": 41,
+      "description": "setMessage('\u2713 You\\'re on the list! We\\'ll notify you when $BANKR launches.');"
+    },
+    {
+      "file": "components/ListingCard.tsx",
+      "line": 67,
+      "description": "<div className=\"text-lg font-bold font-mono text-gold\">{price_bankr} BANKR</div>"
+    },
+    {
+      "file": "components/Countdown.tsx",
+      "line": 54,
+      "description": "\ud83d\ude80 $BANKR IS LIVE <Image src=\"/images/bankr-logo.svg\" alt=\"$BANKR\" width={28} height={28} className=\"inline-block ml-1\" />"
+    },
+    {
+      "file": "components/Footer.tsx",
+      "line": 29,
+      "description": "<Link href=\"/#token\" className=\"block text-text-dim hover:text-text transition-colors\"><Image src=\"/images/bankr-logo.svg\" alt=\"BANKR\" width={16} height={16} className=\"inline-bloc"
+    },
+    {
+      "file": "components/Navbar.tsx",
+      "line": 96,
+      "description": "<Image src=\"/images/bankr-logo.svg\" alt=\"BANKR\" width={16} height={16} className=\"inline-block w-4 h-4 mr-1\" /> BANKR"
+    },
+    {
+      "file": "components/Navbar.tsx",
+      "line": 174,
+      "description": "<Image src=\"/images/bankr-logo.svg\" alt=\"BANKR\" width={16} height={16} className=\"inline-block w-4 h-4 mr-1\" /> BANKR"
+    },
+    {
+      "file": "components/WalletLoginPopup.tsx",
+      "line": 145,
+      "description": "<p className=\"text-xs text-text-dim\">Use your Base wallet to pay in BANKR.</p>"
+    },
+    {
+      "file": "components/dashboard/ListingsTab.tsx",
+      "line": 122,
+      "description": "<label className=\"block text-sm font-medium mb-2\">Price (BANKR)</label>"
+    },
+    {
+      "file": "components/dashboard/ListingsTab.tsx",
+      "line": 163,
+      "description": "<div className=\"font-mono font-bold text-gold\">{listing.price_bankr} BANKR</div>"
+    },
+    {
+      "file": "components/dashboard/WalletTab.tsx",
+      "line": 29,
+      "description": "const bankrToken = process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS as `0x${string}` | undefined;"
+    },
+    {
+      "file": "components/dashboard/WalletTab.tsx",
+      "line": 70,
+      "description": "? `Connected wallet: ${address.slice(0, 6)}...${address.slice(-4)} (on-chain BANKR)`"
+    },
+    {
+      "file": "components/dashboard/WalletTab.tsx",
+      "line": 71,
+      "description": ": 'Showing internal ledger balance (connect wallet to view on-chain BANKR).'}"
+    },
+    {
+      "file": "components/dashboard/WalletTab.tsx",
+      "line": 87,
+      "description": "On-Chain BANKR"
+    },
+    {
+      "file": "components/dashboard/WalletTab.tsx",
+      "line": 96,
+      "description": "{total.toLocaleString(undefined, { maximumFractionDigits: 4 })} <span className=\"text-lg text-accent\">BANKR</span>"
+    },
+    {
+      "file": "components/dashboard/WalletTab.tsx",
+      "line": 103,
+      "description": "{available.toLocaleString(undefined, { maximumFractionDigits: 4 })} <span className=\"text-lg text-green-500/70\">BANKR</span>"
+    },
+    {
+      "file": "components/dashboard/WalletTab.tsx",
+      "line": 111,
+      "description": "{wallet.escrow.toLocaleString()} <span className=\"text-lg text-gold/70\">BANKR</span>"
+    },
+    {
+      "file": "components/dashboard/TradesTab.tsx",
+      "line": 179,
+      "description": "<div className=\"font-mono font-bold text-gold\">{trade.amount} BANKR</div>"
+    },
+    {
+      "file": "e2e/listings.spec.ts",
+      "line": 48,
+      "description": "await expect(page.getByText('1500 BANKR')).toBeVisible();"
+    },
+    {
+      "file": "e2e/wallet.spec.ts",
+      "line": 6,
+      "description": "const account = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945387d9f71b4ddf4f5f0f8f0ce5f5ef5b9d25');"
+    },
+    {
+      "file": "agents/nexus-trader/src/index.ts",
+      "line": 58,
+      "description": "console.log(chalk.yellow(`\ud83d\udcb0 Balance: ${balance} BANKR`));"
+    },
+    {
+      "file": "agents/nexus-trader/src/index.ts",
+      "line": 79,
+      "description": "console.log(chalk.cyan(`\ud83d\udcdd Listing item: ${template.title} for ${finalPrice} BANKR`));"
+    },
+    {
+      "file": "agents/nexus-trader/src/index.ts",
+      "line": 102,
+      "description": "// Find cheap items (under 40 BANKR) that aren't ours"
+    },
+    {
+      "file": "agents/nexus-trader/src/index.ts",
+      "line": 108,
+      "description": "console.log(chalk.magenta(`\ud83c\udfaf Sniping deal: ${target.title} (${target.price_bankr} BANKR)`));"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 184,
+      "description": "// \u2500\u2500\u2500 $BANKR Tokenomics \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+    }
+  ],
+  "api_endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/activity",
+      "auth": "mixed/conditional",
+      "file": "app/api/activity/route.ts",
+      "line": 19,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/environment",
+      "auth": "required",
+      "file": "app/api/agent/environment/route.ts",
+      "line": 15,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent/session",
+      "auth": "required",
+      "file": "app/api/agent/session/route.ts",
+      "line": 8,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents",
+      "auth": "mixed/conditional",
+      "file": "app/api/agents/route.ts",
+      "line": 8,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents/[id]",
+      "auth": "mixed/conditional",
+      "file": "app/api/agents/[id]/route.ts",
+      "line": 8,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/[id]/rate",
+      "auth": "mixed/conditional",
+      "file": "app/api/agents/[id]/rate/route.ts",
+      "line": 9,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/analytics/summary",
+      "auth": "required",
+      "file": "app/api/analytics/summary/route.ts",
+      "line": 21,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/analytics/track",
+      "auth": "required",
+      "file": "app/api/analytics/track/route.ts",
+      "line": 39,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/api-keys",
+      "auth": "required",
+      "file": "app/api/auth/api-keys/route.ts",
+      "line": 93,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/api-keys",
+      "auth": "required",
+      "file": "app/api/auth/api-keys/route.ts",
+      "line": 10,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/auth/api-keys/[id]",
+      "auth": "required",
+      "file": "app/api/auth/api-keys/[id]/route.ts",
+      "line": 9,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/forgot-password",
+      "auth": "public",
+      "file": "app/api/auth/forgot-password/route.ts",
+      "line": 9,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "auth": "required",
+      "file": "app/api/auth/login/route.ts",
+      "line": 10,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "auth": "required",
+      "file": "app/api/auth/logout/route.ts",
+      "line": 4,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "auth": "required",
+      "file": "app/api/auth/me/route.ts",
+      "line": 7,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/auth/me",
+      "auth": "required",
+      "file": "app/api/auth/me/route.ts",
+      "line": 61,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "auth": "public",
+      "file": "app/api/auth/register/route.ts",
+      "line": 9,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/reset-password",
+      "auth": "public",
+      "file": "app/api/auth/reset-password/route.ts",
+      "line": 9,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/wallet/nonce",
+      "auth": "mixed/conditional",
+      "file": "app/api/auth/wallet/nonce/route.ts",
+      "line": 5,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/wallet/verify",
+      "auth": "required",
+      "file": "app/api/auth/wallet/verify/route.ts",
+      "line": 11,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/docs",
+      "auth": "required",
+      "file": "app/api/docs/route.ts",
+      "line": 640,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "auth": "public",
+      "file": "app/api/health/route.ts",
+      "line": 4,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/listings",
+      "auth": "required",
+      "file": "app/api/listings/route.ts",
+      "line": 136,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/listings",
+      "auth": "required",
+      "file": "app/api/listings/route.ts",
+      "line": 235,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/listings/[id]",
+      "auth": "required",
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 204,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/listings/[id]",
+      "auth": "required",
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 83,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/listings/[id]",
+      "auth": "required",
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 111,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messages",
+      "auth": "mixed/conditional",
+      "file": "app/api/messages/route.ts",
+      "line": 43,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/messages",
+      "auth": "mixed/conditional",
+      "file": "app/api/messages/route.ts",
+      "line": 8,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messages/[partnerId]",
+      "auth": "mixed/conditional",
+      "file": "app/api/messages/[partnerId]/route.ts",
+      "line": 9,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ratings",
+      "auth": "required",
+      "file": "app/api/ratings/route.ts",
+      "line": 9,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats",
+      "auth": "mixed/conditional",
+      "file": "app/api/stats/route.ts",
+      "line": 7,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/trades",
+      "auth": "required",
+      "file": "app/api/trades/route.ts",
+      "line": 386,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trades",
+      "auth": "required",
+      "file": "app/api/trades/route.ts",
+      "line": 57,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/trades/[id]",
+      "auth": "required",
+      "file": "app/api/trades/[id]/route.ts",
+      "line": 12,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/[id]/profile",
+      "auth": "mixed/conditional",
+      "file": "app/api/users/[id]/profile/route.ts",
+      "line": 7,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/[id]/ratings",
+      "auth": "mixed/conditional",
+      "file": "app/api/users/[id]/ratings/route.ts",
+      "line": 6,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/waitlist",
+      "auth": "public",
+      "file": "app/api/waitlist/route.ts",
+      "line": 9,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "auth": "required",
+      "file": "app/api/wallet/route.ts",
+      "line": 13,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/watchlist",
+      "auth": "required",
+      "file": "app/api/watchlist/route.ts",
+      "line": 82,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/watchlist",
+      "auth": "required",
+      "file": "app/api/watchlist/route.ts",
+      "line": 30,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/watchlist",
+      "auth": "required",
+      "file": "app/api/watchlist/route.ts",
+      "line": 43,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "GET",
+      "path": "/api/webhooks",
+      "auth": "required",
+      "file": "app/api/webhooks/route.ts",
+      "line": 95,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhooks",
+      "auth": "required",
+      "file": "app/api/webhooks/route.ts",
+      "line": 11,
+      "description": "Route handler in Next.js API route"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/webhooks/[id]",
+      "auth": "required",
+      "file": "app/api/webhooks/[id]/route.ts",
+      "line": 9,
+      "description": "Route handler in Next.js API route"
+    }
+  ],
+  "hardcoded_assumptions": [
+    {
+      "file": "scripts/seed.ts",
+      "line": 159,
+      "description": "price_bankr: number;"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 166,
+      "description": "price_bankr: 150,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 172,
+      "description": "price_bankr: 85,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 178,
+      "description": "price_bankr: 30,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 184,
+      "description": "price_bankr: 95,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 190,
+      "description": "price_bankr: 120,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 198,
+      "description": "price_bankr: 50,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 204,
+      "description": "price_bankr: 200,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 210,
+      "description": "price_bankr: 180,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 216,
+      "description": "price_bankr: 40,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 222,
+      "description": "price_bankr: 35,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 228,
+      "description": "price_bankr: 90,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 236,
+      "description": "price_bankr: 75,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 242,
+      "description": "price_bankr: 60,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 248,
+      "description": "price_bankr: 110,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 254,
+      "description": "price_bankr: 80,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 260,
+      "description": "price_bankr: 55,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 266,
+      "description": "price_bankr: 45,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 274,
+      "description": "price_bankr: 150,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 280,
+      "description": "price_bankr: 100,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 286,
+      "description": "price_bankr: 175,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 292,
+      "description": "price_bankr: 125,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 298,
+      "description": "price_bankr: 140,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 340,
+      "description": "amount: listing.price_bankr,"
+    },
+    {
+      "file": "scripts/seed.ts",
+      "line": 341,
+      "description": "fee: Math.round(listing.price_bankr * 0.03 * 100) / 100,"
+    },
+    {
+      "file": "scripts/normalize-listing-prices.ts",
+      "line": 17,
+      "description": ".select({ id: listings.id, price_bankr: listings.price_bankr })"
+    },
+    {
+      "file": "scripts/normalize-listing-prices.ts",
+      "line": 25,
+      "description": "const prices = rows.map((r) => Number(r.price_bankr)).filter((n) => Number.isFinite(n));"
+    },
+    {
+      "file": "scripts/normalize-listing-prices.ts",
+      "line": 41,
+      "description": "const original = Number(row.price_bankr);"
+    },
+    {
+      "file": "scripts/normalize-listing-prices.ts",
+      "line": 48,
+      "description": ".set({ price_bankr: normalized })"
+    },
+    {
+      "file": "scripts/normalize-listing-prices.ts",
+      "line": 54,
+      "description": "const updatedRows = await db.select({ price_bankr: listings.price_bankr }).from(listings);"
+    },
+    {
+      "file": "scripts/normalize-listing-prices.ts",
+      "line": 55,
+      "description": "const updatedPrices = updatedRows.map((r) => Number(r.price_bankr));"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 98,
+      "description": "{ num: '04', icon: '\ud83d\udd12', title: 'Settle + 3% Fee', desc: (<>Trades settle on-chain. 3% ecosystem fee funds <Image src=\"/images/lobster-logo.png\" alt=\"CLAWD\" width={16} height={16} c"
+    },
+    {
+      "file": "app/page.tsx",
+      "line": 211,
+      "description": "{ stat: '3%', label: 'Ecosystem Fee', desc: 'Every marketplace trade funds the ecosystem. Developer gets 3% of profits.', highlight: true },"
+    },
+    {
+      "file": "app/marketplace/page.tsx",
+      "line": 22,
+      "description": "price_bankr: number;"
+    },
+    {
+      "file": "app/marketplace/page.tsx",
+      "line": 120,
+      "description": "nextListings = nextListings.filter((l) => l.price_bankr >= min);"
+    },
+    {
+      "file": "app/marketplace/page.tsx",
+      "line": 123,
+      "description": "nextListings = nextListings.filter((l) => l.price_bankr <= max);"
+    },
+    {
+      "file": "app/marketplace/page.tsx",
+      "line": 126,
+      "description": "if (sort === 'price_asc') nextListings.sort((a, b) => a.price_bankr - b.price_bankr);"
+    },
+    {
+      "file": "app/marketplace/page.tsx",
+      "line": 127,
+      "description": "if (sort === 'price_desc') nextListings.sort((a, b) => b.price_bankr - a.price_bankr);"
+    },
+    {
+      "file": "app/marketplace/page.tsx",
+      "line": 314,
+      "description": "price_bankr={listing.price_bankr}"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 26,
+      "description": "price_bankr: number;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 58,
+      "description": "const basePublicClient = usePublicClient({ chainId: base.id });"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 91,
+      "description": "price: data.listing.price_bankr"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 164,
+      "description": "const bankrToken = process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 165,
+      "description": "const escrowWallet = process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 166,
+      "description": "const devFeeWallet = process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 173,
+      "description": "const fee = listing.price_bankr * 0.03;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 174,
+      "description": "const total = listing.price_bankr + fee;"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 176,
+      "description": "if (!confirm(`Are you sure you want to buy this item?\\n\\nPrice: ${listing.price_bankr} BANKR\\nFee (3%): ${fee.toFixed(2)} BANKR\\nTotal: ${total.toFixed(2)} BANKR\\n\\nYou will sign o"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 180,
+      "description": "track('trade_init', { listing_id: listing.id, amount: listing.price_bankr });"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 184,
+      "description": "const escrowAmount = parseUnits(listing.price_bankr.toFixed(18), 18);"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 185,
+      "description": "const feeAmount = parseUnits(fee.toFixed(18), 18);"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 188,
+      "description": "chainId: base.id,"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 198,
+      "description": "chainId: base.id,"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 217,
+      "description": "amount: listing.price_bankr,"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 314,
+      "description": "<div className=\"text-4xl font-mono font-bold text-gold tracking-tight\">{listing.price_bankr} <span className=\"text-lg text-gold/70\">BANKR</span></div>"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 333,
+      "description": "price: listing.price_bankr,"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 408,
+      "description": "<span className=\"font-mono\">{listing.price_bankr} BANKR</span>"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 411,
+      "description": "<span className=\"text-text-dim\">Platform Fee (3%)</span>"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 412,
+      "description": "<span className=\"font-mono text-text-dim\">{(listing.price_bankr * 0.03).toFixed(2)} BANKR</span>"
+    },
+    {
+      "file": "app/marketplace/[id]/page.tsx",
+      "line": 417,
+      "description": "<span className=\"font-mono text-gold\">{(listing.price_bankr * 1.03).toFixed(2)} BANKR</span>"
+    },
+    {
+      "file": "app/api/activity/route.ts",
+      "line": 50,
+      "description": "price_bankr: listings.price_bankr,"
+    },
+    {
+      "file": "app/api/activity/route.ts",
+      "line": 81,
+      "description": "action: `posted bounty \"${b.title}\" for ${b.price_bankr} BANKR`,"
+    },
+    {
+      "file": "app/api/activity/route.ts",
+      "line": 83,
+      "description": "amount: b.price_bankr,"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 15,
+      "description": "const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 17,
+      "description": "const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 20,
+      "description": "const adminWalletAddress = (process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim().toLowerCase();"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 23,
+      "description": "console.error('Invalid ADMIN_BANKR_WALLET_ADDRESS configured');"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 164,
+      "description": "if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || '')) || !TX_HASH_RE.test(String(onchain.fee_tx_hash || ''))) {"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 230,
+      "description": "admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 311,
+      "description": "? 'Marketplace fee (3%) credited to admin wallet'"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 312,
+      "description": ": 'Marketplace fee (3%) with no admin wallet configured',"
+    },
+    {
+      "file": "app/api/trades/route.ts",
+      "line": 362,
+      "description": "admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 29,
+      "description": "price_bankr: listings.price_bankr,"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 45,
+      "description": "if (!isMissingColumnError(error, 'price_bankr')) throw error;"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 62,
+      "description": "price_bankr: sql<number>`CAST(${sql.raw('price_clawd')} AS REAL)`,"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 86,
+      "description": "price_bankr: sql<number>`CAST(${sql.raw('price')} AS REAL)`,"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 104,
+      "description": "price_bankr: number;"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 113,
+      "description": "if (!isMissingColumnError(error, 'price_bankr')) throw error;"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 120,
+      "description": "args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 127,
+      "description": "args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 209,
+      "description": "price_bankr: Number.isFinite(Number(listing.price_bankr))"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 210,
+      "description": "? Number(listing.price_bankr)"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 296,
+      "description": "price_bankr: validated.price_bankr,"
+    },
+    {
+      "file": "app/api/listings/route.ts",
+      "line": 330,
+      "description": "price_bankr: validated.price_bankr,"
+    },
+    {
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 22,
+      "description": "price_bankr: listings.price_bankr,"
+    },
+    {
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 31,
+      "description": "if (listing && listing.price_bankr !== 'price_bankr') {"
+    },
+    {
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 32,
+      "description": "return { ...listing, price_bankr: Number(listing.price_bankr) || 0 };"
+    },
+    {
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 48,
+      "description": "price_bankr: sql<number>`CAST(${sql.raw('price_clawd')} AS REAL)`,"
+    },
+    {
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 57,
+      "description": "if (listing) return { ...listing, price_bankr: Number(listing.price_bankr) || 0 };"
+    },
+    {
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 71,
+      "description": "price_bankr: sql<number>`CAST(${sql.raw('price')} AS REAL)`,"
+    },
+    {
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 80,
+      "description": "return listing ? { ...listing, price_bankr: Number(listing.price_bankr) || 0 } : null;"
+    },
+    {
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 171,
+      "description": "if (validated.price_bankr !== undefined) {"
+    },
+    {
+      "file": "app/api/listings/[id]/route.ts",
+      "line": 172,
+      "description": "updateData.price_bankr = validated.price_bankr;"
+    },
+    {
+      "file": "app/api/docs/route.ts",
+      "line": 48,
+      "description": "price_bankr: { type: 'number', minimum: 1, maximum: 1000000000000 },"
+    },
+    {
+      "file": "app/api/docs/route.ts",
+      "line": 357,
+      "description": "required: ['category', 'title', 'description', 'price_bankr'],"
+    },
+    {
+      "file": "app/api/docs/route.ts",
+      "line": 362,
+      "description": "price_bankr: { type: 'number', minimum: 1, maximum: 1000000000000 },"
+    },
+    {
+      "file": "app/api/docs/route.ts",
+      "line": 370,
+      "description": "required: ['category', 'title', 'description', 'price_bankr'],"
+    },
+    {
+      "file": "app/api/docs/route.ts",
+      "line": 375,
+      "description": "price_bankr: { type: 'number', minimum: 1, maximum: 1000000000000 },"
+    },
+    {
+      "file": "app/api/docs/route.ts",
+      "line": 423,
+      "description": "price_bankr: { type: 'number', minimum: 1, maximum: 1000000000000 },"
+    },
+    {
+      "file": "app/dashboard/page.tsx",
+      "line": 199,
+      "description": "<span className=\"font-mono text-gold text-sm\">{listing.price_bankr} BANKR</span>"
+    },
+    {
+      "file": "app/docs/page.tsx",
+      "line": 44,
+      "description": "body: '{ \"category\": \"compute|skills|data|bounties|other\", \"title\": \"string\", \"description\": \"string\", \"price_bankr\": number (1-1,000,000,000,000) }' },"
+    },
+    {
+      "file": "app/docs/page.tsx",
+      "line": 47,
+      "description": "body: '{ \"title?\": \"string\", \"description?\": \"string\", \"price_bankr?\": number (1-1,000,000,000,000), \"category?\": \"string\" }' },"
+    },
+    {
+      "file": "app/docs/page.tsx",
+      "line": 166,
+      "description": "<div className=\"text-text-dim pl-4\">-H &quot;Authorization: Bearer YOUR_API_KEY&quot; \\<br/>-H &quot;Content-Type: application/json&quot; \\<br/>-d &apos;{`{\"category\":\"skills\",\"tit"
+    },
+    {
+      "file": "app/users/[id]/page.tsx",
+      "line": 30,
+      "description": "price_bankr: number;"
+    },
+    {
+      "file": "app/users/[id]/page.tsx",
+      "line": 165,
+      "description": "price_bankr={l.price_bankr}"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 248,
+      "description": "const price = `${listing.price_bankr} BANKR`;"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 269,
+      "description": "console.log(chalk.yellow(`\\nPrice: ${listing.price_bankr} BANKR`));"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 314,
+      "description": "name: 'price_bankr',"
+    },
+    {
+      "file": "sdk/src/cli.ts",
+      "line": 457,
+      "description": "message: `Buy \"${listing.title}\" for ${listing.price_bankr} BANKR?`,"
+    },
+    {
+      "file": "sdk/src/index.ts",
+      "line": 24,
+      "description": "price_bankr: number;"
+    },
+    {
+      "file": "sdk/src/index.ts",
+      "line": 205,
+      "description": "amount: listing.price_bankr,"
+    },
+    {
+      "file": "sdk/dist/index.js",
+      "line": 141,
+      "description": "amount: listing.price_bankr,"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 221,
+      "description": "const price = `${listing.price_bankr} BANKR`;"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 239,
+      "description": "console.log(chalk.yellow(`\\nPrice: ${listing.price_bankr} BANKR`));"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 281,
+      "description": "name: 'price_bankr',"
+    },
+    {
+      "file": "sdk/dist/cli.js",
+      "line": 413,
+      "description": "message: `Buy \"${listing.title}\" for ${listing.price_bankr} BANKR?`,"
+    },
+    {
+      "file": "sdk/dist/index.d.ts",
+      "line": 13,
+      "description": "price_bankr: number;"
+    },
+    {
+      "file": "components/ListingCard.tsx",
+      "line": 10,
+      "description": "price_bankr: number;"
+    },
+    {
+      "file": "components/ListingCard.tsx",
+      "line": 40,
+      "description": "price_bankr,"
+    },
+    {
+      "file": "components/ListingCard.tsx",
+      "line": 67,
+      "description": "<div className=\"text-lg font-bold font-mono text-gold\">{price_bankr} BANKR</div>"
+    },
+    {
+      "file": "components/PageShell.tsx",
+      "line": 14,
+      "description": "opacity: 0.03"
+    },
+    {
+      "file": "components/WalletLoginPopup.tsx",
+      "line": 87,
+      "description": "await switchChainAsync({ chainId: 8453 });"
+    },
+    {
+      "file": "components/dashboard/ListingsTab.tsx",
+      "line": 12,
+      "description": "price_bankr: number;"
+    },
+    {
+      "file": "components/dashboard/ListingsTab.tsx",
+      "line": 31,
+      "description": "price_bankr: '',"
+    },
+    {
+      "file": "components/dashboard/ListingsTab.tsx",
+      "line": 46,
+      "description": "price_bankr: parseFloat(form.price_bankr),"
+    },
+    {
+      "file": "components/dashboard/ListingsTab.tsx",
+      "line": 52,
+      "description": "setForm({ category: 'compute', title: '', description: '', price_bankr: '' });"
+    },
+    {
+      "file": "components/dashboard/ListingsTab.tsx",
+      "line": 128,
+      "description": "value={form.price_bankr}"
+    },
+    {
+      "file": "components/dashboard/ListingsTab.tsx",
+      "line": 129,
+      "description": "onChange={(e) => setForm({ ...form, price_bankr: e.target.value })}"
+    },
+    {
+      "file": "components/dashboard/ListingsTab.tsx",
+      "line": 163,
+      "description": "<div className=\"font-mono font-bold text-gold\">{listing.price_bankr} BANKR</div>"
+    },
+    {
+      "file": "components/dashboard/WalletTab.tsx",
+      "line": 29,
+      "description": "const bankrToken = process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS as `0x${string}` | undefined;"
+    },
+    {
+      "file": "components/dashboard/WalletTab.tsx",
+      "line": 34,
+      "description": "chainId: 8453,"
+    },
+    {
+      "file": "e2e/api-flows.spec.ts",
+      "line": 65,
+      "description": "price_bankr: 1200,"
+    },
+    {
+      "file": "agents/nexus-trader/src/index.ts",
+      "line": 83,
+      "description": "price_bankr: finalPrice,"
+    },
+    {
+      "file": "agents/nexus-trader/src/index.ts",
+      "line": 104,
+      "description": "const deals = listings.filter(l => l.price_bankr < 40 && l.status === 'active');"
+    },
+    {
+      "file": "agents/nexus-trader/src/index.ts",
+      "line": 108,
+      "description": "console.log(chalk.magenta(`\ud83c\udfaf Sniping deal: ${target.title} (${target.price_bankr} BANKR)`));"
+    },
+    {
+      "file": "lib/validation.ts",
+      "line": 29,
+      "description": "price_bankr: z.number().min(1, 'Price must be at least 1').max(1000000000, 'Price must be at most 1,000,000,000'),"
+    },
+    {
+      "file": "lib/validation.ts",
+      "line": 61,
+      "description": "price_bankr: z.number().min(1, 'Price must be at least 1').max(1000000000, 'Price must be at most 1,000,000,000').optional(),"
+    },
+    {
+      "file": "lib/schema.ts",
+      "line": 42,
+      "description": "price_bankr: real('price_bankr').notNull(),"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 9,
+      "description": "/** Ecosystem fee on trades (3%) */"
+    },
+    {
+      "file": "lib/wallet.ts",
+      "line": 10,
+      "description": "export const ECOSYSTEM_FEE_RATE = 0.03;"
+    }
+  ]
+}
