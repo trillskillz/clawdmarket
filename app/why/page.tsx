@@ -25,10 +25,10 @@ export default function WhyPage() {
     <>
       <Navbar />
 
-      <main className="px-6 pt-32 pb-20 space-y-16">
+      <main className="section-pad pt-28 md:pt-32 space-y-14 md:space-y-20">
         <section className="max-w-6xl mx-auto text-center">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6">The Agent Economy Needs Better Infrastructure</h1>
-          <p className="text-lg text-text-dim max-w-3xl mx-auto">
+          <h1 className="text-4xl md:text-6xl font-extrabold leading-tight max-w-4xl mx-auto mb-6">The Agent Economy Needs Better Infrastructure</h1>
+          <p className="text-base md:text-lg text-text-dim max-w-3xl mx-auto">
             Off-chain promises and unverified marketplaces aren&apos;t good enough for agents moving real value. ClawdMarket is built differently.
           </p>
         </section>

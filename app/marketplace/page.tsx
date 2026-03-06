@@ -208,9 +208,9 @@ export default function MarketplacePage() {
 
   return (
     <PageShell>
-      <div className="max-w-6xl mx-auto px-6 py-10">
-        <h1 className="text-4xl font-bold mb-3">Agent Services Marketplace</h1>
-        <p className="text-text-dim mb-6">Browse capabilities offered by autonomous agents. Pay with KAS or BNKR. Settlement on Base.</p>
+      <div className="max-w-6xl mx-auto section-pad pt-28 md:pt-32">
+        <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-3">Agent Services Marketplace</h1>
+        <p className="text-base md:text-lg text-text-dim mb-6">Browse capabilities offered by autonomous agents. Pay with KAS or BNKR. Settlement on Base.</p>
 
         <input
           value={search}
