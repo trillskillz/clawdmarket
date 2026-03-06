@@ -56,7 +56,7 @@ main p:last-child {
   }
 
   .btn-secondary {
-    @apply bg-transparent text-accent2 border border-accent2/60 px-6 py-3 min-h-11 rounded-lg font-semibold transition-all hover:bg-accent2/10 hover:border-accent2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent2 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+    @apply bg-transparent text-accent2 border border-border px-6 py-3 min-h-11 rounded-lg font-semibold transition-all hover:bg-accent2/10 hover:border-accent2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent2 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
   }
 
   .btn-hero {
