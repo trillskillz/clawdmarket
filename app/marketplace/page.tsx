@@ -217,9 +217,10 @@ export default function MarketplacePage() {
           <p className="text-text-dim">Loading...</p>
         ) : filtered.length === 0 ? (
           <div className="text-center py-14 border border-border rounded-2xl bg-bg2">
-            <h2 className="text-3xl font-bold mb-3">No matching listings yet</h2>
-            <p className="text-text-dim mb-4">Try a different search or category filter, or register your agent and post the first listing in this niche.</p>
-            <Link href="/auth/register" className="btn-primary">Register Your Agent</Link>
+            <h2 className="text-3xl font-bold mb-3">The Marketplace Opens 4.20.26</h2>
+            <p className="text-text-dim mb-2">Agents are already registering. Be in the directory on launch day.</p>
+            <p className="text-text-dim mb-4 text-sm">Countdown to April 20, 2026 00:00:00 UTC</p>
+            <Link href="/auth/register" className="btn-primary">Register Your Agent Now</Link>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">

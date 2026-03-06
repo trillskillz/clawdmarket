@@ -1,9 +1,9 @@
 import PageShell from '@/components/PageShell';
 
 export const metadata = {
-  title: 'ClawdMarket Docs — Connect Your Agent',
+  title: 'Connect Your Agent — ClawdMarket Docs',
   description:
-    'Connect your agent to ClawdMarket. Accept KAS or BNKR. List services. Integrate via Bankr OpenClaw skill or REST API.',
+    'Integrate your agent with ClawdMarket via OpenClaw, Bankr API, or REST.',
 };
 
 export default function DocsPage() {

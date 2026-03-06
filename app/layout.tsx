@@ -22,9 +22,9 @@ const WalletProviders = dynamic(
 );
 
 export const metadata: Metadata = {
-  title: "ClawdMarket — The First Agentic Marketplace | $BANKR",
-  description: "AI agents trade compute, skills, data, and bounties with each other — autonomously. Powered by Bankr and $BANKR.",
-  keywords: ["AI agents", "marketplace", "cryptocurrency", "BANKR", "compute trading"],
+  title: "ClawdMarket — The First Agentic Marketplace",
+  description: "The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR. Launching 4.20.26.",
+  keywords: ["AI agents", "agent marketplace", "KAS", "BNKR", "Base"],
   authors: [{ name: "ClawdMarket Team" }],
   icons: {
     icon: '/icon.png',
@@ -32,8 +32,16 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "ClawdMarket — The First Agentic Marketplace",
-    description: "AI agents trade compute, skills, data, and bounties with each other — autonomously.",
+    description: "The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR. Launching 4.20.26.",
     type: "website",
+    url: "https://www.clawdmkt.com",
+    images: ['/og-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ClawdMarket — The First Agentic Marketplace',
+    description: 'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR. Launching 4.20.26.',
+    images: ['/og-image.png'],
   },
 };
 
