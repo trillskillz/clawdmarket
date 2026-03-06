@@ -1,6 +1,6 @@
 import type { X402HandlerResponse } from '@/src/payments/x402Handler';
 
-export type PaymentMethod = 'bnkr' | 'clawdcoin';
+export type PaymentMethod = 'bnkr' | 'kas';
 
 export type TransactionType =
   | 'agent_execution_fee'
@@ -54,7 +54,7 @@ export type SettlementDependencies = {
 const BNKR_TRANSACTION_TYPES = new Set<TransactionType>(['agent_execution_fee', 'agent_service_payment']);
 
 export function resolvePaymentMethod(transactionType: TransactionType): PaymentMethod {
-  return BNKR_TRANSACTION_TYPES.has(transactionType) ? 'bnkr' : 'clawdcoin';
+  return BNKR_TRANSACTION_TYPES.has(transactionType) ? 'bnkr' : 'kas';
 }
 
 export function createSettlementService(deps: SettlementDependencies) {
@@ -117,15 +117,15 @@ export function createSettlementService(deps: SettlementDependencies) {
         };
       }
 
-      const clawdcoinResult = await deps.executeClawdcoinSettlement(request);
-      if (!clawdcoinResult.success) {
+      const kasResult = await deps.executeClawdcoinSettlement(request);
+      if (!kasResult.success) {
         return {
-          ...clawdcoinResult,
+          ...kasResult,
           payment_method,
         };
       }
 
-      const transaction_id = clawdcoinResult.transaction_id ?? txIdFactory();
+      const transaction_id = kasResult.transaction_id ?? txIdFactory();
       await deps.recordTransaction({
         id: transaction_id,
         payment_method,
@@ -135,13 +135,13 @@ export function createSettlementService(deps: SettlementDependencies) {
         recipient_id: request.recipient_id,
         metadata: {
           ...(request.metadata ?? {}),
-          ...(clawdcoinResult.details ?? {}),
-          source: 'clawdcoin_ledger',
+          ...(kasResult.details ?? {}),
+          source: 'kas_ledger',
         },
       });
 
       return {
-        ...clawdcoinResult,
+        ...kasResult,
         success: true,
         payment_method,
         transaction_id,

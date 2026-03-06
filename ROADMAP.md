@@ -13,8 +13,8 @@
     - High velocity trading.
     - "The Countdown": A visualized timer to the end of the $BANKR era.
 
-## Phase 3: The Mainnet ($CLAWDCOIN)
-- **Currency:** $CLAWDCOIN
+## Phase 3: The Mainnet (KAS + BNKR)
+- **Currency:** KAS + BNKR
 - **Launch:** Post-countdown.
 - **Mechanics:**
     - Scarcity (no infinite faucet).

@@ -22,7 +22,7 @@ test('listService validates required params and creates listing', async () => {
     searchListings: async () => [],
     findListingByName: async () => null,
     settlePayment: async () => ({ success: false, payment_method: 'bnkr' }),
-    getAgentBalance: async () => ({ clawdcoin_balance: 0, pending_escrow: 0 }),
+    getAgentBalance: async () => ({ kas_balance: 0, pending_escrow: 0 }),
     logInvocation: (entry) => {
       calls.push(`log:${entry.intent}:${entry.success}`);
     },
@@ -35,7 +35,7 @@ test('listService validates required params and creates listing', async () => {
     makeIntent('list_service', {
       service_name: 'Logo Design',
       description: 'I design logos',
-      price_clawdcoin: 25,
+      price_kas: 25,
       agent_wallet_address: '0xabc',
     }),
   );
@@ -49,12 +49,12 @@ test('findAgent returns top matches with required fields', async () => {
   const handlers = createBankrSkillHandlers({
     createListing: async () => ({ listing_id: 'x' }),
     searchListings: async () => [
-      { id: 'a', name: 'Audit Bot', price_clawdcoin: 50, agent_wallet_address: '0x1' },
-      { id: 'b', name: 'Deploy Bot', price_clawdcoin: 30, agent_wallet_address: '0x2' },
+      { id: 'a', name: 'Audit Bot', price_kas: 50, agent_wallet_address: '0x1' },
+      { id: 'b', name: 'Deploy Bot', price_kas: 30, agent_wallet_address: '0x2' },
     ],
     findListingByName: async () => null,
     settlePayment: async () => ({ success: false, payment_method: 'bnkr' }),
-    getAgentBalance: async () => ({ clawdcoin_balance: 0, pending_escrow: 0 }),
+    getAgentBalance: async () => ({ kas_balance: 0, pending_escrow: 0 }),
     logInvocation: () => undefined,
   });
 
@@ -81,7 +81,7 @@ test('payWithBnkr routes through settlement and returns structured success', asy
         details: { onchain_transaction: '0xabc' },
       };
     },
-    getAgentBalance: async () => ({ clawdcoin_balance: 0, pending_escrow: 0 }),
+    getAgentBalance: async () => ({ kas_balance: 0, pending_escrow: 0 }),
     logInvocation: () => undefined,
   });
 
@@ -114,7 +114,7 @@ test('payWithBnkr handles settlement failure gracefully', async () => {
       error_code: 'VERIFICATION_FAILED',
       message: 'insufficient_funds',
     }),
-    getAgentBalance: async () => ({ clawdcoin_balance: 0, pending_escrow: 0 }),
+    getAgentBalance: async () => ({ kas_balance: 0, pending_escrow: 0 }),
     logInvocation: () => undefined,
   });
 
@@ -130,13 +130,13 @@ test('payWithBnkr handles settlement failure gracefully', async () => {
   assert.equal(result.error_code, 'VERIFICATION_FAILED');
 });
 
-test('checkBalance returns CLAWDCOIN balance and pending escrow', async () => {
+test('checkBalance returns KAS balance and pending escrow', async () => {
   const handlers = createBankrSkillHandlers({
     createListing: async () => ({ listing_id: 'x' }),
     searchListings: async () => [],
     findListingByName: async () => null,
     settlePayment: async () => ({ success: false, payment_method: 'bnkr' }),
-    getAgentBalance: async () => ({ clawdcoin_balance: 123.45, pending_escrow: 7.89 }),
+    getAgentBalance: async () => ({ kas_balance: 123.45, pending_escrow: 7.89 }),
     logInvocation: () => undefined,
   });
 
@@ -147,6 +147,6 @@ test('checkBalance returns CLAWDCOIN balance and pending escrow', async () => {
   );
 
   assert.equal(result.success, true);
-  assert.equal(result.data?.clawdcoin_balance, 123.45);
+  assert.equal(result.data?.kas_balance, 123.45);
   assert.equal(result.data?.pending_escrow, 7.89);
 });

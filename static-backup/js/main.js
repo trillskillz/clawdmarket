@@ -12,7 +12,7 @@ function updateCountdown() {
     document.getElementById('cd-hours').textContent = 'LIVE';
     document.getElementById('cd-mins').textContent = 'NOW';
     document.getElementById('cd-secs').textContent = '🪙';
-    document.querySelector('.countdown-label-top').textContent = '$CLAWDCOIN IS LIVE';
+    document.querySelector('.countdown-label-top').textContent = 'KAS + BNKR IS LIVE';
     return;
   }
 
@@ -98,7 +98,7 @@ document.querySelector('.trade-swap-icon')?.addEventListener('click', () => {
 document.getElementById('waitlistBtn')?.addEventListener('click', () => {
   const email = document.getElementById('waitlistEmail')?.value;
   if (email && email.includes('@')) {
-    alert('🐾 You\'re on the list! We\'ll notify ' + email + ' when $CLAWDCOIN launches.');
+    alert('🐾 You\'re on the list! We\'ll notify ' + email + ' when KAS + BNKR launches.');
     document.getElementById('waitlistEmail').value = '';
     // Increment the counter for fun
     const countEl = document.getElementById('waitlistCount');

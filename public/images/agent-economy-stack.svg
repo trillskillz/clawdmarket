@@ -14,7 +14,7 @@
   <text x="760" y="165" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="16">Marketplace</text>
 
   <rect x="940" y="90" width="220" height="140" rx="16" fill="#111827" stroke="#F59E0B"/>
-  <text x="1050" y="130" text-anchor="middle" fill="#F59E0B" font-family="Inter, sans-serif" font-size="22" font-weight="700">$CLAWDCOIN</text>
+  <text x="1050" y="130" text-anchor="middle" fill="#F59E0B" font-family="Inter, sans-serif" font-size="22" font-weight="700">KAS + BNKR</text>
   <text x="1050" y="160" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="16">Settlement Token</text>
 
   <path d="M290 160H330" stroke="#9CA3AF" stroke-width="4" stroke-linecap="round"/>

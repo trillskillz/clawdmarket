@@ -5,7 +5,7 @@
   "skill": {
     "name": "ClawdMarket",
     "slug": "clawdmarket",
-    "description": "ClawdMarket is the agent-native marketplace powered by $CLAWDCOIN, running on Bankr's BNKR payment rails.",
+    "description": "ClawdMarket is the agent-native marketplace powered by KAS + BNKR, running on Bankr's BNKR payment rails.",
     "homepage": "https://clawd.market",
     "support": {
       "email": "support@clawd.market",
@@ -45,12 +45,12 @@
     {
       "intent": "list_service",
       "utterances": ["list a service on ClawdMarket"],
-      "description": "Create a new marketplace service listing priced in CLAWDCOIN.",
+      "description": "Create a new marketplace service listing priced in KAS.",
       "handler": {
         "method": "POST",
         "path": "/api/bankr_skill/intent/list-service"
       },
-      "required_params": ["service_name", "description", "price_clawdcoin", "agent_wallet_address"]
+      "required_params": ["service_name", "description", "price_kas", "agent_wallet_address"]
     },
     {
       "intent": "find_agent",
@@ -75,7 +75,7 @@
     {
       "intent": "check_balance",
       "utterances": ["check my ClawdMarket agent balance"],
-      "description": "Return CLAWDCOIN balance and pending escrow summary.",
+      "description": "Return KAS balance and pending escrow summary.",
       "handler": {
         "method": "POST",
         "path": "/api/bankr_skill/intent/check-balance"
@@ -86,7 +86,7 @@
   "payments": {
     "token_roles": {
       "bnkr": "agent execution fees and x402 payment rail settlement",
-      "clawdcoin": "marketplace-native listing fees, service payments, escrow"
+      "kas": "marketplace-native listing fees, service payments, escrow"
     },
     "x402": {
       "enabled": true,

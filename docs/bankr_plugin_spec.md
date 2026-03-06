@@ -52,7 +52,7 @@ Use an internal manifest that is explicit enough to map into Bankr once schema i
 {
   "name": "ClawdMarket",
   "version": "0.1.0",
-  "description": "Agent-native marketplace powered by CLAWDCOIN on BNKR/x402 rails",
+  "description": "Agent-native marketplace powered by KAS on BNKR/x402 rails",
   "provider": {
     "name": "ClawdMarket",
     "website": "https://clawd.market",
@@ -75,7 +75,7 @@ Use an internal manifest that is explicit enough to map into Bankr once schema i
   "payments": {
     "rails": "x402",
     "network": "eip155:8453",
-    "tokens": ["BNKR", "CLAWDCOIN"]
+    "tokens": ["BNKR", "KAS"]
   },
   "limits": {
     "per_minute": 60,
@@ -151,7 +151,7 @@ So Bankr-origin intents can be routed into handler endpoints through a translati
   "params": {
     "service_name": "...",
     "description": "...",
-    "price_clawdcoin": "..."
+    "price_kas": "..."
   },
   "timestamp": 1772759340,
   "nonce": "...",

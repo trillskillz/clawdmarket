@@ -1,34 +1,34 @@
 {
-  "clawdcoin_references": [
+  "kas_references": [
     {
       "file": "app/page.tsx",
       "line": 98,
-      "description": "Homepage copy references 3% fee funding $CLAWDCOIN treasury."
+      "description": "Homepage copy references 3% fee funding KAS + BNKR treasury."
     },
     {
       "file": "app/page.tsx",
       "line": 159,
-      "description": "Token section logo alt text references $CLAWDCOIN."
+      "description": "Token section logo alt text references KAS + BNKR."
     },
     {
       "file": "app/page.tsx",
       "line": 163,
-      "description": "Hero token label renders $CLAWDCOIN branding."
+      "description": "Hero token label renders KAS + BNKR branding."
     },
     {
       "file": "app/page.tsx",
       "line": 167,
-      "description": "Marketing copy references future $CLAWDCOIN drop."
+      "description": "Marketing copy references future KAS + BNKR drop."
     },
     {
       "file": "app/page.tsx",
       "line": 182,
-      "description": "Feature copy says trading fees fund $CLAWDCOIN development."
+      "description": "Feature copy says trading fees fund KAS + BNKR development."
     },
     {
       "file": "app/page.tsx",
       "line": 200,
-      "description": "Tokenomics heading for $CLAWDCOIN page section."
+      "description": "Tokenomics heading for KAS + BNKR page section."
     }
   ],
   "payment_logic_locations": [
@@ -69,6 +69,6 @@
   },
   "multi_token_readiness": {
     "score": 5,
-    "explanation": "The code already supports more than one settlement path (on-chain BANKR vs internal ledger) and stores payment metadata, so groundwork exists. However, token-specific routing is hardcoded across UI/API layers, and there is no unified settlement abstraction yet. BNKR + CLAWDCOIN dual-token support is feasible without a full rewrite, but it needs targeted refactor into shared payment interfaces and middleware before scaling safely."
+    "explanation": "The code already supports more than one settlement path (on-chain BANKR vs internal ledger) and stores payment metadata, so groundwork exists. However, token-specific routing is hardcoded across UI/API layers, and there is no unified settlement abstraction yet. BNKR + KAS dual-token support is feasible without a full rewrite, but it needs targeted refactor into shared payment interfaces and middleware before scaling safely."
   }
 }

@@ -24,7 +24,7 @@ export type HandlerResponse = {
 export type ListingSearchResult = {
   id: string;
   name: string;
-  price_clawdcoin: number;
+  price_kas: number;
   agent_wallet_address: string;
   description?: string;
 };
@@ -33,7 +33,7 @@ export type BankrSkillDeps = {
   createListing: (input: {
     service_name: string;
     description: string;
-    price_clawdcoin: number;
+    price_kas: number;
     agent_wallet_address: string;
     agent_id: string;
   }) => Promise<{ listing_id: string }>;
@@ -52,7 +52,7 @@ export type BankrSkillDeps = {
       isAgentToAgentRequest: boolean;
     };
   }) => Promise<SettlementResult>;
-  getAgentBalance: (agentWalletAddress: string) => Promise<{ clawdcoin_balance: number; pending_escrow: number }>;
+  getAgentBalance: (agentWalletAddress: string) => Promise<{ kas_balance: number; pending_escrow: number }>;
   logInvocation: (entry: {
     intent: BankrIntent;
     agent_id: string;
@@ -104,19 +104,19 @@ export function createBankrSkillHandlers(deps: BankrSkillDeps) {
       return withLogging('list_service', intent.agent_id, async () => {
         const service_name = intent.params.service_name;
         const description = intent.params.description;
-        const price = intent.params.price_clawdcoin;
+        const price = intent.params.price_kas;
         const agent_wallet_address = intent.params.agent_wallet_address;
 
         if (!isNonEmptyString(service_name)) return toValidationError('Missing required parameter: service_name');
         if (!isNonEmptyString(description)) return toValidationError('Missing required parameter: description');
         if (typeof price !== 'number' || Number.isNaN(price) || price <= 0)
-          return toValidationError('Missing or invalid required parameter: price_clawdcoin');
+          return toValidationError('Missing or invalid required parameter: price_kas');
         if (!isNonEmptyString(agent_wallet_address)) return toValidationError('Missing required parameter: agent_wallet_address');
 
         const created = await deps.createListing({
           service_name,
           description,
-          price_clawdcoin: price,
+          price_kas: price,
           agent_wallet_address,
           agent_id: intent.agent_id,
         });
@@ -127,7 +127,7 @@ export function createBankrSkillHandlers(deps: BankrSkillDeps) {
           data: {
             listing_id: created.listing_id,
             service_name,
-            price_clawdcoin: price,
+            price_kas: price,
             agent_wallet_address,
           },
         };
@@ -149,7 +149,7 @@ export function createBankrSkillHandlers(deps: BankrSkillDeps) {
             query: keyword,
             matches: matches.map((m) => ({
               name: m.name,
-              price_clawdcoin: m.price_clawdcoin,
+              price_kas: m.price_kas,
               agent_wallet_address: m.agent_wallet_address,
               listing_id: m.id,
             })),
@@ -233,7 +233,7 @@ export function createBankrSkillHandlers(deps: BankrSkillDeps) {
           message: 'Retrieved ClawdMarket balance successfully.',
           data: {
             agent_wallet_address: wallet,
-            clawdcoin_balance: balance.clawdcoin_balance,
+            kas_balance: balance.kas_balance,
             pending_escrow: balance.pending_escrow,
           },
         };

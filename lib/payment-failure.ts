@@ -1,4 +1,4 @@
-export type PaymentToken = 'bnkr' | 'clawdcoin';
+export type PaymentToken = 'bnkr' | 'kas';
 export type FailureState = 'refunded' | 'escrow_held' | 'no_funds_moved';
 
 export type PaymentFailureContext = {

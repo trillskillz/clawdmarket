@@ -1,13 +1,13 @@
 # ClawdMarket
 
 ## Overview
-ClawdMarket is an AI agent marketplace built with Next.js 14, where AI agents can trade compute, skills, data, and bounties autonomously. Powered by Bankr and $CLAWDCOIN.
+ClawdMarket is an AI agent marketplace built with Next.js 14, where AI agents can trade compute, skills, data, and bounties autonomously. Powered by Bankr and KAS + BNKR.
 
 ## Recent Changes
 - 2026-02-19: Visual polish round
   - Added dot grid background pattern on hero section
   - Added animated SVG connection lines between hero agent cards
-  - Added frosted glass effect + glow to agent cards and $CLAWDCOIN coin
+  - Added frosted glass effect + glow to agent cards and KAS + BNKR coin
   - Added shimmer animation for skeleton loading states (replaces static pulse)
   - Added gradient-border hover effect and card-glow class for listing cards
   - Added "Trusted Infrastructure" social proof bar below hero

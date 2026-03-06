@@ -1,5 +1,5 @@
 # ClawdMarket — Revised Site Content & OpenClaw Tasks
-## Stack: KAS + BNKR payments | No $CLAWDCOIN | Custodial KAS conversion | Launch 4.20.26
+## Stack: KAS + BNKR payments | No KAS + BNKR | Custodial KAS conversion | Launch 4.20.26
 
 ---
 
@@ -392,7 +392,7 @@ POST /services
 ```
 You are a frontend developer working on ClawdMarket, an agent-native 
 marketplace that accepts KAS (Kaspa) and BNKR as payment methods.
-There is no $CLAWDCOIN token. Remove any references to it.
+There is no KAS + BNKR token. Remove any references to it.
 
 Update the homepage hero section:
 
@@ -413,7 +413,7 @@ Fetch the BNKR logo from: https://bankr.bot
 Fetch the KAS logo from: https://kaspa.org or the Kaspa GitHub assets
 Fetch the Base logo from: https://base.org
 
-IMPORTANT: Remove any existing $CLAWDCOIN references on this page.
+IMPORTANT: Remove any existing KAS + BNKR references on this page.
 
 Output a summary of all files changed.
 TASK_STATUS: [COMPLETE | PARTIAL | BLOCKED: reason]
@@ -421,22 +421,22 @@ TASK_STATUS: [COMPLETE | PARTIAL | BLOCKED: reason]
 
 ---
 
-### Task H.2 — Remove All $CLAWDCOIN References Sitewide
+### Task H.2 — Remove All KAS + BNKR References Sitewide
 
 ```
 You are a frontend developer working on ClawdMarket.
 
-CRITICAL CLEANUP TASK: Remove every reference to $CLAWDCOIN from the 
+CRITICAL CLEANUP TASK: Remove every reference to KAS + BNKR from the 
 entire codebase — UI copy, component text, metadata, page titles, 
 og:description tags, comments, and variable names.
 
 Replace as follows:
-- "$CLAWDCOIN" in copy → remove entirely or replace with "KAS + BNKR" where context requires a token name
+- "KAS + BNKR" in copy → remove entirely or replace with "KAS + BNKR" where context requires a token name
 - Any token launch copy (launch date for a token, tokenomics, "settlement token", etc.) → remove
-- Any CLAWDCOIN price display components → remove
-- Any CLAWDCOIN wallet balance components → remove or repurpose for KAS/BNKR balances
+- Any KAS price display components → remove
+- Any KAS wallet balance components → remove or repurpose for KAS/BNKR balances
 
-After removal, do a final grep across the entire repo for "CLAWDCOIN" and "clawdcoin" 
+After removal, do a final grep across the entire repo for "KAS" and "kas" 
 to confirm nothing was missed. Output the grep results.
 
 Output a full list of every file modified and every line changed.
@@ -499,7 +499,7 @@ Card 3:
   automatically. Settlement is on-chain and instant."
 
 Cards: subtle border, dark background, consistent padding, inline SVG icons.
-Do NOT reference $CLAWDCOIN anywhere in this section.
+Do NOT reference KAS + BNKR anywhere in this section.
 
 Output a summary of all files changed.
 TASK_STATUS: [COMPLETE | PARTIAL | BLOCKED: reason]
@@ -634,7 +634,7 @@ Update the marketplace page (/marketplace):
    
    CTA button: "Register Your Agent Now" → /auth/register
 
-3. Remove any $CLAWDCOIN references from this page.
+3. Remove any KAS + BNKR references from this page.
 
 Keep the search bar and filter pills visible above the empty state 
 so the page feels like a functional UI, not a placeholder.
@@ -652,7 +652,7 @@ You are a frontend developer and technical writer working on ClawdMarket.
 
 Create or fully rewrite the docs/integration page at /docs.
 
-IMPORTANT: No $CLAWDCOIN references anywhere on this page.
+IMPORTANT: No KAS + BNKR references anywhere on this page.
 Payment methods are KAS and BNKR only.
 
 Page structure:
@@ -811,7 +811,7 @@ Banner requirements:
   - Use localStorage to persist dismissal across page loads
   - "Register Your Agent →" links to /auth/register
 
-Remove any $CLAWDCOIN references from the nav or existing banners.
+Remove any KAS + BNKR references from the nav or existing banners.
 
 Output a summary of all files changed.
 TASK_STATUS: [COMPLETE | PARTIAL | BLOCKED: reason]
@@ -838,7 +838,7 @@ Bottom bar (full width, small muted text):
   Left: "© 2026 ClawdMarket"
   Right: "ClawdMarket is experimental infrastructure. Not financial advice."
 
-Remove any $CLAWDCOIN references from the footer.
+Remove any KAS + BNKR references from the footer.
 Remove any token launch language.
 
 Output a summary of all files changed.
@@ -849,7 +849,7 @@ TASK_STATUS: [COMPLETE | PARTIAL | BLOCKED: reason]
 
 ## Feed Order for OpenClaw
 
-1. H.2 — $CLAWDCOIN removal (clean slate first, everything else builds on this)
+1. H.2 — KAS + BNKR removal (clean slate first, everything else builds on this)
 2. N.1 — Nav + banner
 3. H.1 — Hero
 4. H.3 — What is ClawdMarket
@@ -866,7 +866,7 @@ TASK_STATUS: [COMPLETE | PARTIAL | BLOCKED: reason]
 
 ## Key Constraints for All Tasks
 
-- No $CLAWDCOIN anywhere. If OpenClaw finds it, remove it.
+- No KAS + BNKR anywhere. If OpenClaw finds it, remove it.
 - Payment methods: KAS and BNKR only.
 - KAS is described as a payment method, not a community or identity signal.
 - The Kaspa logo/branding should appear only in payment context — not in hero, taglines, or positioning copy.

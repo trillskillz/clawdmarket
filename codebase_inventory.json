@@ -1165,22 +1165,22 @@
     {
       "file": "replit.md",
       "line": 4,
-      "description": "ClawdMarket is an AI agent marketplace built with Next.js 14, where AI agents can trade compute, skills, data, and bounties autonomously. Powered by Bankr and $CLAWDCOIN."
+      "description": "ClawdMarket is an AI agent marketplace built with Next.js 14, where AI agents can trade compute, skills, data, and bounties autonomously. Powered by Bankr and KAS + BNKR."
     },
     {
       "file": "replit.md",
       "line": 10,
-      "description": "- Added frosted glass effect + glow to agent cards and $CLAWDCOIN coin"
+      "description": "- Added frosted glass effect + glow to agent cards and KAS + BNKR coin"
     },
     {
       "file": "README.md",
       "line": 3,
-      "description": "The first agentic marketplace where AI agents trade compute, skills, data, and bounties with each other \u2014 autonomously. Powered by **Bankr** and **$CLAWDCOIN**."
+      "description": "The first agentic marketplace where AI agents trade compute, skills, data, and bounties with each other \u2014 autonomously. Powered by **Bankr** and **KAS + BNKR**."
     },
     {
       "file": "README.md",
       "line": 11,
-      "description": "- **Waitlist System**: Email collection for $CLAWDCOIN launch"
+      "description": "- **Waitlist System**: Email collection for KAS + BNKR launch"
     },
     {
       "file": "ROADMAP.md",
@@ -1205,12 +1205,12 @@
     {
       "file": "ROADMAP.md",
       "line": 16,
-      "description": "## Phase 3: The Mainnet ($CLAWDCOIN)"
+      "description": "## Phase 3: The Mainnet (KAS + BNKR)"
     },
     {
       "file": "ROADMAP.md",
       "line": 17,
-      "description": "- **Currency:** $CLAWDCOIN"
+      "description": "- **Currency:** KAS + BNKR"
     },
     {
       "file": "ROADMAP.md",
@@ -1220,12 +1220,12 @@
     {
       "file": "static-backup/js/main.js",
       "line": 15,
-      "description": "document.querySelector('.countdown-label-top').textContent = '$CLAWDCOIN IS LIVE';"
+      "description": "document.querySelector('.countdown-label-top').textContent = 'KAS + BNKR IS LIVE';"
     },
     {
       "file": "static-backup/js/main.js",
       "line": 101,
-      "description": "alert('\ud83d\udc3e You\\'re on the list! We\\'ll notify ' + email + ' when $CLAWDCOIN launches.');"
+      "description": "alert('\ud83d\udc3e You\\'re on the list! We\\'ll notify ' + email + ' when KAS + BNKR launches.');"
     },
     {
       "file": "app/layout.tsx",
@@ -1280,17 +1280,17 @@
     {
       "file": "app/page.tsx",
       "line": 159,
-      "description": "<div className=\"relative\"><Image src=\"/images/lobster-logo.png\" alt=\"$CLAWDCOIN\" width={80} height={80} /></div>"
+      "description": "<div className=\"relative\"><Image src=\"/images/lobster-logo.png\" alt=\"KAS + BNKR\" width={80} height={80} /></div>"
     },
     {
       "file": "app/page.tsx",
       "line": 163,
-      "description": "<Image src=\"/images/lobster-logo.png\" alt=\"CLAWD\" width={32} height={32} className=\"inline-block w-8 h-8\" /> $CLAWDCOIN"
+      "description": "<Image src=\"/images/lobster-logo.png\" alt=\"CLAWD\" width={32} height={32} className=\"inline-block w-8 h-8\" /> KAS + BNKR"
     },
     {
       "file": "app/page.tsx",
       "line": 167,
-      "description": "Earn <Image src=\"/images/bankr-logo.svg\" alt=\"BANKR\" width={16} height={16} className=\"inline-block w-4 h-4 mr-1\" /> BANKR today. Await the $CLAWDCOIN drop."
+      "description": "Earn <Image src=\"/images/bankr-logo.svg\" alt=\"BANKR\" width={16} height={16} className=\"inline-block w-4 h-4 mr-1\" /> BANKR today. Await the KAS + BNKR drop."
     },
     {
       "file": "app/page.tsx",
@@ -1300,7 +1300,7 @@
     {
       "file": "app/page.tsx",
       "line": 200,
-      "description": "<h2 className=\"text-4xl font-bold text-center mb-4\">$CLAWDCOIN Tokenomics</h2>"
+      "description": "<h2 className=\"text-4xl font-bold text-center mb-4\">KAS + BNKR Tokenomics</h2>"
     },
     {
       "file": "app/page.tsx",
@@ -1545,12 +1545,12 @@
     {
       "file": "components/Hero.tsx",
       "line": 87,
-      "description": "Powered by <strong className=\"text-text\">$BANKR</strong> and <strong className=\"text-text\">$CLAWDCOIN</strong>."
+      "description": "Powered by <strong className=\"text-text\">$BANKR</strong> and <strong className=\"text-text\">KAS + BNKR</strong>."
     },
     {
       "file": "components/Hero.tsx",
       "line": 95,
-      "description": "View $CLAWDCOIN \u2192"
+      "description": "View KAS + BNKR \u2192"
     },
     {
       "file": "components/Hero.tsx",
