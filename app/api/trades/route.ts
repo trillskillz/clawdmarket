@@ -17,7 +17,22 @@ import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
-const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee
+const DEV_FEE_PERCENT = 0.03; // 3% fee
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function calculateTradeFinancials(itemPrice: number) {
+  const platformFee = round2(itemPrice * DEV_FEE_PERCENT);
+  const totalCost = round2(itemPrice + platformFee);
+  const sellerAmount = itemPrice;
+  const devAmount = platformFee;
+  if (devAmount !== round2(itemPrice * DEV_FEE_PERCENT)) {
+    throw new Error('DEV_FEE_MISMATCH');
+  }
+  return { itemPrice, platformFee, totalCost, sellerAmount, devAmount };
+}
 
 class TradeRaceError extends Error {
   constructor(public readonly code: 'LISTING_ALREADY_CLAIMED' | 'INSUFFICIENT_FUNDS_AT_COMMIT', message: string) {
@@ -85,7 +100,7 @@ async function ensureSeededListingMaterialized(listingId: string) {
 }
 
 async function ensureAdminFeeRecipient(): Promise<string | null> {
-  const adminWalletAddress = (process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim().toLowerCase();
+  const adminWalletAddress = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim().toLowerCase();
   if (!adminWalletAddress) return null;
   if (!isAddress(adminWalletAddress as `0x${string}`)) {
     console.error('Invalid ADMIN_BANKR_WALLET_ADDRESS configured');
@@ -223,10 +238,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Calculate fee from listing price * requested quantity
-    const tradeAmount = listing.price_bankr * validated.amount;
-    const fee = tradeAmount * ECOSYSTEM_FEE_PERCENT;
-    const totalCost = tradeAmount + fee;
+    // Server-authoritative fee math (never trust client-provided fee/price)
+    const requestedQuantity = Number(validated.amount || 1);
+    if (requestedQuantity !== 1) {
+      return NextResponse.json({ error: 'Only quantity=1 is supported' }, { status: 400 });
+    }
+
+    const itemPrice = Number(listing.price_bankr);
+    const { itemPrice: tradeAmount, platformFee: fee, totalCost, sellerAmount, devAmount } = calculateTradeFinancials(itemPrice);
 
     const bodyPaymentMode = (body?.payment_mode || '').toString();
     const onchain = body?.onchain || null;
@@ -234,7 +253,7 @@ export async function POST(req: NextRequest) {
     if (bodyPaymentMode === 'onchain') {
       const expectedToken = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '').trim().toLowerCase();
       const expectedEscrow = (process.env.ESCROW_WALLET_ADDRESS || process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS || '').trim().toLowerCase();
-      const expectedFeeWallet = (process.env.DEV_FEE_WALLET_ADDRESS || process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS || '').trim().toLowerCase();
+      const expectedFeeWallet = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS || '').trim().toLowerCase();
 
       if (!expectedToken || !expectedEscrow || !expectedFeeWallet) {
         return NextResponse.json(
@@ -256,10 +275,10 @@ export async function POST(req: NextRequest) {
       }
 
       if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || ''))) {
-        return NextResponse.json({ error: 'Invalid on-chain escrow transaction hash format' }, { status: 400 });
+        return NextResponse.json({ error: 'Invalid on-chain seller payment transaction hash format' }, { status: 400 });
       }
-      if (onchain.fee_tx_hash && !TX_HASH_RE.test(String(onchain.fee_tx_hash))) {
-        return NextResponse.json({ error: 'Invalid optional on-chain fee transaction hash format' }, { status: 400 });
+      if (!TX_HASH_RE.test(String(onchain.fee_tx_hash || ''))) {
+        return NextResponse.json({ error: 'Invalid on-chain dev fee transaction hash format' }, { status: 400 });
       }
 
       const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
@@ -287,34 +306,30 @@ export async function POST(req: NextRequest) {
           })
           .returning();
 
-        const escrowTransferAmount = onchain.fee_tx_hash ? tradeAmount : totalCost;
-
         await tx.insert(transactions).values({
           from_user_id: auth.userId,
-          to_user_id: null,
-          amount: escrowTransferAmount,
+          to_user_id: listing.seller_id,
+          amount: sellerAmount,
           type: 'transfer',
           reference_id: trade.id,
-          memo: onchain.fee_tx_hash
-            ? `On-chain escrow transfer (${onchain.escrow_tx_hash})`
-            : `On-chain total transfer (escrow+fee) (${onchain.escrow_tx_hash})`,
+          memo: `On-chain seller transfer (${onchain.escrow_tx_hash})`,
         });
 
-        if (fee > 0 && onchain.fee_tx_hash) {
+        if (devAmount > 0) {
           if (adminFeeRecipientUserId) {
             await tx
               .update(wallets)
-              .set({ balance: sql`${wallets.balance} + ${fee}` })
+              .set({ balance: sql`${wallets.balance} + ${devAmount}` })
               .where(eq(wallets.user_id, adminFeeRecipientUserId));
           }
 
           await tx.insert(transactions).values({
             from_user_id: auth.userId,
             to_user_id: adminFeeRecipientUserId,
-            amount: fee,
+            amount: devAmount,
             type: 'fee',
             reference_id: trade.id,
-            memo: `On-chain fee transfer (${onchain.fee_tx_hash})`,
+            memo: `On-chain dev fee transfer (${onchain.fee_tx_hash})`,
           });
         }
 
@@ -333,10 +348,13 @@ export async function POST(req: NextRequest) {
           trade: newTrade,
           code: 'TRADE_CREATED_ONCHAIN',
           fee_info: {
-            amount: tradeAmount,
-            ecosystem_fee: fee,
-            seller_receives: tradeAmount,
-            admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),
+            item_price: sellerAmount,
+            platform_fee: devAmount,
+            total_cost: totalCost,
+            seller_amount: sellerAmount,
+            dev_amount: devAmount,
+            dev_wallet: process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || null,
+            admin_fee_wallet_configured: Boolean(process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS),
           },
           onchain_receipts: {
             escrow_tx_hash: onchain.escrow_tx_hash,
@@ -421,8 +439,8 @@ export async function POST(req: NextRequest) {
           listing_id: validated.listing_id,
           buyer_id: auth.userId,
           seller_id: listing.seller_id,
-          amount: validated.amount,
-          fee: fee,
+          amount: sellerAmount,
+          fee: devAmount,
           status: 'pending',
         })
         .returning();
@@ -475,10 +493,13 @@ export async function POST(req: NextRequest) {
         trade: newTrade,
         code: 'TRADE_CREATED',
         fee_info: {
-          amount: validated.amount,
-          ecosystem_fee: fee,
-          seller_receives: validated.amount, // No fee for seller in this model, buyer pays fee
-          admin_fee_wallet_configured: Boolean(process.env.ADMIN_BANKR_WALLET_ADDRESS),
+          item_price: sellerAmount,
+          platform_fee: devAmount,
+          total_cost: totalCost,
+          seller_amount: sellerAmount,
+          dev_amount: devAmount,
+          dev_wallet: process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || null,
+          admin_fee_wallet_configured: Boolean(process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS),
         },
         ...envMeta('clawdmarket/api/trades'),
       },

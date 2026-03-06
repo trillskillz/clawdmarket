@@ -58,6 +58,14 @@ interface OnchainConfig {
   chain: 'base';
 }
 
+interface TradePreview {
+  item_price: number;
+  platform_fee: number;
+  total_cost: number;
+  seller_amount: number;
+  dev_amount: number;
+}
+
 const WalletLoginPopup = dynamic(() => import('@/components/WalletLoginPopup'), { ssr: false });
 
 export default function ListingDetailPage() {
@@ -77,6 +85,7 @@ export default function ListingDetailPage() {
   const [kasLoading, setKasLoading] = useState(false);
   const [kasPayment, setKasPayment] = useState<KasPaymentState | null>(null);
   const [onchainConfig, setOnchainConfig] = useState<OnchainConfig | null>(null);
+  const [tradePreview, setTradePreview] = useState<TradePreview | null>(null);
   const { track } = useAnalytics();
   const { address: connectedAddress, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
@@ -155,6 +164,28 @@ export default function ListingDetailPage() {
       } catch {}
     })();
   }, []);
+
+  useEffect(() => {
+    if (!listing?.id) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/trades/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ listing_id: listing.id }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setTradePreview({
+          item_price: Number(data.item_price || 0),
+          platform_fee: Number(data.platform_fee || 0),
+          total_cost: Number(data.total_cost || 0),
+          seller_amount: Number(data.seller_amount || 0),
+          dev_amount: Number(data.dev_amount || 0),
+        });
+      } catch {}
+    })();
+  }, [listing?.id]);
 
   useEffect(() => {
     if (!kasPayment?.payment_id) return;
@@ -239,10 +270,15 @@ export default function ListingDetailPage() {
       return;
     }
 
-    const fee = listing.price_bankr * 0.03;
-    const total = listing.price_bankr + fee;
+    const preview = tradePreview || {
+      item_price: listing.price_bankr,
+      platform_fee: Number((listing.price_bankr * 0.03).toFixed(2)),
+      total_cost: Number((listing.price_bankr * 1.03).toFixed(2)),
+      seller_amount: listing.price_bankr,
+      dev_amount: Number((listing.price_bankr * 0.03).toFixed(2)),
+    };
 
-    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${listing.price_bankr} BANKR\nFee (3%): ${fee.toFixed(2)} BANKR\nTotal: ${total.toFixed(2)} BANKR\n\nYou will sign on-chain BANKR transfers for escrow and fee.`)) {
+    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${preview.item_price} BANKR\nFee (3%): ${preview.platform_fee.toFixed(2)} BANKR\nTotal: ${preview.total_cost.toFixed(2)} BANKR\n\nYou will sign on-chain BANKR transfers to seller and dev wallet.`)) {
       return;
     }
 
@@ -255,18 +291,28 @@ export default function ListingDetailPage() {
         return;
       }
 
-      // Single-transfer checkout to escrow prevents partial loss if user rejects second signature.
-      const totalAmount = parseUnits(total.toFixed(18), 18);
+      const sellerAmount = parseUnits(preview.seller_amount.toFixed(18), 18);
+      const devAmount = parseUnits(preview.dev_amount.toFixed(18), 18);
 
       const escrowTxHash = await writeContractAsync({
         chainId: base.id,
         address: bankrToken as `0x${string}`,
         abi: erc20Abi,
         functionName: 'transfer',
-        args: [escrowWallet as `0x${string}`, totalAmount],
+        args: [escrowWallet as `0x${string}`, sellerAmount],
       });
 
       await basePublicClient.waitForTransactionReceipt({ hash: escrowTxHash });
+
+      const feeTxHash = await writeContractAsync({
+        chainId: base.id,
+        address: bankrToken as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [devFeeWallet as `0x${string}`, devAmount],
+      });
+
+      await basePublicClient.waitForTransactionReceipt({ hash: feeTxHash });
 
       const csrfToken = getCsrfToken();
       const res = await fetch('/api/trades', {
@@ -287,7 +333,7 @@ export default function ListingDetailPage() {
             escrow_wallet: escrowWallet,
             fee_wallet: devFeeWallet,
             escrow_tx_hash: escrowTxHash,
-            fee_tx_hash: null,
+            fee_tx_hash: feeTxHash,
           },
         }),
       });
@@ -324,7 +370,7 @@ export default function ListingDetailPage() {
 
     setKasLoading(true);
     try {
-      const totalBankr = listing.price_bankr * 1.03;
+      const totalBankr = tradePreview?.total_cost ?? Number((listing.price_bankr * 1.03).toFixed(2));
       const amountKas = (totalBankr * bankrToKas).toFixed(6);
 
       const res = await fetch('/api/payments/kas', {
@@ -521,16 +567,16 @@ export default function ListingDetailPage() {
                 <div className="space-y-3 text-sm mb-6">
                   <div className="flex justify-between">
                     <span className="text-text-dim">Item Price</span>
-                    <span className="font-mono"><PriceWithKas bankr={listing.price_bankr} /></span>
+                    <span className="font-mono"><PriceWithKas bankr={tradePreview?.item_price ?? listing.price_bankr} /></span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-text-dim">Platform Fee (3%)</span>
-                    <span className="font-mono text-text-dim"><PriceWithKas bankr={Number((listing.price_bankr * 0.03).toFixed(4))} /></span>
+                    <span className="font-mono text-text-dim"><PriceWithKas bankr={tradePreview?.platform_fee ?? Number((listing.price_bankr * 0.03).toFixed(2))} /></span>
                   </div>
                   <div className="h-px bg-border my-2"></div>
                   <div className="flex justify-between font-bold text-white">
                     <span>Total Cost</span>
-                    <span className="font-mono text-gold"><PriceWithKas bankr={Number((listing.price_bankr * 1.03).toFixed(4))} kasClassName="text-gold/80" /></span>
+                    <span className="font-mono text-gold"><PriceWithKas bankr={tradePreview?.total_cost ?? Number((listing.price_bankr * 1.03).toFixed(2))} kasClassName="text-gold/80" /></span>
                   </div>
                 </div>
 
