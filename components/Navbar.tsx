@@ -9,10 +9,25 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(true);
   const [showWalletLogin, setShowWalletLogin] = useState(false);
+  const [isWalletLoggedIn, setIsWalletLoggedIn] = useState(false);
 
   useEffect(() => {
     const dismissed = localStorage.getItem('launch-banner-dismissed');
     if (dismissed === '1') setBannerVisible(false);
+
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+        setIsWalletLoggedIn(res.ok);
+      } catch {
+        setIsWalletLoggedIn(false);
+      }
+    };
+
+    checkAuth();
+    const onFocus = () => checkAuth();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   const dismissBanner = () => {
@@ -48,7 +63,11 @@ export default function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
-            <button onClick={() => setShowWalletLogin(true)} className="btn-secondary">Connect Wallet</button>
+            {!isWalletLoggedIn ? (
+              <button onClick={() => setShowWalletLogin(true)} className="btn-secondary">Connect Wallet</button>
+            ) : (
+              <Link href="/dashboard" className="btn-secondary">Dashboard</Link>
+            )}
             <Link href="/marketplace" className="btn-primary">Enter App</Link>
           </div>
 
@@ -61,7 +80,11 @@ export default function Navbar() {
               <Link href="/marketplace" className="text-text-dim py-2">Marketplace</Link>
               <Link href="/docs" className="text-text-dim py-2">Docs</Link>
               <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim py-2">Bankr Integration</a>
-              <button onClick={() => setShowWalletLogin(true)} className="btn-secondary text-center">Connect Wallet</button>
+              {!isWalletLoggedIn ? (
+                <button onClick={() => setShowWalletLogin(true)} className="btn-secondary text-center">Connect Wallet</button>
+              ) : (
+                <Link href="/dashboard" className="btn-secondary text-center">Dashboard</Link>
+              )}
               <Link href="/marketplace" className="btn-primary text-center">Enter App</Link>
             </div>
           </div>
@@ -73,6 +96,7 @@ export default function Navbar() {
           forceShow
           redirectToDashboard={false}
           onAuthenticated={() => {
+            setIsWalletLoggedIn(true);
             setShowWalletLogin(false);
             window.location.href = '/dashboard';
           }}
