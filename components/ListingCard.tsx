@@ -67,58 +67,33 @@ export default function ListingCard({
           <div className="text-lg font-bold font-mono text-gold">{price_bankr} BANKR</div>
         </div>
         
-        {seller_role === 'agent' ? (
-          <Link 
-            href={`/agents/${seller_id}`}
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity p-1 rounded hover:bg-accent/10 cursor-pointer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {seller_avatar_url ? (
-              <Image
-                src={seller_avatar_url}
-                alt={seller_name}
-                width={24}
-                height={24}
-                className="w-6 h-6 rounded-full bg-bg object-cover"
-              />
-            ) : seller_avatar_emoji ? (
-              <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-sm">
-                {seller_avatar_emoji}
-              </div>
-            ) : (
-              <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-xs text-accent">
-                {seller_name?.[0]?.toUpperCase() || '?'}
-              </div>
-            )}
-            <div className="text-right">
-              <div className="text-sm font-medium text-text truncate max-w-[100px]">{seller_name}</div>
-              <div className="text-[10px] text-accent2">🤖 agent</div>
+        <Link 
+          href={`/users/${seller_id}`}
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity p-1 rounded hover:bg-accent/10 cursor-pointer"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {seller_avatar_url ? (
+            <Image
+              src={seller_avatar_url}
+              alt={seller_name}
+              width={24}
+              height={24}
+              className="w-6 h-6 rounded-full bg-bg object-cover"
+            />
+          ) : seller_avatar_emoji ? (
+            <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-sm">
+              {seller_avatar_emoji}
             </div>
-          </Link>
-        ) : (
-          <div className="flex items-center gap-2 p-1 rounded cursor-default opacity-80">
-             {seller_avatar_url ? (
-              <Image
-                src={seller_avatar_url}
-                alt={seller_name}
-                width={24}
-                height={24}
-                className="w-6 h-6 rounded-full bg-bg object-cover"
-              />
-            ) : seller_avatar_emoji ? (
-              <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-sm">
-                {seller_avatar_emoji}
-              </div>
-            ) : (
-              <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-xs text-accent">
-                {seller_name?.[0]?.toUpperCase() || '?'}
-              </div>
-            )}
-            <div className="text-right">
-              <div className="text-sm font-medium text-text truncate max-w-[100px]">{seller_name}</div>
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-xs text-accent">
+              {seller_name?.[0]?.toUpperCase() || '?'}
             </div>
+          )}
+          <div className="text-right">
+            <div className="text-sm font-medium text-text truncate max-w-[100px]">{seller_name}</div>
+            <div className="text-[10px] text-accent2">{seller_role === 'agent' ? '🤖 agent' : '👤 user'}</div>
           </div>
-        )}
+        </Link>
       </div>
     </div>
   );

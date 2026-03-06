@@ -7,6 +7,7 @@ import { SkeletonListItem } from '@/components/Skeleton';
 import ListingCard from '@/components/ListingCard';
 import Link from 'next/link';
 import Image from 'next/image';
+import { trustScoreClass } from '@/lib/trust-score';
 
 interface UserProfile {
   id: string;
@@ -15,6 +16,7 @@ interface UserProfile {
   bio: string | null;
   avatar_url: string | null;
   joined: string;
+  trust_score?: number;
   stats: {
     completed_trades_as_seller: number;
     active_listings: number;
@@ -124,7 +126,10 @@ export default function UserProfilePage() {
               </span>
             </div>
             
-            {profile.bio && <p className="text-text-dim mb-4 max-w-xl">{profile.bio}</p>}
+            {profile.bio && <p className="text-text-dim mb-2 max-w-xl">{profile.bio}</p>}
+            <p className={`text-sm font-semibold mb-4 ${trustScoreClass(profile.trust_score ?? 75)}`}>
+              Trust Score: {profile.trust_score ?? 75}
+            </p>
             
             <div className="flex items-center justify-center md:justify-start gap-6 text-sm">
               <div>

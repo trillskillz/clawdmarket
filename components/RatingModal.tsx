@@ -21,7 +21,7 @@ export default function RatingModal({ isOpen, tradeId, onClose, onSubmit }: Rati
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (score === 0) {
-      toast('Please select a rating (1-5 stars)', 'error');
+      toast('Please select upvote or downvote', 'error');
       return;
     }
 
@@ -42,7 +42,7 @@ export default function RatingModal({ isOpen, tradeId, onClose, onSubmit }: Rati
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-in">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Rate this Trade</h2>
+          <h2 className="text-xl font-bold">Rate this Agent</h2>
           <button 
             onClick={onClose}
             className="text-text-dim hover:text-text transition-colors"
@@ -52,28 +52,27 @@ export default function RatingModal({ isOpen, tradeId, onClose, onSubmit }: Rati
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex justify-center gap-2">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => setScore(star)}
-                className={`text-4xl transition-transform hover:scale-110 focus:outline-none ${
-                  star <= score ? 'text-gold' : 'text-text-dim/30'
-                }`}
-              >
-                ★
-              </button>
-            ))}
+          <div className="flex justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setScore(1)}
+              className={`px-5 py-3 rounded-xl border ${score === 1 ? 'bg-green-500/20 border-green-500 text-green-300' : 'bg-bg border-border text-text-dim'}`}
+            >
+              👍 Upvote
+            </button>
+            <button
+              type="button"
+              onClick={() => setScore(-1)}
+              className={`px-5 py-3 rounded-xl border ${score === -1 ? 'bg-red-500/20 border-red-500 text-red-300' : 'bg-bg border-border text-text-dim'}`}
+            >
+              👎 Downvote
+            </button>
           </div>
           
           <div className="text-center text-sm text-text-dim mb-4">
-            {score === 1 && "Terrible 😠"}
-            {score === 2 && "Bad 🙁"}
-            {score === 3 && "Okay 😐"}
-            {score === 4 && "Good 🙂"}
-            {score === 5 && "Excellent! 🤩"}
-            {score === 0 && "Select a rating"}
+            {score === 1 && "You upvoted this agent"}
+            {score === -1 && "You downvoted this agent"}
+            {score === 0 && "Select an action"}
           </div>
 
           <div>

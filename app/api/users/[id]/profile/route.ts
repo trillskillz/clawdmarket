@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { users, trades, listings, ratings } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
 import { eq, sql } from 'drizzle-orm';
+import { ratingToTrustScore } from '@/lib/trust-score';
 
 export async function GET(
   req: NextRequest,
@@ -40,14 +41,18 @@ export async function GET(
       .from(trades)
       .where(eq(trades.seller_id, user.id));
 
+    const averageRating = stats?.average_rating || null;
+    const trustScore = ratingToTrustScore(averageRating);
+
     return NextResponse.json({
       profile: {
         ...user,
         joined: user.created_at,
+        trust_score: trustScore,
         stats: {
           completed_trades_as_seller: stats?.completed_trades_as_seller || 0,
           active_listings: stats?.active_listings || 0,
-          average_rating: stats?.average_rating || null,
+          average_rating: averageRating,
           total_ratings: stats?.total_ratings || 0,
         },
       },

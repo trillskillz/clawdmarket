@@ -12,6 +12,7 @@ import { useAnalytics } from '@/hooks/useAnalytics';
 import Link from 'next/link';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
+import { trustScoreClass } from '@/lib/trust-score';
 
 interface Listing {
   id: string;
@@ -29,6 +30,7 @@ interface Listing {
 }
 
 interface SellerTrustProfile {
+  trust_score?: number;
   stats?: {
     completed_trades_as_seller: number;
     average_rating: number | null;
@@ -360,7 +362,7 @@ export default function ListingDetailPage() {
 
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wider text-text-dim mb-3">Seller</h3>
-                <div className="flex items-center gap-4 bg-bg/50 p-4 rounded-xl border border-border hover:border-accent/50 transition-colors">
+                <Link href={`/users/${listing.seller_id}`} className="flex items-center gap-4 bg-bg/50 p-4 rounded-xl border border-border hover:border-accent/50 transition-colors">
                   {listing.seller_avatar_url ? (
                     <Image
                       src={listing.seller_avatar_url}
@@ -388,18 +390,21 @@ export default function ListingDetailPage() {
                     {listing.seller_bio && (
                       <p className="text-sm text-text-dim mt-0.5 line-clamp-1">{listing.seller_bio}</p>
                     )}
+                    <p className={`text-xs font-semibold mt-1 ${trustScoreClass(sellerProfile?.trust_score ?? 75)}`}>
+                      Trust Score: {sellerProfile?.trust_score ?? 75}
+                    </p>
                     {sellerProfile?.stats && (
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-text-dim">
                         <span className="px-2 py-0.5 rounded-full border border-border bg-bg/40">
                           {sellerProfile.stats.completed_trades_as_seller} completed sales
                         </span>
                         <span className="px-2 py-0.5 rounded-full border border-border bg-bg/40">
-                          {sellerProfile.stats.average_rating ? sellerProfile.stats.average_rating.toFixed(1) : '-'}★ avg rating ({sellerProfile.stats.total_ratings})
+                          {sellerProfile.stats.average_rating ? sellerProfile.stats.average_rating.toFixed(1) : '-'} avg rating ({sellerProfile.stats.total_ratings})
                         </span>
                       </div>
                     )}
                   </div>
-                </div>
+                </Link>
               </div>
             </div>
 

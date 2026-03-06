@@ -36,9 +36,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (typeof score !== 'number' || score < 1 || score > 5 || !Number.isInteger(score)) {
+    if (typeof score !== 'number' || ![-1, 1].includes(score) || !Number.isInteger(score)) {
       return NextResponse.json(
-        { error: 'Score must be an integer between 1 and 5' },
+        { error: 'Score must be either 1 (upvote) or -1 (downvote)' },
         { status: 400 }
       );
     }
