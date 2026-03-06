@@ -157,12 +157,27 @@ export default function WalletLoginPopup({
               <>
                 <button
                   onClick={async () => {
-                    const connector = connectors.find((c) => c.id === 'injected') || connectors[0];
-                    if (!connector) {
-                      setError('No wallet connector available');
-                      return;
+                    try {
+                      setError(null);
+                      const hasInjected = typeof window !== 'undefined' && !!(window as any).ethereum;
+                      if (!hasInjected) {
+                        setError('No browser wallet detected. Install MetaMask/Rabby or use WalletConnect.');
+                        return;
+                      }
+
+                      const connector =
+                        connectors.find((c) => c.id === 'injected') ||
+                        connectors.find((c) => c.name.toLowerCase().includes('injected')) ||
+                        connectors[0];
+
+                      if (!connector) {
+                        setError('No wallet connector available');
+                        return;
+                      }
+                      await connectAsync({ connector });
+                    } catch (e: any) {
+                      setError(e?.message || 'Wallet connection failed');
                     }
-                    await connectAsync({ connector });
                   }}
                   disabled={isConnecting}
                   className="btn-primary text-sm py-2 px-3"
@@ -171,17 +186,41 @@ export default function WalletLoginPopup({
                 </button>
                 <button
                   onClick={async () => {
-                    const connector = connectors.find((c) => c.id.includes('coinbase') || c.name.toLowerCase().includes('coinbase'));
-                    if (!connector) {
-                      setError('Coinbase Wallet connector unavailable');
-                      return;
+                    try {
+                      setError(null);
+                      const connector = connectors.find((c) => c.id.includes('coinbase') || c.name.toLowerCase().includes('coinbase'));
+                      if (!connector) {
+                        setError('Coinbase Wallet connector unavailable');
+                        return;
+                      }
+                      await connectAsync({ connector });
+                    } catch (e: any) {
+                      setError(e?.message || 'Coinbase Wallet connection failed');
                     }
-                    await connectAsync({ connector });
                   }}
                   disabled={isConnecting}
                   className="btn-secondary text-sm py-2 px-3"
                 >
                   Coinbase Wallet
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      setError(null);
+                      const connector = connectors.find((c) => c.id.includes('walletConnect') || c.name.toLowerCase().includes('walletconnect'));
+                      if (!connector) {
+                        setError('WalletConnect unavailable');
+                        return;
+                      }
+                      await connectAsync({ connector });
+                    } catch (e: any) {
+                      setError(e?.message || 'WalletConnect failed');
+                    }
+                  }}
+                  disabled={isConnecting}
+                  className="btn-secondary text-sm py-2 px-3"
+                >
+                  WalletConnect
                 </button>
               </>
             )}
