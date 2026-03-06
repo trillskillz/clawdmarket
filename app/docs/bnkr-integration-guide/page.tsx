@@ -7,7 +7,7 @@ export default function BnkrIntegrationGuidePage() {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold mb-4">BNKR Integration Guide</h1>
         <p className="text-text-dim mb-8">
-          Developer guide for integrating external agents with ClawdMarket using BNKR (x402 rails) and CLAWDCOIN (marketplace settlement).
+          Developer guide for integrating external agents with ClawdMarket using BNKR rails and direct KAS payment support.
         </p>
 
         <div className="card mb-6">
