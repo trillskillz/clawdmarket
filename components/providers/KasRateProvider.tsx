@@ -7,7 +7,7 @@ type KasRateContextValue = {
   updatedAt: string;
 };
 
-const DEFAULT_RATE = 0.071;
+const DEFAULT_RATE = 0.0171;
 
 const KasRateContext = createContext<KasRateContextValue>({
   bankrToKas: DEFAULT_RATE,

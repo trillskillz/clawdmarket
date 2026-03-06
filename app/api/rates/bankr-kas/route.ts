@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const FALLBACK = 0.071;
+const FALLBACK = 0.0171;
 
 export const dynamic = 'force-dynamic';
 
