@@ -34,6 +34,17 @@ function calculateTradeFinancials(itemPrice: number) {
   return { itemPrice, platformFee, totalCost, sellerAmount, devAmount };
 }
 
+async function tradesHasFeeColumns() {
+  try {
+    const rs = await (db as any).$client.execute({ sql: "PRAGMA table_info('trades')", args: [] });
+    const rows = rs?.rows || [];
+    const names = new Set(rows.map((r: any) => String(r.name || r[1] || '').toLowerCase()));
+    return names.has('item_price') && names.has('platform_fee') && names.has('payout_status');
+  } catch {
+    return false;
+  }
+}
+
 class TradeRaceError extends Error {
   constructor(public readonly code: 'LISTING_ALREADY_CLAIMED' | 'INSUFFICIENT_FUNDS_AT_COMMIT', message: string) {
     super(message);
@@ -593,7 +604,41 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const userTrades = await db
+    const hasFeeColumns = await tradesHasFeeColumns();
+
+    if (hasFeeColumns) {
+      const userTrades = await db
+        .select({
+          id: trades.id,
+          listing_id: trades.listing_id,
+          listing_title: listings.title,
+          buyer_id: trades.buyer_id,
+          buyer_name: users.name,
+          seller_id: trades.seller_id,
+          amount: trades.amount,
+          fee: trades.fee,
+          item_price: trades.item_price,
+          platform_fee: trades.platform_fee,
+          total_cost: trades.total_cost,
+          seller_amount: trades.seller_amount,
+          dev_amount: trades.dev_amount,
+          dev_wallet: trades.dev_wallet,
+          fee_tx_hash: trades.fee_tx_hash,
+          payout_status: trades.payout_status,
+          status: trades.status,
+          created_at: trades.created_at,
+          completed_at: trades.completed_at,
+        })
+        .from(trades)
+        .leftJoin(listings, eq(trades.listing_id, listings.id))
+        .leftJoin(users, eq(trades.buyer_id, users.id))
+        .where(or(eq(trades.buyer_id, auth.userId), eq(trades.seller_id, auth.userId)))
+        .orderBy(desc(trades.created_at));
+
+      return NextResponse.json({ trades: userTrades, ...envMeta('clawdmarket/api/trades') });
+    }
+
+    const legacyTrades = await db
       .select({
         id: trades.id,
         listing_id: trades.listing_id,
@@ -603,14 +648,6 @@ export async function GET(req: NextRequest) {
         seller_id: trades.seller_id,
         amount: trades.amount,
         fee: trades.fee,
-        item_price: trades.item_price,
-        platform_fee: trades.platform_fee,
-        total_cost: trades.total_cost,
-        seller_amount: trades.seller_amount,
-        dev_amount: trades.dev_amount,
-        dev_wallet: trades.dev_wallet,
-        fee_tx_hash: trades.fee_tx_hash,
-        payout_status: trades.payout_status,
         status: trades.status,
         created_at: trades.created_at,
         completed_at: trades.completed_at,
@@ -618,45 +655,11 @@ export async function GET(req: NextRequest) {
       .from(trades)
       .leftJoin(listings, eq(trades.listing_id, listings.id))
       .leftJoin(users, eq(trades.buyer_id, users.id))
-      .where(
-        or(
-          eq(trades.buyer_id, auth.userId),
-          eq(trades.seller_id, auth.userId)
-        )
-      )
+      .where(or(eq(trades.buyer_id, auth.userId), eq(trades.seller_id, auth.userId)))
       .orderBy(desc(trades.created_at));
 
-    return NextResponse.json({ trades: userTrades, ...envMeta('clawdmarket/api/trades') });
+    return NextResponse.json({ trades: legacyTrades, schema_mode: 'legacy', ...envMeta('clawdmarket/api/trades') });
   } catch (error: any) {
-    const message = String(error?.message || '');
-    if (message.includes('no such column')) {
-      try {
-        const fallbackTrades = await db
-          .select({
-            id: trades.id,
-            listing_id: trades.listing_id,
-            listing_title: listings.title,
-            buyer_id: trades.buyer_id,
-            buyer_name: users.name,
-            seller_id: trades.seller_id,
-            amount: trades.amount,
-            fee: trades.fee,
-            status: trades.status,
-            created_at: trades.created_at,
-            completed_at: trades.completed_at,
-          })
-          .from(trades)
-          .leftJoin(listings, eq(trades.listing_id, listings.id))
-          .leftJoin(users, eq(trades.buyer_id, users.id))
-          .where(or(eq(trades.buyer_id, auth.userId), eq(trades.seller_id, auth.userId)))
-          .orderBy(desc(trades.created_at));
-
-        return NextResponse.json({ trades: fallbackTrades, schema_mode: 'legacy', ...envMeta('clawdmarket/api/trades') });
-      } catch (legacyErr) {
-        console.error('Trades legacy fallback failed:', legacyErr);
-      }
-    }
-
     console.error('Trades fetch error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
