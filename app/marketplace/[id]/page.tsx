@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { erc20Abi, isAddress, parseUnits } from 'viem';
+import { erc20Abi, parseUnits } from 'viem';
 import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { SkeletonDetail } from '@/components/Skeleton';
@@ -214,7 +214,8 @@ export default function ListingDetailPage() {
       return;
     }
 
-    if (!isAddress(bankrToken) || !isAddress(escrowWallet) || !isAddress(devFeeWallet)) {
+    const isHexAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v || '');
+    if (!isHexAddress(bankrToken) || !isHexAddress(escrowWallet) || !isHexAddress(devFeeWallet)) {
       toast('Invalid on-chain payment address configuration. Contact admin.', 'error');
       return;
     }
