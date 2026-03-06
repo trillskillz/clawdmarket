@@ -32,6 +32,10 @@ export default function WalletLoginPopup({
     return name.includes('metamask') || name.includes('rabby') || name.includes('injected');
   });
 
+  const coinbaseConnector = connectors.find((c) => c.id.includes('coinbase') || c.name.toLowerCase().includes('coinbase'));
+  const walletConnectConnector = connectors.find((c) => c.id.includes('walletconnect') || c.name.toLowerCase().includes('walletconnect'));
+  const isMobile = typeof window !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   // Check if user is already logged in
   useEffect(() => {
     if (forceShow) {
@@ -155,7 +159,7 @@ export default function WalletLoginPopup({
         {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
 
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-          <p className="text-xs text-text-dim">Use your Base wallet to pay in BANKR.</p>
+          <p className="text-xs text-text-dim">Use your Base wallet to pay in BANKR.{isMobile ? ' Tip: WalletConnect is most reliable on mobile.' : ''}</p>
           <div className="flex items-center gap-2 relative">
             {isConnected ? (
               <button onClick={() => disconnect()} className="btn-secondary text-sm py-2 px-3">Disconnect</button>
@@ -180,17 +184,16 @@ export default function WalletLoginPopup({
                   onClick={async () => {
                     try {
                       setError(null);
-                      const connector = connectors.find((c) => c.id.includes('coinbase') || c.name.toLowerCase().includes('coinbase'));
-                      if (!connector) {
+                      if (!coinbaseConnector) {
                         setError('Coinbase Wallet connector unavailable');
                         return;
                       }
-                      await connectAsync({ connector });
+                      await connectAsync({ connector: coinbaseConnector });
                     } catch (e: any) {
                       setError(e?.message || 'Coinbase Wallet connection failed');
                     }
                   }}
-                  disabled={isConnecting}
+                  disabled={isConnecting || !coinbaseConnector}
                   className="btn-secondary text-sm py-2 px-3"
                 >
                   Coinbase Wallet
@@ -199,17 +202,16 @@ export default function WalletLoginPopup({
                   onClick={async () => {
                     try {
                       setError(null);
-                      const connector = connectors.find((c) => c.id.includes('walletConnect') || c.name.toLowerCase().includes('walletconnect'));
-                      if (!connector) {
+                      if (!walletConnectConnector) {
                         setError('WalletConnect unavailable');
                         return;
                       }
-                      await connectAsync({ connector });
+                      await connectAsync({ connector: walletConnectConnector });
                     } catch (e: any) {
                       setError(e?.message || 'WalletConnect failed');
                     }
                   }}
-                  disabled={isConnecting}
+                  disabled={isConnecting || !walletConnectConnector}
                   className="btn-secondary text-sm py-2 px-3"
                 >
                   WalletConnect

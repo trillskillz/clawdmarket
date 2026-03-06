@@ -14,20 +14,19 @@ export function WalletProviders({ children }: { children: ReactNode }) {
       injected({ shimDisconnect: true }),
     ];
 
-    // Avoid noisy third-party requests/cookies on public pages unless explicitly configured.
-    if (process.env.NEXT_PUBLIC_ENABLE_COINBASE === 'true') {
+    // Mobile reliability: enable Coinbase by default unless explicitly disabled.
+    if (process.env.NEXT_PUBLIC_ENABLE_COINBASE !== 'false') {
       connectors.push(coinbaseWallet({ appName: 'ClawdMarket' }));
     }
 
-    const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
-    if (walletConnectProjectId) {
-      connectors.push(
-        walletConnect({
-          projectId: walletConnectProjectId,
-          showQrModal: true,
-        })
-      );
-    }
+    // Keep WalletConnect available for mobile wallets even if env var is missing.
+    const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo';
+    connectors.push(
+      walletConnect({
+        projectId: walletConnectProjectId,
+        showQrModal: true,
+      })
+    );
 
     return createConfig({
       chains: [base],
