@@ -19,14 +19,16 @@ export function WalletProviders({ children }: { children: ReactNode }) {
       connectors.push(coinbaseWallet({ appName: 'ClawdMarket' }));
     }
 
-    // Keep WalletConnect available for mobile wallets even if env var is missing.
-    const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo';
-    connectors.push(
-      walletConnect({
-        projectId: walletConnectProjectId,
-        showQrModal: true,
-      })
-    );
+    // WalletConnect should use a real project id; demo fallback causes slow/unstable mobile loads.
+    const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+    if (walletConnectProjectId) {
+      connectors.push(
+        walletConnect({
+          projectId: walletConnectProjectId,
+          showQrModal: true,
+        })
+      );
+    }
 
     return createConfig({
       chains: [base],

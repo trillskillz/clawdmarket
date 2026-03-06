@@ -206,10 +206,16 @@ export default function WalletLoginPopup({
                     try {
                       setError(null);
                       if (!walletConnectConnector) {
-                        setError('WalletConnect unavailable');
+                        setError('WalletConnect unavailable (missing project id)');
                         return;
                       }
-                      await connectAsync({ connector: walletConnectConnector });
+
+                      await Promise.race([
+                        connectAsync({ connector: walletConnectConnector }),
+                        new Promise((_, reject) =>
+                          setTimeout(() => reject(new Error('WalletConnect timed out. Try MetaMask/Coinbase deep link.')), 10000)
+                        ),
+                      ]);
                     } catch (e: any) {
                       setError(e?.message || 'WalletConnect failed');
                     }
