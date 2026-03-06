@@ -12,6 +12,8 @@ import { isAddress } from 'viem';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
 import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
+import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
+import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
@@ -22,6 +24,64 @@ class TradeRaceError extends Error {
     super(message);
     this.name = 'TradeRaceError';
   }
+}
+
+function mapFallbackCategory(input: string): 'compute' | 'skills' | 'data' | 'bounties' | 'other' {
+  const c = input.toLowerCase();
+  if (c === 'data') return 'data';
+  if (c === 'code' || c === 'analysis' || c === 'content' || c === 'custom') return 'skills';
+  if (c === 'defi' || c === 'trading') return 'bounties';
+  return 'other';
+}
+
+async function ensureSeededListingMaterialized(listingId: string) {
+  const fallback = FALLBACK_LISTINGS.find((l) => l.id === listingId);
+  if (!fallback) return null;
+
+  const seller = fallbackAgentForListingId(listingId);
+
+  let [sellerUser] = await db.select().from(users).where(eq(users.id, seller.id));
+  if (!sellerUser) {
+    const password_hash = await hashPassword(`${seller.id}:seeded-agent`);
+    const [createdUser] = await db
+      .insert(users)
+      .values({
+        id: seller.id,
+        email: `${seller.name.toLowerCase().replace(/\s+/g, '.')}@agents.clawdmarket.local`,
+        password_hash,
+        name: seller.name,
+        role: 'agent',
+        bio: seller.bio,
+        avatar_url: seller.avatar_url,
+      })
+      .returning();
+    sellerUser = createdUser;
+
+    await db.insert(wallets).values({
+      user_id: seller.id,
+      balance: 0,
+      escrow: 0,
+    });
+  }
+
+  let [listing] = await db.select().from(listings).where(eq(listings.id, listingId));
+  if (!listing) {
+    const [createdListing] = await db
+      .insert(listings)
+      .values({
+        id: listingId,
+        seller_id: seller.id,
+        category: mapFallbackCategory(fallback.category),
+        title: fallback.title,
+        description: fallback.description,
+        price_bankr: fallback.price_bankr,
+        status: 'active',
+      })
+      .returning();
+    listing = createdListing;
+  }
+
+  return listing;
 }
 
 async function ensureAdminFeeRecipient(): Promise<string | null> {
@@ -104,11 +164,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const validated = createTradeSchema.parse(body);
 
-    // Fetch listing
-    const [listing] = await db
+    // Fetch listing (materialize seeded fallback listings when needed)
+    let [listing]: any = await db
       .select()
       .from(listings)
       .where(eq(listings.id, validated.listing_id));
+
+    if (!listing && validated.listing_id.startsWith('fb-')) {
+      listing = await ensureSeededListingMaterialized(validated.listing_id);
+    }
 
     if (!listing) {
       await logPaymentFailure({
@@ -124,24 +188,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { ...paymentError('LISTING_NOT_FOUND', 'Listing not found'), ...envMeta('clawdmarket/api/trades') },
         { status: 404 }
-      );
-    }
-
-    if (String(listing.id).startsWith('fb-')) {
-      await logPaymentFailure({
-        buyer_id: auth.userId,
-        seller_id: listing.seller_id,
-        amount: validated.amount,
-        token: 'bnkr',
-        route: 'POST /api/trades',
-        listing_id: validated.listing_id,
-        error_code: 'SEEDED_LISTING_NOT_PURCHASABLE',
-        message: 'Seeded fallback listings are preview-only',
-        state: 'no_funds_moved',
-      });
-      return NextResponse.json(
-        { ...paymentError('SEEDED_LISTING_NOT_PURCHASABLE', 'This seeded listing is preview-only and cannot be purchased yet.'), ...envMeta('clawdmarket/api/trades') },
-        { status: 400 }
       );
     }
 

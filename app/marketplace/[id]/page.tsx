@@ -181,11 +181,6 @@ export default function ListingDetailPage() {
       return;
     }
 
-    if (listing.seller_id === '00000000-0000-0000-0000-000000000000') {
-      toast('This seeded listing is preview-only and cannot be purchased yet.', 'error');
-      return;
-    }
-
     const fee = listing.price_bankr * 0.03;
     const total = listing.price_bankr + fee;
 
