@@ -35,6 +35,7 @@ export default function WalletLoginPopup({
   const coinbaseConnector = connectors.find((c) => c.id.includes('coinbase') || c.name.toLowerCase().includes('coinbase'));
   const walletConnectConnector = connectors.find((c) => c.id.includes('walletconnect') || c.name.toLowerCase().includes('walletconnect'));
   const isMobile = typeof window !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const walletConnectConfigured = Boolean(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID);
   const dappUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.clawdmkt.com';
   const metaMaskDeepLink = `https://metamask.app.link/dapp/${dappUrl.replace(/^https?:\/\//, '')}`;
   const coinbaseDeepLink = `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(dappUrl)}`;
@@ -162,7 +163,7 @@ export default function WalletLoginPopup({
         {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
 
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-          <p className="text-xs text-text-dim">Use your Base wallet to pay in BANKR.{isMobile ? ' Tip: WalletConnect is most reliable on mobile.' : ''}</p>
+          <p className="text-xs text-text-dim">Use your Base wallet to pay in BANKR.{isMobile ? ' Recommended on mobile: WalletConnect or Open in MetaMask/Coinbase.' : ''}</p>
           <div className="flex items-center gap-2 relative flex-wrap">
             {isConnected ? (
               <button onClick={() => disconnect()} className="btn-secondary text-sm py-2 px-3">Disconnect</button>
@@ -257,14 +258,21 @@ export default function WalletLoginPopup({
           </div>
         </div>
 
-        {isMobile && !isConnected && (
+        {!isConnected && (
           <div className="mt-4 rounded-lg border border-border bg-bg/60 p-3 text-xs text-text-dim space-y-2">
-            <p className="text-text">Mobile quick-open:</p>
-            <div className="flex flex-wrap gap-2">
-              <a href={metaMaskDeepLink} className="btn-secondary text-xs py-1.5 px-2">Open in MetaMask</a>
-              <a href={coinbaseDeepLink} className="btn-secondary text-xs py-1.5 px-2">Open in Coinbase Wallet</a>
-            </div>
-            <p>Kaspium note: Kaspium is for KAS sends/receives. Use WalletConnect/MetaMask/Coinbase for Base/BANKR wallet auth.</p>
+            <p>
+              WalletConnect configured: <span className={walletConnectConfigured ? 'text-green-400' : 'text-yellow-300'}>{walletConnectConfigured ? 'Yes' : 'Fallback mode'}</span>
+            </p>
+            {isMobile && (
+              <>
+                <p className="text-text">Mobile quick-open:</p>
+                <div className="flex flex-wrap gap-2">
+                  <a href={metaMaskDeepLink} className="btn-secondary text-xs py-1.5 px-2">Open in MetaMask</a>
+                  <a href={coinbaseDeepLink} className="btn-secondary text-xs py-1.5 px-2">Open in Coinbase Wallet</a>
+                </div>
+                <p>Kaspium note: Kaspium is for KAS sends/receives. Use WalletConnect/MetaMask/Coinbase for Base/BANKR wallet auth.</p>
+              </>
+            )}
           </div>
         )}
       </div>

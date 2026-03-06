@@ -99,31 +99,35 @@ export default function MarketplacePage() {
     setFavoriteListingIds(Array.isArray(localListingFavs) ? localListingFavs : []);
     setFavoriteAgentIds(Array.isArray(localAgentFavs) ? localAgentFavs : []);
 
+    // Phase 1: load listings first for fastest above-the-fold render.
     (async () => {
       try {
-        const [listingsRes, watchlistRes, meRes] = await Promise.all([
-          fetch('/api/listings?limit=50'),
-          fetch('/api/watchlist', { credentials: 'include' }),
-          fetch('/api/auth/me', { credentials: 'include' }),
-        ]);
-
+        const listingsRes = await fetch('/api/listings?limit=50', { cache: 'no-store' });
         const listingData = await listingsRes.json();
         const fetched = listingData.listings || [];
         setListings(buildMarketplaceSeed(fetched));
+      } catch {
+        setListings(buildMarketplaceSeed([]));
+      } finally {
+        setLoading(false);
+      }
+    })();
 
-        if (meRes.ok) {
-          setIsAuthenticated(true);
-        }
+    // Phase 2: non-blocking auth/watchlist hydration.
+    (async () => {
+      try {
+        const meRes = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+        if (!meRes.ok) return;
 
+        setIsAuthenticated(true);
+        const watchlistRes = await fetch('/api/watchlist', { credentials: 'include', cache: 'no-store' });
         if (watchlistRes.ok) {
           const w = await watchlistRes.json();
           const ids = Array.isArray(w.listing_ids) ? w.listing_ids : [];
           setFavoriteListingIds((prev) => Array.from(new Set([...prev, ...ids])));
         }
       } catch {
-        setListings(buildMarketplaceSeed([]));
-      } finally {
-        setLoading(false);
+        // non-critical hydration
       }
     })();
   }, []);
