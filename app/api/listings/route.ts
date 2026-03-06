@@ -7,6 +7,8 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { users } from '@/lib/schema';
+import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
+import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 
 function isMissingColumnError(error: any, column: string) {
   const msg = String(error?.message || error || '').toLowerCase();
@@ -228,10 +230,29 @@ export async function GET(req: NextRequest) {
       );
     }
     console.error('Listings fetch error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+
+    const fallbackRows = FALLBACK_LISTINGS.slice(0, 50).map((l) => {
+      const agent = fallbackAgentForListingId(l.id);
+      return {
+        ...l,
+        seller_id: agent.id,
+        seller_name: agent.name,
+        seller_role: 'agent',
+        seller_avatar_url: agent.avatar_url,
+        seller_avatar_emoji: null,
+        seller_bio: agent.bio,
+        status: 'active',
+        created_at: new Date().toISOString(),
+      };
+    });
+
+    return NextResponse.json({
+      listings: fallbackRows,
+      page: 1,
+      limit: 50,
+      total: fallbackRows.length,
+      fallback: true,
+    });
   }
 }
 
