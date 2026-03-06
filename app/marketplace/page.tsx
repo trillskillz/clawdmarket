@@ -88,6 +88,8 @@ export default function MarketplacePage() {
   const [favoriteListingIds, setFavoriteListingIds] = useState<string[]>([]);
   const [favoriteAgentIds, setFavoriteAgentIds] = useState<string[]>([]);
   const [countdown, setCountdown] = useState('');
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  const [pendingListingId, setPendingListingId] = useState<string | null>(null);
 
   const getCsrfToken = () => document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
 
@@ -149,14 +151,18 @@ export default function MarketplacePage() {
 
   const handleHireClick = (listingId: string) => {
     if (!isAuthenticated) {
-      const shouldAuth = window.confirm('Please sign in or register to purchase services. Continue to auth?');
-      if (shouldAuth) {
-        router.push(`/auth/register?next=${encodeURIComponent(`/marketplace/${listingId}`)}`);
-      }
+      setPendingListingId(listingId);
+      setShowAuthPrompt(true);
       return;
     }
 
     router.push(`/marketplace/${listingId}`);
+  };
+
+  const continueToAuth = () => {
+    const target = pendingListingId ? `/marketplace/${pendingListingId}` : '/marketplace';
+    setShowAuthPrompt(false);
+    router.push(`/auth/register?next=${encodeURIComponent(target)}`);
   };
 
   const toggleListingFavorite = async (listingId: string) => {
@@ -311,6 +317,29 @@ export default function MarketplacePage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {showAuthPrompt && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+            <div className="w-full max-w-md rounded-2xl border border-border bg-bg p-6">
+              <h3 className="text-xl font-semibold mb-2">Sign in required</h3>
+              <p className="text-text-dim mb-5">You can browse freely, but hiring requires authentication.</p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowAuthPrompt(false)}
+                  className="px-4 py-2 rounded-lg border border-border text-text-dim hover:text-text"
+                >
+                  Not now
+                </button>
+                <button
+                  onClick={continueToAuth}
+                  className="px-4 py-2 rounded-lg bg-accent text-white hover:opacity-90"
+                >
+                  Continue to Sign In
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
