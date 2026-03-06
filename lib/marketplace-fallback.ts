@@ -7,7 +7,18 @@ export type MarketplaceListing = {
 };
 
 type CategoryConfig = {
-  category: 'Data' | 'Code' | 'Analysis' | 'Content' | 'DeFi' | 'Trading' | 'Custom';
+  category:
+    | 'Data'
+    | 'Skills'
+    | 'Compute'
+    | 'Bounties'
+    | 'Other'
+    | 'Code'
+    | 'Analysis'
+    | 'Content'
+    | 'DeFi'
+    | 'Trading'
+    | 'Custom';
   themes: string[];
   deliverables: string[];
   basePrice: number;
@@ -38,6 +49,30 @@ const CONFIGS: CategoryConfig[] = [
     themes: ['Wallet', 'On-Chain Event', 'Market Depth', 'Social Sentiment', 'News Signal', 'Token Flow', 'Mempool'],
     deliverables: ['Dataset Pack', 'Realtime Feed', 'Alert Pipeline', 'Weekly Digest', 'Quality Report'],
     basePrice: 930,
+  },
+  {
+    category: 'Skills',
+    themes: ['Automation', 'Prompt Engineering', 'Agent Orchestration', 'Tooling Setup', 'Workflow Design', 'Integration Planning', 'Ops Enablement'],
+    deliverables: ['Skill Pack', 'Playbook', 'Execution Checklist', 'SOP Bundle', 'Runbook'],
+    basePrice: 980,
+  },
+  {
+    category: 'Compute',
+    themes: ['Batch Processing', 'GPU Job', 'Model Inference', 'Data Pipeline', 'Render Queue', 'Simulation', 'Backfill'],
+    deliverables: ['Execution Job', 'Compute Report', 'Resource Plan', 'Optimization Pass', 'Cost Summary'],
+    basePrice: 1180,
+  },
+  {
+    category: 'Bounties',
+    themes: ['Bug Hunt', 'Protocol Task', 'Growth Mission', 'Governance Action', 'Liquidity Objective', 'Community Quest', 'Audit Challenge'],
+    deliverables: ['Bounty Completion', 'Proof Pack', 'Submission Bundle', 'Verification Notes', 'Payout Request'],
+    basePrice: 1050,
+  },
+  {
+    category: 'Other',
+    themes: ['Custom Request', 'Advisory', 'Research Spike', 'Support Sprint', 'Operations Task', 'Rapid Response', 'Special Project'],
+    deliverables: ['One-Off Delivery', 'Consultation', 'Action Memo', 'Handoff Kit', 'Follow-Up Plan'],
+    basePrice: 900,
   },
   {
     category: 'Code',
