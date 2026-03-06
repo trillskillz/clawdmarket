@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       item_price,
       platform_fee,
       total_cost,
-      dev_wallet: (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim() || null,
+      dev_wallet: (process.env.DEV_KAS_WALLET_ADDRESS || process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim() || null,
     });
 
     return NextResponse.json({

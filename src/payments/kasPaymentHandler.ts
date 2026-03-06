@@ -115,6 +115,10 @@ export class KasPaymentHandler {
       throw new Error('DEV_FEE_MISMATCH');
     }
 
+    if (!payment.dev_wallet) {
+      throw new Error('DEV_KAS_WALLET_NOT_CONFIGURED');
+    }
+
     let lastErr: unknown;
     for (let i = 0; i < 3; i++) {
       try {
