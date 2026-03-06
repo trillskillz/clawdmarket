@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { transactions } from '@/lib/schema';
+import { transactions, trades } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { getBalance } from '@/lib/wallet';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { eq, or, desc } from 'drizzle-orm';
+import { eq, or, desc, and, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
 
 /**
@@ -28,6 +28,11 @@ export async function GET(req: NextRequest) {
   try {
     const balance = await getBalance(auth.userId);
 
+    const [pending] = await db
+      .select({ pending_escrow: sql<number>`coalesce(sum(${trades.amount}), 0)` })
+      .from(trades)
+      .where(and(eq(trades.buyer_id, auth.userId), eq(trades.status, 'pending')));
+
     const recentTx = await db
       .select()
       .from(transactions)
@@ -40,9 +45,14 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(transactions.created_at))
       .limit(25);
 
+    const pendingEscrow = Number(pending?.pending_escrow || 0);
+    const escrow = Math.max(balance.escrow, pendingEscrow);
+
     return NextResponse.json({
       ticker: '$BANKR',
       ...balance,
+      escrow,
+      available: Math.max(0, balance.balance - escrow),
       transactions: recentTx,
       ...envMeta('clawdmarket/api/wallet'),
     }, { headers: getRateLimitHeaders(rateLimitResult) });

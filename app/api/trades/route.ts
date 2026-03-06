@@ -223,9 +223,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Calculate fee
-    const fee = validated.amount * ECOSYSTEM_FEE_PERCENT;
-    const totalCost = validated.amount + fee;
+    // Calculate fee from listing price * requested quantity
+    const tradeAmount = listing.price_bankr * validated.amount;
+    const fee = tradeAmount * ECOSYSTEM_FEE_PERCENT;
+    const totalCost = tradeAmount + fee;
 
     const bodyPaymentMode = (body?.payment_mode || '').toString();
     const onchain = body?.onchain || null;
@@ -277,7 +278,7 @@ export async function POST(req: NextRequest) {
             listing_id: validated.listing_id,
             buyer_id: auth.userId,
             seller_id: listing.seller_id,
-            amount: validated.amount,
+            amount: tradeAmount,
             fee,
             status: 'pending',
           })
@@ -286,7 +287,7 @@ export async function POST(req: NextRequest) {
         await tx.insert(transactions).values({
           from_user_id: auth.userId,
           to_user_id: null,
-          amount: validated.amount,
+          amount: tradeAmount,
           type: 'transfer',
           reference_id: trade.id,
           memo: `On-chain escrow transfer (${onchain.escrow_tx_hash})`,
@@ -398,7 +399,7 @@ export async function POST(req: NextRequest) {
         .update(wallets)
         .set({
           balance: sql`${wallets.balance} - ${totalCost}`,
-          escrow: sql`${wallets.escrow} + ${validated.amount}`,
+          escrow: sql`${wallets.escrow} + ${tradeAmount}`,
         })
         .where(and(eq(wallets.user_id, auth.userId), sql`${wallets.balance} >= ${totalCost}`))
         .returning({ user_id: wallets.user_id });
@@ -422,7 +423,7 @@ export async function POST(req: NextRequest) {
       // Record transaction: Lock funds
       await tx.insert(transactions).values({
         from_user_id: auth.userId,
-        amount: validated.amount,
+        amount: tradeAmount,
         type: 'escrow_lock',
         reference_id: trade.id,
         memo: `Escrow lock for listing ${validated.listing_id}`,
