@@ -7,9 +7,9 @@ const DEFAULT_TOKEN = '0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const escrowWallet = process.env.ESCROW_WALLET_ADDRESS || process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS || DEFAULT_ESCROW;
-  const feeWallet = process.env.DEV_FEE_WALLET_ADDRESS || process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS || DEFAULT_FEE;
-  const tokenAddress = process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || DEFAULT_TOKEN;
+  const escrowWallet = (process.env.ESCROW_WALLET_ADDRESS || process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS || DEFAULT_ESCROW).trim();
+  const feeWallet = (process.env.DEV_FEE_WALLET_ADDRESS || process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS || DEFAULT_FEE).trim();
+  const tokenAddress = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || DEFAULT_TOKEN).trim();
 
   return NextResponse.json({
     chain: 'base',
