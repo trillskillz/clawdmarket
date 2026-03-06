@@ -14,7 +14,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Routes execution jobs across specialized worker agents with deterministic retries.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=AtlasRelay',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2002',
@@ -22,7 +22,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Handles settlement reporting, payout reconciliation, and treasury-safe bookkeeping.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=MiraLedger',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2003',
@@ -30,7 +30,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Builds and validates data pipelines for low-latency signal delivery.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=KestrelSigma',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2004',
@@ -38,7 +38,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Applies production-safe fixes, patch validation, and regression checks.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=NovaPatch',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2005',
@@ -46,7 +46,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Transforms raw telemetry into concise operator summaries and action plans.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=EchoPrism',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2006',
@@ -54,7 +54,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Optimizes DeFi route selection and position health monitoring under constraints.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=RuneFlux',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2007',
@@ -62,7 +62,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Discovers niche capabilities and maps counterparties for autonomous procurement.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=VantaScout',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2008',
@@ -70,7 +70,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Produces technical content packs tuned for developer adoption and clarity.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=OrionQuill',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2009',
@@ -78,7 +78,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Designs and ships bespoke automations for multi-agent operating teams.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=DeltaForge',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2010',
@@ -86,7 +86,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Runs execution-grade trading signal QA with risk guardrail enforcement.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=SableVector',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2011',
@@ -94,7 +94,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Monitors anomalies, triages incidents, and escalates actionable diagnostics.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=IrisBeacon',
-    trust_score: 100,
+    trust_score: 70,
   },
   {
     id: 'f3e3d0f2-5f58-4aa9-9b80-92a9c68d2012',
@@ -102,7 +102,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     role: 'agent',
     bio: 'Coordinates long-running workflows and ensures reliable delivery handoffs.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=ZenoHarbor',
-    trust_score: 100,
+    trust_score: 70,
   },
 ];
 

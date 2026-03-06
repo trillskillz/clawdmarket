@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { users, trades, listings, ratings } from '@/lib/schema';
+import { users, trades, listings, ratings, agent_ratings } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, or, sql, gte } from 'drizzle-orm';
 import { FALLBACK_AGENTS } from '@/lib/fallback-agents';
 import { getAgentRatingState } from '@/lib/agent-moderation';
+import { computeTrustScore } from '@/lib/trust-score';
 
 export async function GET(
   req: NextRequest,
@@ -44,9 +45,13 @@ export async function GET(
           avatar_url: fallback.avatar_url,
           avatar_emoji: null,
           trust_score: null,
+          trust_confidence: 'low',
+          trust_drivers: ['No verified activity yet'],
+          trust_evidence_points: 0,
           joined: new Date().toISOString(),
           stats: {
             completed_trades_as_seller: 0,
+            disputed_trades_as_seller: 0,
             active_listings: 0,
             average_rating: null,
             total_ratings: 0,
@@ -58,7 +63,8 @@ export async function GET(
     // Calculate stats
     const [stats] = await db
       .select({
-        completed_trades_as_seller: sql<number>`count(case when ${trades.status} = 'completed' then 1 else null end)`,
+        completed_trades_as_seller: sql<number>`count(case when ${trades.status} in ('completed','complete') then 1 else null end)`,
+        disputed_trades_as_seller: sql<number>`count(case when ${trades.status} = 'disputed' then 1 else null end)`,
         active_listings: sql<number>`(select count(*) from ${listings} where ${listings.seller_id} = ${user.id} and ${listings.status} = 'active')`,
         average_rating: sql<number>`(select avg(${ratings.score}) from ${ratings} where ${ratings.rated_id} = ${user.id})`,
         total_ratings: sql<number>`(select count(*) from ${ratings} where ${ratings.rated_id} = ${user.id})`,
@@ -66,18 +72,38 @@ export async function GET(
       .from(trades)
       .where(eq(trades.seller_id, user.id));
 
-    const averageRating = stats?.average_rating || null;
     const ratingState = await getAgentRatingState(user.id);
     const starRating = ratingState.stars;
-    const trustScore = starRating * 20;
+
+    const now = Date.now();
+    const ninetyDaysAgo = new Date(now - 90 * 24 * 60 * 60 * 1000);
+    const [recentRatingsRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(agent_ratings)
+      .where(and(eq(agent_ratings.to_agent_id, user.id), gte(agent_ratings.created_at, ninetyDaysAgo)));
+
+    const trust = computeTrustScore({
+      likes: ratingState.likes,
+      dislikes: ratingState.dislikes,
+      effectiveDislikes: ratingState.effectiveDislikes,
+      totalRatings: stats?.total_ratings || 0,
+      completedTrades: stats?.completed_trades_as_seller || 0,
+      disputedTrades: stats?.disputed_trades_as_seller || 0,
+      accountAgeDays: Math.floor((now - new Date(user.created_at as any).getTime()) / (1000 * 60 * 60 * 24)),
+      recentRatings90d: recentRatingsRow?.count || 0,
+    });
 
     return NextResponse.json({
       profile: {
         ...user,
         joined: user.created_at,
-        trust_score: trustScore,
+        trust_score: trust.trustScore,
+        trust_confidence: trust.confidence,
+        trust_drivers: trust.drivers,
+        trust_evidence_points: trust.evidencePoints,
         stats: {
           completed_trades_as_seller: stats?.completed_trades_as_seller || 0,
+          disputed_trades_as_seller: stats?.disputed_trades_as_seller || 0,
           active_listings: stats?.active_listings || 0,
           average_rating: starRating,
           total_ratings: stats?.total_ratings || 0,

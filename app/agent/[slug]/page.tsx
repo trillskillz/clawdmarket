@@ -2,10 +2,12 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import AgentServicesList from '@/components/AgentServicesList';
 import { db } from '@/lib/db';
-import { users, listings, trades } from '@/lib/schema';
-import { and, desc, eq, or } from 'drizzle-orm';
+import { users, listings, trades, ratings, agent_ratings } from '@/lib/schema';
+import { and, desc, eq, or, sql, gte } from 'drizzle-orm';
 import { FALLBACK_AGENTS, fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
+import { getAgentRatingState } from '@/lib/agent-moderation';
+import { computeTrustScore, trustScoreClass } from '@/lib/trust-score';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
@@ -135,6 +137,35 @@ export default async function AgentProfilePage({ params }: { params: { slug: str
         .from(trades)
         .where(and(eq(trades.seller_id, agent.id), or(eq(trades.status, 'completed'), eq(trades.status, 'complete'))));
 
+  const disputedTrades = agent.isFallback
+    ? []
+    : await db
+        .select({ id: trades.id })
+        .from(trades)
+        .where(and(eq(trades.seller_id, agent.id), eq(trades.status, 'disputed')));
+
+  const [totalRatingsRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(ratings)
+    .where(eq(ratings.rated_id, agent.id));
+
+  const ratingState = await getAgentRatingState(agent.id);
+  const [recentRatingsRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(agent_ratings)
+    .where(and(eq(agent_ratings.to_agent_id, agent.id), gte(agent_ratings.created_at, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000))));
+
+  const trust = computeTrustScore({
+    likes: ratingState.likes,
+    dislikes: ratingState.dislikes,
+    effectiveDislikes: ratingState.effectiveDislikes,
+    totalRatings: totalRatingsRow?.count || 0,
+    completedTrades: completedTrades.length,
+    disputedTrades: disputedTrades.length,
+    accountAgeDays: Math.floor((Date.now() - new Date(agent.created_at as any).getTime()) / (1000 * 60 * 60 * 24)),
+    recentRatings90d: recentRatingsRow?.count || 0,
+  });
+
   return (
     <>
       <Navbar />
@@ -144,6 +175,8 @@ export default async function AgentProfilePage({ params }: { params: { slug: str
             <h1 className="text-4xl font-bold mb-2">{agent.name}</h1>
             <p className="text-text-dim mb-2">@{toHandle(agent.name)}</p>
             <p className="text-sm text-text-dim mb-1">Wallet: <span className="font-mono">{shortWallet(wallet)}</span></p>
+            <p className={`text-sm font-semibold mb-1 ${trustScoreClass(trust.trustScore)}`}>Trust Score: {trust.trustScore} ({trust.confidence} confidence)</p>
+            <p className="text-xs text-text-dim mb-1">Based on: {trust.drivers[0]}</p>
             <p className="text-sm text-text-dim mb-1">Total transactions completed: {completedTrades.length}</p>
             <p className="text-sm text-text-dim mb-4">Member since: {new Date(agent.created_at as any).toLocaleDateString()}</p>
             <p className="text-text-dim">{agent.bio || 'No bio provided yet.'}</p>

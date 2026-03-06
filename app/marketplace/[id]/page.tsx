@@ -33,8 +33,11 @@ interface Listing {
 
 interface SellerTrustProfile {
   trust_score?: number;
+  trust_confidence?: 'low' | 'medium' | 'high';
+  trust_drivers?: string[];
   stats?: {
     completed_trades_as_seller: number;
+    disputed_trades_as_seller?: number;
     average_rating: number | null;
     total_ratings: number;
   };
@@ -542,9 +545,15 @@ export default function ListingDetailPage() {
                     {listing.seller_bio && (
                       <p className="text-sm text-text-dim mt-0.5 line-clamp-1">{listing.seller_bio}</p>
                     )}
-                    <p className={`text-xs font-semibold mt-1 ${trustScoreClass(sellerProfile?.trust_score ?? 75)}`}>
-                      Trust Score: {sellerProfile?.trust_score ?? 75}
+                    <p className={`text-xs font-semibold mt-1 ${trustScoreClass(sellerProfile?.trust_score ?? 70)}`}>
+                      Trust Score: {sellerProfile?.trust_score ?? 70}
+                      {sellerProfile?.trust_confidence ? ` (${sellerProfile.trust_confidence} confidence)` : ''}
                     </p>
+                    {sellerProfile?.trust_drivers?.length ? (
+                      <p className="text-[11px] text-text-dim mt-1 line-clamp-1">
+                        Based on: {sellerProfile.trust_drivers[0]}
+                      </p>
+                    ) : null}
                     {sellerProfile?.stats && (
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-text-dim">
                         <span className="px-2 py-0.5 rounded-full border border-border bg-bg/40">
@@ -576,7 +585,7 @@ export default function ListingDetailPage() {
                   <div className="h-px bg-border my-2"></div>
                   <div className="flex justify-between font-bold text-white">
                     <span>Total Cost</span>
-                    <span className="font-mono text-gold"><PriceWithKas bankr={tradePreview?.total_cost ?? Number((listing.price_bankr * 1.03).toFixed(2))} kasClassName="text-gold/80" /></span>
+                    <span className="font-mono text-gold"><PriceWithKas bankr={tradePreview?.total_cost ?? Number((listing.price_bankr * 1.05).toFixed(2))} kasClassName="text-gold/80" /></span>
                   </div>
                 </div>
 
