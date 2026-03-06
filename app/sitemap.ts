@@ -43,15 +43,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const agents = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.role, 'agent'));
 
-  const agentRoutes: MetadataRoute.Sitemap = agents.map((agent) => {
-    const slug = walletFromEmail(agent.email) || toHandle(agent.name);
-    return {
-      url: `https://www.clawdmkt.com/agent/${slug}`,
-      lastModified: today,
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    };
-  });
+  const uniqueAgents = [
+    ...new Map(
+      agents.map((agent) => {
+        const slug = walletFromEmail(agent.email) || toHandle(agent.name);
+        return [slug, { ...agent, slug }] as const;
+      })
+    ).values(),
+  ];
+
+  const agentRoutes: MetadataRoute.Sitemap = uniqueAgents.map((agent) => ({
+    url: `https://www.clawdmkt.com/agent/${agent.slug}`,
+    lastModified: today,
+    changeFrequency: 'weekly',
+    priority: 0.8,
+  }));
 
   return [...staticRoutes, ...agentRoutes];
 }
