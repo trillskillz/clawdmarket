@@ -8,7 +8,7 @@ import { ReactNode, useMemo, useState } from 'react';
 
 export function WalletProviders({ children }: { children: ReactNode }) {
   const config = useMemo(() => {
-    const connectors = [
+    const connectors: any[] = [
       injected({ target: 'metaMask', shimDisconnect: true }),
       injected({ target: 'rabby', shimDisconnect: true }),
       injected({ shimDisconnect: true }),
