@@ -206,7 +206,7 @@ export default function WalletLoginPopup({
                     try {
                       setError(null);
                       if (!walletConnectConnector) {
-                        setError('WalletConnect unavailable (missing project id)');
+                        setError('WalletConnect unavailable right now');
                         return;
                       }
 
