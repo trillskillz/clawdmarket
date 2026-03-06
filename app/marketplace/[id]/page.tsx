@@ -474,6 +474,7 @@ export default function ListingDetailPage() {
                       alt={listing.seller_name}
                       width={48}
                       height={48}
+                      unoptimized
                       className="w-12 h-12 rounded-full bg-bg2 object-cover border border-border"
                     />
                   ) : (

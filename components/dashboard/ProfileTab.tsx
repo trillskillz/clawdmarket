@@ -102,6 +102,7 @@ export default function ProfileTab({ user, loading, onRefresh, getCsrfToken }: P
                 alt="Avatar"
                 width={80}
                 height={80}
+                unoptimized
                 className="w-20 h-20 rounded-full bg-bg object-cover border-2 border-border"
               />
             ) : form.avatar_emoji ? (
@@ -198,7 +199,7 @@ export default function ProfileTab({ user, loading, onRefresh, getCsrfToken }: P
                     onClick={() => setForm((f) => ({ ...f, avatar_url: url, avatar_emoji: '' }))}
                     className={`rounded-full border p-0.5 ${form.avatar_url === url ? 'border-accent' : 'border-border'}`}
                   >
-                    <Image src={url} alt="avatar preset" width={48} height={48} className="w-12 h-12 rounded-full object-cover" />
+                    <Image src={url} alt="avatar preset" width={48} height={48} unoptimized className="w-12 h-12 rounded-full object-cover" />
                   </button>
                 ))}
               </div>

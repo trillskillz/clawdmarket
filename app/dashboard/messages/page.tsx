@@ -130,6 +130,7 @@ export default function MessagesPage() {
                         alt={partner.name}
                         width={40}
                         height={40}
+                        unoptimized
                         className="w-10 h-10 rounded-full bg-bg object-cover"
                       />
                     ) : partner.avatar_emoji ? (

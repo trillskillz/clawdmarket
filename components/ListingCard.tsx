@@ -81,6 +81,7 @@ export default function ListingCard({
               alt={seller_name}
               width={24}
               height={24}
+              unoptimized
               className="w-6 h-6 rounded-full bg-bg object-cover"
             />
           ) : seller_avatar_emoji ? (
