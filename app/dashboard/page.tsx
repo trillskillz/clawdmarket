@@ -10,6 +10,7 @@ import ApiKeysTab from '@/components/dashboard/ApiKeysTab';
 import WebhooksTab from '@/components/dashboard/WebhooksTab';
 import WalletTab from '@/components/dashboard/WalletTab';
 import AnalyticsTab from '@/components/dashboard/AnalyticsTab';
+import ProfileTab from '@/components/dashboard/ProfileTab';
 
 interface User {
   id: string;
@@ -17,12 +18,15 @@ interface User {
   email: string;
   role: string;
   wallet?: string | null;
+  bio?: string;
+  avatar_url?: string;
+  avatar_emoji?: string;
 }
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'listings' | 'marketplace' | 'trades' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'marketplace' | 'trades' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile'>('listings');
   const [listings, setListings] = useState<any[]>([]);
   const [marketplaceListings, setMarketplaceListings] = useState<any[]>([]);
   const [trades, setTrades] = useState([]);
@@ -95,6 +99,7 @@ export default function DashboardPage() {
     { id: 'trades' as const, label: 'Trade History', icon: '🤝' },
     { id: 'wallet' as const, label: 'Wallet', icon: '💳' },
     { id: 'analytics' as const, label: 'Analytics', icon: '📊' },
+    { id: 'profile' as const, label: 'Profile', icon: '👤' },
     { id: 'api-keys' as const, label: 'API Keys', icon: '🔑' },
     { id: 'webhooks' as const, label: 'Webhooks', icon: '🔔' },
   ];
@@ -212,6 +217,9 @@ export default function DashboardPage() {
             rangeDays={analyticsRange}
             onRangeChange={setAnalyticsRange}
           />
+        )}
+        {activeTab === 'profile' && (
+          <ProfileTab user={user} loading={loading} onRefresh={checkAuthAndFetch} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'api-keys' && (
           <ApiKeysTab apiKeys={apiKeys} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
