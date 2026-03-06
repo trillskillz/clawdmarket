@@ -9,8 +9,6 @@ import {
   parseUnits,
   type Address,
   type Hash,
-  type PublicClient,
-  type WalletClient,
 } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
@@ -81,14 +79,15 @@ function getEnvPrivateKey(): `0x${string}` {
 
 export class BaseWalletService {
   public readonly network: BaseNetwork;
-  public readonly chain = getChain(this.network);
+  public readonly chain: ReturnType<typeof getChain>;
   public readonly bnkrTokenAddress: Address;
-  private readonly publicClient: PublicClient;
+  private readonly publicClient: any;
   private readonly defaultPrivateKey?: `0x${string}`;
   private readonly pollIntervalMs: number;
 
   constructor(config: BaseWalletConfig = {}) {
     this.network = config.network ?? 'base';
+    this.chain = getChain(this.network);
     this.bnkrTokenAddress = config.bnkrTokenAddress ?? getEnvTokenAddress();
     this.defaultPrivateKey = config.privateKey;
     this.pollIntervalMs = config.pollIntervalMs ?? 7_000;
@@ -173,13 +172,14 @@ export class BaseWalletService {
       args: [params.to, amount],
     });
 
-    const walletClient: WalletClient = createWalletClient({
+    const walletClient = createWalletClient({
       account,
       chain: this.chain,
       transport: this.publicClient.transport,
     });
 
     const txHash = await walletClient.writeContract({
+      chain: this.chain,
       address: this.bnkrTokenAddress,
       abi: erc20Abi,
       functionName: 'transfer',
@@ -232,7 +232,7 @@ export class BaseWalletService {
           };
         }
 
-        cursor = latest + 1n;
+        cursor = latest + BigInt(1);
       }
 
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));

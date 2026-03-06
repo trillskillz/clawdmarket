@@ -181,6 +181,11 @@ export default function ListingDetailPage() {
     setTradeLoading(true);
 
     try {
+      if (!basePublicClient) {
+        toast('Base client unavailable. Please reconnect wallet and retry.', 'error');
+        return;
+      }
+
       const escrowAmount = parseUnits(listing.price_bankr.toFixed(18), 18);
       const feeAmount = parseUnits(fee.toFixed(18), 18);
 

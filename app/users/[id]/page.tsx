@@ -159,6 +159,7 @@ export default function UserProfilePage() {
                   <ListingCard 
                     key={l.id} 
                     id={l.id}
+                    seller_id={l.seller_id}
                     title={l.title}
                     description="[See details]" // Profile listing object doesn't have description yet, or we need to add it
                     category={l.category}
