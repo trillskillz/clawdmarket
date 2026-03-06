@@ -13,8 +13,8 @@ import {
 
 /** Starting balance for new users (faucet removed) */
 export const FAUCET_AMOUNT = 0;
-/** Ecosystem fee on trades (3%) */
-export const ECOSYSTEM_FEE_RATE = 0.03;
+/** Ecosystem fee on trades (5%) */
+export const ECOSYSTEM_FEE_RATE = 0.05;
 /** Treasury address (null = system/burn) */
 export const TREASURY_USER_ID = null;
 // ─── Errors ───────────────────────────────────────────────────────────────────

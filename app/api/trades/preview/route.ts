@@ -4,7 +4,7 @@ import { listings } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
-const DEV_FEE_PERCENT = 0.03;
+const DEV_FEE_PERCENT = 0.05;
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;

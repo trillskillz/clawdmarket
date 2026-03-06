@@ -28,7 +28,7 @@
     {
       "file": "app/marketplace/[id]/page.tsx",
       "line": 173,
-      "description": "const fee = listing.price_bankr * 0.03;"
+      "description": "const fee = listing.price_bankr * 0.05;"
     },
     {
       "file": "app/marketplace/[id]/page.tsx",
@@ -158,7 +158,7 @@
     {
       "file": "app/api/trades/route.ts",
       "line": 17,
-      "description": "const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee"
+      "description": "const ECOSYSTEM_FEE_PERCENT = 0.05; // 3% fee"
     },
     {
       "file": "app/api/trades/route.ts",
@@ -1365,7 +1365,7 @@
     {
       "file": "app/marketplace/[id]/page.tsx",
       "line": 412,
-      "description": "<span className=\"font-mono text-text-dim\">{(listing.price_bankr * 0.03).toFixed(2)} BANKR</span>"
+      "description": "<span className=\"font-mono text-text-dim\">{(listing.price_bankr * 0.05).toFixed(2)} BANKR</span>"
     },
     {
       "file": "app/marketplace/[id]/page.tsx",
@@ -2164,7 +2164,7 @@
     {
       "file": "scripts/seed.ts",
       "line": 341,
-      "description": "fee: Math.round(listing.price_bankr * 0.03 * 100) / 100,"
+      "description": "fee: Math.round(listing.price_bankr * 0.05 * 100) / 100,"
     },
     {
       "file": "scripts/normalize-listing-prices.ts",
@@ -2269,7 +2269,7 @@
     {
       "file": "app/marketplace/[id]/page.tsx",
       "line": 173,
-      "description": "const fee = listing.price_bankr * 0.03;"
+      "description": "const fee = listing.price_bankr * 0.05;"
     },
     {
       "file": "app/marketplace/[id]/page.tsx",
@@ -2334,7 +2334,7 @@
     {
       "file": "app/marketplace/[id]/page.tsx",
       "line": 412,
-      "description": "<span className=\"font-mono text-text-dim\">{(listing.price_bankr * 0.03).toFixed(2)} BANKR</span>"
+      "description": "<span className=\"font-mono text-text-dim\">{(listing.price_bankr * 0.05).toFixed(2)} BANKR</span>"
     },
     {
       "file": "app/marketplace/[id]/page.tsx",
@@ -2364,7 +2364,7 @@
     {
       "file": "app/api/trades/route.ts",
       "line": 17,
-      "description": "const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee"
+      "description": "const ECOSYSTEM_FEE_PERCENT = 0.05; // 3% fee"
     },
     {
       "file": "app/api/trades/route.ts",
@@ -2644,7 +2644,7 @@
     {
       "file": "components/PageShell.tsx",
       "line": 14,
-      "description": "opacity: 0.03"
+      "description": "opacity: 0.05"
     },
     {
       "file": "components/WalletLoginPopup.tsx",
@@ -2739,7 +2739,7 @@
     {
       "file": "lib/wallet.ts",
       "line": 10,
-      "description": "export const ECOSYSTEM_FEE_RATE = 0.03;"
+      "description": "export const ECOSYSTEM_FEE_RATE = 0.05;"
     }
   ]
 }

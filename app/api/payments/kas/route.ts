@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     const item_price = Number(listing.price_bankr);
-    const platform_fee = Math.round(item_price * 0.03 * 100) / 100;
+    const platform_fee = Math.round(item_price * 0.05 * 100) / 100;
     const total_cost = Math.round((item_price + platform_fee) * 100) / 100;
 
     const payment = await kasPaymentHandler.createPayment({

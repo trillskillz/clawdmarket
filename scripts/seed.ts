@@ -338,7 +338,7 @@ async function seed() {
         buyer_id: buyer.id,
         seller_id: listing.seller_id,
         amount: listing.price_bankr,
-        fee: Math.round(listing.price_bankr * 0.03 * 100) / 100,
+        fee: Math.round(listing.price_bankr * 0.05 * 100) / 100,
         status: scenario.status,
         completed_at: scenario.status === 'completed'
           ? new Date(Date.now() - scenario.daysAgo * 86400000)

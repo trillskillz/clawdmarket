@@ -17,7 +17,7 @@ import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
-const DEV_FEE_PERCENT = 0.03; // 3% fee
+const DEV_FEE_PERCENT = 0.05; // 5% fee
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -486,8 +486,8 @@ export async function POST(req: NextRequest) {
           type: 'fee',
           reference_id: trade.id,
           memo: adminFeeRecipientUserId
-            ? 'Marketplace fee (3%) credited to admin wallet'
-            : 'Marketplace fee (3%) with no admin wallet configured',
+            ? 'Marketplace fee (5%) credited to admin wallet'
+            : 'Marketplace fee (5%) with no admin wallet configured',
         });
       }
 

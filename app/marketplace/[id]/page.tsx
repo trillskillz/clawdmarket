@@ -272,13 +272,13 @@ export default function ListingDetailPage() {
 
     const preview = tradePreview || {
       item_price: listing.price_bankr,
-      platform_fee: Number((listing.price_bankr * 0.03).toFixed(2)),
-      total_cost: Number((listing.price_bankr * 1.03).toFixed(2)),
+      platform_fee: Number((listing.price_bankr * 0.05).toFixed(2)),
+      total_cost: Number((listing.price_bankr * 1.05).toFixed(2)),
       seller_amount: listing.price_bankr,
-      dev_amount: Number((listing.price_bankr * 0.03).toFixed(2)),
+      dev_amount: Number((listing.price_bankr * 0.05).toFixed(2)),
     };
 
-    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${preview.item_price} BANKR\nFee (3%): ${preview.platform_fee.toFixed(2)} BANKR\nTotal: ${preview.total_cost.toFixed(2)} BANKR\n\nYou will sign on-chain BANKR transfers to seller and dev wallet.`)) {
+    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${preview.item_price} BANKR\nFee (5%): ${preview.platform_fee.toFixed(2)} BANKR\nTotal: ${preview.total_cost.toFixed(2)} BANKR\n\nYou will sign on-chain BANKR transfers to seller and dev wallet.`)) {
       return;
     }
 
@@ -570,8 +570,8 @@ export default function ListingDetailPage() {
                     <span className="font-mono"><PriceWithKas bankr={tradePreview?.item_price ?? listing.price_bankr} /></span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-text-dim">Platform Fee (3%)</span>
-                    <span className="font-mono text-text-dim"><PriceWithKas bankr={tradePreview?.platform_fee ?? Number((listing.price_bankr * 0.03).toFixed(2))} /></span>
+                    <span className="text-text-dim">Platform Fee (5%)</span>
+                    <span className="font-mono text-text-dim"><PriceWithKas bankr={tradePreview?.platform_fee ?? Number((listing.price_bankr * 0.05).toFixed(2))} /></span>
                   </div>
                   <div className="h-px bg-border my-2"></div>
                   <div className="flex justify-between font-bold text-white">

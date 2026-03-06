@@ -102,7 +102,7 @@ export async function PATCH(
 
       // 2. Handle funds if completing
       if (targetStatus === 'complete') {
-        const expectedDevFee = Math.round(Number(trade.amount) * 0.03 * 100) / 100;
+        const expectedDevFee = Math.round(Number(trade.amount) * 0.05 * 100) / 100;
         const actualDevFee = Math.round(Number(trade.fee) * 100) / 100;
         if (actualDevFee !== expectedDevFee) {
           await tx.insert(fee_errors).values({

@@ -110,7 +110,7 @@ export class KasPaymentHandler {
     payment.status = 'converting';
     this.store.set(payment.payment_id, payment);
 
-    const expectedDev = Math.round(payment.item_price * 0.03 * 100) / 100;
+    const expectedDev = Math.round(payment.item_price * 0.05 * 100) / 100;
     if (Math.round(payment.dev_amount * 100) / 100 !== expectedDev) {
       throw new Error('DEV_FEE_MISMATCH');
     }
