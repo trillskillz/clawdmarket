@@ -80,6 +80,26 @@ main p:last-child {
     @apply bg-bg2 border border-border rounded-xl p-6 transition-all hover:border-accent;
   }
 
+  .card-elevated {
+    @apply bg-bg2/90 border border-border rounded-xl p-6 shadow-sm;
+  }
+
+  .card-interactive {
+    @apply card-elevated cursor-pointer transition-all duration-200 hover:border-accent hover:shadow-lg hover:-translate-y-0.5;
+  }
+
+  .token-pill {
+    @apply inline-flex items-center rounded-full border border-border bg-bg px-2.5 py-1 text-xs font-semibold text-text-dim;
+  }
+
+  .step-card {
+    @apply relative overflow-hidden;
+  }
+
+  .step-number {
+    @apply absolute -top-2 right-3 text-6xl font-extrabold text-white/5 pointer-events-none select-none;
+  }
+
   .card-glow {
     @apply bg-bg2 border border-border rounded-xl p-6 transition-all;
     position: relative;

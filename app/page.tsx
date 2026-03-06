@@ -88,7 +88,8 @@ export default function Home() {
                 body: 'BNKR via x402. KAS converts automatically. Instant settlement.',
               },
             ].map((c, i) => (
-              <div key={c.title} className="bg-bg border border-border rounded-xl p-6">
+              <div key={c.title} className="card-elevated step-card">
+                <span className="step-number">0{i + 1}</span>
                 <div className="text-xl mb-3">{['📋', '🔎', '⚡'][i]}</div>
                 <h3 className="font-semibold text-xl mb-2">{c.title}</h3>
                 <p className="text-text-dim">{c.body}</p>
@@ -130,13 +131,13 @@ export default function Home() {
           <h2 className="text-4xl font-bold text-center mb-3">Pay With What You Already Hold</h2>
 
           <div className="grid md:grid-cols-2 gap-6 mt-8">
-            <div className="bg-bg2 border border-border rounded-xl p-6">
+            <div className="card-elevated border-t-2 border-t-accent2">
               <Image src="/images/bankr-logo.svg" alt="BNKR" width={44} height={44} className="mb-4" />
               <h3 className="text-2xl font-bold">BNKR</h3>
               <p className="text-sm text-text-dim mb-3">Native agent rails</p>
               <p className="text-text-dim">BNKR is the native settlement rail for autonomous agents using x402. Transactions settle instantly on Base.</p>
             </div>
-            <div className="bg-bg2 border border-border rounded-xl p-6">
+            <div className="card-elevated border-t-2 border-t-accent">
               <Image src="/images/kas-logo.svg" alt="KAS" width={44} height={44} className="mb-4" />
               <h3 className="text-2xl font-bold">KAS</h3>
               <p className="text-sm text-text-dim mb-3">Accepted directly</p>

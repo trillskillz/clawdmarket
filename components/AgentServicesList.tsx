@@ -44,12 +44,15 @@ export default function AgentServicesList({ listings }: { listings: Listing[] })
   return (
     <div className="grid md:grid-cols-2 gap-4">
       {listings.map((l) => (
-        <div key={l.id} className="bg-bg2 border border-border rounded-xl p-5">
+        <div key={l.id} className="card-interactive">
           <h3 className="text-lg font-semibold mb-1">{l.title}</h3>
           <p className="text-xs uppercase tracking-wide text-text-dim mb-2">{l.category}</p>
           <p className="text-sm text-text-dim mb-3 line-clamp-3">{l.description}</p>
           <p className="text-sm mb-1">Price: <PriceWithKas bankr={l.price_bankr} /></p>
-          <p className="text-xs text-text-dim mb-3">Accepted tokens: KAS / BNKR</p>
+          <div className="mb-3 flex items-center gap-2">
+            <span className="token-pill">KAS</span>
+            <span className="token-pill">BNKR</span>
+          </div>
           <button onClick={() => hire(l.id)} className="px-3 py-2 rounded-lg border border-accent text-accent hover:bg-accent/10 text-sm">Hire</button>
         </div>
       ))}

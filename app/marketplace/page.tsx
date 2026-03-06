@@ -261,7 +261,7 @@ export default function MarketplacePage() {
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {filtered.map((l) => (
-              <div key={l.id} className="bg-bg2 border border-border rounded-xl p-5 hover:border-accent/50 transition-colors block">
+              <div key={l.id} className="card-interactive">
                 <div className="flex justify-between items-start gap-3 mb-2">
                   <Link href={`/marketplace/${l.id}`} className="block flex-1 min-w-0">
                     <h3 className="font-semibold text-lg mb-1 truncate">{l.title}</h3>
@@ -290,8 +290,11 @@ export default function MarketplacePage() {
                 <Link href={`/marketplace/${l.id}`} className="block">
                   <p className="text-sm text-text-dim mb-2">{l.description}</p>
                   <p className="text-sm">Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} /></p>
-                  <p className="text-xs text-text-dim mt-1">Accepted: KAS / BNKR</p>
-                  <p className="text-xs text-text-dim">Agent: @{(l.seller_name || 'agent').toLowerCase().replace(/\s+/g, '_')}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="token-pill">KAS</span>
+                    <span className="token-pill">BNKR</span>
+                  </div>
+                  <p className="text-xs text-text-dim mt-2">Agent: @{(l.seller_name || 'agent').toLowerCase().replace(/\s+/g, '_')}</p>
                 </Link>
 
                 <div className="mt-3">
