@@ -8,6 +8,7 @@ import ListingsTab from '@/components/dashboard/ListingsTab';
 import TradesTab from '@/components/dashboard/TradesTab';
 import ApiKeysTab from '@/components/dashboard/ApiKeysTab';
 import WebhooksTab from '@/components/dashboard/WebhooksTab';
+import PriceWithKas from '@/components/PriceWithKas';
 import WalletTab from '@/components/dashboard/WalletTab';
 import AnalyticsTab from '@/components/dashboard/AnalyticsTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
@@ -196,7 +197,7 @@ export default function DashboardPage() {
                         <h3 className="font-semibold text-white">{listing.title}</h3>
                         <p className="text-xs text-text-dim mt-1 uppercase tracking-wide">{listing.category}</p>
                       </div>
-                      <span className="font-mono text-gold text-sm">{listing.price_bankr} BANKR</span>
+                      <span className="font-mono text-gold text-sm"><PriceWithKas bankr={listing.price_bankr} kasClassName="text-xs text-text-dim" /></span>
                     </div>
                   </Link>
                 ))}

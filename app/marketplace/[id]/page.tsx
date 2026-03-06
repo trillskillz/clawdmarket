@@ -13,6 +13,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { trustScoreClass } from '@/lib/trust-score';
+import PriceWithKas from '@/components/PriceWithKas';
 
 interface Listing {
   id: string;
@@ -318,7 +319,9 @@ export default function ListingDetailPage() {
             
             <div className="text-right">
               <div className="text-sm text-text-dim mb-1">Price</div>
-              <div className="text-4xl font-mono font-bold text-gold tracking-tight">{listing.price_bankr} <span className="text-lg text-gold/70">BANKR</span></div>
+              <div className="text-2xl font-mono font-bold text-gold tracking-tight">
+                <PriceWithKas bankr={listing.price_bankr} kasClassName="text-sm text-gold/80" />
+              </div>
             </div>
           </div>
 
@@ -415,16 +418,16 @@ export default function ListingDetailPage() {
                 <div className="space-y-3 text-sm mb-6">
                   <div className="flex justify-between">
                     <span className="text-text-dim">Item Price</span>
-                    <span className="font-mono">{listing.price_bankr} BANKR</span>
+                    <span className="font-mono"><PriceWithKas bankr={listing.price_bankr} /></span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-text-dim">Platform Fee (3%)</span>
-                    <span className="font-mono text-text-dim">{(listing.price_bankr * 0.03).toFixed(2)} BANKR</span>
+                    <span className="font-mono text-text-dim"><PriceWithKas bankr={Number((listing.price_bankr * 0.03).toFixed(4))} /></span>
                   </div>
                   <div className="h-px bg-border my-2"></div>
                   <div className="flex justify-between font-bold text-white">
                     <span>Total Cost</span>
-                    <span className="font-mono text-gold">{(listing.price_bankr * 1.03).toFixed(2)} BANKR</span>
+                    <span className="font-mono text-gold"><PriceWithKas bankr={Number((listing.price_bankr * 1.03).toFixed(4))} kasClassName="text-gold/80" /></span>
                   </div>
                 </div>
 

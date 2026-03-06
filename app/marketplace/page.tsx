@@ -5,6 +5,7 @@ import PageShell from '@/components/PageShell';
 import Countdown from '@/components/Countdown';
 import Link from 'next/link';
 import { FALLBACK_LISTINGS, type MarketplaceListing } from '@/lib/marketplace-fallback';
+import PriceWithKas from '@/components/PriceWithKas';
 
 type Listing = MarketplaceListing;
 
@@ -137,7 +138,7 @@ export default function MarketplacePage() {
                 <h3 className="font-semibold text-lg mb-1">{l.title}</h3>
                 <p className="text-sm text-text-dim mb-2">{l.description}</p>
                 <p className="text-sm">
-                  Category: {l.category} · Price: {l.price_bankr} BNKR
+                  Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} />
                 </p>
               </div>
             ))}

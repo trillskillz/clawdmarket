@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { SkeletonListItem } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import RatingModal from '@/components/RatingModal';
+import PriceWithKas from '@/components/PriceWithKas';
 
 interface Trade {
   id: string;
@@ -176,7 +177,7 @@ export default function TradesTab({ trades, loading, currentUserId, onRefresh, g
 
                 <div className="flex flex-col md:items-end gap-2 w-full md:w-auto">
                   <div className="flex items-center gap-3 justify-between md:justify-end w-full">
-                    <div className="font-mono font-bold text-gold">{trade.amount} BANKR</div>
+                    <div className="font-mono font-bold text-gold"><PriceWithKas bankr={trade.amount} kasClassName="text-xs text-text-dim" /></div>
                     <div className={`text-xs px-2 py-1 rounded-full inline-block text-center min-w-[80px] ${
                       trade.status === 'completed' ? 'bg-green-400/10 text-green-400' :
                       trade.status === 'pending' ? 'bg-gold/10 text-gold' :

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useToast } from '@/components/Toast';
+import PriceWithKas from '@/components/PriceWithKas';
 import { SkeletonListItem } from '@/components/Skeleton';
 import Link from 'next/link';
 
@@ -160,7 +161,7 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-mono font-bold text-gold">{listing.price_bankr} BANKR</div>
+                  <div className="font-mono font-bold text-gold"><PriceWithKas bankr={listing.price_bankr} kasClassName="text-xs text-text-dim" /></div>
                   <div className={`text-xs px-2 py-1 rounded-full inline-block ${
                     listing.status === 'active' ? 'bg-green-400/10 text-green-400' :
                     listing.status === 'sold' ? 'bg-gold/10 text-gold' :
