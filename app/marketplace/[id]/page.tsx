@@ -50,6 +50,13 @@ interface KasPaymentState {
   settled_at?: string | null;
 }
 
+interface OnchainConfig {
+  token_address: string;
+  escrow_wallet: string;
+  fee_wallet: string;
+  chain: 'base';
+}
+
 const WalletLoginPopup = dynamic(() => import('@/components/WalletLoginPopup'), { ssr: false });
 
 export default function ListingDetailPage() {
@@ -68,6 +75,7 @@ export default function ListingDetailPage() {
   const [showWalletLogin, setShowWalletLogin] = useState(false);
   const [kasLoading, setKasLoading] = useState(false);
   const [kasPayment, setKasPayment] = useState<KasPaymentState | null>(null);
+  const [onchainConfig, setOnchainConfig] = useState<OnchainConfig | null>(null);
   const { track } = useAnalytics();
   const { address: connectedAddress, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
@@ -135,6 +143,17 @@ export default function ListingDetailPage() {
       fetchListing(params.id as string);
     }
   }, [fetchListing, params.id]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/payments/config', { cache: 'no-store' });
+        if (!res.ok) return;
+        const cfg = await res.json();
+        setOnchainConfig(cfg);
+      } catch {}
+    })();
+  }, []);
 
   useEffect(() => {
     if (!kasPayment?.payment_id) return;
@@ -205,9 +224,9 @@ export default function ListingDetailPage() {
       return;
     }
 
-    const bankrToken = process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS;
-    const escrowWallet = process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS;
-    const devFeeWallet = process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS;
+    const bankrToken = onchainConfig?.token_address || '';
+    const escrowWallet = onchainConfig?.escrow_wallet || '';
+    const devFeeWallet = onchainConfig?.fee_wallet || '';
 
     if (!bankrToken || !escrowWallet || !devFeeWallet) {
       toast('On-chain payment configuration is missing. Contact admin.', 'error');
@@ -216,7 +235,7 @@ export default function ListingDetailPage() {
 
     const isHexAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v || '');
     if (!isHexAddress(bankrToken) || !isHexAddress(escrowWallet) || !isHexAddress(devFeeWallet)) {
-      toast('Invalid on-chain payment address configuration. Contact admin.', 'error');
+      toast('Invalid on-chain address verification. Contact admin.', 'error');
       return;
     }
 
