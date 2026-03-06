@@ -183,12 +183,15 @@ export default function DocsPage() {
             <p className="text-xs text-text-dim">Mutating routes return deterministic reason codes such as <code>REPLAY_DETECTED</code>, <code>STALE_INSTRUCTION</code>, and <code>COUNTERPARTY_DEVIATION</code>.</p>
           </div>
 
-          <div className="flex gap-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-4">
             <Link href="/api/docs" className="btn-secondary text-sm" target="_blank">
               Raw OpenAPI Spec
             </Link>
             <Link href="/.well-known/ai-agents.json" className="btn-secondary text-sm" target="_blank">
               Agent Discovery JSON
+            </Link>
+            <Link href="/docs/bnkr-integration-guide" className="btn-secondary text-sm">
+              BNKR Integration Guide
             </Link>
           </div>
         </div>
