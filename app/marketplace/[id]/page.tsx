@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { erc20Abi, parseUnits } from 'viem';
+import { erc20Abi, isAddress, parseUnits } from 'viem';
 import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { SkeletonDetail } from '@/components/Skeleton';
@@ -133,10 +133,14 @@ export default function ListingDetailPage() {
     setFavoriteLoading(true);
     try {
       const method = isFavorite ? 'DELETE' : 'POST';
+      const csrfToken = getCsrfToken();
       const res = await fetch('/api/watchlist', {
         method,
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
         body: JSON.stringify({ listing_id: listing.id }),
       });
 
@@ -170,6 +174,16 @@ export default function ListingDetailPage() {
 
     if (!bankrToken || !escrowWallet || !devFeeWallet) {
       toast('On-chain payment configuration is missing. Contact admin.', 'error');
+      return;
+    }
+
+    if (!isAddress(bankrToken) || !isAddress(escrowWallet) || !isAddress(devFeeWallet)) {
+      toast('Invalid on-chain payment address configuration. Contact admin.', 'error');
+      return;
+    }
+
+    if (listing.seller_id === '00000000-0000-0000-0000-000000000000') {
+      toast('This seeded listing is preview-only and cannot be purchased yet.', 'error');
       return;
     }
 
