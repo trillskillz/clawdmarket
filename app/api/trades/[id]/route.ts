@@ -83,15 +83,19 @@ export async function PATCH(
 
     // ─── ESCROW RELEASE LOGIC ───
     const updatedTrade = await db.transaction(async (tx) => {
-      // 1. Update trade status
+      // 1. Update trade status atomically only if still pending.
       const [t] = await tx
         .update(trades)
         .set({
           status: validated.status,
           completed_at: validated.status === 'completed' ? new Date() : null,
         })
-        .where(eq(trades.id, params.id))
+        .where(and(eq(trades.id, params.id), eq(trades.status, 'pending')))
         .returning();
+
+      if (!t) {
+        throw new Error('TRADE_NOT_PENDING_AT_COMMIT');
+      }
 
       // 2. Handle funds if completing
       if (validated.status === 'completed') {
@@ -156,6 +160,13 @@ export async function PATCH(
       ...envMeta('clawdmarket/api/trades/:id'),
     });
   } catch (error: any) {
+    if (error?.message === 'TRADE_NOT_PENDING_AT_COMMIT') {
+      return NextResponse.json(
+        { error: 'Trade was already updated by another request', code: 'TRADE_ALREADY_UPDATED', ...envMeta('clawdmarket/api/trades/:id') },
+        { status: 409 }
+      );
+    }
+
     if (error.errors) {
       return NextResponse.json(
         { error: 'Validation failed', details: error.errors },

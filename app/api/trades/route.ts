@@ -6,7 +6,7 @@ import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
-import { eq, or, desc, sql } from 'drizzle-orm';
+import { and, eq, or, desc, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { isAddress } from 'viem';
 import { envMeta } from '@/lib/agent-environment';
@@ -15,6 +15,13 @@ import { validateAgentInstruction } from '@/lib/agent-security';
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
 const ECOSYSTEM_FEE_PERCENT = 0.03; // 3% fee
+
+class TradeRaceError extends Error {
+  constructor(public readonly code: 'LISTING_ALREADY_CLAIMED' | 'INSUFFICIENT_FUNDS_AT_COMMIT', message: string) {
+    super(message);
+    this.name = 'TradeRaceError';
+  }
+}
 
 async function ensureAdminFeeRecipient(): Promise<string | null> {
   const adminWalletAddress = (process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim().toLowerCase();
@@ -168,6 +175,16 @@ export async function POST(req: NextRequest) {
       const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
 
       const newTrade = await db.transaction(async (tx) => {
+        const claimedRows = await tx
+          .update(listings)
+          .set({ status: 'sold' })
+          .where(and(eq(listings.id, validated.listing_id), eq(listings.status, 'active')))
+          .returning({ id: listings.id });
+
+        if (claimedRows.length === 0) {
+          throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
+        }
+
         const [trade] = await tx
           .insert(trades)
           .values({
@@ -179,8 +196,6 @@ export async function POST(req: NextRequest) {
             status: 'pending',
           })
           .returning();
-
-        await tx.update(listings).set({ status: 'sold' }).where(eq(listings.id, validated.listing_id));
 
         await tx.insert(transactions).values({
           from_user_id: auth.userId,
@@ -273,23 +288,48 @@ export async function POST(req: NextRequest) {
     // 2. Perform atomic trade creation & fund locking
     // Note: Drizzle's `db.transaction` works with @libsql/client (Turso)
     const newTrade = await db.transaction(async (tx) => {
-      // Deduct from buyer balance, move amount to escrow
-      // Fee is burned (or moved to platform wallet - for now we just deduct it)
-      await tx
+      const claimedRows = await tx
+        .update(listings)
+        .set({ status: 'sold' })
+        .where(and(eq(listings.id, validated.listing_id), eq(listings.status, 'active')))
+        .returning({ id: listings.id });
+
+      if (claimedRows.length === 0) {
+        throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
+      }
+
+      const walletUpdateRows = await tx
         .update(wallets)
         .set({
           balance: sql`${wallets.balance} - ${totalCost}`,
           escrow: sql`${wallets.escrow} + ${validated.amount}`,
         })
-        .where(eq(wallets.user_id, auth.userId));
+        .where(and(eq(wallets.user_id, auth.userId), sql`${wallets.balance} >= ${totalCost}`))
+        .returning({ user_id: wallets.user_id });
+
+      if (walletUpdateRows.length === 0) {
+        throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient funds at commit time. Required ${totalCost} BANKR.`);
+      }
+
+      const [trade] = await tx
+        .insert(trades)
+        .values({
+          listing_id: validated.listing_id,
+          buyer_id: auth.userId,
+          seller_id: listing.seller_id,
+          amount: validated.amount,
+          fee: fee,
+          status: 'pending',
+        })
+        .returning();
 
       // Record transaction: Lock funds
       await tx.insert(transactions).values({
         from_user_id: auth.userId,
         amount: validated.amount,
         type: 'escrow_lock',
-        reference_id: validated.listing_id, // temporarily link to listing until trade ID exists
-        memo: `Escrow lock for listing ${listings.title.name || validated.listing_id}`,
+        reference_id: trade.id,
+        memo: `Escrow lock for listing ${validated.listing_id}`,
       });
 
       // Record transaction: Fee (credited to configured admin fee wallet when available)
@@ -306,37 +346,12 @@ export async function POST(req: NextRequest) {
           to_user_id: adminFeeRecipientUserId,
           amount: fee,
           type: 'fee',
-          reference_id: validated.listing_id,
+          reference_id: trade.id,
           memo: adminFeeRecipientUserId
             ? 'Marketplace fee (3%) credited to admin wallet'
             : 'Marketplace fee (3%) with no admin wallet configured',
         });
       }
-
-      // Create trade record
-      const [trade] = await tx
-        .insert(trades)
-        .values({
-          listing_id: validated.listing_id,
-          buyer_id: auth.userId,
-          seller_id: listing.seller_id,
-          amount: validated.amount,
-          fee: fee,
-          status: 'pending',
-        })
-        .returning();
-
-      // Update transactions to reference the real trade ID
-      await tx
-        .update(transactions)
-        .set({ reference_id: trade.id })
-        .where(eq(transactions.reference_id, validated.listing_id));
-
-      // Mark listing as sold
-      await tx
-        .update(listings)
-        .set({ status: 'sold' })
-        .where(eq(listings.id, validated.listing_id));
 
       return trade;
     });
@@ -369,6 +384,14 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error: any) {
+    if (error instanceof TradeRaceError) {
+      const status = error.code === 'LISTING_ALREADY_CLAIMED' ? 409 : 402;
+      return NextResponse.json(
+        { error: error.message, code: error.code, ...envMeta('clawdmarket/api/trades') },
+        { status }
+      );
+    }
+
     if (error.errors) {
       return NextResponse.json(
         { error: 'Validation failed', details: error.errors, code: 'VALIDATION_FAILED', ...envMeta('clawdmarket/api/trades') },
