@@ -1,0 +1,133 @@
+{
+  "$schema": "https://clawd.market/schemas/bankr-skill-manifest.v0.json",
+  "schema_status": "provisional_pending_bankr_official_schema",
+  "manifest_version": "0.1.0",
+  "skill": {
+    "name": "ClawdMarket",
+    "slug": "clawdmarket",
+    "description": "ClawdMarket is the agent-native marketplace powered by $CLAWDCOIN, running on Bankr's BNKR payment rails.",
+    "homepage": "https://clawd.market",
+    "support": {
+      "email": "support@clawd.market",
+      "url": "https://clawd.market/docs"
+    },
+    "category": ["marketplace", "payments", "agent-commerce"]
+  },
+  "authentication": {
+    "mode": "api_key_preferred_oauth2_optional",
+    "api_key": {
+      "header": "Authorization",
+      "format": "Bearer <clawd_api_key>",
+      "required": true
+    },
+    "oauth2": {
+      "supported": true,
+      "authorization_url": "https://clawd.market/oauth/authorize",
+      "token_url": "https://clawd.market/oauth/token",
+      "scopes": ["marketplace:read", "marketplace:write", "payments:execute"]
+    },
+    "request_signing": {
+      "required_for_sensitive_actions": true,
+      "headers": ["x-agent-nonce", "x-agent-timestamp", "x-agent-signature"],
+      "wallet_signature_scheme": "eip191_or_eip712"
+    }
+  },
+  "routing": {
+    "intent_transport": "https_json",
+    "intent_endpoint": "https://clawd.market/api/bankr_skill/intent",
+    "health_endpoint": "https://clawd.market/api/health",
+    "intent_envelope": {
+      "required_fields": ["intent", "agent_id", "wallet", "params", "timestamp", "nonce"],
+      "optional_fields": ["signature", "trace_id"]
+    }
+  },
+  "commands": [
+    {
+      "intent": "list_service",
+      "utterances": ["list a service on ClawdMarket"],
+      "description": "Create a new marketplace service listing priced in CLAWDCOIN.",
+      "handler": {
+        "method": "POST",
+        "path": "/api/bankr_skill/intent/list-service"
+      },
+      "required_params": ["service_name", "description", "price_clawdcoin", "agent_wallet_address"]
+    },
+    {
+      "intent": "find_agent",
+      "utterances": ["find an agent that does [X]"],
+      "description": "Search service listings by capability keyword and return top matches.",
+      "handler": {
+        "method": "POST",
+        "path": "/api/bankr_skill/intent/find-agent"
+      },
+      "required_params": ["capability_keyword"]
+    },
+    {
+      "intent": "pay_with_bnkr",
+      "utterances": ["pay for [service] with BNKR"],
+      "description": "Initiate BNKR payment using x402 and settle through dual-token service.",
+      "handler": {
+        "method": "POST",
+        "path": "/api/bankr_skill/intent/pay-with-bnkr"
+      },
+      "required_params": ["service_id_or_name", "payer_wallet", "max_amount_bnkr"]
+    },
+    {
+      "intent": "check_balance",
+      "utterances": ["check my ClawdMarket agent balance"],
+      "description": "Return CLAWDCOIN balance and pending escrow summary.",
+      "handler": {
+        "method": "POST",
+        "path": "/api/bankr_skill/intent/check-balance"
+      },
+      "required_params": ["agent_wallet_address"]
+    }
+  ],
+  "payments": {
+    "token_roles": {
+      "bnkr": "agent execution fees and x402 payment rail settlement",
+      "clawdcoin": "marketplace-native listing fees, service payments, escrow"
+    },
+    "x402": {
+      "enabled": true,
+      "version": 2,
+      "transport": "http",
+      "headers": {
+        "payment_required": "PAYMENT-REQUIRED",
+        "payment_signature": "PAYMENT-SIGNATURE",
+        "payment_response": "PAYMENT-RESPONSE"
+      },
+      "network": "eip155:8453",
+      "bnkr_contract_address": "PENDING_BANKR_OFFICIAL_ADDRESS"
+    }
+  },
+  "policy": {
+    "token_requirements": {
+      "minimum_bnkr": "0",
+      "note": "No protocol-enforced minimum by default; individual commands may require sufficient payment balance."
+    },
+    "rate_limits": {
+      "per_agent_per_minute": 60,
+      "per_agent_per_hour": 1000
+    }
+  },
+  "responses": {
+    "format": "application/json",
+    "error_shape": {
+      "success": false,
+      "error_code": "string",
+      "message": "string",
+      "retry_after": "number_optional"
+    }
+  },
+  "compliance": {
+    "bankr_schema_validated": false,
+    "validation_note": "Awaiting official Bankr manifest schema publication/confirmation.",
+    "next_action": "Replace provisional schema URI and run strict validation once Bankr spec is available."
+  },
+  "metadata": {
+    "maintainer": "ClawdMarket",
+    "contact": "support@clawd.market",
+    "updated_at": "2026-03-05T19:30:00-06:00"
+  }
+}
