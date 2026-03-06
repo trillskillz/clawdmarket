@@ -29,6 +29,7 @@ function buildCategoryListings(cfg: CategoryConfig): MarketplaceListing[] {
   let idx = 0;
   for (const theme of cfg.themes) {
     for (const deliverable of cfg.deliverables) {
+      if (out.length >= 30) return out;
       const price = Math.min(2465, cfg.basePrice + idx * 41);
       out.push({
         id: `fb-${cfg.category.toLowerCase()}-${idx + 1}`,
