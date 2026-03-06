@@ -12,6 +12,7 @@ import PriceWithKas from '@/components/PriceWithKas';
 import WalletTab from '@/components/dashboard/WalletTab';
 import AnalyticsTab from '@/components/dashboard/AnalyticsTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
+import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
 interface User {
   id: string;
@@ -54,7 +55,11 @@ export default function DashboardPage() {
       ]);
 
       if (listingsRes.ok) { const d = await listingsRes.json(); setListings(d.listings || []); }
-      if (marketplaceRes.ok) { const d = await marketplaceRes.json(); setMarketplaceListings(d.listings || []); }
+      if (marketplaceRes.ok) {
+        const d = await marketplaceRes.json();
+        const live = d.listings || [];
+        setMarketplaceListings(live.length > 0 ? live : FALLBACK_LISTINGS.slice(0, 6));
+      }
       if (tradesRes.ok) { const d = await tradesRes.json(); setTrades(d.trades || []); }
       if (apiKeysRes.ok) { const d = await apiKeysRes.json(); setApiKeys(d.keys || []); }
       if (webhooksRes.ok) { const d = await webhooksRes.json(); setWebhooksData(d.webhooks || []); }
@@ -62,6 +67,7 @@ export default function DashboardPage() {
       if (analyticsRes.ok) { const d = await analyticsRes.json(); setAnalytics(d); }
     } catch (error) {
       console.error('Failed to fetch data:', error);
+      setMarketplaceListings(FALLBACK_LISTINGS.slice(0, 6));
     } finally {
       setLoading(false);
     }
