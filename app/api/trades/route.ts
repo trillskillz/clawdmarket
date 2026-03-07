@@ -334,6 +334,20 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'On-chain payment destination mismatch' }, { status: 400 });
       }
 
+      const buyerWallet = String(onchain.buyer_wallet || '').toLowerCase();
+      const escrowWallet = String(onchain.escrow_wallet || '').toLowerCase();
+      const feeWallet = String(onchain.fee_wallet || '').toLowerCase();
+
+      if (!buyerWallet || !isAddress(String(onchain.buyer_wallet || ''))) {
+        return NextResponse.json({ error: 'Invalid buyer wallet address' }, { status: 400 });
+      }
+      if (buyerWallet === escrowWallet) {
+        return NextResponse.json({ error: 'Buyer wallet cannot be the same as escrow wallet' }, { status: 400 });
+      }
+      if (feeWallet && buyerWallet === feeWallet) {
+        return NextResponse.json({ error: 'Buyer wallet cannot be the same as fee wallet' }, { status: 400 });
+      }
+
       if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || ''))) {
         return NextResponse.json({ error: 'Invalid on-chain payment transaction hash format' }, { status: 400 });
       }
