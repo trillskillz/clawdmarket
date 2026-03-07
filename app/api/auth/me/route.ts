@@ -4,19 +4,32 @@ import { db } from '@/lib/db';
 import { users } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 
+async function getUserColumnNames(): Promise<Set<string>> {
+  const cols = new Set<string>();
+  try {
+    const rs = await (db as any).$client.execute({ sql: "PRAGMA table_info('users')", args: [] });
+    for (const row of rs?.rows || []) {
+      const name = String((row as any)?.name ?? (row as any)?.[1] ?? '').trim();
+      if (name) cols.add(name);
+    }
+  } catch (error) {
+    console.error('getUserColumnNames error:', error);
+  }
+  return cols;
+}
+
 async function ensureProfileColumns() {
   try {
-    const info = await db.$client.execute('PRAGMA table_info(users)');
-    const existing = new Set((info.rows ?? []).map((r) => String((r as { name?: unknown }).name)));
+    const existing = await getUserColumnNames();
 
     if (!existing.has('avatar_emoji')) {
-      await db.$client.execute('ALTER TABLE users ADD COLUMN avatar_emoji TEXT');
+      await (db as any).$client.execute({ sql: 'ALTER TABLE users ADD COLUMN avatar_emoji TEXT', args: [] });
     }
     if (!existing.has('avatar_url')) {
-      await db.$client.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+      await (db as any).$client.execute({ sql: 'ALTER TABLE users ADD COLUMN avatar_url TEXT', args: [] });
     }
     if (!existing.has('bio')) {
-      await db.$client.execute('ALTER TABLE users ADD COLUMN bio TEXT');
+      await (db as any).$client.execute({ sql: 'ALTER TABLE users ADD COLUMN bio TEXT', args: [] });
     }
   } catch (error) {
     console.error('ensureProfileColumns error:', error);
@@ -112,14 +125,30 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Avatar URL must start with http:// or https://' }, { status: 400 });
     }
 
-    await db
-      .update(users)
-      .set({
-        bio: normalizedBio !== undefined ? (normalizedBio || null) : undefined,
-        avatar_url: normalizedAvatarUrl !== undefined ? (normalizedAvatarUrl || null) : undefined,
-        avatar_emoji: normalizedAvatarEmoji !== undefined ? (normalizedAvatarEmoji || null) : undefined,
-      })
-      .where(eq(users.id, auth.userId));
+    const patchData: Record<string, any> = {
+      bio: normalizedBio !== undefined ? (normalizedBio || null) : undefined,
+      avatar_url: normalizedAvatarUrl !== undefined ? (normalizedAvatarUrl || null) : undefined,
+      avatar_emoji: normalizedAvatarEmoji !== undefined ? (normalizedAvatarEmoji || null) : undefined,
+    };
+
+    try {
+      await db
+        .update(users)
+        .set(patchData)
+        .where(eq(users.id, auth.userId));
+    } catch (err: any) {
+      const message = String(err?.message || '');
+      if (message.includes('no such column')) {
+        // One more best-effort schema sync + retry
+        await ensureProfileColumns();
+        await db
+          .update(users)
+          .set(patchData)
+          .where(eq(users.id, auth.userId));
+      } else {
+        throw err;
+      }
+    }
 
     const [updated] = await db
       .select({
