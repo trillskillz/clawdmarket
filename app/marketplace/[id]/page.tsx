@@ -285,7 +285,7 @@ export default function ListingDetailPage() {
       dev_amount: Number((listing.price_bankr * 0.05).toFixed(2)),
     };
 
-    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${preview.item_price} BANKR\nFee (5%): ${preview.platform_fee.toFixed(2)} BANKR\nTotal: ${preview.total_cost.toFixed(2)} BANKR\n\nYou will sign on-chain BANKR transfers to seller and dev wallet.`)) {
+    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${preview.item_price} BANKR\nFee (5%): ${preview.platform_fee.toFixed(2)} BANKR\nTotal: ${preview.total_cost.toFixed(2)} BANKR\n\nYou will sign a single on-chain BANKR payment transaction.`)) {
       return;
     }
 
@@ -298,28 +298,17 @@ export default function ListingDetailPage() {
         return;
       }
 
-      const sellerAmount = parseUnits(preview.seller_amount.toFixed(18), 18);
-      const devAmount = parseUnits(preview.dev_amount.toFixed(18), 18);
+      const totalAmount = parseUnits(preview.total_cost.toFixed(18), 18);
 
       const escrowTxHash = await writeContractAsync({
         chainId: base.id,
         address: bankrToken as `0x${string}`,
         abi: erc20Abi,
         functionName: 'transfer',
-        args: [escrowWallet as `0x${string}`, sellerAmount],
+        args: [escrowWallet as `0x${string}`, totalAmount],
       });
 
       await basePublicClient.waitForTransactionReceipt({ hash: escrowTxHash });
-
-      const feeTxHash = await writeContractAsync({
-        chainId: base.id,
-        address: bankrToken as `0x${string}`,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [devFeeWallet as `0x${string}`, devAmount],
-      });
-
-      await basePublicClient.waitForTransactionReceipt({ hash: feeTxHash });
 
       const csrfToken = getCsrfToken();
       const res = await fetch('/api/trades', {
@@ -340,7 +329,8 @@ export default function ListingDetailPage() {
             escrow_wallet: escrowWallet,
             fee_wallet: devFeeWallet,
             escrow_tx_hash: escrowTxHash,
-            fee_tx_hash: feeTxHash,
+            // Single payment tx now covers item + dev fee in one go.
+            fee_tx_hash: escrowTxHash,
           },
         }),
       });

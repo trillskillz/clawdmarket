@@ -265,9 +265,8 @@ export async function POST(req: NextRequest) {
     if (bodyPaymentMode === 'onchain') {
       const expectedToken = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '').trim().toLowerCase();
       const expectedEscrow = (process.env.ESCROW_WALLET_ADDRESS || process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS || '').trim().toLowerCase();
-      const expectedFeeWallet = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS || '').trim().toLowerCase();
 
-      if (!expectedToken || !expectedEscrow || !expectedFeeWallet) {
+      if (!expectedToken || !expectedEscrow) {
         return NextResponse.json(
           { error: 'On-chain payment is not configured on server' },
           { status: 500 }
@@ -280,17 +279,13 @@ export async function POST(req: NextRequest) {
 
       if (
         String(onchain.token_address || '').toLowerCase() !== expectedToken ||
-        String(onchain.escrow_wallet || '').toLowerCase() !== expectedEscrow ||
-        String(onchain.fee_wallet || '').toLowerCase() !== expectedFeeWallet
+        String(onchain.escrow_wallet || '').toLowerCase() !== expectedEscrow
       ) {
         return NextResponse.json({ error: 'On-chain payment destination mismatch' }, { status: 400 });
       }
 
       if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || ''))) {
-        return NextResponse.json({ error: 'Invalid on-chain seller payment transaction hash format' }, { status: 400 });
-      }
-      if (!TX_HASH_RE.test(String(onchain.fee_tx_hash || ''))) {
-        return NextResponse.json({ error: 'Invalid on-chain dev fee transaction hash format' }, { status: 400 });
+        return NextResponse.json({ error: 'Invalid on-chain payment transaction hash format' }, { status: 400 });
       }
 
       const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
@@ -320,7 +315,8 @@ export async function POST(req: NextRequest) {
             seller_amount: sellerAmount,
             dev_amount: devAmount,
             dev_wallet: devWalletAddress,
-            fee_tx_hash: onchain.fee_tx_hash,
+            // Single on-chain payment tx covers item + dev fee.
+            fee_tx_hash: onchain.fee_tx_hash || onchain.escrow_tx_hash,
             payout_status: 'seller_paid',
             status: 'pending',
           })
@@ -332,7 +328,7 @@ export async function POST(req: NextRequest) {
           amount: sellerAmount,
           type: 'transfer',
           reference_id: trade.id,
-          memo: `On-chain seller transfer (${onchain.escrow_tx_hash})`,
+          memo: `On-chain escrow payment (single tx: ${onchain.escrow_tx_hash})`,
         });
 
         if (devAmount > 0) {
@@ -349,7 +345,7 @@ export async function POST(req: NextRequest) {
             amount: devAmount,
             type: 'fee',
             reference_id: trade.id,
-            memo: `On-chain dev fee transfer (${onchain.fee_tx_hash})`,
+            memo: `On-chain dev fee allocation (single tx: ${onchain.escrow_tx_hash})`,
           });
         }
 
@@ -377,8 +373,9 @@ export async function POST(req: NextRequest) {
             admin_fee_wallet_configured: Boolean(process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS),
           },
           onchain_receipts: {
+            payment_tx_hash: onchain.escrow_tx_hash,
             escrow_tx_hash: onchain.escrow_tx_hash,
-            fee_tx_hash: onchain.fee_tx_hash,
+            fee_tx_hash: onchain.fee_tx_hash || onchain.escrow_tx_hash,
           },
           ...envMeta('clawdmarket/api/trades'),
         },
