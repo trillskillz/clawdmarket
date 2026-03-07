@@ -7,26 +7,18 @@ import { isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
-
-function isAdminUser(userId: string) {
-  const list = (process.env.ADMIN_USER_IDS || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return list.includes(userId);
-}
+import { authorizeAdmin } from '@/lib/admin-auth';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
 
-  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authError = authorizeAdmin(auth ? { userId: auth.userId, email: auth.email } : null);
+  if (authError) return authError;
+
   if (!authHeader && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
-  }
-  if (!isAdminUser(auth.userId)) {
-    return NextResponse.json({ error: 'Forbidden (admin only)' }, { status: 403 });
   }
   if (!isValidUUID(params.id)) return NextResponse.json({ error: 'Invalid dispute ID' }, { status: 400 });
 

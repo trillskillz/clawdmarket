@@ -8,6 +8,28 @@ import { db } from '@/lib/db';
 import { contract_milestones, contracts, listings, trades, transactions, users, wallets } from '@/lib/schema';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 
+async function ensureTradeFeeColumns() {
+  const statements = [
+    "ALTER TABLE trades ADD COLUMN item_price real DEFAULT 0 NOT NULL",
+    "ALTER TABLE trades ADD COLUMN platform_fee real DEFAULT 0 NOT NULL",
+    "ALTER TABLE trades ADD COLUMN total_cost real DEFAULT 0 NOT NULL",
+    "ALTER TABLE trades ADD COLUMN seller_amount real DEFAULT 0 NOT NULL",
+    "ALTER TABLE trades ADD COLUMN dev_amount real DEFAULT 0 NOT NULL",
+    "ALTER TABLE trades ADD COLUMN dev_wallet text",
+    "ALTER TABLE trades ADD COLUMN fee_tx_hash text",
+    "ALTER TABLE trades ADD COLUMN payout_status text DEFAULT 'pending' NOT NULL",
+  ];
+
+  for (const sql of statements) {
+    try {
+      await db.$client.execute(sql);
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      if (/duplicate column name|already exists/i.test(msg)) continue;
+    }
+  }
+}
+
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 const DEV_FEE_PERCENT = 0.05;
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
@@ -37,6 +59,8 @@ export async function POST(req: NextRequest) {
   if (!authHeader && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
+
+  await ensureTradeFeeColumns();
 
   try {
     const body = await req.json();

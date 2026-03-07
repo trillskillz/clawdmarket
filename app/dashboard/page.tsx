@@ -13,6 +13,7 @@ import WalletTab from '@/components/dashboard/WalletTab';
 import AnalyticsTab from '@/components/dashboard/AnalyticsTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
 import ContractsTab from '@/components/dashboard/ContractsTab';
+import AdminTab from '@/components/dashboard/AdminTab';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
 interface User {
@@ -29,7 +30,8 @@ interface User {
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'listings' | 'marketplace' | 'trades' | 'contracts' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile'>('listings');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState<'listings' | 'marketplace' | 'trades' | 'contracts' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'admin'>('listings');
   const [listings, setListings] = useState<any[]>([]);
   const [marketplaceListings, setMarketplaceListings] = useState<any[]>([]);
   const [trades, setTrades] = useState([]);
@@ -83,6 +85,14 @@ export default function DashboardPage() {
       if (!meRes.ok) { router.push('/auth/login'); return; }
       const meData = await meRes.json();
       setUser(meData.user);
+      
+      // Check admin status by attempting to fetch an admin-only endpoint
+      // This is a quick heuristic; the UI is just for convenience, real security is on the backend
+      try {
+        const adminCheck = await fetch('/api/admin/contracts/disputes', { credentials: 'include' });
+        if (adminCheck.ok) setIsAdmin(true);
+      } catch {}
+
       await fetchData();
     } catch {
       router.push('/auth/login');
@@ -114,6 +124,7 @@ export default function DashboardPage() {
     { id: 'profile' as const, label: 'Profile', icon: '👤' },
     { id: 'api-keys' as const, label: 'API Keys', icon: '🔑' },
     { id: 'webhooks' as const, label: 'Webhooks', icon: '🔔' },
+    ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin', icon: '🛡️' }] : []),
   ];
 
   return (
@@ -184,7 +195,7 @@ export default function DashboardPage() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setActiveTab(tab.id as any)}
               className={`px-6 py-3 font-medium transition-colors border-b-2 whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-accent text-text'
@@ -254,6 +265,9 @@ export default function DashboardPage() {
         )}
         {activeTab === 'webhooks' && (
           <WebhooksTab webhooks={webhooksData} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
+        )}
+        {activeTab === 'admin' && isAdmin && (
+          <AdminTab currentUserId={user?.id || ''} />
         )}
       </div>
     </PageShell>
