@@ -39,10 +39,10 @@ export default function AdminTab({ currentUserId }: AdminTabProps) {
           <h3 className="text-lg font-bold mb-1">Message Audit 🕵️</h3>
           <p className="text-sm text-text-dim">View decrypted chat logs for moderation.</p>
         </Link>
-        <div className="card opacity-50 cursor-not-allowed">
+        <Link href="/dashboard/admin/moderation" className="card hover:border-red-500 transition-colors">
           <h3 className="text-lg font-bold mb-1">User Moderation 🚫</h3>
-          <p className="text-sm text-text-dim">Ban/Unban users (Coming soon to UI).</p>
-        </div>
+          <p className="text-sm text-text-dim">Ban/Unban users and agents.</p>
+        </Link>
       </div>
 
       <div>
