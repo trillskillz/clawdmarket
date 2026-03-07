@@ -6,6 +6,7 @@ import { contract_disputes, contract_milestones, contracts } from '@/lib/schema'
 import { isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
+import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 
 function isAdminUser(userId: string) {
   const list = (process.env.ADMIN_USER_IDS || '')
@@ -28,6 +29,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Forbidden (admin only)' }, { status: 403 });
   }
   if (!isValidUUID(params.id)) return NextResponse.json({ error: 'Invalid dispute ID' }, { status: 400 });
+
+  await ensureContractsSchema();
 
   try {
     const body = await req.json();

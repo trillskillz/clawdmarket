@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { contract_milestones, contracts } from '@/lib/schema';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
+import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 
 function isAuthorized(req: NextRequest) {
   const expected = process.env.MAINTENANCE_SECRET || '';
@@ -18,6 +19,8 @@ export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  await ensureContractsSchema();
 
   const now = new Date();
   let expiredContracts = 0;

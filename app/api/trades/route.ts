@@ -14,6 +14,7 @@ import { validateAgentInstruction } from '@/lib/agent-security';
 import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
+import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
@@ -190,6 +191,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const validated = createTradeSchema.parse(body);
+
+    if (CONTRACTS_V1_ENABLED) {
+      await ensureContractsSchema();
+    }
 
     // Fetch listing (materialize seeded fallback listings when needed)
     let [listing]: any = await db

@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { contract_milestones, contracts, listings } from '@/lib/schema';
 import { createContractSchema } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
+import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  await ensureContractsSchema();
 
   const rows = await db
     .select()
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  await ensureContractsSchema();
   if (!authHeader && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
