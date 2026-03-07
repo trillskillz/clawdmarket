@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { listings } from '@/lib/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
 const DEV_FEE_PERCENT = 0.05;
@@ -20,10 +20,32 @@ export async function POST(req: NextRequest) {
 
     let [listing] = await db.select({ id: listings.id, price_bankr: listings.price_bankr }).from(listings).where(eq(listings.id, listingId)).limit(1);
 
+    if ((!listing || !Number.isFinite(Number(listing.price_bankr))) && listingId) {
+      try {
+        const [legacyClawd] = await db
+          .select({ id: listings.id, price_bankr: sql<number>`CAST(${sql.raw('price_clawd')} AS REAL)` })
+          .from(listings)
+          .where(eq(listings.id, listingId))
+          .limit(1);
+        if (legacyClawd && Number.isFinite(Number(legacyClawd.price_bankr))) listing = legacyClawd as any;
+      } catch {}
+
+      if (!listing || !Number.isFinite(Number(listing.price_bankr))) {
+        try {
+          const [legacyPrice] = await db
+            .select({ id: listings.id, price_bankr: sql<number>`CAST(${sql.raw('price')} AS REAL)` })
+            .from(listings)
+            .where(eq(listings.id, listingId))
+            .limit(1);
+          if (legacyPrice && Number.isFinite(Number(legacyPrice.price_bankr))) listing = legacyPrice as any;
+        } catch {}
+      }
+    }
+
     if (!listing && listingId.startsWith('fb-')) {
       const fallback = FALLBACK_LISTINGS.find((l) => l.id === listingId);
       if (fallback) {
-        listing = { id: fallback.id, price_bankr: fallback.price_bankr };
+        listing = { id: fallback.id, price_bankr: fallback.price_bankr } as any;
       }
     }
 
@@ -32,6 +54,9 @@ export async function POST(req: NextRequest) {
     }
 
     const item_price = Number(listing.price_bankr);
+    if (!Number.isFinite(item_price)) {
+      return NextResponse.json({ error: 'Listing price unavailable' }, { status: 500 });
+    }
     const platform_fee = round2(item_price * DEV_FEE_PERCENT);
     const total_cost = round2(item_price + platform_fee);
 
