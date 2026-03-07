@@ -21,6 +21,50 @@ const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 const DEV_FEE_PERCENT = 0.05; // 5% fee
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 
+async function tryCreateContractForTrade(params: {
+  listingId: string;
+  buyerId: string;
+  sellerId: string;
+  sellerAmount: number;
+  devAmount: number;
+  totalCost: number;
+}) {
+  if (!CONTRACTS_V1_ENABLED) return;
+
+  try {
+    await ensureContractsSchema();
+    await db.transaction(async (tx) => {
+      const [contract] = await tx
+        .insert(contracts)
+        .values({
+          buyer_id: params.buyerId,
+          seller_id: params.sellerId,
+          listing_id: params.listingId,
+          total_amount: params.sellerAmount,
+          fee_amount: params.devAmount,
+          escrow_amount: params.totalCost,
+          state: 'IN_PROGRESS',
+          current_milestone_index: 0,
+        })
+        .returning();
+
+      await tx.insert(contract_milestones).values({
+        contract_id: contract.id,
+        milestone_index: 0,
+        title: 'Deliver service output',
+        amount: params.sellerAmount,
+        acceptance_spec: JSON.stringify({
+          required_artifacts: ['delivery_summary'],
+          notes: 'Seller must submit delivery artifacts. Buyer approves/rejects in dashboard.',
+        }),
+        state: 'ACTIVE',
+      });
+    });
+  } catch (e) {
+    console.error('contract creation non-fatal error:', e);
+  }
+}
+
 function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
@@ -328,34 +372,6 @@ export async function POST(req: NextRequest) {
           })
           .returning();
 
-        if (CONTRACTS_V1_ENABLED) {
-          const [contract] = await tx
-            .insert(contracts)
-            .values({
-              buyer_id: auth.userId,
-              seller_id: listing.seller_id,
-              listing_id: validated.listing_id,
-              total_amount: sellerAmount,
-              fee_amount: devAmount,
-              escrow_amount: totalCost,
-              state: 'IN_PROGRESS',
-              current_milestone_index: 0,
-            })
-            .returning();
-
-          await tx.insert(contract_milestones).values({
-            contract_id: contract.id,
-            milestone_index: 0,
-            title: 'Deliver service output',
-            amount: sellerAmount,
-            acceptance_spec: JSON.stringify({
-              required_artifacts: ['delivery_summary'],
-              notes: 'Seller must submit delivery artifacts. Buyer approves/rejects in dashboard.',
-            }),
-            state: 'ACTIVE',
-          });
-        }
-
         await tx.insert(transactions).values({
           from_user_id: auth.userId,
           to_user_id: listing.seller_id,
@@ -384,6 +400,15 @@ export async function POST(req: NextRequest) {
         }
 
         return trade;
+      });
+
+      await tryCreateContractForTrade({
+        listingId: validated.listing_id,
+        buyerId: auth.userId,
+        sellerId: listing.seller_id,
+        sellerAmount,
+        devAmount,
+        totalCost,
       });
 
       Promise.all([
@@ -503,34 +528,6 @@ export async function POST(req: NextRequest) {
         })
         .returning();
 
-      if (CONTRACTS_V1_ENABLED) {
-        const [contract] = await tx
-          .insert(contracts)
-          .values({
-            buyer_id: auth.userId,
-            seller_id: listing.seller_id,
-            listing_id: validated.listing_id,
-            total_amount: sellerAmount,
-            fee_amount: devAmount,
-            escrow_amount: totalCost,
-            state: 'IN_PROGRESS',
-            current_milestone_index: 0,
-          })
-          .returning();
-
-        await tx.insert(contract_milestones).values({
-          contract_id: contract.id,
-          milestone_index: 0,
-          title: 'Deliver service output',
-          amount: sellerAmount,
-          acceptance_spec: JSON.stringify({
-            required_artifacts: ['delivery_summary'],
-            notes: 'Seller must submit delivery artifacts. Buyer approves/rejects in dashboard.',
-          }),
-          state: 'ACTIVE',
-        });
-      }
-
       // Record transaction: Lock funds
       await tx.insert(transactions).values({
         from_user_id: auth.userId,
@@ -564,6 +561,15 @@ export async function POST(req: NextRequest) {
       return trade;
     });
     // ─── ESCROW LOGIC END ───
+
+    await tryCreateContractForTrade({
+      listingId: validated.listing_id,
+      buyerId: auth.userId,
+      sellerId: listing.seller_id,
+      sellerAmount,
+      devAmount,
+      totalCost,
+    });
 
     // Fire webhooks (fire-and-forget, don't block response)
     Promise.all([
