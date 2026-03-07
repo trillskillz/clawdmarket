@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users, wallets, transactions, fee_errors } from '@/lib/schema';
+import { trades, listings, users, wallets, transactions, fee_errors, contracts, contract_milestones } from '@/lib/schema';
 import { authenticateRequest, hashPassword } from '@/lib/auth';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
@@ -322,6 +322,32 @@ export async function POST(req: NextRequest) {
           })
           .returning();
 
+        const [contract] = await tx
+          .insert(contracts)
+          .values({
+            buyer_id: auth.userId,
+            seller_id: listing.seller_id,
+            listing_id: validated.listing_id,
+            total_amount: sellerAmount,
+            fee_amount: devAmount,
+            escrow_amount: totalCost,
+            state: 'IN_PROGRESS',
+            current_milestone_index: 0,
+          })
+          .returning();
+
+        await tx.insert(contract_milestones).values({
+          contract_id: contract.id,
+          milestone_index: 0,
+          title: 'Deliver service output',
+          amount: sellerAmount,
+          acceptance_spec: JSON.stringify({
+            required_artifacts: ['delivery_summary'],
+            notes: 'Seller must submit delivery artifacts. Buyer approves/rejects in dashboard.',
+          }),
+          state: 'ACTIVE',
+        });
+
         await tx.insert(transactions).values({
           from_user_id: auth.userId,
           to_user_id: listing.seller_id,
@@ -468,6 +494,32 @@ export async function POST(req: NextRequest) {
           status: 'pending',
         })
         .returning();
+
+      const [contract] = await tx
+        .insert(contracts)
+        .values({
+          buyer_id: auth.userId,
+          seller_id: listing.seller_id,
+          listing_id: validated.listing_id,
+          total_amount: sellerAmount,
+          fee_amount: devAmount,
+          escrow_amount: totalCost,
+          state: 'IN_PROGRESS',
+          current_milestone_index: 0,
+        })
+        .returning();
+
+      await tx.insert(contract_milestones).values({
+        contract_id: contract.id,
+        milestone_index: 0,
+        title: 'Deliver service output',
+        amount: sellerAmount,
+        acceptance_spec: JSON.stringify({
+          required_artifacts: ['delivery_summary'],
+          notes: 'Seller must submit delivery artifacts. Buyer approves/rejects in dashboard.',
+        }),
+        state: 'ACTIVE',
+      });
 
       // Record transaction: Lock funds
       await tx.insert(transactions).values({
