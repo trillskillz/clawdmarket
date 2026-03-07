@@ -71,6 +71,36 @@ export const updateTradeStatusSchema = z.object({
   status: z.enum(['completed', 'complete', 'disputed']),
 });
 
+export const createContractSchema = z.object({
+  seller_id: z.string().uuid().optional(),
+  listing_id: z.string().optional(),
+  fee_percent: z.number().min(0).max(0.2).optional().default(0.05),
+  expires_in_hours: z.number().int().min(1).max(24 * 30).optional().default(72),
+  milestones: z.array(z.object({
+    title: z.string().min(3).max(120),
+    amount: z.number().positive(),
+    deadline_in_hours: z.number().int().min(1).max(24 * 30).optional(),
+    review_window_hours: z.number().int().min(1).max(24 * 14).optional().default(24),
+    acceptance_spec: z.object({
+      required_artifacts: z.array(z.string().min(1)).optional().default([]),
+      notes: z.string().max(2000).optional(),
+    }).passthrough().optional().default({ required_artifacts: [] }),
+  })).min(1).max(20),
+});
+
+export const contractActionSchema = z.object({
+  action: z.enum(['fund', 'start', 'cancel', 'expire']),
+});
+
+export const milestoneActionSchema = z.object({
+  action: z.enum(['submit', 'approve', 'request_changes', 'mark_paid', 'open_dispute', 'resolve_dispute']),
+  artifact_bundle: z.record(z.any()).optional(),
+  reason_code: z.string().max(120).optional(),
+  evidence: z.record(z.any()).optional(),
+  ruling: z.enum(['buyer_win', 'seller_win', 'split', 'redo']).optional(),
+  split_percent_to_seller: z.number().min(0).max(100).optional(),
+});
+
 function isPrivateIP(ip: string): boolean {
   const parts = ip.split('.').map(Number);
   if (parts.length === 4 && parts.every(p => p >= 0 && p <= 255)) {
