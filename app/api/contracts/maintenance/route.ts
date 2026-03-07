@@ -7,8 +7,11 @@ import { nextContractStateFromMilestones } from '@/lib/contracts-state';
 function isAuthorized(req: NextRequest) {
   const expected = process.env.MAINTENANCE_SECRET || '';
   if (!expected) return false;
-  const got = req.headers.get('x-maintenance-secret') || '';
-  return got === expected;
+  const gotHeader = req.headers.get('x-maintenance-secret') || '';
+  const gotQuery = req.nextUrl.searchParams.get('secret') || '';
+  const authz = req.headers.get('authorization') || '';
+  const bearer = authz.startsWith('Bearer ') ? authz.slice(7) : '';
+  return gotHeader === expected || gotQuery === expected || bearer === expected;
 }
 
 export async function POST(req: NextRequest) {
