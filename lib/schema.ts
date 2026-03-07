@@ -11,6 +11,7 @@ export const users = sqliteTable('users', {
   avatar_url: text('avatar_url'),
   avatar_emoji: text('avatar_emoji'),
   is_banned: integer('is_banned', { mode: 'boolean' }).default(false),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
