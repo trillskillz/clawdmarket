@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { desc, eq, inArray, or } from 'drizzle-orm';
+import { desc, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { messages, users } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { authorizeAdmin } from '@/lib/admin-auth';
-// No decryptMessage import because server-side we only store encrypted. 
-// Wait, the previous code *attempted* to decrypt.
-// But decryptMessage is usually client-side with user keys. 
-// If we have an "Admin Audit" feature that decrypts, it implies we have access to keys or it's not E2E encrypted in a way that prevents admin access.
-// Let's assume the previous implementation had a way or was just a placeholder.
-// Checking `clawdmarket/lib/chat-crypto.ts`...
+
+// We should implement or use a decryption utility if we want to show readable messages.
+// For now, we'll return the raw encrypted content or a placeholder.
+// The frontend can handle decryption if it has keys, but admin audit usually implies server-side decryption if possible.
+// Given the previous error was just about the property name, let's fix that first.
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +26,8 @@ export async function GET(req: NextRequest) {
         id: messages.id,
         sender_id: messages.sender_id,
         receiver_id: messages.receiver_id,
-        content: messages.content, // Assuming content is stored readable or we return it raw
+        encrypted_content: messages.encrypted_content, // Correct column name
+        nonce: messages.nonce,
         created_at: messages.created_at,
       })
       .from(messages)
@@ -49,7 +49,11 @@ export async function GET(req: NextRequest) {
     const result = rows.map(r => ({
       id: r.id,
       created_at: r.created_at,
-      content: r.content, // Return raw content for now
+      content: r.encrypted_content, // Map encrypted_content to content for frontend consistency, or handle in frontend
+      // Ideally we decrypt here if we have the key, otherwise send raw.
+      // Let's send raw for now to fix the build.
+      encrypted_content: r.encrypted_content,
+      nonce: r.nonce,
       sender: userMap.get(r.sender_id) || { id: r.sender_id, name: 'Unknown' },
       receiver: userMap.get(r.receiver_id) || { id: r.receiver_id, name: 'Unknown' }
     }));
