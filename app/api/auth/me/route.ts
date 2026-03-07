@@ -4,6 +4,25 @@ import { db } from '@/lib/db';
 import { users } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 
+async function ensureProfileColumns() {
+  try {
+    const info = await db.$client.execute('PRAGMA table_info(users)');
+    const existing = new Set((info.rows ?? []).map((r) => String((r as { name?: unknown }).name)));
+
+    if (!existing.has('avatar_emoji')) {
+      await db.$client.execute('ALTER TABLE users ADD COLUMN avatar_emoji TEXT');
+    }
+    if (!existing.has('avatar_url')) {
+      await db.$client.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+    }
+    if (!existing.has('bio')) {
+      await db.$client.execute('ALTER TABLE users ADD COLUMN bio TEXT');
+    }
+  } catch (error) {
+    console.error('ensureProfileColumns error:', error);
+  }
+}
+
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
@@ -17,6 +36,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    await ensureProfileColumns();
+
     const [user] = await db
       .select({
         id: users.id,
@@ -71,23 +92,32 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
+    await ensureProfileColumns();
+
     const body = await req.json();
     const { bio, avatar_url, avatar_emoji } = body;
 
+    const normalizedBio = typeof bio === 'string' ? bio.trim() : undefined;
+    const normalizedAvatarUrl = typeof avatar_url === 'string' ? avatar_url.trim() : undefined;
+    const normalizedAvatarEmoji = typeof avatar_emoji === 'string' ? avatar_emoji.trim() : undefined;
+
     // Validate (basic)
-    if (bio && bio.length > 500) {
+    if (normalizedBio && normalizedBio.length > 500) {
       return NextResponse.json({ error: 'Bio too long (max 500 chars)' }, { status: 400 });
     }
-    if (avatar_emoji && avatar_emoji.length > 4) { // Allow composite emojis
-       return NextResponse.json({ error: 'Invalid emoji' }, { status: 400 });
+    if (normalizedAvatarEmoji && normalizedAvatarEmoji.length > 8) { // allow composed emoji sequences
+      return NextResponse.json({ error: 'Invalid emoji' }, { status: 400 });
+    }
+    if (normalizedAvatarUrl && !/^https?:\/\//i.test(normalizedAvatarUrl)) {
+      return NextResponse.json({ error: 'Avatar URL must start with http:// or https://' }, { status: 400 });
     }
 
     await db
       .update(users)
       .set({
-        bio: bio !== undefined ? bio : undefined,
-        avatar_url: avatar_url !== undefined ? avatar_url : undefined,
-        avatar_emoji: avatar_emoji !== undefined ? avatar_emoji : undefined,
+        bio: normalizedBio !== undefined ? (normalizedBio || null) : undefined,
+        avatar_url: normalizedAvatarUrl !== undefined ? (normalizedAvatarUrl || null) : undefined,
+        avatar_emoji: normalizedAvatarEmoji !== undefined ? (normalizedAvatarEmoji || null) : undefined,
       })
       .where(eq(users.id, auth.userId));
 
