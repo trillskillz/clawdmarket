@@ -271,6 +271,65 @@ export const fee_errors = sqliteTable('fee_errors', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+export const contracts = sqliteTable('contracts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  listing_id: text('listing_id').references(() => listings.id, { onDelete: 'set null' }),
+  total_amount: real('total_amount').notNull(),
+  fee_amount: real('fee_amount').notNull().default(0),
+  escrow_amount: real('escrow_amount').notNull().default(0),
+  state: text('state', {
+    enum: ['DRAFT', 'FUNDED', 'IN_PROGRESS', 'AWAITING_REVIEW', 'DISPUTED', 'COMPLETED', 'CANCELED', 'EXPIRED', 'REFUNDED'],
+  }).notNull().default('DRAFT'),
+  expires_at: integer('expires_at', { mode: 'timestamp' }),
+  current_milestone_index: integer('current_milestone_index').notNull().default(0),
+  dispute_id: text('dispute_id'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const contract_milestones = sqliteTable('contract_milestones', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),
+  milestone_index: integer('milestone_index').notNull(),
+  title: text('title').notNull(),
+  amount: real('amount').notNull(),
+  acceptance_spec: text('acceptance_spec').notNull(),
+  deadline_at: integer('deadline_at', { mode: 'timestamp' }),
+  review_window_hours: integer('review_window_hours').notNull().default(24),
+  state: text('state', {
+    enum: ['PENDING', 'ACTIVE', 'SUBMITTED', 'AUTO_FAILED', 'AWAITING_BUYER_REVIEW', 'CHANGES_REQUESTED', 'APPROVED', 'PAID', 'DISPUTED', 'REFUNDED'],
+  }).notNull().default('PENDING'),
+  submission_id: text('submission_id'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const contract_submissions = sqliteTable('contract_submissions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  milestone_id: text('milestone_id').notNull().references(() => contract_milestones.id, { onDelete: 'cascade' }),
+  submitted_by: text('submitted_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  artifact_bundle: text('artifact_bundle').notNull(),
+  auto_check_result: text('auto_check_result', { enum: ['pass', 'fail', 'inconclusive'] }).notNull().default('inconclusive'),
+  auto_check_report: text('auto_check_report').notNull(),
+  submitted_at: integer('submitted_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const contract_disputes = sqliteTable('contract_disputes', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),
+  milestone_id: text('milestone_id').references(() => contract_milestones.id, { onDelete: 'set null' }),
+  raised_by: text('raised_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  reason_code: text('reason_code').notNull(),
+  evidence: text('evidence').notNull(),
+  state: text('state', { enum: ['open', 'under_review', 'resolved'] }).notNull().default('open'),
+  ruling: text('ruling', { enum: ['buyer_win', 'seller_win', 'split', 'redo'] }),
+  resolved_at: integer('resolved_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 export type Wallet = typeof wallets.$inferSelect;
 export type NewWallet = typeof wallets.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;
@@ -283,3 +342,11 @@ export type EventStreamRow = typeof event_stream.$inferSelect;
 export type NewEventStreamRow = typeof event_stream.$inferInsert;
 export type FeeError = typeof fee_errors.$inferSelect;
 export type NewFeeError = typeof fee_errors.$inferInsert;
+export type Contract = typeof contracts.$inferSelect;
+export type NewContract = typeof contracts.$inferInsert;
+export type ContractMilestone = typeof contract_milestones.$inferSelect;
+export type NewContractMilestone = typeof contract_milestones.$inferInsert;
+export type ContractSubmission = typeof contract_submissions.$inferSelect;
+export type NewContractSubmission = typeof contract_submissions.$inferInsert;
+export type ContractDispute = typeof contract_disputes.$inferSelect;
+export type NewContractDispute = typeof contract_disputes.$inferInsert;

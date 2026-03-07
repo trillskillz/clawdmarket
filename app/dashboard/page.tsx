@@ -12,6 +12,7 @@ import PriceWithKas from '@/components/PriceWithKas';
 import WalletTab from '@/components/dashboard/WalletTab';
 import AnalyticsTab from '@/components/dashboard/AnalyticsTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
+import ContractsTab from '@/components/dashboard/ContractsTab';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
 interface User {
@@ -28,11 +29,12 @@ interface User {
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'listings' | 'marketplace' | 'trades' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'marketplace' | 'trades' | 'contracts' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile'>('listings');
   const [listings, setListings] = useState<any[]>([]);
   const [marketplaceListings, setMarketplaceListings] = useState<any[]>([]);
   const [trades, setTrades] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
+  const [contracts, setContracts] = useState([]);
   const [webhooksData, setWebhooksData] = useState([]);
   const [wallet, setWallet] = useState(null);
   const [analytics, setAnalytics] = useState(null);
@@ -44,10 +46,11 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [listingsRes, marketplaceRes, tradesRes, apiKeysRes, webhooksRes, walletRes, analyticsRes] = await Promise.all([
+      const [listingsRes, marketplaceRes, tradesRes, contractsRes, apiKeysRes, webhooksRes, walletRes, analyticsRes] = await Promise.all([
         fetch('/api/listings?seller=me', { credentials: 'include' }),
         fetch('/api/listings?status=active&limit=6', { credentials: 'include' }),
         fetch('/api/trades', { credentials: 'include' }),
+        fetch('/api/contracts', { credentials: 'include' }),
         fetch('/api/auth/api-keys', { credentials: 'include' }),
         fetch('/api/webhooks', { credentials: 'include' }),
         fetch('/api/wallet', { credentials: 'include' }),
@@ -61,6 +64,7 @@ export default function DashboardPage() {
         setMarketplaceListings(live.length > 0 ? live : FALLBACK_LISTINGS.slice(0, 6));
       }
       if (tradesRes.ok) { const d = await tradesRes.json(); setTrades(d.trades || []); }
+      if (contractsRes.ok) { const d = await contractsRes.json(); setContracts(d.contracts || []); }
       if (apiKeysRes.ok) { const d = await apiKeysRes.json(); setApiKeys(d.keys || []); }
       if (webhooksRes.ok) { const d = await webhooksRes.json(); setWebhooksData(d.webhooks || []); }
       if (walletRes.ok) { const d = await walletRes.json(); setWallet(d); }
@@ -104,6 +108,7 @@ export default function DashboardPage() {
     { id: 'listings' as const, label: 'My Listings', icon: '📋' },
     { id: 'marketplace' as const, label: 'Marketplace', icon: '🛒' },
     { id: 'trades' as const, label: 'Trade History', icon: '🤝' },
+    { id: 'contracts' as const, label: 'Contracts', icon: '📑' },
     { id: 'wallet' as const, label: 'Wallet', icon: '💳' },
     { id: 'analytics' as const, label: 'Analytics', icon: '📊' },
     { id: 'profile' as const, label: 'Profile', icon: '👤' },
@@ -226,6 +231,9 @@ export default function DashboardPage() {
         )}
         {activeTab === 'trades' && (
           <TradesTab trades={trades} loading={loading} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
+        )}
+        {activeTab === 'contracts' && (
+          <ContractsTab contracts={contracts as any[]} loading={loading} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'wallet' && (
           <WalletTab wallet={wallet} loading={loading} />
