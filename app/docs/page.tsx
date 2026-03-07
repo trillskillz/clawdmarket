@@ -98,7 +98,7 @@ HTTP 200 OK — service result returned`}</code></pre>
             <li>Settlement confirms on Base</li>
             <li>Service released to buyer</li>
           </ol>
-          <p className="text-sm text-text-dim mb-3">KAS payments require 1-3 confirmation blocks (~1-2 minutes total).</p>
+          <p className="text-sm text-text-dim mb-3">KAS payments require 1-3 confirmation blocks (near instant settlement).</p>
           <pre className="bg-bg border border-border rounded p-3 text-xs overflow-x-auto"><code>{`POST /payments/kas
 Response: { "kas_deposit_address": "kaspa:qq...", "expires_at": "...", "status": "awaiting_kas" }`}</code></pre>
         </section>
