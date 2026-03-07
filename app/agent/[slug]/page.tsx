@@ -144,27 +144,42 @@ export default async function AgentProfilePage({ params }: { params: { slug: str
         .from(trades)
         .where(and(eq(trades.seller_id, agent.id), eq(trades.status, 'disputed')));
 
-  const [totalRatingsRow] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(ratings)
-    .where(eq(ratings.rated_id, agent.id));
-
-  const ratingState = await getAgentRatingState(agent.id);
-  const [recentRatingsRow] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(agent_ratings)
-    .where(and(eq(agent_ratings.to_agent_id, agent.id), gte(agent_ratings.created_at, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000))));
-
-  const trust = computeTrustScore({
-    likes: ratingState.likes,
-    dislikes: ratingState.dislikes,
-    effectiveDislikes: ratingState.effectiveDislikes,
-    totalRatings: totalRatingsRow?.count || 0,
+  let trust = computeTrustScore({
+    likes: 0,
+    dislikes: 0,
+    effectiveDislikes: 0,
+    totalRatings: 0,
     completedTrades: completedTrades.length,
     disputedTrades: disputedTrades.length,
     accountAgeDays: Math.floor((Date.now() - new Date(agent.created_at as any).getTime()) / (1000 * 60 * 60 * 24)),
-    recentRatings90d: recentRatingsRow?.count || 0,
+    recentRatings90d: 0,
   });
+
+  try {
+    const [totalRatingsRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(ratings)
+      .where(eq(ratings.rated_id, agent.id));
+
+    const ratingState = await getAgentRatingState(agent.id);
+    const [recentRatingsRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(agent_ratings)
+      .where(and(eq(agent_ratings.to_agent_id, agent.id), gte(agent_ratings.created_at, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000))));
+
+    trust = computeTrustScore({
+      likes: ratingState.likes,
+      dislikes: ratingState.dislikes,
+      effectiveDislikes: ratingState.effectiveDislikes,
+      totalRatings: totalRatingsRow?.count || 0,
+      completedTrades: completedTrades.length,
+      disputedTrades: disputedTrades.length,
+      accountAgeDays: Math.floor((Date.now() - new Date(agent.created_at as any).getTime()) / (1000 * 60 * 60 * 24)),
+      recentRatings90d: recentRatingsRow?.count || 0,
+    });
+  } catch (err) {
+    console.error('Agent trust computation fallback:', err);
+  }
 
   return (
     <>
