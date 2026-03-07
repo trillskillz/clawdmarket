@@ -86,4 +86,90 @@ test.describe('API lifecycle matrix', () => {
     expect(preview.seller_amount).toBe(1200);
     expect(preview.dev_amount).toBe(60);
   });
+
+  test('contracts lifecycle via trade auto-create', async ({ request }) => {
+    const sellerToken = await loginToken(request, 'jacob@example.com', 'password123');
+    const buyerToken = await loginToken(request, 'maya@startup.io', 'password123');
+
+    const listingTitle = `PW Contract Listing ${Date.now()}`;
+
+    const listingRes = await request.post('/api/listings', {
+      headers: {
+        Authorization: `Bearer ${sellerToken}`,
+        'Content-Type': 'application/json',
+      },
+      data: {
+        category: 'skills',
+        title: listingTitle,
+        description: 'Listing to validate auto contract + milestone lifecycle.',
+        price_bankr: 100,
+      },
+    });
+
+    expect(listingRes.status()).toBe(201);
+    const listingBody = await listingRes.json();
+    const listingId = listingBody.listing?.id;
+    expect(listingId).toBeTruthy();
+
+    const tradeRes = await request.post('/api/trades', {
+      headers: {
+        Authorization: `Bearer ${buyerToken}`,
+        'Content-Type': 'application/json',
+      },
+      data: {
+        listing_id: listingId,
+        amount: 1,
+      },
+    });
+
+    expect(tradeRes.status()).toBe(201);
+
+    const contractsRes = await request.get('/api/contracts', {
+      headers: { Authorization: `Bearer ${buyerToken}` },
+    });
+    expect(contractsRes.ok()).toBeTruthy();
+    const contractsJson = await contractsRes.json();
+    const contract = (contractsJson.contracts || []).find((c: any) => c.listing_id === listingId);
+    expect(contract?.id).toBeTruthy();
+
+    const detailRes = await request.get(`/api/contracts/${contract.id}`, {
+      headers: { Authorization: `Bearer ${buyerToken}` },
+    });
+    expect(detailRes.ok()).toBeTruthy();
+    const detailJson = await detailRes.json();
+    const milestone = detailJson.milestones?.[0];
+    expect(milestone?.id).toBeTruthy();
+
+    const submitRes = await request.patch(`/api/contracts/${contract.id}/milestones/${milestone.id}`, {
+      headers: {
+        Authorization: `Bearer ${sellerToken}`,
+        'Content-Type': 'application/json',
+      },
+      data: {
+        action: 'submit',
+        artifact_bundle: { delivery_summary: 'done' },
+      },
+    });
+    expect(submitRes.ok()).toBeTruthy();
+
+    const approveRes = await request.patch(`/api/contracts/${contract.id}/milestones/${milestone.id}`, {
+      headers: {
+        Authorization: `Bearer ${buyerToken}`,
+        'Content-Type': 'application/json',
+      },
+      data: { action: 'approve' },
+    });
+    expect(approveRes.ok()).toBeTruthy();
+
+    const payRes = await request.patch(`/api/contracts/${contract.id}/milestones/${milestone.id}`, {
+      headers: {
+        Authorization: `Bearer ${buyerToken}`,
+        'Content-Type': 'application/json',
+      },
+      data: { action: 'mark_paid' },
+    });
+    expect(payRes.ok()).toBeTruthy();
+    const payJson = await payRes.json();
+    expect(payJson.contract?.state).toBe('COMPLETED');
+  });
 });

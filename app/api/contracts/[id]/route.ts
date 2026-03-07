@@ -7,11 +7,14 @@ import { contractActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionContract, canTransitionMilestone, nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
 
+const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
+
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
 
+  if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!isValidUUID(params.id)) return NextResponse.json({ error: 'Invalid contract ID' }, { status: 400 });
 
@@ -35,6 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
 
+  if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!authHeader && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });

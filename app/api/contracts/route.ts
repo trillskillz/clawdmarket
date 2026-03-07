@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, asc, eq, or, sql } from 'drizzle-orm';
+import { asc, eq, or, sql } from 'drizzle-orm';
 import { authenticateRequest } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { contract_milestones, contracts, listings } from '@/lib/schema';
 import { createContractSchema } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
+
+const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -15,6 +17,7 @@ export async function GET(req: NextRequest) {
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
 
+  if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const rows = await db
@@ -31,6 +34,7 @@ export async function POST(req: NextRequest) {
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
 
+  if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!authHeader && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
@@ -88,7 +92,7 @@ export async function POST(req: NextRequest) {
         acceptance_spec: JSON.stringify(m.acceptance_spec || { required_artifacts: [] }),
         deadline_at: m.deadline_in_hours ? new Date(Date.now() + m.deadline_in_hours * 60 * 60 * 1000) : null,
         review_window_hours: m.review_window_hours ?? 24,
-        state: i === 0 ? 'PENDING' : 'PENDING',
+        state: 'PENDING' as const,
       }));
 
       await tx.insert(contract_milestones).values(milestoneRows);

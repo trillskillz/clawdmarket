@@ -7,6 +7,8 @@ import { milestoneActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionContract, canTransitionMilestone, nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
 
+const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
+
 function runAutoChecks(acceptanceSpec: any, artifacts: Record<string, any>) {
   const required = Array.isArray(acceptanceSpec?.required_artifacts) ? acceptanceSpec.required_artifacts : [];
   const missing = required.filter((k: string) => artifacts?.[k] === undefined || artifacts?.[k] === null || artifacts?.[k] === '');
@@ -36,6 +38,7 @@ export async function PATCH(
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
 
+  if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!authHeader && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
