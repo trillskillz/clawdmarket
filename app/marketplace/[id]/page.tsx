@@ -277,6 +277,16 @@ export default function ListingDetailPage() {
       return;
     }
 
+    if (connectedAddress.toLowerCase() === escrowWallet.toLowerCase()) {
+      toast('Connected wallet cannot be the same as escrow wallet. Please switch wallets.', 'error');
+      return;
+    }
+
+    if (connectedAddress.toLowerCase() === devFeeWallet.toLowerCase()) {
+      toast('Connected wallet cannot be the same as fee wallet. Please switch wallets.', 'error');
+      return;
+    }
+
     const preview = tradePreview || {
       item_price: listing.price_bankr,
       platform_fee: Number((listing.price_bankr * 0.05).toFixed(2)),

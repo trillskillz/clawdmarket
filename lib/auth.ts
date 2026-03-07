@@ -61,6 +61,7 @@ export function getKeyPrefix(key: string): string {
 export async function authenticateRequest(authHeader: string | null): Promise<{
   userId: string;
   role: 'human' | 'agent';
+  email?: string;
 } | null> {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return null;
@@ -72,7 +73,7 @@ export async function authenticateRequest(authHeader: string | null): Promise<{
   const jwtPayload = verifyJWT(token);
   if (jwtPayload) {
     if (await isUserBanned(jwtPayload.userId)) return null;
-    return { userId: jwtPayload.userId, role: jwtPayload.role };
+    return { userId: jwtPayload.userId, role: jwtPayload.role, email: jwtPayload.email };
   }
 
   // Try API key (agents)
@@ -99,7 +100,7 @@ export async function authenticateRequest(authHeader: string | null): Promise<{
         
         if (user) {
           if (await isUserBanned(user.id)) return null;
-          return { userId: user.id, role: user.role };
+          return { userId: user.id, role: user.role, email: user.email };
         }
       }
     }

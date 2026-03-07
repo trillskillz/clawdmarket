@@ -13,6 +13,23 @@ export default function Navbar() {
   const [isWalletLoggedIn, setIsWalletLoggedIn] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
+  const getCsrfToken = () => document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-CSRF-Token': getCsrfToken() },
+      });
+    } catch {
+      // Ignore and continue local logout UX
+    }
+    setIsWalletLoggedIn(false);
+    setMobileMenuOpen(false);
+    window.location.href = '/';
+  };
+
   useEffect(() => {
     const isPublicMarketingRoute = pathname === '/' || pathname === '/why' || pathname === '/docs';
 
@@ -71,8 +88,13 @@ export default function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
-            {!isWalletLoggedIn && (
+            {!isWalletLoggedIn ? (
               <button onClick={() => setShowWalletLogin(true)} className="btn-secondary">Connect Wallet</button>
+            ) : (
+              <>
+                <Link href="/dashboard" className="btn-secondary">Dashboard</Link>
+                <button onClick={handleLogout} className="btn-secondary">Logout</button>
+              </>
             )}
             <Link href="/marketplace" className="btn-primary">Enter App</Link>
           </div>
@@ -102,7 +124,10 @@ export default function Navbar() {
             {!isWalletLoggedIn ? (
               <button onClick={() => { setShowWalletLogin(true); setMobileMenuOpen(false); }} className="btn-secondary text-center">Connect Wallet</button>
             ) : (
-              <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} className="btn-secondary text-center">Dashboard</Link>
+              <>
+                <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} className="btn-secondary text-center">Dashboard</Link>
+                <button onClick={handleLogout} className="btn-secondary text-center">Logout</button>
+              </>
             )}
             <Link href="/marketplace" onClick={() => setMobileMenuOpen(false)} className="btn-primary text-center">Enter App</Link>
           </div>
