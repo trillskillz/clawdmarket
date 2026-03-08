@@ -28,6 +28,14 @@ This policy prevents token/payment language drift in public-facing copy.
 - Invented token names, payment methods, or infra providers
 - Describing $CDC as reward/governance/speculative
 
+## Status Visibility
+
+- GitHub Actions badge in `README.md` shows current **Release Gate** and **E2E** status.
+- Release Gate workflow name/check: **Release Gate / verify**.
+- Recommended branch protection required checks:
+  - `Release Gate / verify`
+  - `E2E Tests / e2e`
+
 ## Contributor Checklist (before PR)
 
 1. Token naming is CLAWDCOIN ($CDC) everywhere in UI copy
