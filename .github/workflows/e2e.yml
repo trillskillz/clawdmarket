@@ -40,6 +40,9 @@ jobs:
       - name: Install SDK dependencies
         run: npm ci --prefix sdk
 
+      - name: Enforce copy policy
+        run: npm run check:copy-policy
+
       - name: Initialize CI database
         run: |
           npm run db:push

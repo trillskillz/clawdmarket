@@ -24,6 +24,9 @@ jobs:
       - name: Run npm audit (high+)
         run: npm audit --audit-level=high
 
+      - name: Enforce copy policy
+        run: npm run check:copy-policy
+
       - name: Lint
         run: npm run lint
 

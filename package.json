@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "check:copy-policy": "node scripts/enforce-copy-policy.mjs",
     "test:e2e": "playwright test",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
