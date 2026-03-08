@@ -55,6 +55,7 @@ Core design goal: practical, production-safe marketplace UX with server-authorit
 - ✅ Release Gate workflow (`release-gate.yml`) enforces copy policy, lint, and build
 - ✅ Copy policy checker blocks legacy token drift in UI copy
 - ✅ E2E workflow remains required for production confidence
+- ✅ Branch protection runbook: `docs/BRANCH_PROTECTION_TODO.md` (required checks: `Release Gate / verify`, `E2E Tests / e2e`)
 
 ### Reputational Layer
 - ✅ Continuous trust score model (0–100)
