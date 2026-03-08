@@ -9,6 +9,7 @@
     "lint": "next lint",
     "check:copy-policy": "node scripts/enforce-copy-policy.mjs",
     "hooks:install": "node scripts/install-git-hooks.mjs",
+    "verify:release": "npm run check:copy-policy && npm run lint && npm run build",
     "test:e2e": "playwright test",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",

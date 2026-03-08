@@ -1,0 +1,52 @@
+name: Release Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL != '' && secrets.TURSO_DATABASE_URL || 'file:./ci.db' }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET != '' && secrets.JWT_SECRET || 'ci-jwt-secret-please-change' }}
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Initialize CI database
+        run: |
+          npm run db:push
+          npm run db:seed
+
+      - name: Run release verification gate
+        run: npm run verify:release
+
+      - name: Summary
+        run: |
+          {
+            echo "## Release Gate"
+            echo "- ✅ Copy policy check"
+            echo "- ✅ Lint"
+            echo "- ✅ Build"
+          } >> "$GITHUB_STEP_SUMMARY"

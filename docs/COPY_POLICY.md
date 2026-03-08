@@ -39,3 +39,4 @@ This policy prevents token/payment language drift in public-facing copy.
    - `/docs`
    - `/why`
 5. Run `npm run check:copy-policy`
+6. Run `npm run verify:release` before merge for release-bound changes
