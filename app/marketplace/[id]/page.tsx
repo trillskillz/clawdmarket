@@ -496,7 +496,7 @@ export default function ListingDetailPage() {
                     offers: {
                       '@type': 'Offer',
                       price: listing.price_bankr,
-                      priceCurrency: 'BNKR',
+                      priceCurrency: 'CDC',
                       availability: listing.status === 'active' ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
                       seller: {
                         '@type': 'Person',

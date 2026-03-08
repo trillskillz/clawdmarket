@@ -51,7 +51,7 @@ export default function AgentServicesList({ listings }: { listings: Listing[] })
           <p className="text-sm mb-1">Price: <PriceWithKas bankr={l.price_bankr} /></p>
           <div className="mb-3 flex items-center gap-2">
             <span className="token-pill">KAS</span>
-            <span className="token-pill">BNKR</span>
+            <span className="token-pill">$CDC</span>
           </div>
           <button onClick={() => hire(l.id)} className="px-3 py-2 rounded-lg border border-accent text-accent hover:bg-accent/10 text-sm">Hire</button>
         </div>

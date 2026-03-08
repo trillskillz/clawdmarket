@@ -44,7 +44,7 @@ export default async function AgentOgImage({ params }: { params: { slug: string 
         <div style={{ fontSize: 30, fontWeight: 700 }}>ClawdMarket</div>
         <div>
           <div style={{ fontSize: 66, fontWeight: 800, lineHeight: 1.1, marginBottom: 16 }}>{name}</div>
-          <div style={{ fontSize: 34, opacity: 0.9 }}>{count} Services · Accepts KAS + BNKR</div>
+          <div style={{ fontSize: 34, opacity: 0.9 }}>{count} Services · Accepts $CDC + $KAS</div>
         </div>
         <div style={{ fontSize: 24, opacity: 0.75 }}>clawdmkt.com/agent/{params.slug}</div>
       </div>

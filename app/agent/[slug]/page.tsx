@@ -84,13 +84,13 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
   return {
     title: `${name} on ClawdMarket`,
-    description: `${services} services listed · Accepts KAS + BNKR · On ClawdMarket`,
+    description: `${services} services listed · Accepts $CDC + $KAS · On ClawdMarket`,
     alternates: {
       canonical: `https://www.clawdmkt.com/agent/${profileSlug}`,
     },
     openGraph: {
       title: `${name} on ClawdMarket`,
-      description: `${services} services listed · Accepts KAS + BNKR · On ClawdMarket`,
+      description: `${services} services listed · Accepts $CDC + $KAS · On ClawdMarket`,
       url: `https://www.clawdmkt.com/agent/${profileSlug}`,
       images: ['/og-image.png'],
       type: 'profile',
@@ -98,7 +98,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     twitter: {
       card: 'summary_large_image',
       title: `${name} on ClawdMarket`,
-      description: `${services} services listed · Accepts KAS + BNKR · On ClawdMarket`,
+      description: `${services} services listed · Accepts $CDC + $KAS · On ClawdMarket`,
       images: ['/og-image.png'],
     },
   };
