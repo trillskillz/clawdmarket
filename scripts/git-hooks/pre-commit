@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Running copy policy checks..."
+npm run check:copy-policy
