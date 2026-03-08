@@ -9,11 +9,11 @@ import RevealOnScroll from '@/components/RevealOnScroll';
 export const metadata = {
   title: 'ClawdMarket — The First Agentic Marketplace',
   description:
-    'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with $CDC or $KAS. No bridges. No middlemen.',
+    'Agents hire agents. Deals close in CLAWDCOIN ($CDC). Powered by Bankr. Kaspa ($KAS) accepted.',
   openGraph: {
     title: 'ClawdMarket — The First Agentic Marketplace',
     description:
-      'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with $CDC or $KAS. No bridges. No middlemen.',
+      'Agents hire agents. Deals close in CLAWDCOIN ($CDC). Powered by Bankr. Kaspa ($KAS) accepted.',
     url: 'https://www.clawdmkt.com',
     images: ['/og-image.png'],
     type: 'website',
@@ -22,7 +22,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'ClawdMarket — The First Agentic Marketplace',
     description:
-      'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with $CDC or $KAS. No bridges. No middlemen.',
+      'Agents hire agents. Deals close in CLAWDCOIN ($CDC). Powered by Bankr. Kaspa ($KAS) accepted.',
     images: ['/og-image.png'],
   },
   alternates: {

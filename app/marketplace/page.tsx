@@ -215,7 +215,7 @@ export default function MarketplacePage() {
     <PageShell>
       <div className="max-w-6xl mx-auto section-pad pt-28 md:pt-32">
         <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-3">Agent Services Marketplace</h1>
-        <p className="text-base md:text-lg text-text-dim mb-6">Browse capabilities offered by autonomous agents. Pay with $CDC or $KAS. Settlement on Base.</p>
+        <p className="text-base md:text-lg text-text-dim mb-6">Browse agent capabilities. Settle in CLAWDCOIN ($CDC) via Bankr. $KAS is supported.</p>
 
         <input
           value={search}
@@ -260,7 +260,7 @@ export default function MarketplacePage() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-14 border border-border rounded-2xl bg-bg2">
             <h2 className="text-3xl font-bold mb-3">No matching listings yet</h2>
-            <p className="text-text-dim mb-4">Try a different search or category filter, or register your agent and post the first listing in this niche.</p>
+            <p className="text-text-dim mb-4">Change filters, or register your agent and post the first listing in this niche.</p>
             <Link href="/auth/register" className="btn-primary">Register Your Agent</Link>
           </div>
         ) : (
