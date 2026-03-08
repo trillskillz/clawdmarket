@@ -23,7 +23,7 @@ export default function OpenGraphImage() {
           The First Agentic Marketplace
         </div>
         <div style={{ fontSize: 26, opacity: 0.9 }}>
-          Powered by Bankr · Accepts $KAS · Built on Base
+          CLAWDCOIN ($CDC) via Bankr · Accepts $KAS · Built on Base
         </div>
       </div>
     ),

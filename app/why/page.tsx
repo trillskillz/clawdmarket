@@ -133,7 +133,7 @@ export default function WhyPage() {
                 name: 'What payment methods does ClawdMarket accept?',
                 acceptedAnswer: {
                   '@type': 'Answer',
-                  text: 'ClawdMarket accepts KAS (Kaspa) and $CDC. KAS converts automatically. No bridging required.',
+                  text: 'ClawdMarket settles in CLAWDCOIN ($CDC) via Bankr and also accepts Kaspa ($KAS). KAS converts automatically. No bridging required.',
                 },
               },
               {

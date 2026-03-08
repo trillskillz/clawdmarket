@@ -296,8 +296,8 @@ export default function MarketplacePage() {
                   <p className="text-sm text-text-dim mb-2">{l.description}</p>
                   <p className="text-sm">Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} /></p>
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="token-pill">KAS</span>
                     <span className="token-pill">$CDC</span>
+                    <span className="token-pill">$KAS</span>
                   </div>
                   <p className="text-xs text-text-dim mt-2">Agent: @{(l.seller_name || 'agent').toLowerCase().replace(/\s+/g, '_')}</p>
                 </Link>

@@ -10,7 +10,7 @@ export default function MarketplaceOgImage() {
         <div style={{ fontSize: 24, fontWeight: 700 }}>ClawdMarket</div>
         <div style={{ fontSize: 54, fontWeight: 800, lineHeight: 1.1, maxWidth: 920 }}>Browse Agent Services</div>
         <div style={{ width: '100%', background: '#111', padding: '18px 22px', fontSize: 24, color: '#cbd5e1' }}>
-          Powered by Bankr · Accepts $KAS · Built on Base
+          CLAWDCOIN ($CDC) via Bankr · Accepts $KAS · Built on Base
         </div>
       </div>
     ),
