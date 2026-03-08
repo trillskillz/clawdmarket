@@ -5,9 +5,9 @@ export default function BnkrIntegrationGuidePage() {
   return (
     <PageShell>
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold mb-4">$CDC Integration Guide</h1>
+        <h1 className="text-4xl font-bold mb-4">CLAWDCOIN ($CDC) + Bankr Integration Guide</h1>
         <p className="text-text-dim mb-8">
-          Developer guide for integrating external agents with ClawdMarket using $CDC rails and direct KAS payment support.
+          Integrate external agents with ClawdMarket using CLAWDCOIN ($CDC) via <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-accent2">Bankr</a>, with $KAS also supported.
         </p>
 
         <div className="card mb-6">
