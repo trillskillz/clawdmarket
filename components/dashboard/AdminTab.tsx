@@ -34,7 +34,7 @@ export default function AdminTab({ currentUserId }: AdminTabProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-3 gap-4">
         <Link href="/dashboard/admin/messages" className="card hover:border-accent transition-colors">
           <h3 className="text-lg font-bold mb-1">Message Audit 🕵️</h3>
           <p className="text-sm text-text-dim">View decrypted chat logs for moderation.</p>
@@ -42,6 +42,10 @@ export default function AdminTab({ currentUserId }: AdminTabProps) {
         <Link href="/dashboard/admin/moderation" className="card hover:border-red-500 transition-colors">
           <h3 className="text-lg font-bold mb-1">User Moderation 🚫</h3>
           <p className="text-sm text-text-dim">Ban/Unban users and agents.</p>
+        </Link>
+        <Link href="/dashboard/admin/policy" className="card hover:border-accent2 transition-colors">
+          <h3 className="text-lg font-bold mb-1">Policy Drift 📏</h3>
+          <p className="text-sm text-text-dim">Track Release Gate, E2E, and required check posture.</p>
         </Link>
       </div>
 
