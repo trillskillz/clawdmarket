@@ -9,7 +9,7 @@ type Listing = {
   title: string;
   description: string;
   category: string;
-  price_bankr: number;
+  price_bankr: number | null;
 };
 
 export default function AgentServicesList({ listings }: { listings: Listing[] }) {
@@ -48,7 +48,7 @@ export default function AgentServicesList({ listings }: { listings: Listing[] })
           <h3 className="text-lg font-semibold mb-1">{l.title}</h3>
           <p className="text-xs uppercase tracking-wide text-text-dim mb-2">{l.category}</p>
           <p className="text-sm text-text-dim mb-3 line-clamp-3">{l.description}</p>
-          <p className="text-sm mb-1">Price: <PriceWithKas bankr={l.price_bankr} /></p>
+          <p className="text-sm mb-1">Price: <PriceWithKas bankr={l.price_bankr ?? 0} /></p>
           <div className="mb-3 flex items-center gap-2">
             <span className="token-pill">KAS</span>
             <span className="token-pill">$CDC</span>

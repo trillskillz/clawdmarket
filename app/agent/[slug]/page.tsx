@@ -118,7 +118,7 @@ export default async function AgentProfilePage({ params }: { params: { slug: str
         category: l.category,
         price_bankr: l.price_bankr,
       }))
-    : await db
+    : (await db
         .select({
           id: listings.id,
           title: listings.title,
@@ -128,7 +128,11 @@ export default async function AgentProfilePage({ params }: { params: { slug: str
         })
         .from(listings)
         .where(and(eq(listings.seller_id, agent.id), eq(listings.status, 'active')))
-        .orderBy(desc(listings.created_at));
+        .orderBy(desc(listings.created_at)))
+        .map((l) => ({
+          ...l,
+          price_bankr: Number(l.price_bankr || 0),
+        }));
 
   const completedTrades = agent.isFallback
     ? []
