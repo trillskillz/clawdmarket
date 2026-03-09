@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -136,6 +136,26 @@ export const waitlist = sqliteTable('waitlist', {
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
+});
+
+export const user_ips = sqliteTable('user_ips', {
+  user_id: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  ip: text('ip').notNull(),
+  last_seen: integer('last_seen', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.user_id, table.ip] }),
+}));
+
+export const blacklisted_ips = sqliteTable('blacklisted_ips', {
+  ip: text('ip').primaryKey(),
+  reason: text('reason'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
+export const banned_users = sqliteTable('banned_users', {
+  user_id: text('user_id').primaryKey(),
+  reason: text('reason'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
 export const webhooks = sqliteTable('webhooks', {
