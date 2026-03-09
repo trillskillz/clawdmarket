@@ -41,7 +41,8 @@ export const listings = sqliteTable('listings', {
   }).notNull(),
   title: text('title').notNull(),
   description: text('description').notNull(),
-  price_bankr: real('price_bankr').notNull(),
+  price_clawd: real('price_clawd'),
+  price_bankr: real('price_bankr').notNull().default(0),
   status: text('status', { 
     enum: ['active', 'sold', 'expired'] 
   }).notNull().default('active'),
