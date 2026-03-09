@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
-import { base } from 'wagmi/chains';
-import { erc20Abi, parseUnits } from 'viem';
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { SkeletonDetail } from '@/components/Skeleton';
@@ -15,12 +13,16 @@ import dynamic from 'next/dynamic';
 import { trustScoreClass } from '@/lib/trust-score';
 import PriceWithKas from '@/components/PriceWithKas';
 import { useKasRate } from '@/components/providers/KasRateProvider';
+import { useCDCTransfer } from '@/hooks/useCDCTransfer';
+import { useCDCFeeTransfer } from '@/hooks/useCDCFeeTransfer';
+import { CDC_CHAIN_ID, CDC_TOKEN_ADDRESS, cdcTxUrl } from '@/lib/constants/cdc';
 
 interface Listing {
   id: string;
   seller_id: string;
   seller_name: string;
   seller_role: string;
+  seller_wallet?: string | null;
   seller_bio: string | null;
   seller_avatar_url: string | null;
   category: string;
@@ -57,13 +59,6 @@ interface KasPaymentState {
   settled_at?: string | null;
 }
 
-interface OnchainConfig {
-  token_address: string;
-  escrow_wallet: string;
-  fee_wallet: string;
-  chain: 'base';
-}
-
 interface TradePreview {
   item_price: number;
   platform_fee: number;
@@ -90,13 +85,14 @@ export default function ListingDetailPage() {
   const [showWalletLogin, setShowWalletLogin] = useState(false);
   const [kasLoading, setKasLoading] = useState(false);
   const [kasPayment, setKasPayment] = useState<KasPaymentState | null>(null);
-  const [onchainConfig, setOnchainConfig] = useState<OnchainConfig | null>(null);
   const [tradePreview, setTradePreview] = useState<TradePreview | null>(null);
   const [showTrustBreakdown, setShowTrustBreakdown] = useState(false);
   const { track } = useAnalytics();
   const { address: connectedAddress, isConnected } = useAccount();
-  const { writeContractAsync } = useWriteContract();
-  const basePublicClient = usePublicClient({ chainId: base.id });
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  const { sendCDC, isPending, isConfirming, isConfirmed, hash, error } = useCDCTransfer();
+  const { sendFee, isPending: feePending, error: feeError } = useCDCFeeTransfer();
   const { bankrToKas } = useKasRate();
 
   const getCsrfToken = () =>
@@ -161,16 +157,6 @@ export default function ListingDetailPage() {
     }
   }, [fetchListing, params.id]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/payments/config', { cache: 'no-store' });
-        if (!res.ok) return;
-        const cfg = await res.json();
-        setOnchainConfig(cfg);
-      } catch {}
-    })();
-  }, []);
 
   useEffect(() => {
     if (!listing?.id) return;
@@ -262,27 +248,31 @@ export default function ListingDetailPage() {
       return;
     }
 
-    const bankrToken = onchainConfig?.token_address || '';
-    const escrowWallet = onchainConfig?.escrow_wallet || '';
-    const devFeeWallet = onchainConfig?.fee_wallet || '';
-
-    if (!bankrToken || !escrowWallet || !devFeeWallet) {
-      toast('On-chain payment configuration is missing. Contact admin.', 'error');
+    if (chainId !== CDC_CHAIN_ID) {
+      toast('Switch to Base network to pay with $CDC.', 'error');
+      try { switchChain({ chainId: CDC_CHAIN_ID }); } catch {}
       return;
     }
 
-    const isHexAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v || '');
-    if (!isHexAddress(bankrToken) || !isHexAddress(escrowWallet) || !isHexAddress(devFeeWallet)) {
-      toast('Invalid on-chain address verification. Contact admin.', 'error');
+    const sellerWallet = listing.seller_wallet as `0x${string}` | undefined;
+    const devFeeWallet = process.env.NEXT_PUBLIC_DEV_WALLET_ADDRESS as `0x${string}` | undefined;
+
+    const isHexAddress = (v?: string | null) => !!v && /^0x[a-fA-F0-9]{40}$/.test(v);
+    if (!isHexAddress(sellerWallet)) {
+      toast('Seller wallet is missing. Contact admin.', 'error');
+      return;
+    }
+    if (!isHexAddress(devFeeWallet)) {
+      toast('Dev fee wallet is missing. Contact admin.', 'error');
       return;
     }
 
-    if (connectedAddress.toLowerCase() === escrowWallet.toLowerCase()) {
-      toast('Connected wallet cannot be the same as escrow wallet. Please switch wallets.', 'error');
+    if (connectedAddress.toLowerCase() === sellerWallet!.toLowerCase()) {
+      toast('Connected wallet cannot be the same as seller wallet. Please switch wallets.', 'error');
       return;
     }
 
-    if (connectedAddress.toLowerCase() === devFeeWallet.toLowerCase()) {
+    if (connectedAddress.toLowerCase() === devFeeWallet!.toLowerCase()) {
       toast('Connected wallet cannot be the same as fee wallet. Please switch wallets.', 'error');
       return;
     }
@@ -295,7 +285,7 @@ export default function ListingDetailPage() {
       dev_amount: Number((listing.price_bankr * 0.05).toFixed(2)),
     };
 
-    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${preview.item_price} BANKR\nFee (5%): ${preview.platform_fee.toFixed(2)} BANKR\nTotal: ${preview.total_cost.toFixed(2)} BANKR\n\nYou will sign a single on-chain BANKR payment transaction.`)) {
+    if (!confirm(`Buy with CLAWDCOIN ($CDC)?\n\nSeller amount: ${preview.seller_amount.toFixed(2)} $CDC\nPlatform fee (5%): ${preview.platform_fee.toFixed(2)} $CDC\nTotal: ${preview.total_cost.toFixed(2)} $CDC\n\nYou will sign two on-chain $CDC transfers on Base.`)) {
       return;
     }
 
@@ -303,22 +293,8 @@ export default function ListingDetailPage() {
     setTradeLoading(true);
 
     try {
-      if (!basePublicClient) {
-        toast('Base client unavailable. Please reconnect wallet and retry.', 'error');
-        return;
-      }
-
-      const totalAmount = parseUnits(preview.total_cost.toFixed(18), 18);
-
-      const escrowTxHash = await writeContractAsync({
-        chainId: base.id,
-        address: bankrToken as `0x${string}`,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [escrowWallet as `0x${string}`, totalAmount],
-      });
-
-      await basePublicClient.waitForTransactionReceipt({ hash: escrowTxHash });
+      const sellerTxHash = await sendCDC(sellerWallet!, preview.seller_amount.toString());
+      const feeTxHash = await sendFee(preview.platform_fee.toString());
 
       const csrfToken = getCsrfToken();
       const res = await fetch('/api/trades', {
@@ -334,13 +310,12 @@ export default function ListingDetailPage() {
           payment_mode: 'onchain',
           onchain: {
             chain: 'base',
-            token_address: bankrToken,
+            token_address: CDC_TOKEN_ADDRESS,
             buyer_wallet: connectedAddress,
-            escrow_wallet: escrowWallet,
+            escrow_wallet: sellerWallet,
             fee_wallet: devFeeWallet,
-            escrow_tx_hash: escrowTxHash,
-            // Single payment tx now covers item + dev fee in one go.
-            fee_tx_hash: escrowTxHash,
+            escrow_tx_hash: sellerTxHash,
+            fee_tx_hash: feeTxHash,
           },
         }),
       });
@@ -348,7 +323,7 @@ export default function ListingDetailPage() {
       const data = await res.json();
 
       if (res.ok) {
-        toast('Trade successful! On-chain BANKR payment confirmed.', 'success');
+        toast('Trade successful! $CDC transfers confirmed on Base.', 'success');
         router.push('/dashboard');
       } else {
         if (res.status === 401 || res.status === 403) {
@@ -360,7 +335,7 @@ export default function ListingDetailPage() {
       }
     } catch (err: any) {
       console.error(err);
-      toast(err?.shortMessage || err?.message || 'On-chain transaction failed', 'error');
+      toast(err?.shortMessage || err?.message || 'On-chain $CDC transfer failed', 'error');
     } finally {
       setTradeLoading(false);
     }
@@ -614,20 +589,32 @@ export default function ListingDetailPage() {
                     </button>
                   ) : (
                     <>
+                      {chainId !== CDC_CHAIN_ID && (
+                        <div className="text-xs text-amber-300 mb-2">
+                          Switch to Base network to pay with $CDC.{' '}
+                          <button
+                            onClick={() => switchChain({ chainId: CDC_CHAIN_ID })}
+                            className="underline hover:text-amber-200"
+                          >
+                            Switch now
+                          </button>
+                        </div>
+                      )}
                       <button
                         onClick={handleTrade}
-                        disabled={tradeLoading}
+                        disabled={tradeLoading || isPending || isConfirming || feePending || chainId !== CDC_CHAIN_ID}
                         className="btn-primary w-full py-3 text-base shadow-lg shadow-accent/20 hover:shadow-accent/40 transition-all"
                       >
-                        {tradeLoading ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                            Processing...
-                          </span>
-                        ) : (
-                          'Buy with BANKR 🚀'
-                        )}
+                        {isPending || feePending ? 'Confirm in wallet...' : isConfirming ? 'Confirming on Base...' : tradeLoading ? 'Processing...' : 'Buy with $CDC 🚀'}
                       </button>
+                      {isConfirmed && hash && (
+                        <a href={cdcTxUrl(hash)} target="_blank" rel="noopener noreferrer" className="block mt-2 text-xs text-emerald-400 underline">
+                          View seller tx on Basescan ↗
+                        </a>
+                      )}
+                      {(error || feeError) && (
+                        <p className="text-xs text-red-400 mt-2">{error?.message || feeError?.message}</p>
+                      )}
 
                       <button
                         onClick={handleBuyWithKas}
@@ -725,7 +712,7 @@ export default function ListingDetailPage() {
             onAuthenticated={async () => {
               setShowWalletLogin(false);
               await fetchMe();
-              toast('Wallet connected. You can complete your BANKR purchase now.', 'success');
+              toast('Wallet connected. You can complete your $CDC purchase now.', 'success');
             }}
           />
         )}

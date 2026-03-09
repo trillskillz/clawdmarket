@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
       await logPaymentFailure({
         buyer_id: auth.userId,
         amount: validated.amount,
-        token: 'bnkr',
+        token: 'cdc',
         route: 'POST /api/trades',
         listing_id: validated.listing_id,
         error_code: 'LISTING_NOT_FOUND',
@@ -272,7 +272,7 @@ export async function POST(req: NextRequest) {
         buyer_id: auth.userId,
         seller_id: listing.seller_id,
         amount: validated.amount,
-        token: 'bnkr',
+        token: 'cdc',
         route: 'POST /api/trades',
         listing_id: validated.listing_id,
         error_code: 'LISTING_NOT_ACTIVE',
@@ -313,12 +313,17 @@ export async function POST(req: NextRequest) {
     const onchain = body?.onchain || null;
 
     if (bodyPaymentMode === 'onchain') {
-      const expectedToken = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '').trim().toLowerCase();
-      const expectedEscrow = (process.env.ESCROW_WALLET_ADDRESS || process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS || '').trim().toLowerCase();
+      const expectedToken = (
+        process.env.CDC_TOKEN_ADDRESS ||
+        process.env.NEXT_PUBLIC_CDC_TOKEN_ADDRESS ||
+        process.env.BANKR_TOKEN_ADDRESS ||
+        process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS ||
+        ''
+      ).trim().toLowerCase();
 
-      if (!expectedToken || !expectedEscrow) {
+      if (!expectedToken) {
         return NextResponse.json(
-          { error: 'On-chain payment is not configured on server' },
+          { error: 'On-chain payment token is not configured on server' },
           { status: 500 }
         );
       }
@@ -327,29 +332,58 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid on-chain payment payload (chain)' }, { status: 400 });
       }
 
-      if (
-        String(onchain.token_address || '').toLowerCase() !== expectedToken ||
-        String(onchain.escrow_wallet || '').toLowerCase() !== expectedEscrow
-      ) {
-        return NextResponse.json({ error: 'On-chain payment destination mismatch' }, { status: 400 });
+      if (String(onchain.token_address || '').toLowerCase() !== expectedToken) {
+        return NextResponse.json({ error: 'On-chain payment token mismatch' }, { status: 400 });
       }
 
       const buyerWallet = String(onchain.buyer_wallet || '').toLowerCase();
-      const escrowWallet = String(onchain.escrow_wallet || '').toLowerCase();
+      const sellerWallet = String(onchain.escrow_wallet || '').toLowerCase();
       const feeWallet = String(onchain.fee_wallet || '').toLowerCase();
 
       if (!buyerWallet || !isAddress(String(onchain.buyer_wallet || ''))) {
         return NextResponse.json({ error: 'Invalid buyer wallet address' }, { status: 400 });
       }
-      if (buyerWallet === escrowWallet) {
-        return NextResponse.json({ error: 'Buyer wallet cannot be the same as escrow wallet' }, { status: 400 });
+      if (!sellerWallet || !isAddress(String(onchain.escrow_wallet || ''))) {
+        return NextResponse.json({ error: 'Invalid seller wallet address' }, { status: 400 });
       }
-      if (feeWallet && buyerWallet === feeWallet) {
+      if (!feeWallet || !isAddress(String(onchain.fee_wallet || ''))) {
+        return NextResponse.json({ error: 'Invalid fee wallet address' }, { status: 400 });
+      }
+      if (buyerWallet === sellerWallet) {
+        return NextResponse.json({ error: 'Buyer wallet cannot be the same as seller wallet' }, { status: 400 });
+      }
+      if (buyerWallet === feeWallet) {
         return NextResponse.json({ error: 'Buyer wallet cannot be the same as fee wallet' }, { status: 400 });
+      }
+      if (sellerWallet === feeWallet) {
+        return NextResponse.json({ error: 'Seller wallet cannot be the same as fee wallet' }, { status: 400 });
+      }
+
+      const devFeeWallet = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || '').trim().toLowerCase();
+      if (!devFeeWallet) {
+        return NextResponse.json({ error: 'Dev fee wallet is not configured on server' }, { status: 500 });
+      }
+      if (feeWallet !== devFeeWallet) {
+        return NextResponse.json({ error: 'Fee wallet mismatch' }, { status: 400 });
+      }
+
+      const [sellerUser] = await db
+        .select({ wallet: users.wallet })
+        .from(users)
+        .where(eq(users.id, listing.seller_id));
+      const expectedSellerWallet = String(sellerUser?.wallet || '').toLowerCase();
+      if (!expectedSellerWallet) {
+        return NextResponse.json({ error: 'Seller wallet is missing' }, { status: 400 });
+      }
+      if (sellerWallet !== expectedSellerWallet) {
+        return NextResponse.json({ error: 'Seller wallet mismatch' }, { status: 400 });
       }
 
       if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || ''))) {
-        return NextResponse.json({ error: 'Invalid on-chain payment transaction hash format' }, { status: 400 });
+        return NextResponse.json({ error: 'Invalid seller transaction hash format' }, { status: 400 });
+      }
+      if (!TX_HASH_RE.test(String(onchain.fee_tx_hash || ''))) {
+        return NextResponse.json({ error: 'Invalid fee transaction hash format' }, { status: 400 });
       }
 
       const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
@@ -379,8 +413,10 @@ export async function POST(req: NextRequest) {
             seller_amount: sellerAmount,
             dev_amount: devAmount,
             dev_wallet: devWalletAddress,
-            // Single on-chain payment tx covers item + dev fee.
-            fee_tx_hash: onchain.fee_tx_hash || onchain.escrow_tx_hash,
+            payment_token: 'CDC',
+            payment_contract: String(onchain.token_address || ''),
+            chain_id: 8453,
+            fee_tx_hash: onchain.fee_tx_hash,
             payout_status: 'seller_paid',
             status: 'pending',
           })
@@ -392,7 +428,7 @@ export async function POST(req: NextRequest) {
           amount: sellerAmount,
           type: 'transfer',
           reference_id: trade.id,
-          memo: `On-chain escrow payment (single tx: ${onchain.escrow_tx_hash})`,
+          memo: `On-chain $CDC seller payment (tx: ${onchain.escrow_tx_hash})`,
         });
 
         if (devAmount > 0) {
@@ -409,7 +445,7 @@ export async function POST(req: NextRequest) {
             amount: devAmount,
             type: 'fee',
             reference_id: trade.id,
-            memo: `On-chain dev fee allocation (single tx: ${onchain.escrow_tx_hash})`,
+            memo: `On-chain $CDC platform fee (tx: ${onchain.fee_tx_hash})`,
           });
         }
 
@@ -433,7 +469,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         {
-          message: 'Trade initiated successfully with on-chain BANKR payment.',
+          message: 'Trade initiated successfully with on-chain $CDC payment.',
           trade: newTrade,
           code: 'TRADE_CREATED_ONCHAIN',
           fee_info: {
@@ -447,8 +483,8 @@ export async function POST(req: NextRequest) {
           },
           onchain_receipts: {
             payment_tx_hash: onchain.escrow_tx_hash,
-            escrow_tx_hash: onchain.escrow_tx_hash,
-            fee_tx_hash: onchain.fee_tx_hash || onchain.escrow_tx_hash,
+            seller_tx_hash: onchain.escrow_tx_hash,
+            fee_tx_hash: onchain.fee_tx_hash,
           },
           ...envMeta('clawdmarket/api/trades'),
         },
@@ -479,16 +515,16 @@ export async function POST(req: NextRequest) {
         buyer_id: auth.userId,
         seller_id: listing.seller_id,
         amount: totalCost,
-        token: 'bnkr',
+        token: 'cdc',
         route: 'POST /api/trades',
         listing_id: validated.listing_id,
         error_code: 'INSUFFICIENT_FUNDS',
-        message: `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`,
+        message: `Insufficient funds. Cost: ${totalCost} $CDC, Balance: ${buyerWallet.balance} $CDC`,
         state: 'no_funds_moved',
       });
       return NextResponse.json(
         {
-          ...paymentError('INSUFFICIENT_FUNDS', `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`),
+          ...paymentError('INSUFFICIENT_FUNDS', `Insufficient funds. Cost: ${totalCost} $CDC, Balance: ${buyerWallet.balance} $CDC`),
           ...envMeta('clawdmarket/api/trades'),
         },
         { status: 402 } // Payment Required
@@ -520,7 +556,7 @@ export async function POST(req: NextRequest) {
         .returning({ user_id: wallets.user_id });
 
       if (walletUpdateRows.length === 0) {
-        throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient funds at commit time. Required ${totalCost} BANKR.`);
+        throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient funds at commit time. Required ${totalCost} $CDC.`);
       }
 
       const [trade] = await tx
@@ -635,7 +671,7 @@ export async function POST(req: NextRequest) {
       const status = error.code === 'LISTING_ALREADY_CLAIMED' ? 409 : 402;
       await logPaymentFailure({
         buyer_id: auth.userId,
-        token: 'bnkr',
+        token: 'cdc',
         route: 'POST /api/trades',
         error_code: error.code,
         message: error.message,
@@ -657,7 +693,7 @@ export async function POST(req: NextRequest) {
     console.error('Trade creation error:', error);
     await logPaymentFailure({
       buyer_id: auth.userId,
-      token: 'bnkr',
+      token: 'cdc',
       route: 'POST /api/trades',
       error_code: 'INTERNAL_ERROR',
       message: error?.message || 'Internal server error',

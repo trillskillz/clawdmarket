@@ -69,6 +69,9 @@ export const trades = sqliteTable('trades', {
   seller_amount: real('seller_amount').notNull().default(0),
   dev_amount: real('dev_amount').notNull().default(0),
   dev_wallet: text('dev_wallet'),
+  payment_token: text('payment_token').default('CDC'),
+  payment_contract: text('payment_contract'),
+  chain_id: integer('chain_id').default(8453),
   fee_tx_hash: text('fee_tx_hash'),
   payout_status: text('payout_status', { enum: ['pending', 'fee_sent', 'seller_paid', 'complete'] }).notNull().default('pending'),
   status: text('status', { 
