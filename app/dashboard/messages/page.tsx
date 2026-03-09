@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import PageShell from '@/components/PageShell';
@@ -24,6 +24,9 @@ interface Partner {
   avatar_url?: string;
   avatar_emoji?: string;
   role: string;
+  last_message_at?: string | null;
+  last_message_sender_id?: string | null;
+  last_message_preview?: string | null;
 }
 
 export default function MessagesPage() {
@@ -42,50 +45,60 @@ export default function MessagesPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
 
+  const loadPartners = useCallback(async () => {
+    const res = await fetch('/api/messages');
+    const data = await res.json();
+    setPartners(data);
+
+    if (partnerIdParam && !data.find((p: Partner) => p.id === partnerIdParam)) {
+      // Fetch partner details if conversation is new
+      fetch(`/api/agents/${partnerIdParam}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data?.profile) {
+            setPartners(prev => [data.profile, ...prev]);
+            return;
+          }
+
+          // Fallback for non-agent or generic user profile route
+          return fetch(`/api/users/${partnerIdParam}/profile`)
+            .then(res => res.json())
+            .then(userData => {
+              if (userData?.profile) {
+                const p = userData.profile;
+                setPartners(prev => [{
+                  id: p.id,
+                  name: p.name,
+                  avatar_url: p.avatar_url,
+                  avatar_emoji: p.avatar_emoji,
+                  role: p.role,
+                }, ...prev]);
+              }
+            });
+        })
+        .catch(() => {
+          // keep page functional even if partner prefetch fails
+        });
+    }
+    setLoading(false);
+  }, [partnerIdParam]);
+
   // Fetch partners
   useEffect(() => {
     if (!user) return;
-    
-    fetch('/api/messages')
-      .then((res) => res.json())
-      .then((data) => {
-        setPartners(data);
-        // If partnerId param exists but not in list, fetch their details separately?
-        // For simplicity, assume partner list covers existing convos.
-        // If new convo, we might need to add them manually to list or just fetch directly.
-        if (partnerIdParam && !data.find((p: Partner) => p.id === partnerIdParam)) {
-          // Fetch partner details if conversation is new
-          fetch(`/api/agents/${partnerIdParam}`)
-            .then(res => res.json())
-            .then(data => {
-              if (data?.profile) {
-                setPartners(prev => [data.profile, ...prev]);
-                return;
-              }
+    loadPartners().catch(console.error);
+  }, [user, loadPartners]);
 
-              // Fallback for non-agent or generic user profile route
-              return fetch(`/api/users/${partnerIdParam}/profile`)
-                .then(res => res.json())
-                .then(userData => {
-                  if (userData?.profile) {
-                    const p = userData.profile;
-                    setPartners(prev => [{
-                      id: p.id,
-                      name: p.name,
-                      avatar_url: p.avatar_url,
-                      avatar_emoji: p.avatar_emoji,
-                      role: p.role,
-                    }, ...prev]);
-                  }
-                });
-            })
-            .catch(() => {
-              // keep page functional even if partner prefetch fails
-            });
-        }
-        setLoading(false);
-      });
-  }, [user, partnerIdParam]);
+  // Refresh partner list periodically
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      loadPartners().catch(() => {});
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [user, loadPartners]);
 
   const fetchConversation = async (partnerId: string, options?: { before?: string; appendOlder?: boolean; silent?: boolean }) => {
     const query = new URLSearchParams({ limit: '30' });
@@ -205,9 +218,14 @@ export default function MessagesPage() {
                     )}
                   </div>
                   <div className="flex-grow min-w-0">
-                    <div className="font-semibold text-text truncate">{partner.name}</div>
+                    <div className="font-semibold text-text truncate flex items-center gap-2">
+                      <span className="truncate">{partner.name}</span>
+                      {partner.last_message_sender_id && partner.last_message_sender_id !== user?.id && selectedPartnerId !== partner.id && (
+                        <span className="inline-block w-2 h-2 rounded-full bg-accent" />
+                      )}
+                    </div>
                     <div className="text-xs text-text-dim truncate">
-                      {partner.role === 'agent' ? '🤖 Agent' : '👤 Human'}
+                      {partner.last_message_preview || (partner.role === 'agent' ? '🤖 Agent' : '👤 Human')}
                     </div>
                   </div>
                 </div>

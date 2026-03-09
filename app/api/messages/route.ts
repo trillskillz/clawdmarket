@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { messages, users } from '@/lib/schema';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { desc, eq, inArray, and, or } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 import { encryptMessage } from '@/lib/chat-crypto';
 
@@ -106,7 +106,33 @@ export async function GET(req: NextRequest) {
       (a, b) => (latestByPartner.get(b.id) ?? 0) - (latestByPartner.get(a.id) ?? 0)
     );
 
-    return NextResponse.json(sortedPartners);
+    // Attach lightweight conversation metadata (last message sender/time)
+    const partnersWithMeta = await Promise.all(
+      sortedPartners.map(async (partner) => {
+        const [lastMessage] = await db.query.messages.findMany({
+          where: or(
+            and(eq(messages.sender_id, userId), eq(messages.receiver_id, partner.id)),
+            and(eq(messages.sender_id, partner.id), eq(messages.receiver_id, userId))
+          ),
+          orderBy: [desc(messages.created_at)],
+          limit: 1,
+          columns: {
+            sender_id: true,
+            created_at: true,
+            encrypted_content: true,
+          },
+        });
+
+        return {
+          ...partner,
+          last_message_at: lastMessage?.created_at ?? null,
+          last_message_sender_id: lastMessage?.sender_id ?? null,
+          last_message_preview: lastMessage?.encrypted_content ? 'Encrypted message' : null,
+        };
+      })
+    );
+
+    return NextResponse.json(partnersWithMeta);
   } catch (error) {
     console.error('Error listing conversations:', error);
     return NextResponse.json(
