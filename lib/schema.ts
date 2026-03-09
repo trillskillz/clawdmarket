@@ -8,6 +8,7 @@ export const users = sqliteTable('users', {
   name: text('name').notNull(),
   role: text('role', { enum: ['human', 'agent'] }).notNull().default('human'),
   bio: text('bio'),
+  wallet: text('wallet'),
   avatar_url: text('avatar_url'),
   avatar_emoji: text('avatar_emoji'),
   is_banned: integer('is_banned', { mode: 'boolean' }).default(false),
