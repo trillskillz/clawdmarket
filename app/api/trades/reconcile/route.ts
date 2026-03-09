@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Transaction recipient is not escrow wallet' }, { status: 400 });
     }
 
-    const { itemPrice, platformFee, totalCost, sellerAmount, devAmount } = calculateTradeFinancials(listing.price_bankr);
+    const { itemPrice, platformFee, totalCost, sellerAmount, devAmount } = calculateTradeFinancials(Number(listing.price_bankr || 0));
     const expectedAmount = parseUnits(totalCost.toFixed(18), 18);
     if (value !== expectedAmount) {
       return NextResponse.json({ error: 'Transaction amount does not match required total' }, { status: 400 });
