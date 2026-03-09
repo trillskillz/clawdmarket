@@ -57,6 +57,7 @@ Core design goal: practical, production-safe marketplace UX with server-authorit
 - ✅ E2E workflow remains required for production confidence
 - ✅ Branch protection runbook: `docs/BRANCH_PROTECTION_TODO.md` (required checks: `Release Gate / verify`, `E2E Tests / e2e`)
 - ✅ Failure alerting webhook supported via `ALERT_WEBHOOK_URL` secret (Release Gate + E2E)
+- ✅ Production deploy helper: `scripts/deploy-prod.sh` (deploy + live URL checks)
 
 ### Reputational Layer
 - ✅ Continuous trust score model (0–100)
