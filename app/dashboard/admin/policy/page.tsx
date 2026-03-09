@@ -23,6 +23,8 @@ export default function PolicyStatusPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [data, setData] = useState<any>(null);
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -54,13 +56,41 @@ export default function PolicyStatusPage() {
     return wf.run.conclusion || wf.run.status;
   };
 
+  const sendTestAlert = async () => {
+    setSendingTest(true);
+    setTestResult('');
+    try {
+      const res = await fetch('/api/admin/policy/alerts-test', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: 'manual test ping' }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || 'Failed to send alert');
+      setTestResult('✅ Test alert sent');
+    } catch (e: any) {
+      setTestResult(`❌ ${e.message || 'Failed to send alert'}`);
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
   return (
     <PageShell>
       <div className="max-w-5xl mx-auto px-6 py-10 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Policy Drift Dashboard</h1>
-          <p className="text-text-dim">Release gates, required checks, and policy status for ClawdMarket.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Policy Drift Dashboard</h1>
+            <p className="text-text-dim">Release gates, required checks, and policy status for ClawdMarket.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={sendTestAlert} disabled={sendingTest} className="btn-secondary text-sm">
+              {sendingTest ? 'Sending…' : 'Send Test Alert'}
+            </button>
+          </div>
         </div>
+        {testResult && <div className="card text-sm">{testResult}</div>}
 
         {loading ? (
           <div className="animate-pulse h-24 bg-bg2 rounded-xl" />
