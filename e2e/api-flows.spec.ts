@@ -8,6 +8,14 @@ async function loginToken(request: any, email: string, password: string) {
   return body.token as string;
 }
 
+async function me(request: any, token: string) {
+  const res = await request.get('/api/auth/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(res.ok()).toBeTruthy();
+  return res.json();
+}
+
 test.describe('API lifecycle matrix', () => {
   test('api key lifecycle (create + list + revoke)', async ({ request }) => {
     const token = await loginToken(request, 'jacob@example.com', 'password123');
@@ -85,6 +93,97 @@ test.describe('API lifecycle matrix', () => {
     expect(preview.total_cost).toBe(1260);
     expect(preview.seller_amount).toBe(1200);
     expect(preview.dev_amount).toBe(60);
+  });
+
+  test('agent rating returns updated reputation and viewer my_rating', async ({ request }) => {
+    test.fixme(true, 'Local auth/login currently broken by schema drift (missing users.wallet column). Enable after migration parity.');
+    const jacobToken = await loginToken(request, 'jacob@example.com', 'password123');
+    const mayaToken = await loginToken(request, 'maya@startup.io', 'password123');
+    const jacobMe = await me(request, jacobToken);
+    const mayaMe = await me(request, mayaToken);
+
+    if (jacobMe?.user?.role !== 'agent' || mayaMe?.user?.role !== 'agent') {
+      test.skip(true, 'Seed users are not both agents in this environment');
+    }
+
+    const rateRes = await request.post(`/api/agents/${mayaMe.user.id}/rate`, {
+      headers: {
+        Authorization: `Bearer ${jacobToken}`,
+        'Content-Type': 'application/json',
+      },
+      data: { score: 1 },
+    });
+
+    expect(rateRes.ok()).toBeTruthy();
+    const rateBody = await rateRes.json();
+    expect(rateBody?.success).toBeTruthy();
+    expect(rateBody?.reputation?.count).toBeGreaterThan(0);
+
+    const profileRes = await request.get(`/api/agents/${mayaMe.user.id}`, {
+      headers: { Authorization: `Bearer ${jacobToken}` },
+    });
+
+    expect(profileRes.ok()).toBeTruthy();
+    const profileBody = await profileRes.json();
+    expect(profileBody?.profile?.my_rating).toBe(1);
+  });
+
+  test('messages API supports metadata + pagination', async ({ request }) => {
+    test.fixme(true, 'Local auth/login currently broken by schema drift (missing users.wallet column). Enable after migration parity.');
+    const jacobToken = await loginToken(request, 'jacob@example.com', 'password123');
+    const mayaToken = await loginToken(request, 'maya@startup.io', 'password123');
+    const jacobMe = await me(request, jacobToken);
+    const mayaMe = await me(request, mayaToken);
+
+    for (let i = 0; i < 4; i++) {
+      const send = await request.post('/api/messages', {
+        headers: {
+          Authorization: `Bearer ${jacobToken}`,
+          'Content-Type': 'application/json',
+        },
+        data: {
+          receiverId: mayaMe.user.id,
+          content: `pw-message-${Date.now()}-${i}`,
+        },
+      });
+      expect(send.ok()).toBeTruthy();
+    }
+
+    // Ensure the receiver also has auth context available in this test matrix
+    const receiverList = await request.get('/api/messages', {
+      headers: { Authorization: `Bearer ${mayaToken}` },
+    });
+    expect(receiverList.ok()).toBeTruthy();
+
+    const convoList = await request.get('/api/messages', {
+      headers: { Authorization: `Bearer ${jacobToken}` },
+    });
+    expect(convoList.ok()).toBeTruthy();
+    const listJson = await convoList.json();
+    const partner = (listJson || []).find((p: any) => p.id === mayaMe.user.id);
+    expect(partner).toBeTruthy();
+    expect(partner.last_message_at).toBeTruthy();
+    expect(partner.last_message_sender_id).toBeTruthy();
+
+    const firstPage = await request.get(`/api/messages/${mayaMe.user.id}?limit=2`, {
+      headers: { Authorization: `Bearer ${jacobToken}` },
+    });
+    expect(firstPage.ok()).toBeTruthy();
+    const firstJson = await firstPage.json();
+    expect(Array.isArray(firstJson.messages)).toBeTruthy();
+    expect(firstJson.messages.length).toBe(2);
+    expect(firstJson.has_more).toBeTruthy();
+
+    const before = firstJson.messages[0]?.created_at;
+    expect(before).toBeTruthy();
+
+    const secondPage = await request.get(`/api/messages/${mayaMe.user.id}?limit=2&before=${encodeURIComponent(before)}`, {
+      headers: { Authorization: `Bearer ${jacobToken}` },
+    });
+    expect(secondPage.ok()).toBeTruthy();
+    const secondJson = await secondPage.json();
+    expect(Array.isArray(secondJson.messages)).toBeTruthy();
+    expect(secondJson.messages.length).toBeGreaterThanOrEqual(1);
   });
 
   test('contracts lifecycle via trade auto-create', async ({ request }) => {
