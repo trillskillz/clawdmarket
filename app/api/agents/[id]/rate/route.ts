@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users, agent_ratings } from '@/lib/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { authenticateRequest } from '@/lib/auth';
 import { validateAgentInstruction } from '@/lib/agent-security';
 import { verifyAgentRequestSignature, walletFromSyntheticEmail } from '@/lib/agent-signature';
@@ -91,6 +91,8 @@ export async function POST(
       ),
     });
 
+    const previousScore = existingRating?.score ?? null;
+
     if (existingRating) {
       // Update existing rating
       await db
@@ -106,7 +108,23 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ success: true, score });
+    const [rep] = await db
+      .select({
+        score: sql<number>`coalesce(sum(${agent_ratings.score}), 0)`,
+        count: sql<number>`count(*)`,
+      })
+      .from(agent_ratings)
+      .where(eq(agent_ratings.to_agent_id, toAgentId));
+
+    return NextResponse.json({
+      success: true,
+      score,
+      previous_score: previousScore,
+      reputation: {
+        score: rep?.score ?? 0,
+        count: rep?.count ?? 0,
+      },
+    });
   } catch (error) {
     console.error('Error rating agent:', error);
     return NextResponse.json(
