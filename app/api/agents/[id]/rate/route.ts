@@ -43,20 +43,25 @@ export async function POST(
       );
     }
 
-    const expectedWallet = walletFromSyntheticEmail(actor.email);
-    const sigCheck = await verifyAgentRequestSignature({
-      method: req.method,
-      path: req.nextUrl.pathname,
-      headers: Object.fromEntries(req.headers.entries()),
-      bodyText: rawBody,
-      expectedWallet: expectedWallet ?? undefined,
-    });
+    // Signature validation is mandatory for API-key style agent calls,
+    // but optional for first-party authenticated web sessions.
+    const isApiKeyAuth = Boolean(authHeader?.startsWith('Bearer clawd_'));
+    if (isApiKeyAuth) {
+      const expectedWallet = walletFromSyntheticEmail(actor.email);
+      const sigCheck = await verifyAgentRequestSignature({
+        method: req.method,
+        path: req.nextUrl.pathname,
+        headers: Object.fromEntries(req.headers.entries()),
+        bodyText: rawBody,
+        expectedWallet: expectedWallet ?? undefined,
+      });
 
-    if (!sigCheck.ok) {
-      return NextResponse.json(
-        { success: false, error_code: sigCheck.code, message: sigCheck.message },
-        { status: 401 }
-      );
+      if (!sigCheck.ok) {
+        return NextResponse.json(
+          { success: false, error_code: sigCheck.code, message: sigCheck.message },
+          { status: 401 }
+        );
+      }
     }
 
     const fromAgentId = actor.id;

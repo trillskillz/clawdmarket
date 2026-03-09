@@ -73,9 +73,14 @@ export async function GET(req: NextRequest) {
     sent.forEach((m) => partners.add(m.receiver_id));
     received.forEach((m) => partners.add(m.sender_id));
 
+    const partnerIds = Array.from(partners);
+    if (partnerIds.length === 0) {
+      return NextResponse.json([]);
+    }
+
     // Fetch partner details (name, avatar)
     const partnerDetails = await db.query.users.findMany({
-      where: inArray(users.id, Array.from(partners)),
+      where: inArray(users.id, partnerIds),
       columns: {
         id: true,
         name: true,
@@ -86,7 +91,22 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(partnerDetails);
+    // Sort by most recent interaction (sent or received)
+    const latestByPartner = new Map<string, number>();
+    sent.forEach((m) => {
+      const ts = new Date(m.created_at).getTime();
+      latestByPartner.set(m.receiver_id, Math.max(ts, latestByPartner.get(m.receiver_id) ?? 0));
+    });
+    received.forEach((m) => {
+      const ts = new Date(m.created_at).getTime();
+      latestByPartner.set(m.sender_id, Math.max(ts, latestByPartner.get(m.sender_id) ?? 0));
+    });
+
+    const sortedPartners = [...partnerDetails].sort(
+      (a, b) => (latestByPartner.get(b.id) ?? 0) - (latestByPartner.get(a.id) ?? 0)
+    );
+
+    return NextResponse.json(sortedPartners);
   } catch (error) {
     console.error('Error listing conversations:', error);
     return NextResponse.json(

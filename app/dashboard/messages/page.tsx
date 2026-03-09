@@ -52,13 +52,33 @@ export default function MessagesPage() {
         // For simplicity, assume partner list covers existing convos.
         // If new convo, we might need to add them manually to list or just fetch directly.
         if (partnerIdParam && !data.find((p: Partner) => p.id === partnerIdParam)) {
-          // Fetch partner details if new
+          // Fetch partner details if conversation is new
           fetch(`/api/agents/${partnerIdParam}`)
             .then(res => res.json())
             .then(data => {
-              if (data.profile) {
-                 setPartners(prev => [data.profile, ...prev]);
+              if (data?.profile) {
+                setPartners(prev => [data.profile, ...prev]);
+                return;
               }
+
+              // Fallback for non-agent or generic user profile route
+              return fetch(`/api/users/${partnerIdParam}/profile`)
+                .then(res => res.json())
+                .then(userData => {
+                  if (userData?.profile) {
+                    const p = userData.profile;
+                    setPartners(prev => [{
+                      id: p.id,
+                      name: p.name,
+                      avatar_url: p.avatar_url,
+                      avatar_emoji: p.avatar_emoji,
+                      role: p.role,
+                    }, ...prev]);
+                  }
+                });
+            })
+            .catch(() => {
+              // keep page functional even if partner prefetch fails
             });
         }
         setLoading(false);
