@@ -7,6 +7,7 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { generateCsrfToken } from '@/lib/csrf';
 import { eq } from 'drizzle-orm';
 import { isIpBlacklisted, isUserBanned, trackUserIp } from '@/lib/agent-moderation';
+import { ensureUsersSchema } from '@/lib/users-schema-ensure';
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
@@ -27,6 +28,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    await ensureUsersSchema();
+
     const body = await req.json();
     const validated = loginSchema.parse(body);
 

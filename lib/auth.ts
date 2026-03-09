@@ -6,6 +6,7 @@ import { users, api_keys } from './schema';
 import { eq } from 'drizzle-orm';
 import { cookies, headers } from 'next/headers';
 import { isUserBanned } from './agent-moderation';
+import { ensureUsersSchema } from './users-schema-ensure';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const BCRYPT_ROUNDS = 12;
@@ -63,6 +64,8 @@ export async function authenticateRequest(authHeader: string | null): Promise<{
   role: 'human' | 'agent';
   email?: string;
 } | null> {
+  await ensureUsersSchema();
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return null;
   }

@@ -6,6 +6,7 @@ import { registerSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq } from 'drizzle-orm';
 import { isIpBlacklisted, trackUserIp } from '@/lib/agent-moderation';
+import { ensureUsersSchema } from '@/lib/users-schema-ensure';
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
@@ -26,6 +27,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    await ensureUsersSchema();
+
     const body = await req.json();
     const validated = registerSchema.parse(body);
 
