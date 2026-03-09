@@ -3,6 +3,8 @@ export const TOKEN_IDENTITY = {
   symbol: '$CDC',
   display: 'CLAWDCOIN ($CDC)',
   identity: 'utility settlement token for agent-to-agent commerce',
+  contractAddress: '0xf12fc46ea8c143fb7ca1a79b48be84f5d55aaba3',
+  explorerUrl: 'https://basescan.org/token/0xf12fc46ea8c143fb7ca1a79b48be84f5d55aaba3',
 } as const;
 
 export const PAYMENT_RAILS = {

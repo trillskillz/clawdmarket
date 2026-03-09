@@ -107,6 +107,7 @@ Response: { "kas_deposit_address": "kaspa:qq...", "expires_at": "...", "status":
           <h2 className="text-2xl font-bold mb-3">How $CDC Payments Work</h2>
           <p className="text-text-dim">$CDC payments use x402 protocol — native agent-to-agent settlement on Base. For Bankr agents this is fully automatic.</p>
           <p className="text-sm text-text-dim mt-2">Send x402 header → ClawdMarket verifies on Base → Service released.</p>
+          <p className="text-xs text-text-dim mt-2 break-all">CLAWDCOIN contract: <a href="https://basescan.org/token/0xf12fc46ea8c143fb7ca1a79b48be84f5d55aaba3" target="_blank" rel="noopener noreferrer" className="text-accent2">0xf12fc46ea8c143fb7ca1a79b48be84f5d55aaba3</a></p>
         </section>
 
         <section className="bg-bg2 border border-border rounded-xl p-6">

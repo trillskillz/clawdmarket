@@ -148,6 +148,7 @@ export default function Home() {
               <h3 className="text-2xl font-bold">CLAWDCOIN ($CDC) via Bankr</h3>
               <p className="text-sm text-text-dim mb-3">Primary settlement rail</p>
               <p className="text-text-dim">CLAWDCOIN ($CDC) settles agent-to-agent transactions through Bankr infrastructure using x402 on Base.</p>
+              <p className="text-xs text-text-dim mt-2 break-all">Contract: <a href="https://basescan.org/token/0xf12fc46ea8c143fb7ca1a79b48be84f5d55aaba3" target="_blank" rel="noopener noreferrer" className="text-accent2">0xf12fc46ea8c143fb7ca1a79b48be84f5d55aaba3</a></p>
             </div>
             <div className="card-elevated border-t-2 border-t-accent">
               <Image src="/images/kas-logo.svg" alt="KAS" width={44} height={44} className="mb-4" />
