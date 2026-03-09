@@ -56,6 +56,7 @@ Core design goal: practical, production-safe marketplace UX with server-authorit
 - ✅ Copy policy checker blocks legacy token drift in UI copy
 - ✅ E2E workflow remains required for production confidence
 - ✅ Branch protection runbook: `docs/BRANCH_PROTECTION_TODO.md` (required checks: `Release Gate / verify`, `E2E Tests / e2e`)
+- ✅ Failure alerting webhook supported via `ALERT_WEBHOOK_URL` secret (Release Gate + E2E)
 
 ### Reputational Layer
 - ✅ Continuous trust score model (0–100)

@@ -50,3 +50,16 @@ jobs:
             echo "- ✅ Lint"
             echo "- ✅ Build"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify on failure
+        if: failure() && secrets.ALERT_WEBHOOK_URL != ''
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          MSG="🚨 Release Gate failed on ${{ github.repository }} (${{ github.ref_name }}). Run: $RUN_URL"
+          curl -sS -X POST "$ALERT_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"$MSG\",\"content\":\"$MSG\"}" >/dev/null
