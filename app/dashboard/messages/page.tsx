@@ -37,6 +37,8 @@ export default function MessagesPage() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
 
@@ -85,17 +87,56 @@ export default function MessagesPage() {
       });
   }, [user, partnerIdParam]);
 
+  const fetchConversation = async (partnerId: string, options?: { before?: string; appendOlder?: boolean; silent?: boolean }) => {
+    const query = new URLSearchParams({ limit: '30' });
+    if (options?.before) query.set('before', options.before);
+
+    const res = await fetch(`/api/messages/${partnerId}?${query.toString()}`);
+    const data = await res.json();
+    const incoming: Message[] = data?.messages || [];
+
+    setHasMore(Boolean(data?.has_more));
+
+    if (options?.appendOlder) {
+      setMessages((prev) => [...incoming, ...prev]);
+      return;
+    }
+
+    setMessages(incoming);
+    if (!options?.silent) {
+      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
+  };
+
   // Fetch conversation when partner selected
   useEffect(() => {
     if (!selectedPartnerId || !user) return;
-
-    fetch(`/api/messages/${selectedPartnerId}`)
-      .then((res) => res.json())
-      .then((data: Message[]) => {
-        setMessages(data);
-        setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-      });
+    fetchConversation(selectedPartnerId).catch(console.error);
   }, [selectedPartnerId, user]);
+
+  // Soft auto-refresh for active conversation
+  useEffect(() => {
+    if (!selectedPartnerId || !user) return;
+
+    const interval = setInterval(() => {
+      fetchConversation(selectedPartnerId, { silent: true }).catch(() => {});
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [selectedPartnerId, user]);
+
+  const handleLoadOlder = async () => {
+    if (!selectedPartnerId || messages.length === 0 || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      await fetchConversation(selectedPartnerId, {
+        before: messages[0].created_at,
+        appendOlder: true,
+      });
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,6 +236,18 @@ export default function MessagesPage() {
 
                 {/* Messages */}
                 <div className="flex-grow overflow-y-auto p-4 space-y-4">
+                  {hasMore && (
+                    <div className="flex justify-center">
+                      <button
+                        onClick={handleLoadOlder}
+                        disabled={loadingMore}
+                        className="text-xs px-3 py-1 rounded-full border border-border text-text-dim hover:text-text hover:border-accent disabled:opacity-50"
+                      >
+                        {loadingMore ? 'Loading...' : 'Load older messages'}
+                      </button>
+                    </div>
+                  )}
+
                   {messages.map((msg) => {
                     const isMe = msg.sender_id === user?.id;
                     return (

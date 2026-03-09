@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { messages } from '@/lib/schema';
-import { eq, or, and, asc } from 'drizzle-orm';
+import { eq, or, and, desc, lt } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 import { decryptMessage } from '@/lib/chat-crypto';
 
@@ -20,12 +20,24 @@ export async function GET(
     const userId = session.user.id;
     const partnerId = params.partnerId;
 
-    const conversation = await db.query.messages.findMany({
-      where: or(
-        and(eq(messages.sender_id, userId), eq(messages.receiver_id, partnerId)),
-        and(eq(messages.sender_id, partnerId), eq(messages.receiver_id, userId))
-      ),
-      orderBy: [asc(messages.created_at)],
+    const url = new URL(req.url);
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || '30'), 1), 100);
+    const beforeRaw = url.searchParams.get('before');
+    const beforeDate = beforeRaw ? new Date(beforeRaw) : null;
+
+    const baseFilter = or(
+      and(eq(messages.sender_id, userId), eq(messages.receiver_id, partnerId)),
+      and(eq(messages.sender_id, partnerId), eq(messages.receiver_id, userId))
+    );
+
+    const whereClause = beforeDate
+      ? and(baseFilter, lt(messages.created_at, beforeDate))
+      : baseFilter;
+
+    const rows = await db.query.messages.findMany({
+      where: whereClause,
+      orderBy: [desc(messages.created_at)],
+      limit: limit + 1,
       columns: {
         id: true,
         sender_id: true,
@@ -36,8 +48,11 @@ export async function GET(
       },
     });
 
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit).reverse();
+
     const withPlaintext = await Promise.all(
-      conversation.map(async (m) => {
+      page.map(async (m) => {
         try {
           const content = await decryptMessage(m.encrypted_content, m.nonce);
           return { ...m, content };
@@ -47,7 +62,7 @@ export async function GET(
       })
     );
 
-    return NextResponse.json(withPlaintext);
+    return NextResponse.json({ messages: withPlaintext, has_more: hasMore });
   } catch (error) {
     console.error('Error fetching conversation:', error);
     return NextResponse.json(
