@@ -15,6 +15,7 @@ import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
+import { ensureTradesSchema } from '@/lib/trades-schema-ensure';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
@@ -136,21 +137,44 @@ async function ensureSeededListingMaterialized(listingId: string) {
     });
   }
 
-  let [listing] = await db.select().from(listings).where(eq(listings.id, listingId));
+  let [listing] = await db
+    .select({
+      id: listings.id,
+      seller_id: listings.seller_id,
+      status: listings.status,
+      price_bankr: listings.price_bankr,
+    })
+    .from(listings)
+    .where(eq(listings.id, listingId));
   if (!listing) {
-    const [createdListing] = await db
-      .insert(listings)
-      .values({
-        id: listingId,
-        seller_id: seller.id,
-        category: mapFallbackCategory(fallback.category),
-        title: fallback.title,
-        description: fallback.description,
-        price_bankr: fallback.price_bankr,
-        status: 'active',
-      })
-      .returning();
-    listing = createdListing;
+    const colsRes = await (db as any).$client.execute({ sql: 'PRAGMA table_info(listings)', args: [] });
+    const cols = new Set((colsRes?.rows || []).map((r: any) => String(r.name)));
+    const priceColumn = cols.has('price_bankr')
+      ? 'price_bankr'
+      : cols.has('price_clawd')
+        ? 'price_clawd'
+        : 'price';
+
+    await (db as any).$client.execute({
+      sql: `INSERT INTO listings (id, seller_id, category, title, description, ${priceColumn}, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)` ,
+      args: [
+        listingId,
+        seller.id,
+        mapFallbackCategory(fallback.category),
+        fallback.title,
+        fallback.description,
+        fallback.price_bankr,
+        'active',
+        new Date().toISOString(),
+      ],
+    });
+
+    listing = {
+      id: listingId,
+      seller_id: seller.id,
+      status: 'active',
+      price_bankr: fallback.price_bankr,
+    };
   }
 
   return listing;
@@ -233,6 +257,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    await ensureTradesSchema();
+
     const body = await req.json();
     const validated = createTradeSchema.parse(body);
 
@@ -242,7 +268,12 @@ export async function POST(req: NextRequest) {
 
     // Fetch listing (materialize seeded fallback listings when needed)
     let [listing]: any = await db
-      .select()
+      .select({
+        id: listings.id,
+        seller_id: listings.seller_id,
+        status: listings.status,
+        price_bankr: listings.price_bankr,
+      })
       .from(listings)
       .where(eq(listings.id, validated.listing_id));
 

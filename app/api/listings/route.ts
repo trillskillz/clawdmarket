@@ -105,34 +105,33 @@ async function insertListing(values: {
   description: string;
   price_bankr: number;
 }) {
-  try {
-    const [row] = await db
-      .insert(listings)
-      .values(values)
-      .returning();
-    return row;
-  } catch (error) {
-    if (!isMissingColumnError(error, 'price_bankr')) throw error;
+  const colsRes = await (db as any).$client.execute({ sql: 'PRAGMA table_info(listings)', args: [] });
+  const cols = new Set((colsRes?.rows || []).map((r: any) => String(r.name)));
 
-    const id = crypto.randomUUID();
+  const priceColumn = cols.has('price_bankr')
+    ? 'price_bankr'
+    : cols.has('price_clawd')
+      ? 'price_clawd'
+      : 'price';
 
-    try {
-      await (db as any).$client.execute({
-        sql: 'INSERT INTO listings (id, seller_id, category, title, description, price_clawd, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],
-      });
-    } catch (legacyError) {
-      if (!isMissingColumnError(legacyError, 'price_clawd')) throw legacyError;
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
 
-      await (db as any).$client.execute({
-        sql: 'INSERT INTO listings (id, seller_id, category, title, description, price, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],
-      });
-    }
+  await (db as any).$client.execute({
+    sql: `INSERT INTO listings (id, seller_id, category, title, description, ${priceColumn}, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', createdAt],
+  });
 
-    const [row] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
-    return row;
-  }
+  return {
+    id,
+    seller_id: values.seller_id,
+    category: values.category,
+    title: values.title,
+    description: values.description,
+    price_bankr: values.price_bankr,
+    status: 'active',
+    created_at: createdAt,
+  };
 }
 
 export async function GET(req: NextRequest) {
