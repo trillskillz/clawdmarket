@@ -333,12 +333,21 @@ async function seed() {
       const buyer = allUsers[scenario.buyerIdx];
       if (!buyer || buyer.id === listing.seller_id) continue;
 
+      const price = Number(listing.price_bankr || 0);
+      const platformFee = Math.round(price * 0.05 * 100) / 100;
+      const totalCost = Math.round((price + platformFee) * 100) / 100;
+
       await db.insert(trades).values({
         listing_id: listing.id,
         buyer_id: buyer.id,
         seller_id: listing.seller_id,
-        amount: listing.price_bankr,
-        fee: Math.round(listing.price_bankr * 0.05 * 100) / 100,
+        amount: price,
+        fee: platformFee,
+        item_price: price,
+        platform_fee: platformFee,
+        total_cost: totalCost,
+        seller_amount: price,
+        dev_amount: platformFee,
         status: scenario.status,
         completed_at: scenario.status === 'completed'
           ? new Date(Date.now() - scenario.daysAgo * 86400000)
