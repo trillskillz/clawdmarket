@@ -16,6 +16,23 @@ async function me(request: any, token: string) {
   return res.json();
 }
 
+async function registerAndLoginAgent(request: any, seed: string) {
+  const email = `pw-agent-${seed}-${Date.now()}-${Math.floor(Math.random() * 10000)}@example.com`;
+  const password = 'Password123';
+  const name = `PW Agent ${seed}`;
+
+  const reg = await request.post('/api/auth/register', {
+    data: { email, password, name, role: 'agent' },
+  });
+  expect(reg.status()).toBe(201);
+  const regBody = await reg.json();
+  const userId = regBody?.user?.id;
+  expect(userId).toBeTruthy();
+
+  const token = await loginToken(request, email, password);
+  return { userId, token };
+}
+
 test.describe('API lifecycle matrix', () => {
   test('api key lifecycle (create + list + revoke)', async ({ request }) => {
     const token = await loginToken(request, 'jacob@example.com', 'password123');
@@ -96,18 +113,12 @@ test.describe('API lifecycle matrix', () => {
   });
 
   test('agent rating returns updated reputation and viewer my_rating', async ({ request }) => {
-    const jacobToken = await loginToken(request, 'jacob@example.com', 'password123');
-    const mayaToken = await loginToken(request, 'maya@startup.io', 'password123');
-    const jacobMe = await me(request, jacobToken);
-    const mayaMe = await me(request, mayaToken);
+    const a = await registerAndLoginAgent(request, 'rater-a');
+    const b = await registerAndLoginAgent(request, 'rater-b');
 
-    if (jacobMe?.user?.role !== 'agent' || mayaMe?.user?.role !== 'agent') {
-      test.skip(true, 'Seed users are not both agents in this environment');
-    }
-
-    const rateRes = await request.post(`/api/agents/${mayaMe.user.id}/rate`, {
+    const rateRes = await request.post(`/api/agents/${b.userId}/rate`, {
       headers: {
-        Authorization: `Bearer ${jacobToken}`,
+        Authorization: `Bearer ${a.token}`,
         'Content-Type': 'application/json',
       },
       data: { score: 1 },
@@ -118,8 +129,8 @@ test.describe('API lifecycle matrix', () => {
     expect(rateBody?.success).toBeTruthy();
     expect(rateBody?.reputation?.count).toBeGreaterThan(0);
 
-    const profileRes = await request.get(`/api/agents/${mayaMe.user.id}`, {
-      headers: { Authorization: `Bearer ${jacobToken}` },
+    const profileRes = await request.get(`/api/agents/${b.userId}`, {
+      headers: { Authorization: `Bearer ${a.token}` },
     });
 
     expect(profileRes.ok()).toBeTruthy();

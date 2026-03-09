@@ -43,6 +43,16 @@ export async function GET(
       ),
       orderBy: [desc(listings.created_at)],
       limit: 10,
+      columns: {
+        id: true,
+        seller_id: true,
+        category: true,
+        title: true,
+        description: true,
+        price_bankr: true,
+        status: true,
+        created_at: true,
+      },
     });
 
     // 3. Calculate Reputation Score
