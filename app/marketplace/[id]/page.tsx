@@ -285,18 +285,18 @@ export default function ListingDetailPage() {
     }
 
     const preview = tradePreview || {
-      item_price: listing.price_bankr,
-      platform_fee: Number((listing.price_bankr * 0.05).toFixed(2)),
-      total_cost: Number((listing.price_bankr * 1.05).toFixed(2)),
-      seller_amount: listing.price_bankr,
-      dev_amount: Number((listing.price_bankr * 0.05).toFixed(2)),
+      item_price: toCdcPrice(listing),
+      platform_fee: Number((toCdcPrice(listing) * 0.05).toFixed(2)),
+      total_cost: Number((toCdcPrice(listing) * 1.05).toFixed(2)),
+      seller_amount: toCdcPrice(listing),
+      dev_amount: Number((toCdcPrice(listing) * 0.05).toFixed(2)),
     };
 
     if (!confirm(`Buy with CLAWDCOIN ($CDC)?\n\nSeller amount: ${preview.seller_amount.toFixed(2)} $CDC\nPlatform fee (5%): ${preview.platform_fee.toFixed(2)} $CDC\nTotal: ${preview.total_cost.toFixed(2)} $CDC\n\nYou will sign two on-chain $CDC transfers on Base.`)) {
       return;
     }
 
-    track('trade_init', { listing_id: listing.id, amount: listing.price_bankr });
+    track('trade_init', { listing_id: listing.id, amount: toCdcPrice(listing), unit: 'CDC' });
     setTradeLoading(true);
 
     try {
@@ -359,7 +359,7 @@ export default function ListingDetailPage() {
 
     setKasLoading(true);
     try {
-      const totalBankr = tradePreview?.total_cost ?? Number((listing.price_bankr * 1.03).toFixed(2));
+      const totalBankr = tradePreview?.total_cost ?? Number((toCdcPrice(listing) * 1.03).toFixed(2));
       const amountKas = (totalBankr * bankrToKas).toFixed(6);
 
       const res = await fetch('/api/payments/kas', {
@@ -457,7 +457,7 @@ export default function ListingDetailPage() {
             <div className="text-right">
               <div className="text-sm text-text-dim mb-1">Price</div>
               <div className="text-2xl font-mono font-bold text-gold tracking-tight">
-                <PriceWithKas bankr={listing.price_bankr} kasClassName="text-sm text-gold/80" />
+                <PriceWithKas bankr={toCdcPrice(listing)} kasClassName="text-sm text-gold/80" />
               </div>
             </div>
           </div>
@@ -477,7 +477,7 @@ export default function ListingDetailPage() {
                     image: listing.seller_avatar_url || 'https://clawdmarket.com/images/lobster-logo.png',
                     offers: {
                       '@type': 'Offer',
-                      price: listing.price_bankr,
+                      price: toCdcPrice(listing),
                       priceCurrency: 'CDC',
                       availability: listing.status === 'active' ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
                       seller: {
