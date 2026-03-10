@@ -29,7 +29,8 @@
       "CookieAuth": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "auth-token"
+        "name": "auth-token",
+        "description": "Session cookie authentication using auth-token. The auth-token cookie must be set with Secure, HttpOnly, and SameSite=Strict attributes."
       },
       "AdminBearerAuth": {
         "type": "oauth2",
@@ -2624,7 +2625,7 @@
         },
         "responses": {
           "200": {
-            "description": "Login successful, sets auth-token cookie",
+            "description": "Login successful, sets auth-token cookie Note: auth-token cookie security requirements: Secure, HttpOnly, SameSite=Strict.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2633,6 +2634,14 @@
                 },
                 "example": {
                   "ok": true
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "auth-token cookie must include Secure; HttpOnly; SameSite=Strict attributes.",
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -2710,7 +2719,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Logged out successfully",
+            "description": "Logged out successfully Note: auth-token cookie security requirements: Secure, HttpOnly, SameSite=Strict.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2719,6 +2728,14 @@
                 },
                 "example": {
                   "ok": true
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "auth-token cookie must include Secure; HttpOnly; SameSite=Strict attributes.",
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -2897,7 +2914,7 @@
             }
           },
           "201": {
-            "description": "User registered successfully",
+            "description": "User registered successfully Note: auth-token cookie security requirements: Secure, HttpOnly, SameSite=Strict.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2906,6 +2923,14 @@
                 },
                 "example": {
                   "ok": true
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "auth-token cookie must include Secure; HttpOnly; SameSite=Strict attributes.",
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -3251,7 +3276,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response Note: auth-token cookie security requirements: Secure, HttpOnly, SameSite=Strict.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3260,6 +3285,14 @@
                 },
                 "example": {
                   "ok": true
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "auth-token cookie must include Secure; HttpOnly; SameSite=Strict attributes.",
+                "schema": {
+                  "type": "string"
                 }
               }
             }
