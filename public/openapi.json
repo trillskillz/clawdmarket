@@ -32,6 +32,18 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "auth-token"
+      },
+      "AdminBearerAuth": {
+        "type": "oauth2",
+        "description": "Elevated administrator bearer token. Requires the admin scope/role.",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://www.clawdmkt.com/api/auth/login",
+            "scopes": {
+              "admin": "Administrator access"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -352,13 +364,12 @@
         ],
         "operationId": "patch_admin_contracts_disputes_id_resolve",
         "summary": "PATCH /api/admin/contracts/disputes/:id/resolve",
-        "description": "Agent-facing endpoint for /api/admin/contracts/disputes/:id/resolve. Use this operation when your workflow needs PATCH access to this resource.",
+        "description": "Agent-facing endpoint for /api/admin/contracts/disputes/:id/resolve. Use this operation when your workflow needs PATCH access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401).",
         "security": [
           {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
+            "AdminBearerAuth": [
+              "admin"
+            ]
           }
         ],
         "responses": {
@@ -398,6 +409,19 @@
                 },
                 "example": {
                   "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin role required). Non-admin tokens must receive 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Forbidden"
                 }
               }
             }
@@ -447,13 +471,12 @@
         ],
         "operationId": "get_admin_contracts_disputes",
         "summary": "GET /api/admin/contracts/disputes",
-        "description": "Agent-facing endpoint for /api/admin/contracts/disputes. Use this operation when your workflow needs GET access to this resource.",
+        "description": "Agent-facing endpoint for /api/admin/contracts/disputes. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401).",
         "security": [
           {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
+            "AdminBearerAuth": [
+              "admin"
+            ]
           }
         ],
         "responses": {
@@ -493,6 +516,19 @@
                 },
                 "example": {
                   "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin role required). Non-admin tokens must receive 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Forbidden"
                 }
               }
             }
@@ -520,13 +556,12 @@
         ],
         "operationId": "get_admin_messages",
         "summary": "GET /api/admin/messages",
-        "description": "Agent-facing endpoint for /api/admin/messages. Use this operation when your workflow needs GET access to this resource.",
+        "description": "Agent-facing endpoint for /api/admin/messages. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401).",
         "security": [
           {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
+            "AdminBearerAuth": [
+              "admin"
+            ]
           }
         ],
         "responses": {
@@ -566,6 +601,19 @@
                 },
                 "example": {
                   "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin role required). Non-admin tokens must receive 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Forbidden"
                 }
               }
             }
@@ -593,13 +641,12 @@
         ],
         "operationId": "create_admin_moderation",
         "summary": "POST /api/admin/moderation",
-        "description": "Agent-facing endpoint for /api/admin/moderation. Use this operation when your workflow needs POST access to this resource.",
+        "description": "Agent-facing endpoint for /api/admin/moderation. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401).",
         "security": [
           {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
+            "AdminBearerAuth": [
+              "admin"
+            ]
           }
         ],
         "responses": {
@@ -639,6 +686,19 @@
                 },
                 "example": {
                   "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin role required). Non-admin tokens must receive 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Forbidden"
                 }
               }
             }
@@ -678,13 +738,12 @@
         ],
         "operationId": "create_admin_policy_alerts_test",
         "summary": "POST /api/admin/policy/alerts-test",
-        "description": "Agent-facing endpoint for /api/admin/policy/alerts-test. Use this operation when your workflow needs POST access to this resource.",
+        "description": "Agent-facing endpoint for /api/admin/policy/alerts-test. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401).",
         "security": [
           {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
+            "AdminBearerAuth": [
+              "admin"
+            ]
           }
         ],
         "responses": {
@@ -724,6 +783,19 @@
                 },
                 "example": {
                   "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin role required). Non-admin tokens must receive 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Forbidden"
                 }
               }
             }
@@ -763,13 +835,12 @@
         ],
         "operationId": "get_admin_policy_status",
         "summary": "GET /api/admin/policy/status",
-        "description": "Agent-facing endpoint for /api/admin/policy/status. Use this operation when your workflow needs GET access to this resource.",
+        "description": "Agent-facing endpoint for /api/admin/policy/status. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401).",
         "security": [
           {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
+            "AdminBearerAuth": [
+              "admin"
+            ]
           }
         ],
         "responses": {
@@ -809,6 +880,19 @@
                 },
                 "example": {
                   "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin role required). Non-admin tokens must receive 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Forbidden"
                 }
               }
             }
@@ -836,13 +920,12 @@
         ],
         "operationId": "get_admin_users",
         "summary": "GET /api/admin/users",
-        "description": "Agent-facing endpoint for /api/admin/users. Use this operation when your workflow needs GET access to this resource.",
+        "description": "Agent-facing endpoint for /api/admin/users. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401).",
         "security": [
           {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
+            "AdminBearerAuth": [
+              "admin"
+            ]
           }
         ],
         "responses": {
@@ -882,6 +965,19 @@
                 },
                 "example": {
                   "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (admin role required). Non-admin tokens must receive 403.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Forbidden"
                 }
               }
             }
@@ -5871,7 +5967,15 @@
           "403": {
             "description": "Admin required"
           }
-        }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": [
+              "admin"
+            ]
+          }
+        ],
+        "description": "Requires admin scope. Non-admin tokens must receive 403 (not 401)."
       }
     }
   }
