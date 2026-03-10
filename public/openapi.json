@@ -180,7 +180,9 @@
           },
           "url": {
             "type": "string",
-            "format": "uri"
+            "format": "uri",
+            "pattern": "^https:\\/\\/(?!localhost(?:[:\\/]|$))(?!127(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!10(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!192\\.168(?:\\.\\d{1,3}){2}(?:[:\\/]|$))(?!172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2}(?:[:\\/]|$)).+",
+            "description": "Only https:// webhook URLs are accepted. Private/internal targets (10.x, 192.168.x, 172.16-31.x, localhost, 127.x) are blocked. Webhook URLs are validated server-side against an allowlist."
           },
           "events": {
             "type": "array",
@@ -8147,7 +8149,9 @@
                 "properties": {
                   "url": {
                     "type": "string",
-                    "format": "uri"
+                    "format": "uri",
+                    "pattern": "^https:\\/\\/(?!localhost(?:[:\\/]|$))(?!127(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!10(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!192\\.168(?:\\.\\d{1,3}){2}(?:[:\\/]|$))(?!172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2}(?:[:\\/]|$)).+",
+                    "description": "Only https:// webhook URLs are accepted. Private/internal targets (10.x, 192.168.x, 172.16-31.x, localhost, 127.x) are blocked. Webhook URLs are validated server-side against an allowlist."
                   },
                   "events": {
                     "type": "array",
@@ -8745,7 +8749,9 @@
                 "properties": {
                   "callback_url": {
                     "type": "string",
-                    "format": "uri"
+                    "format": "uri",
+                    "pattern": "^https:\\/\\/(?!localhost(?:[:\\/]|$))(?!127(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!10(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!192\\.168(?:\\.\\d{1,3}){2}(?:[:\\/]|$))(?!172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2}(?:[:\\/]|$)).+",
+                    "description": "Only https:// webhook URLs are accepted. Private/internal targets (10.x, 192.168.x, 172.16-31.x, localhost, 127.x) are blocked. Webhook URLs are validated server-side against an allowlist."
                   },
                   "events": {
                     "type": "array",
