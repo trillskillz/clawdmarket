@@ -200,18 +200,50 @@
       },
       "AgentSessionInitRequest": {
         "type": "object",
+        "description": "Agent session initialization payload. Sessions that can execute financial trades must use short-lived tokens and re-authenticate on expiry.",
         "properties": {
           "declared_parameters": {
             "type": "object",
             "additionalProperties": true
           },
+          "read_only": {
+            "type": "boolean",
+            "default": false,
+            "description": "Set true for read-only agent sessions. Only read-only sessions may request ttl_seconds up to 86400."
+          },
           "ttl_seconds": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 86400,
-            "default": 3600
+            "default": 3600,
+            "description": "Session TTL in seconds. Max 14400 for APIKeyAuth trading-capable sessions; up to 86400 is permitted only for read-only sessions."
           }
-        }
+        },
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "read_only": {
+                    "const": false
+                  },
+                  "ttl_seconds": {
+                    "maximum": 14400
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "read_only": {
+                    "const": true
+                  },
+                  "ttl_seconds": {
+                    "maximum": 86400
+                  }
+                }
+              }
+            ]
+          }
+        ]
       },
       "AgentSessionInitResponse": {
         "type": "object",
