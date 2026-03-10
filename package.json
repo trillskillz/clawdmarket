@@ -8,6 +8,7 @@
     "start": "next start",
     "mcp:dev": "tsx mcp-server/src/server.ts",
     "mcp:http": "MCP_TRANSPORT=http tsx mcp-server/src/server.ts",
+    "mcp:http": "MCP_TRANSPORT=http tsx mcp-server/src/server.ts",
     "lint": "next lint",
     "check:copy-policy": "node scripts/enforce-copy-policy.mjs",
     "hooks:install": "node scripts/install-git-hooks.mjs",
@@ -29,6 +30,7 @@
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.36.4",
     "express": "^4.21.2",
+    "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "libsodium-wrappers": "^0.8.2",
     "next": "14.2.20",
@@ -41,6 +43,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@types/express": "^5.0.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20",

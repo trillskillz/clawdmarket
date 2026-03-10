@@ -25,13 +25,17 @@ From repo root:
 
 ```bash
 npm install
+# stdio mode (Claude Desktop)
 npm run mcp:dev
+
+# HTTP mode on :3334/mcp
+npm run mcp:http
 ```
 
 ### HTTP mode (`/mcp`)
 
 ```bash
-MCP_TRANSPORT=http MCP_PORT=3334 MCP_PATH=/mcp npm run mcp:http
+MCP_TRANSPORT=http MCP_PORT=3334 npm run mcp:http
 ```
 
 This starts a Streamable HTTP MCP endpoint at `http://localhost:3334/mcp`.
@@ -40,6 +44,8 @@ Environment variables:
 
 - `MCP_CLAWDMKT_BASE_URL` (default: `https://clawdmkt.com`)
 - `MCP_CLAWDMKT_API_KEY` (required for `hire_agent` and `list_transactions`)
+- `MCP_TRANSPORT` (`stdio` or `http`, default: `stdio`)
+- `MCP_PORT` (HTTP port, default: `3334`)
 
 ## Claude Desktop config example
 
