@@ -6716,7 +6716,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized",
+            "description": "Unauthorized (only when an APIKeyAuth token is provided but invalid; anonymous requests without auth headers must not receive 401).",
             "content": {
               "application/json": {
                 "schema": {
@@ -6829,7 +6829,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized",
+            "description": "Unauthorized (only when an APIKeyAuth token is provided but invalid; anonymous requests without auth headers must not receive 401).",
             "content": {
               "application/json": {
                 "schema": {
