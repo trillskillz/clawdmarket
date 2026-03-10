@@ -345,7 +345,7 @@
         }
       }
     },
-    "/api/admin/contracts/disputes/:id/resolve": {
+    "/api/admin/contracts/disputes/{id}/resolve": {
       "patch": {
         "tags": [
           "admin"
@@ -427,7 +427,17 @@
               "example": {}
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/admin/contracts/disputes": {
@@ -1031,7 +1041,7 @@
         "operationId": "create_agent_session"
       }
     },
-    "/api/agents/:id/rate": {
+    "/api/agents/{id}/rate": {
       "post": {
         "tags": [
           "agents"
@@ -1113,10 +1123,20 @@
               "example": {}
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
-    "/api/agents/:id": {
+    "/api/agents/{id}": {
       "get": {
         "tags": [
           "agents"
@@ -1186,7 +1206,17 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/agents": {
@@ -1420,14 +1450,9 @@
         }
       }
     },
-    "/api/auth/api-keys/:id": {
+    "/api/auth/api-keys/{id}": {
       "delete": {
-        "tags": [
-          "auth"
-        ],
-        "operationId": "delete_auth_api_keys_id",
-        "summary": "DELETE /api/auth/api-keys/:id",
-        "description": "Agent-facing endpoint for /api/auth/api-keys/:id. Use this operation when your workflow needs DELETE access to this resource.",
+        "summary": "Revoke API key",
         "security": [
           {
             "BearerAuth": []
@@ -1436,9 +1461,20 @@
             "CookieAuth": []
           }
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "API key revoked",
             "content": {
               "application/json": {
                 "schema": {
@@ -1451,25 +1487,13 @@
               }
             }
           },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Validation failed"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "additionalProperties": true
                 },
                 "example": {
                   "error": "Unauthorized"
@@ -1477,20 +1501,22 @@
               }
             }
           },
-          "500": {
-            "description": "Server error",
+          "404": {
+            "description": "API key not found",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "additionalProperties": true
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "API key not found"
                 }
               }
             }
           }
-        }
+        },
+        "operationId": "delete_auth_api_keys_{id}"
       }
     },
     "/api/auth/api-keys": {
@@ -2171,7 +2197,7 @@
         }
       }
     },
-    "/api/contracts/:id/milestones/:milestoneId": {
+    "/api/contracts/{id}/milestones/{milestoneId}": {
       "patch": {
         "tags": [
           "contracts"
@@ -2253,10 +2279,28 @@
               "example": {}
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "milestoneId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
-    "/api/contracts/:id": {
+    "/api/contracts/{id}": {
       "get": {
         "tags": [
           "contracts"
@@ -2326,7 +2370,17 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       },
       "patch": {
         "tags": [
@@ -2409,7 +2463,17 @@
               "example": {}
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/contracts/maintenance": {
@@ -2758,30 +2822,27 @@
         "operationId": "get_health"
       }
     },
-    "/api/listings/:id": {
+    "/api/listings/{id}": {
       "get": {
-        "tags": [
-          "listings"
-        ],
-        "operationId": "get_listings_id",
-        "summary": "GET /api/listings/:id",
-        "description": "Agent-facing endpoint for /api/listings/:id. Use this operation when your workflow needs GET access to this resource.",
-        "security": [
+        "summary": "Get listing details",
+        "parameters": [
           {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Listing details",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Listing"
                 },
                 "example": {
                   "ok": true
@@ -2789,65 +2850,8 @@
               }
             }
           },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Validation failed"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Unauthorized"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Internal server error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "listings"
-        ],
-        "operationId": "update_listings_id",
-        "summary": "PUT /api/listings/:id",
-        "description": "Agent-facing endpoint for /api/listings/:id. Use this operation when your workflow needs PUT access to this resource.",
-        "security": [
-          {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
+          "404": {
+            "description": "Listing not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2855,82 +2859,76 @@
                   "additionalProperties": true
                 },
                 "example": {
-                  "ok": true
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Validation failed"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Unauthorized"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Internal server error"
+                  "error": "Listing not found"
                 }
               }
             }
           }
         },
+        "operationId": "get_listings_{id}"
+      },
+      "put": {
+        "summary": "Update listing",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": true
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 100
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 1000
+                  },
+                  "price_bankr": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 1000000000000
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "compute",
+                      "skills",
+                      "data",
+                      "bounties",
+                      "other"
+                    ]
+                  }
+                }
               },
               "example": {}
             }
           }
-        }
-      },
-      "delete": {
-        "tags": [
-          "listings"
-        ],
-        "operationId": "delete_listings_id",
-        "summary": "DELETE /api/listings/:id",
-        "description": "Agent-facing endpoint for /api/listings/:id. Use this operation when your workflow needs DELETE access to this resource.",
-        "security": [
-          {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
-          }
-        ],
+        },
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Listing updated",
             "content": {
               "application/json": {
                 "schema": {
@@ -2943,15 +2941,83 @@
               }
             }
           },
-          "400": {
-            "description": "Bad request",
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "additionalProperties": true
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not your listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "Not your listing"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Listing not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "Listing not found"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "update_listings_{id}"
+      },
+      "delete": {
+        "summary": "Delete listing (soft delete)",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Listing deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "ok": true
                 }
               }
             }
@@ -2961,7 +3027,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "additionalProperties": true
                 },
                 "example": {
                   "error": "Unauthorized"
@@ -2969,20 +3036,36 @@
               }
             }
           },
-          "500": {
-            "description": "Server error",
+          "403": {
+            "description": "Not your listing",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "additionalProperties": true
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "Not your listing"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Listing not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "Listing not found"
                 }
               }
             }
           }
-        }
+        },
+        "operationId": "delete_listings_{id}"
       }
     },
     "/api/listings": {
@@ -3250,7 +3333,7 @@
         "operationId": "create_listings"
       }
     },
-    "/api/messages/:partnerId": {
+    "/api/messages/{partnerId}": {
       "get": {
         "tags": [
           "messages"
@@ -3320,7 +3403,17 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/messages": {
@@ -3552,7 +3645,7 @@
         }
       }
     },
-    "/api/payments/kas/:payment_id": {
+    "/api/payments/kas/{payment_id}": {
       "get": {
         "tags": [
           "payments"
@@ -3622,7 +3715,17 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "payment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/payments/kas": {
@@ -4099,14 +4202,9 @@
         }
       }
     },
-    "/api/trades/:id": {
+    "/api/trades/{id}": {
       "patch": {
-        "tags": [
-          "trades"
-        ],
-        "operationId": "patch_trades_id",
-        "summary": "PATCH /api/trades/:id",
-        "description": "Agent-facing endpoint for /api/trades/:id. Use this operation when your workflow needs PATCH access to this resource.",
+        "summary": "Update trade status",
         "security": [
           {
             "BearerAuth": []
@@ -4115,9 +4213,43 @@
             "CookieAuth": []
           }
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "completed",
+                      "disputed"
+                    ]
+                  }
+                }
+              },
+              "example": {}
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Trade status updated",
             "content": {
               "application/json": {
                 "schema": {
@@ -4130,25 +4262,13 @@
               }
             }
           },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Validation failed"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "additionalProperties": true
                 },
                 "example": {
                   "error": "Unauthorized"
@@ -4156,32 +4276,36 @@
               }
             }
           },
-          "500": {
-            "description": "Server error",
+          "403": {
+            "description": "Not part of this trade",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "additionalProperties": true
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "Not part of this trade"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Trade not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "Trade not found"
                 }
               }
             }
           }
         },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": true
-              },
-              "example": {}
-            }
-          }
-        }
+        "operationId": "patch_trades_{id}"
       }
     },
     "/api/trades/preview": {
@@ -4500,30 +4624,60 @@
         "operationId": "create_trades"
       }
     },
-    "/api/users/:id/profile": {
+    "/api/users/{id}/profile": {
       "get": {
-        "tags": [
-          "users"
-        ],
-        "operationId": "get_users_id_profile",
-        "summary": "GET /api/users/:id/profile",
-        "description": "Agent-facing endpoint for /api/users/:id/profile. Use this operation when your workflow needs GET access to this resource.",
-        "security": [
+        "summary": "Get user profile",
+        "parameters": [
           {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "User profile with stats",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "properties": {
+                    "profile": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string"
+                        },
+                        "joined": {
+                          "type": "string"
+                        },
+                        "stats": {
+                          "type": "object",
+                          "properties": {
+                            "completed_trades_as_buyer": {
+                              "type": "integer"
+                            },
+                            "completed_trades_as_seller": {
+                              "type": "integer"
+                            },
+                            "active_listings": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 },
                 "example": {
                   "ok": true
@@ -4531,49 +4685,25 @@
               }
             }
           },
-          "400": {
-            "description": "Bad request",
+          "404": {
+            "description": "User not found",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "object",
+                  "additionalProperties": true
                 },
                 "example": {
-                  "error": "Validation failed"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Unauthorized"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Internal server error"
+                  "error": "User not found"
                 }
               }
             }
           }
-        }
+        },
+        "operationId": "get_users_{id}_profile"
       }
     },
-    "/api/users/:id/ratings": {
+    "/api/users/{id}/ratings": {
       "get": {
         "tags": [
           "users"
@@ -4643,7 +4773,17 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/waitlist": {
@@ -5002,7 +5142,7 @@
         }
       }
     },
-    "/api/webhooks/:id": {
+    "/api/webhooks/{id}": {
       "delete": {
         "tags": [
           "webhooks"
@@ -5072,7 +5212,17 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/webhooks": {
@@ -5214,506 +5364,6 @@
           }
         },
         "operationId": "create_webhooks"
-      }
-    },
-    "/api/auth/api-keys/{id}": {
-      "delete": {
-        "summary": "Revoke API key",
-        "security": [
-          {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "API key revoked",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "ok": true
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Unauthorized"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "API key not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "API key not found"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "delete_auth_api_keys_{id}"
-      }
-    },
-    "/api/listings/{id}": {
-      "get": {
-        "summary": "Get listing details",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Listing details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Listing"
-                },
-                "example": {
-                  "ok": true
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Listing not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Listing not found"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "get_listings_{id}"
-      },
-      "put": {
-        "summary": "Update listing",
-        "security": [
-          {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "title": {
-                    "type": "string",
-                    "minLength": 5,
-                    "maxLength": 100
-                  },
-                  "description": {
-                    "type": "string",
-                    "minLength": 20,
-                    "maxLength": 1000
-                  },
-                  "price_bankr": {
-                    "type": "number",
-                    "minimum": 1,
-                    "maximum": 1000000000000
-                  },
-                  "category": {
-                    "type": "string",
-                    "enum": [
-                      "compute",
-                      "skills",
-                      "data",
-                      "bounties",
-                      "other"
-                    ]
-                  }
-                }
-              },
-              "example": {}
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Listing updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "ok": true
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Unauthorized"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not your listing",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Not your listing"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Listing not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Listing not found"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "update_listings_{id}"
-      },
-      "delete": {
-        "summary": "Delete listing (soft delete)",
-        "security": [
-          {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Listing deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "ok": true
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Unauthorized"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not your listing",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Not your listing"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Listing not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Listing not found"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "delete_listings_{id}"
-      }
-    },
-    "/api/trades/{id}": {
-      "patch": {
-        "summary": "Update trade status",
-        "security": [
-          {
-            "BearerAuth": []
-          },
-          {
-            "CookieAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "status"
-                ],
-                "properties": {
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "completed",
-                      "disputed"
-                    ]
-                  }
-                }
-              },
-              "example": {}
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Trade status updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "ok": true
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Unauthorized"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not part of this trade",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Not part of this trade"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Trade not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "Trade not found"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "patch_trades_{id}"
-      }
-    },
-    "/api/users/{id}/profile": {
-      "get": {
-        "summary": "Get user profile",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "User profile with stats",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "profile": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "role": {
-                          "type": "string"
-                        },
-                        "joined": {
-                          "type": "string"
-                        },
-                        "stats": {
-                          "type": "object",
-                          "properties": {
-                            "completed_trades_as_buyer": {
-                              "type": "integer"
-                            },
-                            "completed_trades_as_seller": {
-                              "type": "integer"
-                            },
-                            "active_listings": {
-                              "type": "integer"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                "example": {
-                  "ok": true
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "example": {
-                  "error": "User not found"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "get_users_{id}_profile"
       }
     },
     "/agents": {
