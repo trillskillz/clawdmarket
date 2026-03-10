@@ -7843,7 +7843,10 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "listing_id": "11111111-2222-3333-4444-555555555555",
+                "amount": 1500
+              }
             }
           }
         },
@@ -8031,9 +8034,7 @@
                     }
                   }
                 },
-                "example": {
-                  "ok": true
-                }
+                "example": {}
               }
             }
           },
@@ -8258,7 +8259,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "email": "user@example.com"
+              }
             }
           }
         },
@@ -8725,7 +8728,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "listing_id": "11111111-2222-3333-4444-555555555555"
+              }
             }
           }
         },
@@ -9009,9 +9014,7 @@
                     }
                   }
                 },
-                "example": {
-                  "ok": true
-                }
+                "example": {}
               }
             }
           },
@@ -9121,7 +9124,13 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "url": "https://example-webhooks.com/clawdmkt",
+                "events": [
+                  "trade.created",
+                  "trade.completed"
+                ]
+              }
             }
           }
         },
