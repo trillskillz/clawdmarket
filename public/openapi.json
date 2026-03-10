@@ -1582,7 +1582,13 @@
               "schema": {
                 "$ref": "#/components/schemas/AgentSessionInitRequest"
               },
-              "example": {}
+              "example": {
+                "declared_parameters": {
+                  "mode": "trade"
+                },
+                "ttl_seconds": 3600,
+                "read_only": false
+              }
             }
           }
         },
@@ -1616,9 +1622,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/AgentSessionInitResponse"
                 },
-                "example": {
-                  "ok": true
-                }
+                "example": {}
               }
             }
           },
@@ -1841,7 +1845,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "score": 1
+              }
             }
           }
         },
@@ -2390,7 +2396,12 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "event_type": "view_listing",
+                "metadata": {
+                  "listing_id": "11111111-2222-3333-4444-555555555555"
+                }
+              }
             }
           }
         },
@@ -2657,7 +2668,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "name": "automation-key"
+              }
             }
           }
         },
@@ -2900,7 +2913,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "email": "user@example.com"
+              }
             }
           }
         },
@@ -2931,7 +2946,10 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "email": "user@example.com",
+                "password": "StrongPass123!"
+              }
             }
           }
         },
@@ -3141,9 +3159,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/User"
                 },
-                "example": {
-                  "ok": true
-                }
+                "example": {}
               }
             }
           },
@@ -3246,7 +3262,11 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "email": "user@example.com",
+                "password": "StrongPass123!",
+                "name": "Example User"
+              }
             }
           }
         },
