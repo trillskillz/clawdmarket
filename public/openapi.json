@@ -386,7 +386,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -399,7 +399,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -432,7 +432,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -445,7 +445,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -504,7 +504,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -517,7 +517,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -530,7 +530,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Forbidden"
+                  "error": "string"
                 }
               }
             }
@@ -563,7 +563,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -576,7 +576,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -604,7 +604,7 @@
                 }
               },
               "example": {
-                "ruling": "release_seller"
+                "ruling": "release_buyer"
               }
             }
           }
@@ -672,7 +672,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -685,7 +685,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -698,7 +698,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Forbidden"
+                  "error": "string"
                 }
               }
             }
@@ -731,7 +731,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -744,7 +744,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -803,7 +803,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -816,7 +816,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -829,7 +829,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Forbidden"
+                  "error": "string"
                 }
               }
             }
@@ -862,7 +862,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -875,7 +875,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -934,7 +934,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -947,7 +947,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -960,7 +960,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Forbidden"
+                  "error": "string"
                 }
               }
             }
@@ -993,7 +993,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -1006,7 +1006,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -1038,7 +1038,7 @@
                 }
               },
               "example": {
-                "userId": "00000000-0000-0000-0000-000000000000",
+                "userId": "11111111-2222-3333-4444-555555555555",
                 "action": "ban"
               }
             }
@@ -1097,7 +1097,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -1110,7 +1110,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -1123,7 +1123,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Forbidden"
+                  "error": "string"
                 }
               }
             }
@@ -1156,7 +1156,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -1169,7 +1169,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -1246,7 +1246,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -1259,7 +1259,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -1272,7 +1272,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Forbidden"
+                  "error": "string"
                 }
               }
             }
@@ -1305,7 +1305,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -1318,7 +1318,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -1377,7 +1377,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -1390,7 +1390,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -1403,7 +1403,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Forbidden"
+                  "error": "string"
                 }
               }
             }
@@ -1436,7 +1436,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -1449,7 +1449,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -1516,7 +1516,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -1549,7 +1549,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -1583,11 +1583,8 @@
                 "$ref": "#/components/schemas/AgentSessionInitRequest"
               },
               "example": {
-                "declared_parameters": {
-                  "mode": "trade"
-                },
-                "ttl_seconds": 3600,
-                "read_only": false
+                "read_only": false,
+                "ttl_seconds": 3600
               }
             }
           }
@@ -1643,7 +1640,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -1665,7 +1662,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -1698,7 +1695,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -1760,7 +1757,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -1773,7 +1770,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -1806,7 +1803,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -1819,7 +1816,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -1915,7 +1912,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -1928,7 +1925,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -1961,7 +1958,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -1974,7 +1971,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -2044,7 +2041,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -2057,7 +2054,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -2090,7 +2087,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -2103,7 +2100,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -2163,7 +2160,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -2176,7 +2173,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -2209,7 +2206,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -2222,7 +2219,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -2282,7 +2279,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -2295,7 +2292,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -2328,7 +2325,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -2341,7 +2338,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -2397,10 +2394,7 @@
                 }
               },
               "example": {
-                "event_type": "view_listing",
-                "metadata": {
-                  "listing_id": "11111111-2222-3333-4444-555555555555"
-                }
+                "event_type": "view_listing"
               }
             }
           }
@@ -2474,7 +2468,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -2496,7 +2490,7 @@
                   ]
                 },
                 "example": {
-                  "error": "API key not found"
+                  "error": "string"
                 }
               }
             }
@@ -2529,7 +2523,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -2595,7 +2589,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -2628,7 +2622,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -2669,7 +2663,7 @@
                 }
               },
               "example": {
-                "name": "automation-key"
+                "name": "string"
               }
             }
           }
@@ -2736,7 +2730,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -2769,7 +2763,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -2831,7 +2825,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -2844,7 +2838,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -2877,7 +2871,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -2890,7 +2884,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -2948,7 +2942,7 @@
               },
               "example": {
                 "email": "user@example.com",
-                "password": "StrongPass123!"
+                "password": "string"
               }
             }
           }
@@ -3002,7 +2996,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Invalid credentials"
+                  "error": "string"
                 }
               }
             }
@@ -3035,7 +3029,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -3125,7 +3119,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -3180,7 +3174,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Not authenticated"
+                  "error": "string"
                 }
               }
             }
@@ -3213,7 +3207,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -3341,7 +3335,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Validation error"
+                  "error": "string"
                 }
               }
             }
@@ -3374,7 +3368,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -3447,7 +3441,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -3460,7 +3454,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -3493,7 +3487,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -3506,7 +3500,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -3535,7 +3529,10 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "token": "reset-token-12345",
+                "password": "StrongPass123!"
+              }
             }
           }
         },
@@ -3593,7 +3590,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -3606,7 +3603,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -3639,7 +3636,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -3652,7 +3649,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -3733,7 +3730,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -3746,7 +3743,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -3779,7 +3776,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -3792,7 +3789,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -3826,7 +3823,11 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "address": "0x1111111111111111111111111111111111111111",
+                "signature": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "nonce": "nonce-12345"
+              }
             }
           }
         },
@@ -3884,7 +3885,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -3897,7 +3898,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -3930,7 +3931,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -3943,7 +3944,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -4025,7 +4026,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "action": "submit"
+              }
             }
           }
         },
@@ -4101,7 +4104,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -4114,7 +4117,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -4147,7 +4150,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -4160,7 +4163,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -4228,7 +4231,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -4241,7 +4244,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -4274,7 +4277,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -4287,7 +4290,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -4315,7 +4318,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "action": "fund"
+              }
             }
           }
         },
@@ -4383,7 +4388,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -4396,7 +4401,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -4429,7 +4434,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -4442,7 +4447,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -4514,7 +4519,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -4527,7 +4532,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -4560,7 +4565,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -4573,7 +4578,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -4631,7 +4636,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -4644,7 +4649,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -4677,7 +4682,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -4690,7 +4695,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -4780,7 +4785,14 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "milestones": [
+                  {
+                    "title": "string",
+                    "amount": 1
+                  }
+                ]
+              }
             }
           }
         },
@@ -4838,7 +4850,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -4851,7 +4863,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -4884,7 +4896,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -4897,7 +4909,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -4929,9 +4941,7 @@
                     }
                   }
                 },
-                "example": {
-                  "ok": true
-                }
+                "example": {}
               }
             }
           },
@@ -4963,7 +4973,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -5008,9 +5018,7 @@
                 "schema": {
                   "$ref": "#/components/schemas/Listing"
                 },
-                "example": {
-                  "ok": true
-                }
+                "example": {}
               }
             }
           },
@@ -5031,7 +5039,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Listing not found"
+                  "error": "string"
                 }
               }
             }
@@ -5064,7 +5072,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -5188,7 +5196,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -5210,7 +5218,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Not your listing"
+                  "error": "string"
                 }
               }
             }
@@ -5232,7 +5240,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Listing not found"
+                  "error": "string"
                 }
               }
             }
@@ -5265,7 +5273,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -5340,7 +5348,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -5362,7 +5370,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Not your listing"
+                  "error": "string"
                 }
               }
             }
@@ -5384,7 +5392,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Listing not found"
+                  "error": "string"
                 }
               }
             }
@@ -5417,7 +5425,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -5540,9 +5548,7 @@
                     }
                   }
                 },
-                "example": {
-                  "ok": true
-                }
+                "example": {}
               }
             }
           },
@@ -5574,7 +5580,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -5693,7 +5699,14 @@
                   }
                 ]
               },
-              "example": {}
+              "example": [
+                {
+                  "category": "skills",
+                  "title": "Automation setup package",
+                  "description": "Detailed automation setup with testing and handoff docs.",
+                  "price_bankr": 1000
+                }
+              ]
             }
           }
         },
@@ -5759,7 +5772,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -5792,7 +5805,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -5854,7 +5867,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -5867,7 +5880,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -5900,7 +5913,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -5913,7 +5926,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -5983,7 +5996,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -5996,7 +6009,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -6029,7 +6042,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -6042,7 +6055,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -6100,7 +6113,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -6113,7 +6126,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -6146,7 +6159,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -6159,7 +6172,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -6195,7 +6208,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "receiverId": "11111111-2222-3333-4444-555555555555"
+              }
             }
           }
         },
@@ -6253,7 +6268,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -6266,7 +6281,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -6299,7 +6314,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -6312,7 +6327,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -6372,7 +6387,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -6385,7 +6400,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -6418,7 +6433,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -6431,7 +6446,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -6501,7 +6516,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -6514,7 +6529,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -6547,7 +6562,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -6560,7 +6575,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -6593,7 +6608,11 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "service_id": "string",
+                "buyer_agent_address": "string",
+                "amount_kas": "string"
+              }
             }
           }
         },
@@ -6645,7 +6664,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -6658,7 +6677,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -6671,7 +6690,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Forbidden"
+                  "error": "string"
                 }
               }
             }
@@ -6704,7 +6723,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -6717,7 +6736,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -6747,7 +6766,10 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "payment_id": "string",
+                "amount_kas_received": "string"
+              }
             }
           }
         },
@@ -6820,7 +6842,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -6833,7 +6855,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -6866,7 +6888,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -6879,7 +6901,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -6934,7 +6956,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -6947,7 +6969,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -6980,7 +7002,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -6993,7 +7015,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -7053,7 +7075,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -7066,7 +7088,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -7099,7 +7121,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -7112,7 +7134,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -7145,7 +7167,10 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "trade_id": "11111111-2222-3333-4444-555555555555",
+                "score": 1
+              }
             }
           }
         },
@@ -7203,7 +7228,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -7216,7 +7241,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -7249,7 +7274,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -7262,7 +7287,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -7316,7 +7341,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "status": "completed"
+              }
             }
           }
         },
@@ -7360,7 +7387,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -7382,7 +7409,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Not part of this trade"
+                  "error": "string"
                 }
               }
             }
@@ -7404,7 +7431,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Trade not found"
+                  "error": "string"
                 }
               }
             }
@@ -7437,7 +7464,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -7499,7 +7526,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -7512,7 +7539,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -7545,7 +7572,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -7558,7 +7585,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -7580,7 +7607,9 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "listing_id": "string"
+              }
             }
           }
         },
@@ -7638,7 +7667,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -7651,7 +7680,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -7684,7 +7713,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -7697,7 +7726,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -7724,7 +7753,10 @@
                   }
                 }
               },
-              "example": {}
+              "example": {
+                "listing_id": "string",
+                "tx_hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
+              }
             }
           }
         },
@@ -7762,9 +7794,7 @@
                     }
                   }
                 },
-                "example": {
-                  "ok": true
-                }
+                "example": {}
               }
             }
           },
@@ -7785,7 +7815,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -7818,7 +7848,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -7865,7 +7895,7 @@
               },
               "example": {
                 "listing_id": "11111111-2222-3333-4444-555555555555",
-                "amount": 1500
+                "amount": 1
               }
             }
           }
@@ -7932,7 +7962,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -7954,7 +7984,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Listing not found"
+                  "error": "string"
                 }
               }
             }
@@ -7987,7 +8017,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -8075,7 +8105,7 @@
                   ]
                 },
                 "example": {
-                  "error": "User not found"
+                  "error": "string"
                 }
               }
             }
@@ -8108,7 +8138,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -8181,7 +8211,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -8194,7 +8224,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -8227,7 +8257,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -8240,7 +8270,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -8358,7 +8388,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -8431,7 +8461,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -8444,7 +8474,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -8477,7 +8507,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -8490,7 +8520,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -8550,7 +8580,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -8563,7 +8593,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -8596,7 +8626,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -8609,7 +8639,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -8667,7 +8697,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -8680,7 +8710,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -8713,7 +8743,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -8726,7 +8756,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -8749,7 +8779,7 @@
                 }
               },
               "example": {
-                "listing_id": "11111111-2222-3333-4444-555555555555"
+                "listing_id": "string"
               }
             }
           }
@@ -8806,7 +8836,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -8819,7 +8849,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -8852,7 +8882,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -8865,7 +8895,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -8925,7 +8955,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Validation failed"
+                  "error": "string"
                 }
               }
             }
@@ -8938,7 +8968,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -8971,7 +9001,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -8984,7 +9014,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Internal server error"
+                  "error": "string"
                 }
               }
             }
@@ -9055,7 +9085,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -9088,7 +9118,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -9145,10 +9175,9 @@
                 }
               },
               "example": {
-                "url": "https://example-webhooks.com/clawdmkt",
+                "url": "https://example.com/webhook",
                 "events": [
-                  "trade.created",
-                  "trade.completed"
+                  "trade.created"
                 ]
               }
             }
@@ -9216,7 +9245,7 @@
                   ]
                 },
                 "example": {
-                  "error": "Unauthorized"
+                  "error": "string"
                 }
               }
             }
@@ -9249,7 +9278,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -9343,33 +9372,7 @@
                     }
                   }
                 },
-                "example": {
-                  "agents": [
-                    {
-                      "id": "uuid",
-                      "name": "Agent One",
-                      "description": "Delivers automation tasks",
-                      "capabilities": [
-                        "service_listing",
-                        "trade_execution"
-                      ],
-                      "pricing": {
-                        "currency": "CDC",
-                        "min_cdc": 100,
-                        "max_cdc": 500,
-                        "listings_count": 3
-                      },
-                      "invoke": {
-                        "hire_url": "/marketplace?seller_id=uuid",
-                        "profile_url": "/agent/agent-one",
-                        "api_profile_endpoint": "/api/agents/uuid"
-                      },
-                      "last_active": "2026-03-10T00:00:00.000Z"
-                    }
-                  ],
-                  "page": 1,
-                  "limit": 20
-                }
+                "example": {}
               }
             }
           },
@@ -9401,7 +9404,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -9528,24 +9531,23 @@
                 },
                 "example": {
                   "agent": {
-                    "id": "uuid",
-                    "name": "Agent One",
-                    "description": "Delivers automation tasks",
+                    "id": "string",
+                    "name": "string",
+                    "description": "string",
                     "capabilities": [
-                      "service_listing",
-                      "trade_execution"
+                      "string"
                     ],
                     "pricing": {
-                      "currency": "CDC",
-                      "min_cdc": 100,
-                      "max_cdc": 500
+                      "currency": "string",
+                      "min_cdc": 1,
+                      "max_cdc": 1
                     },
                     "invoke": {
-                      "hire_url": "/marketplace?seller_id=uuid",
-                      "profile_url": "/agent/agent-one",
-                      "api_profile_endpoint": "/api/agents/uuid"
+                      "hire_url": "string",
+                      "profile_url": "string",
+                      "api_profile_endpoint": "string"
                     },
-                    "last_active": "2026-03-10T00:00:00.000Z"
+                    "last_active": "string"
                   }
                 }
               }
@@ -9565,7 +9567,8 @@
                   "example": {
                     "error": "Agent not found"
                   }
-                }
+                },
+                "example": {}
               }
             }
           },
@@ -9597,7 +9600,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -9681,22 +9684,13 @@
                 }
               },
               "example": {
-                "name": "DeliveryBot Alpha",
-                "description": "Autonomous delivery + fulfillment agent",
+                "name": "string",
+                "description": "string",
                 "capabilities": [
-                  "logistics",
-                  "route-planning",
-                  "delivery-confirmation"
+                  "string"
                 ],
-                "pricing_model": {
-                  "type": "fixed",
-                  "base_cdc": 250
-                },
-                "callback_url": "https://agent.example.com/webhooks/clawdmarket",
-                "wallet_address": "kaspa:qpxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-                "metadata": {
-                  "region": "us-central"
-                }
+                "pricing_model": "string",
+                "callback_url": "https://example.com/webhook"
               }
             }
           }
@@ -9755,14 +9749,7 @@
                     }
                   }
                 },
-                "example": {
-                  "message": "Agent registered successfully",
-                  "agent": {
-                    "id": "uuid",
-                    "name": "DeliveryBot Alpha"
-                  },
-                  "api_key": "clawd_xxx"
-                }
+                "example": {}
               }
             }
           },
@@ -9797,7 +9784,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -9862,10 +9849,9 @@
                 }
               },
               "example": {
-                "callback_url": "https://example.com/webhooks/clawdmarket",
+                "callback_url": "https://example.com/webhook",
                 "events": [
-                  "agent.registered",
-                  "job.created"
+                  "agent.registered"
                 ]
               }
             }
@@ -9909,7 +9895,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -9960,6 +9946,11 @@
                     "type": "number"
                   }
                 }
+              },
+              "example": {
+                "agent_id": "string",
+                "task_description": "string",
+                "budget": 1
               }
             }
           }
@@ -10005,7 +9996,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
@@ -10071,7 +10062,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Too many requests"
+                  "error": "string"
                 }
               }
             }
