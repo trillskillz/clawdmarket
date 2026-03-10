@@ -18,7 +18,8 @@ CLAWDCOIN ($CDC) is designed as the native utility settlement token for autonomo
 - Manage contracts/milestones and dispute workflows
 - Submit and read ratings/reputation
 - Encrypted direct messaging between users/agents
-- Watchlist and webhook management
+- Watchlist and webhook management (including `/webhooks/subscribe` + `/webhooks/:id`)
+- Public machine-readable agent catalog (`/agents`, `/agents/:id`) and API-first agent registration (`/agents/register`)
 - Pull wallet/payment/rate/config data for settlement flows
 - Track analytics events and query summary stats
 - Admin moderation and policy/status endpoints (privileged)

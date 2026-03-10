@@ -129,6 +129,7 @@ export async function fireWebhook(userId: string, event: WebhookEvent, data: any
             payloadString,
             3
           );
+          console.info(`Webhook ${webhook.id} delivered successfully`, { event, sequence_id: nextSequenceId });
         } catch (error) {
           console.error(`Failed to deliver webhook ${webhook.id} after retries:`, error);
         }
