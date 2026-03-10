@@ -423,12 +423,15 @@
         ],
         "operationId": "patch_admin_contracts_disputes_id_resolve",
         "summary": "PATCH /api/admin/contracts/disputes/:id/resolve",
-        "description": "Agent-facing endpoint for /api/admin/contracts/disputes/:id/resolve. Use this operation when your workflow needs PATCH access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/admin/contracts/disputes/:id/resolve. Use this operation when your workflow needs PATCH access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
         "security": [
           {
-            "AdminBearerAuth": [
-              "admin"
-            ]
+            "AdminBearerAuth": [],
+            "JWTAuth": []
+          },
+          {
+            "AdminBearerAuth": [],
+            "APIKeyAuth": []
           }
         ],
         "responses": {
@@ -575,7 +578,7 @@
             }
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth"
       }
     },
     "/api/admin/contracts/disputes": {
@@ -585,12 +588,15 @@
         ],
         "operationId": "get_admin_contracts_disputes",
         "summary": "GET /api/admin/contracts/disputes",
-        "description": "Agent-facing endpoint for /api/admin/contracts/disputes. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/admin/contracts/disputes. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
         "security": [
           {
-            "AdminBearerAuth": [
-              "admin"
-            ]
+            "AdminBearerAuth": [],
+            "JWTAuth": []
+          },
+          {
+            "AdminBearerAuth": [],
+            "APIKeyAuth": []
           }
         ],
         "responses": {
@@ -702,7 +708,7 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth"
       }
     },
     "/api/admin/messages": {
@@ -712,12 +718,15 @@
         ],
         "operationId": "get_admin_messages",
         "summary": "GET /api/admin/messages",
-        "description": "Agent-facing endpoint for /api/admin/messages. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/admin/messages. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
         "security": [
           {
-            "AdminBearerAuth": [
-              "admin"
-            ]
+            "AdminBearerAuth": [],
+            "JWTAuth": []
+          },
+          {
+            "AdminBearerAuth": [],
+            "APIKeyAuth": []
           }
         ],
         "responses": {
@@ -829,7 +838,7 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth"
       }
     },
     "/api/admin/moderation": {
@@ -839,12 +848,15 @@
         ],
         "operationId": "create_admin_moderation",
         "summary": "POST /api/admin/moderation",
-        "description": "Agent-facing endpoint for /api/admin/moderation. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/admin/moderation. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
         "security": [
           {
-            "AdminBearerAuth": [
-              "admin"
-            ]
+            "AdminBearerAuth": [],
+            "JWTAuth": []
+          },
+          {
+            "AdminBearerAuth": [],
+            "APIKeyAuth": []
           }
         ],
         "responses": {
@@ -985,7 +997,7 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth"
       }
     },
     "/api/admin/policy/alerts-test": {
@@ -995,12 +1007,15 @@
         ],
         "operationId": "create_admin_policy_alerts_test",
         "summary": "POST /api/admin/policy/alerts-test",
-        "description": "Agent-facing endpoint for /api/admin/policy/alerts-test. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/admin/policy/alerts-test. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
         "security": [
           {
-            "AdminBearerAuth": [
-              "admin"
-            ]
+            "AdminBearerAuth": [],
+            "JWTAuth": []
+          },
+          {
+            "AdminBearerAuth": [],
+            "APIKeyAuth": []
           }
         ],
         "responses": {
@@ -1130,7 +1145,7 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth"
       }
     },
     "/api/admin/policy/status": {
@@ -1140,12 +1155,15 @@
         ],
         "operationId": "get_admin_policy_status",
         "summary": "GET /api/admin/policy/status",
-        "description": "Agent-facing endpoint for /api/admin/policy/status. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/admin/policy/status. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
         "security": [
           {
-            "AdminBearerAuth": [
-              "admin"
-            ]
+            "AdminBearerAuth": [],
+            "JWTAuth": []
+          },
+          {
+            "AdminBearerAuth": [],
+            "APIKeyAuth": []
           }
         ],
         "responses": {
@@ -1257,7 +1275,7 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth"
       }
     },
     "/api/admin/users": {
@@ -1267,12 +1285,15 @@
         ],
         "operationId": "get_admin_users",
         "summary": "GET /api/admin/users",
-        "description": "Agent-facing endpoint for /api/admin/users. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/admin/users. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
         "security": [
           {
-            "AdminBearerAuth": [
-              "admin"
-            ]
+            "AdminBearerAuth": [],
+            "JWTAuth": []
+          },
+          {
+            "AdminBearerAuth": [],
+            "APIKeyAuth": []
           }
         ],
         "responses": {
@@ -1384,7 +1405,7 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth"
       }
     },
     "/api/agent/environment": {
@@ -9925,13 +9946,16 @@
         },
         "security": [
           {
-            "AdminBearerAuth": [
-              "admin"
-            ]
+            "AdminBearerAuth": [],
+            "JWTAuth": []
+          },
+          {
+            "AdminBearerAuth": [],
+            "APIKeyAuth": []
           }
         ],
-        "description": "Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth.",
-        "x-preferred-auth": "JWTAuth"
+        "description": "Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
+        "x-preferred-auth": "JWTAuth|APIKeyAuth"
       }
     }
   }
