@@ -1,5 +1,10 @@
 export function toCdcPrice(value: any): number {
-  const raw = value?.price_cdc ?? value?.price_bankr ?? value;
+  const raw =
+    value?.price_cdc ??
+    value?.price_bankr ??
+    value?.price_clawd ??
+    value?.price ??
+    value;
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 }

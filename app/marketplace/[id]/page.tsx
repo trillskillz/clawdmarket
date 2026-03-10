@@ -176,12 +176,22 @@ export default function ListingDetailPage() {
         });
         if (!res.ok) return;
         const data = await res.json();
+        const itemPrice = Number(data.item_price);
+        const platformFee = Number(data.platform_fee);
+        const totalCost = Number(data.total_cost);
+        const sellerAmount = Number(data.seller_amount);
+        const devAmount = Number(data.dev_amount);
+
+        if (![itemPrice, platformFee, totalCost, sellerAmount, devAmount].every(Number.isFinite)) {
+          return;
+        }
+
         setTradePreview({
-          item_price: Number(data.item_price || 0),
-          platform_fee: Number(data.platform_fee || 0),
-          total_cost: Number(data.total_cost || 0),
-          seller_amount: Number(data.seller_amount || 0),
-          dev_amount: Number(data.dev_amount || 0),
+          item_price: itemPrice,
+          platform_fee: platformFee,
+          total_cost: totalCost,
+          seller_amount: sellerAmount,
+          dev_amount: devAmount,
         });
       } catch {}
     })();
