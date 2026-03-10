@@ -12,6 +12,7 @@ import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { trustScoreClass } from '@/lib/trust-score';
 import PriceWithKas from '@/components/PriceWithKas';
+import { toCdcPrice } from '@/lib/pricing';
 import { useKasRate } from '@/components/providers/KasRateProvider';
 import { useCDCTransfer } from '@/hooks/useCDCTransfer';
 import { useCDCFeeTransfer } from '@/hooks/useCDCFeeTransfer';
@@ -120,13 +121,19 @@ export default function ListingDetailPage() {
       const res = await fetch(`/api/listings/${id}`);
       if (res.ok) {
         const data = await res.json();
-        setListing(data.listing);
+        const normalizedListing = {
+          ...data.listing,
+          price_bankr: toCdcPrice(data.listing),
+        };
+
+        setListing(normalizedListing);
 
         // Track view
         track('view_listing', { 
-          listing_id: data.listing.id, 
-          category: data.listing.category, 
-          price: data.listing.price_bankr 
+          listing_id: normalizedListing.id, 
+          category: normalizedListing.category, 
+          price: normalizedListing.price_bankr,
+          unit: 'CDC',
         });
 
         if (data?.listing?.seller_id) {

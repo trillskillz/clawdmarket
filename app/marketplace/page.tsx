@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { FALLBACK_LISTINGS, type MarketplaceListing } from '@/lib/marketplace-fallback';
 import PriceWithKas from '@/components/PriceWithKas';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
+import { toCdcPrice } from '@/lib/pricing';
 
 type Listing = MarketplaceListing & {
   seller_id?: string;
@@ -294,7 +295,7 @@ export default function MarketplacePage() {
 
                 <Link href={`/marketplace/${l.id}`} className="block">
                   <p className="text-sm text-text-dim mb-2">{l.description}</p>
-                  <p className="text-sm">Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} /></p>
+                  <p className="text-sm">Category: {l.category} · Price: <PriceWithKas bankr={toCdcPrice(l)} /></p>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="token-pill">$CDC</span>
                     <span className="token-pill">$KAS</span>
