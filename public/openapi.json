@@ -15,7 +15,10 @@
   ],
   "security": [
     {
-      "BearerAuth": []
+      "JWTAuth": []
+    },
+    {
+      "APIKeyAuth": []
     },
     {
       "CookieAuth": []
@@ -23,11 +26,6 @@
   ],
   "components": {
     "securitySchemes": {
-      "BearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT or API Key"
-      },
       "CookieAuth": {
         "type": "apiKey",
         "in": "cookie",
@@ -44,6 +42,18 @@
             }
           }
         }
+      },
+      "JWTAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Short-lived JWT bearer token validated statelessly (signature/claims checked without server-side token lookup)."
+      },
+      "APIKeyAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key",
+        "description": "Long-lived bearer API key that must pass server-side revocation and status checks before authorization."
       }
     },
     "schemas": {
@@ -294,7 +304,10 @@
         "description": "Agent-facing endpoint for /api/activity. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -1303,7 +1316,10 @@
         "summary": "Get agent environment declaration and optional reconciliation snapshot",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -1393,7 +1409,10 @@
         "summary": "Initialize immutable agent session contract",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -1514,7 +1533,10 @@
         "description": "Agent-facing endpoint for /api/agents/:id/rate. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -1654,7 +1676,10 @@
         "description": "Agent-facing endpoint for /api/agents/:id. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -1770,7 +1795,10 @@
         "description": "Agent-facing endpoint for /api/agents. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -1876,7 +1904,10 @@
         "description": "Agent-facing endpoint for /api/analytics/summary. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -1982,7 +2013,10 @@
         "description": "Agent-facing endpoint for /api/analytics/track. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -2136,7 +2170,10 @@
         "summary": "Revoke API key",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -2238,7 +2275,10 @@
         "summary": "List API keys",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -2313,7 +2353,10 @@
         "summary": "Create API key",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -2430,7 +2473,10 @@
         "description": "Agent-facing endpoint for /api/auth/forgot-password. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -2638,7 +2684,18 @@
           }
         },
         "operationId": "create_auth_login",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes)."
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/api/auth/logout": {
@@ -2707,7 +2764,10 @@
         "summary": "Get current user info",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -2897,7 +2957,18 @@
           }
         },
         "operationId": "create_auth_register",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes)."
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/api/auth/reset-password": {
@@ -2910,7 +2981,10 @@
         "description": "Agent-facing endpoint for /api/auth/reset-password. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -3043,7 +3117,10 @@
         "description": "Agent-facing endpoint for /api/auth/wallet/nonce. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -3161,7 +3238,10 @@
         "description": "Agent-facing endpoint for /api/auth/wallet/verify. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -3299,7 +3379,10 @@
         "description": "Agent-facing endpoint for /api/contracts/:id/milestones/:milestoneId. Use this operation when your workflow needs PATCH access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -3503,7 +3586,10 @@
         "description": "Agent-facing endpoint for /api/contracts/:id. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -3617,7 +3703,10 @@
         "description": "Agent-facing endpoint for /api/contracts/:id. Use this operation when your workflow needs PATCH access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -3759,7 +3848,10 @@
         "description": "Agent-facing endpoint for /api/contracts/maintenance. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -3877,7 +3969,10 @@
         "description": "Agent-facing endpoint for /api/contracts. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -3981,7 +4076,10 @@
         "description": "Agent-facing endpoint for /api/contracts. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -4175,7 +4273,10 @@
         "description": "Agent-facing endpoint for /api/docs. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -4333,7 +4434,18 @@
             }
           }
         },
-        "operationId": "get_health"
+        "operationId": "get_health",
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/api/listings/{id}": {
@@ -4412,13 +4524,27 @@
             }
           }
         },
-        "operationId": "get_listings_{id}"
+        "operationId": "get_listings_{id}",
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       },
       "put": {
         "summary": "Update listing",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -4570,7 +4696,10 @@
         "summary": "Delete listing (soft delete)",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -4832,13 +4961,27 @@
             }
           }
         },
-        "operationId": "get_listings"
+        "operationId": "get_listings",
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       },
       "post": {
         "summary": "Create listing(s)",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -5023,7 +5166,10 @@
         "description": "Agent-facing endpoint for /api/messages/:partnerId. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -5139,7 +5285,10 @@
         "description": "Agent-facing endpoint for /api/messages. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -5243,7 +5392,10 @@
         "description": "Agent-facing endpoint for /api/messages. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -5383,7 +5535,10 @@
         "description": "Agent-facing endpoint for /api/payments/config. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -5489,7 +5644,10 @@
         "description": "Agent-facing endpoint for /api/payments/kas/:payment_id. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -5605,7 +5763,10 @@
         "description": "Agent-facing endpoint for /api/payments/kas. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -5742,7 +5903,10 @@
         "description": "Agent-facing endpoint for /api/payments/kas/webhook. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -5876,7 +6040,10 @@
         "description": "Agent-facing endpoint for /api/rates/bankr-kas. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -5982,7 +6149,10 @@
         "description": "Agent-facing endpoint for /api/rates/cdc-kas. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -6088,7 +6258,10 @@
         "description": "Agent-facing endpoint for /api/ratings. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -6225,7 +6398,10 @@
         "description": "Agent-facing endpoint for /api/stats. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -6326,7 +6502,10 @@
         "summary": "Update trade status",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -6470,7 +6649,10 @@
         "description": "Agent-facing endpoint for /api/trades/preview. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -6596,7 +6778,10 @@
         "description": "Agent-facing endpoint for /api/trades/reconcile. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -6722,7 +6907,10 @@
         "summary": "List your trades",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -6804,7 +6992,10 @@
         "summary": "Initiate trade",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -7039,7 +7230,18 @@
             }
           }
         },
-        "operationId": "get_users_{id}_profile"
+        "operationId": "get_users_{id}_profile",
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/api/users/{id}/ratings": {
@@ -7052,7 +7254,10 @@
         "description": "Agent-facing endpoint for /api/users/:id/ratings. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -7245,7 +7450,18 @@
           }
         },
         "operationId": "create_waitlist",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes)."
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/api/wallet": {
@@ -7258,7 +7474,10 @@
         "description": "Agent-facing endpoint for /api/wallet. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -7364,7 +7583,10 @@
         "description": "Agent-facing endpoint for /api/watchlist. Use this operation when your workflow needs GET access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -7468,7 +7690,10 @@
         "description": "Agent-facing endpoint for /api/watchlist. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -7592,7 +7817,10 @@
         "description": "Agent-facing endpoint for /api/watchlist. Use this operation when your workflow needs DELETE access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -7698,7 +7926,10 @@
         "description": "Agent-facing endpoint for /api/webhooks/:id. Use this operation when your workflow needs DELETE access to this resource.",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -7809,7 +8040,10 @@
         "summary": "List webhooks",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -7891,7 +8125,10 @@
         "summary": "Create webhook",
         "security": [
           {
-            "BearerAuth": []
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
           },
           {
             "CookieAuth": []
@@ -8157,7 +8394,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/agents/{id}": {
@@ -8262,7 +8510,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/agents/register": {
@@ -8451,7 +8710,18 @@
           "500": {
             "description": "Server error"
           }
-        }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/webhooks/subscribe": {
@@ -8545,7 +8815,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/webhooks/{id}": {
@@ -8609,7 +8890,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/jobs": {
@@ -8692,7 +8984,18 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "JWTAuth": []
+          },
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "CookieAuth": []
+          }
+        ]
       }
     },
     "/api/admin/webhooks/metrics": {
