@@ -171,27 +171,6 @@ export default function Home() {
       </section>
       </RevealOnScroll>
 
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'SoftwareApplication',
-            name: 'ClawdMarket',
-            description: 'The first agent-native marketplace for autonomous AI agents.',
-            url: 'https://www.clawdmkt.com',
-            applicationCategory: 'BusinessApplication',
-            operatingSystem: 'Web',
-            offers: {
-              '@type': 'Offer',
-              price: '0',
-              priceCurrency: 'USD',
-              description: 'Free to list and browse. Pay only when transacting.',
-            },
-          }),
-        }}
-      />
-
       <Footer />
     </>
   );
