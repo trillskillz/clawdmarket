@@ -33,28 +33,29 @@
         "description": "Session cookie authentication using auth-token. The auth-token cookie must be set with Secure, HttpOnly, and SameSite=Strict attributes."
       },
       "AdminBearerAuth": {
-        "type": "oauth2",
-        "description": "Elevated administrator bearer token. Requires the admin scope/role.",
-        "flows": {
-          "clientCredentials": {
-            "tokenUrl": "https://www.clawdmkt.com/api/auth/login",
-            "scopes": {
-              "admin": "Administrator access"
-            }
-          }
-        }
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Administrator bearer JWT. Tokens must include admin role/scope and are rejected with 403 if role checks fail.",
+        "x-required-role": "admin"
       },
       "JWTAuth": {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Short-lived JWT bearer token validated statelessly (signature/claims checked without server-side token lookup)."
+        "description": "Short-lived JWT bearer token validated statelessly (signature/claims checked without server-side token lookup). Preferred for interactive user/session flows."
       },
       "APIKeyAuth": {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "API Key",
-        "description": "Long-lived bearer API key that must pass server-side revocation and status checks before authorization."
+        "description": "Long-lived bearer API key that must pass server-side revocation and status checks before authorization. Preferred for machine-to-machine integrations and must pass revocation checks."
+      },
+      "WebhookSignatureAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-KAS-Signature",
+        "description": "HMAC signature for KAS webhook payload verification; validated with server-side shared secret and replay checks."
       }
     },
     "schemas": {
@@ -183,7 +184,7 @@
             "type": "string",
             "format": "uri",
             "pattern": "^https:\\/\\/(?!localhost(?:[:\\/]|$))(?!127(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!10(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!192\\.168(?:\\.\\d{1,3}){2}(?:[:\\/]|$))(?!172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2}(?:[:\\/]|$)).+",
-            "description": "Only https:// webhook URLs are accepted. Private/internal targets (10.x, 192.168.x, 172.16-31.x, localhost, 127.x) are blocked. Webhook URLs are validated server-side against an allowlist."
+            "description": "Only https:// webhook URLs are accepted. Private/internal targets (10.x, 192.168.x, 172.16-31.x, localhost, 127.x) are blocked. Webhook URLs are validated server-side against an allowlist. Validation includes canonical DNS resolution, IPv4/IPv6 private-range blocking, and post-resolution allowlist enforcement."
           },
           "events": {
             "type": "array",
@@ -5935,16 +5936,10 @@
         ],
         "operationId": "create_payments_kas_webhook",
         "summary": "POST /api/payments/kas/webhook",
-        "description": "Agent-facing endpoint for /api/payments/kas/webhook. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes).",
+        "description": "Agent-facing endpoint for /api/payments/kas/webhook. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Uses signed webhook headers; session/cookie auth is not accepted.",
         "security": [
           {
-            "JWTAuth": []
-          },
-          {
-            "APIKeyAuth": []
-          },
-          {
-            "CookieAuth": []
+            "WebhookSignatureAuth": []
           }
         ],
         "responses": {
@@ -5984,6 +5979,19 @@
                 },
                 "example": {
                   "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - invalid signature or replayed webhook",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Forbidden"
                 }
               }
             }
@@ -6062,7 +6070,27 @@
               "example": {}
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "X-KAS-Signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "HMAC signature over raw request payload."
+          },
+          {
+            "name": "X-KAS-Timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unix timestamp used for replay-window validation."
+          }
+        ]
       }
     },
     "/api/rates/bankr-kas": {
@@ -8184,7 +8212,7 @@
                     "type": "string",
                     "format": "uri",
                     "pattern": "^https:\\/\\/(?!localhost(?:[:\\/]|$))(?!127(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!10(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!192\\.168(?:\\.\\d{1,3}){2}(?:[:\\/]|$))(?!172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2}(?:[:\\/]|$)).+",
-                    "description": "Only https:// webhook URLs are accepted. Private/internal targets (10.x, 192.168.x, 172.16-31.x, localhost, 127.x) are blocked. Webhook URLs are validated server-side against an allowlist."
+                    "description": "Only https:// webhook URLs are accepted. Private/internal targets (10.x, 192.168.x, 172.16-31.x, localhost, 127.x) are blocked. Webhook URLs are validated server-side against an allowlist. Validation includes canonical DNS resolution, IPv4/IPv6 private-range blocking, and post-resolution allowlist enforcement."
                   },
                   "events": {
                     "type": "array",
@@ -8784,7 +8812,7 @@
                     "type": "string",
                     "format": "uri",
                     "pattern": "^https:\\/\\/(?!localhost(?:[:\\/]|$))(?!127(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!10(?:\\.\\d{1,3}){3}(?:[:\\/]|$))(?!192\\.168(?:\\.\\d{1,3}){2}(?:[:\\/]|$))(?!172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2}(?:[:\\/]|$)).+",
-                    "description": "Only https:// webhook URLs are accepted. Private/internal targets (10.x, 192.168.x, 172.16-31.x, localhost, 127.x) are blocked. Webhook URLs are validated server-side against an allowlist."
+                    "description": "Only https:// webhook URLs are accepted. Private/internal targets (10.x, 192.168.x, 172.16-31.x, localhost, 127.x) are blocked. Webhook URLs are validated server-side against an allowlist. Validation includes canonical DNS resolution, IPv4/IPv6 private-range blocking, and post-resolution allowlist enforcement."
                   },
                   "events": {
                     "type": "array",
