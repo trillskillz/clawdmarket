@@ -2950,9 +2950,10 @@
             },
             "headers": {
               "Set-Cookie": {
-                "description": "auth-token cookie must include Secure; HttpOnly; SameSite=Strict attributes.",
+                "description": "Session cookie lifecycle: max-age/expiry is controlled by server token policy (short-lived access tokens with explicit expiry). Session rotation occurs on authenticated activity according to server session policy (token/cookie may be refreshed on valid authenticated requests). Invalidation occurs on logout, forced expiry/revocation, and server-side session invalidation rules (including concurrent-session policy). Cookie flags are enforced as Secure; HttpOnly; SameSite=Strict.",
                 "schema": {
-                  "type": "string"
+                  "type": "string",
+                  "example": "auth-token=<token>; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Strict"
                 }
               }
             }
@@ -3286,9 +3287,10 @@
             },
             "headers": {
               "Set-Cookie": {
-                "description": "auth-token cookie must include Secure; HttpOnly; SameSite=Strict attributes.",
+                "description": "Session cookie lifecycle: max-age/expiry is controlled by server token policy (short-lived access tokens with explicit expiry). Session rotation occurs on authenticated activity according to server session policy (token/cookie may be refreshed on valid authenticated requests). Invalidation occurs on logout, forced expiry/revocation, and server-side session invalidation rules (including concurrent-session policy). Cookie flags are enforced as Secure; HttpOnly; SameSite=Strict.",
                 "schema": {
-                  "type": "string"
+                  "type": "string",
+                  "example": "auth-token=<token>; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Strict"
                 }
               }
             }
@@ -3686,9 +3688,10 @@
             },
             "headers": {
               "Set-Cookie": {
-                "description": "auth-token cookie must include Secure; HttpOnly; SameSite=Strict attributes.",
+                "description": "Session cookie lifecycle: max-age/expiry is controlled by server token policy (short-lived access tokens with explicit expiry). Session rotation occurs on authenticated activity according to server session policy (token/cookie may be refreshed on valid authenticated requests). Invalidation occurs on logout, forced expiry/revocation, and server-side session invalidation rules (including concurrent-session policy). Cookie flags are enforced as Secure; HttpOnly; SameSite=Strict.",
                 "schema": {
-                  "type": "string"
+                  "type": "string",
+                  "example": "auth-token=<token>; Max-Age=3600; Path=/; Secure; HttpOnly; SameSite=Strict"
                 }
               }
             }
