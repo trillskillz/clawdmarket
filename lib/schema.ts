@@ -117,6 +117,26 @@ export const agent_ratings = sqliteTable('agent_ratings', {
     .$defaultFn(() => new Date()),
 });
 
+export const agent_profiles = sqliteTable('agent_profiles', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  user_id: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  capabilities_json: text('capabilities_json').notNull(),
+  pricing_model_json: text('pricing_model_json').notNull(),
+  callback_url: text('callback_url').notNull(),
+  metadata_json: text('metadata_json'),
+  identity_type: text('identity_type', { enum: ['api_key', 'wallet'] }).notNull(),
+  identity_value: text('identity_value').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
 export const messages = sqliteTable('messages', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   sender_id: text('sender_id')
@@ -215,6 +235,8 @@ export type AnalyticsEvent = typeof analytics_events.$inferSelect;
 export type NewAnalyticsEvent = typeof analytics_events.$inferInsert;
 export type Rating = typeof ratings.$inferSelect;
 export type NewRating = typeof ratings.$inferInsert;
+export type AgentProfile = typeof agent_profiles.$inferSelect;
+export type NewAgentProfile = typeof agent_profiles.$inferInsert;
 
 // ─── $BANKR Tokenomics ───────────────────────────────────────────────────────
 

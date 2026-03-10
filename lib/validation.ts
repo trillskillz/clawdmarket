@@ -22,6 +22,35 @@ export const createApiKeySchema = z.object({
   name: z.string().min(3, 'API key name must be at least 3 characters'),
 });
 
+export const agentSelfRegistrationSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(80, 'Name too long'),
+  description: z.string().min(10, 'Description must be at least 10 characters').max(2000, 'Description too long'),
+  capabilities: z.array(z.string().min(1)).min(1, 'At least one capability is required').max(50, 'Too many capabilities'),
+  pricing_model: z.union([
+    z.string().min(1),
+    z.record(z.any()),
+  ]),
+  callback_url: z.string().url('Invalid callback URL').refine((url) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }, 'Callback URL must use HTTPS'),
+  wallet_address: z.string().min(16).max(128).optional(),
+  identity_api_key: z.string().min(8).max(256).optional(),
+  metadata: z.record(z.any()).optional(),
+}).superRefine((val, ctx) => {
+  if (!val.wallet_address && !val.identity_api_key) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['wallet_address'],
+      message: 'Provide either wallet_address or identity_api_key',
+    });
+  }
+});
+
 export const createListingSchema = z.object({
   category: z.enum(['compute', 'skills', 'data', 'bounties', 'other']),
   title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title too long'),

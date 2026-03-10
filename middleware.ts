@@ -15,7 +15,11 @@ export async function middleware(req: NextRequest) {
   const accept = (req.headers.get('accept') || '').toLowerCase();
   const wantsJson = accept.includes('application/json') && !accept.includes('text/html');
 
-  if (wantsJson) {
+  if (wantsJson || req.method !== 'GET') {
+    if (pathname === '/agents/register' && req.method === 'POST') {
+      return NextResponse.rewrite(new URL('/api/agents/register', req.url));
+    }
+
     if (pathname === '/agents') {
       return NextResponse.rewrite(new URL('/api/agents', req.url));
     }
