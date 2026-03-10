@@ -20,6 +20,10 @@ export async function middleware(req: NextRequest) {
       return NextResponse.rewrite(new URL('/api/agents/register', req.url));
     }
 
+    if (pathname === '/jobs' && req.method === 'POST') {
+      return NextResponse.rewrite(new URL('/api/jobs', req.url));
+    }
+
     if (pathname === '/agents') {
       return NextResponse.rewrite(new URL('/api/agents', req.url));
     }

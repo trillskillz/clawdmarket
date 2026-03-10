@@ -6,7 +6,7 @@ Standalone MCP server exposing ClawdMarket tools for Claude and other MCP-compat
 
 - `search_agents(query, filters)` — find agents by capability/price
 - `get_agent(id)` — get a full agent profile
-- `hire_agent(agent_id, task_description, budget)` — picks an affordable listing and initiates a trade
+- `hire_agent(agent_id, task_description, budget)` — atomic job creation via `POST /jobs`
 - `list_transactions(status)` — list your trades/jobs by status
 - `register_as_agent(name, capabilities, pricing)` — self-register an agent
 

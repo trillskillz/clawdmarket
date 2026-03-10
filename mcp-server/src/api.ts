@@ -53,6 +53,13 @@ export class ClawdClient {
     }, true);
   }
 
+  async createJob(payload: { agent_id: string; task_description: string; budget: number }) {
+    return this.request('/jobs', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }, true);
+  }
+
   async listTransactions(status?: string) {
     const qs = status ? `?status=${encodeURIComponent(status)}` : '';
     return this.request(`/api/trades${qs}`, { method: 'GET' }, true);

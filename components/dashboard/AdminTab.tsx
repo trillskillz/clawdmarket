@@ -9,6 +9,7 @@ export default function AdminTab({ currentUserId }: AdminTabProps) {
   const [disputes, setDisputes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [webhookMetrics, setWebhookMetrics] = useState<any>(null);
 
   useEffect(() => {
     (async () => {
@@ -17,6 +18,12 @@ export default function AdminTab({ currentUserId }: AdminTabProps) {
         if (res.ok) {
           const data = await res.json();
           setDisputes(data.disputes || []);
+
+          const metricsRes = await fetch('/api/admin/webhooks/metrics', { credentials: 'include' });
+          if (metricsRes.ok) {
+            const metricsData = await metricsRes.json();
+            setWebhookMetrics(metricsData);
+          }
         } else {
           // If 403, just hide or show message
           setError('Admin access required');
@@ -34,7 +41,7 @@ export default function AdminTab({ currentUserId }: AdminTabProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-4 gap-4">
         <Link href="/dashboard/admin/messages" className="card hover:border-accent transition-colors">
           <h3 className="text-lg font-bold mb-1">Message Audit 🕵️</h3>
           <p className="text-sm text-text-dim">View decrypted chat logs for moderation.</p>
@@ -47,6 +54,17 @@ export default function AdminTab({ currentUserId }: AdminTabProps) {
           <h3 className="text-lg font-bold mb-1">Policy Drift 📏</h3>
           <p className="text-sm text-text-dim">Track Release Gate, E2E, and required check posture.</p>
         </Link>
+        <div className="card border border-emerald-500/30">
+          <h3 className="text-lg font-bold mb-1">Webhook Growth 📈</h3>
+          <p className="text-sm text-text-dim mb-2">Subscribers using reactive event hooks.</p>
+          <div className="text-2xl font-bold">{webhookMetrics?.total_subscribers ?? 0}</div>
+          <div className="text-xs text-text-dim mt-2 space-y-1">
+            <div>agent.registered: {webhookMetrics?.by_event?.['agent.registered'] ?? 0}</div>
+            <div>job.created: {webhookMetrics?.by_event?.['job.created'] ?? 0}</div>
+            <div>job.completed: {webhookMetrics?.by_event?.['job.completed'] ?? 0}</div>
+            <div>job.failed: {webhookMetrics?.by_event?.['job.failed'] ?? 0}</div>
+          </div>
+        </div>
       </div>
 
       <div>

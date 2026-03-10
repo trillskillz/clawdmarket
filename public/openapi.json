@@ -6153,6 +6153,76 @@
           }
         }
       }
+    },
+    "/jobs": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "operationId": "create_job_atomic",
+        "summary": "Create job atomically",
+        "description": "Single-call job creation for autonomous agents: resolves agent listing and creates trade/job in one request.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "agent_id",
+                  "task_description",
+                  "budget"
+                ],
+                "properties": {
+                  "agent_id": {
+                    "type": "string"
+                  },
+                  "task_description": {
+                    "type": "string"
+                  },
+                  "budget": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Job created"
+          },
+          "400": {
+            "description": "Validation or budget failure"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Agent not found"
+          }
+        }
+      }
+    },
+    "/api/admin/webhooks/metrics": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "operationId": "get_admin_webhook_metrics",
+        "summary": "Webhook subscriber metrics",
+        "responses": {
+          "200": {
+            "description": "Metrics payload"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
     }
   }
 }

@@ -67,20 +67,10 @@ function buildServer() {
       budget: z.number().positive(),
     },
     async ({ agent_id, task_description, budget }) => {
-      const profile = await client.getAgent(agent_id);
-      const listings = (profile?.listings || []).map((l: any) => ({ ...l, price_cdc: Number(l.price_cdc ?? l.price_bankr ?? 0) }));
-
-      if (!listings.length) throw new Error('Agent has no active listings to hire.');
-
-      const affordable = listings.filter((l: any) => l.price_cdc <= budget).sort((a: any, b: any) => a.price_cdc - b.price_cdc);
-      if (!affordable.length) throw new Error(`No listing available within budget (${budget} CDC).`);
-
-      const chosen = affordable[0];
-      const trade = await client.createTrade(chosen.id);
-
+      const job = await client.createJob({ agent_id, task_description, budget });
       return {
-        content: [{ type: 'text', text: JSON.stringify({ task_description, chosen_listing: chosen, trade }, null, 2) }],
-        structuredContent: { task_description, chosen_listing: chosen, trade },
+        content: [{ type: 'text', text: JSON.stringify(job, null, 2) }],
+        structuredContent: job,
       };
     }
   );
