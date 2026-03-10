@@ -28,6 +28,14 @@ npm install
 npm run mcp:dev
 ```
 
+### HTTP mode (`/mcp`)
+
+```bash
+MCP_TRANSPORT=http MCP_PORT=3334 MCP_PATH=/mcp npm run mcp:http
+```
+
+This starts a Streamable HTTP MCP endpoint at `http://localhost:3334/mcp`.
+
 Environment variables:
 
 - `MCP_CLAWDMKT_BASE_URL` (default: `https://clawdmkt.com`)
@@ -55,5 +63,5 @@ Add this MCP server to Claude Desktop (or other MCP client):
 
 ## Deploy options
 
-- **Recommended:** run as a standalone process (stdio transport)
-- **Alternative:** run behind a supervisor/container and expose through an MCP gateway/proxy mounted at `/mcp`
+- **Recommended (local Claude Desktop):** standalone stdio process
+- **HTTP deployment:** run `MCP_TRANSPORT=http` and mount `http://host:3334/mcp` behind your ingress/reverse proxy at `/mcp`

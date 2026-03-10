@@ -1,125 +1,175 @@
 #!/usr/bin/env node
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { ClawdClient } from './api.js';
 
 const baseUrl = process.env.MCP_CLAWDMKT_BASE_URL || 'https://clawdmkt.com';
 const apiKey = process.env.MCP_CLAWDMKT_API_KEY;
+const transportMode = (process.env.MCP_TRANSPORT || 'stdio').toLowerCase();
+const mcpPath = process.env.MCP_PATH || '/mcp';
+const mcpPort = Number(process.env.MCP_PORT || 3334);
 
 const client = new ClawdClient({ baseUrl, apiKey });
 
-const server = new McpServer({
-  name: 'clawdmarket-mcp',
-  version: '1.0.0',
-});
+function buildServer() {
+  const server = new McpServer({
+    name: 'clawdmarket-mcp',
+    version: '1.1.0',
+  });
 
-server.tool(
-  'search_agents',
-  {
-    query: z.string().default(''),
-    filters: z.object({
-      min_cdc: z.number().optional(),
-      max_cdc: z.number().optional(),
-      capability: z.string().optional(),
-    }).optional(),
-  },
-  async ({ query, filters }) => {
-    const data = await client.searchAgents();
-    const q = query.toLowerCase();
+  server.tool(
+    'search_agents',
+    {
+      query: z.string().default(''),
+      filters: z.object({
+        min_cdc: z.number().optional(),
+        max_cdc: z.number().optional(),
+        capability: z.string().optional(),
+      }).optional(),
+    },
+    async ({ query, filters }) => {
+      const data = await client.searchAgents();
+      const q = query.toLowerCase();
 
-    const agents = (data.agents || []).filter((a: any) => {
-      const text = `${a.name || ''} ${a.description || ''} ${(a.capabilities || []).join(' ')}`.toLowerCase();
-      if (q && !text.includes(q)) return false;
-      if (filters?.capability && !(a.capabilities || []).some((c: string) => c.toLowerCase().includes(filters.capability!.toLowerCase()))) return false;
-      if (filters?.min_cdc != null && Number(a?.pricing?.min_cdc || 0) < filters.min_cdc) return false;
-      if (filters?.max_cdc != null && Number(a?.pricing?.max_cdc || 0) > filters.max_cdc) return false;
-      return true;
-    });
+      const agents = (data.agents || []).filter((a: any) => {
+        const text = `${a.name || ''} ${a.description || ''} ${(a.capabilities || []).join(' ')}`.toLowerCase();
+        if (q && !text.includes(q)) return false;
+        if (filters?.capability && !(a.capabilities || []).some((c: string) => c.toLowerCase().includes(filters.capability!.toLowerCase()))) return false;
+        if (filters?.min_cdc != null && Number(a?.pricing?.min_cdc || 0) < filters.min_cdc) return false;
+        if (filters?.max_cdc != null && Number(a?.pricing?.max_cdc || 0) > filters.max_cdc) return false;
+        return true;
+      });
 
-    return {
-      content: [{ type: 'text', text: JSON.stringify({ count: agents.length, agents }, null, 2) }],
-      structuredContent: { count: agents.length, agents },
-    };
-  }
-);
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ count: agents.length, agents }, null, 2) }],
+        structuredContent: { count: agents.length, agents },
+      };
+    }
+  );
 
-server.tool(
-  'get_agent',
-  { id: z.string() },
-  async ({ id }) => {
+  server.tool('get_agent', { id: z.string() }, async ({ id }) => {
     const agent = await client.getAgent(id);
-    return {
-      content: [{ type: 'text', text: JSON.stringify(agent, null, 2) }],
-      structuredContent: agent,
-    };
-  }
-);
+    return { content: [{ type: 'text', text: JSON.stringify(agent, null, 2) }], structuredContent: agent };
+  });
 
-server.tool(
-  'hire_agent',
-  {
-    agent_id: z.string(),
-    task_description: z.string(),
-    budget: z.number().positive(),
-  },
-  async ({ agent_id, task_description, budget }) => {
-    const profile = await client.getAgent(agent_id);
-    const listings = (profile?.listings || []).map((l: any) => ({ ...l, price_cdc: Number(l.price_cdc ?? l.price_bankr ?? 0) }));
+  server.tool(
+    'hire_agent',
+    {
+      agent_id: z.string(),
+      task_description: z.string(),
+      budget: z.number().positive(),
+    },
+    async ({ agent_id, task_description, budget }) => {
+      const profile = await client.getAgent(agent_id);
+      const listings = (profile?.listings || []).map((l: any) => ({ ...l, price_cdc: Number(l.price_cdc ?? l.price_bankr ?? 0) }));
 
-    if (!listings.length) {
-      throw new Error('Agent has no active listings to hire.');
+      if (!listings.length) throw new Error('Agent has no active listings to hire.');
+
+      const affordable = listings.filter((l: any) => l.price_cdc <= budget).sort((a: any, b: any) => a.price_cdc - b.price_cdc);
+      if (!affordable.length) throw new Error(`No listing available within budget (${budget} CDC).`);
+
+      const chosen = affordable[0];
+      const trade = await client.createTrade(chosen.id);
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ task_description, chosen_listing: chosen, trade }, null, 2) }],
+        structuredContent: { task_description, chosen_listing: chosen, trade },
+      };
     }
+  );
 
-    const affordable = listings
-      .filter((l: any) => l.price_cdc <= budget)
-      .sort((a: any, b: any) => a.price_cdc - b.price_cdc);
-
-    if (!affordable.length) {
-      throw new Error(`No listing available within budget (${budget} CDC).`);
-    }
-
-    const chosen = affordable[0];
-    const trade = await client.createTrade(chosen.id);
-
-    return {
-      content: [{ type: 'text', text: JSON.stringify({ task_description, chosen_listing: chosen, trade }, null, 2) }],
-      structuredContent: { task_description, chosen_listing: chosen, trade },
-    };
-  }
-);
-
-server.tool(
-  'list_transactions',
-  { status: z.enum(['pending', 'completed', 'complete', 'disputed']).optional() },
-  async ({ status }) => {
+  server.tool('list_transactions', { status: z.enum(['pending', 'completed', 'complete', 'disputed']).optional() }, async ({ status }) => {
     const data = await client.listTransactions(status);
-    return {
-      content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
-      structuredContent: data,
-    };
-  }
-);
+    return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }], structuredContent: data };
+  });
 
-server.tool(
-  'register_as_agent',
-  {
-    name: z.string().min(2),
-    capabilities: z.array(z.string()).min(1),
-    pricing: z.union([z.string(), z.record(z.any())]),
-  },
-  async ({ name, capabilities, pricing }) => {
-    const data = await client.registerAsAgent({ name, capabilities, pricing });
-    return {
-      content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
-      structuredContent: data,
-    };
-  }
-);
+  server.tool(
+    'register_as_agent',
+    { name: z.string().min(2), capabilities: z.array(z.string()).min(1), pricing: z.union([z.string(), z.record(z.any())]) },
+    async ({ name, capabilities, pricing }) => {
+      const data = await client.registerAsAgent({ name, capabilities, pricing });
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }], structuredContent: data };
+    }
+  );
+
+  return server;
+}
+
+async function runStdio() {
+  const server = buildServer();
+  await server.connect(new StdioServerTransport());
+}
+
+async function runHttp() {
+  const app = createMcpExpressApp();
+  const transports: Record<string, StreamableHTTPServerTransport> = {};
+
+  app.post(mcpPath, async (req, res) => {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    let transport: StreamableHTTPServerTransport;
+
+    if (sessionId && transports[sessionId]) {
+      transport = transports[sessionId];
+      await transport.handleRequest(req, res, req.body);
+      return;
+    }
+
+    if (!sessionId && isInitializeRequest(req.body)) {
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sid) => {
+          transports[sid] = transport;
+        },
+      });
+
+      transport.onclose = () => {
+        const sid = transport.sessionId;
+        if (sid) delete transports[sid];
+      };
+
+      const server = buildServer();
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+      return;
+    }
+
+    res.status(400).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Bad Request: invalid session' }, id: null });
+  });
+
+  app.get(mcpPath, async (req, res) => {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    if (!sessionId || !transports[sessionId]) {
+      res.status(400).send('Invalid or missing session ID');
+      return;
+    }
+    await transports[sessionId].handleRequest(req, res);
+  });
+
+  app.delete(mcpPath, async (req, res) => {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    if (!sessionId || !transports[sessionId]) {
+      res.status(400).send('Invalid or missing session ID');
+      return;
+    }
+    await transports[sessionId].handleRequest(req, res);
+  });
+
+  app.listen(mcpPort, () => {
+    console.error(`ClawdMarket MCP HTTP server listening on :${mcpPort}${mcpPath}`);
+  });
+}
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  if (transportMode === 'http') {
+    await runHttp();
+    return;
+  }
+  await runStdio();
 }
 
 main().catch((err) => {
