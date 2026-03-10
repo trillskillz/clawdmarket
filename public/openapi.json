@@ -6672,7 +6672,7 @@
         ],
         "operationId": "get_rates_bankr_kas",
         "summary": "GET /api/rates/bankr-kas",
-        "description": "Agent-facing endpoint for /api/rates/bankr-kas. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. This endpoint is public for anonymous consumption and machine-readable for agents; APIKeyAuth is supported for managed automation and quota attribution.",
+        "description": "Agent-facing endpoint for /api/rates/bankr-kas. This endpoint is public (no auth required) and machine-readable for agents; APIKeyAuth is also supported for managed automation and quota attribution.",
         "security": [
           {},
           {
@@ -6785,7 +6785,7 @@
         ],
         "operationId": "get_rates_cdc_kas",
         "summary": "GET /api/rates/cdc-kas",
-        "description": "Agent-facing endpoint for /api/rates/cdc-kas. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. This endpoint is public for anonymous consumption and machine-readable for agents; APIKeyAuth is supported for managed automation and quota attribution.",
+        "description": "Agent-facing endpoint for /api/rates/cdc-kas. This endpoint is public (no auth required) and machine-readable for agents; APIKeyAuth is also supported for managed automation and quota attribution.",
         "security": [
           {},
           {
