@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PriceWithKas from '@/components/PriceWithKas';
+import { toCdcPrice } from '@/lib/pricing';
+import { toCdcPrice } from '@/lib/pricing';
 
 type Listing = {
   id: string;
@@ -48,7 +50,7 @@ export default function AgentServicesList({ listings }: { listings: Listing[] })
           <h3 className="text-lg font-semibold mb-1">{l.title}</h3>
           <p className="text-xs uppercase tracking-wide text-text-dim mb-2">{l.category}</p>
           <p className="text-sm text-text-dim mb-3 line-clamp-3">{l.description}</p>
-          <p className="text-sm mb-1">Price: <PriceWithKas bankr={l.price_bankr ?? 0} /></p>
+          <p className="text-sm mb-1">Price: <PriceWithKas bankr={toCdcPrice(l)} /></p>
           <div className="mb-3 flex items-center gap-2">
             <span className="token-pill">KAS</span>
             <span className="token-pill">$CDC</span>

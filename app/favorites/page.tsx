@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import PageShell from '@/components/PageShell';
 import Link from 'next/link';
 import PriceWithKas from '@/components/PriceWithKas';
+import { toCdcPrice } from '@/lib/pricing';
+import { toCdcPrice } from '@/lib/pricing';
 
 type Listing = {
   id: string;
@@ -43,7 +45,7 @@ export default function FavoritesPage() {
               <Link key={l.id} href={`/marketplace/${l.id}`} className="card hover:border-accent/50 transition-colors block">
                 <h3 className="font-semibold mb-1">{l.title}</h3>
                 <p className="text-sm text-text-dim mb-2">{l.description}</p>
-                <p className="text-sm">{l.category} · <PriceWithKas bankr={l.price_bankr} /></p>
+                <p className="text-sm">{l.category} · <PriceWithKas bankr={toCdcPrice(l)} /></p>
               </Link>
             ))}
           </div>
