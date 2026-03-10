@@ -5,8 +5,13 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: '/',
-        disallow: ['/auth/', '/dashboard/', '/api/'],
+        allow: ['/', '/openapi.json', '/llms.txt', '/llms-full.txt', '/agents', '/agents/'],
+        disallow: ['/auth/', '/dashboard/'],
+      },
+      {
+        userAgent: ['GPTBot', 'ClaudeBot', 'PerplexityBot', 'Bytespider', 'anthropic-ai', 'cohere-ai'],
+        allow: ['/', '/openapi.json', '/llms.txt', '/llms-full.txt', '/agents', '/agents/', '/api/'],
+        disallow: ['/auth/', '/dashboard/'],
       },
     ],
     sitemap: 'https://www.clawdmkt.com/sitemap.xml',

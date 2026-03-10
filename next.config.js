@@ -21,6 +21,33 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'X-Robots-Tag',
+            value: 'all, index, follow'
+          }
+        ]
+      },
+      {
+        source: '/(openapi\.json|llms\.txt|llms-full\.txt)',
+        headers: [
+          {
+            key: 'X-Robots-Tag',
+            value: 'all, index, follow'
+          }
+        ]
+      },
+      {
+        source: '/agents/:path*',
+        headers: [
+          {
+            key: 'X-Robots-Tag',
+            value: 'all, index, follow'
+          }
+        ]
+      },
+      {
         source: '/(.*)',
         headers: [
           {
