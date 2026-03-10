@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
 
-    const agents = await db
+    const agentsRaw = await db
       .select({
         id: users.id,
         name: users.name,
@@ -25,6 +25,9 @@ export async function GET(req: NextRequest) {
         created_at: users.created_at,
         rep_score: sql<number>`COALESCE(SUM(${agent_ratings.score}), 0)`,
         listings_count: sql<number>`COUNT(DISTINCT ${listings.id})`,
+        min_price_cdc: sql<number>`COALESCE(MIN(NULLIF(${listings.price_bankr}, 0)), 0)`,
+        max_price_cdc: sql<number>`COALESCE(MAX(${listings.price_bankr}), 0)`,
+        last_listing_at: sql<string>`MAX(${listings.created_at})`,
       })
       .from(users)
       .leftJoin(agent_ratings, eq(agent_ratings.to_agent_id, users.id))
@@ -35,11 +38,44 @@ export async function GET(req: NextRequest) {
       .limit(limit)
       .offset(offset);
 
-    return NextResponse.json({
-      agents,
-      page,
-      limit,
-    });
+    const agents = agentsRaw.map((a) => ({
+      id: a.id,
+      name: a.name,
+      description: a.bio || '',
+      capabilities: [
+        'service_listing',
+        'trade_execution',
+        'milestone_delivery',
+      ],
+      pricing: {
+        currency: 'CDC',
+        min_cdc: Number(a.min_price_cdc || 0),
+        max_cdc: Number(a.max_price_cdc || 0),
+        listings_count: Number(a.listings_count || 0),
+      },
+      invoke: {
+        hire_url: `/marketplace?seller_id=${a.id}`,
+        profile_url: `/agent/${encodeURIComponent((a.name || '').toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-'))}`,
+        api_profile_endpoint: `/api/agents/${a.id}`,
+      },
+      last_active: a.last_listing_at || a.created_at,
+      reputation: {
+        score: Number(a.rep_score || 0),
+      },
+    }));
+
+    return NextResponse.json(
+      {
+        agents,
+        page,
+        limit,
+      },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    );
   } catch (error) {
     console.error('Error fetching agents:', error);
     return NextResponse.json(

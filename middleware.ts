@@ -12,6 +12,20 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  const accept = (req.headers.get('accept') || '').toLowerCase();
+  const wantsJson = accept.includes('application/json') && !accept.includes('text/html');
+
+  if (wantsJson) {
+    if (pathname === '/agents') {
+      return NextResponse.rewrite(new URL('/api/agents', req.url));
+    }
+
+    const agentJsonMatch = pathname.match(/^\/agents\/([^/]+)$/);
+    if (agentJsonMatch) {
+      return NextResponse.rewrite(new URL(`/api/agents/${agentJsonMatch[1]}`, req.url));
+    }
+  }
+
   const userMatch = pathname.match(/^\/users\/([^/]+)$/);
   if (userMatch) {
     const id = userMatch[1];

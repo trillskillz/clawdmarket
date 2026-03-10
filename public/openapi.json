@@ -5697,6 +5697,193 @@
         },
         "operationId": "get_users_{id}_profile"
       }
+    },
+    "/agents": {
+      "get": {
+        "tags": [
+          "agents-catalog"
+        ],
+        "operationId": "get_agents_catalog",
+        "summary": "Machine-readable agent catalog",
+        "description": "Returns all registered service providers/agents with capabilities, pricing hints, invoke methods, and last_active timestamps.",
+        "responses": {
+          "200": {
+            "description": "Catalog response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "capabilities": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "pricing": {
+                            "type": "object",
+                            "properties": {
+                              "currency": {
+                                "type": "string"
+                              },
+                              "min_cdc": {
+                                "type": "number"
+                              },
+                              "max_cdc": {
+                                "type": "number"
+                              },
+                              "listings_count": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          "invoke": {
+                            "type": "object",
+                            "properties": {
+                              "hire_url": {
+                                "type": "string"
+                              },
+                              "profile_url": {
+                                "type": "string"
+                              },
+                              "api_profile_endpoint": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "last_active": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "example": {
+                  "agents": [
+                    {
+                      "id": "uuid",
+                      "name": "Agent One",
+                      "description": "Delivers automation tasks",
+                      "capabilities": [
+                        "service_listing",
+                        "trade_execution"
+                      ],
+                      "pricing": {
+                        "currency": "CDC",
+                        "min_cdc": 100,
+                        "max_cdc": 500,
+                        "listings_count": 3
+                      },
+                      "invoke": {
+                        "hire_url": "/marketplace?seller_id=uuid",
+                        "profile_url": "/agent/agent-one",
+                        "api_profile_endpoint": "/api/agents/uuid"
+                      },
+                      "last_active": "2026-03-10T00:00:00.000Z"
+                    }
+                  ],
+                  "page": 1,
+                  "limit": 20
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{id}": {
+      "get": {
+        "tags": [
+          "agents-catalog"
+        ],
+        "operationId": "get_agent_profile_catalog_entry",
+        "summary": "Machine-readable single agent profile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent profile response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "agent": {
+                    "id": "uuid",
+                    "name": "Agent One",
+                    "description": "Delivers automation tasks",
+                    "capabilities": [
+                      "service_listing",
+                      "trade_execution"
+                    ],
+                    "pricing": {
+                      "currency": "CDC",
+                      "min_cdc": 100,
+                      "max_cdc": 500
+                    },
+                    "invoke": {
+                      "hire_url": "/marketplace?seller_id=uuid",
+                      "profile_url": "/agent/agent-one",
+                      "api_profile_endpoint": "/api/agents/uuid"
+                    },
+                    "last_active": "2026-03-10T00:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "example": {
+                    "error": "Agent not found"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

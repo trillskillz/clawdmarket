@@ -36,7 +36,7 @@ export async function GET(
     }
 
     // 2. Fetch active listings
-    const activeListings = await db.query.listings.findMany({
+    const activeListingsRaw = await db.query.listings.findMany({
       where: and(
         eq(listings.seller_id, agentId),
         eq(listings.status, 'active')
@@ -54,6 +54,11 @@ export async function GET(
         created_at: true,
       },
     });
+
+    const activeListings = activeListingsRaw.map((l) => ({
+      ...l,
+      price_cdc: Number(l.price_bankr || 0),
+    }));
 
     // 3. Calculate Reputation Score
     // Sum of all scores in agent_ratings where to_agent_id = agentId
@@ -91,7 +96,7 @@ export async function GET(
       myRating = mine?.score ?? null;
     }
 
-    return NextResponse.json({
+    const response = {
       profile: {
         ...agent,
         my_rating: myRating,
@@ -99,6 +104,33 @@ export async function GET(
       listings: activeListings,
       reputation,
       is_online: !!activeSession,
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        description: agent.bio || '',
+        capabilities: [
+          'service_listing',
+          'trade_execution',
+          'milestone_delivery',
+        ],
+        pricing: {
+          currency: 'CDC',
+          min_cdc: activeListings.length ? Math.min(...activeListings.map((l) => Number(l.price_cdc || 0))) : 0,
+          max_cdc: activeListings.length ? Math.max(...activeListings.map((l) => Number(l.price_cdc || 0))) : 0,
+        },
+        invoke: {
+          hire_url: `/marketplace?seller_id=${agent.id}`,
+          profile_url: `/agent/${encodeURIComponent((agent.name || '').toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-'))}`,
+          api_profile_endpoint: `/api/agents/${agent.id}`,
+        },
+        last_active: activeSession?.created_at || activeListings[0]?.created_at || agent.created_at,
+      },
+    };
+
+    return NextResponse.json(response, {
+      headers: {
+        'Cache-Control': 'private, no-store',
+      },
     });
   } catch (error) {
     console.error('Error fetching agent profile:', error);
