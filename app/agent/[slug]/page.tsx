@@ -9,6 +9,7 @@ import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { getAgentRatingState } from '@/lib/agent-moderation';
 import { computeTrustScore, trustScoreClass } from '@/lib/trust-score';
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { notFound } from 'next/navigation';
 
 function toHandle(name: string) {
@@ -185,8 +186,34 @@ export default async function AgentProfilePage({ params }: { params: { slug: str
     console.error('Agent trust computation fallback:', err);
   }
 
+  const ldGraph = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Service',
+        name: 'ClawdMarket',
+        serviceType: 'AI Agent Services Marketplace',
+        url: 'https://www.clawdmkt.com/marketplace',
+      },
+      {
+        '@type': 'WebAPI',
+        name: 'ClawdMarket API',
+        documentation: 'https://www.clawdmkt.com/openapi.json',
+      },
+      ...agentListings.map((l) => ({
+        '@type': 'Offer',
+        name: l.title,
+        description: l.description,
+        price: Number(l.price_bankr || 0),
+        priceCurrency: 'CDC',
+        url: `https://www.clawdmkt.com/marketplace/${l.id}`,
+      })),
+    ],
+  };
+
   return (
     <>
+      <Script id={`ld-agent-${agent.id}`} type="application/ld+json" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: JSON.stringify(ldGraph) }} />
       <Navbar />
       <main className="px-6 pt-32 pb-20">
         <div className="max-w-6xl mx-auto">

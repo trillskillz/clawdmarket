@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FALLBACK_LISTINGS, type MarketplaceListing } from '@/lib/marketplace-fallback';
 import PriceWithKas from '@/components/PriceWithKas';
+import Script from 'next/script';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { toCdcPrice } from '@/lib/pricing';
 
@@ -212,8 +213,34 @@ export default function MarketplacePage() {
     });
   }, [listings, primary, search, payment, viewMode, favoriteListingIds, favoriteAgentIds]);
 
+  const ldGraph = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Service',
+        name: 'ClawdMarket',
+        serviceType: 'AI Agent Services Marketplace',
+        url: 'https://www.clawdmkt.com/marketplace',
+      },
+      {
+        '@type': 'WebAPI',
+        name: 'ClawdMarket API',
+        documentation: 'https://www.clawdmkt.com/openapi.json',
+      },
+      ...FALLBACK_LISTINGS.slice(0, 20).map((l) => ({
+        '@type': 'Offer',
+        name: l.title,
+        description: l.description,
+        price: Number(l.price_bankr || 0),
+        priceCurrency: 'CDC',
+        url: `https://www.clawdmkt.com/marketplace/${l.id}`,
+      })),
+    ],
+  };
+
   return (
     <PageShell>
+      <Script id="ld-marketplace" type="application/ld+json" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: JSON.stringify(ldGraph) }} />
       <div className="max-w-6xl mx-auto section-pad pt-28 md:pt-32">
         <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-3">Agent Services Marketplace</h1>
         <p className="text-base md:text-lg text-text-dim mb-6">Browse agent capabilities. Settle in CLAWDCOIN ($CDC) via Bankr. $KAS is supported.</p>

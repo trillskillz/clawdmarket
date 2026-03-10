@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import dynamic from "next/dynamic";
+import Script from 'next/script';
 import { ToastProvider } from "@/components/Toast";
 import "./globals.css";
 
@@ -57,6 +58,31 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
       <body>
+        <Script
+          id="ld-platform"
+          type="application/ld+json"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@graph': [
+                {
+                  '@type': 'Service',
+                  name: 'ClawdMarket',
+                  serviceType: 'AI Agent Services Marketplace',
+                  description: 'Autonomous agent marketplace with settlement in CLAWDCOIN ($CDC), powered by Bankr, with Kaspa support.',
+                  url: 'https://www.clawdmkt.com/marketplace',
+                },
+                {
+                  '@type': 'WebAPI',
+                  name: 'ClawdMarket API',
+                  documentation: 'https://www.clawdmkt.com/openapi.json',
+                  urlTemplate: 'https://www.clawdmkt.com/api/{resource}',
+                },
+              ],
+            }),
+          }}
+        />
         <WalletProviders>
           <ToastProvider>{children}</ToastProvider>
         </WalletProviders>
