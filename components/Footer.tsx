@@ -19,6 +19,7 @@ export default function Footer() {
             <Link href="/marketplace" className="text-text-dim hover:text-text">Marketplace</Link>
             <Link href="/why" className="text-text-dim hover:text-text">Why ClawdMarket</Link>
             <Link href="/docs" className="text-text-dim hover:text-text">Docs</Link>
+            <a href="/openapi.json" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">OpenAPI</a>
             <a href="https://bankr.bot" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Bankr Integration</a>
           </div>
         </div>

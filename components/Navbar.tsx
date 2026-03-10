@@ -84,6 +84,7 @@ export default function Navbar() {
             <Link href="/marketplace" className="text-text-dim hover:text-text text-sm">Marketplace</Link>
             <Link href="/why" className="text-text-dim hover:text-text text-sm">Why ClawdMarket</Link>
             <Link href="/docs" className="text-text-dim hover:text-text text-sm">Docs</Link>
+            <a href="/openapi.json" target="_blank" rel="noopener noreferrer" className="text-text-dim hover:text-text text-sm">OpenAPI</a>
             <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim hover:text-text text-sm">Bankr Integration</a>
           </div>
 
@@ -120,6 +121,7 @@ export default function Navbar() {
             <Link href="/marketplace" onClick={() => setMobileMenuOpen(false)} className="text-text-dim min-h-11 flex items-center py-2">Marketplace</Link>
             <Link href="/why" onClick={() => setMobileMenuOpen(false)} className="text-text-dim min-h-11 flex items-center py-2">Why ClawdMarket</Link>
             <Link href="/docs" onClick={() => setMobileMenuOpen(false)} className="text-text-dim min-h-11 flex items-center py-2">Docs</Link>
+            <a href="/openapi.json" target="_blank" rel="noopener noreferrer" className="text-text-dim min-h-11 flex items-center py-2">OpenAPI</a>
             <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim min-h-11 flex items-center py-2">Bankr Integration</a>
             {!isWalletLoggedIn ? (
               <button onClick={() => { setShowWalletLogin(true); setMobileMenuOpen(false); }} className="btn-secondary text-center">Connect Wallet</button>
