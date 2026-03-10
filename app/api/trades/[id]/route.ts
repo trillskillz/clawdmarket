@@ -165,10 +165,13 @@ export async function PATCH(
 
     // Fire webhooks
     if (targetStatus === 'complete') {
-      await fireWebhook(trade.buyer_id, 'trade.completed', { trade: updatedTrade });
-      await fireWebhook(trade.seller_id, 'trade.completed', { trade: updatedTrade });
+      await fireWebhook(trade.buyer_id, 'job.completed', { job: updatedTrade });
+      await fireWebhook(trade.seller_id, 'job.completed', { job: updatedTrade });
       await fireWebhook(trade.buyer_id, 'balance.changed', { reason: 'escrow_release', trade_id: trade.id });
       await fireWebhook(trade.seller_id, 'balance.changed', { reason: 'escrow_release', trade_id: trade.id });
+    } else if (targetStatus === 'disputed') {
+      await fireWebhook(trade.buyer_id, 'job.failed', { job: updatedTrade, reason: 'disputed' });
+      await fireWebhook(trade.seller_id, 'job.failed', { job: updatedTrade, reason: 'disputed' });
     }
 
     return NextResponse.json({

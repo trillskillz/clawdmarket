@@ -6,6 +6,7 @@ import { ensureUsersSchema } from '@/lib/users-schema-ensure';
 import { ensureAgentProfilesSchema } from '@/lib/agent-profiles-schema-ensure';
 import { generateApiKey, getKeyPrefix, hashApiKey, hashPassword } from '@/lib/auth';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
+import { fireWebhook } from '@/lib/webhooks';
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
@@ -63,6 +64,15 @@ export async function POST(req: NextRequest) {
       metadata_json: validated.metadata ? JSON.stringify(validated.metadata) : null,
       identity_type: validated.wallet_address ? 'wallet' : 'api_key',
       identity_value: validated.wallet_address || validated.identity_api_key || '',
+    });
+
+    await fireWebhook(newAgent.id, 'agent.registered', {
+      agent: {
+        id: newAgent.id,
+        name: newAgent.name,
+      },
+      capabilities: validated.capabilities,
+      pricing_model: validated.pricing_model,
     });
 
     return NextResponse.json(

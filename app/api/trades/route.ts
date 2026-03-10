@@ -493,8 +493,8 @@ export async function POST(req: NextRequest) {
       });
 
       Promise.all([
-        fireWebhook(auth.userId, 'trade.created', { trade: newTrade }),
-        fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade }),
+        fireWebhook(auth.userId, 'job.created', { job: newTrade }),
+        fireWebhook(listing.seller_id, 'job.created', { job: newTrade }),
         fireWebhook(listing.seller_id, 'listing.sold', { listing_id: validated.listing_id, trade: newTrade }),
       ]).catch(err => console.error('Webhook error:', err));
 
@@ -654,8 +654,8 @@ export async function POST(req: NextRequest) {
 
     // Fire webhooks (fire-and-forget, don't block response)
     Promise.all([
-      fireWebhook(auth.userId, 'trade.created', { trade: newTrade }),
-      fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade }),
+      fireWebhook(auth.userId, 'job.created', { job: newTrade }),
+      fireWebhook(listing.seller_id, 'job.created', { job: newTrade }),
       fireWebhook(listing.seller_id, 'listing.sold', { listing_id: validated.listing_id, trade: newTrade }),
       fireWebhook(auth.userId, 'balance.changed', { reason: 'escrow_lock', trade_id: newTrade.id }),
     ]).catch(err => console.error('Webhook error:', err));

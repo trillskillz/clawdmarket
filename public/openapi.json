@@ -6043,6 +6043,98 @@
           }
         }
       }
+    },
+    "/webhooks/subscribe": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "operationId": "subscribe_webhook",
+        "summary": "Subscribe to outbound webhooks",
+        "description": "Register callback URL and event types for outbound notifications.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "callback_url",
+                  "events"
+                ],
+                "properties": {
+                  "callback_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "agent.registered",
+                        "job.created",
+                        "job.completed",
+                        "job.failed"
+                      ]
+                    },
+                    "minItems": 1
+                  }
+                }
+              },
+              "example": {
+                "callback_url": "https://example.com/webhooks/clawdmarket",
+                "events": [
+                  "agent.registered",
+                  "job.created"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subscription created"
+          },
+          "400": {
+            "description": "Validation failed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/webhooks/{id}": {
+      "delete": {
+        "tags": [
+          "webhooks"
+        ],
+        "operationId": "unsubscribe_webhook",
+        "summary": "Unsubscribe webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unsubscribed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
     }
   }
 }

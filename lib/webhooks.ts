@@ -4,7 +4,15 @@ import { db } from './db';
 import { event_stream, webhooks } from './schema';
 import { eq, sql } from 'drizzle-orm';
 
-export type WebhookEvent = 'trade.created' | 'trade.completed' | 'listing.sold' | 'balance.changed';
+export type WebhookEvent =
+  | 'agent.registered'
+  | 'job.created'
+  | 'job.completed'
+  | 'job.failed'
+  | 'trade.created'
+  | 'trade.completed'
+  | 'listing.sold'
+  | 'balance.changed';
 
 export interface WebhookPayload {
   event: WebhookEvent;
@@ -17,8 +25,62 @@ function generateSignature(payload: string, secret: string): string {
   return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function deliverWithRetry(url: string, headers: Record<string, string>, payloadString: string, attempts = 3) {
+  let lastError: any = null;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: payloadString,
+        redirect: 'error',
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (res.ok) return;
+      lastError = new Error(`Webhook returned ${res.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (i < attempts - 1) {
+      const backoffMs = 500 * Math.pow(2, i); // 500ms, 1000ms, 2000ms
+      await delay(backoffMs);
+    }
+  }
+
+  throw lastError;
+}
+
+async function isBlockedHost(webhookUrl: string): Promise<boolean> {
+  try {
+    const parsedUrl = new URL(webhookUrl);
+    const resolved = await dns.resolve4(parsedUrl.hostname).catch(() => []);
+    if (!resolved.length) return true;
+
+    return resolved.some((ip) => {
+      const p = ip.split('.').map(Number);
+      return (
+        p[0] === 10 ||
+        p[0] === 127 ||
+        p[0] === 0 ||
+        (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+        (p[0] === 192 && p[1] === 168) ||
+        (p[0] === 169 && p[1] === 254) ||
+        (p[0] === 100 && p[1] >= 64 && p[1] <= 127)
+      );
+    });
+  } catch {
+    return true;
+  }
+}
+
 export async function fireWebhook(userId: string, event: WebhookEvent, data: any): Promise<void> {
-  // Non-blocking - fire and forget
   setImmediate(async () => {
     try {
       const [maxSeqRow] = await db
@@ -34,56 +96,41 @@ export async function fireWebhook(userId: string, event: WebhookEvent, data: any
         payload: JSON.stringify(data),
       });
 
-      // Get all webhooks for this user that subscribe to this event
-      const userWebhooks = await db.select()
-        .from(webhooks)
-        .where(eq(webhooks.user_id, userId));
-      
+      const userWebhooks = await db.select().from(webhooks).where(eq(webhooks.user_id, userId));
+
       for (const webhook of userWebhooks) {
-        const events = webhook.events.split(',').map(e => e.trim());
-        if (!events.includes(event)) {
+        const events = webhook.events.split(',').map((e) => e.trim());
+        if (!events.includes(event)) continue;
+
+        if (await isBlockedHost(webhook.url)) {
+          console.error(`Webhook ${webhook.id} blocked: private/invalid host`);
           continue;
         }
-        
+
         const payload: WebhookPayload = {
           event,
           data,
           timestamp: new Date().toISOString(),
           sequence_id: nextSequenceId,
         };
-        
+
         const payloadString = JSON.stringify(payload);
         const signature = generateSignature(payloadString, webhook.secret);
-        
-        try {
-          const parsedUrl = new URL(webhook.url);
-          const resolved = await dns.resolve4(parsedUrl.hostname).catch(() => []);
-          const isPrivate = resolved.some(ip => {
-            const p = ip.split('.').map(Number);
-            return p[0] === 10 || p[0] === 127 || p[0] === 0 ||
-              (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
-              (p[0] === 192 && p[1] === 168) ||
-              (p[0] === 169 && p[1] === 254) ||
-              (p[0] === 100 && p[1] >= 64 && p[1] <= 127);
-          });
-          if (isPrivate || resolved.length === 0) {
-            console.error(`Webhook ${webhook.id} blocked: resolves to private IP`);
-            continue;
-          }
 
-          await fetch(webhook.url, {
-            method: 'POST',
-            headers: {
+        try {
+          await deliverWithRetry(
+            webhook.url,
+            {
               'Content-Type': 'application/json',
               'X-Webhook-Signature': signature,
               'X-Webhook-Event': event,
+              'X-Webhook-Timestamp': payload.timestamp,
             },
-            body: payloadString,
-            redirect: 'error',
-            signal: AbortSignal.timeout(5000),
-          });
+            payloadString,
+            3
+          );
         } catch (error) {
-          console.error(`Failed to fire webhook ${webhook.id}:`, error);
+          console.error(`Failed to deliver webhook ${webhook.id} after retries:`, error);
         }
       }
     } catch (error) {
