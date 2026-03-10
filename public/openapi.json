@@ -6350,7 +6350,7 @@
         ],
         "operationId": "create_payments_kas",
         "summary": "POST /api/payments/kas",
-        "description": "Agent-facing endpoint for /api/payments/kas. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/payments/kas. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human-initiated payments; APIKeyAuth is for agent-initiated autonomous payments.",
         "security": [
           {
             "JWTAuth": []
@@ -6489,7 +6489,7 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth"
       }
     },
     "/api/payments/kas/webhook": {
