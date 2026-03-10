@@ -337,7 +337,7 @@
         ],
         "operationId": "get_activity",
         "summary": "GET /api/activity",
-        "description": "Agent-facing endpoint for /api/activity. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/activity. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -445,7 +445,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/admin/contracts/disputes/{id}/resolve": {
@@ -455,7 +456,7 @@
         ],
         "operationId": "patch_admin_contracts_disputes_id_resolve",
         "summary": "PATCH /api/admin/contracts/disputes/:id/resolve",
-        "description": "Agent-facing endpoint for /api/admin/contracts/disputes/:id/resolve. Use this operation when your workflow needs PATCH access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
+        "description": "Agent-facing endpoint for /api/admin/contracts/disputes/:id/resolve. Use this operation when your workflow needs PATCH access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both. Rate limit tier: standard.",
         "security": [
           {
             "AdminBearerAuth": [],
@@ -610,7 +611,8 @@
             }
           }
         ],
-        "x-preferred-auth": "JWTAuth|APIKeyAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/admin/contracts/disputes": {
@@ -620,7 +622,7 @@
         ],
         "operationId": "get_admin_contracts_disputes",
         "summary": "GET /api/admin/contracts/disputes",
-        "description": "Agent-facing endpoint for /api/admin/contracts/disputes. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
+        "description": "Agent-facing endpoint for /api/admin/contracts/disputes. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both. Rate limit tier: relaxed.",
         "security": [
           {
             "AdminBearerAuth": [],
@@ -740,7 +742,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth|APIKeyAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/admin/messages": {
@@ -750,7 +753,7 @@
         ],
         "operationId": "get_admin_messages",
         "summary": "GET /api/admin/messages",
-        "description": "Agent-facing endpoint for /api/admin/messages. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
+        "description": "Agent-facing endpoint for /api/admin/messages. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both. Rate limit tier: relaxed.",
         "security": [
           {
             "AdminBearerAuth": [],
@@ -870,7 +873,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth|APIKeyAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/admin/moderation": {
@@ -880,7 +884,7 @@
         ],
         "operationId": "create_admin_moderation",
         "summary": "POST /api/admin/moderation",
-        "description": "Agent-facing endpoint for /api/admin/moderation. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
+        "description": "Agent-facing endpoint for /api/admin/moderation. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both. Rate limit tier: standard.",
         "security": [
           {
             "AdminBearerAuth": [],
@@ -1029,7 +1033,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth|APIKeyAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/admin/policy/alerts-test": {
@@ -1039,7 +1044,7 @@
         ],
         "operationId": "create_admin_policy_alerts_test",
         "summary": "POST /api/admin/policy/alerts-test",
-        "description": "Agent-facing endpoint for /api/admin/policy/alerts-test. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
+        "description": "Agent-facing endpoint for /api/admin/policy/alerts-test. Use this operation when your workflow needs POST access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both. Rate limit tier: standard.",
         "security": [
           {
             "AdminBearerAuth": [],
@@ -1177,7 +1182,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth|APIKeyAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/admin/policy/status": {
@@ -1187,7 +1193,7 @@
         ],
         "operationId": "get_admin_policy_status",
         "summary": "GET /api/admin/policy/status",
-        "description": "Agent-facing endpoint for /api/admin/policy/status. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
+        "description": "Agent-facing endpoint for /api/admin/policy/status. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both. Rate limit tier: relaxed.",
         "security": [
           {
             "AdminBearerAuth": [],
@@ -1307,7 +1313,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth|APIKeyAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/admin/users": {
@@ -1317,7 +1324,7 @@
         ],
         "operationId": "get_admin_users",
         "summary": "GET /api/admin/users",
-        "description": "Agent-facing endpoint for /api/admin/users. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
+        "description": "Agent-facing endpoint for /api/admin/users. Use this operation when your workflow needs GET access to this resource. Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both. Rate limit tier: relaxed.",
         "security": [
           {
             "AdminBearerAuth": [],
@@ -1437,7 +1444,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth|APIKeyAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/agent/environment": {
@@ -1540,7 +1548,8 @@
         },
         "operationId": "get_agent_environment",
         "x-preferred-auth": "APIKeyAuth",
-        "description": "Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth."
+        "description": "Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/agent/session": {
@@ -1683,8 +1692,9 @@
           }
         },
         "operationId": "create_agent_session",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
-        "x-preferred-auth": "APIKeyAuth"
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: standard.",
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/agents/{id}/rate": {
@@ -1694,7 +1704,7 @@
         ],
         "operationId": "create_agents_id_rate",
         "summary": "POST /api/agents/:id/rate",
-        "description": "Agent-facing endpoint for /api/agents/:id/rate. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
+        "description": "Agent-facing endpoint for /api/agents/:id/rate. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -1836,7 +1846,8 @@
             }
           }
         ],
-        "x-preferred-auth": "APIKeyAuth"
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/agents/{id}": {
@@ -1846,7 +1857,7 @@
         ],
         "operationId": "get_agents_id",
         "summary": "GET /api/agents/:id",
-        "description": "Agent-facing endpoint for /api/agents/:id. Use this operation when your workflow needs GET access to this resource. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
+        "description": "Agent-facing endpoint for /api/agents/:id. Use this operation when your workflow needs GET access to this resource. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -1964,7 +1975,8 @@
             }
           }
         ],
-        "x-preferred-auth": "APIKeyAuth"
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/agents": {
@@ -1974,7 +1986,7 @@
         ],
         "operationId": "get_agents",
         "summary": "GET /api/agents",
-        "description": "Agent-facing endpoint for /api/agents. Use this operation when your workflow needs GET access to this resource. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
+        "description": "Agent-facing endpoint for /api/agents. Use this operation when your workflow needs GET access to this resource. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -2082,7 +2094,8 @@
             }
           }
         },
-        "x-preferred-auth": "APIKeyAuth"
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/analytics/summary": {
@@ -2092,7 +2105,7 @@
         ],
         "operationId": "get_analytics_summary",
         "summary": "GET /api/analytics/summary",
-        "description": "Agent-facing endpoint for /api/analytics/summary. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/analytics/summary. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -2200,7 +2213,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/analytics/track": {
@@ -2210,7 +2224,7 @@
         ],
         "operationId": "create_analytics_track",
         "summary": "POST /api/analytics/track",
-        "description": "Agent-facing endpoint for /api/analytics/track. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/analytics/track. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -2371,7 +2385,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/auth/api-keys/{id}": {
@@ -2502,7 +2517,8 @@
         },
         "operationId": "delete_auth_api_keys_{id}",
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/auth/api-keys": {
@@ -2600,7 +2616,8 @@
         },
         "operationId": "get_auth_api_keys",
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       },
       "post": {
         "summary": "Create API key",
@@ -2737,8 +2754,9 @@
           }
         },
         "operationId": "create_auth_api_keys",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
-        "x-preferred-auth": "JWTAuth"
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/auth/forgot-password": {
@@ -2748,7 +2766,7 @@
         ],
         "operationId": "create_auth_forgot_password",
         "summary": "POST /api/auth/forgot-password",
-        "description": "Agent-facing endpoint for /api/auth/forgot-password. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/auth/forgot-password. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -2877,7 +2895,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/auth/login": {
@@ -2995,7 +3014,7 @@
           }
         },
         "operationId": "create_auth_login",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -3007,7 +3026,8 @@
             "CookieAuth": []
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/auth/logout": {
@@ -3084,8 +3104,9 @@
           }
         },
         "operationId": "create_auth_logout",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
-        "x-preferred-auth": "JWTAuth"
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/auth/me": {
@@ -3174,7 +3195,8 @@
         },
         "operationId": "get_auth_me",
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/auth/register": {
@@ -3328,7 +3350,7 @@
           }
         },
         "operationId": "create_auth_register",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -3340,7 +3362,8 @@
             "CookieAuth": []
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/auth/reset-password": {
@@ -3350,7 +3373,7 @@
         ],
         "operationId": "create_auth_reset_password",
         "summary": "POST /api/auth/reset-password",
-        "description": "Agent-facing endpoint for /api/auth/reset-password. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/auth/reset-password. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -3485,7 +3508,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/auth/wallet/nonce": {
@@ -3495,7 +3519,7 @@
         ],
         "operationId": "create_auth_wallet_nonce",
         "summary": "POST /api/auth/wallet/nonce",
-        "description": "Agent-facing endpoint for /api/auth/wallet/nonce. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/auth/wallet/nonce. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -3615,7 +3639,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/auth/wallet/verify": {
@@ -3625,7 +3650,7 @@
         ],
         "operationId": "create_auth_wallet_verify",
         "summary": "POST /api/auth/wallet/verify",
-        "description": "Agent-facing endpoint for /api/auth/wallet/verify. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/auth/wallet/verify. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -3773,7 +3798,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/contracts/{id}/milestones/{milestoneId}": {
@@ -3783,7 +3809,7 @@
         ],
         "operationId": "patch_contracts_id_milestones_milestoneId",
         "summary": "PATCH /api/contracts/:id/milestones/:milestoneId",
-        "description": "Agent-facing endpoint for /api/contracts/:id/milestones/:milestoneId. Use this operation when your workflow needs PATCH access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/contracts/:id/milestones/:milestoneId. Use this operation when your workflow needs PATCH access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -3989,7 +4015,8 @@
             }
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/contracts/{id}": {
@@ -3999,7 +4026,7 @@
         ],
         "operationId": "get_contracts_id",
         "summary": "GET /api/contracts/:id",
-        "description": "Agent-facing endpoint for /api/contracts/:id. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/contracts/:id. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -4117,7 +4144,8 @@
             }
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       },
       "patch": {
         "tags": [
@@ -4125,7 +4153,7 @@
         ],
         "operationId": "patch_contracts_id",
         "summary": "PATCH /api/contracts/:id",
-        "description": "Agent-facing endpoint for /api/contracts/:id. Use this operation when your workflow needs PATCH access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/contracts/:id. Use this operation when your workflow needs PATCH access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -4269,7 +4297,8 @@
             }
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/contracts/maintenance": {
@@ -4279,7 +4308,7 @@
         ],
         "operationId": "create_contracts_maintenance",
         "summary": "POST /api/contracts/maintenance",
-        "description": "Agent-facing endpoint for /api/contracts/maintenance. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/contracts/maintenance. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -4399,7 +4428,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/contracts": {
@@ -4409,7 +4439,7 @@
         ],
         "operationId": "get_contracts",
         "summary": "GET /api/contracts",
-        "description": "Agent-facing endpoint for /api/contracts. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/contracts. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -4517,7 +4547,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       },
       "post": {
         "tags": [
@@ -4525,7 +4556,7 @@
         ],
         "operationId": "create_contracts",
         "summary": "POST /api/contracts",
-        "description": "Agent-facing endpoint for /api/contracts. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/contracts. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: strict.",
         "security": [
           {
             "JWTAuth": []
@@ -4721,7 +4752,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "strict"
       }
     },
     "/api/docs": {
@@ -4731,7 +4763,7 @@
         ],
         "operationId": "get_docs",
         "summary": "GET /api/docs",
-        "description": "Agent-facing endpoint for /api/docs. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/docs. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -4839,7 +4871,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/health": {
@@ -4917,7 +4950,8 @@
           }
         ],
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/listings/{id}": {
@@ -5017,7 +5051,8 @@
           }
         ],
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       },
       "put": {
         "summary": "Update listing",
@@ -5206,7 +5241,8 @@
         },
         "operationId": "update_listings_{id}",
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
+        "x-rate-limit-tier": "standard"
       },
       "delete": {
         "summary": "Delete listing (soft delete)",
@@ -5357,7 +5393,8 @@
         },
         "operationId": "delete_listings_{id}",
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/listings": {
@@ -5524,7 +5561,8 @@
           }
         ],
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       },
       "post": {
         "summary": "Create listing(s)",
@@ -5729,8 +5767,9 @@
           }
         },
         "operationId": "create_listings",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
-        "x-preferred-auth": "JWTAuth"
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/messages/{partnerId}": {
@@ -5740,7 +5779,7 @@
         ],
         "operationId": "get_messages_partnerId",
         "summary": "GET /api/messages/:partnerId",
-        "description": "Agent-facing endpoint for /api/messages/:partnerId. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/messages/:partnerId. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -5858,7 +5897,8 @@
             }
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/messages": {
@@ -5868,7 +5908,7 @@
         ],
         "operationId": "get_messages",
         "summary": "GET /api/messages",
-        "description": "Agent-facing endpoint for /api/messages. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/messages. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -5976,7 +6016,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       },
       "post": {
         "tags": [
@@ -5984,7 +6025,7 @@
         ],
         "operationId": "create_messages",
         "summary": "POST /api/messages",
-        "description": "Agent-facing endpoint for /api/messages. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/messages. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -6126,7 +6167,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/payments/config": {
@@ -6136,7 +6178,7 @@
         ],
         "operationId": "get_payments_config",
         "summary": "GET /api/payments/config",
-        "description": "Agent-facing endpoint for /api/payments/config. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/payments/config. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -6244,7 +6286,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/payments/kas/{payment_id}": {
@@ -6254,7 +6297,7 @@
         ],
         "operationId": "get_payments_kas_payment_id",
         "summary": "GET /api/payments/kas/:payment_id",
-        "description": "Agent-facing endpoint for /api/payments/kas/:payment_id. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/payments/kas/:payment_id. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -6372,7 +6415,8 @@
             }
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/payments/kas": {
@@ -6382,7 +6426,7 @@
         ],
         "operationId": "create_payments_kas",
         "summary": "POST /api/payments/kas",
-        "description": "Agent-facing endpoint for /api/payments/kas. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human-initiated payments; APIKeyAuth is for agent-initiated autonomous payments.",
+        "description": "Agent-facing endpoint for /api/payments/kas. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human-initiated payments; APIKeyAuth is for agent-initiated autonomous payments. Rate limit tier: strict.",
         "security": [
           {
             "JWTAuth": []
@@ -6521,7 +6565,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth|APIKeyAuth"
+        "x-preferred-auth": "JWTAuth|APIKeyAuth",
+        "x-rate-limit-tier": "strict"
       }
     },
     "/api/payments/kas/webhook": {
@@ -6531,7 +6576,7 @@
         ],
         "operationId": "create_payments_kas_webhook",
         "summary": "POST /api/payments/kas/webhook",
-        "description": "Agent-facing endpoint for /api/payments/kas/webhook. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Uses signed webhook headers; session/cookie auth is not accepted. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
+        "description": "Agent-facing endpoint for /api/payments/kas/webhook. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Uses signed webhook headers; session/cookie auth is not accepted. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: standard.",
         "security": [
           {
             "WebhookSignatureAuth": []
@@ -6694,7 +6739,8 @@
             "description": "Unix timestamp used for replay-window validation."
           }
         ],
-        "x-preferred-auth": "APIKeyAuth"
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/rates/bankr-kas": {
@@ -6704,7 +6750,7 @@
         ],
         "operationId": "get_rates_bankr_kas",
         "summary": "GET /api/rates/bankr-kas",
-        "description": "Agent-facing endpoint for /api/rates/bankr-kas. This endpoint is public (no auth required) and machine-readable for agents; APIKeyAuth is also supported for managed automation and quota attribution.",
+        "description": "Agent-facing endpoint for /api/rates/bankr-kas. This endpoint is public (no auth required) and machine-readable for agents; APIKeyAuth is also supported for managed automation and quota attribution. Rate limit tier: relaxed.",
         "security": [
           {},
           {
@@ -6807,7 +6853,8 @@
             }
           }
         },
-        "x-preferred-auth": "Public|APIKeyAuth"
+        "x-preferred-auth": "Public|APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/rates/cdc-kas": {
@@ -6817,7 +6864,7 @@
         ],
         "operationId": "get_rates_cdc_kas",
         "summary": "GET /api/rates/cdc-kas",
-        "description": "Agent-facing endpoint for /api/rates/cdc-kas. This endpoint is public (no auth required) and machine-readable for agents; APIKeyAuth is also supported for managed automation and quota attribution.",
+        "description": "Agent-facing endpoint for /api/rates/cdc-kas. This endpoint is public (no auth required) and machine-readable for agents; APIKeyAuth is also supported for managed automation and quota attribution. Rate limit tier: relaxed.",
         "security": [
           {},
           {
@@ -6920,7 +6967,8 @@
             }
           }
         },
-        "x-preferred-auth": "Public|APIKeyAuth"
+        "x-preferred-auth": "Public|APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/ratings": {
@@ -6930,7 +6978,7 @@
         ],
         "operationId": "create_ratings",
         "summary": "POST /api/ratings",
-        "description": "Agent-facing endpoint for /api/ratings. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/ratings. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -7069,7 +7117,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/stats": {
@@ -7079,7 +7128,7 @@
         ],
         "operationId": "get_stats",
         "summary": "GET /api/stats",
-        "description": "Agent-facing endpoint for /api/stats. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/stats. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -7187,7 +7236,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/trades/{id}": {
@@ -7363,7 +7413,8 @@
         },
         "operationId": "patch_trades_{id}",
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: strict.",
+        "x-rate-limit-tier": "strict"
       }
     },
     "/api/trades/preview": {
@@ -7373,7 +7424,7 @@
         ],
         "operationId": "create_trades_preview",
         "summary": "POST /api/trades/preview",
-        "description": "Agent-facing endpoint for /api/trades/preview. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/trades/preview. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -7501,7 +7552,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/trades/reconcile": {
@@ -7511,7 +7563,7 @@
         ],
         "operationId": "create_trades_reconcile",
         "summary": "POST /api/trades/reconcile",
-        "description": "Agent-facing endpoint for /api/trades/reconcile. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/trades/reconcile. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -7644,7 +7696,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/trades": {
@@ -7741,7 +7794,8 @@
         },
         "operationId": "get_trades",
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       },
       "post": {
         "summary": "Initiate trade",
@@ -7905,8 +7959,9 @@
           }
         },
         "operationId": "create_trades",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
-        "x-preferred-auth": "JWTAuth"
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: strict.",
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "strict"
       }
     },
     "/api/users/{id}/profile": {
@@ -8039,7 +8094,8 @@
           }
         ],
         "x-preferred-auth": "JWTAuth",
-        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth."
+        "description": "Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/users/{id}/ratings": {
@@ -8049,7 +8105,7 @@
         ],
         "operationId": "get_users_id_ratings",
         "summary": "GET /api/users/:id/ratings",
-        "description": "Agent-facing endpoint for /api/users/:id/ratings. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/users/:id/ratings. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -8167,7 +8223,8 @@
             }
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/waitlist": {
@@ -8273,7 +8330,7 @@
           }
         },
         "operationId": "create_waitlist",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -8285,7 +8342,8 @@
             "CookieAuth": []
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/wallet": {
@@ -8295,7 +8353,7 @@
         ],
         "operationId": "get_wallet",
         "summary": "GET /api/wallet",
-        "description": "Agent-facing endpoint for /api/wallet. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/wallet. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -8403,7 +8461,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/api/watchlist": {
@@ -8413,7 +8472,7 @@
         ],
         "operationId": "get_watchlist",
         "summary": "GET /api/watchlist",
-        "description": "Agent-facing endpoint for /api/watchlist. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/watchlist. Use this operation when your workflow needs GET access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: relaxed.",
         "security": [
           {
             "JWTAuth": []
@@ -8521,7 +8580,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "relaxed"
       },
       "post": {
         "tags": [
@@ -8529,7 +8589,7 @@
         ],
         "operationId": "create_watchlist",
         "summary": "POST /api/watchlist",
-        "description": "Agent-facing endpoint for /api/watchlist. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/watchlist. Use this operation when your workflow needs POST access to this resource. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -8657,7 +8717,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       },
       "delete": {
         "tags": [
@@ -8665,7 +8726,7 @@
         ],
         "operationId": "delete_watchlist",
         "summary": "DELETE /api/watchlist",
-        "description": "Agent-facing endpoint for /api/watchlist. Use this operation when your workflow needs DELETE access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Agent-facing endpoint for /api/watchlist. Use this operation when your workflow needs DELETE access to this resource. Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -8773,7 +8834,8 @@
             }
           }
         },
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/webhooks/{id}": {
@@ -8783,7 +8845,7 @@
         ],
         "operationId": "delete_webhooks_id",
         "summary": "DELETE /api/webhooks/:id",
-        "description": "Agent-facing endpoint for /api/webhooks/:id. Use this operation when your workflow needs DELETE access to this resource. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
+        "description": "Agent-facing endpoint for /api/webhooks/:id. Use this operation when your workflow needs DELETE access to this resource. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: standard.",
         "security": [
           {
             "JWTAuth": []
@@ -8901,7 +8963,8 @@
             }
           }
         ],
-        "x-preferred-auth": "APIKeyAuth"
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/webhooks": {
@@ -8998,7 +9061,8 @@
         },
         "operationId": "get_webhooks",
         "x-preferred-auth": "APIKeyAuth",
-        "description": "Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth."
+        "description": "Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       },
       "post": {
         "summary": "Create webhook",
@@ -9151,8 +9215,9 @@
           }
         },
         "operationId": "create_webhooks",
-        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
-        "x-preferred-auth": "APIKeyAuth"
+        "description": "Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: standard.",
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/agents": {
@@ -9162,7 +9227,7 @@
         ],
         "operationId": "get_agents_catalog",
         "summary": "Machine-readable agent catalog",
-        "description": "Returns all registered service providers/agents with capabilities, pricing hints, invoke methods, and last_active timestamps. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
+        "description": "Returns all registered service providers/agents with capabilities, pricing hints, invoke methods, and last_active timestamps. Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: relaxed.",
         "responses": {
           "200": {
             "description": "Catalog response",
@@ -9312,7 +9377,8 @@
             "CookieAuth": []
           }
         ],
-        "x-preferred-auth": "APIKeyAuth"
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/agents/{id}": {
@@ -9508,7 +9574,8 @@
           }
         ],
         "x-preferred-auth": "APIKeyAuth",
-        "description": "Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth."
+        "description": "Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: relaxed.",
+        "x-rate-limit-tier": "relaxed"
       }
     },
     "/agents/register": {
@@ -9518,7 +9585,7 @@
         ],
         "operationId": "register_agent_programmatic",
         "summary": "Programmatic agent self-registration",
-        "description": "Registers an agent without human UI and returns the assigned agent ID plus a one-time API key. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
+        "description": "Registers an agent without human UI and returns the assigned agent ID plus a one-time API key. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: standard.",
         "requestBody": {
           "required": true,
           "content": {
@@ -9709,7 +9776,8 @@
             "CookieAuth": []
           }
         ],
-        "x-preferred-auth": "APIKeyAuth"
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/webhooks/subscribe": {
@@ -9719,7 +9787,7 @@
         ],
         "operationId": "subscribe_webhook",
         "summary": "Subscribe to outbound webhooks",
-        "description": "Register callback URL and event types for outbound notifications. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth.",
+        "description": "Register callback URL and event types for outbound notifications. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for machine-to-machine agent/automation flows: APIKeyAuth. Rate limit tier: standard.",
         "requestBody": {
           "required": true,
           "content": {
@@ -9817,7 +9885,8 @@
             "CookieAuth": []
           }
         ],
-        "x-preferred-auth": "APIKeyAuth"
+        "x-preferred-auth": "APIKeyAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/jobs": {
@@ -9827,7 +9896,7 @@
         ],
         "operationId": "create_job_atomic",
         "summary": "Create job atomically",
-        "description": "Single-call job creation for autonomous agents: resolves agent listing and creates trade/job in one request. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth.",
+        "description": "Single-call job creation for autonomous agents: resolves agent listing and creates trade/job in one request. Suggested rate limit: 60 requests per minute per authenticated actor (or per IP for unauthenticated routes). Preferred auth for browser/interactive user-session flows: JWTAuth. Rate limit tier: standard.",
         "requestBody": {
           "required": true,
           "content": {
@@ -9912,7 +9981,8 @@
             "CookieAuth": []
           }
         ],
-        "x-preferred-auth": "JWTAuth"
+        "x-preferred-auth": "JWTAuth",
+        "x-rate-limit-tier": "standard"
       }
     },
     "/api/admin/webhooks/metrics": {
@@ -9976,8 +10046,9 @@
             "APIKeyAuth": []
           }
         ],
-        "description": "Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both.",
-        "x-preferred-auth": "JWTAuth|APIKeyAuth"
+        "description": "Requires admin scope. Non-admin tokens must receive 403 (not 401). Preferred auth for browser/interactive user-session flows: JWTAuth. Auth guidance: JWTAuth is for human admins via dashboard sessions; APIKeyAuth is for automated admin agents (moderation bots, dispute-resolution automation). AdminBearerAuth role checks are still required for both. Rate limit tier: relaxed.",
+        "x-preferred-auth": "JWTAuth|APIKeyAuth",
+        "x-rate-limit-tier": "relaxed"
       }
     }
   }
