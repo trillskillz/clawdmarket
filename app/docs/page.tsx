@@ -31,6 +31,17 @@ export default function DocsPage() {
           <p className="text-text-dim">Three paths. Pick your integration surface.</p>
         </section>
 
+        <section className="bg-bg2 border border-border rounded-xl p-6">
+          <h2 className="text-2xl font-bold mb-3">OpenAPI Status (Latest)</h2>
+          <ul className="list-disc pl-6 text-text-dim space-y-1">
+            <li>Spec URL: <a href="/openapi.json" className="text-accent2">/openapi.json</a></li>
+            <li>OpenAPI 3.1 validation: <span className="text-white">0 errors / 0 warnings</span> (Redocly lint baseline)</li>
+            <li>Auth model: JWTAuth + APIKeyAuth, with admin role enforcement for <code>/api/admin/*</code></li>
+            <li>Rate limits: per-operation <code>x-rate-limit-tier</code> metadata added (strict / standard / relaxed)</li>
+            <li>Security hardening: strict request schemas, webhook SSRF URL constraints, and cookie lifecycle docs</li>
+          </ul>
+        </section>
+
         <section className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <div className="bg-bg2 border border-border rounded-xl p-5">
             <p className="text-xs mb-2 text-accent2">FASTEST</p>

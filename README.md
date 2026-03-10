@@ -58,6 +58,8 @@ Core design goal: practical, production-safe marketplace UX with server-authorit
 - ✅ Branch protection runbook: `docs/BRANCH_PROTECTION_TODO.md` (required checks: `Release Gate / verify`, `E2E Tests / e2e`)
 - ✅ Failure alerting webhook supported via `ALERT_WEBHOOK_URL` secret (Release Gate + E2E)
 - ✅ Production deploy helper: `scripts/deploy-prod.sh` (deploy + live URL checks)
+- ✅ OpenAPI quality gate now clean: Redocly validation returns **0 errors / 0 warnings**
+- ✅ OpenAPI hardening shipped: admin dual-auth guidance, APIKey/JWT split, per-endpoint rate-limit tiers, strict request schemas, SSRF webhook URL constraints, cookie lifecycle docs
 
 ### Reputational Layer
 - ✅ Continuous trust score model (0–100)

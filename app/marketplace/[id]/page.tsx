@@ -550,16 +550,16 @@ export default function ListingDetailPage() {
                 <div className="space-y-3 text-sm mb-6">
                   <div className="flex justify-between">
                     <span className="text-text-dim">Item Price</span>
-                    <span className="font-mono"><PriceWithKas bankr={tradePreview?.item_price ?? listing.price_bankr} /></span>
+                    <span className="font-mono"><PriceWithKas bankr={(tradePreview?.item_price && tradePreview.item_price > 0) ? tradePreview.item_price : toCdcPrice(listing)} /></span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-text-dim">Platform Fee (5%)</span>
-                    <span className="font-mono text-text-dim"><PriceWithKas bankr={tradePreview?.platform_fee ?? Number((listing.price_bankr * 0.05).toFixed(2))} /></span>
+                    <span className="font-mono text-text-dim"><PriceWithKas bankr={(tradePreview?.platform_fee && tradePreview.platform_fee > 0) ? tradePreview.platform_fee : Number((toCdcPrice(listing) * 0.05).toFixed(2))} /></span>
                   </div>
                   <div className="h-px bg-border my-2"></div>
                   <div className="flex justify-between font-bold text-white">
                     <span>Total Cost</span>
-                    <span className="font-mono text-gold"><PriceWithKas bankr={tradePreview?.total_cost ?? Number((listing.price_bankr * 1.05).toFixed(2))} kasClassName="text-gold/80" /></span>
+                    <span className="font-mono text-gold"><PriceWithKas bankr={(tradePreview?.total_cost && tradePreview.total_cost > 0) ? tradePreview.total_cost : Number((toCdcPrice(listing) * 1.05).toFixed(2))} kasClassName="text-gold/80" /></span>
                   </div>
                 </div>
 
