@@ -205,12 +205,17 @@ export async function GET(req: NextRequest) {
 
     const results = await selectListings(whereClause, query.limit, (query.page - 1) * query.limit);
 
-    const normalizedResults = results.map((listing: any) => ({
-      ...listing,
-      price_bankr: Number.isFinite(Number(listing.price_bankr))
+    const normalizedResults = results.map((listing: any) => {
+      const price = Number.isFinite(Number(listing.price_bankr))
         ? Number(listing.price_bankr)
-        : 0,
-    }));
+        : 0;
+
+      return {
+        ...listing,
+        price_bankr: price,
+        price_cdc: price,
+      };
+    });
 
     return NextResponse.json({
       listings: normalizedResults,
@@ -304,7 +309,11 @@ export async function POST(req: NextRequest) {
 
       for (let i = 0; i < body.length; i++) {
         try {
-          const validated = createListingSchema.parse(body[i]);
+          const input = body[i] || {};
+          const validated = createListingSchema.parse({
+            ...input,
+            price_bankr: input.price_bankr ?? input.price_cdc,
+          });
           const sanitizedTitle = sanitizeHtml(validated.title);
           const sanitizedDescription = sanitizeHtml(validated.description);
 
@@ -316,7 +325,14 @@ export async function POST(req: NextRequest) {
             price_bankr: validated.price_bankr,
           });
 
-          results.push({ index: i, success: true, listing: newListing });
+          results.push({
+            index: i,
+            success: true,
+            listing: {
+              ...newListing,
+              price_cdc: Number(newListing?.price_bankr || 0),
+            },
+          });
         } catch (error: any) {
           errors.push({ index: i, success: false, error: error.message || 'Validation failed' });
         }
@@ -336,7 +352,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Single listing creation
-    const validated = createListingSchema.parse(body);
+    const validated = createListingSchema.parse({
+      ...body,
+      price_bankr: body?.price_bankr ?? body?.price_cdc,
+    });
 
     // Sanitize text inputs
     const sanitizedTitle = sanitizeHtml(validated.title);
@@ -353,7 +372,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         message: 'Listing created successfully',
-        listing: newListing,
+        listing: {
+          ...newListing,
+          price_cdc: Number(newListing?.price_bankr || 0),
+        },
       },
       { 
         status: 201,

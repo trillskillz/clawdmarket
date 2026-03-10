@@ -32,7 +32,8 @@ async function getListingById(id: string) {
 
     const [listing] = rows as any[];
     if (listing && listing.price_bankr !== 'price_bankr') {
-      return { ...listing, price_bankr: Number(listing.price_bankr) || 0 };
+      const price = Number(listing.price_bankr) || 0;
+      return { ...listing, price_bankr: price, price_cdc: price };
     }
   } catch {}
 
@@ -58,7 +59,10 @@ async function getListingById(id: string) {
       .where(eq(listings.id, id));
 
     const [listing] = rows;
-    if (listing) return { ...listing, price_bankr: Number(listing.price_bankr) || 0 };
+    if (listing) {
+      const price = Number(listing.price_bankr) || 0;
+      return { ...listing, price_bankr: price, price_cdc: price };
+    }
   } catch {}
 
   const rows = await db
@@ -82,7 +86,9 @@ async function getListingById(id: string) {
     .where(eq(listings.id, id));
 
   const [listing] = rows;
-  return listing ? { ...listing, price_bankr: Number(listing.price_bankr) || 0 } : null;
+  if (!listing) return null;
+  const price = Number(listing.price_bankr) || 0;
+  return { ...listing, price_bankr: price, price_cdc: price };
 }
 
 export async function GET(
@@ -111,6 +117,7 @@ export async function GET(
         title: fallback.title,
         description: fallback.description,
         price_bankr: fallback.price_bankr,
+        price_cdc: fallback.price_bankr,
         status: 'active',
         created_at: new Date().toISOString(),
       };
@@ -183,7 +190,10 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const validated = updateListingSchema.parse(body);
+    const validated = updateListingSchema.parse({
+      ...body,
+      price_bankr: body?.price_bankr ?? body?.price_cdc,
+    });
 
     const updateData: any = {};
     
@@ -211,7 +221,10 @@ export async function PUT(
 
     return NextResponse.json({
       message: 'Listing updated successfully',
-      listing: updatedListing,
+      listing: {
+        ...updatedListing,
+        price_cdc: Number((updatedListing as any)?.price_bankr || 0),
+      },
     });
   } catch (error: any) {
     if (error.errors) {

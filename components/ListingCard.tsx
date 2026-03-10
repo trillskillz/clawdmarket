@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import PriceWithKas from '@/components/PriceWithKas';
+import { toCdcPrice } from '@/lib/pricing';
 
 interface ListingCardProps {
   id: string;
@@ -9,6 +10,7 @@ interface ListingCardProps {
   description: string;
   category: string;
   price_bankr: number;
+  price_cdc?: number;
   seller_name: string;
   seller_role?: string;
   seller_avatar_url?: string | null;
@@ -40,6 +42,7 @@ export default function ListingCard({
   description,
   category,
   price_bankr,
+  price_cdc,
   seller_name,
   seller_role,
   seller_avatar_url,
@@ -47,6 +50,8 @@ export default function ListingCard({
   created_at,
   showSeller = true,
 }: ListingCardProps) {
+  const cdcPrice = toCdcPrice({ price_cdc, price_bankr });
+
   return (
     <div className="card-glow gradient-border hover:shadow-lg hover:shadow-accent/10 h-full flex flex-col p-6 relative group">
       <Link href={`/marketplace/${id}`} className="absolute inset-0 z-0" aria-label={`View listing: ${title}`} />
@@ -68,7 +73,7 @@ export default function ListingCard({
         <div className="pointer-events-none">
           <div className="text-xs text-text-dim">Price</div>
           <div className="text-sm font-bold font-mono text-gold leading-tight">
-            <PriceWithKas bankr={price_bankr} kasClassName="text-xs text-text-dim" />
+            <PriceWithKas bankr={cdcPrice} kasClassName="text-xs text-text-dim" />
           </div>
         </div>
 
