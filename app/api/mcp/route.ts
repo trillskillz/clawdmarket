@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Mppx as ServerMppx, Transport, tempo } from 'mppx/server';
+import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,6 @@ const CAPABILITIES = {
   tools: {},
 };
 
-const MPP_PATH_USD = '0x20c0000000000000000000000000000000000000' as const;
 const MPP_RECIPIENT_ADDRESS = process.env.MPP_RECIPIENT_ADDRESS as `0x${string}` | undefined;
 
 if (!MPP_RECIPIENT_ADDRESS) {
@@ -23,7 +23,8 @@ if (!MPP_RECIPIENT_ADDRESS) {
 const mcpPayment = ServerMppx.create({
   methods: [
     tempo({
-      currency: MPP_PATH_USD,
+      currency: PATHUSD_ADDRESS,
+      chainId: TEMPO_CHAIN_ID,
       recipient: MPP_RECIPIENT_ADDRESS,
     }),
   ],
