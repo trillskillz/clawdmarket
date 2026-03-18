@@ -494,7 +494,7 @@ async function createTradePost(req: NextRequest) {
           amount: sellerAmount,
           type: 'transfer',
           reference_id: trade.id,
-          memo: `On-chain escrow payment (single tx: ${onchain.escrow_tx_hash})`,
+          memo: `On-chain escrow payment (single tx: ${txHash})`,
         });
 
         if (devAmount > 0) {
@@ -561,9 +561,9 @@ async function createTradePost(req: NextRequest) {
             admin_fee_wallet_configured: Boolean(process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS),
           },
           onchain_receipts: {
-            payment_tx_hash: onchain.escrow_tx_hash,
-            escrow_tx_hash: onchain.escrow_tx_hash,
-            fee_tx_hash: onchain.fee_tx_hash || onchain.escrow_tx_hash,
+            payment_tx_hash: txHash,
+            escrow_tx_hash: txHash,
+            fee_tx_hash: txHash,
           },
           ...envMeta('clawdmarket/api/trades'),
         },
