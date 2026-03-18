@@ -69,7 +69,7 @@ function withCors(res: Response | NextResponse): Response {
   const headers = new Headers(res.headers);
   headers.set('Access-Control-Allow-Origin', '*');
   headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   return new Response(res.body, { status: res.status, headers });
 }
 
@@ -149,6 +149,39 @@ function buildApiCaller(req: NextRequest) {
   };
 }
 
+function getErrorMessage(data: any, fallback: string) {
+  return data?.error || data?.message || fallback;
+}
+
+async function invokeExternalService(req: NextRequest, serviceId: string, payload: object, paymentCurrency: 'KAS' | 'BNKR') {
+  const authHeader = req.headers.get('authorization');
+  const cookieHeader = req.headers.get('cookie');
+  const csrfHeader = req.headers.get('x-csrf-token');
+
+  const headers = new Headers();
+  headers.set('Accept', 'application/json');
+  headers.set('Content-Type', 'application/json');
+  if (authHeader) headers.set('Authorization', authHeader);
+  if (cookieHeader) headers.set('Cookie', cookieHeader);
+  if (csrfHeader) headers.set('X-CSRF-Token', csrfHeader);
+
+  const res = await fetch(`https://api.clawdmkt.com/services/${encodeURIComponent(serviceId)}/invoke`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ payload, payment_currency: paymentCurrency }),
+    cache: 'no-store',
+  });
+
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    data = { error: 'Non-JSON response from invoke endpoint' };
+  }
+
+  return { ok: res.ok, status: res.status, data };
+}
+
 async function executeTool(req: NextRequest, name: string, args: any) {
   const callApi = buildApiCaller(req);
 
@@ -157,6 +190,7 @@ async function executeTool(req: NextRequest, name: string, args: any) {
       const category = typeof args?.category === 'string' ? args.category : undefined;
       const limit = typeof args?.limit === 'number' ? args.limit : 20;
 
+      // Equivalent internal route: /api/listings
       const result = await callApi('GET', '/api/listings', {
         query: {
           status: 'active',
@@ -165,12 +199,8 @@ async function executeTool(req: NextRequest, name: string, args: any) {
         },
       });
 
-      return {
-        tool: name,
-        ok: result.ok,
-        status: result.status,
-        data: result.data,
-      };
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `list_services failed (${result.status})`));
+      return result.data;
     }
 
     case 'get_service': {
@@ -178,13 +208,10 @@ async function executeTool(req: NextRequest, name: string, args: any) {
         throw new Error('service_id is required');
       }
 
+      // Equivalent internal route: /api/listings/:id
       const result = await callApi('GET', `/api/listings/${encodeURIComponent(args.service_id)}`);
-      return {
-        tool: name,
-        ok: result.ok,
-        status: result.status,
-        data: result.data,
-      };
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `get_service failed (${result.status})`));
+      return result.data;
     }
 
     case 'invoke_service': {
@@ -198,30 +225,15 @@ async function executeTool(req: NextRequest, name: string, args: any) {
         throw new Error('payment_currency must be KAS or BNKR');
       }
 
-      // Proxy to existing trade creation route (auth rules remain unchanged).
-      const result = await callApi('POST', '/api/trades', {
-        body: {
-          listing_id: args.service_id,
-          amount: 1,
-          allow_partial_fill: false,
-          payload: args.payload,
-          payment_currency: args.payment_currency,
-        },
-      });
+      const result = await invokeExternalService(
+        req,
+        args.service_id,
+        args.payload,
+        args.payment_currency as 'KAS' | 'BNKR',
+      );
 
-      const invocationId =
-        (result.data as any)?.trade?.id ||
-        (result.data as any)?.trade_id ||
-        (result.data as any)?.id ||
-        null;
-
-      return {
-        tool: name,
-        ok: result.ok,
-        status: result.status,
-        invocation_id: invocationId,
-        data: result.data,
-      };
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `invoke_service failed (${result.status})`));
+      return result.data;
     }
 
     case 'get_invocation_status': {
@@ -229,13 +241,16 @@ async function executeTool(req: NextRequest, name: string, args: any) {
         throw new Error('invocation_id is required');
       }
 
-      const result = await callApi('GET', `/api/trades/${encodeURIComponent(args.invocation_id)}`);
-      return {
-        tool: name,
-        ok: result.ok,
-        status: result.status,
-        data: result.data,
-      };
+      // Preferred route shape requested: /api/invocations/:id
+      const preferred = await callApi('GET', `/api/invocations/${encodeURIComponent(args.invocation_id)}`);
+      if (preferred.ok) return preferred.data;
+
+      // Equivalent existing route fallback: /api/trades/:id
+      const fallback = await callApi('GET', `/api/trades/${encodeURIComponent(args.invocation_id)}`);
+      if (!fallback.ok) {
+        throw new Error(getErrorMessage(fallback.data, `get_invocation_status failed (${fallback.status})`));
+      }
+      return fallback.data;
     }
 
     default:
@@ -283,16 +298,29 @@ export async function POST(req: NextRequest) {
       const name = params?.name;
       const args = params?.arguments ?? {};
       if (!name || typeof name !== 'string') {
-        return withCors(jsonRpcError(id, -32602, 'Invalid params: tool name is required'));
+        return withCors(
+          jsonRpcResult(id, {
+            content: [{ type: 'text', text: 'Error: tool name is required' }],
+            isError: true,
+          }),
+        );
       }
 
-      const toolResult = await executeTool(req, name, args);
-      return withCors(
-        jsonRpcResult(id, {
-          content: [{ type: 'text', text: JSON.stringify(toolResult, null, 2) }],
-          structuredContent: toolResult,
-        }),
-      );
+      try {
+        const toolResult = await executeTool(req, name, args);
+        return withCors(
+          jsonRpcResult(id, {
+            content: [{ type: 'text', text: JSON.stringify(toolResult) }],
+          }),
+        );
+      } catch (error: any) {
+        return withCors(
+          jsonRpcResult(id, {
+            content: [{ type: 'text', text: `Error: ${error?.message || 'Tool execution failed'}` }],
+            isError: true,
+          }),
+        );
+      }
     }
 
     return withCors(jsonRpcError(id, -32601, `Method not found: ${method}`));
@@ -302,5 +330,5 @@ export async function POST(req: NextRequest) {
 }
 
 export async function OPTIONS() {
-  return withCors(new NextResponse(null, { status: 204 }));
+  return withCors(new NextResponse(null, { status: 200 }));
 }
