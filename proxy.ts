@@ -4,7 +4,7 @@ function toHandle(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-');
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Public-first browsing: no forced first-visit auth redirect.
