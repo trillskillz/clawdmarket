@@ -1,18 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const SERVER_INFO = {
+  name: 'clawdmarket-mcp',
+  version: '1.0.0',
+};
+
+const CAPABILITIES = {
+  tools: {},
+};
+
+const TOOLS = [
+  {
+    name: 'list_services',
+    description:
+      'List all available AI agent services on ClawdMarket. Returns service IDs, names, descriptions, pricing, and accepted payment methods (KAS or BNKR).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', description: 'Optional category filter' },
+        limit: { type: 'number', description: 'Max results to return, default 20' },
+      },
+    },
+  },
+  {
+    name: 'get_service',
+    description:
+      'Get full details about a specific ClawdMarket agent service including capabilities, pricing, input schema, and invocation requirements.',
+    inputSchema: {
+      type: 'object',
+      required: ['service_id'],
+      properties: {
+        service_id: { type: 'string', description: 'The unique service identifier' },
+      },
+    },
+  },
+  {
+    name: 'invoke_service',
+    description:
+      'Hire and invoke a ClawdMarket agent service. Triggers the service with a payload and initiates payment via x402 protocol. Returns an invocation ID for status polling.',
+    inputSchema: {
+      type: 'object',
+      required: ['service_id', 'payload', 'payment_currency'],
+      properties: {
+        service_id: { type: 'string' },
+        payload: { type: 'object', description: 'Input data the service requires' },
+        payment_currency: { type: 'string', enum: ['KAS', 'BNKR'], description: 'Currency to pay with' },
+      },
+    },
+  },
+  {
+    name: 'get_invocation_status',
+    description:
+      'Poll the status of a previously invoked ClawdMarket service. Returns current status, progress, and result if completed.',
+    inputSchema: {
+      type: 'object',
+      required: ['invocation_id'],
+      properties: {
+        invocation_id: { type: 'string' },
+      },
+    },
+  },
+] as const;
+
 function withCors(res: Response | NextResponse): Response {
   const headers = new Headers(res.headers);
   headers.set('Access-Control-Allow-Origin', '*');
-  headers.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id, Last-Event-ID, X-CSRF-Token');
+  headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token');
   return new Response(res.body, { status: res.status, headers });
+}
+
+function jsonRpcResult(id: unknown, result: unknown) {
+  return NextResponse.json({ jsonrpc: '2.0', id: id ?? null, result });
+}
+
+function jsonRpcError(id: unknown, code: number, message: string, data?: unknown) {
+  return NextResponse.json(
+    {
+      jsonrpc: '2.0',
+      id: id ?? null,
+      error: {
+        code,
+        message,
+        ...(data !== undefined ? { data } : {}),
+      },
+    },
+    { status: 400 },
+  );
 }
 
 function buildApiCaller(req: NextRequest) {
@@ -20,14 +97,14 @@ function buildApiCaller(req: NextRequest) {
   const cookieHeader = req.headers.get('cookie');
   const csrfHeader = req.headers.get('x-csrf-token');
 
-  return async function callApi<T = unknown>(
+  return async function callApi(
     method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
     path: string,
     opts?: {
       query?: Record<string, string | number | boolean | undefined | null>;
       body?: unknown;
     },
-  ): Promise<{ ok: boolean; status: number; data: T }> {
+  ) {
     const url = new URL(path, req.nextUrl.origin);
 
     if (opts?.query) {
@@ -67,231 +144,161 @@ function buildApiCaller(req: NextRequest) {
     return {
       ok: res.ok,
       status: res.status,
-      data: data as T,
+      data,
     };
   };
 }
 
-function createMcpServer(req: NextRequest) {
-  const server = new McpServer(
-    {
-      name: 'clawdmarket-mcp',
-      version: '1.0.0',
-    },
-    {
-      capabilities: {
-        tools: {},
-      },
-    },
-  );
-
+async function executeTool(req: NextRequest, name: string, args: any) {
   const callApi = buildApiCaller(req);
 
-  server.registerTool(
-    'clawdmarket_search_services',
-    {
-      title: 'Search ClawdMarket services',
-      description: 'Search available service listings on ClawdMarket.',
-      inputSchema: {
-        search: z.string().optional().describe('Free-text search query.'),
-        category: z.enum(['compute', 'skills', 'data', 'bounties', 'other']).optional(),
-        page: z.number().int().positive().optional().default(1),
-        limit: z.number().int().positive().max(100).optional().default(20),
-        min_price: z.number().positive().optional(),
-        max_price: z.number().positive().optional(),
-      },
-    },
-    async ({ search, category, page = 1, limit = 20, min_price, max_price }) => {
+  switch (name) {
+    case 'list_services': {
+      const category = typeof args?.category === 'string' ? args.category : undefined;
+      const limit = typeof args?.limit === 'number' ? args.limit : 20;
+
       const result = await callApi('GET', '/api/listings', {
         query: {
           status: 'active',
-          search,
           category,
-          page,
           limit,
-          min_price,
-          max_price,
         },
       });
 
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result.data, null, 2),
-          },
-        ],
-        structuredContent: {
-          ok: result.ok,
-          status: result.status,
-          data: result.data,
-        },
+        tool: name,
+        ok: result.ok,
+        status: result.status,
+        data: result.data,
       };
-    },
-  );
+    }
 
-  server.registerTool(
-    'clawdmarket_get_service',
-    {
-      title: 'Get a ClawdMarket service listing',
-      description: 'Fetch details for a specific listing by id.',
-      inputSchema: {
-        id: z.string().describe('Listing ID (UUID or fallback id).'),
-      },
-    },
-    async ({ id }) => {
-      const result = await callApi('GET', `/api/listings/${encodeURIComponent(id)}`);
+    case 'get_service': {
+      if (!args?.service_id || typeof args.service_id !== 'string') {
+        throw new Error('service_id is required');
+      }
 
+      const result = await callApi('GET', `/api/listings/${encodeURIComponent(args.service_id)}`);
       return {
-        content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
-        structuredContent: {
-          ok: result.ok,
-          status: result.status,
-          data: result.data,
-        },
+        tool: name,
+        ok: result.ok,
+        status: result.status,
+        data: result.data,
       };
-    },
-  );
+    }
 
-  server.registerTool(
-    'clawdmarket_create_service',
-    {
-      title: 'Create a ClawdMarket service listing',
-      description: 'Create a new listing. Requires auth that matches existing API rules.',
-      inputSchema: {
-        category: z.enum(['compute', 'skills', 'data', 'bounties', 'other']),
-        title: z.string().min(5).max(100),
-        description: z.string().min(20).max(1000),
-        price_bankr: z.number().min(1).max(1_000_000_000),
-      },
-    },
-    async (input) => {
-      const result = await callApi('POST', '/api/listings', {
-        body: input,
-      });
+    case 'invoke_service': {
+      if (!args?.service_id || typeof args.service_id !== 'string') {
+        throw new Error('service_id is required');
+      }
+      if (!args?.payload || typeof args.payload !== 'object') {
+        throw new Error('payload is required and must be an object');
+      }
+      if (!['KAS', 'BNKR'].includes(args?.payment_currency)) {
+        throw new Error('payment_currency must be KAS or BNKR');
+      }
 
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
-        structuredContent: {
-          ok: result.ok,
-          status: result.status,
-          data: result.data,
-        },
-      };
-    },
-  );
-
-  server.registerTool(
-    'clawdmarket_hire_service',
-    {
-      title: 'Hire a ClawdMarket service',
-      description: 'Create a trade for a listing. Requires auth that matches existing API rules.',
-      inputSchema: {
-        listing_id: z.string().describe('Listing ID to purchase.'),
-        amount: z.number().positive().default(1),
-        allow_partial_fill: z.boolean().optional().default(false),
-      },
-    },
-    async ({ listing_id, amount = 1, allow_partial_fill = false }) => {
+      // Proxy to existing trade creation route (auth rules remain unchanged).
       const result = await callApi('POST', '/api/trades', {
         body: {
-          listing_id,
-          amount,
-          allow_partial_fill,
+          listing_id: args.service_id,
+          amount: 1,
+          allow_partial_fill: false,
+          payload: args.payload,
+          payment_currency: args.payment_currency,
         },
       });
 
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
-        structuredContent: {
-          ok: result.ok,
-          status: result.status,
-          data: result.data,
-        },
-      };
-    },
-  );
-
-  server.registerTool(
-    'clawdmarket_get_trade',
-    {
-      title: 'Get trade details',
-      description: 'Fetch details for a specific trade by id. Requires auth.',
-      inputSchema: {
-        id: z.string().describe('Trade ID.'),
-      },
-    },
-    async ({ id }) => {
-      const result = await callApi('GET', `/api/trades/${encodeURIComponent(id)}`);
+      const invocationId =
+        (result.data as any)?.trade?.id ||
+        (result.data as any)?.trade_id ||
+        (result.data as any)?.id ||
+        null;
 
       return {
-        content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
-        structuredContent: {
-          ok: result.ok,
-          status: result.status,
-          data: result.data,
-        },
+        tool: name,
+        ok: result.ok,
+        status: result.status,
+        invocation_id: invocationId,
+        data: result.data,
       };
-    },
-  );
+    }
 
-  server.registerTool(
-    'clawdmarket_get_wallet',
-    {
-      title: 'Get authenticated wallet state',
-      description: 'Return wallet balance and recent transactions for the authenticated user.',
-      inputSchema: {},
-    },
-    async () => {
-      const result = await callApi('GET', '/api/wallet');
+    case 'get_invocation_status': {
+      if (!args?.invocation_id || typeof args.invocation_id !== 'string') {
+        throw new Error('invocation_id is required');
+      }
 
+      const result = await callApi('GET', `/api/trades/${encodeURIComponent(args.invocation_id)}`);
       return {
-        content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
-        structuredContent: {
-          ok: result.ok,
-          status: result.status,
-          data: result.data,
-        },
+        tool: name,
+        ok: result.ok,
+        status: result.status,
+        data: result.data,
       };
-    },
-  );
+    }
 
-  return server;
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
 }
 
-async function handleMcp(req: NextRequest) {
-  // Stateless mode for serverless routing (new transport per request).
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-    enableJsonResponse: true,
-  });
-
-  const server = createMcpServer(req);
-  await server.connect(transport);
-
-  if (req.method === 'POST') {
-    const body = await req.clone().json().catch(() => null);
-    if (!body || !isInitializeRequest(body)) {
-      // In stateless mode we still allow non-initialize requests, but this hint helps debugging
-      // clients that assume stateful sessions.
-    }
-  }
-
-  const response = await transport.handleRequest(req);
-  await server.close();
-  return withCors(response);
+export async function GET() {
+  return withCors(
+    NextResponse.json({
+      server: SERVER_INFO,
+      capabilities: CAPABILITIES,
+      transport: {
+        kind: 'http',
+        methods: ['GET', 'POST'],
+      },
+    }),
+  );
 }
 
 export async function POST(req: NextRequest) {
-  return handleMcp(req);
-}
+  const body = await req.json().catch(() => null);
+  if (!body || body.jsonrpc !== '2.0' || typeof body.method !== 'string') {
+    return withCors(jsonRpcError(null, -32600, 'Invalid Request'));
+  }
 
-export async function GET(req: NextRequest) {
-  return handleMcp(req);
-}
+  const { id, method, params } = body;
 
-export async function DELETE(req: NextRequest) {
-  return handleMcp(req);
+  try {
+    if (method === 'initialize') {
+      return withCors(
+        jsonRpcResult(id, {
+          protocolVersion: '2024-11-05',
+          serverInfo: SERVER_INFO,
+          capabilities: CAPABILITIES,
+        }),
+      );
+    }
+
+    if (method === 'tools/list') {
+      return withCors(jsonRpcResult(id, { tools: TOOLS }));
+    }
+
+    if (method === 'tools/call') {
+      const name = params?.name;
+      const args = params?.arguments ?? {};
+      if (!name || typeof name !== 'string') {
+        return withCors(jsonRpcError(id, -32602, 'Invalid params: tool name is required'));
+      }
+
+      const toolResult = await executeTool(req, name, args);
+      return withCors(
+        jsonRpcResult(id, {
+          content: [{ type: 'text', text: JSON.stringify(toolResult, null, 2) }],
+          structuredContent: toolResult,
+        }),
+      );
+    }
+
+    return withCors(jsonRpcError(id, -32601, `Method not found: ${method}`));
+  } catch (error: any) {
+    return withCors(jsonRpcError(id, -32000, error?.message || 'Internal MCP error'));
+  }
 }
 
 export async function OPTIONS() {
