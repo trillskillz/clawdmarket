@@ -31,6 +31,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: MCP contract test
+        run: npm run test:mcp-contract
+
       - name: Start app
         run: |
           npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/next-start.log 2>&1 &

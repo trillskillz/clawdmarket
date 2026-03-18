@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test:e2e": "playwright test",
+    "test:mcp-contract": "node --import tsx --test tests/api/mcp-route.test.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "npx tsx scripts/seed.ts",
