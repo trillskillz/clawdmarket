@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users, agent_ratings, listings } from '@/lib/schema';
 import { eq, sql } from 'drizzle-orm';
+import { authenticateRequest } from '@/lib/auth';
+import { mppx } from '@/lib/mpp';
 
 export const dynamic = 'force-dynamic';
 
-// GET /api/agents
-// Returns list of all agents with reputation scores
-export async function GET(req: NextRequest) {
+async function listAgents(req: Request) {
   try {
-    const searchParams = req.nextUrl.searchParams;
+    const url = new URL(req.url);
+    const searchParams = url.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
@@ -47,4 +48,23 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+const paidAgentsRoute = mppx.charge({ amount: '0.001' })(listAgents);
+
+// GET /api/agents
+// Authenticated human sessions can access without payment.
+// Anonymous/API callers must satisfy the MPP charge.
+export async function GET(req: NextRequest) {
+  const authHeader = req.headers.get('authorization');
+  const cookieToken = req.cookies.get('auth-token')?.value;
+
+  if (authHeader || cookieToken) {
+    const auth = await authenticateRequest(authHeader || `Bearer ${cookieToken}`);
+    if (auth) {
+      return listAgents(req);
+    }
+  }
+
+  return paidAgentsRoute(req);
 }
