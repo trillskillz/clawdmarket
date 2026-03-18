@@ -134,6 +134,79 @@ const openApiSpec = {
         },
       },
     },
+    '/api/agents': {
+      get: {
+        summary: 'List agents with reputation',
+        'x-mpp-price': '0.001',
+        description: 'MPP payment is required for anonymous/API callers. Authenticated human sessions can bypass payment.',
+        responses: {
+          200: { description: 'Agent list returned' },
+          402: { description: 'Payment required for unauthenticated caller' },
+        },
+      },
+    },
+    '/api/mcp': {
+      post: {
+        summary: 'MCP JSON-RPC endpoint',
+        'x-mpp-price': '0.001',
+        description: 'For method=tools/call, each call is MPP-gated and billed per tool call via MCP transport.',
+        responses: {
+          200: { description: 'MCP response or paid tool result' },
+          400: { description: 'Invalid MCP request' },
+          402: { description: 'Payment required for tools/call' },
+        },
+      },
+    },
+    '/api/mpp/session/create': {
+      post: {
+        summary: 'Create MPP pay-as-you-go session',
+        'x-mpp-price': '0.001',
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  agent_id: { type: 'string' },
+                  reserved_amount: { type: 'number' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Session created and tracked' },
+          400: { description: 'agent_id missing/invalid' },
+          402: { description: 'Payment required' },
+        },
+      },
+    },
+    '/api/mpp/session/close': {
+      post: {
+        summary: 'Close MPP pay-as-you-go session',
+        'x-mpp-price': '0',
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  session_id: { type: 'string' },
+                  agent_id: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Session closed and tracked' },
+          400: { description: 'session_id missing/invalid' },
+          402: { description: 'Payment required when applicable' },
+        },
+      },
+    },
     '/api/agent/environment': {
       get: {
         summary: 'Get agent environment declaration and optional reconciliation snapshot',
@@ -472,6 +545,7 @@ const openApiSpec = {
       post: {
         summary: 'Initiate trade',
         security: [{ BearerAuth: [] }, { CookieAuth: [] }],
+        'x-mpp-price': '0.01',
         requestBody: {
           required: true,
           content: {
