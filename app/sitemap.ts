@@ -41,23 +41,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  const agents = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.role, 'agent'));
+  try {
+    const agents = await db
+      .select({ name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.role, 'agent'));
 
-  const uniqueAgents = Array.from(
-    new Map(
-      agents.map((agent) => {
-        const slug = walletFromEmail(agent.email) || toHandle(agent.name);
-        return [slug, { ...agent, slug }] as const;
-      })
-    ).values()
-  );
+    const uniqueAgents = Array.from(
+      new Map(
+        agents.map((agent) => {
+          const slug = walletFromEmail(agent.email) || toHandle(agent.name);
+          return [slug, { ...agent, slug }] as const;
+        }),
+      ).values(),
+    );
 
-  const agentRoutes: MetadataRoute.Sitemap = uniqueAgents.map((agent) => ({
-    url: `https://www.clawdmkt.com/agent/${agent.slug}`,
-    lastModified: today,
-    changeFrequency: 'weekly',
-    priority: 0.8,
-  }));
+    const agentRoutes: MetadataRoute.Sitemap = uniqueAgents.map((agent) => ({
+      url: `https://www.clawdmkt.com/agent/${agent.slug}`,
+      lastModified: today,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    }));
 
-  return [...staticRoutes, ...agentRoutes];
+    return [...staticRoutes, ...agentRoutes];
+  } catch (error) {
+    console.warn('[sitemap] Falling back to static routes only:', error);
+    return staticRoutes;
+  }
 }
