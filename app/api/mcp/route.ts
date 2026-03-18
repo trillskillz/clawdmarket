@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Mppx as ServerMppx, Transport, tempo } from 'mppx/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,6 +12,26 @@ const SERVER_INFO = {
 const CAPABILITIES = {
   tools: {},
 };
+
+const MPP_PATH_USD = '0x20c0000000000000000000000000000000000000' as const;
+const MPP_RECIPIENT_ADDRESS = process.env.MPP_RECIPIENT_ADDRESS as `0x${string}` | undefined;
+
+if (!MPP_RECIPIENT_ADDRESS) {
+  throw new Error('Missing MPP_RECIPIENT_ADDRESS environment variable.');
+}
+
+const mcpPayment = ServerMppx.create({
+  methods: [
+    tempo({
+      currency: MPP_PATH_USD,
+      recipient: MPP_RECIPIENT_ADDRESS,
+    }),
+  ],
+  transport: Transport.mcp(),
+  secretKey: process.env.MPP_SECRET_KEY || process.env.JWT_SECRET || 'clawdmarket-mpp-dev-secret',
+});
+
+const paidMcpToolCall = mcpPayment.charge({ amount: '0.001' });
 
 const TOOLS = [
   {
@@ -306,20 +327,33 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const paymentGate = await paidMcpToolCall(body as any);
+      if (paymentGate.status === 402) {
+        return withCors(NextResponse.json(paymentGate.challenge));
+      }
+
       try {
         const toolResult = await executeTool(req, name, args);
-        return withCors(
-          jsonRpcResult(id, {
+        const baseResult = {
+          jsonrpc: '2.0' as const,
+          id: id ?? null,
+          result: {
             content: [{ type: 'text', text: JSON.stringify(toolResult) }],
-          }),
-        );
+          },
+        };
+
+        return withCors(NextResponse.json(paymentGate.withReceipt(baseResult)));
       } catch (error: any) {
-        return withCors(
-          jsonRpcResult(id, {
+        const errorResult = {
+          jsonrpc: '2.0' as const,
+          id: id ?? null,
+          result: {
             content: [{ type: 'text', text: `Error: ${error?.message || 'Tool execution failed'}` }],
             isError: true,
-          }),
-        );
+          },
+        };
+
+        return withCors(NextResponse.json(paymentGate.withReceipt(errorResult)));
       }
     }
 
