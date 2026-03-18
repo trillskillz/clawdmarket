@@ -283,6 +283,17 @@ export const payment_receipts = sqliteTable('payment_receipts', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+export const mpp_sessions = sqliteTable('mpp_sessions', {
+  session_id: text('session_id').primaryKey(),
+  agent_id: text('agent_id').notNull(),
+  payer_address: text('payer_address'),
+  reserved_amount: real('reserved_amount').notNull().default(0),
+  spent_amount: real('spent_amount').notNull().default(0),
+  status: text('status', { enum: ['active', 'closed'] }).notNull().default('active'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  closed_at: integer('closed_at', { mode: 'timestamp' }),
+});
+
 export const contracts = sqliteTable('contracts', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -356,6 +367,8 @@ export type FeeError = typeof fee_errors.$inferSelect;
 export type NewFeeError = typeof fee_errors.$inferInsert;
 export type PaymentReceipt = typeof payment_receipts.$inferSelect;
 export type NewPaymentReceipt = typeof payment_receipts.$inferInsert;
+export type MppSession = typeof mpp_sessions.$inferSelect;
+export type NewMppSession = typeof mpp_sessions.$inferInsert;
 export type Contract = typeof contracts.$inferSelect;
 export type NewContract = typeof contracts.$inferInsert;
 export type ContractMilestone = typeof contract_milestones.$inferSelect;
