@@ -8,7 +8,7 @@ import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
 import { and, eq, or, desc, sql } from 'drizzle-orm';
 import crypto from 'crypto';
-import { isAddress } from 'viem';
+import { createPublicClient, decodeEventLog, formatUnits, http, isAddress, parseAbiItem } from 'viem';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
 import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
@@ -18,6 +18,7 @@ import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 import { mppx } from '@/lib/mpp';
 import { Receipt } from 'mppx';
 import { PATHUSD_ADDRESS } from '@/lib/constants';
+import { getTokenPriceUsd } from '@/lib/price-oracle';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
@@ -25,6 +26,61 @@ const DEV_FEE_PERCENT = 0.05; // 5% fee
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 const MPP_TRADE_EXECUTION_PRICE_USD = 0.01;
 const MPP_CURRENCY_PATH_USD = PATHUSD_ADDRESS;
+const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
+
+function getRpcUrl(chainId: number): string | null {
+  const specific = process.env[`EVM_RPC_URL_${chainId}` as keyof NodeJS.ProcessEnv] as string | undefined;
+  if (specific) return specific;
+  if (process.env.EVM_RPC_URL) return process.env.EVM_RPC_URL;
+  if (chainId === 1) return 'https://rpc.ankr.com/eth';
+  if (chainId === 10) return 'https://rpc.ankr.com/optimism';
+  if (chainId === 137) return 'https://rpc.ankr.com/polygon';
+  if (chainId === 8453) return 'https://rpc.ankr.com/base';
+  if (chainId === 42161) return 'https://rpc.ankr.com/arbitrum';
+  return null;
+}
+
+async function verifyErc20Transfer(params: {
+  chainId: number;
+  tokenAddress: `0x${string}`;
+  txHash: `0x${string}`;
+  treasuryAddress: `0x${string}`;
+  buyerWallet?: `0x${string}`;
+}) {
+  const rpcUrl = getRpcUrl(params.chainId);
+  if (!rpcUrl) throw new Error(`Unsupported or unconfigured chainId: ${params.chainId}`);
+
+  const client = createPublicClient({ transport: http(rpcUrl) });
+  const receipt = await client.getTransactionReceipt({ hash: params.txHash });
+  if (receipt.status !== 'success') {
+    throw new Error('Payment transaction failed on-chain');
+  }
+
+  let tokenAmount = BigInt(0);
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== params.tokenAddress.toLowerCase()) continue;
+    try {
+      const decoded = decodeEventLog({ abi: [TRANSFER_EVENT], data: log.data, topics: log.topics });
+      if (decoded.eventName !== 'Transfer') continue;
+      const from = String(decoded.args.from || '').toLowerCase();
+      const to = String(decoded.args.to || '').toLowerCase();
+      const value = BigInt(decoded.args.value || BigInt(0));
+      if (to === params.treasuryAddress.toLowerCase()) {
+        if (!params.buyerWallet || from === params.buyerWallet.toLowerCase()) {
+          tokenAmount += value;
+        }
+      }
+    } catch {
+      // ignore unrelated logs
+    }
+  }
+
+  if (tokenAmount <= BigInt(0)) {
+    throw new Error('No ERC-20 transfer to treasury found in transaction');
+  }
+
+  return { tokenAmount };
+}
 
 async function tryCreateContractForTrade(params: {
   listingId: string;
@@ -318,43 +374,84 @@ async function createTradePost(req: NextRequest) {
     const onchain = body?.onchain || null;
 
     if (bodyPaymentMode === 'onchain') {
-      const expectedToken = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '').trim().toLowerCase();
-      const expectedEscrow = (process.env.ESCROW_WALLET_ADDRESS || process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS || '').trim().toLowerCase();
+      const treasuryAddressRaw = (
+        process.env.TREASURY_ADDRESS ||
+        process.env.MPP_TREASURY_ADDRESS ||
+        process.env.MPP_RECIPIENT_ADDRESS ||
+        process.env.ESCROW_WALLET_ADDRESS ||
+        process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS ||
+        ''
+      ).trim();
 
-      if (!expectedToken || !expectedEscrow) {
+      if (!treasuryAddressRaw || !isAddress(treasuryAddressRaw)) {
         return NextResponse.json(
-          { error: 'On-chain payment is not configured on server' },
+          { error: 'On-chain treasury wallet is not configured on server' },
           { status: 500 }
         );
       }
 
-      if (!onchain || onchain.chain !== 'base') {
-        return NextResponse.json({ error: 'Invalid on-chain payment payload (chain)' }, { status: 400 });
+      if (!onchain) {
+        return NextResponse.json({ error: 'Missing on-chain payment payload' }, { status: 400 });
       }
 
-      if (
-        String(onchain.token_address || '').toLowerCase() !== expectedToken ||
-        String(onchain.escrow_wallet || '').toLowerCase() !== expectedEscrow
-      ) {
-        return NextResponse.json({ error: 'On-chain payment destination mismatch' }, { status: 400 });
-      }
+      const tokenAddress = String(onchain.tokenAddress || onchain.token_address || '').trim();
+      const txHash = String(onchain.txHash || onchain.escrow_tx_hash || '').trim();
+      const buyerWalletRaw = String(onchain.buyerWallet || onchain.buyer_wallet || '').trim();
+      const tokenSymbol = String(onchain.tokenSymbol || onchain.token_symbol || '').trim() || null;
+      const chainId = Number(onchain.chainId || onchain.chain_id || 0);
+      const tokenDecimals = Number(onchain.decimals);
 
-      const buyerWallet = String(onchain.buyer_wallet || '').toLowerCase();
-      const escrowWallet = String(onchain.escrow_wallet || '').toLowerCase();
-      const feeWallet = String(onchain.fee_wallet || '').toLowerCase();
-
-      if (!buyerWallet || !isAddress(String(onchain.buyer_wallet || ''))) {
-        return NextResponse.json({ error: 'Invalid buyer wallet address' }, { status: 400 });
+      if (!isAddress(tokenAddress)) {
+        return NextResponse.json({ error: 'Invalid token address' }, { status: 400 });
       }
-      if (buyerWallet === escrowWallet) {
-        return NextResponse.json({ error: 'Buyer wallet cannot be the same as escrow wallet' }, { status: 400 });
+      if (!Number.isInteger(chainId) || chainId <= 0) {
+        return NextResponse.json({ error: 'Invalid on-chain payment payload (chainId)' }, { status: 400 });
       }
-      if (feeWallet && buyerWallet === feeWallet) {
-        return NextResponse.json({ error: 'Buyer wallet cannot be the same as fee wallet' }, { status: 400 });
+      if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 36) {
+        return NextResponse.json({ error: 'Invalid token decimals' }, { status: 400 });
       }
-
-      if (!TX_HASH_RE.test(String(onchain.escrow_tx_hash || ''))) {
+      if (!TX_HASH_RE.test(txHash)) {
         return NextResponse.json({ error: 'Invalid on-chain payment transaction hash format' }, { status: 400 });
+      }
+
+      let buyerWallet: `0x${string}` | undefined;
+      if (buyerWalletRaw) {
+        if (!isAddress(buyerWalletRaw)) {
+          return NextResponse.json({ error: 'Invalid buyer wallet address' }, { status: 400 });
+        }
+        buyerWallet = buyerWalletRaw as `0x${string}`;
+      }
+
+      let tokenAmount: bigint;
+      try {
+        const verification = await verifyErc20Transfer({
+          chainId,
+          tokenAddress: tokenAddress as `0x${string}`,
+          txHash: txHash as `0x${string}`,
+          treasuryAddress: treasuryAddressRaw as `0x${string}`,
+          buyerWallet,
+        });
+        tokenAmount = verification.tokenAmount;
+      } catch (error: any) {
+        return NextResponse.json({ error: error?.message || 'On-chain transfer verification failed' }, { status: 402 });
+      }
+
+      const tokenPriceUsd = await getTokenPriceUsd(tokenAddress, chainId);
+      if (tokenPriceUsd == null) {
+        return NextResponse.json(
+          { error: 'Token price could not be verified. Use a token with a CoinGecko listing.' },
+          { status: 402 },
+        );
+      }
+
+      const tokenAmountFloat = Number(formatUnits(tokenAmount, tokenDecimals));
+      const usdValueAtPayment = tokenAmountFloat * tokenPriceUsd;
+      const minRequiredUsd = totalCost * 0.98;
+      if (!Number.isFinite(usdValueAtPayment) || usdValueAtPayment < minRequiredUsd) {
+        return NextResponse.json(
+          { error: `Insufficient on-chain payment value. Required at least $${minRequiredUsd.toFixed(4)}, received $${usdValueAtPayment.toFixed(4)}.` },
+          { status: 402 },
+        );
       }
 
       const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
@@ -385,7 +482,7 @@ async function createTradePost(req: NextRequest) {
             dev_amount: devAmount,
             dev_wallet: devWalletAddress,
             // Single on-chain payment tx covers item + dev fee.
-            fee_tx_hash: onchain.fee_tx_hash || onchain.escrow_tx_hash,
+            fee_tx_hash: txHash,
             payout_status: 'seller_paid',
             status: 'pending',
           })
@@ -414,7 +511,7 @@ async function createTradePost(req: NextRequest) {
             amount: devAmount,
             type: 'fee',
             reference_id: trade.id,
-            memo: `On-chain dev fee allocation (single tx: ${onchain.escrow_tx_hash})`,
+            memo: `On-chain dev fee allocation (single tx: ${txHash})`,
           });
         }
 
@@ -430,6 +527,19 @@ async function createTradePost(req: NextRequest) {
         totalCost,
       });
 
+      await db.insert(payment_receipts).values({
+        route: 'POST /api/trades',
+        amount: totalCost,
+        currency: tokenAddress.toLowerCase(),
+        tx_hash: txHash,
+        payer_address: buyerWallet || null,
+        token_address: tokenAddress.toLowerCase(),
+        chain_id: chainId,
+        token_symbol: tokenSymbol,
+        token_amount: tokenAmount.toString(),
+        usd_value_at_payment: usdValueAtPayment,
+      });
+
       Promise.all([
         fireWebhook(auth.userId, 'trade.created', { trade: newTrade }),
         fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade }),
@@ -438,7 +548,7 @@ async function createTradePost(req: NextRequest) {
 
       return NextResponse.json(
         {
-          message: 'Trade initiated successfully with on-chain BANKR payment.',
+          message: 'Trade initiated successfully with on-chain ERC-20 payment.',
           trade: newTrade,
           code: 'TRADE_CREATED_ONCHAIN',
           fee_info: {
