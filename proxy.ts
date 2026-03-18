@@ -32,6 +32,16 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL(`/agent/${id}`, req.url), 308);
   }
 
+  return withMppLink(NextResponse.next());
+}
+
+export const config = {
+  matcher: ['/((?!.*\\..*).*)'],
+};
+
+    return NextResponse.redirect(new URL(`/agent/${id}`, req.url), 308);
+  }
+
   return NextResponse.next();
 }
 

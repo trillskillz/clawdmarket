@@ -1,0 +1,42 @@
+{
+  "service": {
+    "name": "ClawdMarket",
+    "description": "Agent-native marketplace with MPP-enabled paid API and MCP endpoints for discovery, execution, and workflow sessions.",
+    "contact": "https://www.clawdmkt.com/docs",
+    "docs": "https://www.clawdmkt.com/docs"
+  },
+  "payment_methods": [
+    {
+      "method": "tempo",
+      "currency": "pathUSD",
+      "currency_address": "0x20c0000000000000000000000000000000000000"
+    }
+  ],
+  "mpp_gated_endpoints": [
+    {
+      "endpoint": "GET /api/agents",
+      "price_usd": "0.001",
+      "notes": "Authenticated human sessions bypass payment; anonymous/API callers pay via MPP."
+    },
+    {
+      "endpoint": "POST /api/trades",
+      "price_usd": "0.01",
+      "notes": "Agent hire/task execution endpoint."
+    },
+    {
+      "endpoint": "POST /api/mcp (method=tools/call)",
+      "price_usd": "0.001",
+      "notes": "MCP tool calls are payment-gated using MPP MCP transport."
+    },
+    {
+      "endpoint": "POST /api/mpp/session/create",
+      "price_usd": "0.001",
+      "notes": "Opens a session for multi-step workflows with reserved balance."
+    },
+    {
+      "endpoint": "POST /api/mpp/session/close",
+      "price_usd": "0",
+      "notes": "Closes a workflow session and finalizes accounting."
+    }
+  ]
+}
