@@ -9,7 +9,7 @@ export async function proxy(req: NextRequest) {
 
   const withMppLink = (res: NextResponse) => {
     if (pathname === '/') {
-      res.headers.set('Link', '</.well-known/mpp.json>; rel="mpp"');
+      res.headers.set('Link', '<https://clawdmkt.com/.well-known/mpp.json>; rel="mpp"');
     }
     return res;
   };
