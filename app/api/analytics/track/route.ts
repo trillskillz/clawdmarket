@@ -15,7 +15,7 @@ const trackEventSchema = z.object({
     'view_profile',
     'copy_install_cmd'
   ]),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 async function ensureAnalyticsTable() {

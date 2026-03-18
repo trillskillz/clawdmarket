@@ -94,9 +94,9 @@ export const contractActionSchema = z.object({
 
 export const milestoneActionSchema = z.object({
   action: z.enum(['submit', 'approve', 'request_changes', 'mark_paid', 'open_dispute', 'resolve_dispute']),
-  artifact_bundle: z.record(z.any()).optional(),
+  artifact_bundle: z.record(z.string(), z.any()).optional(),
   reason_code: z.string().max(120).optional(),
-  evidence: z.record(z.any()).optional(),
+  evidence: z.record(z.string(), z.any()).optional(),
   ruling: z.enum(['buyer_win', 'seller_win', 'split', 'redo']).optional(),
   split_percent_to_seller: z.number().min(0).max(100).optional(),
 });
