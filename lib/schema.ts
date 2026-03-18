@@ -273,6 +273,16 @@ export const fee_errors = sqliteTable('fee_errors', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+export const payment_receipts = sqliteTable('payment_receipts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  route: text('route').notNull(),
+  amount: real('amount').notNull(),
+  currency: text('currency').notNull(),
+  tx_hash: text('tx_hash'),
+  payer_address: text('payer_address'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 export const contracts = sqliteTable('contracts', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -344,6 +354,8 @@ export type EventStreamRow = typeof event_stream.$inferSelect;
 export type NewEventStreamRow = typeof event_stream.$inferInsert;
 export type FeeError = typeof fee_errors.$inferSelect;
 export type NewFeeError = typeof fee_errors.$inferInsert;
+export type PaymentReceipt = typeof payment_receipts.$inferSelect;
+export type NewPaymentReceipt = typeof payment_receipts.$inferInsert;
 export type Contract = typeof contracts.$inferSelect;
 export type NewContract = typeof contracts.$inferInsert;
 export type ContractMilestone = typeof contract_milestones.$inferSelect;

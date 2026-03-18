@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users, wallets, transactions, fee_errors, contracts, contract_milestones } from '@/lib/schema';
+import { trades, listings, users, wallets, transactions, fee_errors, contracts, contract_milestones, payment_receipts } from '@/lib/schema';
 import { authenticateRequest, hashPassword } from '@/lib/auth';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
@@ -15,11 +15,15 @@ import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
+import { mppx } from '@/lib/mpp';
+import { Receipt } from 'mppx';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
 const DEV_FEE_PERCENT = 0.05; // 5% fee
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
+const MPP_TRADE_EXECUTION_PRICE_USD = 0.01;
+const MPP_CURRENCY_PATH_USD = '0x20c0000000000000000000000000000000000000';
 
 async function tryCreateContractForTrade(params: {
   listingId: string;
@@ -194,7 +198,7 @@ async function ensureAdminFeeRecipient(): Promise<string | null> {
   return adminUser.id;
 }
 
-export async function POST(req: NextRequest) {
+async function createTradePost(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -668,6 +672,61 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+const paidCreateTradeRoute = mppx.charge({ amount: '0.01' })(async (request: Request) => {
+  const nextRequest = request instanceof NextRequest ? request : new NextRequest(request);
+  return createTradePost(nextRequest);
+});
+
+async function attachAndLogPaymentReceipt(response: Response) {
+  const receiptHeader = response.headers.get('Payment-Receipt');
+  if (!receiptHeader) return response;
+
+  let receipt: Record<string, any> | null = null;
+  try {
+    receipt = Receipt.deserialize(receiptHeader) as Record<string, any>;
+  } catch {
+    receipt = null;
+  }
+
+  if (receipt) {
+    try {
+      await db.insert(payment_receipts).values({
+        route: 'POST /api/trades',
+        amount: MPP_TRADE_EXECUTION_PRICE_USD,
+        currency: MPP_CURRENCY_PATH_USD,
+        tx_hash: String(receipt.txHash || receipt.reference || '') || null,
+        payer_address: String(receipt.payer || receipt.payerAddress || receipt.from || '') || null,
+      });
+    } catch (error) {
+      console.error('Failed to persist payment receipt:', error);
+    }
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json') || !receipt) return response;
+
+  try {
+    const body = await response.clone().json();
+    return NextResponse.json(
+      {
+        ...body,
+        mpp_receipt: receipt,
+      },
+      {
+        status: response.status,
+        headers: response.headers,
+      },
+    );
+  } catch {
+    return response;
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const response = await paidCreateTradeRoute(req);
+  return attachAndLogPaymentReceipt(response);
 }
 
 export async function GET(req: NextRequest) {
