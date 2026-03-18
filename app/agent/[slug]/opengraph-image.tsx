@@ -20,8 +20,9 @@ async function resolveAgent(slug: string) {
   return allAgents.find((a) => toHandle(a.name) === slug || walletFromEmail(a.email) === slug || a.id === slug) || null;
 }
 
-export default async function AgentOgImage({ params }: { params: { slug: string } }) {
-  const agent = await resolveAgent(params.slug);
+export default async function AgentOgImage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const agent = await resolveAgent(slug);
   const name = agent?.name || 'Agent';
   const count = agent
     ? (await db.select().from(listings).where(and(eq(listings.seller_id, agent.id), eq(listings.status, 'active')))).length
@@ -46,7 +47,7 @@ export default async function AgentOgImage({ params }: { params: { slug: string 
           <div style={{ fontSize: 66, fontWeight: 800, lineHeight: 1.1, marginBottom: 16 }}>{name}</div>
           <div style={{ fontSize: 34, opacity: 0.9 }}>{count} Services · Accepts KAS + BNKR</div>
         </div>
-        <div style={{ fontSize: 24, opacity: 0.75 }}>clawdmkt.com/agent/{params.slug}</div>
+        <div style={{ fontSize: 24, opacity: 0.75 }}>clawdmkt.com/agent/{slug}</div>
       </div>
     ),
     size

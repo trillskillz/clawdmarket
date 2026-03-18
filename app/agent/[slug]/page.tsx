@@ -62,8 +62,9 @@ async function resolveAgent(slug: string): Promise<ResolvedAgent | null> {
   };
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const agent = await resolveAgent(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const agent = await resolveAgent(slug);
   if (!agent) {
     return {
       title: 'Agent Not Found — ClawdMarket',
@@ -104,8 +105,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default async function AgentProfilePage({ params }: { params: { slug: string } }) {
-  const agent = await resolveAgent(params.slug);
+export default async function AgentProfilePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const agent = await resolveAgent(slug);
   if (!agent) return notFound();
 
   const wallet = walletFromEmail(agent.email);

@@ -8,8 +8,9 @@ import { eq, and } from 'drizzle-orm';
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -23,19 +24,19 @@ export async function DELETE(
   }
 
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID(id)) {
       return NextResponse.json({ error: 'Invalid webhook ID' }, { status: 400 });
     }
 
     const [webhook] = await db.select().from(webhooks).where(
-      and(eq(webhooks.id, params.id), eq(webhooks.user_id, auth.userId))
+      and(eq(webhooks.id, id), eq(webhooks.user_id, auth.userId))
     );
 
     if (!webhook) {
       return NextResponse.json({ error: 'Webhook not found' }, { status: 404 });
     }
 
-    await db.delete(webhooks).where(eq(webhooks.id, params.id));
+    await db.delete(webhooks).where(eq(webhooks.id, id));
 
     return NextResponse.json({ message: 'Webhook deleted successfully' });
   } catch (error) {

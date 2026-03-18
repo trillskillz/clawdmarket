@@ -9,7 +9,8 @@ import { nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 import { authorizeAdmin } from '@/lib/admin-auth';
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -20,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!authHeader && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
-  if (!isValidUUID(params.id)) return NextResponse.json({ error: 'Invalid dispute ID' }, { status: 400 });
+  if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid dispute ID' }, { status: 400 });
 
   await ensureContractsSchema();
 
@@ -31,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: 'Invalid ruling' }, { status: 400 });
     }
 
-    const [dispute] = await db.select().from(contract_disputes).where(eq(contract_disputes.id, params.id)).limit(1);
+    const [dispute] = await db.select().from(contract_disputes).where(eq(contract_disputes.id, id)).limit(1);
     if (!dispute) return NextResponse.json({ error: 'Dispute not found' }, { status: 404 });
     if (dispute.state !== 'open') return NextResponse.json({ error: 'Dispute already resolved' }, { status: 400 });
 
@@ -70,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         .where(and(eq(contracts.id, dispute.contract_id)));
     });
 
-    return NextResponse.json({ success: true, dispute_id: params.id, ruling });
+    return NextResponse.json({ success: true, dispute_id: id, ruling });
   } catch (error) {
     console.error('Resolve dispute error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

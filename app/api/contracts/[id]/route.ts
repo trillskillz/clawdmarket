@@ -10,7 +10,8 @@ import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -18,9 +19,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   await ensureContractsSchema();
-  if (!isValidUUID(params.id)) return NextResponse.json({ error: 'Invalid contract ID' }, { status: 400 });
+  if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid contract ID' }, { status: 400 });
 
-  const [contract] = await db.select().from(contracts).where(eq(contracts.id, params.id)).limit(1);
+  const [contract] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1);
   if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
   if (contract.buyer_id !== auth.userId && contract.seller_id !== auth.userId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -35,7 +36,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json({ contract, milestones });
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -46,13 +48,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!authHeader && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
-  if (!isValidUUID(params.id)) return NextResponse.json({ error: 'Invalid contract ID' }, { status: 400 });
+  if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid contract ID' }, { status: 400 });
 
   try {
     const body = await req.json();
     const validated = contractActionSchema.parse(body);
 
-    const [contract] = await db.select().from(contracts).where(eq(contracts.id, params.id)).limit(1);
+    const [contract] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1);
     if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
 
     if (contract.buyer_id !== auth.userId && contract.seller_id !== auth.userId) {

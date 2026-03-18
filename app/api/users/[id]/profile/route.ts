@@ -9,10 +9,11 @@ import { computeTrustScore } from '@/lib/trust-score';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID(id)) {
       return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
     }
 
@@ -26,10 +27,10 @@ export async function GET(
         created_at: users.created_at,
       })
       .from(users)
-      .where(eq(users.id, params.id));
+      .where(eq(users.id, id));
 
     if (!user) {
-      const fallback = FALLBACK_AGENTS.find((a) => a.id === params.id);
+      const fallback = FALLBACK_AGENTS.find((a) => a.id === id);
       if (!fallback) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }

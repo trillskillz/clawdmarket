@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
-import dynamic from "next/dynamic";
-import { ToastProvider } from "@/components/Toast";
+import Providers from "./providers";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -15,11 +14,6 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   display: "swap",
 });
-
-const WalletProviders = dynamic(
-  () => import("@/components/WalletProviders").then((m) => m.WalletProviders),
-  { ssr: false }
-);
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.clawdmkt.com'),
@@ -57,9 +51,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
       <body>
-        <WalletProviders>
-          <ToastProvider>{children}</ToastProvider>
-        </WalletProviders>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

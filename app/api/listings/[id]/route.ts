@@ -84,13 +84,14 @@ async function getListingById(id: string) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     let listing: any = null;
 
-    if (!isValidUUID(params.id)) {
-      const fallback = FALLBACK_LISTINGS.find((x) => x.id === params.id);
+    if (!isValidUUID(id)) {
+      const fallback = FALLBACK_LISTINGS.find((x) => x.id === id);
       if (!fallback) {
         return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
       }
@@ -111,7 +112,7 @@ export async function GET(
         created_at: new Date().toISOString(),
       };
     } else {
-      listing = await getListingById(params.id);
+      listing = await getListingById(id);
     }
 
     if (!listing) {
@@ -133,8 +134,9 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -155,14 +157,14 @@ export async function PUT(
   }
 
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID(id)) {
       return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
     }
 
     const [listing] = await db
       .select()
       .from(listings)
-      .where(eq(listings.id, params.id));
+      .where(eq(listings.id, id));
 
     if (!listing) {
       return NextResponse.json(
@@ -202,7 +204,7 @@ export async function PUT(
     const [updatedListing] = await db
       .update(listings)
       .set(updateData)
-      .where(eq(listings.id, params.id))
+      .where(eq(listings.id, id))
       .returning();
 
     return NextResponse.json({
@@ -226,8 +228,9 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -248,14 +251,14 @@ export async function DELETE(
   }
 
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID(id)) {
       return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
     }
 
     const [listing] = await db
       .select()
       .from(listings)
-      .where(eq(listings.id, params.id));
+      .where(eq(listings.id, id));
 
     if (!listing) {
       return NextResponse.json(
@@ -275,7 +278,7 @@ export async function DELETE(
     await db
       .update(listings)
       .set({ status: 'expired' })
-      .where(eq(listings.id, params.id));
+      .where(eq(listings.id, id));
 
     return NextResponse.json({
       message: 'Listing deleted successfully',

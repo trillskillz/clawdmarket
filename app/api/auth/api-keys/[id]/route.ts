@@ -8,8 +8,9 @@ import { and, eq } from 'drizzle-orm';
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -22,13 +23,13 @@ export async function DELETE(
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
 
-  if (!isValidUUID(params.id)) {
+  if (!isValidUUID(id)) {
     return NextResponse.json({ error: 'Invalid API key ID' }, { status: 400 });
   }
 
   const deleted = await db
     .delete(api_keys)
-    .where(and(eq(api_keys.id, params.id), eq(api_keys.user_id, auth.userId)))
+    .where(and(eq(api_keys.id, id), eq(api_keys.user_id, auth.userId)))
     .returning({ id: api_keys.id });
 
   if (deleted.length === 0) {

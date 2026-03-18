@@ -5,8 +5,9 @@ import { eq, desc } from 'drizzle-orm';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const userRatings = await db
       .select({
@@ -19,7 +20,7 @@ export async function GET(
       })
       .from(ratings)
       .leftJoin(users, eq(ratings.rater_id, users.id))
-      .where(eq(ratings.rated_id, params.id))
+      .where(eq(ratings.rated_id, id))
       .orderBy(desc(ratings.created_at));
 
     return NextResponse.json({ ratings: userRatings });
