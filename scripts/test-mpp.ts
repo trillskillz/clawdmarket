@@ -4,11 +4,13 @@ process.env.MPPX_NO_KEYSTORE = 'true';
 
 import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { Challenge, Receipt } from 'mppx';
 import { Mppx, tempo } from 'mppx/client';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
+const LOCAL_TEST_KEY_PATH = '.mppx-test.key';
 const AGENTS_URL = `${BASE_URL}/api/agents`;
 const SESSION_CREATE_URL = `${BASE_URL}/api/mpp/session/create`;
 const SESSION_CLOSE_URL = `${BASE_URL}/api/mpp/session/close`;
@@ -67,9 +69,15 @@ async function main() {
   }
 
   if (!privateKey) {
-    privateKey = generatePrivateKey();
-    console.warn('No private key available from CLI output/env. Generated ephemeral key.');
-    console.warn('If payment fails, set MPPX_TEST_PRIVATE_KEY or ensure `mppx account create` outputs privateKey.');
+    if (existsSync(LOCAL_TEST_KEY_PATH)) {
+      privateKey = readFileSync(LOCAL_TEST_KEY_PATH, 'utf8').trim();
+      console.warn(`No key from CLI/env. Reusing persisted test key from ${LOCAL_TEST_KEY_PATH}.`);
+    } else {
+      privateKey = generatePrivateKey();
+      writeFileSync(LOCAL_TEST_KEY_PATH, privateKey, 'utf8');
+      console.warn(`No key from CLI/env. Generated and persisted test key at ${LOCAL_TEST_KEY_PATH}.`);
+    }
+    console.warn('If payment fails, fund this payer address on Tempo testnet or set MPPX_TEST_PRIVATE_KEY.');
   }
 
   const account = privateKeyToAccount(privateKey as `0x${string}`);
@@ -97,6 +105,7 @@ async function main() {
       tempo({
         account,
         testnet: true,
+        maxDeposit: '100000',
       }),
     ],
   });

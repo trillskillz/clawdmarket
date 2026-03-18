@@ -12,6 +12,7 @@ export const mppx = Mppx.create({
     tempo({
       currency,
       recipient,
+      testnet: true,
     }),
   ],
 });
