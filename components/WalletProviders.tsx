@@ -2,7 +2,7 @@
 
 import { WagmiProvider, createConfig, http } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { injected, coinbaseWallet, walletConnect } from 'wagmi/connectors';
+import { injected } from 'wagmi/connectors';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { ReactNode, useMemo, useState } from 'react';
 
@@ -14,19 +14,8 @@ export function WalletProviders({ children }: { children: ReactNode }) {
       injected({ shimDisconnect: true }),
     ];
 
-    // Mobile reliability: enable Coinbase by default unless explicitly disabled.
-    if (process.env.NEXT_PUBLIC_ENABLE_COINBASE !== 'false') {
-      connectors.push(coinbaseWallet({ appName: 'ClawdMarket' }));
-    }
-
-    // Keep WalletConnect functional even if env is missing; prefer real project id when available.
-    const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo';
-    connectors.push(
-      walletConnect({
-        projectId: walletConnectProjectId,
-        showQrModal: true,
-      })
-    );
+    // Phase 2 migration baseline: keep injected wallets enabled first,
+    // then re-introduce coinbase/walletconnect once connector deps are aligned for wagmi v3.
 
     return createConfig({
       chains: [base],

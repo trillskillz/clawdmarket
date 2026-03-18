@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAccount, useBalance } from 'wagmi';
+import { useAccount } from 'wagmi';
 
 interface Transaction {
   id: string;
@@ -26,17 +26,10 @@ interface WalletTabProps {
 
 export default function WalletTab({ wallet, loading }: WalletTabProps) {
   const { address, isConnected } = useAccount();
-  const bankrToken = process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS as `0x${string}` | undefined;
-
-  const { data: tokenBalance } = useBalance({
-    address,
-    token: bankrToken,
-    chainId: 8453,
-    query: { enabled: Boolean(isConnected && address && bankrToken) },
-  });
-
-  const onchainBankr = tokenBalance ? Number(tokenBalance.formatted) : null;
-  const canUseOnchain = onchainBankr !== null;
+  // NOTE: wagmi v3 migration follow-up:
+  // replace this with ERC-20 BANKR reads via useReadContract.
+  const onchainBankr: number | null = null;
+  const canUseOnchain = false;
   const [source, setSource] = useState<'onchain' | 'ledger'>(canUseOnchain ? 'onchain' : 'ledger');
 
   useEffect(() => {
@@ -59,8 +52,8 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
   const ledgerTotal = wallet.available + wallet.escrow;
   const usingOnchain = source === 'onchain' && canUseOnchain;
 
-  const total = usingOnchain ? (onchainBankr as number) : ledgerTotal;
-  const available = usingOnchain ? (onchainBankr as number) : wallet.available;
+  const total = usingOnchain && onchainBankr !== null ? onchainBankr : ledgerTotal;
+  const available = usingOnchain && onchainBankr !== null ? onchainBankr : wallet.available;
 
   return (
     <div>
