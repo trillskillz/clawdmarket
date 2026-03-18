@@ -83,3 +83,36 @@ test('tools/call unknown tool returns MCP tool error envelope', async () => {
   assert.equal(body.result?.isError, true);
   assert.match(body.result?.content?.[0]?.text || '', /^Error:/);
 });
+
+test('tools/call list_services returns MCP success envelope', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = (async () =>
+    new Response(JSON.stringify({ listings: [{ id: 'svc_1', title: 'Test Service' }] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })) as typeof fetch;
+
+  try {
+    const req = new NextRequest('http://localhost/api/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'list_services', arguments: { limit: 1 } },
+      }),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 200);
+    const body = await asJson(res);
+
+    assert.equal(body.result?.isError, undefined);
+    const text = body.result?.content?.[0]?.text || '';
+    assert.ok(text.includes('svc_1'));
+    assert.ok(text.includes('Test Service'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
