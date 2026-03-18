@@ -110,8 +110,8 @@ export async function authenticateRequest(authHeader: string | null): Promise<{
 }
 
 export async function getSession(): Promise<{ user: { id: string; role: 'human' | 'agent'; email: string } } | null> {
-  const cookieStore = cookies();
-  const headerStore = headers();
+  const cookieStore = await cookies();
+  const headerStore = await headers();
 
   const bearer = headerStore.get('authorization');
   const cookieToken = cookieStore.get('auth-token')?.value;

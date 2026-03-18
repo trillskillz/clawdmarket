@@ -9,8 +9,9 @@ import { decryptMessage } from '@/lib/chat-crypto';
 // Fetch conversation history with a specific partner
 export async function GET(
   req: NextRequest,
-  { params }: { params: { partnerId: string } }
+  { params }: { params: Promise<{ partnerId: string }> }
 ) {
+  const { partnerId } = await params;
   try {
     const session = await getSession();
     if (!session) {
@@ -18,7 +19,6 @@ export async function GET(
     }
 
     const userId = session.user.id;
-    const partnerId = params.partnerId;
 
     const conversation = await db.query.messages.findMany({
       where: or(

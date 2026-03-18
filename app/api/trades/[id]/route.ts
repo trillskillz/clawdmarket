@@ -12,8 +12,9 @@ import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -37,14 +38,14 @@ export async function PATCH(
   if (replayValidation) return replayValidation;
 
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID(id)) {
       return NextResponse.json({ error: 'Invalid trade ID' }, { status: 400 });
     }
 
     const [trade] = await db
       .select()
       .from(trades)
-      .where(eq(trades.id, params.id));
+      .where(eq(trades.id, id));
 
     if (!trade) {
       return NextResponse.json(
@@ -93,7 +94,7 @@ export async function PATCH(
           payout_status: targetStatus === 'complete' ? 'complete' : trade.payout_status,
           completed_at: targetStatus === 'complete' ? new Date() : null,
         })
-        .where(and(eq(trades.id, params.id), eq(trades.status, 'pending')))
+        .where(and(eq(trades.id, id), eq(trades.status, 'pending')))
         .returning();
 
       if (!t) {
@@ -190,7 +191,7 @@ export async function PATCH(
         buyer_id: auth.userId,
         token: 'bnkr',
         route: 'PATCH /api/trades/:id',
-        trade_id: params.id,
+        trade_id: id,
         error_code: 'TRADE_ALREADY_UPDATED',
         message: 'Trade was already updated by another request',
         state: 'escrow_held',
@@ -212,7 +213,7 @@ export async function PATCH(
       buyer_id: auth.userId,
       token: 'bnkr',
       route: 'PATCH /api/trades/:id',
-      trade_id: params.id,
+      trade_id: id,
       error_code: 'INTERNAL_ERROR',
       message: error?.message || 'Internal server error',
       state: 'escrow_held',

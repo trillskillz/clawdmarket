@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+export const dynamic = 'force-dynamic';
+
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import PageShell from '@/components/PageShell';
@@ -26,7 +28,7 @@ interface Partner {
   role: string;
 }
 
-export default function MessagesPage() {
+function MessagesPageContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const partnerIdParam = searchParams.get('partner');
@@ -228,5 +230,13 @@ export default function MessagesPage() {
         </div>
       </div>
     </PageShell>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense fallback={<PageShell><div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">Loading messages…</div></PageShell>}>
+      <MessagesPageContent />
+    </Suspense>
   );
 }

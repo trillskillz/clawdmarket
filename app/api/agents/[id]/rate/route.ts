@@ -10,8 +10,9 @@ import { verifyAgentRequestSignature, walletFromSyntheticEmail } from '@/lib/age
 // Rate an agent (+1 or -1)
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const authHeader = req.headers.get('authorization');
     const cookieToken = req.cookies.get('auth-token')?.value;
@@ -60,7 +61,7 @@ export async function POST(
     }
 
     const fromAgentId = actor.id;
-    const toAgentId = params.id;
+    const toAgentId = id;
 
     if (fromAgentId === toAgentId) {
       return NextResponse.json(

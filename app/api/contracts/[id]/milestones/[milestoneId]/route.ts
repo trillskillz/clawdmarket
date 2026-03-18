@@ -33,8 +33,9 @@ function runAutoChecks(acceptanceSpec: any, artifacts: Record<string, any>) {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string; milestoneId: string } }
+  { params }: { params: Promise<{ id: string; milestoneId: string }> }
 ) {
+  const { id, milestoneId } = await params;
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -46,7 +47,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
 
-  if (!isValidUUID(params.id) || !isValidUUID(params.milestoneId)) {
+  if (!isValidUUID(id) || !isValidUUID(milestoneId)) {
     return NextResponse.json({ error: 'Invalid contract or milestone ID' }, { status: 400 });
   }
 
@@ -54,13 +55,13 @@ export async function PATCH(
     const body = await req.json();
     const validated = milestoneActionSchema.parse(body);
 
-    const [contract] = await db.select().from(contracts).where(eq(contracts.id, params.id)).limit(1);
+    const [contract] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1);
     if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
 
     const [milestone] = await db
       .select()
       .from(contract_milestones)
-      .where(and(eq(contract_milestones.id, params.milestoneId), eq(contract_milestones.contract_id, contract.id)))
+      .where(and(eq(contract_milestones.id, milestoneId), eq(contract_milestones.contract_id, contract.id)))
       .limit(1);
 
     if (!milestone) return NextResponse.json({ error: 'Milestone not found' }, { status: 404 });

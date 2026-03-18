@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kasPaymentHandler } from '@/lib/kas-payment-instance';
 
-export async function GET(_req: NextRequest, { params }: { params: { payment_id: string } }) {
-  const payment = kasPaymentHandler.getPayment(params.payment_id);
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ payment_id: string }> }) {
+  const { payment_id } = await params;
+  const payment = kasPaymentHandler.getPayment(payment_id);
   if (!payment) {
     return NextResponse.json({ success: false, error_code: 'NOT_FOUND', message: 'Payment not found' }, { status: 404 });
   }
