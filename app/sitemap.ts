@@ -64,8 +64,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
 
     return [...staticRoutes, ...agentRoutes];
-  } catch (error) {
-    console.warn('[sitemap] Falling back to static routes only:', error);
+  } catch (error: any) {
+    const message = error?.message || String(error);
+    console.warn(`[sitemap] Falling back to static routes only (${message}).`);
     return staticRoutes;
   }
 }
