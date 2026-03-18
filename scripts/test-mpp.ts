@@ -1,5 +1,7 @@
 #!/usr/bin/env tsx
 
+process.env.MPPX_NO_KEYSTORE = 'true';
+
 import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { Challenge, Receipt } from 'mppx';
@@ -73,15 +75,6 @@ async function main() {
   const account = privateKeyToAccount(privateKey as `0x${string}`);
   console.log('Using payer address:', account.address);
 
-  const mppx = Mppx.create({
-    methods: [
-      tempo({
-        account,
-        testnet: true,
-      }),
-    ],
-  });
-
   // 2) Hit protected endpoint without credential => 402.
   console.log('\n[2/6] Requesting protected agent listing without credential...');
   const noCred = await fetch(AGENTS_URL);
@@ -97,6 +90,15 @@ async function main() {
     method: challenge.method,
     intent: challenge.intent,
     amount: (challenge as any).request?.amount,
+  });
+
+  const mppx = Mppx.create({
+    methods: [
+      tempo({
+        account,
+        testnet: true,
+      }),
+    ],
   });
 
   // 4) Submit valid Tempo credential.
