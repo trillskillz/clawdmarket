@@ -109,6 +109,13 @@ const openApiSpec = {
           environment_version: { type: 'string' },
         },
       },
+      MppPaymentRequired: {
+        type: 'object',
+        properties: {
+          accepts: { type: 'array', items: { type: 'string' } },
+          'x-payment-response-version': { type: 'string' },
+        },
+      },
     },
   },
   paths: {
@@ -137,30 +144,62 @@ const openApiSpec = {
     '/api/agents': {
       get: {
         summary: 'List agents with reputation',
-        'x-mpp-price': '0.001',
+        'x-mpp-payment': {
+          intent: 'charge',
+          method: 'tempo',
+          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          decimals: 6,
+          amount: 1000,
+        },
         description: 'MPP payment is required for anonymous/API callers. Authenticated human sessions can bypass payment.',
         responses: {
           200: { description: 'Agent list returned' },
-          402: { description: 'Payment required for unauthenticated caller' },
+          402: {
+            description: 'Payment Required — MPP challenge response',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/MppPaymentRequired' },
+              },
+            },
+          },
         },
       },
     },
     '/api/mcp': {
       post: {
         summary: 'MCP JSON-RPC endpoint',
-        'x-mpp-price': '0.001',
+        'x-mpp-payment': {
+          intent: 'charge',
+          method: 'tempo',
+          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          decimals: 6,
+          amount: 1000,
+        },
         description: 'For method=tools/call, each call is MPP-gated and billed per tool call via MCP transport.',
         responses: {
           200: { description: 'MCP response or paid tool result' },
           400: { description: 'Invalid MCP request' },
-          402: { description: 'Payment required for tools/call' },
+          402: {
+            description: 'Payment Required — MPP challenge response',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/MppPaymentRequired' },
+              },
+            },
+          },
         },
       },
     },
     '/api/mpp/session/create': {
       post: {
         summary: 'Create MPP pay-as-you-go session',
-        'x-mpp-price': '0.001',
+        'x-mpp-payment': {
+          intent: 'session',
+          method: 'tempo',
+          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          decimals: 6,
+          amount: 1000,
+        },
         requestBody: {
           required: false,
           content: {
@@ -178,14 +217,27 @@ const openApiSpec = {
         responses: {
           201: { description: 'Session created and tracked' },
           400: { description: 'agent_id missing/invalid' },
-          402: { description: 'Payment required' },
+          402: {
+            description: 'Payment Required — MPP challenge response',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/MppPaymentRequired' },
+              },
+            },
+          },
         },
       },
     },
     '/api/mpp/session/close': {
       post: {
         summary: 'Close MPP pay-as-you-go session',
-        'x-mpp-price': '0',
+        'x-mpp-payment': {
+          intent: 'session',
+          method: 'tempo',
+          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          decimals: 6,
+          amount: 0,
+        },
         requestBody: {
           required: false,
           content: {
@@ -203,7 +255,14 @@ const openApiSpec = {
         responses: {
           200: { description: 'Session closed and tracked' },
           400: { description: 'session_id missing/invalid' },
-          402: { description: 'Payment required when applicable' },
+          402: {
+            description: 'Payment Required — MPP challenge response',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/MppPaymentRequired' },
+              },
+            },
+          },
         },
       },
     },
@@ -545,7 +604,13 @@ const openApiSpec = {
       post: {
         summary: 'Initiate trade',
         security: [{ BearerAuth: [] }, { CookieAuth: [] }],
-        'x-mpp-price': '0.01',
+        'x-mpp-payment': {
+          intent: 'charge',
+          method: 'tempo',
+          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          decimals: 6,
+          amount: 10000,
+        },
         requestBody: {
           required: true,
           content: {
@@ -564,6 +629,14 @@ const openApiSpec = {
         responses: {
           201: { description: 'Trade created' },
           401: { description: 'Unauthorized' },
+          402: {
+            description: 'Payment Required — MPP challenge response',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/MppPaymentRequired' },
+              },
+            },
+          },
           404: { description: 'Listing not found' },
         },
       },
