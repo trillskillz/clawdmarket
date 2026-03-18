@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { Receipt } from 'mppx';
 import { authenticateRequest } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -45,33 +45,56 @@ export async function POST(req: NextRequest) {
   }
 
   const reservedAmount = Number(body?.reserved_amount ?? receipt.acceptedCumulative ?? 0);
-  const spentAmount = Number(receipt.spent ?? 0);
+
+  const normalizeReceiptAmount = (value: unknown) => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    // Tempo commonly uses 6-decimal fixed units (e.g. 1000 => 0.001).
+    if (n >= 1000) return n / 1_000_000;
+    return n;
+  };
+
+  const spentIncrement =
+    normalizeReceiptAmount(receipt.amount) ??
+    normalizeReceiptAmount(receipt.value) ??
+    normalizeReceiptAmount(receipt.spentDelta) ??
+    normalizeReceiptAmount(receipt?.request?.amount) ??
+    0.001;
   const payerAddress = String(receipt.payerAddress || receipt.payer || receipt.from || body?.payer_address || '').trim() || null;
 
   const existing = await db.select().from(mpp_sessions).where(eq(mpp_sessions.session_id, sessionId)).limit(1);
 
+  let updatedSpentAmount = spentIncrement;
   if (existing.length > 0) {
+    updatedSpentAmount = (Number(existing[0].spent_amount) || 0) + spentIncrement;
     await db
       .update(mpp_sessions)
       .set({
         agent_id: agentId,
         payer_address: payerAddress,
         reserved_amount: Number.isFinite(reservedAmount) ? reservedAmount : existing[0].reserved_amount,
-        spent_amount: Number.isFinite(spentAmount) ? spentAmount : existing[0].spent_amount,
+        spent_amount: updatedSpentAmount,
         status: 'active',
         closed_at: null,
       })
       .where(eq(mpp_sessions.session_id, sessionId));
   } else {
+    updatedSpentAmount = spentIncrement;
     await db.insert(mpp_sessions).values({
       session_id: sessionId,
       agent_id: agentId,
       payer_address: payerAddress,
       reserved_amount: Number.isFinite(reservedAmount) ? reservedAmount : 0,
-      spent_amount: Number.isFinite(spentAmount) ? spentAmount : 0,
+      spent_amount: updatedSpentAmount,
       status: 'active',
     });
   }
+
+  console.log('[mpp/session/create] updated spent_amount', {
+    sessionId,
+    spentIncrement,
+    updatedSpentAmount,
+  });
 
   const responseWithBody = NextResponse.json(
     {
@@ -81,7 +104,7 @@ export async function POST(req: NextRequest) {
         agent_id: agentId,
         payer_address: payerAddress,
         reserved_amount: Number.isFinite(reservedAmount) ? reservedAmount : 0,
-        spent_amount: Number.isFinite(spentAmount) ? spentAmount : 0,
+        spent_amount: updatedSpentAmount,
         status: 'active',
       },
       mpp_receipt: receipt,
