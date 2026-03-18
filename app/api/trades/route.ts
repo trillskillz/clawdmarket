@@ -17,13 +17,14 @@ import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 import { mppx } from '@/lib/mpp';
 import { Receipt } from 'mppx';
+import { PATHUSD_ADDRESS } from '@/lib/constants';
 
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
 const DEV_FEE_PERCENT = 0.05; // 5% fee
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 const MPP_TRADE_EXECUTION_PRICE_USD = 0.01;
-const MPP_CURRENCY_PATH_USD = '0x20c0000000000000000000000000000000000000';
+const MPP_CURRENCY_PATH_USD = PATHUSD_ADDRESS;
 
 async function tryCreateContractForTrade(params: {
   listingId: string;

@@ -1,6 +1,6 @@
 import { Mppx, tempo } from 'mppx/nextjs';
+import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants';
 
-const currency = '0x20c0000000000000000000000000000000000000' as const; // pathUSD on Tempo
 const recipient = process.env.MPP_RECIPIENT_ADDRESS as `0x${string}` | undefined;
 
 if (!recipient) {
@@ -10,9 +10,9 @@ if (!recipient) {
 export const mppx = Mppx.create({
   methods: [
     tempo({
-      currency,
+      currency: PATHUSD_ADDRESS,
+      chainId: TEMPO_CHAIN_ID,
       recipient,
-      testnet: true,
     }),
   ],
 });

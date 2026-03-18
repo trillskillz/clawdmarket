@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import packageJson from '../../../package.json';
+import { PATHUSD_ADDRESS } from '@/lib/constants';
 
 const openApiSpec = {
   openapi: '3.0.0',
@@ -147,7 +148,7 @@ const openApiSpec = {
         'x-mpp-payment': {
           intent: 'charge',
           method: 'tempo',
-          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          currency: PATHUSD_ADDRESS,
           decimals: 6,
           amount: 1000,
         },
@@ -171,7 +172,7 @@ const openApiSpec = {
         'x-mpp-payment': {
           intent: 'charge',
           method: 'tempo',
-          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          currency: PATHUSD_ADDRESS,
           decimals: 6,
           amount: 1000,
         },
@@ -196,7 +197,7 @@ const openApiSpec = {
         'x-mpp-payment': {
           intent: 'session',
           method: 'tempo',
-          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          currency: PATHUSD_ADDRESS,
           decimals: 6,
           amount: 1000,
         },
@@ -234,7 +235,7 @@ const openApiSpec = {
         'x-mpp-payment': {
           intent: 'session',
           method: 'tempo',
-          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          currency: PATHUSD_ADDRESS,
           decimals: 6,
           amount: 0,
         },
@@ -607,7 +608,7 @@ const openApiSpec = {
         'x-mpp-payment': {
           intent: 'charge',
           method: 'tempo',
-          currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          currency: PATHUSD_ADDRESS,
           decimals: 6,
           amount: 10000,
         },
