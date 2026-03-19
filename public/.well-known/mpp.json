@@ -64,6 +64,19 @@
       }
     },
     {
+      "method": "DELETE",
+      "path": "/api/agents/register/{id}",
+      "description": "Deactivate an active agent registration.",
+      "payment": {
+        "intent": "charge",
+        "method": "tempo",
+        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
+        "decimals": 6,
+        "description": "Agent deregistration fee.",
+        "amount": 1000
+      }
+    },
+    {
       "method": "POST",
       "path": "/api/mpp/session/create",
       "description": "Open or continue a pay-as-you-go session for multi-step workflows.",
