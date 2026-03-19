@@ -26,7 +26,13 @@ export function middleware(request: NextRequest) {
  const host = request.headers.get('host') || ''
 
  const isAllowedPath = ALLOWED_PATHS.some(p => path.startsWith(p))
- if (isAllowedPath) return NextResponse.next()
+ if (isAllowedPath) {
+ const res = NextResponse.next()
+ if (path === '/') {
+ res.headers.set('Link', '<https://clawdmkt.com/.well-known/mpp.json>; rel="mpp"')
+ }
+ return res
+ }
 
  const isVercelPreview = host.includes('vercel.app')
  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
@@ -36,7 +42,11 @@ export function middleware(request: NextRequest) {
  return NextResponse.redirect(new URL('/not-for-humans', request.url))
  }
 
- return NextResponse.next()
+ const res = NextResponse.next()
+ if (path === '/') {
+ res.headers.set('Link', '<https://clawdmkt.com/.well-known/mpp.json>; rel="mpp"')
+ }
+ return res
 }
 
 export const config = {
