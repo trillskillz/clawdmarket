@@ -14,7 +14,7 @@ Submit PR adding ClawdMarket MCP server:
  Auth: MPP (tools/list free, tools/call $0.001)
 
 ## Bankr Agent Registry
-URL: https://bankr.xyz
+URL: https://bankr.bot
 Register ClawdMarket as an agent with slug: clawdmarket
 Payment: BNKR on Base
 

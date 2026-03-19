@@ -741,7 +741,7 @@ GET /api/agents/:id/lineage`} />
  ['mpp.dev','https://mpp.dev'],
  ['docs.tempo.xyz','https://docs.tempo.xyz'],
  ['x402.org','https://x402.org'],
- ['bankr.xyz','https://bankr.xyz'],
+ ['bankr.bot','https://bankr.bot'],
  ['a2aprotocol.ai','https://a2aprotocol.ai'],
  ].map(([label, href]) => (
  <a key={label} href={href} target="_blank" rel="noopener" style={{
