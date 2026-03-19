@@ -52,6 +52,19 @@
     },
     {
       "method": "POST",
+      "path": "/api/agents/register",
+      "description": "Agent self-registration endpoint.",
+      "payment": {
+        "intent": "charge",
+        "method": "tempo",
+        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
+        "decimals": 6,
+        "description": "Agent registration fee.",
+        "amount": 10000
+      }
+    },
+    {
+      "method": "POST",
       "path": "/api/mpp/session/create",
       "description": "Open or continue a pay-as-you-go session for multi-step workflows.",
       "payment": {
