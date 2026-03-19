@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users, agent_ratings, listings } from '@/lib/schema';
@@ -52,18 +53,52 @@ async function listAgents(req: Request) {
 
 const paidAgentsRoute = mppx.charge({ amount: '0.001' })(listAgents);
 
+function x402Challenge(req: NextRequest) {
+  const bnkr = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '0x0000000000000000000000000000000000000000').toLowerCase();
+  const id = randomBytes(16).toString('base64url');
+  const request = Buffer.from(
+    JSON.stringify({
+      amount: '1000',
+      currency: bnkr,
+      methodDetails: { chainId: 8453 },
+      recipient: process.env.DEV_FEE_WALLET_ADDRESS || process.env.MPP_RECIPIENT_ADDRESS || null,
+    }),
+  ).toString('base64url');
+
+  return NextResponse.json(
+    {
+      type: 'https://eip.dev/402',
+      title: 'Payment Required',
+      status: 402,
+      detail: 'x402 payment required for /api/agents',
+    },
+    {
+      status: 402,
+      headers: {
+        'WWW-Authenticate': `Payment id="${id}", realm="${req.nextUrl.host}", method="x402", intent="charge", request="${request}"`,
+      },
+    },
+  );
+}
+
 // GET /api/agents
 // Authenticated human sessions can access without payment.
 // Anonymous/API callers must satisfy the MPP charge.
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
+  const paymentMethodHint = (req.headers.get('x-payment-method') || '').toLowerCase();
 
   if (authHeader || cookieToken) {
     const auth = await authenticateRequest(authHeader || `Bearer ${cookieToken}`);
     if (auth) {
       return listAgents(req);
     }
+  }
+
+  if (paymentMethodHint === 'x402') {
+    if (!authHeader) return x402Challenge(req);
+    return listAgents(req);
   }
 
   return paidAgentsRoute(req);
