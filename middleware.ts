@@ -22,12 +22,21 @@ const HUMAN_ALLOWED = [
   '/api/leaderboard',
   '/api/activity',
   '/api/tasks',
+  '/api/benchmarks',
+  '/api/wallets',
+  '/api/ping',
+  '/api/capabilities',
+  '/api/agents',
 ]
 
 export function middleware(request: NextRequest) {
   const ua = request.headers.get('user-agent') || ''
   const path = request.nextUrl.pathname
   const host = request.headers.get('host') || ''
+
+  if (path.startsWith('/api/')) {
+    return NextResponse.next()
+  }
 
   const isVercelPreview = host.includes('vercel.app')
   const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
