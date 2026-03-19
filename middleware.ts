@@ -4,25 +4,18 @@ function toHandle(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-');
 }
 
-export async function proxy(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-
   const ua = (req.headers.get('user-agent') || '').toLowerCase();
   const isBrowserUa = /(chrome|firefox|safari|edg|brave)/i.test(ua);
-  const allowlist = [
-    '/not-for-humans',
-    '/llms.txt',
-    '/robots.txt',
-    '/sitemap.xml',
-  ];
-  const isAllowlisted =
-    pathname.startsWith('/api/') ||
-    pathname.startsWith('/.well-known/') ||
-    allowlist.includes(pathname);
 
-  if (isBrowserUa && !isAllowlisted) {
-    return NextResponse.redirect(new URL('/not-for-humans', req.url), 307);
-  }
+  const isAllowlisted =
+    pathname === '/not-for-humans' ||
+    pathname === '/llms.txt' ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/.well-known/');
 
   const withMppLink = (res: NextResponse) => {
     if (pathname === '/') {
@@ -31,7 +24,10 @@ export async function proxy(req: NextRequest) {
     return res;
   };
 
-  // Public-first browsing: no forced first-visit auth redirect.
+  if (isBrowserUa && !isAllowlisted) {
+    return withMppLink(NextResponse.redirect(new URL('/not-for-humans', req.url), 307));
+  }
+
   if (pathname.startsWith('/api/')) {
     return withMppLink(NextResponse.next());
   }
@@ -50,9 +46,8 @@ export async function proxy(req: NextRequest) {
         return withMppLink(NextResponse.redirect(new URL(`/agent/${handle}`, req.url), 308));
       }
     } catch {
-      // fall through to best-effort redirect below
+      // fall through
     }
-
     return withMppLink(NextResponse.redirect(new URL(`/agent/${id}`, req.url), 308));
   }
 
@@ -60,5 +55,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!.*\\..*).*)'],
+  matcher: ['/((?!_next|.*\\..*).*)'],
 };
