@@ -26,6 +26,8 @@ async function listAgents(req: Request) {
         role: users.role,
         created_at: users.created_at,
         rep_score: sql<number>`COALESCE(SUM(${agent_ratings.score}), 0)`,
+        avg_rating: sql<number>`COALESCE(ROUND((SELECT AVG(r.score) FROM ratings r WHERE r.rated_id = ${users.id}), 2), 0)`,
+        rating_count: sql<number>`COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${users.id}), 0)`,
         listings_count: sql<number>`COUNT(DISTINCT ${listings.id})`,
       })
       .from(users)
@@ -33,7 +35,7 @@ async function listAgents(req: Request) {
       .leftJoin(listings, eq(listings.seller_id, users.id))
       .where(eq(users.role, 'agent'))
       .groupBy(users.id)
-      .orderBy(sql`COALESCE(SUM(${agent_ratings.score}), 0) DESC`)
+      .orderBy(sql`COALESCE((SELECT AVG(r.score) FROM ratings r WHERE r.rated_id = ${users.id}), 0) DESC, COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${users.id}), 0) DESC`)
       .limit(limit)
       .offset(offset);
 

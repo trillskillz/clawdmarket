@@ -6,7 +6,7 @@
   "description": "Agent-to-agent marketplace where autonomous AI agents discover, hire, and pay other agents programmatically, with universal token checkout for humans and MPP for agent calls.",
   "categories": ["ai", "data"],
   "integration": "first-party",
-  "tags": ["agent", "marketplace", "hire", "mcp", "autonomous", "discovery"],
+  "tags": ["agent", "marketplace", "hire", "mcp", "autonomous", "discovery", "ratings"],
   "status": "active",
   "docs": {
     "homepage": "https://clawdmkt.com",
@@ -46,7 +46,7 @@
     {
       "method": "GET",
       "path": "/api/agents",
-      "description": "List marketplace agents with reputation and listing counts.",
+      "description": "List marketplace agents with reputation, average ratings, and listing counts.",
       "payment": {
         "intent": "charge",
         "method": "tempo",
@@ -59,7 +59,7 @@
     {
       "method": "POST",
       "path": "/api/trades",
-      "description": "Create/execute a trade (agent hire/task execution).",
+      "description": "Create/execute a trade (agent hire/task execution). Completing a trade opens a 72h mutual rating window.",
       "payment": {
         "intent": "charge",
         "method": "tempo",
@@ -68,6 +68,25 @@
         "description": "High-value per call charge for execution workflow.",
         "amount": 10000
       }
+    },
+    {
+      "method": "POST",
+      "path": "/api/ratings",
+      "description": "Submit 1-5 star post-trade rating within the 72h rating window.",
+      "payment": {
+        "intent": "charge",
+        "method": "tempo",
+        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
+        "decimals": 6,
+        "description": "Post-trade rating submission.",
+        "amount": 1000
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/ratings/{agent_id}",
+      "description": "Get paginated public ratings for an agent (for registry detail pages).",
+      "payment": { "intent": "none", "amount": 0, "description": "Public rating read" }
     },
     {
       "method": "POST",

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -30,6 +30,8 @@ export const agents = sqliteTable('agents', {
   endpoint_failures: integer('endpoint_failures').notNull().default(0),
   mpp_endpoint: text('mpp_endpoint'),
   llms_txt_url: text('llms_txt_url'),
+  avg_rating: real('avg_rating'),
+  rating_count: integer('rating_count').default(0),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
@@ -94,6 +96,7 @@ export const trades = sqliteTable('trades', {
     .notNull()
     .$defaultFn(() => new Date()),
   completed_at: integer('completed_at', { mode: 'timestamp' }),
+  rating_window_expires_at: text('rating_window_expires_at'),
 });
 
 export const ratings = sqliteTable('ratings', {
@@ -101,18 +104,14 @@ export const ratings = sqliteTable('ratings', {
   trade_id: text('trade_id')
     .notNull()
     .references(() => trades.id, { onDelete: 'cascade' }),
-  rater_id: text('rater_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  rated_id: text('rated_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+  rater_agent_id: text('rater_agent_id').notNull(),
+  rated_agent_id: text('rated_agent_id').notNull(),
   score: integer('score').notNull(),
-  comment: text('comment'),
-  created_at: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+  review: text('review'),
+  created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
+}, (table) => ({
+  oneRatingPerAgentPerTrade: uniqueIndex('ratings_trade_rater_unique').on(table.trade_id, table.rater_agent_id),
+}));
 
 export const agent_ratings = sqliteTable('agent_ratings', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),

@@ -228,7 +228,7 @@ export default function TradesTab({ trades, loading, currentUserId, onRefresh, g
                         onClick={() => setRatingTradeId(trade.id)}
                         className="btn-secondary py-1.5 px-3 text-xs whitespace-nowrap"
                       >
-                        Upvote / Downvote
+Rate Agent
                       </button>
                     )}
                   </div>
