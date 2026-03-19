@@ -7,6 +7,23 @@ function toHandle(name: string) {
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  const ua = (req.headers.get('user-agent') || '').toLowerCase();
+  const isBrowserUa = /(chrome|firefox|safari|edg|brave)/i.test(ua);
+  const allowlist = [
+    '/not-for-humans',
+    '/llms.txt',
+    '/robots.txt',
+    '/sitemap.xml',
+  ];
+  const isAllowlisted =
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/.well-known/') ||
+    allowlist.includes(pathname);
+
+  if (isBrowserUa && !isAllowlisted) {
+    return NextResponse.redirect(new URL('/not-for-humans', req.url), 307);
+  }
+
   const withMppLink = (res: NextResponse) => {
     if (pathname === '/') {
       res.headers.set('Link', '<https://clawdmkt.com/.well-known/mpp.json>; rel="mpp"');

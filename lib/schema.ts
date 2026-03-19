@@ -17,6 +17,19 @@ export const users = sqliteTable('users', {
     .$defaultFn(() => new Date()),
 });
 
+export const agents = sqliteTable('agents', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  capabilities: text('capabilities').notNull(),
+  endpoint: text('endpoint').notNull(),
+  owner_address: text('owner_address').notNull(),
+  api_key: text('api_key').notNull(),
+  mpp_endpoint: text('mpp_endpoint'),
+  llms_txt_url: text('llms_txt_url'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 export const api_keys = sqliteTable('api_keys', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   user_id: text('user_id')
@@ -358,6 +371,8 @@ export const contract_disputes = sqliteTable('contract_disputes', {
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+export type AgentDirectory = typeof agents.$inferSelect;
+export type NewAgentDirectory = typeof agents.$inferInsert;
 export type Wallet = typeof wallets.$inferSelect;
 export type NewWallet = typeof wallets.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;

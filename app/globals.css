@@ -24,6 +24,12 @@ body {
   font-size: 16px;
   line-height: 1.6;
   overflow-x: hidden;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(255, 77, 77, 0.08), transparent 35%),
+    radial-gradient(circle at 80% 10%, rgba(255, 255, 255, 0.06), transparent 30%),
+    radial-gradient(circle at 10% 80%, rgba(255, 77, 77, 0.06), transparent 30%),
+    radial-gradient(#ffffff20 1px, transparent 1px);
+  background-size: auto, auto, auto, 32px 32px;
 }
 
 main p {
@@ -35,13 +41,22 @@ main p:last-child {
 }
 
 :root {
-  --bg: #0a0a0f;
-  --bg2: #16161e;
-  --text: #e0e0e8;
-  --text-dim: #94a3b8;
-  --accent: #7c3aed;
-  --accent2: #fbbf24;
-  --border: #1e293b;
+  --bg-primary: #0a0b0f;
+  --bg-card: #111318;
+  --bg-card-hover: #161b22;
+  --accent: #ff4d4d;
+  --accent-dim: rgba(255, 77, 77, 0.15);
+  --text-primary: #ffffff;
+  --text-secondary: #8b949e;
+  --text-muted: #484f58;
+  --border: #21262d;
+  --border-accent: #ff4d4d;
+
+  --bg: var(--bg-primary);
+  --bg2: var(--bg-card);
+  --text: var(--text-primary);
+  --text-dim: var(--text-secondary);
+  --accent2: #ff7a7a;
 }
 
 @layer components {
