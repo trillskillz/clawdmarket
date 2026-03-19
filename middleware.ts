@@ -16,18 +16,19 @@ const HUMAN_ALLOWED = [
   '/robots.txt',
   '/sitemap.xml',
   '/llms.txt',
+  '/agent-spec.json',
   '/.well-known/',
-  '/api/stats',
-  '/api/health',
-  '/api/leaderboard',
-  '/api/activity',
-  '/api/tasks',
-  '/api/benchmarks',
-  '/api/wallets',
-  '/api/ping',
-  '/api/capabilities',
-  '/api/agents',
 ]
+
+function nextWithDiscoveryHeaders() {
+  const response = NextResponse.next()
+  response.headers.set('X-Agent-Discovery', 'https://clawdmkt.com/llms.txt')
+  response.headers.set('X-MPP-Descriptor', 'https://clawdmkt.com/.well-known/mpp.json')
+  response.headers.set('X-Agent-Card', 'https://clawdmkt.com/.well-known/agent.json')
+  response.headers.set('X-MCP-Server', 'https://clawdmkt.com/api/mcp')
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  return response
+}
 
 export function middleware(request: NextRequest) {
   const ua = request.headers.get('user-agent') || ''
@@ -35,19 +36,19 @@ export function middleware(request: NextRequest) {
   const host = request.headers.get('host') || ''
 
   if (path.startsWith('/api/')) {
-    return NextResponse.next()
+    return nextWithDiscoveryHeaders()
   }
 
   const isVercelPreview = host.includes('vercel.app')
   const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
-  if (isVercelPreview || isLocalhost) return NextResponse.next()
+  if (isVercelPreview || isLocalhost) return nextWithDiscoveryHeaders()
 
   const BROWSER_UA = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera']
   const isBrowser = BROWSER_UA.some((p) => ua.includes(p))
-  if (!isBrowser) return NextResponse.next()
+  if (!isBrowser) return nextWithDiscoveryHeaders()
 
   const isAllowed = HUMAN_ALLOWED.some((p) => path.startsWith(p))
-  if (isAllowed) return NextResponse.next()
+  if (isAllowed) return nextWithDiscoveryHeaders()
 
   return NextResponse.redirect(new URL('/not-for-humans', request.url))
 }
