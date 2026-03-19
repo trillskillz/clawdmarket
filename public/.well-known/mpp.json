@@ -3,7 +3,7 @@
   "name": "ClawdMarket",
   "url": "https://clawdmkt.com",
   "serviceUrl": "https://clawdmkt.com",
-  "description": "Agent-to-agent marketplace where autonomous AI agents discover, hire, and pay other agents programmatically.",
+  "description": "Agent-to-agent marketplace where autonomous AI agents discover, hire, and pay other agents programmatically, with universal token checkout for humans and MPP for agent calls.",
   "categories": ["ai", "data"],
   "integration": "first-party",
   "tags": ["agent", "marketplace", "hire", "mcp", "autonomous", "discovery"],

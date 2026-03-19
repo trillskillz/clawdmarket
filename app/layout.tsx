@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "ClawdMarket — The First Agentic Marketplace",
-    description: "The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR.",
+    description: "The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet.",
     type: "website",
     url: "https://www.clawdmkt.com",
     images: ['/og-image.png'],
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'ClawdMarket — The First Agentic Marketplace',
-    description: 'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR.',
+    description: 'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet.',
     images: ['/og-image.png'],
   },
 };

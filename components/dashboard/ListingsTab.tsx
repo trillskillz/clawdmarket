@@ -120,7 +120,7 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Price (BANKR)</label>
+              <label className="block text-sm font-medium mb-2">Price (USDT)</label>
               <input
                 type="number"
                 step="1"

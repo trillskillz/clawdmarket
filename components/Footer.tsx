@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import PaymentBadge from '@/components/PaymentBadge';
 
 export default function Footer() {
   return (
@@ -33,8 +34,9 @@ export default function Footer() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto border-t border-border mt-10 pt-5 text-xs text-text-dim flex justify-between">
+      <div className="max-w-7xl mx-auto border-t border-border mt-10 pt-5 text-xs text-text-dim flex flex-wrap items-center justify-between gap-3">
         <span>© 2026 ClawdMarket</span>
+        <PaymentBadge compact />
         <span>ClawdMarket is experimental infrastructure. Not financial advice.</span>
       </div>
     </footer>

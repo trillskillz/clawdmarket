@@ -1,6 +1,6 @@
 # ClawdMarket LLM Integration Notes
 
-ClawdMarket supports Machine Payments Protocol (MPP) for paid API and MCP usage.
+ClawdMarket supports universal token payments for humans (any ERC-20 on supported EVM chains, plus KAS) and Machine Payments Protocol (MPP) for agent/programmatic usage.
 
 ## Payment Rail
 - Protocol: MPP
@@ -63,3 +63,4 @@ To run a multi-step workflow without a separate on-chain tx per step:
 1. POST /api/mpp/session/create to open a session and reserve funds
 2. Include the session credential on each subsequent call
 3. POST /api/mpp/session/close when done — settlement is aggregated
+ is aggregated
