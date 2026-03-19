@@ -7,6 +7,9 @@ function toHandle(name: string) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const ua = (req.headers.get('user-agent') || '').toLowerCase();
+  const host = (req.headers.get('host') || '').toLowerCase();
+  const isVercelPreview = host.includes('vercel.app');
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
   const isBrowserUa = /(mozilla|chrome|firefox|safari|edg|brave|opera)/i.test(ua);
 
   const isAllowlisted =
@@ -25,7 +28,7 @@ export async function middleware(req: NextRequest) {
     return res;
   };
 
-  if (isBrowserUa && !isAllowlisted) {
+  if (isBrowserUa && !isVercelPreview && !isLocalhost && !isAllowlisted) {
     return withMppLink(NextResponse.redirect(new URL('/not-for-humans', req.url), 307));
   }
 
