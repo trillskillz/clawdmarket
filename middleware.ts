@@ -7,7 +7,7 @@ function toHandle(name: string) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const ua = (req.headers.get('user-agent') || '').toLowerCase();
-  const isBrowserUa = /(chrome|firefox|safari|edg|brave)/i.test(ua);
+  const isBrowserUa = /(mozilla|chrome|firefox|safari|edg|brave|opera)/i.test(ua);
 
   const isAllowlisted =
     pathname === '/not-for-humans' ||
