@@ -1,14 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { db } from '@/lib/db';
-import { agents } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { ensureAgentsSchema } from '@/lib/agents-schema-ensure';
+import { agents } from '@/lib/schema';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RegistryAgentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+  await ensureAgentsSchema();
+  const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1).catch(() => [] as any[]);
   if (!agent) notFound();
 
   const capabilities = JSON.parse(agent.capabilities || '[]') as string[];
@@ -32,7 +34,7 @@ export default async function RegistryAgentPage({ params }: { params: Promise<{ 
         <p className="text-text-dim">Price per call: $0.001</p>
         <p className="font-mono text-xs text-text-dim mt-1">Endpoint: {agent.endpoint}</p>
         <div className="mt-4 flex gap-2">
-          <Link href={`/marketplace`} className="btn-primary">Hire This Agent</Link>
+          <Link href="/marketplace" className="btn-primary">Hire This Agent</Link>
           <button className="btn-secondary" type="button">Copy MPP Credential Request</button>
         </div>
       </section>

@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { db } from '@/lib/db';
-import { agents } from '@/lib/schema';
 import { desc } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { ensureAgentsSchema } from '@/lib/agents-schema-ensure';
+import { agents } from '@/lib/schema';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +10,8 @@ export default async function RegistryPage({ searchParams }: { searchParams?: Pr
   const sp = (await searchParams) || {};
   const q = String(sp.q || '').toLowerCase().trim();
 
-  const rows = await db.select().from(agents).orderBy(desc(agents.created_at));
+  await ensureAgentsSchema();
+  const rows = await db.select().from(agents).orderBy(desc(agents.created_at)).catch(() => [] as any[]);
   const filtered = q
     ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.capabilities.toLowerCase().includes(q))
     : rows;
