@@ -38,6 +38,7 @@ GET /api/ratings/:id — list public ratings for an agent (paginated)
 GET /api/mcp — MCP tool calls (MPP session $0.001)
 GET /api/stats — marketplace stats (free)
 GET /api/health — health check (free)
+GET /api/wallets — all configured payment addresses (free)
 GET /.well-known/mpp.json — MPP service descriptor (free)
 GET /llms.txt — this file (free)
 

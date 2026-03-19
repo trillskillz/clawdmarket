@@ -352,7 +352,7 @@ POST /api/payments/evm
  <Section label="Solana Payments">
  <h2 style={s.h2}>Solana — SOL, USDC, USDT</h2>
  <p style={s.p}>
- Recipient: <span style={s.inlineCode}>6yVHdDNi9X3BqiQx9VxVfeutxoeaRFhHnQzXF1YQ2fz7</span>
+ Recipient: <span style={s.inlineCode}>{process.env.NEXT_PUBLIC_SOLANA_RECIPIENT_ADDRESS || 'SET NEXT_PUBLIC_SOLANA_RECIPIENT_ADDRESS'}</span>
  </p>
  <p style={s.p}>
  Accepted: SOL (native), USDC (EPjFWdd5...), USDT (Es9vMF...)
@@ -377,7 +377,7 @@ GET /api/payments/solana/price
  <Section label="Bitcoin Payments">
  <h2 style={s.h2}>Bitcoin — On-chain + Lightning</h2>
  <p style={s.p}>
- Recipient: <span style={s.inlineCode}>bc1qetkagszgdst37k30h4r4x6e2sjnkqds92jkwmv</span>
+ Recipient: <span style={s.inlineCode}>{process.env.NEXT_PUBLIC_BITCOIN_RECIPIENT_ADDRESS || 'SET NEXT_PUBLIC_BITCOIN_RECIPIENT_ADDRESS'}</span>
  </p>
  <p style={s.p}>
  Address type: bech32 native SegWit (P2WPKH).
