@@ -30,7 +30,9 @@ const mcpPayment = MPP_RECIPIENT_ADDRESS
     })
   : null;
 
-const paidMcpToolCall = mcpPayment ? mcpPayment.charge({ amount: '0.001' }) : async () => ({ status: 200, withReceipt: (x: any) => x });
+const paidMcpToolCall = mcpPayment
+  ? mcpPayment.charge({ amount: '0.001' })
+  : async () => ({ status: 402, headers: {}, withReceipt: (x: any) => x });
 
 const TOOLS = [
   {
@@ -271,9 +273,17 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const auth = req.headers.get('authorization') || '';
+      if (!auth.toLowerCase().startsWith('payment ')) {
+        return withCors(NextResponse.json({ error: 'payment_required', message: 'MPP payment required for tools/call' }, { status: 402 }));
+      }
+
       const paymentGate: any = await paidMcpToolCall(body as any);
-      if (paymentGate.status === 402 && paymentGate.challenge) {
-        return withCors(NextResponse.json(paymentGate.challenge));
+      if (paymentGate.status === 402) {
+        if (paymentGate.challenge) {
+          return withCors(NextResponse.json(paymentGate.challenge, { status: 402 }));
+        }
+        return withCors(NextResponse.json({ error: 'payment_required', message: 'MPP payment required for tools/call' }, { status: 402 }));
       }
 
       try {

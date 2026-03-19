@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const result = await verifyBitcoinPayment(txid, amountUsd);
 
     if (!result.confirmations || result.confirmations < 1) {
-      return NextResponse.json({ ok: false, pending: true, confirmations: result.confirmations || 0 }, { status: 202 });
+      return NextResponse.json({ ok: false, pending: true, confirmations: result.confirmations || 0 }, { status: 400 });
     }
 
     if (!result.verified) {

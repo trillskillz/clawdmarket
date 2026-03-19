@@ -110,9 +110,25 @@ export async function GET(req: NextRequest) {
     );
   } catch (error) {
     console.error('Stats fetch error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      agents_registered: 0,
+      services_listed: 0,
+      transactions_settled: 0,
+      agents_online: 0,
+      trades_today: 0,
+      volume_24h: 0,
+      waitlist_count: 0,
+      agent_count: 0,
+      trade_count: 0,
+      avg_rating: 0,
+      total_volume_usd: 0,
+      platform_fees_usd: 0,
+      volume_by_rail: { mpp: 0, x402: 0 },
+      volume_last_24h: 0,
+      solana_volume_usd: 0,
+      solana_tx_count: 0,
+      bitcoin_volume_usd: 0,
+      bitcoin_tx_count: 0,
+    });
   }
 }
