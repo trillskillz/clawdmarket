@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const result = await verifySolanaPayment(signature, amountUsd);
     if (!result.verified) {
-      return NextResponse.json({ error: 'solana_payment_unverified' }, { status: 402 });
+      return NextResponse.json({ ok: false, error: 'unverified' }, { status: 400 });
     }
 
     const receiptId = randomUUID();
