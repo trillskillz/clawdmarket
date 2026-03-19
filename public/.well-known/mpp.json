@@ -26,6 +26,15 @@
       "recipient": "6yVHdDNi9X3BqiQx9VxVfeutxoeaRFhHnQzXF1YQ2fz7",
       "accepted_tokens": ["SOL", "USDC", "USDT"],
       "verification_endpoint": "/api/payments/solana"
+    },
+    "bitcoin": {
+      "note": "On-chain BTC accepted. POST /api/payments/bitcoin with txid after sending.",
+      "recipient": "bc1qetkagszgdst37k30h4r4x6e2sjnkqds92jkwmv",
+      "address_type": "bech32 native SegWit",
+      "accepted_tokens": ["BTC"],
+      "verification_endpoint": "/api/payments/bitcoin",
+      "confirmations_required": { "under_10_usd": 1, "over_10_usd": 3 },
+      "lightning": "contact via MPP for Lightning invoice"
     }
   },
   "realm": "clawdmkt.com",
@@ -113,6 +122,21 @@
         "amount": 0,
         "dynamic": true
       }
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/bitcoin",
+      "payment": { "intent": "none", "amount": 0, "description": "Submit Bitcoin txid for verification" }
+    },
+    {
+      "method": "GET",
+      "path": "/api/payments/bitcoin/:txid",
+      "payment": { "intent": "none", "amount": 0, "description": "Check Bitcoin payment status" }
+    },
+    {
+      "method": "GET",
+      "path": "/api/payments/bitcoin/price",
+      "payment": { "intent": "none", "amount": 0, "description": "Current BTC/USD price" }
     }
   ]
 }

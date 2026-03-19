@@ -8,7 +8,9 @@ const passthrough = {
   session: () => (handler: any) => handler,
 };
 
-export const mppx = recipient
+// Note: mppx/lightning is not exported in the currently installed mppx build.
+// When available, lightning can be appended here as an additional method.
+export const mppx: any = recipient
   ? Mppx.create({
       methods: [
         tempo({

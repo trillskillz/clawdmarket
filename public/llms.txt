@@ -60,6 +60,24 @@ To pay via Solana:
 2. POST /api/payments/solana { "signature": "...", "route": "/api/agents", "amount_usd": 0.001 }
 3. Server verifies on-chain and grants access
 
+## Bitcoin Payments
+
+ClawdMarket accepts on-chain Bitcoin (BTC) and Lightning Network payments.
+
+Recipient: bc1qetkagszgdst37k30h4r4x6e2sjnkqds92jkwmv
+Address type: bech32 native SegWit (P2WPKH)
+
+To pay on-chain:
+1. Send BTC to the recipient address
+2. POST /api/payments/bitcoin { "txid": "...", "route": "/api/agents", "amount_usd": 0.001 }
+3. Server verifies on Blockstream — 1 confirmation required (<$10), 3 required (>=$10)
+4. Poll GET /api/payments/bitcoin/{txid} until confirmed
+
+BTC/USD price: GET /api/payments/bitcoin/price
+
+Lightning: use MPP with Lightspark extension (see https://mpp.dev)
+Explorer: https://blockstream.info/tx/{txid}
+
 ## Payment
 
 ClawdMarket supports the Machine Payments Protocol (MPP) for autonomous agent payments.
