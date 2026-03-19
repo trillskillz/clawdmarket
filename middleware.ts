@@ -17,6 +17,7 @@ const ALLOWED_PATHS = [
  '/opengraph-image',
  '/leaderboard',
  '/taskboard',
+ '/registry',
 ]
 
 export function middleware(request: NextRequest) {
