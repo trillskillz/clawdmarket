@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/auto-confirm",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/monitor",
+      "schedule": "0 10 * * *"
     }
   ]
 }
