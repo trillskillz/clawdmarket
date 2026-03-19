@@ -1,135 +1,72 @@
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { Receipt } from 'mppx';
-import { authenticateRequest } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { mpp_sessions } from '@/lib/schema';
 import { mppx } from '@/lib/mpp';
-import { ensureMppSessionsSchema } from '@/lib/mpp-sessions-schema-ensure';
 
-const LOG = (step: string, data?: unknown) =>
-  console.log(JSON.stringify({ mpp_session: step, ...(data ? { data } : {}) }));
+const log = (step: string, data: Record<string, unknown> = {}) => {
+  console.log(JSON.stringify({ mpp_session: step, data }));
+};
 
-const createSessionPaidRoute = mppx.session({
-  amount: '0.001',
-  unitType: 'request',
-  suggestedDeposit: '0.01',
-})(async (_request: Request) => {
-  return NextResponse.json({ ok: true });
-});
+const sessionGate = mppx.session({ amount: '0', unitType: 'request' })(async () => NextResponse.json({ ok: true }));
 
-export async function POST(req: NextRequest) {
+async function ensureTable() {
+  const client = (db as any)?.$client;
+  if (!client?.execute) return;
+  await client.execute({
+    sql: `CREATE TABLE IF NOT EXISTS mpp_sessions (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      payer_address TEXT,
+      reserved_amount TEXT,
+      spent_amount TEXT DEFAULT '0',
+      status TEXT DEFAULT 'open',
+      created_at TEXT DEFAULT (datetime('now')),
+      closed_at TEXT
+    )`,
+    args: [],
+  });
+}
+
+export async function POST(request: NextRequest) {
   try {
-    LOG('handler_entered', { method: req.method });
+    log('entered');
+    await ensureTable();
+    log('table_ready');
 
-    const authHeader = req.headers.get('authorization');
-    const cookieToken = req.cookies.get('auth-token')?.value;
-    const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+    const gated = await sessionGate(request);
+    const receiptHeader = gated.headers.get('Payment-Receipt');
+    if (!receiptHeader) return gated;
 
-    const body = await req.json().catch(() => ({} as any));
-    const agentId = String(body?.agent_id || auth?.userId || '').trim();
-    if (!agentId) {
-      return NextResponse.json({ error: 'agent_id is required' }, { status: 400 });
-    }
-
-    const mppResponse = await createSessionPaidRoute(req);
-    const receiptHeader = mppResponse.headers.get('Payment-Receipt');
-
-    if (!receiptHeader) {
-      return mppResponse;
-    }
-
-    let receipt: Record<string, any>;
+    let receipt: any = null;
     try {
-      receipt = Receipt.deserialize(receiptHeader) as Record<string, any>;
-      LOG('receipt_received', { receipt: JSON.stringify(receipt) });
+      receipt = Receipt.deserialize(receiptHeader);
     } catch {
-      return mppResponse;
+      return gated;
     }
 
-    const sessionId = String(receipt.channelId || receipt.reference || body?.session_id || '').trim();
-    if (!sessionId) {
-      return NextResponse.json({ error: 'MPP session receipt did not include a session identifier' }, { status: 500 });
+    const session_id = String(receipt?.channelId || receipt?.reference || '').trim();
+    if (!session_id) {
+      return NextResponse.json({ error: 'session_create_failed', detail: 'missing_session_id' }, { status: 500 });
     }
 
-    const reservedAmount = Number(body?.reserved_amount ?? receipt.acceptedCumulative ?? 0);
+    const payer = String(receipt?.payerAddress || receipt?.payer || '').trim() || null;
+    const reserved = String(receipt?.acceptedCumulative || receipt?.amount || '0');
 
-    const normalizeReceiptAmount = (value: unknown) => {
-      const n = Number(value);
-      if (!Number.isFinite(n) || n <= 0) return null;
-      if (n >= 1000) return n / 1_000_000;
-      return n;
-    };
+    const client = (db as any)?.$client;
+    await client.execute({
+      sql: `INSERT INTO mpp_sessions (id, session_id, payer_address, reserved_amount, spent_amount, status)
+            VALUES (?, ?, ?, ?, '0', 'open')`,
+      args: [randomUUID(), session_id, payer, reserved],
+    });
 
-    const spentIncrement =
-      normalizeReceiptAmount(receipt.amount) ??
-      normalizeReceiptAmount(receipt.value) ??
-      normalizeReceiptAmount(receipt.spentDelta) ??
-      normalizeReceiptAmount(receipt?.request?.amount) ??
-      0.001;
+    log('inserted', { session_id, payer });
 
-    const payerAddress = String(receipt.payerAddress || receipt.payer || receipt.from || body?.payer_address || '').trim() || null;
-
-    LOG('schema_ensure_start');
-    await ensureMppSessionsSchema();
-    LOG('schema_ensure_done');
-
-    LOG('db_write_start', { sessionId, payerAddress, amount: spentIncrement });
-
-    const existing = await db.select().from(mpp_sessions).where(eq(mpp_sessions.session_id, sessionId)).limit(1);
-
-    let updatedSpentAmount = spentIncrement;
-    if (existing.length > 0) {
-      updatedSpentAmount = (Number(existing[0].spent_amount) || 0) + spentIncrement;
-      await db
-        .update(mpp_sessions)
-        .set({
-          agent_id: agentId,
-          payer_address: payerAddress,
-          reserved_amount: Number.isFinite(reservedAmount) ? reservedAmount : existing[0].reserved_amount,
-          spent_amount: updatedSpentAmount,
-          status: 'active',
-          closed_at: null,
-        })
-        .where(eq(mpp_sessions.session_id, sessionId));
-    } else {
-      updatedSpentAmount = spentIncrement;
-      await db.insert(mpp_sessions).values({
-        session_id: sessionId,
-        agent_id: agentId,
-        payer_address: payerAddress,
-        reserved_amount: Number.isFinite(reservedAmount) ? reservedAmount : 0,
-        spent_amount: updatedSpentAmount,
-        status: 'active',
-      });
-    }
-
-    LOG('db_write_done');
-
-    const responseWithBody = NextResponse.json(
-      {
-        ok: true,
-        session: {
-          session_id: sessionId,
-          agent_id: agentId,
-          payer_address: payerAddress,
-          reserved_amount: Number.isFinite(reservedAmount) ? reservedAmount : 0,
-          spent_amount: updatedSpentAmount,
-          status: 'active',
-        },
-        mpp_receipt: receipt,
-      },
-      { status: 201 },
-    );
-
-    for (const [k, v] of mppResponse.headers.entries()) {
-      responseWithBody.headers.set(k, v);
-    }
-
-    LOG('response_ok');
-    return responseWithBody;
-  } catch (error: any) {
-    LOG('error', { message: error?.message, stack: error?.stack });
-    return Response.json({ error: 'session_create_failed', detail: error?.message }, { status: 500 });
+    const res = NextResponse.json({ ok: true, session_id, status: 'open' });
+    for (const [k, v] of gated.headers.entries()) res.headers.set(k, v);
+    return res;
+  } catch (err: any) {
+    log('error', { message: err?.message || 'unknown' });
+    return NextResponse.json({ error: 'session_create_failed', detail: err?.message || 'unknown' }, { status: 500 });
   }
 }
