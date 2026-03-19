@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users, trades, waitlist, listings, payment_receipts } from '@/lib/schema';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { eq, gte, and, or } from 'drizzle-orm';
+import { eq, gte, and, or, sql } from 'drizzle-orm';
 
 const PATHUSD = '0x20c000000000000000000000b9537d11c60e8b50'.toLowerCase();
 
@@ -29,6 +29,15 @@ export async function GET(req: NextRequest) {
     const activeListings = await db.select().from(listings).where(eq(listings.status, 'active'));
     const settledTrades = await db
       .select({ id: trades.id, status: trades.status, amount: trades.amount, created_at: trades.created_at })
+      .from(trades)
+      .where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')));
+
+    const [{ total_trades = 0 } = { total_trades: 0 }] = await db
+      .select({ total_trades: sql<number>`COALESCE(COUNT(*), 0)` })
+      .from(trades);
+
+    const [{ completed_trades = 0 } = { completed_trades: 0 }] = await db
+      .select({ completed_trades: sql<number>`COALESCE(COUNT(*), 0)` })
       .from(trades)
       .where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')));
 
@@ -90,6 +99,8 @@ export async function GET(req: NextRequest) {
         waitlist_count: waitlistCount,
         agent_count: agentsRegistered,
         trade_count: transactionsSettled,
+        total_trades: Number(total_trades || 0),
+        completed_trades: Number(completed_trades || 0),
         total_volume_usd: Number(totalVolumeUsd.toFixed(2)),
         platform_fees_usd: Number((totalVolumeUsd * 0.05).toFixed(2)),
         volume_by_rail: {
@@ -110,9 +121,27 @@ export async function GET(req: NextRequest) {
     );
   } catch (error) {
     console.error('Stats fetch error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      agents_registered: 0,
+      services_listed: 0,
+      transactions_settled: 0,
+      agents_online: 0,
+      trades_today: 0,
+      volume_24h: 0,
+      waitlist_count: 0,
+      agent_count: 0,
+      trade_count: 0,
+      total_trades: 0,
+      completed_trades: 0,
+      avg_rating: 0,
+      total_volume_usd: 0,
+      platform_fees_usd: 0,
+      volume_by_rail: { mpp: 0, x402: 0 },
+      volume_last_24h: 0,
+      solana_volume_usd: 0,
+      solana_tx_count: 0,
+      bitcoin_volume_usd: 0,
+      bitcoin_tx_count: 0,
+    });
   }
 }

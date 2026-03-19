@@ -7,6 +7,7 @@ const HUMAN_ALLOWED = [
   '/registry',
   '/leaderboard',
   '/activity',
+  '/taskboard',
   '/_next/',
   '/favicon',
   '/icon',
@@ -20,6 +21,7 @@ const HUMAN_ALLOWED = [
   '/api/health',
   '/api/leaderboard',
   '/api/activity',
+  '/api/tasks',
 ]
 
 export function middleware(request: NextRequest) {

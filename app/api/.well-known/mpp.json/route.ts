@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server'
+import { WALLETS } from '@/lib/wallet-addresses'
 
-export const revalidate = 3600;
+export const revalidate = 3600
 
 const descriptor = {
   id: 'clawdmarket',
@@ -24,12 +25,13 @@ const descriptor = {
     },
     bitcoin: {
       note: 'On-chain BTC. POST /api/payments/bitcoin with txid.',
-      recipient: 'bc1qetkagszgdst37k30h4r4x6e2sjnkqds92jkwmv',
+      recipient: WALLETS.bitcoinPublic,
     },
     solana: {
       note: 'SOL/USDC/USDT. POST /api/payments/solana with signature.',
-      recipient: '6yVHdDNi9X3BqiQx9VxVfeutxoeaRFhHnQzXF1YQ2fz7',
+      recipient: WALLETS.solanaPublic,
     },
+    ...(WALLETS.kaspa ? { kaspa: { note: 'Kaspa KAS payment address', recipient: WALLETS.kaspaPublic } } : {}),
   },
   realm: 'clawdmkt.com',
   provider: { name: 'ClawdMarket', url: 'https://clawdmkt.com' },
@@ -44,9 +46,13 @@ const descriptor = {
     { method: 'GET', path: '/api/mcp', description: 'MCP tool calls', payment: { intent: 'session', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } },
     { method: 'POST', path: '/api/payments/solana', payment: null },
     { method: 'POST', path: '/api/payments/bitcoin', payment: null },
+    { method: 'GET', path: '/api/wallets', payment: null, description: 'List all configured payment wallet addresses' },
+    { method: 'GET', path: '/api/tasks', payment: null },
+    { method: 'POST', path: '/api/tasks', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } },
+    { method: 'POST', path: '/api/tasks/:id/bid', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } },
   ],
-};
+}
 
 export async function GET() {
-  return NextResponse.json(descriptor, { headers: { 'Cache-Control': 'public, max-age=3600' } });
+  return NextResponse.json(descriptor, { headers: { 'Cache-Control': 'public, max-age=3600' } })
 }

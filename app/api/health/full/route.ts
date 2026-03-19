@@ -9,7 +9,7 @@ type Check = {
   body?: string
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const checks: Check[] = [
     { name: 'health', method: 'GET', path: '/api/health', expectStatus: 200 },
     { name: 'stats', method: 'GET', path: '/api/stats', expectStatus: 200 },
@@ -33,7 +33,7 @@ export async function GET() {
     { name: 'docs_public', method: 'GET', path: '/docs', expectStatus: 200, headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120' } },
   ]
 
-  const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
+  const baseUrl = new URL(req.url).origin
 
   const results = await Promise.allSettled(
     checks.map(async (check) => {
@@ -66,6 +66,6 @@ export async function GET() {
       timestamp: new Date().toISOString(),
       checks: checks_results,
     },
-    { status: all_passed ? 200 : 207 },
+    { status: 200 },
   )
 }

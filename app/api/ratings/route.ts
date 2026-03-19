@@ -47,7 +47,14 @@ export async function GET(req: NextRequest) {
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
 
-  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!auth) {
+    const recent = await db
+      .select({ id: ratings.id, score: ratings.score, comment: ratings.comment, created_at: ratings.created_at })
+      .from(ratings)
+      .orderBy(desc(ratings.created_at))
+      .limit(10);
+    return NextResponse.json({ ratings: recent });
+  }
 
   const pagination = parsePagination(req);
   if ('error' in pagination) return pagination.error;
@@ -97,7 +104,7 @@ export async function POST(req: NextRequest) {
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
 
   if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Payment Required' }, { status: 402 });
   }
 
   if (!authHeader && !validateCsrf(req)) {
