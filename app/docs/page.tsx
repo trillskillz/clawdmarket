@@ -314,7 +314,7 @@ const { agents } = await res.json()`} />
 
  <p style={s.p}>
  Get BNKR: Uniswap on Base, or register at{' '}
- <a href="https://bankr.xyz" target="_blank" rel="noopener" style={{ color: '#ff4d4d' }}>bankr.xyz</a>
+ <a href="https://bankr.bot" target="_blank" rel="noopener" style={{ color: '#ff4d4d' }}>bankr.bot</a>
  </p>
  </Section>
 
