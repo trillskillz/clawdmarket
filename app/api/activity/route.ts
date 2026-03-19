@@ -1,107 +1,142 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { trades, listings, users } from '@/lib/schema';
-import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { desc, eq } from 'drizzle-orm';
+import { NextResponse } from 'next/server'
+import { desc, eq, inArray } from 'drizzle-orm'
+import { db } from '@/lib/db'
+import { agents, ratings, trades } from '@/lib/schema'
 
-type ActivityItem = {
-  id: string;
-  action: string;
-  category: string | null;
-  amount: number | null;
-  timestamp: Date | null;
-};
+type ActivityEvent = {
+  type: 'trade_created' | 'trade_completed' | 'trade_disputed' | 'trade_confirmed' | 'rating_received' | 'agent_registered'
+  description: string
+  buyer_name?: string | null
+  seller_name?: string | null
+  agent_name?: string | null
+  timestamp: string
+  relative: string
+}
 
-const BLOCKED_LISTING_PHRASE = 'cli test gpu';
-const includesBlockedPhrase = (value?: string | null) =>
-  (value ?? '').toLowerCase().includes(BLOCKED_LISTING_PHRASE);
+function shortId(id?: string | null) {
+  return id ? id.slice(0, 8) : 'unknown'
+}
 
-export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-  const rateLimitResult = rateLimit(`activity:${ip}`, { interval: 60 * 1000, maxRequests: 30 });
+function relativeTime(dateValue: Date | string | number) {
+  const then = new Date(dateValue).getTime()
+  const now = Date.now()
+  const diffSec = Math.max(1, Math.floor((now - then) / 1000))
+  if (diffSec < 60) return `${diffSec}s ago`
+  const mins = Math.floor(diffSec / 60)
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
 
-  if (!rateLimitResult.success) {
-    return NextResponse.json(
-      { error: 'Too many requests' },
-      { status: 429, headers: getRateLimitHeaders(rateLimitResult) }
-    );
-  }
-
+export async function GET() {
   try {
-    const [recentTrades, recentBounties] = await Promise.all([
-      db
-        .select({
-          id: trades.id,
-          listing_title: listings.title,
-          listing_category: listings.category,
-          status: trades.status,
-          amount: trades.amount,
-          created_at: trades.created_at,
-        })
-        .from(trades)
-        .leftJoin(listings, eq(trades.listing_id, listings.id))
-        .orderBy(desc(trades.created_at))
-        .limit(8),
-      db
-        .select({
-          id: listings.id,
-          title: listings.title,
-          category: listings.category,
-          price_bankr: listings.price_bankr,
-          created_at: listings.created_at,
-          seller_name: users.name,
-          seller_id: users.id,
-        })
-        .from(listings)
-        .leftJoin(users, eq(listings.seller_id, users.id))
-        .where(eq(listings.category, 'bounties'))
-        .orderBy(desc(listings.created_at))
-        .limit(8),
-    ]);
+    const [recentTrades, recentRatings, recentRegistrations] = await Promise.all([
+      db.select({
+        id: trades.id,
+        status: trades.status,
+        created_at: trades.created_at,
+        buyer_agent_id: trades.buyer_id,
+        seller_agent_id: trades.seller_id,
+      }).from(trades).orderBy(desc(trades.created_at)).limit(20),
+      db.select({
+        id: ratings.id,
+        score: ratings.score,
+        created_at: ratings.created_at,
+        rater_agent_id: ratings.rater_id,
+        rated_agent_id: ratings.rated_id,
+      }).from(ratings).orderBy(desc(ratings.created_at)).limit(20),
+      db.select({
+        id: agents.id,
+        name: agents.name,
+        created_at: agents.created_at,
+        owner_address: agents.owner_address,
+      }).from(agents).where(eq(agents.status, 'active')).orderBy(desc(agents.created_at)).limit(10),
+    ])
 
-    const tradeActivity: ActivityItem[] = recentTrades
-      .filter((t) => !includesBlockedPhrase(t.listing_title))
-      .map((t) => ({
-        id: `Agent_${t.id.slice(0, 4)}`,
-        action:
-          t.status === 'completed' || t.status === 'complete'
-            ? `completed trade for "${t.listing_title ?? 'untitled listing'}"`
-            : t.status === 'pending'
-              ? `initiated trade for "${t.listing_title ?? 'untitled listing'}"`
-              : `disputed trade for "${t.listing_title ?? 'untitled listing'}"`,
-        category: t.listing_category,
-        amount: t.amount,
-        timestamp: t.created_at,
-      }));
+    const agentIds = new Set<string>()
+    recentTrades.forEach((t) => {
+      if (t.buyer_agent_id) agentIds.add(t.buyer_agent_id)
+      if (t.seller_agent_id) agentIds.add(t.seller_agent_id)
+    })
+    recentRatings.forEach((r) => {
+      if (r.rater_agent_id) agentIds.add(r.rater_agent_id)
+      if (r.rated_agent_id) agentIds.add(r.rated_agent_id)
+    })
 
-    const bountyActivity: ActivityItem[] = recentBounties
-      .filter((b) => !includesBlockedPhrase(b.title))
-      .map((b) => ({
-        id: b.seller_id ? `Agent_${b.seller_id.slice(0, 4)}` : `Agent_${b.id.slice(0, 4)}`,
-        action: `posted bounty "${b.title}" for ${b.price_bankr} BANKR`,
-        category: b.category,
-        amount: b.price_bankr,
-        timestamp: b.created_at,
-      }));
+    const agentRows = agentIds.size
+      ? await db.select({ id: agents.id, name: agents.name }).from(agents).where(inArray(agents.id, Array.from(agentIds)))
+      : []
 
-    // Bias the feed toward bounty posts, keep only a light touch of trade events.
-    const prioritized = [...bountyActivity, ...tradeActivity.slice(0, 2)]
-      .sort((a, b) => (b.timestamp?.getTime() ?? 0) - (a.timestamp?.getTime() ?? 0));
+    const nameById = new Map(agentRows.map((a) => [a.id, a.name]))
 
-    const seenActions = new Set<string>();
-    const activity = prioritized
-      .filter((item) => !includesBlockedPhrase(item.action))
-      .filter((item) => {
-        const key = item.action.toLowerCase();
-        if (seenActions.has(key)) return false;
-        seenActions.add(key);
-        return true;
-      })
-      .slice(0, 5);
+    const tradeEvents: Array<ActivityEvent & { createdAt: Date }> = recentTrades.map((t) => {
+      const buyer = nameById.get(t.buyer_agent_id) || `Agent ${shortId(t.buyer_agent_id)}`
+      const seller = nameById.get(t.seller_agent_id) || `Agent ${shortId(t.seller_agent_id)}`
+      let type: ActivityEvent['type'] = 'trade_created'
+      let description = `Agent "${buyer}" started a new trade with "${seller}"`
+      if (t.status === 'completed' || t.status === 'complete') {
+        type = 'trade_completed'
+        description = `Agent "${buyer}" completed a trade with "${seller}"`
+      } else if (t.status === 'disputed') {
+        type = 'trade_disputed'
+        description = `Trade dispute opened between "${buyer}" and "${seller}"`
+      } else if (t.status === 'resolved') {
+        type = 'trade_confirmed'
+        description = `Trade confirmed and settled between "${buyer}" and "${seller}"`
+      }
 
-    return NextResponse.json({ activity });
+      const createdAt = new Date(t.created_at)
+      return {
+        type,
+        description,
+        buyer_name: buyer,
+        seller_name: seller,
+        timestamp: createdAt.toISOString(),
+        relative: relativeTime(createdAt),
+        createdAt,
+      }
+    })
+
+    const ratingEvents: Array<ActivityEvent & { createdAt: Date }> = recentRatings.map((r) => {
+      const agent = nameById.get(r.rated_agent_id) || `Agent ${shortId(r.rated_agent_id)}`
+      const stars = '★'.repeat(Math.max(1, Math.min(5, Number(r.score) || 0)))
+      const createdAt = new Date(r.created_at)
+      return {
+        type: 'rating_received',
+        description: `Agent "${agent}" received a ${stars.padEnd(5, '☆')} rating`,
+        agent_name: agent,
+        timestamp: createdAt.toISOString(),
+        relative: relativeTime(createdAt),
+        createdAt,
+      }
+    })
+
+    const registrationEvents: Array<ActivityEvent & { createdAt: Date }> = recentRegistrations.map((a) => {
+      const createdAt = new Date(a.created_at)
+      return {
+        type: 'agent_registered',
+        description: `New agent "${a.name || `Agent ${shortId(a.id)}`}" registered`,
+        agent_name: a.name || `Agent ${shortId(a.id)}`,
+        timestamp: createdAt.toISOString(),
+        relative: relativeTime(createdAt),
+        createdAt,
+      }
+    })
+
+    const events = [...tradeEvents, ...ratingEvents, ...registrationEvents]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 50)
+      .map(({ createdAt, ...event }) => event)
+
+    return NextResponse.json(events, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30',
+      },
+    })
   } catch (error) {
-    console.error('Activity fetch error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Activity fetch error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -1,53 +1,59 @@
-import Link from 'next/link';
-import { desc } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { ensureAgentsSchema } from '@/lib/agents-schema-ensure';
-import { agents } from '@/lib/schema';
+import Link from 'next/link'
+import { db } from '@/lib/db'
+import { agents } from '@/lib/schema'
+import { desc } from 'drizzle-orm'
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
 
-export default async function RegistryPage({ searchParams }: { searchParams?: Promise<{ q?: string }> }) {
-  const sp = (await searchParams) || {};
-  const q = String(sp.q || '').toLowerCase().trim();
-
-  await ensureAgentsSchema();
-  const rows = await db.select().from(agents).orderBy(desc(agents.created_at)).catch(() => [] as any[]);
-  const filtered = q
-    ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.capabilities.toLowerCase().includes(q))
-    : rows;
+export default async function RegistryPage() {
+  const rows = await db.select().from(agents).orderBy(desc(agents.created_at)).limit(50)
 
   return (
-    <main className="min-h-screen px-6 py-10 max-w-6xl mx-auto">
-      <p className="font-mono text-sm text-accent mb-4">› Registry</p>
-      <h1 className="text-3xl font-bold mb-4">Agent Registry</h1>
-      <form className="mb-6">
-        <input name="q" defaultValue={q} placeholder="filter by capability..." className="w-full bg-bg2 border border-border rounded px-3 py-2" />
-      </form>
-
-      <div className="border border-border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-bg2 text-text-dim">
-            <tr>
-              <th className="text-left p-3">AGENT</th>
-              <th className="text-left p-3">CAPABILITIES</th>
-              <th className="text-left p-3">PRICE</th>
-              <th className="text-left p-3">ENDPOINT</th>
-              <th className="text-left p-3">REGISTERED</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((a) => (
-              <tr key={a.id} className="border-t border-border hover:bg-bg2/60">
-                <td className="p-3"><Link href={`/registry/${a.id}`} className="hover:text-accent">{a.name}</Link></td>
-                <td className="p-3 text-text-dim">{JSON.parse(a.capabilities).join(', ')}</td>
-                <td className="p-3 text-text-dim">$0.01 register</td>
-                <td className="p-3 font-mono text-xs text-text-dim truncate max-w-[320px]">{a.endpoint}</td>
-                <td className="p-3 text-text-dim">{new Date(a.created_at).toLocaleDateString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <main style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px' }}>
+      <div style={{ marginBottom: 40, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>› Agent Registry</p>
+          <h1 style={{ fontSize: 40, fontWeight: 800, marginBottom: 8 }}>Registered Agents</h1>
+          <p style={{ color: '#8b949e', fontSize: 16 }}>{rows.length} agents registered on Tempo mainnet</p>
+        </div>
+        <Link href="/docs#register" style={{ border: '1px solid #ff4d4d', color: '#ff4d4d', padding: '10px 16px', borderRadius: 8, fontWeight: 700 }}>Register Your Agent</Link>
       </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <input placeholder="search by name or capability..." style={{ width: '100%', background: '#111318', border: '1px solid #21262d', color: '#fff', padding: '12px 14px', borderRadius: 10 }} />
+      </div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            {['RANK', 'AGENT', 'CAPABILITIES', 'RATING', 'STATUS', 'JOINED'].map((h) => (
+              <th key={h} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '10px 16px', borderBottom: '1px solid #21262d', textAlign: 'left' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((agent, i) => {
+            const caps = JSON.parse(agent.capabilities || '[]').slice(0, 3)
+            return (
+              <tr key={agent.id} style={{ borderBottom: '1px solid #21262d', cursor: 'pointer' }}>
+                <td style={{ padding: '14px 16px', fontSize: 14 }}>{i + 1}</td>
+                <td style={{ padding: '14px 16px', fontSize: 14 }}>
+                  <Link href={`/registry/${agent.id}`} style={{ fontWeight: 700 }}>{agent.name}</Link>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#8b949e' }}>{agent.id.slice(0, 8)}</div>
+                </td>
+                <td style={{ padding: '14px 16px', fontSize: 14 }}>
+                  {caps.map((cap: string) => (
+                    <span key={cap} style={{ display: 'inline-block', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#8b949e', background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 20, padding: '2px 10px', margin: '0 4px 4px 0' }}>{cap}</span>
+                  ))}
+                </td>
+                <td style={{ padding: '14px 16px', fontSize: 14, color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace' }}>{agent.avg_rating ? `★ ${Number(agent.avg_rating).toFixed(1)} (${agent.rating_count || 0})` : 'unrated'}</td>
+                <td style={{ padding: '14px 16px', fontSize: 14 }}><span style={{ color: agent.status === 'active' ? '#28c840' : '#ff5f57' }}>●</span> {agent.status}</td>
+                <td style={{ padding: '14px 16px', fontSize: 14 }}>{new Date(agent.created_at).toLocaleDateString()}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </main>
-  );
+  )
 }

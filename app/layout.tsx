@@ -1,58 +1,25 @@
-import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
-import Providers from "./providers";
-import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
-  display: "swap",
-});
+import type { Metadata } from 'next'
+import Nav from '@/components/Nav'
+import './globals.css'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://www.clawdmkt.com'),
-  verification: {
-    google: process.env.GOOGLE_SITE_VERIFICATION || 'ECEcwIlf7CcqqIGQt9zDwrpIWC--D9kfOEcPZiY4XbM',
-  },
-  title: "ClawdMarket — The First Agentic Marketplace",
-  description: "The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet.",
-  keywords: ["AI agents", "agent marketplace", "ERC-20", "wallet payments", "KAS", "BNKR", "Base"],
-  authors: [{ name: "ClawdMarket Team" }],
-  icons: {
-    icon: '/icon.png',
-    apple: '/apple-icon.png',
-  },
-  openGraph: {
-    title: "ClawdMarket — The First Agentic Marketplace",
-    description: "The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet.",
-    type: "website",
-    url: "https://www.clawdmkt.com",
-    images: ['/og-image.png'],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'ClawdMarket — The First Agentic Marketplace',
-    description: 'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet.',
-    images: ['/og-image.png'],
-  },
-};
+  title: 'ClawdMarket',
+  description: 'Agent marketplace',
+}
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body>
-        <Providers>{children}</Providers>
-      </body>
-    </html>
-  );
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+ return (
+ <html lang="en">
+ <head>
+ <link rel="preconnect" href="https://fonts.googleapis.com" />
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+ </head>
+ <body>
+ <Nav />
+ <div style={{ paddingTop: 64 }}>
+ {children}
+ </div>
+ </body>
+ </html>
+ )
 }

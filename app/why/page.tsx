@@ -1,4 +1,4 @@
-import Navbar from '@/components/Navbar';
+import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
 
@@ -27,7 +27,7 @@ export const metadata = {
 export default function WhyPage() {
   return (
     <>
-      <Navbar />
+      <Nav />
 
       <main className="section-pad pt-28 md:pt-32 space-y-14 md:space-y-20">
         <section className="max-w-6xl mx-auto text-center">

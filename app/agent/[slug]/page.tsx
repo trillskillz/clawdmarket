@@ -1,4 +1,4 @@
-import Navbar from '@/components/Navbar';
+import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 import AgentServicesList from '@/components/AgentServicesList';
 import { db } from '@/lib/db';
@@ -185,7 +185,7 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ s
 
   return (
     <>
-      <Navbar />
+      <Nav />
       <main className="px-6 pt-32 pb-20">
         <div className="max-w-6xl mx-auto">
           <div className="bg-bg2 border border-border rounded-2xl p-8 mb-8">

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -30,6 +30,8 @@ export const agents = sqliteTable('agents', {
   endpoint_failures: integer('endpoint_failures').notNull().default(0),
   mpp_endpoint: text('mpp_endpoint'),
   llms_txt_url: text('llms_txt_url'),
+  avg_rating: real('avg_rating'),
+  rating_count: integer('rating_count').default(0),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
@@ -87,13 +89,29 @@ export const trades = sqliteTable('trades', {
   dev_wallet: text('dev_wallet'),
   fee_tx_hash: text('fee_tx_hash'),
   payout_status: text('payout_status', { enum: ['pending', 'fee_sent', 'seller_paid', 'complete'] }).notNull().default('pending'),
-  status: text('status', { 
-    enum: ['pending', 'completed', 'complete', 'disputed'] 
+  status: text('status', {
+    enum: ['pending', 'escrow_held', 'pending_release', 'completed', 'complete', 'disputed', 'resolved', 'cancelled']
   }).notNull().default('pending'),
+  escrow_session_id: text('escrow_session_id'),
+  auto_confirm_at: text('auto_confirm_at'),
+  dispute_reason: text('dispute_reason'),
+  resolution: text('resolution', { enum: ['buyer', 'seller', 'split'] }),
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
   completed_at: integer('completed_at', { mode: 'timestamp' }),
+  rating_window_expires_at: text('rating_window_expires_at'),
+});
+
+export const trade_evidence = sqliteTable('trade_evidence', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trade_id: text('trade_id')
+    .notNull()
+    .references(() => trades.id, { onDelete: 'cascade' }),
+  submitter_agent_id: text('submitter_agent_id').notNull(),
+  content: text('content').notNull(),
+  evidence_url: text('evidence_url'),
+  created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
 export const ratings = sqliteTable('ratings', {
@@ -101,18 +119,14 @@ export const ratings = sqliteTable('ratings', {
   trade_id: text('trade_id')
     .notNull()
     .references(() => trades.id, { onDelete: 'cascade' }),
-  rater_id: text('rater_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  rated_id: text('rated_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+  rater_id: text('rater_id').notNull(),
+  rated_id: text('rated_id').notNull(),
   score: integer('score').notNull(),
   comment: text('comment'),
-  created_at: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+  created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
+}, (table) => ({
+  oneRatingPerAgentPerTrade: uniqueIndex('ratings_trade_rater_unique').on(table.trade_id, table.rater_id),
+}));
 
 export const agent_ratings = sqliteTable('agent_ratings', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -153,15 +167,29 @@ export const waitlist = sqliteTable('waitlist', {
 
 export const webhooks = sqliteTable('webhooks', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  user_id: text('user_id')
+  agent_id: text('agent_id')
     .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .references(() => agents.id, { onDelete: 'cascade' }),
   url: text('url').notNull(),
+  secret_hash: text('secret_hash').notNull(),
   events: text('events').notNull(),
-  secret: text('secret').notNull(),
-  created_at: integer('created_at', { mode: 'timestamp' })
+  active: integer('active').notNull().default(1),
+  created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
+  last_triggered_at: text('last_triggered_at'),
+  failure_count: integer('failure_count').notNull().default(0),
+});
+
+export const webhook_deliveries = sqliteTable('webhook_deliveries', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  webhook_id: text('webhook_id')
     .notNull()
-    .$defaultFn(() => new Date()),
+    .references(() => webhooks.id, { onDelete: 'cascade' }),
+  event_type: text('event_type').notNull(),
+  payload: text('payload').notNull(),
+  response_status: integer('response_status'),
+  delivered_at: text('delivered_at'),
+  attempts: integer('attempts').notNull().default(0),
+  success: integer('success').notNull().default(0),
 });
 
 export const watchlist = sqliteTable('watchlist', {
@@ -204,6 +232,8 @@ export type WatchlistEntry = typeof watchlist.$inferSelect;
 export type NewWatchlistEntry = typeof watchlist.$inferInsert;
 export type AnalyticsEvent = typeof analytics_events.$inferSelect;
 export type NewAnalyticsEvent = typeof analytics_events.$inferInsert;
+export type TradeEvidence = typeof trade_evidence.$inferSelect;
+export type NewTradeEvidence = typeof trade_evidence.$inferInsert;
 export type Rating = typeof ratings.$inferSelect;
 export type NewRating = typeof ratings.$inferInsert;
 

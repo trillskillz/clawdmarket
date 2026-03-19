@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users, wallets, transactions, fee_errors, contracts, contract_milestones, payment_receipts } from '@/lib/schema';
+import { trades, listings, users, wallets, transactions, fee_errors, contracts, contract_milestones, payment_receipts, mpp_sessions } from '@/lib/schema';
 import { authenticateRequest, hashPassword } from '@/lib/auth';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
@@ -139,6 +139,18 @@ function calculateTradeFinancials(itemPrice: number) {
     throw new Error('DEV_FEE_MISMATCH');
   }
   return { itemPrice, platformFee, totalCost, sellerAmount, devAmount };
+}
+
+async function createEscrowSession(tx: any, buyerId: string, reservedAmount: number) {
+  const sessionId = crypto.randomUUID();
+  await tx.insert(mpp_sessions).values({
+    session_id: sessionId,
+    agent_id: buyerId,
+    reserved_amount: reservedAmount,
+    spent_amount: 0,
+    status: 'active',
+  });
+  return sessionId;
 }
 
 async function tradesHasFeeColumns() {
@@ -467,6 +479,8 @@ async function createTradePost(req: NextRequest) {
           throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
         }
 
+        const escrowSessionId = await createEscrowSession(tx, auth.userId, totalCost);
+
         const [trade] = await tx
           .insert(trades)
           .values({
@@ -484,7 +498,8 @@ async function createTradePost(req: NextRequest) {
             // Single on-chain payment tx covers item + dev fee.
             fee_tx_hash: txHash,
             payout_status: 'seller_paid',
-            status: 'pending',
+            escrow_session_id: escrowSessionId,
+            status: 'escrow_held',
           })
           .returning();
 
@@ -638,6 +653,8 @@ async function createTradePost(req: NextRequest) {
         throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient funds at commit time. Required ${totalCost} BANKR.`);
       }
 
+      const escrowSessionId = await createEscrowSession(tx, auth.userId, totalCost);
+
       const [trade] = await tx
         .insert(trades)
         .values({
@@ -653,7 +670,8 @@ async function createTradePost(req: NextRequest) {
           dev_amount: devAmount,
           dev_wallet: devWalletAddress,
           payout_status: devAmount > 0 ? 'fee_sent' : 'pending',
-          status: 'pending',
+          escrow_session_id: escrowSessionId,
+          status: 'escrow_held',
         })
         .returning();
 

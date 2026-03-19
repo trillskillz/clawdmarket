@@ -16,78 +16,51 @@ const CAPABILITIES = {
 
 const MPP_RECIPIENT_ADDRESS = process.env.MPP_RECIPIENT_ADDRESS as `0x${string}` | undefined;
 
-if (!MPP_RECIPIENT_ADDRESS) {
-  throw new Error('Missing MPP_RECIPIENT_ADDRESS environment variable.');
-}
+const mcpPayment = MPP_RECIPIENT_ADDRESS
+  ? ServerMppx.create({
+      methods: [
+        tempo({
+          currency: PATHUSD_ADDRESS,
+          chainId: TEMPO_CHAIN_ID,
+          recipient: MPP_RECIPIENT_ADDRESS,
+        }),
+      ],
+      transport: Transport.mcp(),
+      secretKey: process.env.MPP_SECRET_KEY || process.env.JWT_SECRET || 'clawdmarket-mpp-dev-secret',
+    })
+  : null;
 
-const mcpPayment = ServerMppx.create({
-  methods: [
-    tempo({
-      currency: PATHUSD_ADDRESS,
-      chainId: TEMPO_CHAIN_ID,
-      recipient: MPP_RECIPIENT_ADDRESS,
-    }),
-  ],
-  transport: Transport.mcp(),
-  secretKey: process.env.MPP_SECRET_KEY || process.env.JWT_SECRET || 'clawdmarket-mpp-dev-secret',
-});
-
-const paidMcpToolCall = mcpPayment.charge({ amount: '0.001' });
+const paidMcpToolCall = mcpPayment ? mcpPayment.charge({ amount: '0.001' }) : async () => ({ status: 200, withReceipt: (x: any) => x });
 
 const TOOLS = [
   {
     name: 'list_agents',
-    description: 'Browse agents by capability, price, or name.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        q: { type: 'string', description: 'Search term for capability or name' },
-        category: { type: 'string', description: 'Optional category filter' },
-        limit: { type: 'number', description: 'Max results to return, default 20' },
-      },
-    },
+    description: 'Browse registered agents by capability, price, or name.',
+    inputSchema: { type: 'object', properties: { capability: { type: 'string' }, limit: { type: 'number', default: 20 } } },
   },
   {
     name: 'get_agent',
-    description: 'Get agent details by ID.',
-    inputSchema: {
-      type: 'object',
-      required: ['agent_id'],
-      properties: {
-        agent_id: { type: 'string', description: 'Agent/listing identifier' },
-      },
-    },
+    description: 'Get details for a specific agent by ID.',
+    inputSchema: { type: 'object', properties: { agent_id: { type: 'string' } }, required: ['agent_id'] },
   },
   {
     name: 'hire_agent',
-    description: 'Create a hire request/trade for an agent.',
+    description: 'Create a trade/hire request for an agent.',
     inputSchema: {
       type: 'object',
+      properties: { agent_id: { type: 'string' }, task: { type: 'string' }, budget_usd: { type: 'number' } },
       required: ['agent_id', 'task'],
-      properties: {
-        agent_id: { type: 'string' },
-        task: { type: 'string' },
-      },
     },
   },
   {
     name: 'get_trade_status',
-    description: 'Check status for a trade by ID.',
-    inputSchema: {
-      type: 'object',
-      required: ['trade_id'],
-      properties: {
-        trade_id: { type: 'string' },
-      },
-    },
+    description: 'Check status of an existing trade.',
+    inputSchema: { type: 'object', properties: { trade_id: { type: 'string' } }, required: ['trade_id'] },
   },
   {
     name: 'get_marketplace_stats',
-    description: 'Get marketplace stats (agents, volume, fees).',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
+    description: 'Get marketplace stats: agent count, volume, fees.',
+    inputSchema: { type: 'object', properties: {} },
   },
 ] as const;
 
@@ -184,16 +157,15 @@ async function executeTool(req: NextRequest, name: string, args: any) {
 
   switch (name) {
     case 'list_agents': {
-      const category = typeof args?.category === 'string' ? args.category : undefined;
+      const capability = typeof args?.capability === 'string' ? args.capability : undefined;
       const limit = typeof args?.limit === 'number' ? args.limit : 20;
-      const q = typeof args?.q === 'string' ? args.q : undefined;
 
       const result = await callApi('GET', '/api/listings', {
         query: {
           status: 'active',
-          category,
+          category: capability,
           limit,
-          q,
+          q: capability,
         },
       });
 
@@ -299,8 +271,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const paymentGate = await paidMcpToolCall(body as any);
-      if (paymentGate.status === 402) {
+      const paymentGate: any = await paidMcpToolCall(body as any);
+      if (paymentGate.status === 402 && paymentGate.challenge) {
         return withCors(NextResponse.json(paymentGate.challenge));
       }
 

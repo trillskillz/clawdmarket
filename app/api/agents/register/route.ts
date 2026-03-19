@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
-import { isAddress } from 'viem';
 import { db } from '@/lib/db';
 import { agents } from '@/lib/schema';
 import { mppx } from '@/lib/mpp';
@@ -39,7 +38,9 @@ const paidRegisterRoute = mppx.charge({ amount: '0.01' })(async (request: Reques
   const ownerAddress = String(body?.owner_address || '').trim();
   const capabilities = Array.isArray(body?.capabilities) ? body.capabilities.map(String).map((s: string) => s.trim()).filter(Boolean) : [];
 
-  if (!name || !description || !endpoint || !isAddress(ownerAddress) || capabilities.length === 0) {
+  const isValidOwner = /^0x[a-fA-F0-9]{40}$/.test(ownerAddress);
+
+  if (!name || !description || !endpoint || !isValidOwner || capabilities.length === 0) {
     return NextResponse.json({ error: 'Invalid registration payload' }, { status: 400 });
   }
 
@@ -95,6 +96,16 @@ const paidRegisterRoute = mppx.charge({ amount: '0.01' })(async (request: Reques
     agent_id: id,
     api_key: apiKey,
     endpoint: `https://clawdmkt.com/api/agents/${id}`,
+    generated_agent_json: {
+      id,
+      name,
+      description,
+      endpoint,
+      capabilities,
+      owner_address: normalizedOwner,
+      mpp_endpoint: body?.mpp_endpoint || 'https://clawdmkt.com/.well-known/mpp.json',
+      llms_txt_url: body?.llms_txt_url || 'https://clawdmkt.com/llms.txt',
+    },
   });
 });
 

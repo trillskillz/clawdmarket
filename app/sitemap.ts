@@ -12,24 +12,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/docs`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE}/registry`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE}/not-for-humans`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${BASE}/.well-known/mpp.json`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
-    { url: `${BASE}/llms.txt`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
+    { url: `${BASE}/leaderboard`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
   ];
 
-  try {
-    const allAgents = await db
-      .select({ id: agents.id, createdAt: agents.created_at })
-      .from(agents);
+  const allAgents = await db
+    .select({ id: agents.id, updatedAt: agents.created_at })
+    .from(agents)
+    .all()
+    .catch(() => []); // graceful fallback
 
-    const agentRoutes: MetadataRoute.Sitemap = allAgents.map((agent) => ({
-      url: `${BASE}/registry/${agent.id}`,
-      lastModified: agent.createdAt ?? now,
-      changeFrequency: 'daily',
-      priority: 0.8,
-    }));
+  const agentUrls = allAgents.map((a) => ({
+    url: `${BASE}/registry/${a.id}`,
+    lastModified: a.updatedAt,
+    changeFrequency: 'daily' as const,
+    priority: 0.8,
+  }));
 
-    return [...staticRoutes, ...agentRoutes];
-  } catch {
-    return staticRoutes;
-  }
+  return [...staticRoutes, ...agentUrls];
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, wallets, transactions, fee_errors } from '@/lib/schema';
+import { trades, wallets, transactions, fee_errors, messages } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { updateTradeStatusSchema, isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
@@ -9,6 +9,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
 import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
+import { encryptMessage } from '@/lib/chat-crypto';
 
 export async function PATCH(
   req: NextRequest,
@@ -93,6 +94,7 @@ export async function PATCH(
           status: targetStatus,
           payout_status: targetStatus === 'complete' ? 'complete' : trade.payout_status,
           completed_at: targetStatus === 'complete' ? new Date() : null,
+          rating_window_expires_at: targetStatus === 'complete' ? new Date(Date.now() + (72 * 60 * 60 * 1000)).toISOString() : null,
         })
         .where(and(eq(trades.id, id), eq(trades.status, 'pending')))
         .returning();
@@ -170,6 +172,35 @@ export async function PATCH(
       await fireWebhook(trade.seller_id, 'trade.completed', { trade: updatedTrade });
       await fireWebhook(trade.buyer_id, 'balance.changed', { reason: 'escrow_release', trade_id: trade.id });
       await fireWebhook(trade.seller_id, 'balance.changed', { reason: 'escrow_release', trade_id: trade.id });
+
+      const expiresAtIso = new Date(Date.now() + (72 * 60 * 60 * 1000)).toISOString();
+      const buyerPrompt = await encryptMessage(JSON.stringify({
+        type: 'rating_request',
+        trade_id: trade.id,
+        counterpart_id: trade.seller_id,
+        rating_window_expires_at: expiresAtIso,
+      }));
+      const sellerPrompt = await encryptMessage(JSON.stringify({
+        type: 'rating_request',
+        trade_id: trade.id,
+        counterpart_id: trade.buyer_id,
+        rating_window_expires_at: expiresAtIso,
+      }));
+
+      await db.insert(messages).values([
+        {
+          sender_id: trade.seller_id,
+          receiver_id: trade.buyer_id,
+          encrypted_content: buyerPrompt.encrypted_content,
+          nonce: buyerPrompt.nonce,
+        },
+        {
+          sender_id: trade.buyer_id,
+          receiver_id: trade.seller_id,
+          encrypted_content: sellerPrompt.encrypted_content,
+          nonce: sellerPrompt.nonce,
+        },
+      ]);
     }
 
     return NextResponse.json({

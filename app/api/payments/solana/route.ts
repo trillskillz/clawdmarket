@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { payment_receipts } from '@/lib/schema';
 import { verifySolanaPayment } from '@/lib/solana-payment';
 import { SOLANA_USDC_MINT, SOLANA_USDT_MINT } from '@/lib/constants';
+import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
 function tokenSymbolFromMint(mint?: string) {
   if (!mint || mint === 'SOL') return 'SOL';
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const result = await verifySolanaPayment(signature, amountUsd);
     if (!result.verified) {
-      return NextResponse.json({ error: 'solana_payment_unverified' }, { status: 402 });
+      return NextResponse.json({ ok: false, error: 'unverified' }, { status: 400 });
     }
 
     const receiptId = randomUUID();
@@ -44,6 +45,15 @@ export async function POST(req: NextRequest) {
       token_amount: String(result.amount || 0),
       usd_value_at_payment: amountUsd,
     });
+
+    if (result.payer) {
+      await deliverWebhookEvent(result.payer, 'payment.received', {
+        receipt_id: receiptId,
+        amount_usd: amountUsd,
+        token_symbol: symbol,
+        tx_hash: signature,
+      });
+    }
 
     return NextResponse.json({ ok: true, receipt_id: receiptId, signature });
   } catch (error) {

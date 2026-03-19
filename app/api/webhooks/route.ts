@@ -1,131 +1,65 @@
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { webhooks } from '@/lib/schema';
-import { authenticateRequest } from '@/lib/auth';
+import { mppx } from '@/lib/mpp';
 import { createWebhookSchema } from '@/lib/validation';
-import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { validateCsrf } from '@/lib/csrf';
-import { eq } from 'drizzle-orm';
-import crypto from 'crypto';
+import { agentIdFromRequestPayer, hashSecret } from '@/lib/webhook-delivery';
 
-export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
-
-  if (!auth) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    );
+async function createWebhook(req: NextRequest) {
+  const body = await req.json().catch(() => null);
+  const validated = createWebhookSchema.safeParse(body);
+  if (!validated.success) {
+    return NextResponse.json({ error: 'validation_failed', details: validated.error.issues }, { status: 400 });
   }
 
-  // Validate CSRF for cookie-based auth
-  if (!authHeader && !validateCsrf(req)) {
-    return NextResponse.json(
-      { error: 'CSRF validation failed' },
-      { status: 403 }
-    );
+  const { url, events } = validated.data;
+  if (!url.startsWith('https://')) {
+    return NextResponse.json({ error: 'invalid_url' }, { status: 400 });
   }
 
-  const rateLimitResult = rateLimit(`webhook:${auth.userId}`, { 
-    interval: 60 * 60 * 1000, 
-    maxRequests: 10 
+  const agentId = await agentIdFromRequestPayer(req);
+  if (!agentId) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+
+  const secret = `${randomUUID()}${randomUUID()}`;
+  const secretHash = await hashSecret(secret);
+
+  const [created] = await db
+    .insert(webhooks)
+    .values({
+      agent_id: agentId,
+      url,
+      secret_hash: secretHash,
+      events: JSON.stringify(events),
+      active: 1,
+    })
+    .returning({ id: webhooks.id });
+
+  return NextResponse.json({ webhook_id: created.id, secret }, { status: 201 });
+}
+
+async function listWebhooks(req: NextRequest) {
+  const agentId = await agentIdFromRequestPayer(req);
+  if (!agentId) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+
+  const rows = await db
+    .select({
+      id: webhooks.id,
+      url: webhooks.url,
+      events: webhooks.events,
+      active: webhooks.active,
+      created_at: webhooks.created_at,
+      last_triggered_at: webhooks.last_triggered_at,
+      failure_count: webhooks.failure_count,
+    })
+    .from(webhooks)
+    .where(eq(webhooks.agent_id, agentId));
+
+  return NextResponse.json({
+    webhooks: rows.map((w) => ({ ...w, events: JSON.parse(w.events || '[]') })),
   });
-
-  if (!rateLimitResult.success) {
-    return NextResponse.json(
-      { error: 'Too many webhook creation attempts. Please try again later.' },
-      { 
-        status: 429,
-        headers: getRateLimitHeaders(rateLimitResult),
-      }
-    );
-  }
-
-  try {
-    const body = await req.json();
-    const validated = createWebhookSchema.parse(body);
-
-    // Generate secret for webhook signature
-    const secret = crypto.randomBytes(32).toString('hex');
-
-    const [newWebhook] = await db
-      .insert(webhooks)
-      .values({
-        user_id: auth.userId,
-        url: validated.url,
-        events: validated.events.join(','),
-        secret: secret,
-      })
-      .returning();
-
-    return NextResponse.json(
-      {
-        message: 'Webhook created successfully',
-        webhook: {
-          id: newWebhook.id,
-          url: newWebhook.url,
-          events: validated.events,
-          secret: secret,
-          created_at: newWebhook.created_at,
-        },
-        note: 'Save the secret - it will be used to sign webhook payloads',
-      },
-      { 
-        status: 201,
-        headers: getRateLimitHeaders(rateLimitResult),
-      }
-    );
-  } catch (error: any) {
-    if (error.errors) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
-      );
-    }
-    console.error('Webhook creation error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
 }
 
-export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
-
-  if (!auth) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    );
-  }
-
-  try {
-    const userWebhooks = await db
-      .select({
-        id: webhooks.id,
-        url: webhooks.url,
-        events: webhooks.events,
-        created_at: webhooks.created_at,
-      })
-      .from(webhooks)
-      .where(eq(webhooks.user_id, auth.userId));
-
-    return NextResponse.json({
-      webhooks: userWebhooks.map(wh => ({
-        ...wh,
-        events: wh.events.split(','),
-      })),
-    });
-  } catch (error) {
-    console.error('Webhooks fetch error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
+export const POST = mppx.charge({ amount: '0.001' })(createWebhook);
+export const GET = mppx.charge({ amount: '0.001' })(listWebhooks);

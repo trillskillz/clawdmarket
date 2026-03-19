@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { payment_receipts } from '@/lib/schema';
 import { verifyBitcoinPayment } from '@/lib/bitcoin-payment';
+import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!result.verified) {
-      return NextResponse.json({ ok: false, error: 'bitcoin_payment_unverified', confirmations: result.confirmations || 0 }, { status: 402 });
+      return NextResponse.json({ ok: false, error: 'unverified', confirmations: result.confirmations || 0 }, { status: 400 });
     }
 
     const receiptId = randomUUID();
@@ -39,6 +40,15 @@ export async function POST(req: NextRequest) {
       token_amount: String(result.amount_btc || 0),
       usd_value_at_payment: amountUsd,
     });
+
+    if (result.payer_address) {
+      await deliverWebhookEvent(result.payer_address, 'payment.received', {
+        receipt_id: receiptId,
+        amount_usd: amountUsd,
+        token_symbol: 'BTC',
+        tx_hash: txid,
+      });
+    }
 
     return NextResponse.json({ ok: true, receipt_id: receiptId, txid, confirmations: result.confirmations || 0 });
   } catch (error) {
