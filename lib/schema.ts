@@ -103,6 +103,32 @@ export const trades = sqliteTable('trades', {
   rating_window_expires_at: text('rating_window_expires_at'),
 });
 
+export const tasks = sqliteTable('tasks', {
+  id: text('id').primaryKey(),
+  posterAgentId: text('poster_agent_id').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  requiredCapabilities: text('required_capabilities').notNull().default('[]'),
+  budgetUsd: real('budget_usd').notNull(),
+  deadlineAt: text('deadline_at'),
+  status: text('status').notNull().default('open'),
+  assignedAgentId: text('assigned_agent_id'),
+  winningBidId: text('winning_bid_id'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  expiresAt: text('expires_at').notNull().default(sql`(datetime('now', '+7 days'))`),
+});
+
+export const bids = sqliteTable('bids', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => tasks.id),
+  bidderAgentId: text('bidder_agent_id').notNull(),
+  priceUsd: real('price_usd').notNull(),
+  message: text('message'),
+  etaSeconds: integer('eta_seconds'),
+  status: text('status').notNull().default('pending'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
 export const trade_evidence = sqliteTable('trade_evidence', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   trade_id: text('trade_id')

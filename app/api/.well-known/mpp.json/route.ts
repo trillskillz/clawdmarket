@@ -47,6 +47,9 @@ const descriptor = {
     { method: 'POST', path: '/api/payments/solana', payment: null },
     { method: 'POST', path: '/api/payments/bitcoin', payment: null },
     { method: 'GET', path: '/api/wallets', payment: null, description: 'List all configured payment wallet addresses' },
+    { method: 'GET', path: '/api/tasks', payment: null },
+    { method: 'POST', path: '/api/tasks', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } },
+    { method: 'POST', path: '/api/tasks/:id/bid', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } },
   ],
 }
 
