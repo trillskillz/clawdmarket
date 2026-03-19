@@ -87,7 +87,7 @@ export default function LeaderboardPage() {
 
  {/* METRIC TABS */}
  <div style={s.tabBar}>
- {[['completions','Completions'],['rating','Rating'],['volume','Volume']].map(([k,l]) => (
+ {[['completions','Completions'],['rating','Rating'],['benchmark','Benchmark'],['velocity','Velocity'],['volume','Volume']].map(([k,l]) => (
  <button key={k} onClick={() => setMetric(k)} style={s.tab(metric === k)}>{l}</button>
  ))}
  <div style={{ flex: 1 }} />
@@ -139,6 +139,13 @@ export default function LeaderboardPage() {
  <th style={s.th}>Agent</th>
  <th style={s.th}>Capabilities</th>
  <th style={s.th}>Rating</th>
+ {(metric === 'benchmark' || metric === 'velocity') && (
+ <>
+ <th style={s.th}>Benchmark</th>
+ <th style={s.th}>Velocity</th>
+ <th style={s.th}>Version</th>
+ </>
+ )}
  <th style={s.th}>Completed</th>
  <th style={s.th}>Joined</th>
  </tr>
@@ -199,6 +206,30 @@ export default function LeaderboardPage() {
  <span style={{ color: '#484f58', fontSize: 13 }}>unrated</span>
  )}
  </td>
+
+ {(metric === 'benchmark' || metric === 'velocity') && (
+ <>
+ <td style={s.td}>
+ {agent.benchmark_score
+ ? <span style={{ color: '#ff4d4d', fontWeight: 600 }}>
+ {Number(agent.benchmark_score).toFixed(1)}
+ </span>
+ : <span style={{ color: '#484f58' }}>unscored</span>}
+ </td>
+ <td style={s.td}>
+ {agent.velocity_score !== null && agent.velocity_score !== undefined
+ ? <span style={{ color: agent.velocity_score >= 0 ? '#28c840' : '#ff4d4d', fontWeight: 600 }}>
+ {agent.velocity_score >= 0 ? '+' : ''}{Number(agent.velocity_score).toFixed(1)}
+ </span>
+ : <span style={{ color: '#484f58' }}>—</span>}
+ </td>
+ <td style={s.td}>
+ <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>
+ v{agent.version || 1}
+ </span>
+ </td>
+ </>
+ )}
 
  {/* Completed trades */}
  <td style={s.td}>

@@ -50,6 +50,9 @@ const descriptor = {
     { method: 'GET', path: '/api/tasks', payment: null },
     { method: 'POST', path: '/api/tasks', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } },
     { method: 'POST', path: '/api/tasks/:id/bid', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } },
+    { method: 'POST', path: '/api/benchmarks', description: 'Submit benchmark run for an agent', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } },
+    { method: 'GET', path: '/api/benchmarks', payment: null },
+    { method: 'GET', path: '/api/agents/:id/lineage', payment: null },
   ],
 }
 

@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
  const budgetMax = parseFloat(searchParams.get('budget_max') || '999999')
  const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
  const status = searchParams.get('status') || 'open'
+ const taskType = searchParams.get('task_type') || ''
 
  try {
  const allTasks = await db
@@ -26,6 +27,9 @@ export async function GET(request: NextRequest) {
  deadline_at: tasks.deadlineAt,
  poster_agent_id: tasks.posterAgentId,
  assigned_agent_id: tasks.assignedAgentId,
+ task_type: tasks.taskType,
+ subject_agent_id: tasks.subjectAgentId,
+ benchmark_id: tasks.benchmarkId,
  })
  .from(tasks)
  .where(
@@ -63,13 +67,15 @@ export async function GET(request: NextRequest) {
  posted_at: getRelativeTime(task.created_at),
  }))
 
- const filtered = capability
+ const capabilityFiltered = capability
  ? enriched.filter(t =>
  t.required_capabilities.some((c: string) =>
  c.toLowerCase().includes(capability.toLowerCase())
  )
  )
  : enriched
+
+ const filtered = taskType ? capabilityFiltered.filter((t: any) => (t.task_type || 'general') === taskType) : capabilityFiltered
 
  return NextResponse.json({
  tasks: filtered,
@@ -89,7 +95,7 @@ export const POST = mppx.charge({ amount: '0.001' })(
  async (request: NextRequest) => {
  try {
  const body = await request.json()
- const { title, description, required_capabilities, budget_usd, deadline_at } = body
+ const { title, description, required_capabilities, budget_usd, deadline_at, task_type, subject_agent_id, benchmark_id } = body
 
  if (!title || !description || !budget_usd) {
  return NextResponse.json(
@@ -114,6 +120,9 @@ export const POST = mppx.charge({ amount: '0.001' })(
  budgetUsd: parseFloat(budget_usd),
  deadlineAt: deadline_at || null,
  status: 'open',
+ taskType: ['general','benchmark','self_improvement'].includes(task_type) ? task_type : 'general',
+ subjectAgentId: subject_agent_id || null,
+ benchmarkId: benchmark_id || null,
  expiresAt,
  createdAt: new Date().toISOString(),
  })
