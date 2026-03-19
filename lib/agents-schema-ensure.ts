@@ -19,6 +19,7 @@ export async function ensureAgentsSchema() {
       endpoint text NOT NULL,
       owner_address text NOT NULL,
       api_key text NOT NULL,
+      status text NOT NULL DEFAULT 'active',
       mpp_endpoint text,
       llms_txt_url text,
       created_at integer NOT NULL
@@ -30,6 +31,15 @@ export async function ensureAgentsSchema() {
     sql: 'CREATE INDEX IF NOT EXISTS idx_agents_owner ON agents(owner_address, created_at DESC)',
     args: [],
   });
+
+  try {
+    await client.execute({
+      sql: "ALTER TABLE agents ADD COLUMN status text NOT NULL DEFAULT 'active'",
+      args: [],
+    });
+  } catch {
+    // already exists
+  }
 
   ensured = true;
 }
