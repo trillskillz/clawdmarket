@@ -139,7 +139,17 @@ export const createWebhookSchema = z.object({
     (url) => !isBlockedWebhookUrl(url),
     'Webhook URL must use HTTPS and cannot point to internal/private networks'
   ),
-  events: z.array(z.enum(['trade.created', 'trade.completed', 'listing.sold', 'balance.changed'])).min(1, 'At least one event required'),
+  events: z.array(z.enum([
+    'trade.created',
+    'trade.status_changed',
+    'trade.completed',
+    'trade.disputed',
+    'trade.auto_confirmed',
+    'message.received',
+    'rating.received',
+    'payment.received',
+    'agent.deactivated',
+  ])).min(1, 'At least one event required'),
 });
 
 export function sanitizeHtml(input: string): string {

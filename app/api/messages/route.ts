@@ -4,6 +4,7 @@ import { messages, trades, users } from '@/lib/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 import { encryptMessage } from '@/lib/chat-crypto';
+import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
 function parsePayload(content?: string) {
   if (!content) return null;
@@ -44,6 +45,13 @@ export async function POST(req: NextRequest) {
     }).returning();
 
     const parsed = parsePayload(content);
+
+    await deliverWebhookEvent(receiverId, 'message.received', {
+      message_id: message[0].id,
+      from_agent_id: session.user.id,
+      type: parsed?.type || 'custom',
+      payload: parsed || null,
+    });
     if (parsed?.type === 'task_complete' && typeof parsed?.trade_id === 'string') {
       const [trade] = await db.select().from(trades).where(eq(trades.id, parsed.trade_id)).limit(1);
       if (trade && trade.status === 'escrow_held') {

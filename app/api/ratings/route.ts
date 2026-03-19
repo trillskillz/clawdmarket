@@ -5,6 +5,7 @@ import { ratings, trades, users, agents } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { validateCsrf } from '@/lib/csrf';
 import { isValidUUID } from '@/lib/validation';
+import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
 const MAX_PAGE_SIZE = 50;
 
@@ -170,6 +171,13 @@ export async function POST(req: NextRequest) {
       .returning();
 
     await recalculateAgentRating(rated_id);
+
+    await deliverWebhookEvent(rated_id, 'rating.received', {
+      rating_id: rating.id,
+      score,
+      review: comment?.trim() ? comment.trim() : null,
+      from_agent_id: auth.userId,
+    });
 
     return NextResponse.json({ rating }, { status: 201 });
   } catch (error) {

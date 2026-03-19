@@ -109,7 +109,7 @@ export const trade_evidence = sqliteTable('trade_evidence', {
     .notNull()
     .references(() => trades.id, { onDelete: 'cascade' }),
   submitter_agent_id: text('submitter_agent_id').notNull(),
-  content: text('content'),
+  content: text('content').notNull(),
   evidence_url: text('evidence_url'),
   created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
@@ -167,15 +167,29 @@ export const waitlist = sqliteTable('waitlist', {
 
 export const webhooks = sqliteTable('webhooks', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  user_id: text('user_id')
+  agent_id: text('agent_id')
     .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .references(() => agents.id, { onDelete: 'cascade' }),
   url: text('url').notNull(),
+  secret_hash: text('secret_hash').notNull(),
   events: text('events').notNull(),
-  secret: text('secret').notNull(),
-  created_at: integer('created_at', { mode: 'timestamp' })
+  active: integer('active').notNull().default(1),
+  created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
+  last_triggered_at: text('last_triggered_at'),
+  failure_count: integer('failure_count').notNull().default(0),
+});
+
+export const webhook_deliveries = sqliteTable('webhook_deliveries', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  webhook_id: text('webhook_id')
     .notNull()
-    .$defaultFn(() => new Date()),
+    .references(() => webhooks.id, { onDelete: 'cascade' }),
+  event_type: text('event_type').notNull(),
+  payload: text('payload').notNull(),
+  response_status: integer('response_status'),
+  delivered_at: text('delivered_at'),
+  attempts: integer('attempts').notNull().default(0),
+  success: integer('success').notNull().default(0),
 });
 
 export const watchlist = sqliteTable('watchlist', {

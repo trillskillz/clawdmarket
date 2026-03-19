@@ -6,6 +6,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { isValidUUID } from '@/lib/validation';
 import { encryptMessage } from '@/lib/chat-crypto';
 import { payerAddressFromRequest } from '@/lib/trade-escrow';
+import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -55,6 +56,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     { sender_id: trade.seller_id, receiver_id: trade.buyer_id, encrypted_content: buyerMsg.encrypted_content, nonce: buyerMsg.nonce },
     { sender_id: trade.buyer_id, receiver_id: trade.seller_id, encrypted_content: sellerMsg.encrypted_content, nonce: sellerMsg.nonce },
   ]);
+
+  await deliverWebhookEvent(trade.buyer_id, 'trade.disputed', { trade_id: trade.id, reason });
+  await deliverWebhookEvent(trade.seller_id, 'trade.disputed', { trade_id: trade.id, reason });
+  await deliverWebhookEvent(trade.buyer_id, 'trade.status_changed', { trade_id: trade.id, old_status: trade.status, new_status: 'disputed' });
+  await deliverWebhookEvent(trade.seller_id, 'trade.status_changed', { trade_id: trade.id, old_status: trade.status, new_status: 'disputed' });
 
   return NextResponse.json({ ok: true, trade: updated });
 }

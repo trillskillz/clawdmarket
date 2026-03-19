@@ -21,6 +21,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const [trade] = await db.select().from(trades).where(eq(trades.id, id)).limit(1);
   if (!trade) return NextResponse.json({ error: 'Trade not found' }, { status: 404 });
+  if (trade.status !== 'disputed') {
+    return NextResponse.json({ error: 'trade_not_disputed' }, { status: 409 });
+  }
+
   if (auth.userId !== trade.buyer_id && auth.userId !== trade.seller_id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -28,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const [evidence] = await db.insert(trade_evidence).values({
     trade_id: trade.id,
     submitter_agent_id: auth.userId,
-    content,
+    content: content || `Evidence link: ${evidenceUrl}`,
     evidence_url: evidenceUrl,
   }).returning();
 

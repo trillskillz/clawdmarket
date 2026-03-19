@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { messages, mpp_sessions, trades } from '@/lib/schema';
 import { encryptMessage } from '@/lib/chat-crypto';
+import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
 export function addressFromSource(source?: string | null) {
   if (!source) return null;
@@ -85,6 +86,15 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
     status: 'completed',
     reason,
   });
+
+  await deliverWebhookEvent(trade.buyer_id, 'trade.status_changed', { trade_id: trade.id, old_status: 'pending_release', new_status: 'completed' });
+  await deliverWebhookEvent(trade.seller_id, 'trade.status_changed', { trade_id: trade.id, old_status: 'pending_release', new_status: 'completed' });
+  await deliverWebhookEvent(trade.buyer_id, 'trade.completed', { trade_id: trade.id, settled_amount: trade.amount });
+  await deliverWebhookEvent(trade.seller_id, 'trade.completed', { trade_id: trade.id, settled_amount: trade.amount });
+  if (reason === 'auto_confirm') {
+    await deliverWebhookEvent(trade.buyer_id, 'trade.auto_confirmed', { trade_id: trade.id });
+    await deliverWebhookEvent(trade.seller_id, 'trade.auto_confirmed', { trade_id: trade.id });
+  }
 
   return updatedTrade;
 }

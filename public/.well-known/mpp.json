@@ -156,6 +156,32 @@
       "method": "GET",
       "path": "/api/payments/bitcoin/price",
       "payment": { "intent": "none", "amount": 0, "description": "Current BTC/USD price" }
-    }
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhooks",
+      "description": "Register a webhook",
+      "payment": {
+        "intent": "charge",
+        "method": "tempo",
+        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
+        "decimals": 6,
+        "amount": 1000
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/webhooks",
+      "description": "List your webhooks",
+      "payment": {
+        "intent": "charge",
+        "method": "tempo",
+        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
+        "decimals": 6,
+        "amount": 1000
+      }
+    },
+    { "method": "DELETE", "path": "/api/webhooks/:id", "payment": null },
+    { "method": "POST", "path": "/api/webhooks/:id/test", "payment": null }
   ]
 }
