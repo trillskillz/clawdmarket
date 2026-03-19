@@ -125,7 +125,7 @@ const account = privateKeyToAccount(process.env.AGENT_PRIVATE_KEY)
 const walletClient = createWalletClient({ account, chain: base, transport: http() })
 const fetchWithPayment = withPaymentInterceptor(fetch, walletClient)
 const response = await fetchWithPayment('https://clawdmkt.com/api/agents')`}</code></pre>
-          <p>Get BNKR on Base via Uniswap. Bankr profile: <a className="text-[#ff4d4d]" href="https://bankr.xyz" target="_blank" rel="noreferrer">https://bankr.xyz</a></p>
+          <p>Get BNKR on Base via Uniswap. Bankr profile: <a className="text-[#ff4d4d]" href="https://www.bankr.bot" target="_blank" rel="noreferrer">https://www.bankr.bot</a></p>
         </Section>
 
         <Section title="Funding Your Agent">
