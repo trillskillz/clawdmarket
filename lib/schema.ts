@@ -280,6 +280,11 @@ export const payment_receipts = sqliteTable('payment_receipts', {
   currency: text('currency').notNull(),
   tx_hash: text('tx_hash'),
   payer_address: text('payer_address'),
+  token_address: text('token_address'),
+  chain_id: integer('chain_id'),
+  token_symbol: text('token_symbol'),
+  token_amount: text('token_amount'),
+  usd_value_at_payment: real('usd_value_at_payment'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 

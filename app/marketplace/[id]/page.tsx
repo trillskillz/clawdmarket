@@ -15,6 +15,7 @@ import dynamic from 'next/dynamic';
 import { trustScoreClass } from '@/lib/trust-score';
 import PriceWithKas from '@/components/PriceWithKas';
 import { useKasRate } from '@/components/providers/KasRateProvider';
+import TokenPaymentModal from '@/components/TokenPaymentModal';
 
 interface Listing {
   id: string;
@@ -88,6 +89,7 @@ export default function ListingDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [showWalletLogin, setShowWalletLogin] = useState(false);
+  const [showTokenPayment, setShowTokenPayment] = useState(false);
   const [kasLoading, setKasLoading] = useState(false);
   const [kasPayment, setKasPayment] = useState<KasPaymentState | null>(null);
   const [onchainConfig, setOnchainConfig] = useState<OnchainConfig | null>(null);
@@ -95,8 +97,6 @@ export default function ListingDetailPage() {
   const [showTrustBreakdown, setShowTrustBreakdown] = useState(false);
   const { track } = useAnalytics();
   const { address: connectedAddress, isConnected } = useAccount();
-  const { writeContractAsync } = useWriteContract();
-  const basePublicClient = usePublicClient({ chainId: base.id });
   const { bankrToKas } = useKasRate();
 
   const getCsrfToken = () =>
@@ -262,64 +262,21 @@ export default function ListingDetailPage() {
       return;
     }
 
-    const bankrToken = onchainConfig?.token_address || '';
-    const escrowWallet = onchainConfig?.escrow_wallet || '';
-    const devFeeWallet = onchainConfig?.fee_wallet || '';
-
-    if (!bankrToken || !escrowWallet || !devFeeWallet) {
-      toast('On-chain payment configuration is missing. Contact admin.', 'error');
-      return;
-    }
-
-    const isHexAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v || '');
-    if (!isHexAddress(bankrToken) || !isHexAddress(escrowWallet) || !isHexAddress(devFeeWallet)) {
-      toast('Invalid on-chain address verification. Contact admin.', 'error');
-      return;
-    }
-
-    if (connectedAddress.toLowerCase() === escrowWallet.toLowerCase()) {
-      toast('Connected wallet cannot be the same as escrow wallet. Please switch wallets.', 'error');
-      return;
-    }
-
-    if (connectedAddress.toLowerCase() === devFeeWallet.toLowerCase()) {
-      toast('Connected wallet cannot be the same as fee wallet. Please switch wallets.', 'error');
-      return;
-    }
-
-    const preview = tradePreview || {
-      item_price: listing.price_bankr,
-      platform_fee: Number((listing.price_bankr * 0.05).toFixed(2)),
-      total_cost: Number((listing.price_bankr * 1.05).toFixed(2)),
-      seller_amount: listing.price_bankr,
-      dev_amount: Number((listing.price_bankr * 0.05).toFixed(2)),
-    };
-
-    if (!confirm(`Are you sure you want to buy this item?\n\nPrice: ${preview.item_price} BANKR\nFee (5%): ${preview.platform_fee.toFixed(2)} BANKR\nTotal: ${preview.total_cost.toFixed(2)} BANKR\n\nYou will sign a single on-chain BANKR payment transaction.`)) {
-      return;
-    }
-
     track('trade_init', { listing_id: listing.id, amount: listing.price_bankr });
+    setShowTokenPayment(true);
+  };
+
+  const handleTokenPaymentVerification = async (payload: {
+    tokenAddress: string;
+    chainId: number;
+    decimals: number;
+    tokenSymbol?: string;
+    txHash: string;
+  }) => {
+    if (!listing) return;
+
     setTradeLoading(true);
-
     try {
-      if (!basePublicClient) {
-        toast('Base client unavailable. Please reconnect wallet and retry.', 'error');
-        return;
-      }
-
-      const totalAmount = parseUnits(preview.total_cost.toFixed(18), 18);
-
-      const escrowTxHash = await writeContractAsync({
-        chainId: base.id,
-        address: bankrToken as `0x${string}`,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [escrowWallet as `0x${string}`, totalAmount],
-      });
-
-      await basePublicClient.waitForTransactionReceipt({ hash: escrowTxHash });
-
       const csrfToken = getCsrfToken();
       const res = await fetch('/api/trades', {
         method: 'POST',
@@ -333,34 +290,23 @@ export default function ListingDetailPage() {
           amount: 1,
           payment_mode: 'onchain',
           onchain: {
-            chain: 'base',
-            token_address: bankrToken,
-            buyer_wallet: connectedAddress,
-            escrow_wallet: escrowWallet,
-            fee_wallet: devFeeWallet,
-            escrow_tx_hash: escrowTxHash,
-            // Single payment tx now covers item + dev fee in one go.
-            fee_tx_hash: escrowTxHash,
+            tokenAddress: payload.tokenAddress,
+            chainId: payload.chainId,
+            decimals: payload.decimals,
+            tokenSymbol: payload.tokenSymbol,
+            txHash: payload.txHash,
+            buyerWallet: connectedAddress,
           },
         }),
       });
 
       const data = await res.json();
-
-      if (res.ok) {
-        toast('Trade successful! On-chain BANKR payment confirmed.', 'success');
-        router.push('/dashboard');
-      } else {
-        if (res.status === 401 || res.status === 403) {
-          setShowWalletLogin(true);
-          toast('Please connect your wallet to continue', 'error');
-        } else {
-          toast(data.error || 'Trade failed', 'error');
-        }
+      if (!res.ok) {
+        throw new Error(data?.error || 'Trade verification failed');
       }
-    } catch (err: any) {
-      console.error(err);
-      toast(err?.shortMessage || err?.message || 'On-chain transaction failed', 'error');
+
+      toast('Trade successful! On-chain ERC-20 payment confirmed.', 'success');
+      router.push('/dashboard');
     } finally {
       setTradeLoading(false);
     }
@@ -718,6 +664,15 @@ export default function ListingDetailPage() {
           </div>
         )}
 
+        {showTokenPayment && (
+          <TokenPaymentModal
+            isOpen={showTokenPayment}
+            usdAmount={tradePreview?.total_cost ?? Number((listing.price_bankr * 1.05).toFixed(2))}
+            onClose={() => setShowTokenPayment(false)}
+            onSubmitVerification={handleTokenPaymentVerification}
+          />
+        )}
+
         {showWalletLogin && (
           <WalletLoginPopup
             forceShow
@@ -725,7 +680,7 @@ export default function ListingDetailPage() {
             onAuthenticated={async () => {
               setShowWalletLogin(false);
               await fetchMe();
-              toast('Wallet connected. You can complete your BANKR purchase now.', 'success');
+              toast('Wallet connected. You can complete your token purchase now.', 'success');
             }}
           />
         )}

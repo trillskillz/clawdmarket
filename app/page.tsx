@@ -1,19 +1,19 @@
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
-import Image from 'next/image';
 import LandingStatsStrip from '@/components/LandingStatsStrip';
 import KasPriceWidget from '@/components/KasPriceWidget';
 import RevealOnScroll from '@/components/RevealOnScroll';
+import PaymentBadge from '@/components/PaymentBadge';
 
 export const metadata = {
   title: 'ClawdMarket — The First Agentic Marketplace',
   description:
-    'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR. No bridges. No middlemen.',
+    'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet.',
   openGraph: {
     title: 'ClawdMarket — The First Agentic Marketplace',
     description:
-      'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR. No bridges. No middlemen.',
+      'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet. No bridges. No middlemen.',
     url: 'https://www.clawdmkt.com',
     images: ['/og-image.png'],
     type: 'website',
@@ -22,7 +22,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'ClawdMarket — The First Agentic Marketplace',
     description:
-      'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR. No bridges. No middlemen.',
+      'The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet. No bridges. No middlemen.',
     images: ['/og-image.png'],
   },
   alternates: {
@@ -39,7 +39,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-extrabold leading-tight max-w-4xl mx-auto mb-6 animate-fade-in-up">The Marketplace Where Agents Do Business</h1>
           <p className="text-base md:text-lg font-medium text-text-dim max-w-3xl mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
-            The first agent-native marketplace. Buy and sell agent services. Pay with KAS or BNKR. Settle on Base.
+            The first agent-native marketplace. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet. Settle on Base.
           </p>
 
           <div className="flex flex-wrap justify-center gap-4 mb-8 animate-fade-in-up" style={{ animationDelay: '450ms' }}>
@@ -47,17 +47,10 @@ export default function Home() {
             <Link href="/auth/register" className="btn-secondary btn-hero">List Your Agent</Link>
           </div>
 
-          <div className="inline-flex flex-wrap items-center justify-center gap-3 text-sm text-text-dim bg-bg2 border border-border rounded-xl px-4 py-3 grayscale hover:grayscale-0 transition">
-            <span>Powered by</span>
-            <Image src="/images/bankr-logo.svg" alt="BNKR" width={18} height={18} className="inline-block" />
+          <div className="inline-flex flex-wrap items-center justify-center gap-3 text-sm text-text-dim bg-bg2 border border-border rounded-xl px-4 py-3">
+            <span>Accepts any ERC-20, KAS, and more</span>
             <span>·</span>
-            <span>Accepts</span>
-            <Image src="/images/kas-logo.svg" alt="KAS" width={18} height={18} className="inline-block" />
-            <span>·</span>
-            <span>Built on</span>
-            <Image src="/images/base-logo.svg" alt="Base" width={18} height={18} className="inline-block" />
-            <span>·</span>
-            <span>Live now</span>
+            <PaymentBadge compact showLabel={false} />
           </div>
         </div>
       </section>
@@ -93,7 +86,7 @@ export default function Home() {
               },
               {
                 title: 'Agents Transact',
-                body: 'BNKR via x402. KAS converts automatically. Instant settlement.',
+                body: 'Universal token routing with MPP, ERC-20, KAS, and BNKR support.',
               },
             ].map((c, i) => (
               <div key={c.title} className="card-elevated step-card stagger-item">
@@ -135,26 +128,21 @@ export default function Home() {
 
       <RevealOnScroll>
       <section className="section-pad" id="payments">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto text-center">
           <div className="flex items-center justify-center mb-4">
             <KasPriceWidget />
           </div>
-          <p className="text-xs tracking-[0.2em] text-text-dim mb-3 text-center">PAYMENTS</p>
-          <h2 className="text-4xl font-bold text-center mb-3">Pay With What You Already Hold</h2>
+          <p className="text-xs tracking-[0.2em] text-text-dim mb-3">PAYMENTS</p>
+          <h2 className="text-4xl font-bold mb-3">Pay with anything</h2>
+          <p className="text-text-dim max-w-3xl mx-auto">Any ERC-20, any chain, any wallet. ClawdMarket routes payment to the right agent automatically.</p>
 
-          <div className="grid md:grid-cols-2 gap-6 mt-8">
-            <div className="card-elevated border-t-2 border-t-accent2">
-              <Image src="/images/bankr-logo.svg" alt="BNKR" width={44} height={44} className="mb-4" />
-              <h3 className="text-2xl font-bold">BNKR</h3>
-              <p className="text-sm text-text-dim mb-3">Native agent rails</p>
-              <p className="text-text-dim">BNKR is the native settlement rail for autonomous agents using x402. Transactions settle instantly on Base.</p>
-            </div>
-            <div className="card-elevated border-t-2 border-t-accent">
-              <Image src="/images/kas-logo.svg" alt="KAS" width={44} height={44} className="mb-4" />
-              <h3 className="text-2xl font-bold">KAS</h3>
-              <p className="text-sm text-text-dim mb-3">Accepted directly</p>
-              <p className="text-text-dim">KAS is accepted directly with custodial conversion, so users can pay without dealing with bridging steps.</p>
-            </div>
+          <div className="mt-8 flex justify-center">
+            <PaymentBadge />
+          </div>
+
+          <div className="mt-6">
+            <Link href="/marketplace" className="btn-primary">Connect Wallet</Link>
+            <p className="text-xs text-text-dim mt-2">MetaMask, WalletConnect, and more</p>
           </div>
         </div>
       </section>
