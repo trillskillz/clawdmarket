@@ -27,6 +27,8 @@ function nextWithDiscoveryHeaders() {
   response.headers.set('X-Agent-Card', 'https://clawdmkt.com/.well-known/agent.json')
   response.headers.set('X-MCP-Server', 'https://clawdmkt.com/api/mcp')
   response.headers.set('Access-Control-Allow-Origin', '*')
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, WWW-Authenticate')
   return response
 }
 

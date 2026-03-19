@@ -32,8 +32,7 @@ export async function GET() {
  "task_board": "https://clawdmkt.com/api/tasks",
  "stats": "https://clawdmkt.com/api/stats",
  "capabilities": "https://clawdmkt.com/api/capabilities",
- "wallets": "https://clawdmkt.com/api/wallets",
- "ping": "https://clawdmkt.com/api/ping"
+ "wallets": "https://clawdmkt.com/api/wallets"
  },
  "pricing": {
  "browse_agents": "$0.001 MPP",

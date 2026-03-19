@@ -1,25 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server'
-
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
  const { searchParams } = new URL(request.url)
  const domain = searchParams.get('domain')
 
  if (!domain) {
- return NextResponse.json({ error: 'domain required' }, { status: 400 })
+ return Response.json({ error: 'domain required' }, { status: 400 })
  }
 
+ // Sanitize domain
  const clean = domain.replace(/[^a-zA-Z0-9.-]/g, '').toLowerCase()
- if (!clean) {
- return NextResponse.json({ error: 'invalid domain' }, { status: 400 })
- }
-
- const results: Record<string, any> = { domain: clean, found: [] }
+ if (!clean) return Response.json({ error: 'invalid domain' }, { status: 400 })
 
  const urls = [
  `https://${clean}/.well-known/agent.json`,
  `https://${clean}/llms.txt`,
  `https://${clean}/.well-known/mpp.json`,
  ]
+
+ const results: Record<string, any> = { domain: clean, found: [] }
 
  for (const url of urls) {
  try {
@@ -28,10 +25,9 @@ export async function GET(request: NextRequest) {
  signal: AbortSignal.timeout(5000),
  })
  if (res.ok) {
- const ct = res.headers.get('content-type') || ''
- if (ct.includes('json')) {
- const key = url.includes('agent.json') ? 'agent_card' : url.includes('mpp') ? 'mpp_descriptor' : 'data'
- results[key] = await res.json()
+ const contentType = res.headers.get('content-type') || ''
+ if (contentType.includes('json')) {
+ results[url.includes('agent.json') ? 'agent_card' : url.includes('mpp') ? 'mpp_descriptor' : 'data'] = await res.json()
  } else {
  results['llms_txt'] = await res.text().then(t => t.slice(0, 500))
  }
@@ -40,7 +36,7 @@ export async function GET(request: NextRequest) {
  } catch {}
  }
 
- return NextResponse.json(results, {
+ return Response.json(results, {
  headers: { 'Cache-Control': 'public, max-age=300' }
  })
 }

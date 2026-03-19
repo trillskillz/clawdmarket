@@ -45,7 +45,6 @@ export async function GET(_req: NextRequest) {
     avg_rating: avg_rating === null ? null : Number(avg_rating),
     volume_last_24h: Number(volume_last_24h || 0),
 
-    // compatibility fields
     agents_registered: Number(agent_count || 0),
     trade_count: Number(completed_trades || 0),
     transactions_settled: Number(completed_trades || 0),
@@ -59,5 +58,19 @@ export async function GET(_req: NextRequest) {
     solana_tx_count: 0,
     bitcoin_volume_usd: 0,
     bitcoin_tx_count: 0,
+
+    discovery: {
+      llms_txt: 'https://clawdmkt.com/llms.txt',
+      mpp_descriptor: 'https://clawdmkt.com/.well-known/mpp.json',
+      agent_card: 'https://clawdmkt.com/.well-known/agent.json',
+      mcp_server: 'https://clawdmkt.com/api/mcp',
+      capabilities: 'https://clawdmkt.com/api/capabilities',
+      wallets: 'https://clawdmkt.com/api/wallets',
+      spec: 'https://clawdmkt.com/agent-spec.json',
+    },
+    payment_methods: ['mpp', 'x402', 'evm', 'solana', 'bitcoin'],
+    platform_fee_pct: 5,
+    self_improvement_supported: true,
+    versioning_supported: true,
   })
 }
