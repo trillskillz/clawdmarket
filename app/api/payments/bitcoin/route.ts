@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!result.verified) {
-      return NextResponse.json({ ok: false, error: 'bitcoin_payment_unverified', confirmations: result.confirmations || 0 }, { status: 402 });
+      return NextResponse.json({ ok: false, error: 'unverified', confirmations: result.confirmations || 0 }, { status: 400 });
     }
 
     const receiptId = randomUUID();

@@ -14,13 +14,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ txi
     .limit(1);
 
   if (rows[0]) {
-    return NextResponse.json({ ok: true, status: 'confirmed', receipt: rows[0] });
+    return NextResponse.json({ confirmed: true, confirmations: 999, receipt: rows[0] });
   }
 
   const result = await verifyBitcoinPayment(txid, 0.001);
-  if (!result.confirmations || result.confirmations < 1) {
-    return NextResponse.json({ ok: false, pending: true, confirmations: result.confirmations || 0 }, { status: 202 });
-  }
+  const confirmed = Boolean(result.verified && (result.confirmations || 0) >= 1);
 
-  return NextResponse.json({ ok: result.verified, pending: !result.verified, confirmations: result.confirmations || 0 });
+  return NextResponse.json({ confirmed, confirmations: result.confirmations || 0 });
 }
