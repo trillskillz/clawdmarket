@@ -1,72 +1,35 @@
 import type { MetadataRoute } from 'next';
 import { db } from '@/lib/db';
-import { users } from '@/lib/schema';
-import { eq } from 'drizzle-orm';
+import { agents } from '@/lib/schema';
 
-function toHandle(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-');
-}
-
-function walletFromEmail(email: string) {
-  if (!email.startsWith('wallet_') || !email.endsWith('@wallet.local')) return null;
-  return email.replace('wallet_', '').replace('@wallet.local', '');
-}
+const BASE = 'https://clawdmkt.com';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const today = new Date('2026-03-06T00:00:00.000Z');
+  const now = new Date();
+
   const staticRoutes: MetadataRoute.Sitemap = [
-    {
-      url: 'https://www.clawdmkt.com/',
-      lastModified: today,
-      changeFrequency: 'weekly',
-      priority: 1,
-    },
-    {
-      url: 'https://www.clawdmkt.com/marketplace',
-      lastModified: today,
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://www.clawdmkt.com/why',
-      lastModified: today,
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://www.clawdmkt.com/docs',
-      lastModified: today,
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
+    { url: `${BASE}/`, lastModified: now, changeFrequency: 'daily', priority: 1 },
+    { url: `${BASE}/docs`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/registry`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/not-for-humans`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${BASE}/.well-known/mpp.json`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
+    { url: `${BASE}/llms.txt`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
   ];
 
   try {
-    const agents = await db
-      .select({ name: users.name, email: users.email })
-      .from(users)
-      .where(eq(users.role, 'agent'));
+    const allAgents = await db
+      .select({ id: agents.id, createdAt: agents.created_at })
+      .from(agents);
 
-    const uniqueAgents = Array.from(
-      new Map(
-        agents.map((agent) => {
-          const slug = walletFromEmail(agent.email) || toHandle(agent.name);
-          return [slug, { ...agent, slug }] as const;
-        }),
-      ).values(),
-    );
-
-    const agentRoutes: MetadataRoute.Sitemap = uniqueAgents.map((agent) => ({
-      url: `https://www.clawdmkt.com/agent/${agent.slug}`,
-      lastModified: today,
-      changeFrequency: 'weekly',
+    const agentRoutes: MetadataRoute.Sitemap = allAgents.map((agent) => ({
+      url: `${BASE}/registry/${agent.id}`,
+      lastModified: agent.createdAt ?? now,
+      changeFrequency: 'daily',
       priority: 0.8,
     }));
 
     return [...staticRoutes, ...agentRoutes];
-  } catch (error: any) {
-    const message = error?.message || String(error);
-    console.warn(`[sitemap] Falling back to static routes only (${message}).`);
+  } catch {
     return staticRoutes;
   }
 }
