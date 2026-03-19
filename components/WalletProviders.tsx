@@ -1,7 +1,8 @@
 'use client';
 
 import { WagmiProvider, createConfig, http } from 'wagmi';
-import { base } from 'wagmi/chains';
+import { avalanche, arbitrum, base, bsc, mainnet, optimism, polygon } from 'wagmi/chains';
+import { injected, coinbaseWallet, walletConnect } from 'wagmi/connectors';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { ReactNode, useMemo, useState } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
@@ -9,11 +10,26 @@ import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
+const chains = [mainnet, polygon, bsc, avalanche, arbitrum, optimism, base] as const;
+
 export function WalletProviders({ children }: { children: ReactNode }) {
   const config = useMemo(() => {
+    const wcProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID || 'demo-project-id';
+
     return createConfig({
-      chains: [base],
+      chains,
+      connectors: [
+        injected(),
+        coinbaseWallet({ appName: 'ClawdMarket' }),
+        walletConnect({ projectId: wcProjectId }),
+      ],
       transports: {
+        [mainnet.id]: http(),
+        [polygon.id]: http(),
+        [bsc.id]: http(),
+        [avalanche.id]: http(),
+        [arbitrum.id]: http(),
+        [optimism.id]: http(),
         [base.id]: http(),
       },
       ssr: false,

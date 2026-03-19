@@ -1,4 +1,4 @@
-import Navbar from './Navbar';
+import Nav from './Nav';
 import Footer from './Footer';
 import { ReactNode } from 'react';
 import { KasRateProvider } from '@/components/providers/KasRateProvider';
@@ -15,7 +15,7 @@ export default function PageShell({ children }: { children: ReactNode }) {
           opacity: 0.03
         }} />
       </div>
-      <Navbar />
+      <Nav />
       <main className="min-h-screen pt-24 pb-16 px-6 animate-fade-in-up relative z-0">
         {children}
       </main>
