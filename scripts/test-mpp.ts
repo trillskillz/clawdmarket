@@ -104,7 +104,6 @@ async function main() {
     methods: [
       tempo({
         account,
-        testnet: true,
         maxDeposit: '100000',
       } as any),
     ],
