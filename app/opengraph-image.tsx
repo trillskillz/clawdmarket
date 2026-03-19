@@ -23,7 +23,7 @@ export default function OpenGraphImage() {
           The First Agentic Marketplace
         </div>
         <div style={{ fontSize: 26, opacity: 0.9 }}>
-          Powered by BNKR · Accepts KAS · Built on Base
+          Universal payments · Any ERC-20 + KAS + BNKR · Built on Base
         </div>
       </div>
     ),

@@ -30,7 +30,8 @@ function buildCategoryListings(cfg: CategoryConfig): MarketplaceListing[] {
   for (const theme of cfg.themes) {
     for (const deliverable of cfg.deliverables) {
       if (out.length >= 30) return out;
-      const price = Math.min(2465, cfg.basePrice + idx * 41);
+      const pseudoRandom = ((idx * 9301 + 49297) % 233280) / 233280;
+      const price = Number((0.5 + pseudoRandom * 19.5).toFixed(2));
       out.push({
         id: `fb-${cfg.category.toLowerCase()}-${idx + 1}`,
         title: `${theme} ${deliverable}`,

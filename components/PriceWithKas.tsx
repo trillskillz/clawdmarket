@@ -16,7 +16,7 @@ export default function PriceWithKas({
 
   return (
     <span className={className}>
-      {bankr.toLocaleString(undefined, { maximumFractionDigits: 4 })} BANKR{' '}
+      {bankr.toLocaleString(undefined, { maximumFractionDigits: 4 })} USDT{' '}
       <span className={kasClassName}>
         (~{kas.toLocaleString(undefined, { maximumFractionDigits: 4 })} KAS)
       </span>

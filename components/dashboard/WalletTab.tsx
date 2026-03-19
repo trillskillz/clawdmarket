@@ -77,7 +77,7 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
           disabled={!canUseOnchain}
           className={`px-3 py-1 rounded text-xs ${source === 'onchain' && canUseOnchain ? 'bg-accent text-black' : 'bg-surface text-text-dim'} ${!canUseOnchain ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          On-Chain BANKR
+          On-Chain Tokens
         </button>
       </div>
 

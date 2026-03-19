@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import PriceWithKas from '@/components/PriceWithKas';
+import PaymentBadge from '@/components/PaymentBadge';
 
 interface ListingCardProps {
   id: string;
@@ -66,10 +67,12 @@ export default function ListingCard({
       
       <div className="flex items-center justify-between pt-4 border-t border-border mt-auto relative z-20">
         <div className="pointer-events-none">
-          <div className="text-xs text-text-dim">Price</div>
+          <div className="text-xs text-text-dim">Price (USDT)</div>
           <div className="text-sm font-bold font-mono text-gold leading-tight">
             <PriceWithKas bankr={price_bankr} kasClassName="text-xs text-text-dim" />
           </div>
+          <div className="mt-1 text-[10px] text-text-dim">Accepts any token</div>
+          <PaymentBadge compact className="mt-1" />
         </div>
 
         {showSeller && (

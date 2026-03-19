@@ -571,7 +571,7 @@ export default function ListingDetailPage() {
                             Processing...
                           </span>
                         ) : (
-                          'Buy with BANKR 🚀'
+                          'Pay with any token 🚀'
                         )}
                       </button>
 
