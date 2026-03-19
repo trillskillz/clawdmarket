@@ -1,63 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server'
 
-function toHandle(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-');
-}
+const BROWSER_UA_PATTERNS = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera']
 
-export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-  const ua = (req.headers.get('user-agent') || '').toLowerCase();
-  const host = (req.headers.get('host') || '').toLowerCase();
-  const isVercelPreview = host.includes('vercel.app');
-  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
-  const isBrowserUa = /(mozilla|chrome|firefox|safari|edg|brave|opera)/i.test(ua);
+const ALLOWED_PATHS = [
+ '/not-for-humans',
+ '/docs',
+ '/api/',
+ '/.well-known/',
+ '/llms.txt',
+ '/robots.txt',
+ '/sitemap.xml',
+ '/_next/',
+ '/favicon',
+ '/icon',
+ '/apple-icon',
+ '/opengraph-image',
+ '/leaderboard',
+ '/taskboard',
+]
 
-  const isAllowlisted =
-    pathname === '/not-for-humans' ||
-    pathname === '/llms.txt' ||
-    pathname === '/docs' ||
-    pathname === '/robots.txt' ||
-    pathname === '/sitemap.xml' ||
-    pathname.startsWith('/api/') ||
-    pathname.startsWith('/.well-known/');
+export function middleware(request: NextRequest) {
+ const ua = request.headers.get('user-agent') || ''
+ const path = request.nextUrl.pathname
+ const host = request.headers.get('host') || ''
 
-  const withMppLink = (res: NextResponse) => {
-    if (pathname === '/') {
-      res.headers.set('Link', '<https://clawdmkt.com/.well-known/mpp.json>; rel="mpp"');
-    }
-    return res;
-  };
+ const isAllowedPath = ALLOWED_PATHS.some(p => path.startsWith(p))
+ if (isAllowedPath) return NextResponse.next()
 
-  if (isBrowserUa && !isVercelPreview && !isLocalhost && !isAllowlisted) {
-    return withMppLink(NextResponse.redirect(new URL('/not-for-humans', req.url), 307));
-  }
+ const isVercelPreview = host.includes('vercel.app')
+ const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
+ const isBrowser = BROWSER_UA_PATTERNS.some(p => ua.includes(p))
 
-  if (pathname.startsWith('/api/')) {
-    return withMppLink(NextResponse.next());
-  }
+ if (isBrowser && !isVercelPreview && !isLocalhost) {
+ return NextResponse.redirect(new URL('/not-for-humans', request.url))
+ }
 
-  const userMatch = pathname.match(/^\/users\/([^/]+)$/);
-  if (userMatch) {
-    const id = userMatch[1];
-    try {
-      const profileRes = await fetch(`${req.nextUrl.origin}/api/users/${id}/profile`, {
-        headers: { accept: 'application/json' },
-        cache: 'no-store',
-      });
-      if (profileRes.ok) {
-        const profile = await profileRes.json();
-        const handle = profile?.name ? toHandle(String(profile.name)) : id;
-        return withMppLink(NextResponse.redirect(new URL(`/agent/${handle}`, req.url), 308));
-      }
-    } catch {
-      // fall through
-    }
-    return withMppLink(NextResponse.redirect(new URL(`/agent/${id}`, req.url), 308));
-  }
-
-  return withMppLink(NextResponse.next());
+ return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/((?!_next|.*\\..*).*)'],
-};
+ matcher: ['/((?!_next/static|_next/image|favicon.ico|apple-icon|icon|opengraph-image).*)'],
+}
