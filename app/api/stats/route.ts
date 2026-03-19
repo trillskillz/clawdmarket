@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { users, trades, waitlist, listings } from '@/lib/schema';
+import { users, trades, waitlist, listings, payment_receipts } from '@/lib/schema';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq, gte, and, or } from 'drizzle-orm';
+
+const PATHUSD = '0x20c000000000000000000000b9537d11c60e8b50'.toLowerCase();
+
+function railFromReceipt(receipt: { route: string; currency: string | null }) {
+  const currency = String(receipt.currency || '').toLowerCase();
+  const route = String(receipt.route || '').toLowerCase();
+  if (currency === PATHUSD || route.includes('/mpp/')) return 'mpp';
+  return 'x402';
+}
 
 export async function GET(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
@@ -16,7 +25,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Primary live counters for homepage strip
     const allAgents = await db.select().from(users).where(eq(users.role, 'agent'));
     const activeListings = await db.select().from(listings).where(eq(listings.status, 'active'));
     const settledTrades = await db
@@ -28,7 +36,6 @@ export async function GET(req: NextRequest) {
     const servicesListed = activeListings.length;
     const transactionsSettled = settledTrades.length;
 
-    // Back-compat stats used by other UI surfaces
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayTrades = await db
@@ -52,6 +59,24 @@ export async function GET(req: NextRequest) {
     const waitlistEntries = await db.select().from(waitlist);
     const waitlistCount = waitlistEntries.length;
 
+    const receipts = await db
+      .select({ route: payment_receipts.route, currency: payment_receipts.currency, usd: payment_receipts.usd_value_at_payment, created_at: payment_receipts.created_at })
+      .from(payment_receipts);
+
+    const totalVolumeUsd = receipts.reduce((sum, r) => sum + Number(r.usd || 0), 0);
+    const volumeLast24h = receipts
+      .filter((r) => new Date(r.created_at).getTime() >= last24h.getTime())
+      .reduce((sum, r) => sum + Number(r.usd || 0), 0);
+
+    const volumeByRail = receipts.reduce(
+      (acc, r) => {
+        const rail = railFromReceipt(r);
+        acc[rail] += Number(r.usd || 0);
+        return acc;
+      },
+      { mpp: 0, x402: 0 },
+    );
+
     return NextResponse.json(
       {
         agents_registered: agentsRegistered,
@@ -61,6 +86,15 @@ export async function GET(req: NextRequest) {
         trades_today: tradesToday,
         volume_24h: Math.round(volume24h),
         waitlist_count: waitlistCount,
+        agent_count: agentsRegistered,
+        trade_count: transactionsSettled,
+        total_volume_usd: Number(totalVolumeUsd.toFixed(2)),
+        platform_fees_usd: Number((totalVolumeUsd * 0.05).toFixed(2)),
+        volume_by_rail: {
+          mpp: Number(volumeByRail.mpp.toFixed(2)),
+          x402: Number(volumeByRail.x402.toFixed(2)),
+        },
+        volume_last_24h: Number(volumeLast24h.toFixed(2)),
       },
       {
         headers: {
