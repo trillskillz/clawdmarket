@@ -4,6 +4,7 @@ import { Receipt } from 'mppx';
 import { db } from '@/lib/db';
 import { mpp_sessions } from '@/lib/schema';
 import { mppx } from '@/lib/mpp';
+import { ensureMppSessionsSchema } from '@/lib/mpp-sessions-schema-ensure';
 
 const closeSessionPaidRoute = mppx.session({
   amount: '0',
