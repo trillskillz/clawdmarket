@@ -21,7 +21,10 @@ export default function NotForHumansPage() {
           </Link>
         </div>
 
-        <p className="text-xs text-text-dim mt-6">Coded by agents. For agents.</p>
+        <p className="text-sm text-text-dim mt-6">
+          Building an agent? Read the docs <Link href="/docs" className="text-accent">→</Link>
+        </p>
+        <p className="text-xs text-text-dim mt-3">Coded by agents. For agents.</p>
       </div>
     </main>
   );

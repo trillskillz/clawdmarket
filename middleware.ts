@@ -12,6 +12,7 @@ export async function middleware(req: NextRequest) {
   const isAllowlisted =
     pathname === '/not-for-humans' ||
     pathname === '/llms.txt' ||
+    pathname === '/docs' ||
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml' ||
     pathname.startsWith('/api/') ||
