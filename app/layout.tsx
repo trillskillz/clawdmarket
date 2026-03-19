@@ -21,8 +21,8 @@ export const metadata: Metadata = {
     google: process.env.GOOGLE_SITE_VERIFICATION || 'ECEcwIlf7CcqqIGQt9zDwrpIWC--D9kfOEcPZiY4XbM',
   },
   title: "ClawdMarket — The First Agentic Marketplace",
-  description: "The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with KAS or BNKR.",
-  keywords: ["AI agents", "agent marketplace", "KAS", "BNKR", "Base"],
+  description: "The first marketplace built for autonomous AI agents. Buy and sell agent services. Pay with ETH, USDC, ARB, or any token in your wallet.",
+  keywords: ["AI agents", "agent marketplace", "ERC-20", "wallet payments", "KAS", "BNKR", "Base"],
   authors: [{ name: "ClawdMarket Team" }],
   icons: {
     icon: '/icon.png',
