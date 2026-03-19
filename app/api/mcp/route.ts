@@ -36,53 +36,57 @@ const paidMcpToolCall = mcpPayment.charge({ amount: '0.001' });
 
 const TOOLS = [
   {
-    name: 'list_services',
-    description:
-      'List all available AI agent services on ClawdMarket. Returns service IDs, names, descriptions, pricing, and accepted payment methods (KAS or BNKR).',
+    name: 'list_agents',
+    description: 'Browse agents by capability, price, or name.',
     inputSchema: {
       type: 'object',
       properties: {
+        q: { type: 'string', description: 'Search term for capability or name' },
         category: { type: 'string', description: 'Optional category filter' },
         limit: { type: 'number', description: 'Max results to return, default 20' },
       },
     },
   },
   {
-    name: 'get_service',
-    description:
-      'Get full details about a specific ClawdMarket agent service including capabilities, pricing, input schema, and invocation requirements.',
+    name: 'get_agent',
+    description: 'Get agent details by ID.',
     inputSchema: {
       type: 'object',
-      required: ['service_id'],
+      required: ['agent_id'],
       properties: {
-        service_id: { type: 'string', description: 'The unique service identifier' },
+        agent_id: { type: 'string', description: 'Agent/listing identifier' },
       },
     },
   },
   {
-    name: 'invoke_service',
-    description:
-      'Hire and invoke a ClawdMarket agent service. Triggers the service with a payload and initiates payment via x402 protocol. Returns an invocation ID for status polling.',
+    name: 'hire_agent',
+    description: 'Create a hire request/trade for an agent.',
     inputSchema: {
       type: 'object',
-      required: ['service_id', 'payload', 'payment_currency'],
+      required: ['agent_id', 'task'],
       properties: {
-        service_id: { type: 'string' },
-        payload: { type: 'object', description: 'Input data the service requires' },
-        payment_currency: { type: 'string', enum: ['KAS', 'BNKR'], description: 'Currency to pay with' },
+        agent_id: { type: 'string' },
+        task: { type: 'string' },
       },
     },
   },
   {
-    name: 'get_invocation_status',
-    description:
-      'Poll the status of a previously invoked ClawdMarket service. Returns current status, progress, and result if completed.',
+    name: 'get_trade_status',
+    description: 'Check status for a trade by ID.',
     inputSchema: {
       type: 'object',
-      required: ['invocation_id'],
+      required: ['trade_id'],
       properties: {
-        invocation_id: { type: 'string' },
+        trade_id: { type: 'string' },
       },
+    },
+  },
+  {
+    name: 'get_marketplace_stats',
+    description: 'Get marketplace stats (agents, volume, fees).',
+    inputSchema: {
+      type: 'object',
+      properties: {},
     },
   },
 ] as const;
@@ -175,104 +179,71 @@ function getErrorMessage(data: any, fallback: string) {
   return data?.error || data?.message || fallback;
 }
 
-async function invokeExternalService(req: NextRequest, serviceId: string, payload: object, paymentCurrency: 'KAS' | 'BNKR') {
-  const authHeader = req.headers.get('authorization');
-  const cookieHeader = req.headers.get('cookie');
-  const csrfHeader = req.headers.get('x-csrf-token');
-
-  const headers = new Headers();
-  headers.set('Accept', 'application/json');
-  headers.set('Content-Type', 'application/json');
-  if (authHeader) headers.set('Authorization', authHeader);
-  if (cookieHeader) headers.set('Cookie', cookieHeader);
-  if (csrfHeader) headers.set('X-CSRF-Token', csrfHeader);
-
-  const res = await fetch(`https://api.clawdmkt.com/services/${encodeURIComponent(serviceId)}/invoke`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ payload, payment_currency: paymentCurrency }),
-    cache: 'no-store',
-  });
-
-  let data: any;
-  try {
-    data = await res.json();
-  } catch {
-    data = { error: 'Non-JSON response from invoke endpoint' };
-  }
-
-  return { ok: res.ok, status: res.status, data };
-}
-
 async function executeTool(req: NextRequest, name: string, args: any) {
   const callApi = buildApiCaller(req);
 
   switch (name) {
-    case 'list_services': {
+    case 'list_agents': {
       const category = typeof args?.category === 'string' ? args.category : undefined;
       const limit = typeof args?.limit === 'number' ? args.limit : 20;
+      const q = typeof args?.q === 'string' ? args.q : undefined;
 
-      // Equivalent internal route: /api/listings
       const result = await callApi('GET', '/api/listings', {
         query: {
           status: 'active',
           category,
           limit,
+          q,
         },
       });
 
-      if (!result.ok) throw new Error(getErrorMessage(result.data, `list_services failed (${result.status})`));
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `list_agents failed (${result.status})`));
       return result.data;
     }
 
-    case 'get_service': {
-      if (!args?.service_id || typeof args.service_id !== 'string') {
-        throw new Error('service_id is required');
+    case 'get_agent': {
+      if (!args?.agent_id || typeof args.agent_id !== 'string') {
+        throw new Error('agent_id is required');
       }
 
-      // Equivalent internal route: /api/listings/:id
-      const result = await callApi('GET', `/api/listings/${encodeURIComponent(args.service_id)}`);
-      if (!result.ok) throw new Error(getErrorMessage(result.data, `get_service failed (${result.status})`));
+      const result = await callApi('GET', `/api/listings/${encodeURIComponent(args.agent_id)}`);
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `get_agent failed (${result.status})`));
       return result.data;
     }
 
-    case 'invoke_service': {
-      if (!args?.service_id || typeof args.service_id !== 'string') {
-        throw new Error('service_id is required');
+    case 'hire_agent': {
+      if (!args?.agent_id || typeof args.agent_id !== 'string') {
+        throw new Error('agent_id is required');
       }
-      if (!args?.payload || typeof args.payload !== 'object') {
-        throw new Error('payload is required and must be an object');
-      }
-      if (!['KAS', 'BNKR'].includes(args?.payment_currency)) {
-        throw new Error('payment_currency must be KAS or BNKR');
+      if (!args?.task || typeof args.task !== 'string') {
+        throw new Error('task is required');
       }
 
-      const result = await invokeExternalService(
-        req,
-        args.service_id,
-        args.payload,
-        args.payment_currency as 'KAS' | 'BNKR',
-      );
+      const result = await callApi('POST', '/api/trades', {
+        body: {
+          listing_id: args.agent_id,
+          task: args.task,
+        },
+      });
 
-      if (!result.ok) throw new Error(getErrorMessage(result.data, `invoke_service failed (${result.status})`));
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `hire_agent failed (${result.status})`));
       return result.data;
     }
 
-    case 'get_invocation_status': {
-      if (!args?.invocation_id || typeof args.invocation_id !== 'string') {
-        throw new Error('invocation_id is required');
+    case 'get_trade_status': {
+      if (!args?.trade_id || typeof args.trade_id !== 'string') {
+        throw new Error('trade_id is required');
       }
 
-      // Preferred route shape requested: /api/invocations/:id
-      const preferred = await callApi('GET', `/api/invocations/${encodeURIComponent(args.invocation_id)}`);
-      if (preferred.ok) return preferred.data;
+      const result = await callApi('GET', `/api/trades/${encodeURIComponent(args.trade_id)}`);
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `get_trade_status failed (${result.status})`));
+      return result.data;
+    }
 
-      // Equivalent existing route fallback: /api/trades/:id
-      const fallback = await callApi('GET', `/api/trades/${encodeURIComponent(args.invocation_id)}`);
-      if (!fallback.ok) {
-        throw new Error(getErrorMessage(fallback.data, `get_invocation_status failed (${fallback.status})`));
-      }
-      return fallback.data;
+    case 'get_marketplace_stats': {
+      const result = await callApi('GET', '/api/stats');
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `get_marketplace_stats failed (${result.status})`));
+      return result.data;
     }
 
     default:
