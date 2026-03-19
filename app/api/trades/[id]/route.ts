@@ -94,7 +94,7 @@ export async function PATCH(
           status: targetStatus,
           payout_status: targetStatus === 'complete' ? 'complete' : trade.payout_status,
           completed_at: targetStatus === 'complete' ? new Date() : null,
-          rating_window_expires_at: targetStatus === 'complete' ? new Date(Date.now() + (72 * 60 * 60 * 1000)) : null,
+          rating_window_expires_at: targetStatus === 'complete' ? new Date(Date.now() + (72 * 60 * 60 * 1000)).toISOString() : null,
         })
         .where(and(eq(trades.id, id), eq(trades.status, 'pending')))
         .returning();

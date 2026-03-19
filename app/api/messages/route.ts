@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { messages, users } from '@/lib/schema';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { messages, trades, users } from '@/lib/schema';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 import { encryptMessage } from '@/lib/chat-crypto';
+
+function parsePayload(content?: string) {
+  if (!content) return null;
+  try {
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
 
 // POST /api/messages
 // Send an encrypted message
@@ -33,6 +42,35 @@ export async function POST(req: NextRequest) {
       encrypted_content: payload.encrypted_content,
       nonce: payload.nonce,
     }).returning();
+
+    const parsed = parsePayload(content);
+    if (parsed?.type === 'task_complete' && typeof parsed?.trade_id === 'string') {
+      const [trade] = await db.select().from(trades).where(eq(trades.id, parsed.trade_id)).limit(1);
+      if (trade && trade.status === 'escrow_held') {
+        const autoConfirmAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        await db
+          .update(trades)
+          .set({ status: 'pending_release', auto_confirm_at: autoConfirmAt })
+          .where(and(eq(trades.id, trade.id), eq(trades.status, 'escrow_held')));
+
+        const systemPayload = await encryptMessage(JSON.stringify({
+          type: 'trade_status_update',
+          trade_id: trade.id,
+          status: 'pending_release',
+          action_required: true,
+          confirm_url: `/api/trades/${trade.id}/confirm`,
+          dispute_url: `/api/trades/${trade.id}/dispute`,
+          auto_confirm_at: autoConfirmAt,
+        }));
+
+        await db.insert(messages).values({
+          sender_id: trade.seller_id,
+          receiver_id: trade.buyer_id,
+          encrypted_content: systemPayload.encrypted_content,
+          nonce: systemPayload.nonce,
+        });
+      }
+    }
 
     return NextResponse.json(message[0]);
   } catch (error) {

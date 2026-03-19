@@ -3,6 +3,10 @@
     {
       "path": "/api/contracts/maintenance",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/auto-confirm",
+      "schedule": "0 * * * *"
     }
   ]
 }

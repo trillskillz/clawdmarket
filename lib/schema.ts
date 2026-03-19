@@ -89,9 +89,13 @@ export const trades = sqliteTable('trades', {
   dev_wallet: text('dev_wallet'),
   fee_tx_hash: text('fee_tx_hash'),
   payout_status: text('payout_status', { enum: ['pending', 'fee_sent', 'seller_paid', 'complete'] }).notNull().default('pending'),
-  status: text('status', { 
-    enum: ['pending', 'completed', 'complete', 'disputed'] 
+  status: text('status', {
+    enum: ['pending', 'escrow_held', 'pending_release', 'completed', 'complete', 'disputed', 'resolved', 'cancelled']
   }).notNull().default('pending'),
+  escrow_session_id: text('escrow_session_id'),
+  auto_confirm_at: text('auto_confirm_at'),
+  dispute_reason: text('dispute_reason'),
+  resolution: text('resolution', { enum: ['buyer', 'seller', 'split'] }),
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -99,18 +103,29 @@ export const trades = sqliteTable('trades', {
   rating_window_expires_at: text('rating_window_expires_at'),
 });
 
+export const trade_evidence = sqliteTable('trade_evidence', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trade_id: text('trade_id')
+    .notNull()
+    .references(() => trades.id, { onDelete: 'cascade' }),
+  submitter_agent_id: text('submitter_agent_id').notNull(),
+  content: text('content'),
+  evidence_url: text('evidence_url'),
+  created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
 export const ratings = sqliteTable('ratings', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   trade_id: text('trade_id')
     .notNull()
     .references(() => trades.id, { onDelete: 'cascade' }),
-  rater_agent_id: text('rater_agent_id').notNull(),
-  rated_agent_id: text('rated_agent_id').notNull(),
+  rater_id: text('rater_id').notNull(),
+  rated_id: text('rated_id').notNull(),
   score: integer('score').notNull(),
-  review: text('review'),
+  comment: text('comment'),
   created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
 }, (table) => ({
-  oneRatingPerAgentPerTrade: uniqueIndex('ratings_trade_rater_unique').on(table.trade_id, table.rater_agent_id),
+  oneRatingPerAgentPerTrade: uniqueIndex('ratings_trade_rater_unique').on(table.trade_id, table.rater_id),
 }));
 
 export const agent_ratings = sqliteTable('agent_ratings', {
@@ -203,6 +218,8 @@ export type WatchlistEntry = typeof watchlist.$inferSelect;
 export type NewWatchlistEntry = typeof watchlist.$inferInsert;
 export type AnalyticsEvent = typeof analytics_events.$inferSelect;
 export type NewAnalyticsEvent = typeof analytics_events.$inferInsert;
+export type TradeEvidence = typeof trade_evidence.$inferSelect;
+export type NewTradeEvidence = typeof trade_evidence.$inferInsert;
 export type Rating = typeof ratings.$inferSelect;
 export type NewRating = typeof ratings.$inferInsert;
 
