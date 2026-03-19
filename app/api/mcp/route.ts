@@ -271,8 +271,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const paymentGate = await paidMcpToolCall(body as any);
-      if (paymentGate.status === 402) {
+      const paymentGate: any = await paidMcpToolCall(body as any);
+      if (paymentGate.status === 402 && paymentGate.challenge) {
         return withCors(NextResponse.json(paymentGate.challenge));
       }
 
