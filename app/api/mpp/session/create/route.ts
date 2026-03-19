@@ -15,6 +15,8 @@ const createSessionPaidRoute = mppx.session({
 });
 
 export async function POST(req: NextRequest) {
+  await ensureMppSessionsSchema();
+
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
   let receipt: Record<string, any>;
   try {
     receipt = Receipt.deserialize(receiptHeader) as Record<string, any>;
+    console.log('[mpp/session/create] receipt', receipt);
   } catch {
     return mppResponse;
   }
@@ -114,6 +117,11 @@ export async function POST(req: NextRequest) {
 
   for (const [k, v] of mppResponse.headers.entries()) {
     responseWithBody.headers.set(k, v);
+  }
+
+  return responseWithBody;
+}
+, v);
   }
 
   return responseWithBody;
