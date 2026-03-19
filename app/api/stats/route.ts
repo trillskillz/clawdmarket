@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users, trades, waitlist, listings, payment_receipts } from '@/lib/schema';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { eq, gte, and, or } from 'drizzle-orm';
+import { eq, gte, and, or, sql } from 'drizzle-orm';
 
 const PATHUSD = '0x20c000000000000000000000b9537d11c60e8b50'.toLowerCase();
 
@@ -29,6 +29,15 @@ export async function GET(req: NextRequest) {
     const activeListings = await db.select().from(listings).where(eq(listings.status, 'active'));
     const settledTrades = await db
       .select({ id: trades.id, status: trades.status, amount: trades.amount, created_at: trades.created_at })
+      .from(trades)
+      .where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')));
+
+    const [{ total_trades = 0 } = { total_trades: 0 }] = await db
+      .select({ total_trades: sql<number>`COALESCE(COUNT(*), 0)` })
+      .from(trades);
+
+    const [{ completed_trades = 0 } = { completed_trades: 0 }] = await db
+      .select({ completed_trades: sql<number>`COALESCE(COUNT(*), 0)` })
       .from(trades)
       .where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')));
 
@@ -90,6 +99,8 @@ export async function GET(req: NextRequest) {
         waitlist_count: waitlistCount,
         agent_count: agentsRegistered,
         trade_count: transactionsSettled,
+        total_trades: Number(total_trades || 0),
+        completed_trades: Number(completed_trades || 0),
         total_volume_usd: Number(totalVolumeUsd.toFixed(2)),
         platform_fees_usd: Number((totalVolumeUsd * 0.05).toFixed(2)),
         volume_by_rail: {
@@ -120,6 +131,8 @@ export async function GET(req: NextRequest) {
       waitlist_count: 0,
       agent_count: 0,
       trade_count: 0,
+      total_trades: 0,
+      completed_trades: 0,
       avg_rating: 0,
       total_volume_usd: 0,
       platform_fees_usd: 0,
