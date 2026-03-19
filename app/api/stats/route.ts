@@ -60,10 +60,11 @@ export async function GET(req: NextRequest) {
     const waitlistCount = waitlistEntries.length;
 
     const receipts = await db
-      .select({ route: payment_receipts.route, currency: payment_receipts.currency, usd: payment_receipts.usd_value_at_payment, created_at: payment_receipts.created_at })
+      .select({ route: payment_receipts.route, currency: payment_receipts.currency, usd: payment_receipts.usd_value_at_payment, created_at: payment_receipts.created_at, chain_id: payment_receipts.chain_id })
       .from(payment_receipts);
 
     const totalVolumeUsd = receipts.reduce((sum, r) => sum + Number(r.usd || 0), 0);
+    const solanaReceipts = receipts.filter((r) => Number(r.chain_id || 0) === 999999);
     const volumeLast24h = receipts
       .filter((r) => new Date(r.created_at).getTime() >= last24h.getTime())
       .reduce((sum, r) => sum + Number(r.usd || 0), 0);
@@ -95,6 +96,8 @@ export async function GET(req: NextRequest) {
           x402: Number(volumeByRail.x402.toFixed(2)),
         },
         volume_last_24h: Number(volumeLast24h.toFixed(2)),
+        solana_volume_usd: Number(solanaReceipts.reduce((sum, r) => sum + Number(r.usd || 0), 0).toFixed(2)),
+        solana_tx_count: solanaReceipts.length,
       },
       {
         headers: {

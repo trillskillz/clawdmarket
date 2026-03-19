@@ -20,6 +20,12 @@
     "x402": {
       "intents": ["charge"],
       "assets": ["BNKR_ADDRESS_ON_BASE"]
+    },
+    "solana": {
+      "note": "Native SOL and SPL token payments accepted. POST /api/payments/solana with tx signature.",
+      "recipient": "6yVHdDNi9X3BqiQx9VxVfeutxoeaRFhHnQzXF1YQ2fz7",
+      "accepted_tokens": ["SOL", "USDC", "USDT"],
+      "verification_endpoint": "/api/payments/solana"
     }
   },
   "realm": "clawdmkt.com",
