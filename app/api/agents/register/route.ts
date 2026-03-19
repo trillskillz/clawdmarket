@@ -7,6 +7,26 @@ import { agents } from '@/lib/schema';
 import { mppx } from '@/lib/mpp';
 import { ensureAgentsSchema } from '@/lib/agents-schema-ensure';
 
+async function verifyEndpoint(endpoint: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'ClawdMarket-Verifier/1.0',
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    });
+    clearTimeout(timeout);
+    return res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
 const paidRegisterRoute = mppx.charge({ amount: '0.01' })(async (request: Request) => {
   const req = request instanceof NextRequest ? request : new NextRequest(request);
 
@@ -21,6 +41,18 @@ const paidRegisterRoute = mppx.charge({ amount: '0.01' })(async (request: Reques
 
   if (!name || !description || !endpoint || !isAddress(ownerAddress) || capabilities.length === 0) {
     return NextResponse.json({ error: 'Invalid registration payload' }, { status: 400 });
+  }
+
+  const isLive = await verifyEndpoint(endpoint);
+  if (!isLive) {
+    return NextResponse.json(
+      {
+        error: 'endpoint_unreachable',
+        message: 'Endpoint did not respond within 5 seconds.',
+        detail: 'Ensure your agent is running before registering.',
+      },
+      { status: 422 },
+    );
   }
 
   const normalizedOwner = ownerAddress.toLowerCase();
@@ -53,6 +85,8 @@ const paidRegisterRoute = mppx.charge({ amount: '0.01' })(async (request: Reques
     owner_address: normalizedOwner,
     api_key: apiKey,
     status: 'active',
+    endpoint_verified_at: new Date(),
+    endpoint_failures: 0,
     mpp_endpoint: body?.mpp_endpoint ? String(body.mpp_endpoint) : null,
     llms_txt_url: body?.llms_txt_url ? String(body.llms_txt_url) : null,
   });

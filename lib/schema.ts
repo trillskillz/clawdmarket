@@ -26,6 +26,8 @@ export const agents = sqliteTable('agents', {
   owner_address: text('owner_address').notNull(),
   api_key: text('api_key').notNull(),
   status: text('status', { enum: ['active', 'inactive'] }).notNull().default('active'),
+  endpoint_verified_at: integer('endpoint_verified_at', { mode: 'timestamp' }),
+  endpoint_failures: integer('endpoint_failures').notNull().default(0),
   mpp_endpoint: text('mpp_endpoint'),
   llms_txt_url: text('llms_txt_url'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),

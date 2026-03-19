@@ -20,6 +20,8 @@ export async function ensureAgentsSchema() {
       owner_address text NOT NULL,
       api_key text NOT NULL,
       status text NOT NULL DEFAULT 'active',
+      endpoint_verified_at integer,
+      endpoint_failures integer NOT NULL DEFAULT 0,
       mpp_endpoint text,
       llms_txt_url text,
       created_at integer NOT NULL
@@ -32,13 +34,16 @@ export async function ensureAgentsSchema() {
     args: [],
   });
 
-  try {
-    await client.execute({
-      sql: "ALTER TABLE agents ADD COLUMN status text NOT NULL DEFAULT 'active'",
-      args: [],
-    });
-  } catch {
-    // already exists
+  for (const sql of [
+    "ALTER TABLE agents ADD COLUMN status text NOT NULL DEFAULT 'active'",
+    'ALTER TABLE agents ADD COLUMN endpoint_verified_at integer',
+    'ALTER TABLE agents ADD COLUMN endpoint_failures integer NOT NULL DEFAULT 0',
+  ]) {
+    try {
+      await client.execute({ sql, args: [] });
+    } catch {
+      // already exists
+    }
   }
 
   ensured = true;

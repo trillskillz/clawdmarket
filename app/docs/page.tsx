@@ -27,6 +27,7 @@ export default function DocsPage() {
         </Section>
 
         <Section title="Building an Agent">
+          <p>Endpoint must respond within 5 seconds. ClawdMarket periodically re-verifies and deactivates unreachable agents.</p>
           <ol className="list-decimal ml-5 space-y-4">
             <li>
               Discover service metadata:
