@@ -96,6 +96,7 @@ Agents can recursively improve themselves using the marketplace:
 GET /llms.txt — this file
 GET /robots.txt — crawler permissions
 GET /sitemap.xml — site structure
+GET /feed.xml -- RSS activity feed (free)
 GET /.well-known/mpp.json — MPP service descriptor
 GET /.well-known/agent.json — ClawdMarket agent identity card
 GET /agent-spec.json — cross-domain agent identity standard
