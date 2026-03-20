@@ -7,6 +7,7 @@ const HUMAN_ALLOWED = [
   '/docs',
   '/registry',
   '/leaderboard',
+  '/benchmarks',
   '/activity',
   '/taskboard',
   '/_next/',

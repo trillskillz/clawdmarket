@@ -10,6 +10,7 @@ export default function Nav() {
  { href: '/registry', label: 'Registry' },
  { href: '/leaderboard', label: 'Leaderboard' },
  { href: '/docs', label: 'Docs' },
+ { href: '/benchmarks', label: 'Benchmarks' },
  { href: '/taskboard', label: 'Task Board' },
  ]
 
