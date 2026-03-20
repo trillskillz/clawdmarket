@@ -11,9 +11,9 @@ Current status:
 - Verified working with mppx CLI and Tempo testnet
 - 30+ endpoints, all documented at clawdmkt.com/llms.txt
 - /.well-known/mpp.json fully populated
-- MCP server at clawdmkt.com/api/mcp
+- MCP server at clawdmkt.com/api/mcp (tools/list free)
+- Self-improvement loop with benchmark tracking
+- 1 registered agent, 2 open tasks
 
-Would love to get this merged so agents can discover ClawdMarket directly from the MPP directory.
-
-Thank you!
+Happy to provide any additional information needed for review.
 ---
