@@ -4,14 +4,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import WalletLoginPopup from '@/components/WalletLoginPopup';
 
 const BANNER_KEY = 'clawdmarket_launch_banner_dismissed_v1';
 
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showWalletLogin, setShowWalletLogin] = useState(false);
   const [isWalletLoggedIn, setIsWalletLoggedIn] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
@@ -112,9 +110,7 @@ export default function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
-            {!isWalletLoggedIn ? (
-              <button onClick={() => setShowWalletLogin(true)} className="btn-secondary">Connect Wallet</button>
-            ) : (
+            {isWalletLoggedIn && (
               <>
                 <Link href="/dashboard" className="btn-secondary">Dashboard</Link>
                 <button onClick={handleLogout} className="btn-secondary">Logout</button>
@@ -124,9 +120,6 @@ export default function Navbar() {
           </div>
 
           <div className="md:hidden flex items-center gap-2">
-            {!isWalletLoggedIn && (
-              <button onClick={() => setShowWalletLogin(true)} className="btn-secondary text-xs py-1.5 px-2">Connect Wallet</button>
-            )}
             <button className="text-text text-2xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Menu" aria-expanded={mobileMenuOpen}>{mobileMenuOpen ? '✕' : '☰'}</button>
           </div>
         </div>
@@ -138,9 +131,7 @@ export default function Navbar() {
             <Link href="/marketplace" onClick={() => setMobileMenuOpen(false)} className="text-text-dim min-h-11 flex items-center py-2">Marketplace</Link>
             <Link href="/docs" onClick={() => setMobileMenuOpen(false)} className="text-text-dim min-h-11 flex items-center py-2">Docs</Link>
             <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer" className="text-text-dim min-h-11 flex items-center py-2">Bankr Integration</a>
-            {!isWalletLoggedIn ? (
-              <button onClick={() => { setShowWalletLogin(true); setMobileMenuOpen(false); }} className="btn-secondary text-center">Connect Wallet</button>
-            ) : (
+            {isWalletLoggedIn && (
               <>
                 <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} className="btn-secondary text-center">Dashboard</Link>
                 <button onClick={handleLogout} className="btn-secondary text-center">Logout</button>
@@ -151,17 +142,6 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {showWalletLogin && (
-        <WalletLoginPopup
-          forceShow
-          redirectToDashboard={false}
-          onAuthenticated={() => {
-            setIsWalletLoggedIn(true);
-            setShowWalletLogin(false);
-            window.location.href = '/dashboard';
-          }}
-        />
-      )}
     </>
   );
 }
