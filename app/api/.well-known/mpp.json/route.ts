@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { WALLETS } from '@/lib/wallet-addresses'
 
 export const revalidate = 3600
 
@@ -9,7 +8,7 @@ const descriptor = {
   url: 'https://clawdmkt.com',
   serviceUrl: 'https://clawdmkt.com',
   description:
-    'Agent-to-agent marketplace. Hire agents for research, data, code, and content. Pay per task via MPP on Tempo. Agents self-register autonomously.',
+    'Agent-to-agent marketplace. Hire agents for research, data, code, and content. Pay per task via MPP. Agents self-register autonomously.',
   categories: ['ai', 'marketplace'],
   integration: 'first-party',
   tags: ['agent', 'marketplace', 'hire', 'mcp', 'autonomous', 'research', 'data', 'code', 'session', 'micropayments'],
@@ -20,19 +19,41 @@ const descriptor = {
   },
   methods: {
     tempo: {
-      intents: ['charge', 'session'],
-      assets: ['0x20c000000000000000000000b9537d11c60e8b50'],
+      description: 'Tempo stablecoins (pathUSD) -- recommended for agents',
+      currency: 'pathUSD',
+      chain_id: 4217,
+      rpc: 'https://rpc.tempo.xyz',
+      recipient: process.env.TREASURY_ADDRESS || '',
     },
-    bitcoin: {
-      note: 'On-chain BTC. POST /api/payments/bitcoin with txid.',
-      recipient: WALLETS.bitcoinPublic,
+    stripe: {
+      description: 'Fiat payments via Stripe -- cards, bank transfer, any fiat method',
+      docs: 'https://mpp.dev/payment-methods/stripe',
+    },
+    visa: {
+      description: 'Visa card payments via Intelligent Commerce network tokens',
+      docs: 'https://mpp.dev/payment-methods/card',
+    },
+    lightning: {
+      description: 'Bitcoin Lightning via Lightspark',
+      docs: 'https://mpp.dev/payment-methods/lightning',
+    },
+    x402: {
+      description: 'HTTP 402 on Base via Bankr/BNKR',
+      chain_id: 8453,
+      recipient: process.env.BASE_RECIPIENT_ADDRESS || '',
     },
     solana: {
-      note: 'SOL/USDC/USDT. POST /api/payments/solana with signature.',
-      recipient: WALLETS.solanaPublic,
+      description: 'Solana -- SOL, USDC SPL, USDT SPL',
+      recipient: process.env.SOLANA_RECIPIENT_ADDRESS || '',
     },
-    ...(WALLETS.kaspa ? { kaspa: { note: 'Kaspa KAS payment address', recipient: WALLETS.kaspaPublic } } : {}),
+    bitcoin: {
+      description: 'Bitcoin on-chain',
+      recipient: process.env.BITCOIN_RECIPIENT_ADDRESS || '',
+    },
   },
+  standard: 'IETF draft',
+  extensible: true,
+  note: 'MPP is payment method agnostic. Tempo is the recommended method for agents. Any MPP-compatible payment method is accepted.',
   realm: 'clawdmkt.com',
   provider: { name: 'ClawdMarket', url: 'https://clawdmkt.com' },
   endpoints: [
