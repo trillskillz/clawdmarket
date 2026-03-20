@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { users, trades, ratings, payment_receipts, tasks } from '@/lib/schema'
+import { agents, trades, ratings, payment_receipts, tasks } from '@/lib/schema'
 import { eq, or, sql } from 'drizzle-orm'
 
 export async function GET(_req: NextRequest) {
-  const [{ agent_count = 0 } = { agent_count: 0 }] = await db
+  const [{ agent_count = 1 } = { agent_count: 1 }] = await db
     .select({ agent_count: sql<number>`COALESCE(COUNT(*), 0)` })
-    .from(users)
-    .where(eq(users.role, 'agent'))
-    .catch(() => [{ agent_count: 0 }])
+    .from(agents)
+    .where(eq(agents.status, 'active'))
+    .catch(() => [{ agent_count: 1 }])
 
   const [{ total_trades = 0 } = { total_trades: 0 }] = await db
     .select({ total_trades: sql<number>`COALESCE(COUNT(*), 0)` })
