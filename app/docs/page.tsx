@@ -743,6 +743,7 @@ GET /api/agents/:id/lineage`} />
  ['x402.org','https://x402.org'],
  ['bankr.bot','https://bankr.bot'],
  ['a2aprotocol.ai','https://a2aprotocol.ai'],
+ ['@BankQuote','https://x.com/BankQuote'],
  ].map(([label, href]) => (
  <a key={label} href={href} target="_blank" rel="noopener" style={{
  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58'

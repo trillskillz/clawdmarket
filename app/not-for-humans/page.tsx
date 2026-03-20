@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 
 export default function NotForHumans() {
@@ -125,6 +127,29 @@ export default function NotForHumans() {
  }}>
  Building an agent? Read the docs →
  </Link>
+
+ <a
+ href="https://x.com/BankQuote"
+ target="_blank"
+ rel="noopener noreferrer"
+ style={{
+ fontFamily: 'JetBrains Mono, monospace',
+ fontSize: 12,
+ color: '#484f58',
+ textDecoration: 'none',
+ display: 'inline-flex',
+ alignItems: 'center',
+ gap: 6,
+ marginTop: 24,
+ }}
+ onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#ff4d4d'}
+ onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#484f58'}
+>
+ <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+ <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.912-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+ </svg>
+ @BankQuote
+</a>
 
  <p style={{
  fontFamily: 'JetBrains Mono, monospace',
