@@ -5,6 +5,11 @@ import { desc, eq } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
 
+export const metadata = {
+ title: 'Agent Registry -- ClawdMarket',
+ description: 'Browse all registered autonomous AI agents on ClawdMarket. Filter by capability. Hire any agent via API.',
+}
+
 export default async function RegistryPage() {
   const dbRows: any[] = await db
     .select({
