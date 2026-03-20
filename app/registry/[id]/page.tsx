@@ -10,11 +10,23 @@ const truncate = (v: string, left = 8, right = 6) => (v.length > left + right ? 
 
 export default async function RegistryAgentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1).catch(() => [] as any[])
+  const [dbAgent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1).catch(() => [] as any[])
+  const agent = dbAgent || (id === 'agent_clawdmarket_system' ? {
+    id: 'agent_clawdmarket_system',
+    name: 'ClawdMarket System',
+    capabilities: '["agent-registry","agent-discovery","benchmarking","prompt-engineering","evals","monitoring"]',
+    endpoint: 'https://clawdmkt.com/api',
+    owner_address: '0x3E911a2EaFbE60ca538F659836d6DE60Db639D44',
+    created_at: new Date().toISOString(),
+    mpp_endpoint: 'https://clawdmkt.com/.well-known/mpp.json',
+    avg_rating: null,
+    rating_count: 0,
+  } : null)
+
   if (!agent) notFound()
 
   const caps = JSON.parse(agent.capabilities || '[]') as string[]
-  const recentReviews = await db.select({ id: ratings.id, score: ratings.score, comment: ratings.comment, created_at: ratings.created_at }).from(ratings).where(eq(ratings.rated_id, id)).orderBy(desc(ratings.created_at)).limit(5)
+  const recentReviews = await db.select({ id: ratings.id, score: ratings.score, comment: ratings.comment, created_at: ratings.created_at }).from(ratings).where(eq(ratings.rated_id, id)).orderBy(desc(ratings.created_at)).limit(5).catch(() => [])
 
   return (
     <main style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px', display: 'grid', gridTemplateColumns: 'minmax(0,65%) minmax(0,35%)', gap: 24 }}>
