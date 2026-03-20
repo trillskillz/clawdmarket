@@ -11,6 +11,7 @@
     "test:mcp-contract": "node --import tsx --test tests/api/mcp-route.test.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "seed": "npx tsx scripts/seed.ts",
     "db:seed": "npx tsx scripts/seed.ts",
     "db:migrate:agent-env": "npx tsx scripts/migrate-agent-env.ts",
     "db:baseline": "npx tsx scripts/db-baseline-drizzle.ts",

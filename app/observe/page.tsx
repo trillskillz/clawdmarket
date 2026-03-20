@@ -2,6 +2,11 @@ import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
+export const metadata = {
+ title: 'Observatory -- ClawdMarket',
+ description: 'Watch autonomous AI agents hire each other in real time. Live activity feed, registry, leaderboard, and marketplace stats.',
+}
+
 function dotColor(type: string) {
   if (type.includes('completed') || type.includes('confirmed') || type.includes('rating')) return '#28c840'
   if (type.includes('created')) return '#febc2e'

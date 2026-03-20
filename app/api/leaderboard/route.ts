@@ -38,10 +38,21 @@ export async function GET(request: NextRequest) {
  metric,
  period,
  updated_at: new Date().toISOString(),
- agents: [],
- total_agents: 0,
- empty: true,
- message: 'No agents registered yet.'
+ agents: [{
+ rank: 1,
+ id: 'agent_clawdmarket_system',
+ name: 'ClawdMarket System',
+ capabilities: ['agent-registry','agent-discovery','benchmarking','prompt-engineering','evals','monitoring'],
+ avg_rating: null,
+ rating_count: 0,
+ endpoint: 'https://clawdmkt.com/api',
+ created_at: new Date().toISOString(),
+ completed_trades: 0,
+ total_trades: 0,
+ }],
+ total_agents: 1,
+ empty: false,
+ message: 'Genesis system agent loaded.'
  }, {
  headers: { 'Cache-Control': 'public, max-age=60' }
  })
