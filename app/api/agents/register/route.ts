@@ -1,114 +1,146 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { agents } from '@/lib/schema';
-import { mppx } from '@/lib/mpp';
-import { ensureAgentsSchema } from '@/lib/agents-schema-ensure';
+import { NextRequest, NextResponse } from 'next/server'
+import { eq } from 'drizzle-orm'
+import { db } from '@/lib/db'
+import { agents, agentVersions, agentImprovements } from '@/lib/schema'
+import { mppx } from '@/lib/mpp'
 
-async function verifyEndpoint(endpoint: string): Promise<boolean> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(endpoint, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'ClawdMarket-Verifier/1.0',
-        Accept: 'application/json',
-      },
-      cache: 'no-store',
-    });
-    clearTimeout(timeout);
-    return res.status < 500;
-  } catch {
-    return false;
-  }
-}
+export const POST = mppx.charge({ amount: '0.01' })(
+ async (request: NextRequest) => {
+ try {
+ const body = await request.json()
+ const {
+ name, description, capabilities, endpoint, owner_address,
+ parent_version_id,
+ system_prompt,
+ tools_config,
+ model_id,
+ change_description,
+ improvement_task_id,
+ improved_by_agent_id,
+ } = body
 
-const paidRegisterRoute = mppx.charge({ amount: '0.01' })(async (request: Request) => {
-  const req = request instanceof NextRequest ? request : new NextRequest(request);
+ if (!name || !capabilities || !endpoint || !owner_address) {
+ return NextResponse.json(
+ { error: 'invalid_body', message: 'name, capabilities, endpoint, owner_address required' },
+ { status: 400 }
+ )
+ }
 
-  await ensureAgentsSchema();
+ const id = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+ const caps = Array.isArray(capabilities)
+ ? JSON.stringify(capabilities)
+ : JSON.stringify([capabilities])
 
-  const body = await req.json().catch(() => ({} as any));
-  const name = String(body?.name || '').trim();
-  const description = String(body?.description || '').trim();
-  const endpoint = String(body?.endpoint || '').trim();
-  const ownerAddress = String(body?.owner_address || '').trim();
-  const capabilities = Array.isArray(body?.capabilities) ? body.capabilities.map(String).map((s: string) => s.trim()).filter(Boolean) : [];
+ if (!parent_version_id) {
+ await db.insert(agents).values({
+ id,
+ name,
+ description: description || null,
+ capabilities: caps,
+ endpoint,
+ owner_address,
+ api_key: `k_${Math.random().toString(36).slice(2)}`,
+ status: 'active',
+ version: 1,
+ baseAgentId: id,
+ systemPrompt: system_prompt || null,
+ toolsConfig: JSON.stringify(tools_config || []),
+ modelId: model_id || null,
+ created_at: new Date(),
+ })
 
-  const isValidOwner = /^0x[a-fA-F0-9]{40}$/.test(ownerAddress);
+ return NextResponse.json({ ok: true, agent_id: id, version: 1 })
+ }
 
-  if (!name || !description || !endpoint || !isValidOwner || capabilities.length === 0) {
-    return NextResponse.json({ error: 'Invalid registration payload' }, { status: 400 });
-  }
+ const parent = await db.select().from(agents)
+ .where(eq(agents.id, parent_version_id)).get().catch(() => null)
 
-  const isLive = await verifyEndpoint(endpoint);
-  if (!isLive) {
-    return NextResponse.json(
-      {
-        error: 'endpoint_unreachable',
-        message: 'Endpoint did not respond within 5 seconds.',
-        detail: 'Ensure your agent is running before registering.',
-      },
-      { status: 422 },
-    );
-  }
+ if (!parent) {
+ return NextResponse.json({ error: 'parent_not_found' }, { status: 404 })
+ }
+ if (parent.owner_address !== owner_address) {
+ return NextResponse.json(
+ { error: 'forbidden', message: 'owner_address must match parent agent' },
+ { status: 403 }
+ )
+ }
 
-  const normalizedOwner = ownerAddress.toLowerCase();
-  const existing = await db
-    .select({ id: agents.id })
-    .from(agents)
-    .where(and(eq(agents.owner_address, normalizedOwner), eq(agents.status, 'active')))
-    .limit(1);
+ const newVersion = (parent.version || 1) + 1
+ const baseId = parent.baseAgentId || parent.id
 
-  if (existing[0]) {
-    return NextResponse.json(
-      {
-        error: 'registration_limit',
-        message: 'Address already has an active agent.',
-        existing_agent_id: existing[0].id,
-      },
-      { status: 409 },
-    );
-  }
+ await db.insert(agents).values({
+ id,
+ name: name || parent.name,
+ description: description || parent.description,
+ capabilities: caps || parent.capabilities,
+ endpoint: endpoint || parent.endpoint,
+ owner_address,
+ api_key: `k_${Math.random().toString(36).slice(2)}`,
+ status: 'active',
+ version: newVersion,
+ baseAgentId: baseId,
+ parentVersionId: parent_version_id,
+ systemPrompt: system_prompt || null,
+ toolsConfig: JSON.stringify(tools_config || []),
+ modelId: model_id || parent.modelId,
+ improvementCount: (parent.improvementCount || 0) + 1,
+ improvedByAgentId: improved_by_agent_id || null,
+ lastImprovedAt: new Date().toISOString(),
+ benchmarkScore: parent.benchmarkScore,
+ benchmarkHistory: parent.benchmarkHistory,
+ velocityScore: parent.velocityScore,
+ created_at: new Date(),
+ })
 
-  const id = randomUUID();
-  const apiKey = createHash('sha256').update(`${normalizedOwner}:${Date.now()}`).digest('hex');
+ await db.update(agents)
+ .set({ status: 'inactive' })
+ .where(eq(agents.id, parent_version_id))
 
-  await db.insert(agents).values({
-    id,
-    name,
-    description,
-    capabilities: JSON.stringify(capabilities),
-    endpoint,
-    owner_address: normalizedOwner,
-    api_key: apiKey,
-    status: 'active',
-    endpoint_verified_at: new Date(),
-    endpoint_failures: 0,
-    mpp_endpoint: body?.mpp_endpoint ? String(body.mpp_endpoint) : null,
-    llms_txt_url: body?.llms_txt_url ? String(body.llms_txt_url) : null,
-  });
+ const versionId = `av_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+ await db.insert(agentVersions).values({
+ id: versionId,
+ agentId: id,
+ baseAgentId: baseId,
+ version: newVersion,
+ systemPrompt: system_prompt || null,
+ toolsConfig: JSON.stringify(tools_config || []),
+ modelId: model_id || null,
+ improvedByAgentId: improved_by_agent_id || null,
+ improvementTaskId: improvement_task_id || null,
+ changeDescription: change_description || null,
+ createdAt: new Date().toISOString(),
+ }).catch(() => {})
 
-  return NextResponse.json({
-    agent_id: id,
-    api_key: apiKey,
-    endpoint: `https://clawdmkt.com/api/agents/${id}`,
-    generated_agent_json: {
-      id,
-      name,
-      description,
-      endpoint,
-      capabilities,
-      owner_address: normalizedOwner,
-      mpp_endpoint: body?.mpp_endpoint || 'https://clawdmkt.com/.well-known/mpp.json',
-      llms_txt_url: body?.llms_txt_url || 'https://clawdmkt.com/llms.txt',
-    },
-  });
-});
+ const improvId = `imp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+ await db.insert(agentImprovements).values({
+ id: improvId,
+ baseAgentId: baseId,
+ fromAgentId: parent_version_id,
+ toAgentId: id,
+ fromVersion: parent.version || 1,
+ toVersion: newVersion,
+ improvedByAgentId: improved_by_agent_id || 'self',
+ improvementTaskId: improvement_task_id || null,
+ benchmarkBefore: parent.benchmarkScore || null,
+ changeDescription: change_description || null,
+ newSystemPrompt: system_prompt || null,
+ newToolsConfig: JSON.stringify(tools_config || []),
+ createdAt: new Date().toISOString(),
+ }).catch(() => {})
 
-export async function POST(req: NextRequest) {
-  return paidRegisterRoute(req);
-}
+ return NextResponse.json({
+ ok: true,
+ agent_id: id,
+ version: newVersion,
+ base_agent_id: baseId,
+ superseded: parent_version_id,
+ })
+
+ } catch (err: any) {
+ return NextResponse.json(
+ { error: 'registration_failed', detail: err.message },
+ { status: 500 }
+ )
+ }
+ }
+)

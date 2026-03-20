@@ -1,50 +1,52 @@
 // Central registry of all ClawdMarket payment addresses.
 // Add your addresses to Vercel env vars then they appear here automatically.
 
+const env = (key: string) => (process.env[key] || '').trim()
+
 export const WALLETS = {
  // EVM — works for ALL EVM chains (ETH, USDC, MATIC, BNB, AVAX, ARB, OP, etc.)
- evm: process.env.TREASURY_ADDRESS || '',
- evmPublic: process.env.NEXT_PUBLIC_TREASURY_ADDRESS || '',
+ evm: env('TREASURY_ADDRESS'),
+ evmPublic: env('NEXT_PUBLIC_TREASURY_ADDRESS'),
 
  // MPP / Tempo
- mpp: process.env.MPP_RECIPIENT_ADDRESS || process.env.TREASURY_ADDRESS || '',
+ mpp: env('MPP_RECIPIENT_ADDRESS') || env('TREASURY_ADDRESS'),
 
  // Base / x402 / BNKR
- base: process.env.BASE_RECIPIENT_ADDRESS || process.env.TREASURY_ADDRESS || '',
+ base: env('BASE_RECIPIENT_ADDRESS') || env('TREASURY_ADDRESS'),
 
  // Solana (SOL, USDC, USDT SPL tokens)
- solana: process.env.SOLANA_RECIPIENT_ADDRESS || '',
- solanaPublic: process.env.NEXT_PUBLIC_SOLANA_RECIPIENT_ADDRESS || '',
+ solana: env('SOLANA_RECIPIENT_ADDRESS'),
+ solanaPublic: env('NEXT_PUBLIC_SOLANA_RECIPIENT_ADDRESS'),
 
  // Bitcoin (on-chain)
- bitcoin: process.env.BITCOIN_RECIPIENT_ADDRESS || '',
- bitcoinPublic: process.env.NEXT_PUBLIC_BITCOIN_RECIPIENT_ADDRESS || '',
+ bitcoin: env('BITCOIN_RECIPIENT_ADDRESS'),
+ bitcoinPublic: env('NEXT_PUBLIC_BITCOIN_RECIPIENT_ADDRESS'),
 
  // Kaspa
- kaspa: process.env.KASPA_RECIPIENT_ADDRESS || '',
- kaspaPublic: process.env.NEXT_PUBLIC_KASPA_RECIPIENT_ADDRESS || '',
+ kaspa: env('KASPA_RECIPIENT_ADDRESS'),
+ kaspaPublic: env('NEXT_PUBLIC_KASPA_RECIPIENT_ADDRESS'),
 
  // Litecoin
- litecoin: process.env.LITECOIN_RECIPIENT_ADDRESS || '',
+ litecoin: env('LITECOIN_RECIPIENT_ADDRESS'),
 
  // Dogecoin
- dogecoin: process.env.DOGECOIN_RECIPIENT_ADDRESS || '',
+ dogecoin: env('DOGECOIN_RECIPIENT_ADDRESS'),
 
  // XRP
- xrp: process.env.XRP_RECIPIENT_ADDRESS || '',
- xrpTag: process.env.XRP_DESTINATION_TAG || '',
+ xrp: env('XRP_RECIPIENT_ADDRESS'),
+ xrpTag: env('XRP_DESTINATION_TAG'),
 
  // Cardano
- cardano: process.env.CARDANO_RECIPIENT_ADDRESS || '',
+ cardano: env('CARDANO_RECIPIENT_ADDRESS'),
 
  // Polkadot
- polkadot: process.env.POLKADOT_RECIPIENT_ADDRESS || '',
+ polkadot: env('POLKADOT_RECIPIENT_ADDRESS'),
 
  // Cosmos
- cosmos: process.env.COSMOS_RECIPIENT_ADDRESS || '',
+ cosmos: env('COSMOS_RECIPIENT_ADDRESS'),
 
  // Monero
- monero: process.env.MONERO_RECIPIENT_ADDRESS || '',
+ monero: env('MONERO_RECIPIENT_ADDRESS'),
 } as const
 
 // Helper: check if a wallet is configured

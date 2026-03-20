@@ -10,23 +10,12 @@ const truncate = (v: string, left = 8, right = 6) => (v.length > left + right ? 
 
 export default async function RegistryAgentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const [dbAgent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1).catch(() => [] as any[])
-  const agent = dbAgent || (id === 'agent_clawdmarket_system' ? {
-    id: 'agent_clawdmarket_system',
-    name: 'ClawdMarket System',
-    capabilities: '["agent-registry","agent-discovery","benchmarking","prompt-engineering","evals","monitoring"]',
-    endpoint: 'https://clawdmkt.com/api',
-    owner_address: '0x3E911a2EaFbE60ca538F659836d6DE60Db639D44',
-    created_at: new Date().toISOString(),
-    mpp_endpoint: 'https://clawdmkt.com/.well-known/mpp.json',
-    avg_rating: null,
-    rating_count: 0,
-  } : null)
-
+  const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1).catch(() => [] as any[])
   if (!agent) notFound()
 
   const caps = JSON.parse(agent.capabilities || '[]') as string[]
-  const recentReviews = await db.select({ id: ratings.id, score: ratings.score, comment: ratings.comment, created_at: ratings.created_at }).from(ratings).where(eq(ratings.rated_id, id)).orderBy(desc(ratings.created_at)).limit(5).catch(() => [])
+  const recentReviews = await db.select({ id: ratings.id, score: ratings.score, comment: ratings.comment, created_at: ratings.created_at }).from(ratings).where(eq(ratings.rated_id, id)).orderBy(desc(ratings.created_at)).limit(5)
+  const lineage = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://clawdmkt.com'}/api/agents/${id}/lineage`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null)
 
   return (
     <main style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px', display: 'grid', gridTemplateColumns: 'minmax(0,65%) minmax(0,35%)', gap: 24 }}>
@@ -43,6 +32,29 @@ export default async function RegistryAgentPage({ params }: { params: Promise<{ 
         </div>
 
         <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 10 }}>{agent.avg_rating ? `★★★★☆ ${Number(agent.avg_rating).toFixed(1)} (${agent.rating_count || 0} ratings)` : 'unrated'}</h3>
+
+        <section style={{ background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+          <h4 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Lineage</h4>
+          {lineage ? (
+            <>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#8b949e', marginBottom: 8 }}>
+                v{lineage.current_version || 1} · benchmark {lineage.current_benchmark_score ?? '—'} · velocity {lineage.velocity_score ?? '—'} · improvements {lineage.improvement_count || 0}
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr><th style={{ textAlign: 'left', fontSize: 12, color: '#484f58' }}>version</th><th style={{ textAlign: 'left', fontSize: 12, color: '#484f58' }}>benchmark</th><th style={{ textAlign: 'left', fontSize: 12, color: '#484f58' }}>improved by</th><th style={{ textAlign: 'left', fontSize: 12, color: '#484f58' }}>date</th></tr></thead>
+                  <tbody>
+                    {(lineage.versions || []).slice(-8).map((v: any) => (
+                      <tr key={v.id}><td style={{ padding: '6px 0', color: '#e8e8e8' }}>v{v.version}</td><td style={{ color: '#8b949e' }}>{v.benchmarkScore ?? '—'}</td><td style={{ color: '#8b949e' }}>{v.improvedByAgentId || '—'}</td><td style={{ color: '#8b949e' }}>{v.createdAt ? new Date(v.createdAt).toLocaleDateString() : '—'}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <p style={{ color: '#8b949e' }}>v1 — No improvements recorded yet</p>
+          )}
+        </section>
         <div style={{ display: 'grid', gap: 10 }}>
           {recentReviews.map((r) => (
             <article key={r.id} style={{ border: '1px solid #21262d', borderRadius: 10, padding: 12, background: '#111318' }}>

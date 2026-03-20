@@ -47,6 +47,7 @@ export default function TaskBoardPage() {
  const [tasks, setTasks] = useState<any[]>([])
  const [loading, setLoading] = useState(true)
  const [filter, setFilter] = useState('')
+ const [taskType, setTaskType] = useState('')
  const [showPostModal, setShowPostModal] = useState(false)
  const [posting, setPosting] = useState(false)
  const [form, setForm] = useState({
@@ -57,22 +58,22 @@ export default function TaskBoardPage() {
  setLoading(true)
  const params = new URLSearchParams({ status: activeTab, limit: '50' })
  if (filter) params.set('capability', filter)
+ if (taskType) params.set('task_type', taskType)
  fetch(`/api/tasks?${params}`)
  .then(r => r.json())
  .then(d => { setTasks(d.tasks || []); setLoading(false) })
  .catch(() => { setTasks([]); setLoading(false) })
- }, [activeTab, filter])
+ }, [activeTab, filter, taskType])
 
  useEffect(() => { loadTasks() }, [loadTasks])
 
- const filtered = tasks.filter(t => {
- const requiredCapabilities = t.required_capabilities ?? t.requiredCapabilities ?? []
- return (
+ const filtered = tasks.filter(t =>
  !filter ||
  t.title?.toLowerCase().includes(filter.toLowerCase()) ||
- requiredCapabilities?.some((c: string) => c.toLowerCase().includes(filter.toLowerCase()))
+ t.required_capabilities?.some((c: string) =>
+ c.toLowerCase().includes(filter.toLowerCase())
  )
- })
+ )
 
  const statusDot = (status: string) => {
  const colors: Record<string, string> = {
@@ -117,6 +118,12 @@ export default function TaskBoardPage() {
  Clear
  </button>
  )}
+ <select style={s.input as any} value={taskType} onChange={e => setTaskType(e.target.value)}>
+ <option value="">All Types</option>
+ <option value="general">General</option>
+ <option value="benchmark">Benchmark</option>
+ <option value="self_improvement">Self Improvement</option>
+ </select>
  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>
  {filtered.length} task{filtered.length !== 1 ? 's' : ''}
  </span>
@@ -156,7 +163,7 @@ export default function TaskBoardPage() {
 
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 8 }}>
  <h3 style={s.cardTitle}>{task.title}</h3>
- <span style={s.budgetBadge}>${Number(task.budget_usd ?? task.budgetUsd ?? 0).toFixed(2)}</span>
+ <span style={s.budgetBadge}>${task.budget_usd?.toFixed(2)}</span>
  </div>
 
  <p style={s.cardDesc}>
@@ -166,10 +173,21 @@ export default function TaskBoardPage() {
  </p>
 
  <div style={{ marginBottom: 8 }}>
- {(task.required_capabilities ?? task.requiredCapabilities ?? []).map((cap: string) => (
+ {task.task_type && task.task_type !== 'general' && (
+ <span style={{
+ fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
+ color: task.task_type === 'self_improvement' ? '#febc2e' : '#28c840',
+ border: `1px solid ${task.task_type === 'self_improvement' ? '#febc2e33' : '#28c84033'}`,
+ background: task.task_type === 'self_improvement' ? '#febc2e11' : '#28c84011',
+ borderRadius: 20, padding: '2px 10px', marginRight: 8,
+ }}>
+ {task.task_type === 'self_improvement' ? '⬆ improvement' : '📊 benchmark'}
+ </span>
+ )}
+ {(task.required_capabilities || []).map((cap: string) => (
  <span key={cap} style={s.badge}>{cap}</span>
  ))}
- {((task.required_capabilities ?? task.requiredCapabilities ?? []).length === 0) && (
+ {(!task.required_capabilities || task.required_capabilities.length === 0) && (
  <span style={{ ...s.badge, color: '#484f58' }}>no capabilities specified</span>
  )}
  </div>
@@ -179,9 +197,7 @@ export default function TaskBoardPage() {
  <span style={{ color: statusDot(task.status), marginRight: 6 }}>●</span>
  {task.status}
  </span>
- <span style={s.metaItem}>{task.bid_count ?? task.bidCount ?? 0} bid{(task.bid_count ?? task.bidCount ?? 0) !== 1 ? 's' : ''}</span>
- <span style={s.metaItem}>type {task.task_type ?? task.taskType ?? 'general'}</span>
- <span style={s.metaItem}>poster {task.poster_agent_id ?? task.posterAgentId ?? 'unknown'}</span>
+ <span style={s.metaItem}>{task.bid_count || 0} bid{task.bid_count !== 1 ? 's' : ''}</span>
  <span style={s.metaItem}>posted {task.posted_at}</span>
  {task.status === 'open' && (
  <span style={s.metaItem}>expires {task.expires_in}</span>
