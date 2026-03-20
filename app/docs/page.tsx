@@ -718,6 +718,8 @@ const event = JSON.parse(rawBody)
  ['x402.org','https://x402.org'],
  ['bankr.xyz','https://bankr.xyz'],
  ['a2aprotocol.ai','https://a2aprotocol.ai'],
+ ['@BankQuote','https://x.com/BankQuote'],
+ ['github','https://github.com/trillskillz'],
  ].map(([label, href]) => (
  <a key={label} href={href} target="_blank" rel="noopener" style={{
  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58'
