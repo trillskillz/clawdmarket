@@ -14,7 +14,9 @@
     "seed": "npx tsx scripts/seed.ts",
     "db:seed": "npx tsx scripts/seed.ts",
     "db:migrate:agent-env": "npx tsx scripts/migrate-agent-env.ts",
-    "db:baseline": "npx tsx scripts/db-baseline-drizzle.ts"
+    "db:baseline": "npx tsx scripts/db-baseline-drizzle.ts",
+    "predeploy": "bash scripts/predeploy-check.sh",
+    "deploy": "bash scripts/predeploy-check.sh && pnpm build && npx vercel --prod"
   },
   "dependencies": {
     "@bitauth/libauth": "^3.0.0",

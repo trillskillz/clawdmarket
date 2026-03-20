@@ -88,11 +88,68 @@ export default async function HomePage() {
         <section className="mt-16">
           <h2 className="section-header">Accepted Payment Rails</h2>
           <div className="grid gap-4 lg:grid-cols-3">
-            <article className="feature-card"><p className="inline-block rounded border border-accent px-2 py-0.5 text-xs text-accent">MPP</p><h3 className="mt-2 font-semibold text-text">MPP / Tempo</h3><p className="mt-2 text-sm text-text-dim">Machine Payments Protocol on Tempo blockchain. pathUSD stablecoin. Sub-cent fees. Session support.</p></article>
-            <article className="feature-card"><p className="inline-block rounded border border-accent px-2 py-0.5 text-xs text-accent">x402</p><h3 className="mt-2 font-semibold text-text">x402 / Base</h3><p className="mt-2 text-sm text-text-dim">HTTP 402 payment standard on Base via Bankr. BNKR token settlement. Coinbase-native.</p></article>
-            <article className="feature-card"><p className="inline-block rounded border border-accent px-2 py-0.5 text-xs text-accent">EVM</p><h3 className="mt-2 font-semibold text-text">Any EVM Token</h3><p className="mt-2 text-sm text-text-dim">Any ERC-20 on any chain MetaMask supports. CoinGecko price oracle. Live conversion rates.</p></article>
+            {[
+              {
+                badge: 'MPP',
+                title: 'IETF Web Standard',
+                desc: 'Payment method agnostic. Tempo, Stripe, Visa, Lightning. Any chain, any currency.',
+                highlight: true,
+              },
+              {
+                badge: 'TEMPO',
+                title: 'pathUSD Stablecoins',
+                desc: 'Recommended for agents. Sub-cent fees. Sub-second settlement.',
+              },
+              {
+                badge: 'STRIPE',
+                title: 'Fiat Payments',
+                desc: 'Cards, bank transfer, any Stripe payment method. No crypto needed.',
+              },
+              {
+                badge: 'VISA',
+                title: 'Card Payments',
+                desc: 'Visa Intelligent Commerce. Single-use encrypted network tokens.',
+              },
+              {
+                badge: 'LIGHTNING',
+                title: 'Bitcoin Lightning',
+                desc: 'Fast BTC micropayments via Lightspark MPP extension.',
+              },
+              {
+                badge: 'EVM + SOL + BTC',
+                title: 'Any Token',
+                desc: 'ETH, USDC, SOL, BTC, any ERC-20. CoinGecko price oracle.',
+              },
+            ].map(rail => (
+              <div
+                key={rail.badge}
+                style={{
+                  background: rail.highlight ? '#ff4d4d11' : '#111318',
+                  border: `1px solid ${rail.highlight ? '#ff4d4d44' : '#21262d'}`,
+                  borderRadius: 12,
+                  padding: '20px 24px',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 11,
+                    color: '#ff4d4d',
+                    border: '1px solid #ff4d4d33',
+                    background: '#ff4d4d11',
+                    borderRadius: 20,
+                    padding: '2px 10px',
+                    marginBottom: 12,
+                    display: 'inline-block',
+                  }}
+                >
+                  {rail.badge}
+                </span>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: '10px 0 6px' }}>{rail.title}</h3>
+                <p style={{ color: '#8b949e', fontSize: 13, lineHeight: 1.6, margin: 0 }}>{rail.desc}</p>
+              </div>
+            ))}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2 text-xs text-text-dim"><span className="token-pill">SOL</span><span className="token-pill">BTC</span><span className="token-pill">Lightning</span><span className="token-pill">USDT</span><span className="token-pill">DAI</span><span className="token-pill">WBTC</span><span className="token-pill">AVAX</span><span className="token-pill">ARB</span><span className="token-pill">OP</span></div>
         </section>
 
         <section className="mt-16">

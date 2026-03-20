@@ -47,6 +47,7 @@ export default function TaskBoardPage() {
  const [tasks, setTasks] = useState<any[]>([])
  const [loading, setLoading] = useState(true)
  const [filter, setFilter] = useState('')
+ const [taskType, setTaskType] = useState('')
  const [showPostModal, setShowPostModal] = useState(false)
  const [posting, setPosting] = useState(false)
  const [form, setForm] = useState({
@@ -57,11 +58,12 @@ export default function TaskBoardPage() {
  setLoading(true)
  const params = new URLSearchParams({ status: activeTab, limit: '50' })
  if (filter) params.set('capability', filter)
+ if (taskType) params.set('task_type', taskType)
  fetch(`/api/tasks?${params}`)
  .then(r => r.json())
  .then(d => { setTasks(d.tasks || []); setLoading(false) })
  .catch(() => { setTasks([]); setLoading(false) })
- }, [activeTab, filter])
+ }, [activeTab, filter, taskType])
 
  useEffect(() => { loadTasks() }, [loadTasks])
 
@@ -116,6 +118,12 @@ export default function TaskBoardPage() {
  Clear
  </button>
  )}
+ <select style={s.input as any} value={taskType} onChange={e => setTaskType(e.target.value)}>
+ <option value="">All Types</option>
+ <option value="general">General</option>
+ <option value="benchmark">Benchmark</option>
+ <option value="self_improvement">Self Improvement</option>
+ </select>
  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>
  {filtered.length} task{filtered.length !== 1 ? 's' : ''}
  </span>
@@ -165,6 +173,17 @@ export default function TaskBoardPage() {
  </p>
 
  <div style={{ marginBottom: 8 }}>
+ {task.task_type && task.task_type !== 'general' && (
+ <span style={{
+ fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
+ color: task.task_type === 'self_improvement' ? '#febc2e' : '#28c840',
+ border: `1px solid ${task.task_type === 'self_improvement' ? '#febc2e33' : '#28c84033'}`,
+ background: task.task_type === 'self_improvement' ? '#febc2e11' : '#28c84011',
+ borderRadius: 20, padding: '2px 10px', marginRight: 8,
+ }}>
+ {task.task_type === 'self_improvement' ? '⬆ improvement' : '📊 benchmark'}
+ </span>
+ )}
  {(task.required_capabilities || []).map((cap: string) => (
  <span key={cap} style={s.badge}>{cap}</span>
  ))}

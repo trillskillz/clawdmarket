@@ -12,7 +12,12 @@ import * as schema from './schema';
 const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
 const fallbackUrl = 'file:./build-fallback.db';
 
-if (!tursoUrl && process.env.NODE_ENV !== 'production') {
+if (!tursoUrl) {
+  const isProdRuntime = process.env.NODE_ENV === 'production' && process.env.VERCEL === '1';
+  if (isProdRuntime) {
+    throw new Error('[db] TURSO_DATABASE_URL is missing in production runtime. Refusing to use fallback database.');
+  }
+
   const key = '__clawdmarket_db_fallback_warned__';
   const g = globalThis as Record<string, unknown>;
   if (!g[key]) {

@@ -1,59 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { tasks } from '@/lib/schema'
-import { eq, desc, sql } from 'drizzle-orm'
+import { tasks, bids } from '@/lib/schema'
+import { eq, desc, and, sql, gte, lte } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 
 export async function GET(request: NextRequest) {
  const { searchParams } = new URL(request.url)
- const status = searchParams.get('status') || 'open'
  const capability = searchParams.get('capability')
+ const budgetMin = parseFloat(searchParams.get('budget_min') || '0')
+ const budgetMax = parseFloat(searchParams.get('budget_max') || '999999')
  const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
+ const status = searchParams.get('status') || 'open'
+ const taskType = searchParams.get('task_type') || ''
 
  try {
  const allTasks = await db
- .select()
+ .select({
+ id: tasks.id,
+ title: tasks.title,
+ description: tasks.description,
+ required_capabilities: tasks.requiredCapabilities,
+ budget_usd: tasks.budgetUsd,
+ status: tasks.status,
+ created_at: tasks.createdAt,
+ expires_at: tasks.expiresAt,
+ deadline_at: tasks.deadlineAt,
+ poster_agent_id: tasks.posterAgentId,
+ assigned_agent_id: tasks.assignedAgentId,
+ task_type: tasks.taskType,
+ subject_agent_id: tasks.subjectAgentId,
+ benchmark_id: tasks.benchmarkId,
+ })
  .from(tasks)
- .where(eq(tasks.status, status))
+ .where(
+ and(
+ eq(tasks.status, status),
+ gte(tasks.budgetUsd, budgetMin),
+ lte(tasks.budgetUsd, budgetMax),
+ )
+ )
  .orderBy(desc(tasks.createdAt))
  .limit(limit)
  .all()
  .catch(() => [])
 
- let taskList: any[] = allTasks
- if (taskList.length === 0) {
- const raw = await db.run(sql.raw(`SELECT * FROM tasks WHERE status = '${status}' ORDER BY created_at DESC LIMIT ${limit}`)).catch(() => null)
- if (raw && (raw as any).rows && (raw as any).rows.length > 0) {
- taskList = (raw as any).rows as any[]
- }
- }
+ const bidCounts = await db
+ .select({
+ task_id: bids.taskId,
+ count: sql<number>`COUNT(*)`,
+ })
+ .from(bids)
+ .groupBy(bids.taskId)
+ .all()
+ .catch(() => [])
 
- const enriched = taskList.map(task => ({
+ const bidMap = new Map(bidCounts.map(b => [b.task_id, b.count]))
+
+ const enriched = allTasks.map(task => ({
  ...task,
  required_capabilities: (() => {
- try {
- return JSON.parse(
- task.required_capabilities ||
- task.requiredCapabilities || '[]'
- )
- } catch { return [] }
+ try { return JSON.parse(task.required_capabilities || '[]') }
+ catch { return [] }
  })(),
- bid_count: 0,
- posted_at: task.created_at || task.createdAt
- ? getRelativeTime(task.created_at || task.createdAt)
- : 'recently',
- expires_in: task.expires_at || task.expiresAt
- ? getRelativeTime(task.expires_at || task.expiresAt)
- : '30d',
+ bid_count: Number(bidMap.get(task.id) || 0),
+ expires_in: getRelativeTime(task.expires_at),
+ posted_at: getRelativeTime(task.created_at),
  }))
 
- const filtered = capability
+ const capabilityFiltered = capability
  ? enriched.filter(t =>
  t.required_capabilities.some((c: string) =>
  c.toLowerCase().includes(capability.toLowerCase())
  )
  )
  : enriched
+
+ const filtered = taskType ? capabilityFiltered.filter((t: any) => (t.task_type || 'general') === taskType) : capabilityFiltered
 
  const genesisTasks = [
  {
@@ -63,9 +85,17 @@ export async function GET(request: NextRequest) {
  required_capabilities: ['web-research', 'content-writing', 'prompt-engineering'],
  budget_usd: 0.25,
  status: 'open',
- posted_at: 'just now',
- expires_in: '30d',
+ created_at: new Date().toISOString(),
+ expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+ deadline_at: null,
+ poster_agent_id: 'clawdmarket_system',
+ assigned_agent_id: null,
+ task_type: 'general',
+ subject_agent_id: null,
+ benchmark_id: null,
  bid_count: 0,
+ expires_in: '30d',
+ posted_at: 'just now',
  },
  {
  id: 'task_genesis_002',
@@ -74,17 +104,27 @@ export async function GET(request: NextRequest) {
  required_capabilities: ['benchmarking', 'prompt-engineering', 'evals'],
  budget_usd: 0.5,
  status: 'open',
- posted_at: 'just now',
- expires_in: '30d',
+ created_at: new Date().toISOString(),
+ expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+ deadline_at: null,
+ poster_agent_id: 'clawdmarket_system',
+ assigned_agent_id: null,
+ task_type: 'self_improvement',
+ subject_agent_id: null,
+ benchmark_id: null,
  bid_count: 0,
+ expires_in: '30d',
+ posted_at: 'just now',
  }
  ]
 
- const output = filtered.length === 0 && status === 'open' ? genesisTasks : filtered
+ const seeded = (filtered.length === 0 && status === 'open')
+ ? (taskType ? genesisTasks.filter((t: any) => (t.task_type || 'general') === taskType) : genesisTasks)
+ : filtered
 
  return NextResponse.json({
- tasks: output,
- total: output.length,
+ tasks: seeded,
+ total: seeded.length,
  status_filter: status,
  }, { headers: { 'Cache-Control': 'no-store' } })
 
@@ -100,7 +140,7 @@ export const POST = mppx.charge({ amount: '0.001' })(
  async (request: NextRequest) => {
  try {
  const body = await request.json()
- const { title, description, required_capabilities, budget_usd, deadline_at } = body
+ const { title, description, required_capabilities, budget_usd, deadline_at, task_type, subject_agent_id, benchmark_id } = body
 
  if (!title || !description || !budget_usd) {
  return NextResponse.json(
@@ -125,6 +165,9 @@ export const POST = mppx.charge({ amount: '0.001' })(
  budgetUsd: parseFloat(budget_usd),
  deadlineAt: deadline_at || null,
  status: 'open',
+ taskType: ['general','benchmark','self_improvement'].includes(task_type) ? task_type : 'general',
+ subjectAgentId: subject_agent_id || null,
+ benchmarkId: benchmark_id || null,
  expiresAt,
  createdAt: new Date().toISOString(),
  })

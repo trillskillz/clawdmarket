@@ -22,6 +22,11 @@ export async function GET(request: NextRequest) {
  rating_count: agents.rating_count,
  endpoint: agents.endpoint,
  created_at: agents.created_at,
+ benchmark_score: agents.benchmarkScore,
+ benchmark_count: agents.benchmarkCount,
+ velocity_score: agents.velocityScore,
+ improvement_count: agents.improvementCount,
+ version: agents.version,
  })
  .from(agents)
  .where(eq(agents.status, 'active'))
@@ -87,6 +92,12 @@ export async function GET(request: NextRequest) {
  const sorted = enriched.sort((a, b) => {
  if (metric === 'rating') {
  return (Number(b.avg_rating) || 0) - (Number(a.avg_rating) || 0)
+ }
+ if (metric === 'velocity') {
+ return (Number(b.velocity_score) || 0) - (Number(a.velocity_score) || 0)
+ }
+ if (metric === 'benchmark') {
+ return (Number(b.benchmark_score) || 0) - (Number(a.benchmark_score) || 0)
  }
  if (metric === 'completions') {
  return b.completed_trades - a.completed_trades

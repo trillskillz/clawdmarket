@@ -33,6 +33,21 @@ export const agents = sqliteTable('agents', {
   avg_rating: real('avg_rating'),
   rating_count: integer('rating_count').default(0),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  version: integer('version').notNull().default(1),
+  baseAgentId: text('base_agent_id'),
+  parentVersionId: text('parent_version_id'),
+  systemPrompt: text('system_prompt'),
+  toolsConfig: text('tools_config').default('[]'),
+  modelId: text('model_id'),
+  benchmarkScore: real('benchmark_score'),
+  benchmarkCount: integer('benchmark_count').notNull().default(0),
+  benchmarkHistory: text('benchmark_history').notNull().default('[]'),
+  velocityScore: real('velocity_score'),
+  lastBenchmarkAt: text('last_benchmark_at'),
+  improvementCount: integer('improvement_count').notNull().default(0),
+  totalImprovementDelta: real('total_improvement_delta').notNull().default(0),
+  lastImprovedAt: text('last_improved_at'),
+  improvedByAgentId: text('improved_by_agent_id'),
 });
 
 export const api_keys = sqliteTable('api_keys', {
@@ -114,6 +129,9 @@ export const tasks = sqliteTable('tasks', {
   status: text('status').notNull().default('open'),
   assignedAgentId: text('assigned_agent_id'),
   winningBidId: text('winning_bid_id'),
+  taskType: text('task_type').notNull().default('general'),
+  subjectAgentId: text('subject_agent_id'),
+  benchmarkId: text('benchmark_id'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   expiresAt: text('expires_at').notNull().default(sql`(datetime('now', '+7 days'))`),
 });
@@ -126,6 +144,57 @@ export const bids = sqliteTable('bids', {
   message: text('message'),
   etaSeconds: integer('eta_seconds'),
   status: text('status').notNull().default('pending'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
+export const agentVersions = sqliteTable('agent_versions', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull(),
+  baseAgentId: text('base_agent_id').notNull(),
+  version: integer('version').notNull(),
+  systemPrompt: text('system_prompt'),
+  toolsConfig: text('tools_config').default('[]'),
+  modelId: text('model_id'),
+  benchmarkScore: real('benchmark_score'),
+  improvedByAgentId: text('improved_by_agent_id'),
+  improvementTaskId: text('improvement_task_id'),
+  changeDescription: text('change_description'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
+export const benchmarks = sqliteTable('benchmarks', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull(),
+  taskId: text('task_id'),
+  capability: text('capability').notNull(),
+  testInput: text('test_input').notNull(),
+  testOutput: text('test_output'),
+  scoringRubric: text('scoring_rubric'),
+  score: real('score'),
+  scoredByAgentId: text('scored_by_agent_id'),
+  status: text('status').notNull().default('pending'),
+  runTimeMs: integer('run_time_ms'),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  scoredAt: text('scored_at'),
+});
+
+export const agentImprovements = sqliteTable('agent_improvements', {
+  id: text('id').primaryKey(),
+  baseAgentId: text('base_agent_id').notNull(),
+  fromAgentId: text('from_agent_id').notNull(),
+  toAgentId: text('to_agent_id').notNull(),
+  fromVersion: integer('from_version').notNull(),
+  toVersion: integer('to_version').notNull(),
+  improvedByAgentId: text('improved_by_agent_id').notNull(),
+  improvementTaskId: text('improvement_task_id'),
+  benchmarkBefore: real('benchmark_before'),
+  benchmarkAfter: real('benchmark_after'),
+  delta: real('delta'),
+  costUsd: real('cost_usd'),
+  changeDescription: text('change_description'),
+  newSystemPrompt: text('new_system_prompt'),
+  newToolsConfig: text('new_tools_config'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
