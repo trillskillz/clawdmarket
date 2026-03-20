@@ -1,16 +1,16 @@
 {
+  "github": {
+    "enabled": true,
+    "autoAlias": true
+  },
   "crons": [
-    {
-      "path": "/api/contracts/maintenance",
-      "schedule": "0 12 * * *"
-    },
     {
       "path": "/api/cron/auto-confirm",
       "schedule": "0 9 * * *"
     },
     {
       "path": "/api/cron/monitor",
-      "schedule": "0 10 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

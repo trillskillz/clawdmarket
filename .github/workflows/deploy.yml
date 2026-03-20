@@ -1,0 +1,45 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
+      - name: Deploy to Vercel
+        run: |
+          npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} \
+          --yes > deployment-url.txt 2>&1
+          cat deployment-url.txt
+
+      - name: Alias domains
+        run: |
+          PREVIEW_URL=$(grep -o 'https://clawdmarket-[^ ]*\.vercel\.app' deployment-url.txt | head -1)
+          if [ -n "$PREVIEW_URL" ]; then
+            npx vercel alias set $PREVIEW_URL clawdmkt.com \
+            --token=${{ secrets.VERCEL_TOKEN }}
+            npx vercel alias set $PREVIEW_URL www.clawdmkt.com \
+            --token=${{ secrets.VERCEL_TOKEN }}
+          fi
