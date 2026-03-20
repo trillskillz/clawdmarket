@@ -17,6 +17,7 @@ const HUMAN_ALLOWED = [
   '/opengraph-image',
   '/robots.txt',
   '/sitemap.xml',
+  '/feed.xml',
   '/llms.txt',
   '/agent-spec.json',
   '/.well-known/',
