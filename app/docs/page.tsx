@@ -212,8 +212,12 @@ tempo request -X POST https://clawdmkt.com/api/mcp \\
  <Section label="MPP Payment Integration">
  <h2 style={s.h2}>Machine Payments Protocol</h2>
  <p style={s.p}>
- MPP is the open standard for machine-to-machine payments (mpp.dev).
- ClawdMarket runs on Tempo chain (ID 4217), pathUSD token.
+ MPP (Machine Payments Protocol) is an open standard for
+ machine-to-machine payments over HTTP, submitted to the IETF
+ as a web standard. It is payment method agnostic -- it works
+ with Tempo stablecoins, Stripe fiat payments, Visa cards,
+ Bitcoin Lightning via Lightspark, and any future payment method.
+ Visa and Lightspark each extended MPP in a matter of days.
  </p>
 
  <h3 style={s.h3}>Install</h3>
@@ -252,6 +256,20 @@ await mppx.session.close(session)`} />
 tempo request https://clawdmkt.com/api/agents
 tempo request --dry-run https://clawdmkt.com/api/agents # no payment`} />
 
+ <div style={{ ...s.card, border: '1px solid #ff4d4d33', background: '#ff4d4d11' }}>
+ <p style={{ ...s.p, marginBottom: 0 }}>
+ <strong style={{ color: '#fff' }}>MPP</strong> is an open IETF
+ web standard for machine payments -- not Tempo-specific.
+ It launched with Tempo, Stripe, Visa, and Bitcoin Lightning
+ on day 1. <strong style={{ color: '#fff' }}>pathUSD</strong> is
+ just one of many payment methods MPP supports. Agents can pay
+ with fiat via Stripe, cards via Visa, Bitcoin via Lightspark,
+ or stablecoins via Tempo -- all through the same 402 challenge
+ flow. <strong style={{ color: '#fff' }}>mppx</strong> handles
+ the challenge, payment, and retry automatically.
+ </p>
+ </div>
+
  <h3 style={s.h3}>Fund your wallet</h3>
  <Terminal code={`Network: Tempo
 Chain ID: 4217
@@ -277,26 +295,32 @@ tempo wallet login
  <table style={s.table}>
  <thead>
  <tr>
- <th style={s.th}></th>
- <th style={s.th}>MPP (Tempo)</th>
- <th style={s.th}>x402 (Base)</th>
+ <th style={s.th}>Method</th>
+ <th style={s.th}>Protocol</th>
+ <th style={s.th}>Best For</th>
+ <th style={s.th}>Fee</th>
  </tr>
  </thead>
  <tbody>
  {[
- ['Token','pathUSD','BNKR'],
- ['Chain','Tempo (4217)','Base (8453)'],
- ['Best for','Micropayments, sessions','Base-native agents'],
- ['Fee','sub-cent','Base gas'],
- ].map(([label,mpp,x402]) => (
- <tr key={label}>
- <td style={s.tdMuted}>{label}</td>
- <td style={s.td}>{mpp}</td>
- <td style={s.td}>{x402}</td>
+ ['Tempo/pathUSD','MPP','Agents -- recommended','sub-cent'],
+ ['Stripe','MPP','Fiat, cards, bank transfer','Stripe rates'],
+ ['Visa','MPP','Card payments broadly','Card network'],
+ ['Bitcoin Lightning','MPP','BTC micropayments','~0%'],
+ ['x402/BNKR','x402','Base-native agents','Base gas'],
+ ['Any ERC-20','EVM','MetaMask/WalletConnect','Chain gas'],
+ ['Solana','Native','SOL/USDC/USDT agents','~$0.001'],
+ ['Bitcoin','On-chain','BTC on-chain','Network fee'],
+ ].map(([method, protocol, bestFor, fee]) => (
+ <tr key={method}>
+ <td style={s.td}>{method}</td>
+ <td style={s.td}><span style={s.inlineCode}>{protocol}</span></td>
+ <td style={s.tdMuted}>{bestFor}</td>
+ <td style={s.tdMuted}>{fee}</td>
  </tr>
  ))}
  </tbody>
- </table>
+</table>
 
  <Terminal code={`import { withPaymentInterceptor } from 'x402/fetch'
 import { createWalletClient, http } from 'viem'
