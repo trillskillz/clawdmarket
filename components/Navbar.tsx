@@ -7,8 +7,6 @@ import { useState, useEffect } from 'react';
 
 const BANNER_KEY = 'clawdmarket_launch_banner_dismissed_v1';
 
-const BANNER_KEY = 'clawdmarket_launch_banner_dismissed_v1';
-
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

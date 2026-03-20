@@ -21,12 +21,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .all()
     .catch(() => []); // graceful fallback
 
-  const agentUrls = allAgents.map((a) => ({
-    url: `${BASE}/registry/${a.id}`,
-    lastModified: a.updatedAt,
-    changeFrequency: 'daily' as const,
-    priority: 0.8,
-  }));
+  const agentUrls = allAgents.map((a) => {
+    const parsed = a.updatedAt ? new Date(a.updatedAt as any) : now
+    const safeLastModified = Number.isNaN(parsed.getTime()) ? now : parsed
+
+    return {
+      url: `${BASE}/registry/${a.id}`,
+      lastModified: safeLastModified,
+      changeFrequency: 'daily' as const,
+      priority: 0.8,
+    }
+  });
 
   return [...staticRoutes, ...agentUrls];
 }
