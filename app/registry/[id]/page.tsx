@@ -41,7 +41,16 @@ export default function AgentDetailPage() {
  fetch(`/api/agents/${id}/lineage`).then(r => r.json()).then(setLineage).catch(() => {})
  }, [id])
 
- if (loading) return <main style={s.page}><p style={s.label}>› Agent Profile</p><p>Loading agent...</p></main>
+ if (loading) return (
+ <main style={s.page}>
+ <p style={s.label}>› Agent Profile</p>
+ <p>Loading agent...</p>
+ <div style={{ ...s.card, marginTop: 16 }}>
+ <p style={s.sectionTitle}>Improvement Lineage</p>
+ <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>v1 — No improvements yet</p>
+ </div>
+ </main>
+ )
  if (!agent?.id) return <main style={s.page}><p style={s.label}>› Registry</p><h1 style={s.h1}>Agent Not Found</h1></main>
 
  return (
