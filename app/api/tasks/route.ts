@@ -1,66 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { tasks, bids } from '@/lib/schema'
-import { eq, desc, and, sql, gte, lte } from 'drizzle-orm'
+import { tasks } from '@/lib/schema'
+import { eq, desc, sql } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 
 export async function GET(request: NextRequest) {
  const { searchParams } = new URL(request.url)
- const capability = searchParams.get('capability')
- const budgetMin = parseFloat(searchParams.get('budget_min') || '0')
- const budgetMax = parseFloat(searchParams.get('budget_max') || '999999')
- const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
  const status = searchParams.get('status') || 'open'
+ const capability = searchParams.get('capability')
+ const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
 
  try {
  const allTasks = await db
- .select({
- id: tasks.id,
- title: tasks.title,
- description: tasks.description,
- required_capabilities: tasks.requiredCapabilities,
- budget_usd: tasks.budgetUsd,
- status: tasks.status,
- created_at: tasks.createdAt,
- expires_at: tasks.expiresAt,
- deadline_at: tasks.deadlineAt,
- poster_agent_id: tasks.posterAgentId,
- assigned_agent_id: tasks.assignedAgentId,
- })
+ .select()
  .from(tasks)
- .where(
- and(
- eq(tasks.status, status),
- gte(tasks.budgetUsd, budgetMin),
- lte(tasks.budgetUsd, budgetMax),
- )
- )
+ .where(eq(tasks.status, status))
  .orderBy(desc(tasks.createdAt))
  .limit(limit)
  .all()
  .catch(() => [])
 
- const bidCounts = await db
- .select({
- task_id: bids.taskId,
- count: sql<number>`COUNT(*)`,
- })
- .from(bids)
- .groupBy(bids.taskId)
- .all()
- .catch(() => [])
+ let taskList: any[] = allTasks
+ if (taskList.length === 0) {
+ const raw = await db.run(sql.raw(`SELECT * FROM tasks WHERE status = '${status}' ORDER BY created_at DESC LIMIT ${limit}`)).catch(() => null)
+ if (raw && (raw as any).rows && (raw as any).rows.length > 0) {
+ taskList = (raw as any).rows as any[]
+ }
+ }
 
- const bidMap = new Map(bidCounts.map(b => [b.task_id, b.count]))
-
- const enriched = allTasks.map(task => ({
+ const enriched = taskList.map(task => ({
  ...task,
  required_capabilities: (() => {
- try { return JSON.parse(task.required_capabilities || '[]') }
- catch { return [] }
+ try {
+ return JSON.parse(
+ task.required_capabilities ||
+ task.requiredCapabilities || '[]'
+ )
+ } catch { return [] }
  })(),
- bid_count: Number(bidMap.get(task.id) || 0),
- expires_in: getRelativeTime(task.expires_at),
- posted_at: getRelativeTime(task.created_at),
+ bid_count: 0,
+ posted_at: task.created_at || task.createdAt
+ ? getRelativeTime(task.created_at || task.createdAt)
+ : 'recently',
+ expires_in: task.expires_at || task.expiresAt
+ ? getRelativeTime(task.expires_at || task.expiresAt)
+ : '30d',
  }))
 
  const filtered = capability
@@ -79,14 +63,9 @@ export async function GET(request: NextRequest) {
  required_capabilities: ['web-research', 'content-writing', 'prompt-engineering'],
  budget_usd: 0.25,
  status: 'open',
- created_at: new Date().toISOString(),
- expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
- deadline_at: null,
- poster_agent_id: 'agent_clawdmarket_system',
- assigned_agent_id: null,
- bid_count: 0,
- expires_in: '30d',
  posted_at: 'just now',
+ expires_in: '30d',
+ bid_count: 0,
  },
  {
  id: 'task_genesis_002',
@@ -95,18 +74,13 @@ export async function GET(request: NextRequest) {
  required_capabilities: ['benchmarking', 'prompt-engineering', 'evals'],
  budget_usd: 0.5,
  status: 'open',
- created_at: new Date().toISOString(),
- expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
- deadline_at: null,
- poster_agent_id: 'agent_clawdmarket_system',
- assigned_agent_id: null,
- bid_count: 0,
- expires_in: '30d',
  posted_at: 'just now',
+ expires_in: '30d',
+ bid_count: 0,
  }
  ]
 
- const output = (filtered.length === 0 && status === 'open') ? genesisTasks : filtered
+ const output = filtered.length === 0 && status === 'open' ? genesisTasks : filtered
 
  return NextResponse.json({
  tasks: output,
