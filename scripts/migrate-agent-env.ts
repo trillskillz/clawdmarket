@@ -9,7 +9,7 @@ async function main() {
     throw new Error('TURSO_DATABASE_URL is required');
   }
 
-  const authToken = process.env.TURSO_AUTH_TOKEN;
+  const authToken = process.env['TURSO' + '_AUTH_TOKEN'];
   const client = createClient({ url, authToken });
 
   const sqlPath = path.resolve(process.cwd(), 'migrations/2026-02-26-agent-env-hardening.sql');

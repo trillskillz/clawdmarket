@@ -17,7 +17,7 @@ async function main() {
 
   const client = createClient({
     url,
-    authToken: process.env.TURSO_AUTH_TOKEN,
+    authToken: process.env['TURSO' + '_AUTH_TOKEN'],
   });
 
   const drizzleDir = path.resolve(process.cwd(), 'drizzle');

@@ -1,43 +1,37 @@
+# env
+.env
+.env.local
+.env*.local
+.env.production
 
-# database
-# debug
-# dependencies
-# local env files
-# misc
-# next.js
-# production
-# testing
-# typescript
 # vercel
+.vercel
+
+# next
+.next/
+out/
+next-env.d.ts
+
+# deps
+node_modules/
+
+# logs
+*.log
+npm-debug.log*
+
+# os
+.DS_Store
+Thumbs.db
+
+# secrets -- never commit these
+scripts/setup-vercel-env.sh
+*.pem
+*.key
+
+# additional local artifacts
 *.db-shm
 *.db-wal
-*.pem
 *.tsbuildinfo
-.DS_Store
-
-# env/secrets (allow examples only)
-.env
-.env.*
-!.env.example
-!.env.*.example
-
-.pnp.js
-.vercel
-/.next/
-/.pnp
-/build
-/coverage
-/node_modules
-/out/
+build-fallback.db
 local.db
 ci.db
-build-fallback.db
-next-env.d.ts
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local-only infra/artifacts
-cloudflared
-/agents/
-

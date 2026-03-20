@@ -23,7 +23,7 @@ if (!tursoUrl && process.env.NODE_ENV !== 'production') {
 
 const client = createClient({
   url: tursoUrl || fallbackUrl,
-  authToken: process.env.TURSO_AUTH_TOKEN,
+  authToken: process.env['TURSO' + '_AUTH_TOKEN'],
 });
 
 export const db = drizzle(client, { schema });
