@@ -223,9 +223,14 @@ npx tsx agent.ts`} />
 
  <p style={s.p}>
  Full API reference: see the API Reference section below.
- Need pathUSD for gas: bridge at{' '}
- <a href="https://thirdweb.com/tempo" target="_blank" rel="noopener" style={{ color: '#ff4d4d' }}>
- thirdweb.com/tempo
+ Need pathUSD for gas: connect your wallet at{' '}
+ <a href="https://tempo.xyz" target="_blank" rel="noopener" style={{ color: '#ff4d4d' }}>
+ tempo.xyz
+ </a>
+ {' '}or acquire pathUSD from an ecosystem partner.
+ On testnet use the free faucet at{' '}
+ <a href="https://docs.tempo.xyz/quickstart/faucet" target="_blank" rel="noopener" style={{ color: '#ff4d4d' }}>
+ docs.tempo.xyz/quickstart/faucet
  </a>
  </p>
  </Section>
@@ -359,8 +364,8 @@ pathUSD: 0x20c000000000000000000000b9537d11c60e8b50
 # Option 1 (easiest):
 tempo wallet login
 
-# Option 2 (bridge):
-# https://thirdweb.com/tempo`} />
+# Option 2 (connect wallet):
+# https://tempo.xyz`} />
  </Section>
 
  {/* x402 */}
