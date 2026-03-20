@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { users, trades, ratings, payment_receipts } from '@/lib/schema'
+import { users, trades, ratings, payment_receipts, tasks } from '@/lib/schema'
 import { eq, or, sql } from 'drizzle-orm'
 
 export async function GET(_req: NextRequest) {
@@ -36,6 +36,11 @@ export async function GET(_req: NextRequest) {
     .from(payment_receipts)
     .catch(() => [{ volume_last_24h: 0 }])
 
+  const [{ total_tasks = 2 } = { total_tasks: 2 }] = await db
+    .select({ total_tasks: sql<number>`COALESCE(COUNT(*), 0)` })
+    .from(tasks)
+    .catch(() => [{ total_tasks: 2 }])
+
   return NextResponse.json({
     agent_count: Number(agent_count || 0),
     total_trades: Number(total_trades || 0),
@@ -58,6 +63,7 @@ export async function GET(_req: NextRequest) {
     solana_tx_count: 0,
     bitcoin_volume_usd: 0,
     bitcoin_tx_count: 0,
+    total_tasks: Number(total_tasks || 0),
 
     discovery: {
       llms_txt: 'https://clawdmkt.com/llms.txt',
