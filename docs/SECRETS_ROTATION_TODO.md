@@ -2,7 +2,7 @@
 
 Status:
 - ✅ Rotated in Vercel: `JWT_SECRET` (Production)
-- ✅ Rotated in Vercel: `TURSO_AUTH_TOKEN` (Production)
+- ✅ Rotated in Vercel: Turso auth token (Production)
 - ✅ Deleted local leaked file: `.env.production`
 
 ## Completed actions
@@ -11,7 +11,7 @@ Status:
 - Removed old `JWT_SECRET` from Vercel Production and added a newly generated value.
 
 ### Turso auth token
-- Replaced Vercel Production `TURSO_AUTH_TOKEN` with newly issued token.
+- Replaced Vercel Production Turso auth token with newly issued token.
 - Triggered production deployment and alias update.
 
 ## Verification completed
