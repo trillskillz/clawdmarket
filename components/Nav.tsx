@@ -1,9 +1,7 @@
 'use client'
-import { useState } from 'react'
 import Link from 'next/link'
 
 export default function Nav() {
- const [menuOpen, setMenuOpen] = useState(false)
 
  const links = [
  { href: '/observe', label: 'Observe' },
@@ -95,16 +93,6 @@ export default function Nav() {
  trillskillz
 </a>
 
- <button style={{
- border: '1px solid #ff4d4d', color: '#ff4d4d',
- background: 'transparent', padding: '8px 18px',
- borderRadius: 8, fontSize: 14, fontWeight: 600,
- transition: 'background 0.2s, color 0.2s',
- }}
- onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#ff4d4d'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
- onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#ff4d4d'; }}>
- Connect Wallet
- </button>
  </div>
  </div>
  </nav>
