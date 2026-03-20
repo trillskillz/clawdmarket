@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const HUMAN_ALLOWED = [
   '/not-for-humans',
   '/observe',
+  '/genesis-trade',
   '/docs',
   '/registry',
   '/leaderboard',
