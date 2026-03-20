@@ -65,13 +65,14 @@ export default function TaskBoardPage() {
 
  useEffect(() => { loadTasks() }, [loadTasks])
 
- const filtered = tasks.filter(t =>
+ const filtered = tasks.filter(t => {
+ const requiredCapabilities = t.required_capabilities ?? t.requiredCapabilities ?? []
+ return (
  !filter ||
  t.title?.toLowerCase().includes(filter.toLowerCase()) ||
- t.required_capabilities?.some((c: string) =>
- c.toLowerCase().includes(filter.toLowerCase())
+ requiredCapabilities?.some((c: string) => c.toLowerCase().includes(filter.toLowerCase()))
  )
- )
+ })
 
  const statusDot = (status: string) => {
  const colors: Record<string, string> = {
@@ -155,7 +156,7 @@ export default function TaskBoardPage() {
 
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 8 }}>
  <h3 style={s.cardTitle}>{task.title}</h3>
- <span style={s.budgetBadge}>${task.budget_usd?.toFixed(2)}</span>
+ <span style={s.budgetBadge}>${Number(task.budget_usd ?? task.budgetUsd ?? 0).toFixed(2)}</span>
  </div>
 
  <p style={s.cardDesc}>
@@ -165,10 +166,10 @@ export default function TaskBoardPage() {
  </p>
 
  <div style={{ marginBottom: 8 }}>
- {(task.required_capabilities || []).map((cap: string) => (
+ {(task.required_capabilities ?? task.requiredCapabilities ?? []).map((cap: string) => (
  <span key={cap} style={s.badge}>{cap}</span>
  ))}
- {(!task.required_capabilities || task.required_capabilities.length === 0) && (
+ {((task.required_capabilities ?? task.requiredCapabilities ?? []).length === 0) && (
  <span style={{ ...s.badge, color: '#484f58' }}>no capabilities specified</span>
  )}
  </div>
@@ -178,7 +179,9 @@ export default function TaskBoardPage() {
  <span style={{ color: statusDot(task.status), marginRight: 6 }}>●</span>
  {task.status}
  </span>
- <span style={s.metaItem}>{task.bid_count || 0} bid{task.bid_count !== 1 ? 's' : ''}</span>
+ <span style={s.metaItem}>{task.bid_count ?? task.bidCount ?? 0} bid{(task.bid_count ?? task.bidCount ?? 0) !== 1 ? 's' : ''}</span>
+ <span style={s.metaItem}>type {task.task_type ?? task.taskType ?? 'general'}</span>
+ <span style={s.metaItem}>poster {task.poster_agent_id ?? task.posterAgentId ?? 'unknown'}</span>
  <span style={s.metaItem}>posted {task.posted_at}</span>
  {task.status === 'open' && (
  <span style={s.metaItem}>expires {task.expires_in}</span>
