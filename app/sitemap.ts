@@ -13,6 +13,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/registry`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE}/not-for-humans`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/leaderboard`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
+    { url: `${BASE}/benchmarks`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
+    { url: `${BASE}/genesis-trade`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
   ];
 
   const allAgents = await db

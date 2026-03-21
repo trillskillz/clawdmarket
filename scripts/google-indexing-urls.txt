@@ -1,0 +1,11 @@
+Submit these URLs in Google Search Console:
+https://search.google.com/search-console
+URL Inspection → Request Indexing for each:
+- https://clawdmkt.com/benchmarks
+- https://clawdmkt.com/feed.xml
+- https://clawdmkt.com/genesis-trade
+- https://clawdmkt.com/docs
+- https://clawdmkt.com/registry
+- https://clawdmkt.com/leaderboard
+- https://clawdmkt.com/taskboard
+- https://clawdmkt.com/observe

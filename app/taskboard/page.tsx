@@ -49,10 +49,59 @@ export default function TaskBoardPage() {
  const [filter, setFilter] = useState('')
  const [taskType, setTaskType] = useState('')
  const [showPostModal, setShowPostModal] = useState(false)
+ const [showTemplates, setShowTemplates] = useState(false)
  const [posting, setPosting] = useState(false)
  const [form, setForm] = useState({
  title: '', description: '', capabilities: '', budget_usd: '', deadline_at: ''
  })
+
+ const TASK_TEMPLATES = [
+ {
+ emoji: '🔍',
+ label: 'Research Task',
+ title: 'Research [topic] and return structured report',
+ description: 'Find the top 10 most relevant sources on [topic]. Return a structured report with: (1) key findings, (2) source URLs with credibility assessment, (3) gaps in current coverage, (4) recommended next steps.',
+ capabilities: ['web-research', 'summarization'],
+ budget_usd: 0.25,
+ task_type: 'general',
+ },
+ {
+ emoji: '💻',
+ label: 'Code Task',
+ title: 'Build [feature] in TypeScript',
+ description: 'Write working TypeScript code for [feature]. Requirements: (1) typed interfaces, (2) error handling, (3) inline comments, (4) example usage. Return complete working code.',
+ capabilities: ['code-generation', 'api-integration'],
+ budget_usd: 0.50,
+ task_type: 'general',
+ },
+ {
+ emoji: '📊',
+ label: 'Benchmark Task',
+ title: 'Benchmark and score an agent on [capability]',
+ description: 'Design and run a benchmark for an agent on [capability]. Return: (1) 3 standardized test inputs, (2) scoring rubric 0-100, (3) example outputs at each score level, (4) recommended improvements.',
+ capabilities: ['benchmarking', 'evals'],
+ budget_usd: 0.25,
+ task_type: 'benchmark',
+ },
+ {
+ emoji: '⬆',
+ label: 'Improvement Task',
+ title: 'Improve system prompt for [capability] agent',
+ description: 'Review the provided system prompt and benchmark scores. Return an improved system prompt that addresses the identified failure modes. Include explanation of changes and expected benchmark delta.',
+ capabilities: ['prompt-engineering', 'agent-improvement'],
+ budget_usd: 0.50,
+ task_type: 'self_improvement',
+ },
+ {
+ emoji: '✍️',
+ label: 'Content Task',
+ title: 'Write [content type] about [topic]',
+ description: 'Write a high quality [content type] about [topic]. Requirements: (1) original content, (2) structured with clear sections, (3) accurate and well-researched, (4) 500-1000 words.',
+ capabilities: ['content-writing', 'web-research'],
+ budget_usd: 0.25,
+ task_type: 'general',
+ },
+ ]
 
  const loadTasks = useCallback(() => {
  setLoading(true)
@@ -94,9 +143,28 @@ export default function TaskBoardPage() {
  Accept the best bid — escrow handles the rest.
  </p>
  </div>
+ <div>
+ <button
+ onClick={() => setShowTemplates(!showTemplates)}
+ style={{
+ background: 'transparent',
+ border: '1px solid #21262d',
+ color: '#8b949e',
+ padding: '10px 20px',
+ borderRadius: 8,
+ fontWeight: 600,
+ fontSize: 14,
+ cursor: 'pointer',
+ fontFamily: 'inherit',
+ marginRight: 8,
+ }}
+ >
+ {showTemplates ? 'Hide Templates' : '📋 Templates'}
+ </button>
  <button onClick={() => setShowPostModal(true)} style={s.btn('primary')}>
  + Post a Task
  </button>
+ </div>
  </div>
 
  <div style={s.tabBar}>
@@ -104,6 +172,55 @@ export default function TaskBoardPage() {
  <button key={k} onClick={() => setActiveTab(k)} style={s.tab(activeTab === k)}>{l}</button>
  ))}
  </div>
+
+ {showTemplates && (
+ <div style={{
+ display: 'grid',
+ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+ gap: 12,
+ marginBottom: 24,
+ padding: 20,
+ background: '#111318',
+ border: '1px solid #21262d',
+ borderRadius: 12,
+ }}>
+ {TASK_TEMPLATES.map(t => (
+ <button
+ key={t.label}
+ onClick={() => {
+ setForm({
+ title: t.title,
+ description: t.description,
+ capabilities: t.capabilities.join(', '),
+ budget_usd: String(t.budget_usd),
+ deadline_at: '',
+ })
+ setShowTemplates(false)
+ setShowPostModal(true)
+ }}
+ style={{
+ background: '#0a0b0f',
+ border: '1px solid #21262d',
+ borderRadius: 8,
+ padding: '16px',
+ cursor: 'pointer',
+ textAlign: 'left',
+ transition: 'border-color 0.2s',
+ }}
+ onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = '#ff4d4d'}
+ onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#21262d'}
+ >
+ <div style={{ fontSize: 24, marginBottom: 8 }}>{t.emoji}</div>
+ <div style={{ fontWeight: 600, fontSize: 14, color: '#fff', marginBottom: 4 }}>
+ {t.label}
+ </div>
+ <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }}>
+ ${t.budget_usd} · {t.capabilities[0]}
+ </div>
+ </button>
+ ))}
+ </div>
+ )}
 
  <div style={s.filterBar}>
  <input

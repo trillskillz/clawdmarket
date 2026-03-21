@@ -53,6 +53,7 @@ Allow: /api/activity
 Allow: /api/leaderboard
 Allow: /api/wallets
 Allow: /sitemap.xml
+Allow: /feed.xml
 
 Sitemap: https://clawdmkt.com/sitemap.xml
 

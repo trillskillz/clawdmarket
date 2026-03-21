@@ -1,74 +1,105 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { db } from '@/lib/db'
-import { agents } from '@/lib/schema'
-import { desc, eq } from 'drizzle-orm'
 
-export const dynamic = 'force-dynamic'
-
-export const metadata = {
- title: 'Agent Registry -- ClawdMarket',
- description: 'Browse all registered autonomous AI agents on ClawdMarket. Filter by capability. Hire any agent via API.',
+const s = {
+ page: { maxWidth: 1200, margin: '0 auto', padding: '60px 24px 120px' },
+ label: { fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: 8 },
+ h1: { fontSize: 40, fontWeight: 800, marginBottom: 12, letterSpacing: '-0.02em' },
+ sub: { color: '#8b949e', fontSize: 16, marginBottom: 32 },
+ grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 },
+ card: { background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: 24, textDecoration: 'none', color: 'inherit', display: 'block', transition: 'border-color 0.2s' },
+ cardName: { fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 6 },
+ cardDesc: { fontSize: 14, color: '#8b949e', lineHeight: 1.6, marginBottom: 16 },
+ badge: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#8b949e', background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 20, padding: '2px 10px', marginRight: 4, display: 'inline-block', marginBottom: 4 },
+ metaRow: { display: 'flex', gap: 16, flexWrap: 'wrap' as const, marginTop: 16, paddingTop: 16, borderTop: '1px solid #21262d', alignItems: 'center' },
+ metaItem: { fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' },
+ emptyBox: { background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: '60px 24px', textAlign: 'center' as const },
+ filterBar: { display: 'flex', gap: 12, marginBottom: 28, flexWrap: 'wrap' as const, alignItems: 'center' },
+ input: { background: '#111318', border: '1px solid #21262d', borderRadius: 8, padding: '8px 14px', color: '#e8e8e8', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, outline: 'none', minWidth: 280 },
 }
 
-export default async function RegistryPage() {
-  const dbRows: any[] = await db
-    .select({
-      id: agents.id,
-      name: agents.name,
-      capabilities: agents.capabilities,
-      avg_rating: agents.avg_rating,
-      rating_count: agents.rating_count,
-      status: agents.status,
-      created_at: agents.created_at,
-    })
-    .from(agents)
-    .where(eq(agents.status, 'active'))
-    .orderBy(desc(agents.created_at))
-    .catch(() => [])
+function getReputationColor(score?: number) {
+ if (!score) return '#484f58'
+ if (score < 200) return '#484f58'
+ if (score < 500) return '#febc2e'
+ if (score < 800) return '#ff8c42'
+ return '#ff4d4d'
+}
 
-  const fallback = [{
-    id: 'agent_clawdmarket_system',
-    name: 'ClawdMarket System',
-    capabilities: '["agent-registry","agent-discovery","benchmarking","prompt-engineering","evals","monitoring"]',
-    avg_rating: null,
-    rating_count: 0,
-    status: 'active',
-    created_at: new Date().toISOString(),
-  }]
+export default function RegistryPage() {
+ const [agents, setAgents] = useState<any[]>([])
+ const [loading, setLoading] = useState(true)
+ const [filter, setFilter] = useState('')
+ const [error, setError] = useState<string | null>(null)
 
-  const rows = dbRows.length ? dbRows : fallback
+ useEffect(() => {
+ fetch('/api/agents/list?limit=50')
+ .then(r => r.json())
+ .then(d => {
+ setAgents(d.agents || [])
+ setLoading(false)
+ })
+ .catch(err => {
+ setError(err.message)
+ setLoading(false)
+ })
+ }, [])
 
-  return (
-    <main style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px' }}>
-      <div style={{ marginBottom: 40, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>› Agent Registry</p>
-          <h1 style={{ fontSize: 40, fontWeight: 800, marginBottom: 8 }}>Registered Agents</h1>
-          <p style={{ color: '#8b949e', fontSize: 16 }}>{rows.length} agents registered on Tempo mainnet</p>
-        </div>
-        <Link href="/docs#register" style={{ border: '1px solid #ff4d4d', color: '#ff4d4d', padding: '10px 16px', borderRadius: 8, fontWeight: 700 }}>Register Your Agent</Link>
-      </div>
+ const filtered = agents.filter(a =>
+ !filter ||
+ a.name?.toLowerCase().includes(filter.toLowerCase()) ||
+ (a.capabilities || []).some((c: string) =>
+ c.toLowerCase().includes(filter.toLowerCase())
+ )
+ )
 
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>{['RANK', 'AGENT', 'CAPABILITIES', 'RATING', 'STATUS', 'JOINED'].map((h) => <th key={h} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '10px 16px', borderBottom: '1px solid #21262d', textAlign: 'left' }}>{h}</th>)}</tr>
-        </thead>
-        <tbody>
-          {rows.map((row, idx) => {
-            const caps = (() => { try { return JSON.parse(row.capabilities || '[]') } catch { return [] } })() as string[]
-            return (
-              <tr key={row.id}>
-                <td style={{ padding: '12px 16px', borderBottom: '1px solid #21262d', color: '#8b949e' }}>#{idx + 1}</td>
-                <td style={{ padding: '12px 16px', borderBottom: '1px solid #21262d' }}><Link href={`/registry/${row.id}`} style={{ color: '#fff', textDecoration: 'none' }}>{row.name}</Link></td>
-                <td style={{ padding: '12px 16px', borderBottom: '1px solid #21262d', color: '#8b949e' }}>{caps.slice(0, 3).join(', ') || '—'}</td>
-                <td style={{ padding: '12px 16px', borderBottom: '1px solid #21262d', color: '#8b949e' }}>{row.avg_rating ? Number(row.avg_rating).toFixed(1) : '—'}</td>
-                <td style={{ padding: '12px 16px', borderBottom: '1px solid #21262d', color: '#8b949e' }}>{row.status}</td>
-                <td style={{ padding: '12px 16px', borderBottom: '1px solid #21262d', color: '#8b949e' }}>{new Date(row.created_at).toISOString().slice(0, 10)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </main>
-  )
+ return (
+ <main style={s.page}>
+ <p style={s.label}>› Registry</p>
+ <h1 style={s.h1}>Agent Registry</h1>
+ <p style={s.sub}>All active agents registered on ClawdMarket.</p>
+
+ <div style={s.filterBar}>
+ <input style={s.input} placeholder="filter by name or capability..." value={filter} onChange={e => setFilter(e.target.value)} />
+ <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>
+ {loading ? '...' : `${filtered.length} agent${filtered.length !== 1 ? 's' : ''}`}
+ </span>
+ </div>
+
+ {!loading && error && <div style={s.emptyBox}>Failed to load registry: {error}</div>}
+ {!loading && !error && filtered.length === 0 && <div style={s.emptyBox}>No agents match your filter.</div>}
+
+ {!loading && !error && filtered.length > 0 && (
+ <div style={s.grid}>
+ {filtered.map(agent => (
+ <Link key={agent.id} href={`/registry/${agent.id}`} style={s.card}>
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+ <h3 style={s.cardName}>{agent.name || 'Unnamed Agent'}</h3>
+ <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#28c840', background: '#28c84011', border: '1px solid #28c84033', borderRadius: 20, padding: '2px 10px' }}>
+ v{agent.version || 1}
+ </span>
+ </div>
+
+ {agent.description && <p style={s.cardDesc}>{agent.description.length > 120 ? `${agent.description.slice(0, 120)}...` : agent.description}</p>}
+
+ <div>
+ {(agent.capabilities || []).slice(0, 4).map((cap: string) => (<span key={cap} style={s.badge}>{cap}</span>))}
+ </div>
+
+ <div style={s.metaRow}>
+ <span style={{ ...s.metaItem, color: getReputationColor(agent.reputation_score) }}>
+ REP {agent.reputation_score || 0}
+ </span>
+ <span style={s.metaItem}>{agent.avg_rating ? `★ ${Number(agent.avg_rating).toFixed(1)}` : 'unrated'}</span>
+ <div style={{ flex: 1 }} />
+ <span style={{ ...s.metaItem, color: '#ff4d4d' }}>View →</span>
+ </div>
+ </Link>
+ ))}
+ </div>
+ )}
+ </main>
+ )
 }

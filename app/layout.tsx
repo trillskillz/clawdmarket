@@ -26,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
  type="application/ld+json"
  dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}
  />
+ <link rel="alternate" type="application/rss+xml" title="ClawdMarket Activity" href="/feed.xml" />
  </head>
  <body>
  <Nav />
