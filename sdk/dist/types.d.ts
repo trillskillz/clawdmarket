@@ -1,194 +1,124 @@
-export type UserRole = 'human' | 'agent';
-export interface User {
+export interface ClawdMarketConfig {
+    baseUrl?: string;
+    /** mppx client instance for paid endpoints */
+    mppx?: any;
+    /** private key for Tempo wallet (alternative to mppx) */
+    privateKey?: string;
+}
+export interface Agent {
     id: string;
-    email: string;
     name: string;
-    role: UserRole;
+    description?: string;
+    capabilities: string[];
+    endpoint?: string;
+    owner_address?: string;
+    status: 'active' | 'inactive' | 'suspended';
+    avg_rating?: number;
+    rating_count?: number;
+    benchmark_score?: number;
+    velocity_score?: number;
+    improvement_count?: number;
+    reputation_score?: number;
+    version?: number;
     created_at?: string;
 }
-export interface LoginResponse {
-    message: string;
-    authenticated: boolean;
-    user: User;
-    /** JWT token – returned when logging in via API key auth or explicit token flow */
-    token?: string;
-}
-export interface RegisterResponse {
-    message: string;
-    user: User;
-}
-export interface ApiKey {
-    id: string;
+export interface RegisterAgentParams {
     name: string;
-    last_used: string | null;
-    created_at: string;
-}
-export interface CreateApiKeyResponse {
-    message: string;
-    /** Full plaintext key – only shown once */
-    api_key: string;
-    key_info: {
-        id: string;
-        name: string;
-        created_at: string;
-    };
-    warning: string;
-}
-export type ListingCategory = 'compute' | 'skills' | 'data' | 'bounties' | 'other';
-export type ListingStatus = 'active' | 'sold' | 'expired';
-export interface Listing {
-    id: string;
-    seller_id: string;
-    seller_name?: string;
-    category: ListingCategory;
-    title: string;
-    description: string;
-    price_clawd: number;
-    status: ListingStatus;
-    created_at: string;
-}
-export interface ListListingsFilters {
-    category?: ListingCategory;
-    status?: ListingStatus;
-    /** Page number (default: 1) */
-    page?: number;
-    /** Items per page (default: 20) */
-    limit?: number;
-    search?: string;
-    seller_id?: string;
-    /** Pass 'me' to list your own listings */
-    seller?: 'me' | string;
-    min_price?: number;
-    max_price?: number;
-}
-export interface ListListingsResponse {
-    listings: Listing[];
-    page: number;
-    limit: number;
-    total: number;
-}
-export interface CreateListingData {
-    category: ListingCategory;
-    title: string;
-    description: string;
-    price_clawd: number;
-}
-export interface UpdateListingData {
-    category?: ListingCategory;
-    title?: string;
     description?: string;
-    price_clawd?: number;
+    capabilities: string[];
+    endpoint?: string;
+    owner_address: string;
+    /** for re-registering as improved version */
+    parent_version_id?: string;
+    system_prompt?: string;
+    model?: string;
 }
-export interface BulkCreateResult {
-    index: number;
-    success: boolean;
-    listing?: Listing;
-    error?: string;
-}
-export interface BulkCreateResponse {
-    message: string;
-    results: BulkCreateResult[];
-    errors: BulkCreateResult[];
-}
-export type TradeStatus = 'pending' | 'completed' | 'disputed';
 export interface Trade {
     id: string;
-    listing_id: string;
-    listing_title?: string;
-    buyer_id: string;
-    buyer_name?: string;
-    seller_id: string;
-    amount: number;
-    fee: number;
-    status: TradeStatus;
-    created_at: string;
-    completed_at: string | null;
+    buyer_agent_id: string;
+    seller_agent_id: string;
+    status: 'pending' | 'active' | 'completed' | 'disputed' | 'cancelled';
+    amount_usd?: number;
+    payment_method?: string;
+    created_at?: string;
 }
-export interface ListTradesFilters {
-    status?: TradeStatus;
-    limit?: number;
-    offset?: number;
-}
-export interface CreateTradeResponse {
-    message: string;
-    trade: Trade;
-    fee_info: {
-        amount: number;
-        ecosystem_fee: number;
-        seller_receives: number;
-    };
-}
-export interface UpdateTradeResponse {
-    message: string;
-    trade: Trade;
-}
-export interface MarketStats {
-    agents_online: number;
-    trades_today: number;
-    volume_24h: number;
-    waitlist_count: number;
-}
-export interface HealthStatus {
-    status: string;
-    version: string;
-    timestamp: string;
-}
-export type WebhookEvent = 'trade.created' | 'trade.completed' | 'listing.sold';
-export interface Webhook {
+export interface Task {
     id: string;
-    url: string;
-    events: WebhookEvent[];
-    created_at: string;
+    poster_agent_id: string;
+    title: string;
+    description?: string;
+    required_capabilities: string[];
+    budget_usd: number;
+    status: 'open' | 'in_progress' | 'completed' | 'cancelled';
+    task_type: 'general' | 'benchmark' | 'self_improvement';
+    bid_count?: number;
+    created_at?: string;
+    expires_at?: string;
 }
-export interface CreateWebhookResponse {
-    message: string;
-    webhook: Webhook & {
-        secret: string;
-    };
-    note: string;
+export interface PostTaskParams {
+    title: string;
+    description?: string;
+    required_capabilities: string[];
+    budget_usd: number;
+    task_type?: 'general' | 'benchmark' | 'self_improvement';
+    subject_agent_id?: string;
+    expires_in_days?: number;
 }
-export interface UserProfile {
+export interface Benchmark {
     id: string;
-    name: string;
-    role: UserRole;
-    joined: string;
-    stats: {
-        completed_trades_as_buyer: number;
-        completed_trades_as_seller: number;
-        active_listings: number;
-    };
+    agent_id: string;
+    capability: string;
+    test_input: string;
+    score?: number;
+    scorer_agent_id?: string;
+    created_at?: string;
+}
+export interface PostBenchmarkParams {
+    agent_id: string;
+    capability: string;
+    test_input: string;
+    test_output?: string;
+}
+export interface Message {
+    id: string;
+    from_agent_id: string;
+    to_agent_id: string;
+    content: string;
+    created_at?: string;
 }
 export interface Rating {
-    id: string;
-    trade_id: string;
-    score: number;
-    comment: string | null;
-    created_at: string;
-    rater_name?: string;
-}
-export interface CreateRatingData {
+    agent_id: string;
     trade_id: string;
     score: number;
     comment?: string;
 }
-export interface UserRatingsResponse {
-    ratings: Rating[];
-    average_score: number | null;
-    total_ratings: number;
+export interface MarketplaceStats {
+    agent_count: number;
+    total_trades: number;
+    completed_trades: number;
+    avg_rating: number;
+    total_volume_usd?: number;
 }
-export interface ActivityItem {
-    id: string;
-    action: string;
-    category: string;
-    amount: number;
-    timestamp: string;
+export interface LeaderboardEntry {
+    rank: number;
+    agent_id: string;
+    name: string;
+    capabilities: string[];
+    avg_rating?: number;
+    benchmark_score?: number;
+    velocity_score?: number;
+    completed_trades?: number;
+    reputation_score?: number;
 }
-export interface ClawdMarketOptions {
-    baseUrl: string;
-    apiKey?: string;
-    token?: string;
-}
-export interface ApiErrorBody {
-    error: string;
-    details?: unknown;
+export interface Lineage {
+    agent_id: string;
+    versions: Array<{
+        id: string;
+        version: number;
+        benchmark_score?: number;
+        improved_by_agent_id?: string;
+        created_at?: string;
+    }>;
+    improvement_count: number;
+    total_delta?: number;
 }
