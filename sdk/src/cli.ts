@@ -1,500 +1,196 @@
 #!/usr/bin/env node
+import { Command } from 'commander'
+import chalk from 'chalk'
+import { ClawdMarket } from './index.js'
 
-import { Command } from 'commander';
-import inquirer from 'inquirer';
-import chalk from 'chalk';
-import { z } from 'zod';
-import { ClawdMarket, Listing, ListingsQuery } from './index.js'; // Import from the library we just wrote
-
-const program = new Command();
-const client = new ClawdMarket({
-  baseUrl: process.env.CLAWD_BASE_URL,
-});
+const client = new ClawdMarket()
+const program = new Command()
 
 program
-  .name('clawd')
-  .description('CLI for ClawdMarket - The AI Agent Marketplace')
-  .version('0.1.0');
+ .name('clawd')
+ .description('ClawdMarket CLI -- autonomous agent marketplace')
+ .version('0.3.0')
 
-// ─── Auth Commands ──────────────────────────────────────────────────────────
-
-const auth = program.command('auth').description('Manage authentication');
-
-auth
-  .command('login')
-  .description('Log in to your ClawdMarket account')
-  .option('--email <email>', 'Email for non-interactive login')
-  .option('--password <password>', 'Password for non-interactive login')
-  .action(async (options) => {
-    let email: string;
-    let password: string;
-
-    if (options.email && options.password) {
-      email = options.email;
-      password = options.password;
-    } else {
-      const answers = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'email',
-          message: 'Email:',
-          validate: (input: string) => z.string().email().safeParse(input).success || 'Invalid email',
-        },
-        {
-          type: 'password',
-          name: 'password',
-          message: 'Password:',
-          mask: '*',
-        },
-      ]);
-      email = answers.email;
-      password = answers.password;
-    }
-
-    try {
-      const { user, token } = await client.login(email, password);
-      console.log(chalk.green(`\nLogged in as ${user.name} (${user.email})`));
-      console.log(chalk.gray(`Token saved to ~/.clawdmarket-session.json`));
-    } catch (error: any) {
-      console.error(chalk.red(`\nLogin failed: ${error.message}`));
-    }
-  });
-
-auth
-  .command('logout')
-  .description('Log out of your account')
-  .action(async () => {
-    await client.logout();
-    console.log(chalk.green('Logged out successfully.'));
-  });
-
-auth
-  .command('status')
-  .description('Check current login status')
-  .action(async () => {
-    const session = client.loadSession();
-    if (session) {
-      console.log(chalk.green(`Logged in as ${session.user.name} (${session.user.email})`));
-      console.log(chalk.gray(`Token expires: N/A (JWT)`));
-    } else {
-      console.log(chalk.yellow('Not logged in. Run `clawd auth login` to start.'));
-    }
-  });
-
-const apiKeys = auth.command('api-keys').description('Manage API keys');
-
-apiKeys
-  .command('list')
-  .description('List your API keys')
-  .action(async () => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
-      return;
-    }
-
-    try {
-      const keys = await client.listApiKeys();
-      if (!keys.length) {
-        console.log(chalk.yellow('No API keys found.'));
-        return;
-      }
-
-      console.log(chalk.bold('\nYour API Keys:\n'));
-      keys.forEach((key) => {
-        console.log(`${chalk.cyan(key.id)}  ${chalk.white(key.name)}`);
-        console.log(`   ${chalk.gray(`Created: ${new Date(key.created_at).toLocaleString()}`)}`);
-        console.log(`   ${chalk.gray(key.last_used ? `Last used: ${new Date(key.last_used).toLocaleString()}` : 'Last used: Never')}\n`);
-      });
-    } catch (error: any) {
-      console.error(chalk.red(`Failed to list API keys: ${error.message}`));
-    }
-  });
-
-apiKeys
-  .command('create [name]')
-  .description('Create a new API key')
-  .action(async (name?: string) => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
-      return;
-    }
-
-    let keyName = name;
-    if (!keyName) {
-      const answer = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'name',
-          message: 'API key name:',
-          validate: (input: string) => input.trim().length >= 3 || 'Name must be at least 3 characters',
-        },
-      ]);
-      keyName = answer.name;
-    }
-
-    try {
-      const result = await client.createApiKey(keyName!);
-      console.log(chalk.green('\nAPI key created successfully!'));
-      console.log(chalk.yellow('Save this now. You will not be able to see it again:\n'));
-      console.log(chalk.white(result.api_key));
-      console.log(chalk.gray(`\nID: ${result.key_info.id}`));
-    } catch (error: any) {
-      console.error(chalk.red(`Failed to create API key: ${error.message}`));
-    }
-  });
-
-apiKeys
-  .command('revoke <id>')
-  .description('Revoke an API key by id')
-  .action(async (id: string) => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
-      return;
-    }
-
-    const confirm = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'proceed',
-        message: `Revoke API key ${id}? This cannot be undone.`,
-        default: false,
-      },
-    ]);
-
-    if (!confirm.proceed) {
-      console.log(chalk.yellow('Revocation cancelled.'));
-      return;
-    }
-
-    try {
-      await client.revokeApiKey(id);
-      console.log(chalk.green('API key revoked.'));
-    } catch (error: any) {
-      console.error(chalk.red(`Failed to revoke API key: ${error.message}`));
-    }
-  });
-
-apiKeys
-  .command('rotate <id> [name]')
-  .description('Rotate an API key (create replacement, then revoke old)')
-  .action(async (id: string, name?: string) => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
-      return;
-    }
-
-    const keyName = name || `Rotated Key ${new Date().toISOString().slice(0, 10)}`;
-
-    const confirm = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'proceed',
-        message: `Rotate API key ${id} using new key name "${keyName}"?`,
-        default: false,
-      },
-    ]);
-
-    if (!confirm.proceed) {
-      console.log(chalk.yellow('Rotation cancelled.'));
-      return;
-    }
-
-    try {
-      const replacement = await client.createApiKey(keyName);
-      await client.revokeApiKey(id);
-
-      console.log(chalk.green('\nAPI key rotated successfully.'));
-      console.log(chalk.yellow('Save this new key now. You will not be able to see it again:\n'));
-      console.log(chalk.white(replacement.api_key));
-      console.log(chalk.gray(`\nNew key ID: ${replacement.key_info.id}`));
-      console.log(chalk.gray(`Revoked key ID: ${id}`));
-    } catch (error: any) {
-      console.error(chalk.red(`Failed to rotate API key: ${error.message}`));
-    }
-  });
-
-// ─── Listings Commands ──────────────────────────────────────────────────────
-
-const listings = program.command('listings').description('Browse and manage listings');
-
-listings
-  .command('list')
-  .description('List available items on the marketplace')
-  .option('-c, --category <category>', 'Filter by category (compute, skills, data, bounties, other)')
-  .option('-l, --limit <number>', 'Number of items to show', '10')
-  .option('-s, --search <query>', 'Search term')
-  .action(async (options) => {
-    try {
-      const query: ListingsQuery = {
-        category: options.category,
-        search: options.search,
-        limit: parseInt(options.limit),
-      };
-
-      const result = await client.getListings(query);
-
-      if (result.listings.length === 0) {
-        console.log(chalk.yellow('No listings found matching your criteria.'));
-        return;
-      }
-
-      console.log(chalk.bold(`\nFound ${result.total} listings:\n`));
-      
-      result.listings.forEach((listing: Listing) => {
-        const price = `${listing.price_bankr} BANKR`;
-        const title = listing.title.length > 50 ? listing.title.substring(0, 47) + '...' : listing.title;
-        
-        console.log(`${chalk.cyan(listing.id)}  ${chalk.white(title.padEnd(50))}  ${chalk.yellow(price.padStart(10))}`);
-        console.log(`   ${chalk.gray(listing.category)} • sold by ${chalk.gray(listing.seller_name)}\n`);
-      });
-
-    } catch (error: any) {
-      console.error(chalk.red(`Error fetching listings: ${error.message}`));
-    }
-  });
-
-listings
-  .command('show <id>')
-  .description('Show details of a specific listing')
-  .action(async (id) => {
-    try {
-      const listing = await client.getListing(id);
-      
-      console.log(chalk.bold.underline(`\n${listing.title}`));
-      console.log(chalk.gray(`ID: ${listing.id}`));
-      console.log(chalk.yellow(`\nPrice: ${listing.price_bankr} BANKR`));
-      console.log(`Category: ${listing.category}`);
-      console.log(`Seller: ${listing.seller_name}\n`);
-      console.log(chalk.white(listing.description));
-      console.log(chalk.gray(`\nPosted: ${new Date(listing.created_at).toLocaleString()}`));
-
-      // Upsell: Buy command
-      console.log(chalk.green(`\nTo buy this item, run:\n  clawd buy ${listing.id}`));
-
-    } catch (error: any) {
-      console.error(chalk.red(`Error fetching listing: ${error.message}`));
-    }
-  });
-
-listings
-  .command('create')
-  .description('Create a new listing')
-  .action(async () => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in to create a listing. Run `clawd auth login`.'));
-      return;
-    }
-
-    const answers = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'category',
-        message: 'Category:',
-        choices: ['compute', 'skills', 'data', 'bounties', 'other'],
-      },
-      {
-        type: 'input',
-        name: 'title',
-        message: 'Title:',
-        validate: (input: string) => input.length >= 5 || 'Title must be at least 5 characters',
-      },
-      {
-        type: 'input',
-        name: 'description',
-        message: 'Description:',
-        validate: (input: string) => input.length >= 20 || 'Description must be at least 20 characters',
-      },
-      {
-        type: 'number',
-        name: 'price_bankr',
-        message: 'Price (BANKR):',
-        validate: (input: number) => (input >= 1 && input <= 1000000000000) || 'Price must be between 1 and 1,000,000,000,000',
-      },
-    ]);
-
-    try {
-      const listing = await client.createListing(answers);
-      console.log(chalk.green(`\nListing created successfully!`));
-      console.log(`ID: ${chalk.cyan(listing.id)}`);
-      console.log(`Run \`clawd listings show ${listing.id}\` to view it.`);
-    } catch (error: any) {
-      console.error(chalk.red(`Error creating listing: ${error.message}`));
-    }
-  });
-
-// ─── Trade Commands ─────────────────────────────────────────────────────────
-
-const trades = program.command('trades').description('Manage your trades');
-
-trades
-  .command('list')
-  .description('List your trades')
-  .action(async () => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
-      return;
-    }
-
-    try {
-      const items = await client.getMyTrades();
-      if (!items.length) {
-        console.log(chalk.yellow('No trades found.'));
-        return;
-      }
-
-      console.log(chalk.bold('\nYour Trades:\n'));
-      items.forEach((t) => {
-        console.log(`${chalk.cyan(t.id)}  ${chalk.white(t.status.toUpperCase())}  ${chalk.yellow(`${t.amount} BANKR`)}`);
-      });
-      console.log('');
-    } catch (error: any) {
-      console.error(chalk.red(`Failed to list trades: ${error.message}`));
-    }
-  });
-
-trades
-  .command('complete <trade-id>')
-  .description('Mark a pending trade as completed (buyer only)')
-  .action(async (tradeId: string) => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
-      return;
-    }
-
-    const confirm = await inquirer.prompt([
-      { type: 'confirm', name: 'proceed', message: `Mark trade ${tradeId} as completed?`, default: false },
-    ]);
-    if (!confirm.proceed) return console.log(chalk.yellow('Action cancelled.'));
-
-    try {
-      await client.completeTrade(tradeId);
-      console.log(chalk.green('Trade marked as completed.'));
-    } catch (error: any) {
-      console.error(chalk.red(`Failed to complete trade: ${error.message}`));
-    }
-  });
-
-trades
-  .command('dispute <trade-id>')
-  .description('Dispute a pending trade')
-  .action(async (tradeId: string) => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
-      return;
-    }
-
-    const confirm = await inquirer.prompt([
-      { type: 'confirm', name: 'proceed', message: `Dispute trade ${tradeId}?`, default: false },
-    ]);
-    if (!confirm.proceed) return console.log(chalk.yellow('Action cancelled.'));
-
-    try {
-      await client.disputeTrade(tradeId);
-      console.log(chalk.green('Trade disputed.'));
-    } catch (error: any) {
-      console.error(chalk.red(`Failed to dispute trade: ${error.message}`));
-    }
-  });
-
-trades
-  .command('rate <trade-id>')
-  .description('Rate a completed trade counterparty')
-  .action(async (tradeId: string) => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in. Run `clawd auth login`.'));
-      return;
-    }
-
-    const answers = await inquirer.prompt([
-      {
-        type: 'number',
-        name: 'score',
-        message: 'Score (1-5):',
-        validate: (input: number) => Number.isInteger(input) && input >= 1 && input <= 5 || 'Score must be an integer 1-5',
-      },
-      {
-        type: 'input',
-        name: 'comment',
-        message: 'Comment (optional):',
-      },
-    ]);
-
-    try {
-      await client.rateTrade(tradeId, answers.score, answers.comment || undefined);
-      console.log(chalk.green('Rating submitted.'));
-    } catch (error: any) {
-      console.error(chalk.red(`Failed to submit rating: ${error.message}`));
-    }
-  });
-
+// ─── STATS ─────────────────────────────────────────────
 program
-  .command('buy <listing-id>')
-  .description('Purchase a listing using your BANKR balance')
-  .action(async (id) => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in to buy items. Run `clawd auth login`.'));
-      return;
-    }
+ .command('stats')
+ .description('Live marketplace stats')
+ .action(async () => {
+ try {
+ const stats = await client.stats()
+ console.log(chalk.red('\n ClawdMarket Stats\n'))
+ console.log(` Agents: ${chalk.white(stats.agent_count)}`)
+ console.log(` Trades: ${chalk.white(stats.total_trades)}`)
+ console.log(` Completed: ${chalk.white(stats.completed_trades)}`)
+ console.log(` Avg Rating: ${chalk.white(stats.avg_rating)}\n`)
+ } catch (e: any) {
+ console.error(chalk.red('Error:'), e.message)
+ }
+ })
 
-    try {
-      // Fetch details first to confirm price
-      const listing = await client.getListing(id);
-      
-      const confirm = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'proceed',
-          message: `Buy "${listing.title}" for ${listing.price_bankr} BANKR?`,
-          default: false,
-        },
-      ]);
+// ─── PING ──────────────────────────────────────────────
+program
+ .command('ping')
+ .description('Check marketplace is live')
+ .action(async () => {
+ try {
+ const result = await client.ping()
+ console.log(chalk.green(`\n ✅ ClawdMarket is ${result.status}\n`))
+ console.log(' Discovery:')
+ Object.entries(result.discovery || {}).forEach(([k, v]) => {
+ console.log(` ${chalk.red(k)}: ${v}`)
+ })
+ console.log()
+ } catch (e: any) {
+ console.error(chalk.red(' ❌ Marketplace unreachable:'), e.message)
+ }
+ })
 
-      if (!confirm.proceed) {
-        console.log(chalk.yellow('Purchase cancelled.'));
-        return;
-      }
+// ─── AGENTS ────────────────────────────────────────────
+const agents = program.command('agents').description('Browse and manage agents')
 
-      const trade = await client.buy(id);
-      console.log(chalk.green(`\nPurchase successful! Trade ID: ${trade.id}`));
-      console.log(chalk.white(`Payment is verified on-chain. Waiting for seller confirmation.`));
-      
-    } catch (error: any) {
-      console.error(chalk.red(`Purchase failed: ${error.message}`));
-    }
-  });
+agents
+ .command('list')
+ .description('List active agents (free)')
+ .option('-l, --limit <n>', 'max results', '20')
+ .action(async (opts) => {
+ try {
+ const { agents, total } = await client.listAgents(Number(opts.limit))
+ console.log(chalk.red(`\n ${total} Agent${total !== 1 ? 's' : ''}\n`))
+ agents.forEach((a, i) => {
+ console.log(` ${chalk.white(i + 1 + '.')} ${chalk.bold(a.name)}`)
+ console.log(` ${chalk.red('id:')} ${a.id}`)
+ if (a.capabilities?.length) {
+ console.log(` ${chalk.red('caps:')} ${a.capabilities.slice(0, 3).join(', ')}`)
+ }
+ if (a.reputation_score) {
+ console.log(` ${chalk.red('rep:')} ${a.reputation_score}/1000`)
+ }
+ console.log()
+ })
+ } catch (e: any) {
+ console.error(chalk.red('Error:'), e.message)
+ }
+ })
 
-// ─── Wallet Commands ────────────────────────────────────────────────────────
+agents
+ .command('get <agentId>')
+ .description('Get agent detail (free)')
+ .action(async (agentId) => {
+ try {
+ const agent = await client.getAgent(agentId)
+ console.log(chalk.red(`\n ${agent.name}`))
+ console.log(` ID: ${agent.id}`)
+ console.log(` Status: ${agent.status}`)
+ console.log(` Version: v${agent.version || 1}`)
+ console.log(` Capabilities: ${(agent.capabilities || []).join(', ')}`)
+ if (agent.avg_rating) console.log(` Rating: ${agent.avg_rating}`)
+ if (agent.benchmark_score) console.log(` Benchmark: ${agent.benchmark_score}/100`)
+ if (agent.reputation_score) console.log(` Reputation: ${agent.reputation_score}/1000`)
+ console.log()
+ } catch (e: any) {
+ console.error(chalk.red('Error:'), e.message)
+ }
+ })
 
-const wallet = program.command('wallet').description('Check wallet balance');
+agents
+ .command('lineage <agentId>')
+ .description('Show improvement lineage tree (free)')
+ .action(async (agentId) => {
+ try {
+ const lineage = await client.getLineage(agentId)
+ console.log(chalk.red(`\n Lineage: ${agentId}\n`))
+ lineage.versions.forEach((v, i) => {
+ const arrow = i < lineage.versions.length - 1 ? ' →' : ''
+ console.log(
+ ` v${v.version} [${v.benchmark_score ? v.benchmark_score + '/100' : 'unscored'}]${arrow}`
+ )
+ })
+ if (lineage.total_delta) {
+ console.log(chalk.green(`\n Total improvement: +${lineage.total_delta} pts\n`))
+ }
+ console.log()
+ } catch (e: any) {
+ console.error(chalk.red('Error:'), e.message)
+ }
+ })
 
-wallet
-  .command('balance')
-  .description('Show your current BANKR balance')
-  .action(async () => {
-    const session = client.loadSession();
-    if (!session) {
-      console.error(chalk.red('You must be logged in to check balance. Run `clawd auth login`.'));
-      return;
-    }
+// ─── TASKS ─────────────────────────────────────────────
+const tasks = program.command('tasks').description('Browse and post tasks')
 
-    try {
-      const { balance, escrow } = await client.getWallet();
-      console.log(chalk.bold(`\nWallet for ${session.user.email}:`));
-      console.log(`${chalk.yellow(balance)} BANKR (Available)`);
-      console.log(`${chalk.gray(escrow)} BANKR (Locked in Escrow)`);
-    } catch (error: any) {
-      console.error(chalk.red(`Error fetching wallet: ${error.message}`));
-    }
-  });
+tasks
+ .command('list')
+ .description('Browse open tasks (free)')
+ .action(async () => {
+ try {
+ const { tasks, total } = await client.tasks('open')
+ console.log(chalk.red(`\n ${total} Open Task${total !== 1 ? 's' : ''}\n`))
+ tasks.forEach((t, i) => {
+ console.log(` ${chalk.white(i + 1 + '.')} ${chalk.bold(t.title)}`)
+ console.log(` ${chalk.red('id:')} ${t.id}`)
+ console.log(` ${chalk.red('budget:')} $${t.budget_usd}`)
+ console.log(` ${chalk.red('type:')} ${t.task_type}`)
+ console.log()
+ })
+ } catch (e: any) {
+ console.error(chalk.red('Error:'), e.message)
+ }
+ })
 
-program.parse(process.argv);
+// ─── CAPABILITIES ──────────────────────────────────────
+program
+ .command('capabilities')
+ .description('List all canonical capabilities (free)')
+ .action(async () => {
+ try {
+ const caps = await client.capabilities()
+ console.log(chalk.red('\n Capabilities\n'))
+ caps.forEach(c => console.log(` • ${c}`))
+ console.log()
+ } catch (e: any) {
+ console.error(chalk.red('Error:'), e.message)
+ }
+ })
+
+// ─── LEADERBOARD ───────────────────────────────────────
+program
+ .command('leaderboard')
+ .description('Top agents (free)')
+ .option('-m, --metric <metric>', 'completions|rating|benchmark|velocity|trainer|reputation', 'reputation')
+ .option('-l, --limit <n>', 'max results', '10')
+ .action(async (opts) => {
+ try {
+ const { agents } = await client.leaderboard(opts.metric, 'all', Number(opts.limit))
+ console.log(chalk.red(`\n Leaderboard -- ${opts.metric}\n`))
+ agents.forEach((a) => {
+ const medals = ['🥇', '🥈', '🥉']
+ const medal = medals[a.rank - 1] || ` ${a.rank}.`
+ console.log(` ${medal} ${chalk.bold(a.name)}`)
+ if (a.reputation_score) console.log(` rep: ${a.reputation_score}/1000`)
+ if (a.benchmark_score) console.log(` bench: ${a.benchmark_score}/100`)
+ console.log()
+ })
+ } catch (e: any) {
+ console.error(chalk.red('Error:'), e.message)
+ }
+ })
+
+// ─── DISCOVER ──────────────────────────────────────────
+program
+ .command('discover')
+ .description('Print all discovery endpoints')
+ .action(() => {
+ console.log(chalk.red('\n ClawdMarket Discovery\n'))
+ console.log(' Agent discovery: https://clawdmkt.com/llms.txt')
+ console.log(' MPP descriptor: https://clawdmkt.com/.well-known/mpp.json')
+ console.log(' Agent identity: https://clawdmkt.com/.well-known/agent.json')
+ console.log(' MCP server: https://clawdmkt.com/api/mcp')
+ console.log(' Capabilities: https://clawdmkt.com/api/capabilities')
+ console.log(' Wallets: https://clawdmkt.com/api/wallets')
+ console.log(' RSS feed: https://clawdmkt.com/feed.xml')
+ console.log(' Observatory: https://clawdmkt.com/observe')
+ console.log(' Docs: https://clawdmkt.com/docs')
+ console.log()
+ })
+
+program.parse()

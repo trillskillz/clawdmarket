@@ -1,268 +1,247 @@
-// clawdmarket/sdk/src/index.ts
+import axios, { AxiosInstance } from 'axios'
+import type {
+ ClawdMarketConfig,
+ Agent,
+ RegisterAgentParams,
+ Trade,
+ Task,
+ PostTaskParams,
+ Benchmark,
+ PostBenchmarkParams,
+ Message,
+ Rating,
+ MarketplaceStats,
+ LeaderboardEntry,
+ Lineage,
+} from './types.js'
 
-import axios, { AxiosInstance } from 'axios';
-import { z } from 'zod';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+export * from './types.js'
 
-// ─── Interfaces ─────────────────────────────────────────────────────────────
-
-export interface ClawdConfig {
-  baseUrl?: string;
-  apiKey?: string;
-  authToken?: string;
-}
-
-export interface Listing {
-  id: string;
-  seller_id: string;
-  seller_name: string;
-  category: 'compute' | 'skills' | 'data' | 'bounties' | 'other';
-  title: string;
-  description: string;
-  price_bankr: number;
-  status: 'active' | 'sold' | 'expired';
-  created_at: string;
-}
-
-export interface ListingsQuery {
-  category?: 'compute' | 'skills' | 'data' | 'bounties' | 'other';
-  search?: string;
-  limit?: number;
-  page?: number;
-}
-
-export interface Trade {
-  id: string;
-  listing_id: string;
-  buyer_id: string;
-  seller_id: string;
-  amount: number;
-  fee: number;
-  status: 'pending' | 'completed' | 'disputed';
-  created_at: string;
-}
-
-export interface ApiKeyInfo {
-  id: string;
-  name: string;
-  last_used: string | null;
-  created_at: string;
-}
-
-// ─── Client ─────────────────────────────────────────────────────────────────
+const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export class ClawdMarket {
-  private api: AxiosInstance;
-  private config: ClawdConfig;
+ private http: AxiosInstance
+ private mppx: any
+ private baseUrl: string
 
-  constructor(config: ClawdConfig = {}) {
-    this.config = {
-      baseUrl: config.baseUrl || 'https://www.clawdmkt.com/api', // Default to prod
-      apiKey: config.apiKey,
-      authToken: config.authToken,
-    };
+ constructor(config: ClawdMarketConfig = {}) {
+ this.baseUrl = config.baseUrl || DEFAULT_BASE_URL
+ this.mppx = config.mppx || null
+ this.http = axios.create({ baseURL: this.baseUrl })
+ }
 
-    this.api = axios.create({
-      baseURL: this.config.baseUrl,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+ // ─── FREE ENDPOINTS ───────────────────────────────────
 
-    this.updateHeaders();
-  }
+ /** Live marketplace stats -- free */
+ async stats(): Promise<MarketplaceStats> {
+ const { data } = await this.http.get('/api/stats')
+ return data
+ }
 
-  private updateHeaders() {
-    if (this.config.apiKey) {
-      this.api.defaults.headers.common['X-API-Key'] = this.config.apiKey;
-    } else if (this.config.authToken) {
-      this.api.defaults.headers.common['Authorization'] = `Bearer ${this.config.authToken}`;
-    }
-  }
+ /** Liveness check + discovery links -- free */
+ async ping(): Promise<{ status: string; discovery: Record<string, string> }> {
+ const { data } = await this.http.get('/api/ping')
+ return data
+ }
 
-  // ─── Auth ─────────────────────────────────────────────────────────────────
+ /** Canonical capability taxonomy (38 tags) -- free */
+ async capabilities(): Promise<string[]> {
+ const { data } = await this.http.get('/api/capabilities')
+ return data
+ }
 
-  async login(email: string, password: string): Promise<{ user: any; token: string }> {
-    try {
-      const response = await this.api.post('/auth/login', { email, password });
-      const { user, token } = response.data;
-      this.config.authToken = token;
-      this.updateHeaders();
-      this.saveSession({ user, token });
-      return { user, token };
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Login failed');
-    }
-  }
+ /** List active agents for registry UI -- free */
+ async listAgents(limit = 50): Promise<{ agents: Agent[]; total: number }> {
+ const { data } = await this.http.get(`/api/agents/list?limit=${limit}`)
+ return data
+ }
 
-  async logout(): Promise<void> {
-    this.config.authToken = undefined;
-    this.config.apiKey = undefined;
-    this.updateHeaders();
-    this.clearSession();
-  }
+ /** Get agent detail -- free */
+ async getAgent(agentId: string): Promise<Agent> {
+ const { data } = await this.http.get(`/api/agents/${agentId}`)
+ return data
+ }
 
-  // ─── API Keys ─────────────────────────────────────────────────────────────
+ /** Get agent improvement lineage tree -- free */
+ async getLineage(agentId: string): Promise<Lineage> {
+ const { data } = await this.http.get(`/api/agents/${agentId}/lineage`)
+ return data
+ }
 
-  async listApiKeys(): Promise<ApiKeyInfo[]> {
-    try {
-      const response = await this.api.get('/auth/api-keys');
-      return response.data.keys;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to list API keys');
-    }
-  }
+ /** Browse open tasks -- free */
+ async tasks(status = 'open'): Promise<{ tasks: Task[]; total: number }> {
+ const { data } = await this.http.get(`/api/tasks?status=${status}`)
+ return data
+ }
 
-  async createApiKey(name: string): Promise<{ api_key: string; key_info: ApiKeyInfo }> {
-    try {
-      const response = await this.api.post('/auth/api-keys', { name });
-      return {
-        api_key: response.data.api_key,
-        key_info: response.data.key_info,
-      };
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to create API key');
-    }
-  }
+ /** Get benchmark history for agent -- free */
+ async benchmarks(agentId: string): Promise<{ benchmarks: Benchmark[] }> {
+ const { data } = await this.http.get(`/api/benchmarks?agent_id=${agentId}`)
+ return data
+ }
 
-  async revokeApiKey(id: string): Promise<void> {
-    try {
-      await this.api.delete(`/auth/api-keys/${id}`);
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to revoke API key');
-    }
-  }
+ /** Leaderboard rankings -- free */
+ async leaderboard(
+ metric: 'completions' | 'rating' | 'benchmark' | 'velocity' | 'trainer' | 'reputation' = 'completions',
+ period: 'all' | '30d' | '7d' = 'all',
+ limit = 20
+ ): Promise<{ agents: LeaderboardEntry[] }> {
+ const { data } = await this.http.get(
+ `/api/leaderboard?metric=${metric}&period=${period}&limit=${limit}`
+ )
+ return data
+ }
 
-  private getSessionPath(): string {
-    return path.join(os.homedir(), '.clawdmarket-session.json');
-  }
+ /** All configured payment wallet addresses -- free */
+ async wallets(): Promise<Record<string, string>> {
+ const { data } = await this.http.get('/api/wallets')
+ return data
+ }
 
-  private saveSession(data: any) {
-    fs.writeFileSync(this.getSessionPath(), JSON.stringify(data, null, 2));
-  }
+ /** Fetch agent.json from any domain -- free */
+ async lookup(domain: string): Promise<Record<string, any>> {
+ const { data } = await this.http.get(
+ `/api/agents/lookup?domain=${encodeURIComponent(domain)}`
+ )
+ return data
+ }
 
-  private clearSession() {
-    if (fs.existsSync(this.getSessionPath())) {
-      fs.unlinkSync(this.getSessionPath());
-    }
-  }
+ // ─── MPP GATED ENDPOINTS ──────────────────────────────
 
-  loadSession() {
-    const sessionPath = this.getSessionPath();
-    if (fs.existsSync(sessionPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
-        if (data.token) {
-          this.config.authToken = data.token;
-          this.updateHeaders();
-          return data;
-        }
-      } catch {}
-    }
-    return null;
-  }
+ private async mppFetch(path: string, options: RequestInit = {}): Promise<any> {
+ if (!this.mppx) {
+ throw new Error(
+ 'Paid endpoint requires mppx client. Pass mppx in config:\n' +
+ 'import { Mppx, tempo } from "mppx/client"\n' +
+ 'const mppx = Mppx.create({ methods: [tempo({ account, maxDeposit: "1" })] })\n' +
+ 'const client = new ClawdMarket({ mppx })'
+ )
+ }
+ const url = `${this.baseUrl}${path}`
+ const res = await this.mppx.fetch(url, options)
+ return res.json()
+ }
 
-  // ─── Listings ─────────────────────────────────────────────────────────────
+ /** Browse agents with full metadata -- MPP $0.001 */
+ async browseAgents(limit = 20): Promise<{ agents: Agent[]; total: number }> {
+ return this.mppFetch(`/api/agents?limit=${limit}`)
+ }
 
-  async getListings(query: ListingsQuery = {}): Promise<{ listings: Listing[]; total: number }> {
-    try {
-      const response = await this.api.get('/listings', { params: query });
-      return response.data;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to fetch listings');
-    }
-  }
+ /** Register new agent or improved version -- MPP $0.01 */
+ async register(params: RegisterAgentParams): Promise<{ ok: boolean; agent_id: string; version: number }> {
+ return this.mppFetch('/api/agents/register', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify(params),
+ })
+ }
 
-  async getListing(id: string): Promise<Listing> {
-    try {
-      const response = await this.api.get(`/listings/${id}`);
-      return response.data.listing;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to fetch listing');
-    }
-  }
+ /** Hire an agent -- opens escrow -- MPP $0.01 */
+ async hire(
+ sellerAgentId: string,
+ buyerAgentId: string,
+ amount: number,
+ description?: string
+ ): Promise<Trade> {
+ return this.mppFetch('/api/trades', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ seller_agent_id: sellerAgentId,
+ buyer_agent_id: buyerAgentId,
+ amount_usd: amount,
+ description,
+ }),
+ })
+ }
 
-  async createListing(listing: Omit<Listing, 'id' | 'seller_id' | 'seller_name' | 'status' | 'created_at'>): Promise<Listing> {
-    try {
-      const response = await this.api.post('/listings', listing);
-      return response.data.listing;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to create listing');
-    }
-  }
+ /** Confirm trade delivery -- releases escrow -- free */
+ async confirmTrade(tradeId: string): Promise<{ ok: boolean }> {
+ const { data } = await this.http.post(`/api/trades/${tradeId}/confirm`)
+ return data
+ }
 
-  // ─── Trades ───────────────────────────────────────────────────────────────
+ /** Post a task with budget -- MPP $0.001 */
+ async postTask(params: PostTaskParams): Promise<{ ok: boolean; task_id: string }> {
+ return this.mppFetch('/api/tasks', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify(params),
+ })
+ }
 
-  async buy(listingId: string): Promise<Trade> {
-    try {
-      // First get the listing to confirm price
-      const listing = await this.getListing(listingId);
-      
-      const response = await this.api.post('/trades', {
-        listing_id: listingId,
-        amount: listing.price_bankr,
-      });
-      return response.data.trade;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Purchase failed');
-    }
-  }
+ /** Bid on a task -- MPP $0.001 */
+ async bid(
+ taskId: string,
+ agentId: string,
+ proposal: string,
+ price: number
+ ): Promise<{ ok: boolean; bid_id: string }> {
+ return this.mppFetch(`/api/tasks/${taskId}/bid`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ agent_id: agentId, proposal, price_usd: price }),
+ })
+ }
 
-  async getMyTrades(): Promise<Trade[]> {
-    try {
-      const response = await this.api.get('/trades');
-      return response.data.trades; // Assume API returns trades for current user
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to fetch trades');
-    }
-  }
+ /** Submit benchmark run -- MPP $0.001 */
+ async submitBenchmark(params: PostBenchmarkParams): Promise<{ ok: boolean; benchmark_id: string }> {
+ return this.mppFetch('/api/benchmarks', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify(params),
+ })
+ }
 
-  async completeTrade(tradeId: string): Promise<Trade> {
-    try {
-      const response = await this.api.patch(`/trades/${tradeId}`, { status: 'completed' });
-      return response.data.trade;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to complete trade');
-    }
-  }
+ /** Score a benchmark result (0-100) -- MPP $0.001 */
+ async scoreBenchmark(benchmarkId: string, score: number, notes?: string): Promise<{ ok: boolean }> {
+ return this.mppFetch(`/api/benchmarks/${benchmarkId}/score`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ score, notes }),
+ })
+ }
 
-  async disputeTrade(tradeId: string): Promise<Trade> {
-    try {
-      const response = await this.api.patch(`/trades/${tradeId}`, { status: 'disputed' });
-      return response.data.trade;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to dispute trade');
-    }
-  }
+ /** Send message to another agent (A2A compatible) -- MPP $0.001 */
+ async sendMessage(
+ toAgentId: string,
+ content: string
+ ): Promise<{ ok: boolean; message_id: string }> {
+ return this.mppFetch('/api/messages', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ to_agent_id: toAgentId, content }),
+ })
+ }
 
-  async rateTrade(tradeId: string, score: number, comment?: string): Promise<any> {
-    try {
-      const response = await this.api.post('/ratings', {
-        trade_id: tradeId,
-        score,
-        comment,
-      });
-      return response.data.rating;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || 'Failed to submit rating');
-    }
-  }
+ /** Read messages -- MPP $0.001 */
+ async messages(fromAgentId?: string): Promise<{ messages: Message[] }> {
+ const path = fromAgentId
+ ? `/api/messages/${fromAgentId}`
+ : '/api/messages'
+ return this.mppFetch(path)
+ }
 
-  // ─── Wallet ───────────────────────────────────────────────────────────────
+ /** Rate an agent after trade -- MPP $0.001 */
+ async rate(params: Rating): Promise<{ ok: boolean }> {
+ return this.mppFetch('/api/ratings', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify(params),
+ })
+ }
 
-  async getWallet(): Promise<{ balance: number; escrow: number }> {
-    try {
-      // Assuming a wallet endpoint exists or will exist soon
-      const response = await this.api.get('/wallet');
-      return response.data; 
-    } catch (error: any) {
-      // Fallback if endpoint doesn't exist yet
-      if (error.response?.status === 404) {
-          return { balance: 0, escrow: 0 };
-      }
-      throw new Error(error.response?.data?.error || 'Failed to fetch wallet');
-    }
-  }
+ /** Register webhook for push events -- MPP $0.001 */
+ async registerWebhook(
+ url: string,
+ events: string[]
+ ): Promise<{ ok: boolean; webhook_id: string }> {
+ return this.mppFetch('/api/webhooks', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ url, events }),
+ })
+ }
 }
+
+export default ClawdMarket
