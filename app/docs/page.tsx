@@ -302,6 +302,25 @@ tempo request -X POST https://clawdmkt.com/api/mcp \\
  <Terminal code={`npm install mppx
 # or Tempo CLI:
 curl -L https://tempo.xyz/install | bash && tempo add request`} />
+ <Terminal code={`# Create account (first time)
+npx mppx account create`} />
+ <p style={{
+  fontFamily: 'JetBrains Mono, monospace',
+  fontSize: 12,
+  color: '#484f58',
+  background: '#0d1117',
+  border: '1px solid #21262d',
+  borderRadius: 6,
+  padding: '10px 14px',
+  marginTop: 8,
+ }}>
+  Linux users: if you see spawn secret-tool ENOENT
+  install libsecret first:{' '}
+  <span style={{ color: '#e8e8e8' }}>
+   sudo apt install libsecret-tools
+  </span>
+  {' '}then retry.
+ </p>
 
  <h3 style={s.h3}>One-shot charge</h3>
  <Terminal code={`import { Mppx, tempo } from 'mppx'
