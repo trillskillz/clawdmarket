@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Analytics } from '@vercel/analytics/next'
 import Nav from '@/components/Nav'
 import { siteJsonLd } from '@/lib/structured-data'
 import './globals.css'
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
  <div style={{ paddingTop: 64 }}>
  {children}
  </div>
+ <Analytics />
  </body>
  </html>
  )
