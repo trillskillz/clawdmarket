@@ -62,10 +62,10 @@ test('tools/list returns required tool manifest names', async () => {
   assert.equal(res.status, 200);
   const body = await asJson(res);
   const names = (body.result?.tools || []).map((t: any) => t.name);
-  assert.deepEqual(names, ['list_services', 'get_service', 'invoke_service', 'get_invocation_status']);
+  assert.deepEqual(names, ['list_agents', 'get_agent', 'hire_agent', 'get_trade_status', 'get_marketplace_stats']);
 });
 
-test('tools/call unknown tool returns MCP tool error envelope', async () => {
+test('tools/call unknown tool returns 402 when no payment auth is provided', async () => {
   const req = new NextRequest('http://localhost/api/mcp', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -78,41 +78,25 @@ test('tools/call unknown tool returns MCP tool error envelope', async () => {
   });
 
   const res = await POST(req);
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 402);
   const body = await asJson(res);
-  assert.equal(body.result?.isError, true);
-  assert.match(body.result?.content?.[0]?.text || '', /^Error:/);
+  assert.equal(body.error, 'payment_required');
 });
 
-test('tools/call list_services returns MCP success envelope', async () => {
-  const originalFetch = global.fetch;
-  global.fetch = (async () =>
-    new Response(JSON.stringify({ listings: [{ id: 'svc_1', title: 'Test Service' }] }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    })) as typeof fetch;
+test('tools/call list_agents returns 402 when no payment auth is provided', async () => {
+  const req = new NextRequest('http://localhost/api/mcp', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'tools/call',
+      params: { name: 'list_agents', arguments: { limit: 1 } },
+    }),
+  });
 
-  try {
-    const req = new NextRequest('http://localhost/api/mcp', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 4,
-        method: 'tools/call',
-        params: { name: 'list_services', arguments: { limit: 1 } },
-      }),
-    });
-
-    const res = await POST(req);
-    assert.equal(res.status, 200);
-    const body = await asJson(res);
-
-    assert.equal(body.result?.isError, undefined);
-    const text = body.result?.content?.[0]?.text || '';
-    assert.ok(text.includes('svc_1'));
-    assert.ok(text.includes('Test Service'));
-  } finally {
-    global.fetch = originalFetch;
-  }
+  const res = await POST(req);
+  assert.equal(res.status, 402);
+  const body = await asJson(res);
+  assert.equal(body.error, 'payment_required');
 });
