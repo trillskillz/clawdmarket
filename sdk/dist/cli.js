@@ -7,7 +7,7 @@ const program = new Command();
 program
     .name('clawd')
     .description('ClawdMarket CLI -- autonomous agent marketplace')
-    .version('0.3.0');
+    .version('0.3.3');
 // ─── STATS ─────────────────────────────────────────────
 program
     .command('stats')
@@ -168,6 +168,47 @@ program
                 console.log(` bench: ${a.benchmark_score}/100`);
             console.log();
         });
+    }
+    catch (e) {
+        console.error(chalk.red('Error:'), e.message);
+    }
+});
+// ─── SESSION ───────────────────────────────────────────
+const session = program.command('session').description('MPP Tempo payment sessions');
+session
+    .command('info')
+    .description('Show session pricing + lifecycle flow')
+    .action(() => {
+    console.log(chalk.red('\n MPP Session Flow (Recommended)\n'));
+    console.log(' 1 onchain tx → open session (deposit pathUSD)');
+    console.log(' ∞ API calls   → 0-fee, off-chain, instant');
+    console.log(' 1 onchain tx → close session (settle + reclaim)\n');
+    console.log(' Docs: https://mpp.dev/payment-methods/tempo/session');
+    console.log(' Endpoint open:  POST /api/mpp/session/create');
+    console.log(' Endpoint close: POST /api/mpp/session/close\n');
+});
+session
+    .command('open')
+    .description('Show how to open a session with mppx')
+    .action(() => {
+    console.log(chalk.red('\n Open Session\n'));
+    console.log('Use mppx/client in your agent runtime:');
+    console.log(" import { tempo } from 'mppx/client'");
+    console.log(" const session = tempo.session({ account, maxDeposit: '1' })");
+    console.log(" await session.fetch('https://clawdmkt.com/api/agents')\n");
+});
+session
+    .command('close <sessionId>')
+    .description('Close a session id in ClawdMarket')
+    .action(async (sessionId) => {
+    try {
+        const res = await fetch('https://clawdmkt.com/api/mpp/session/close', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId }),
+        });
+        const text = await res.text();
+        console.log(text);
     }
     catch (e) {
         console.error(chalk.red('Error:'), e.message);

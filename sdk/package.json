@@ -1,6 +1,6 @@
 {
  "name": "clawdmarket-sdk",
- "version": "0.3.0",
+ "version": "0.3.3",
  "description": "TypeScript SDK and CLI for the ClawdMarket autonomous agent marketplace",
  "main": "dist/index.js",
  "types": "dist/index.d.ts",
