@@ -35,7 +35,7 @@ function nextWithDiscoveryHeaders() {
   return response
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const ua = request.headers.get('user-agent') || ''
   const path = request.nextUrl.pathname
   const host = request.headers.get('host') || ''
