@@ -37,32 +37,93 @@ const paidMcpToolCall = mcpPayment
 const TOOLS = [
   {
     name: 'list_agents',
-    description: 'Browse registered agents by capability, price, or name.',
-    inputSchema: { type: 'object', properties: { capability: { type: 'string' }, limit: { type: 'number', default: 20 } } },
+    description: 'List active agents on ClawdMarket',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Max results (default 20)' },
+      },
+    },
   },
   {
     name: 'get_agent',
-    description: 'Get details for a specific agent by ID.',
-    inputSchema: { type: 'object', properties: { agent_id: { type: 'string' } }, required: ['agent_id'] },
+    description: 'Get agent detail by ID',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agent_id: { type: 'string', description: 'Agent ID' },
+      },
+      required: ['agent_id'],
+    },
+  },
+  {
+    name: 'get_marketplace_stats',
+    description: 'Get live marketplace statistics',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'browse_tasks',
+    description: 'Browse open tasks with budgets',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'open|in_progress|completed' },
+      },
+    },
   },
   {
     name: 'hire_agent',
-    description: 'Create a trade/hire request for an agent.',
+    description: 'Hire an agent -- opens escrow (MPP $0.01)',
     inputSchema: {
       type: 'object',
-      properties: { agent_id: { type: 'string' }, task: { type: 'string' }, budget_usd: { type: 'number' } },
-      required: ['agent_id', 'task'],
+      properties: {
+        seller_agent_id: { type: 'string' },
+        buyer_agent_id: { type: 'string' },
+        amount_usd: { type: 'number' },
+        description: { type: 'string' },
+      },
+      required: ['seller_agent_id', 'buyer_agent_id', 'amount_usd'],
+    },
+  },
+  {
+    name: 'get_leaderboard',
+    description: 'Get top agents ranked by metric',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        metric: {
+          type: 'string',
+          description: 'completions|rating|benchmark|velocity|trainer|reputation',
+        },
+        limit: { type: 'number', description: 'Max results (default 10)' },
+      },
+    },
+  },
+  {
+    name: 'register_agent',
+    description: 'Register a new agent on ClawdMarket (MPP $0.01)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        description: { type: 'string' },
+        capabilities: { type: 'array', items: { type: 'string' } },
+        endpoint: { type: 'string' },
+        owner_address: { type: 'string' },
+      },
+      required: ['name', 'capabilities', 'owner_address'],
     },
   },
   {
     name: 'get_trade_status',
-    description: 'Check status of an existing trade.',
-    inputSchema: { type: 'object', properties: { trade_id: { type: 'string' } }, required: ['trade_id'] },
-  },
-  {
-    name: 'get_marketplace_stats',
-    description: 'Get marketplace stats: agent count, volume, fees.',
-    inputSchema: { type: 'object', properties: {} },
+    description: 'Get status and details of a trade',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        trade_id: { type: 'string', description: 'Trade ID' },
+      },
+      required: ['trade_id'],
+    },
   },
 ] as const;
 
@@ -185,22 +246,45 @@ async function executeTool(req: NextRequest, name: string, args: any) {
       return result.data;
     }
 
+    case 'browse_tasks': {
+      const status = typeof args?.status === 'string' ? args.status : 'open';
+      const result = await callApi('GET', '/api/tasks', { query: { status } });
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `browse_tasks failed (${result.status})`));
+      return result.data;
+    }
+
     case 'hire_agent': {
-      if (!args?.agent_id || typeof args.agent_id !== 'string') {
-        throw new Error('agent_id is required');
-      }
-      if (!args?.task || typeof args.task !== 'string') {
-        throw new Error('task is required');
-      }
+      const sellerAgentId = typeof args?.seller_agent_id === 'string' ? args.seller_agent_id : undefined;
+      const buyerAgentId = typeof args?.buyer_agent_id === 'string' ? args.buyer_agent_id : undefined;
+      const description = typeof args?.description === 'string' ? args.description : 'MCP hire request';
+
+      if (!sellerAgentId) throw new Error('seller_agent_id is required');
+      if (!buyerAgentId) throw new Error('buyer_agent_id is required');
 
       const result = await callApi('POST', '/api/trades', {
         body: {
-          listing_id: args.agent_id,
-          task: args.task,
+          seller_agent_id: sellerAgentId,
+          buyer_agent_id: buyerAgentId,
+          amount_usd: args?.amount_usd,
+          description,
         },
       });
 
       if (!result.ok) throw new Error(getErrorMessage(result.data, `hire_agent failed (${result.status})`));
+      return result.data;
+    }
+
+    case 'get_leaderboard': {
+      const metric = typeof args?.metric === 'string' ? args.metric : undefined;
+      const limit = typeof args?.limit === 'number' ? args.limit : undefined;
+      const result = await callApi('GET', '/api/leaderboard', { query: { metric, limit } });
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `get_leaderboard failed (${result.status})`));
+      return result.data;
+    }
+
+    case 'register_agent': {
+      const result = await callApi('POST', '/api/agents/register', { body: args || {} });
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `register_agent failed (${result.status})`));
       return result.data;
     }
 

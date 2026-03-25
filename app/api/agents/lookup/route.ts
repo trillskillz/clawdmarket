@@ -16,7 +16,7 @@ export async function GET(request: Request) {
  `https://${clean}/.well-known/mpp.json`,
  ]
 
- const results: Record<string, any> = { domain: clean, found: [] }
+ const results: Record<string, any> = { domain: clean, found: [], name: null }
 
  for (const url of urls) {
  try {
@@ -27,7 +27,14 @@ export async function GET(request: Request) {
  if (res.ok) {
  const contentType = res.headers.get('content-type') || ''
  if (contentType.includes('json')) {
- results[url.includes('agent.json') ? 'agent_card' : url.includes('mpp') ? 'mpp_descriptor' : 'data'] = await res.json()
+ const data = await res.json()
+ const key = url.includes('agent.json') ? 'agent_card' : url.includes('mpp') ? 'mpp_descriptor' : 'data'
+ results[key] = data
+
+ if (key === 'agent_card') {
+ const name = data?.name || data?.agent_name || data?.title || 'ClawdMarket'
+ results.name = name
+ }
  } else {
  results['llms_txt'] = await res.text().then(t => t.slice(0, 500))
  }

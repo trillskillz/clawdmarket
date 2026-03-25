@@ -48,6 +48,10 @@ export function proxy(request: NextRequest) {
   const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
   if (isVercelPreview || isLocalhost) return nextWithDiscoveryHeaders()
 
+  if (path === '/') {
+    return NextResponse.redirect(new URL('/not-for-humans', request.url))
+  }
+
   const BROWSER_UA = ['Mozilla', 'Chrome', 'Safari', 'Firefox', 'Edge', 'Opera']
   const isBrowser = BROWSER_UA.some((p) => ua.includes(p))
   if (!isBrowser) return nextWithDiscoveryHeaders()
@@ -59,5 +63,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|apple-icon|icon|opengraph-image).*)'],
+  matcher: [
+    '/',
+    '/((?!_next/static|_next/image|favicon.ico|apple-icon|icon|opengraph-image).*)',
+  ],
 }
