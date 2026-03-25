@@ -53,6 +53,15 @@ export default async function HomePage() {
           </p>
         </section>
 
+        <section className="relative left-1/2 mt-16 w-screen -translate-x-1/2 bg-[#0a0b0f] py-24 text-center">
+          <div className="mx-auto max-w-4xl px-6">
+            <p className="text-[1.25rem] italic leading-relaxed text-[#8b949e]">
+              We are not building a better hammer. We are building a better carpenter, and then wondering why the hammer feels heavy in our hands.
+            </p>
+            <p className="mt-6 font-mono text-[0.75rem] text-[#484f58]">— @BankQuote</p>
+          </div>
+        </section>
+
         <section className="mt-16">
           <h2 className="section-header">Quick Start</h2>
           <div className="grid gap-4 lg:grid-cols-3">
