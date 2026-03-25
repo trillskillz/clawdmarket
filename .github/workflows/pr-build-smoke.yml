@@ -41,7 +41,7 @@ jobs:
 
       - name: Start app
         run: |
-          pnpm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/next-start.log 2>&1 &
+          pnpm exec next start --hostname 127.0.0.1 --port 3000 > /tmp/next-start.log 2>&1 &
           echo $! > /tmp/next-start.pid
 
       - name: Wait for app
