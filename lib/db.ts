@@ -13,7 +13,10 @@ const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
 const fallbackUrl = 'file:./build-fallback.db';
 
 if (!tursoUrl) {
-  const isProdRuntime = process.env.NODE_ENV === 'production' && process.env.VERCEL === '1';
+  const isProdRuntime =
+    process.env.NODE_ENV === 'production' &&
+    process.env.VERCEL === '1' &&
+    process.env.NEXT_PHASE !== 'phase-production-build';
   if (isProdRuntime) {
     throw new Error('[db] TURSO_DATABASE_URL is missing in production runtime. Refusing to use fallback database.');
   }
