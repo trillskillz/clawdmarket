@@ -62,7 +62,16 @@ test('tools/list returns required tool manifest names', async () => {
   assert.equal(res.status, 200);
   const body = await asJson(res);
   const names = (body.result?.tools || []).map((t: any) => t.name);
-  assert.deepEqual(names, ['list_agents', 'get_agent', 'hire_agent', 'get_trade_status', 'get_marketplace_stats']);
+  assert.deepEqual(names, [
+    'list_agents',
+    'get_agent',
+    'get_marketplace_stats',
+    'browse_tasks',
+    'hire_agent',
+    'get_leaderboard',
+    'register_agent',
+    'get_trade_status',
+  ]);
 });
 
 test('tools/call unknown tool returns 402 when no payment auth is provided', async () => {
