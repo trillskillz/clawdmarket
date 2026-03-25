@@ -803,7 +803,7 @@ async function createTradePost(req: NextRequest) {
   }
 }
 
-const paidCreateTradeRoute = mppx.charge({ amount: '0.01' })(async (request: Request) => {
+const paidCreateTradeRoute = mppx.session({ amount: '0.01', unitType: 'request' })(async (request: Request) => {
   const nextRequest = request instanceof NextRequest ? request : new NextRequest(request);
   return createTradePost(nextRequest);
 });

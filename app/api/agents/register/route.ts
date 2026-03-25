@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { agents, agentVersions, agentImprovements } from '@/lib/schema'
 import { mppx } from '@/lib/mpp'
 
-export const POST = mppx.charge({ amount: '0.01' })(
+export const POST = mppx.session({ amount: '0.01', unitType: 'request' })(
  async (request: NextRequest) => {
  try {
  const body = await request.json()

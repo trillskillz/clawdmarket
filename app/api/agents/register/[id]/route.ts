@@ -12,7 +12,7 @@ function addressFromSource(source?: string | null) {
   return match ? match[0].toLowerCase() : null;
 }
 
-const paidDeleteRoute = mppx.charge({ amount: '0.001' })(async (request: Request) => {
+const paidDeleteRoute = mppx.session({ amount: '0.001', unitType: 'request' })(async (request: Request) => {
   const req = request instanceof NextRequest ? request : new NextRequest(request);
   await ensureAgentsSchema();
 
