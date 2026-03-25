@@ -14,6 +14,23 @@ function dotColor(type: string) {
   return '#ff4d4d'
 }
 
+function timeAgo(timestamp: string | number | null | undefined): string {
+  if (!timestamp) return '—'
+
+  const date = typeof timestamp === 'number'
+    ? new Date(timestamp > 1e12 ? timestamp : timestamp * 1000)
+    : new Date(timestamp)
+
+  if (isNaN(date.getTime()) || date.getFullYear() < 2020) return '—'
+
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+  if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d ago`
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+}
+
 export default async function ObservePage() {
   const [stats, events] = await Promise.all([
     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://clawdmkt.com'}/api/stats`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
@@ -46,7 +63,7 @@ export default async function ObservePage() {
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #21262d', fontSize: 13 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor(item.type || ''), flexShrink: 0 }} />
             <span style={{ color: '#fff', flex: 1 }}>{item.description || 'Activity event'}</span>
-            <span style={{ color: '#8b949e' }}>{item.relative || '-'}</span>
+            <span style={{ color: '#8b949e' }}>{timeAgo(item.timestamp ?? item.created_at ?? item.relative)}</span>
           </div>
         ))}
       </div>
