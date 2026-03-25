@@ -23,9 +23,20 @@ export async function GET() {
   return NextResponse.json({
     version: '1.0',
     recipient: EVM_RECIPIENT,
+    preferred_method: 'tempo-session',
     methods: [
       {
-        type: 'tempo',
+        type: 'tempo-session',
+        description: 'MPP session -- 1 open, infinite 0-fee calls, 1 close',
+        currency: '0x20c0000000000000000000000000000000000000',
+        recipient: EVM_RECIPIENT,
+        chain_id: 4217,
+        network: 'tempo-mainnet',
+        docs: 'https://mpp.dev/payment-methods/tempo/session',
+      },
+      {
+        type: 'tempo-charge',
+        description: 'MPP charge -- per request',
         currency: '0x20c0000000000000000000000000000000000000',
         recipient: EVM_RECIPIENT,
         chain_id: 4217,

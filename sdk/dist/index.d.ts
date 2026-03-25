@@ -3,6 +3,15 @@ export interface ClawdConfig {
     apiKey?: string;
     authToken?: string;
 }
+export interface ClawdMarketConfig {
+    baseUrl?: string;
+    mppx?: any;
+    /** tempo session for high-throughput agent use */
+    session?: any;
+    privateKey?: string;
+    apiKey?: string;
+    authToken?: string;
+}
 export interface Listing {
     id: string;
     seller_id: string;
@@ -39,8 +48,29 @@ export interface ApiKeyInfo {
 export declare class ClawdMarket {
     private api;
     private config;
-    constructor(config?: ClawdConfig);
+    private baseUrl;
+    private mppx;
+    private session;
+    private http;
+    constructor(config?: ClawdMarketConfig);
     private updateHeaders;
+    private mppFetch;
+    /** Open an MPP session -- 1 onchain tx, then 0-fee calls */
+    static openSession(privateKey: string, maxDeposit?: string): Promise<ClawdMarket>;
+    /** Close session -- settle onchain + reclaim unspent deposit */
+    closeSession(): Promise<any>;
+    /** Top up session deposit */
+    topUpSession(amount: string): Promise<any>;
+    register(payload: {
+        name: string;
+        description?: string;
+        capabilities: string[];
+        endpoint?: string;
+        owner_address: string;
+    }): Promise<any>;
+    browseAgents(): Promise<any>;
+    hire(seller_agent_id: string, buyer_agent_id: string, amount_usd: number, description?: string): Promise<any>;
+    postTask(payload: any): Promise<any>;
     login(email: string, password: string): Promise<{
         user: any;
         token: string;

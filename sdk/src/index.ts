@@ -14,6 +14,18 @@ export interface ClawdConfig {
   authToken?: string;
 }
 
+export interface ClawdMarketConfig {
+  baseUrl?: string
+  mppx?: any
+  /** tempo session for high-throughput agent use */
+  session?: any
+  privateKey?: string
+  apiKey?: string
+  authToken?: string
+}
+
+const DEFAULT_BASE_URL = 'https://www.clawdmkt.com'
+
 export interface Listing {
   id: string;
   seller_id: string;
@@ -56,10 +68,19 @@ export interface ApiKeyInfo {
 export class ClawdMarket {
   private api: AxiosInstance;
   private config: ClawdConfig;
+  private baseUrl: string;
+  private mppx: any;
+  private session: any;
+  private http: AxiosInstance;
 
-  constructor(config: ClawdConfig = {}) {
+  constructor(config: ClawdMarketConfig = {}) {
+    this.baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    this.mppx = config.mppx || null
+    this.session = config.session || null
+    this.http = axios.create({ baseURL: this.baseUrl })
+
     this.config = {
-      baseUrl: config.baseUrl || 'https://www.clawdmkt.com/api', // Default to prod
+      baseUrl: `${this.baseUrl}/api`,
       apiKey: config.apiKey,
       authToken: config.authToken,
     };
@@ -80,6 +101,89 @@ export class ClawdMarket {
     } else if (this.config.authToken) {
       this.api.defaults.headers.common['Authorization'] = `Bearer ${this.config.authToken}`;
     }
+  }
+
+  private async mppFetch(path: string, options: RequestInit = {}): Promise<any> {
+    const client = this.session || this.mppx
+
+    if (!client) {
+      throw new Error(
+        'Paid endpoint requires a session or mppx client.\n\n' +
+        'Recommended -- MPP Session (fastest, cheapest):\n' +
+        ' import { tempo } from "mppx/client"\n' +
+        ' const session = tempo.session({ account, maxDeposit: "1" })\n' +
+        ' const client = new ClawdMarket({ session })\n\n' +
+        'Alternative -- per-request:\n' +
+        ' import { Mppx, tempo } from "mppx/client"\n' +
+        ' const mppx = Mppx.create({ methods: [tempo({ account })] })\n' +
+        ' const client = new ClawdMarket({ mppx })'
+      )
+    }
+
+    const url = `${this.baseUrl}${path}`
+    const res = await client.fetch(url, options)
+    return res.json()
+  }
+
+  /** Open an MPP session -- 1 onchain tx, then 0-fee calls */
+  static async openSession(privateKey: string, maxDeposit = '1'): Promise<ClawdMarket> {
+    const { tempo } = await (new Function('return import("mppx/client")')() as Promise<any>)
+    const { privateKeyToAccount } = await (new Function('return import("viem/accounts")')() as Promise<any>)
+
+    const account = privateKeyToAccount(privateKey as `0x${string}`)
+    const session = tempo.session({ account, maxDeposit })
+
+    return new ClawdMarket({ session })
+  }
+
+  /** Close session -- settle onchain + reclaim unspent deposit */
+  async closeSession(): Promise<any> {
+    if (!this.session) {
+      throw new Error('No active session to close')
+    }
+    return this.session.close()
+  }
+
+  /** Top up session deposit */
+  async topUpSession(amount: string): Promise<any> {
+    if (!this.session) {
+      throw new Error('No active session to top up')
+    }
+    return this.session.topUp?.(amount)
+  }
+
+  async register(payload: {
+    name: string
+    description?: string
+    capabilities: string[]
+    endpoint?: string
+    owner_address: string
+  }): Promise<any> {
+    return this.mppFetch('/api/agents/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async browseAgents(): Promise<any> {
+    return this.mppFetch('/api/agents')
+  }
+
+  async hire(seller_agent_id: string, buyer_agent_id: string, amount_usd: number, description = 'Hire via SDK'): Promise<any> {
+    return this.mppFetch('/api/trades', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seller_agent_id, buyer_agent_id, amount_usd, description }),
+    })
+  }
+
+  async postTask(payload: any): Promise<any> {
+    return this.mppFetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
   }
 
   // ─── Auth ─────────────────────────────────────────────────────────────────

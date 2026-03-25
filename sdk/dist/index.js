@@ -3,11 +3,16 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+const DEFAULT_BASE_URL = 'https://www.clawdmkt.com';
 // ─── Client ─────────────────────────────────────────────────────────────────
 export class ClawdMarket {
     constructor(config = {}) {
+        this.baseUrl = config.baseUrl || DEFAULT_BASE_URL;
+        this.mppx = config.mppx || null;
+        this.session = config.session || null;
+        this.http = axios.create({ baseURL: this.baseUrl });
         this.config = {
-            baseUrl: config.baseUrl || 'https://www.clawdmkt.com/api', // Default to prod
+            baseUrl: `${this.baseUrl}/api`,
             apiKey: config.apiKey,
             authToken: config.authToken,
         };
@@ -26,6 +31,69 @@ export class ClawdMarket {
         else if (this.config.authToken) {
             this.api.defaults.headers.common['Authorization'] = `Bearer ${this.config.authToken}`;
         }
+    }
+    async mppFetch(path, options = {}) {
+        const client = this.session || this.mppx;
+        if (!client) {
+            throw new Error('Paid endpoint requires a session or mppx client.\n\n' +
+                'Recommended -- MPP Session (fastest, cheapest):\n' +
+                ' import { tempo } from "mppx/client"\n' +
+                ' const session = tempo.session({ account, maxDeposit: "1" })\n' +
+                ' const client = new ClawdMarket({ session })\n\n' +
+                'Alternative -- per-request:\n' +
+                ' import { Mppx, tempo } from "mppx/client"\n' +
+                ' const mppx = Mppx.create({ methods: [tempo({ account })] })\n' +
+                ' const client = new ClawdMarket({ mppx })');
+        }
+        const url = `${this.baseUrl}${path}`;
+        const res = await client.fetch(url, options);
+        return res.json();
+    }
+    /** Open an MPP session -- 1 onchain tx, then 0-fee calls */
+    static async openSession(privateKey, maxDeposit = '1') {
+        const { tempo } = await new Function('return import("mppx/client")')();
+        const { privateKeyToAccount } = await new Function('return import("viem/accounts")')();
+        const account = privateKeyToAccount(privateKey);
+        const session = tempo.session({ account, maxDeposit });
+        return new ClawdMarket({ session });
+    }
+    /** Close session -- settle onchain + reclaim unspent deposit */
+    async closeSession() {
+        if (!this.session) {
+            throw new Error('No active session to close');
+        }
+        return this.session.close();
+    }
+    /** Top up session deposit */
+    async topUpSession(amount) {
+        if (!this.session) {
+            throw new Error('No active session to top up');
+        }
+        return this.session.topUp?.(amount);
+    }
+    async register(payload) {
+        return this.mppFetch('/api/agents/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+    }
+    async browseAgents() {
+        return this.mppFetch('/api/agents');
+    }
+    async hire(seller_agent_id, buyer_agent_id, amount_usd, description = 'Hire via SDK') {
+        return this.mppFetch('/api/trades', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seller_agent_id, buyer_agent_id, amount_usd, description }),
+        });
+    }
+    async postTask(payload) {
+        return this.mppFetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
     }
     // ─── Auth ─────────────────────────────────────────────────────────────────
     async login(email, password) {
