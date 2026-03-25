@@ -17,8 +17,15 @@ function shortId(id?: string | null) {
   return id ? id.slice(0, 8) : 'unknown'
 }
 
+function safeDate(value: unknown): Date | null {
+  if (value == null) return null
+  const d = new Date(value as string | number)
+  return isNaN(d.getTime()) ? null : d
+}
+
 function relativeTime(dateValue: Date | string | number) {
   const then = new Date(dateValue).getTime()
+  if (isNaN(then)) return 'unknown'
   const now = Date.now()
   const diffSec = Math.max(1, Math.floor((now - then) / 1000))
   if (diffSec < 60) return `${diffSec}s ago`
@@ -71,59 +78,68 @@ export async function GET() {
 
     const nameById = new Map(agentRows.map((a) => [a.id, a.name]))
 
-    const tradeEvents: Array<ActivityEvent & { createdAt: Date }> = recentTrades.map((t) => {
-      const buyer = nameById.get(t.buyer_agent_id) || `Agent ${shortId(t.buyer_agent_id)}`
-      const seller = nameById.get(t.seller_agent_id) || `Agent ${shortId(t.seller_agent_id)}`
-      let type: ActivityEvent['type'] = 'trade_created'
-      let description = `Agent "${buyer}" started a new trade with "${seller}"`
-      if (t.status === 'completed' || t.status === 'complete') {
-        type = 'trade_completed'
-        description = `Agent "${buyer}" completed a trade with "${seller}"`
-      } else if (t.status === 'disputed') {
-        type = 'trade_disputed'
-        description = `Trade dispute opened between "${buyer}" and "${seller}"`
-      } else if (t.status === 'resolved') {
-        type = 'trade_confirmed'
-        description = `Trade confirmed and settled between "${buyer}" and "${seller}"`
-      }
+    const tradeEvents: Array<ActivityEvent & { createdAt: Date }> = recentTrades
+      .filter((t) => safeDate(t.created_at) !== null)
+      .map((t) => {
+        const buyer = nameById.get(t.buyer_agent_id) || `Agent ${shortId(t.buyer_agent_id)}`
+        const seller = nameById.get(t.seller_agent_id) || `Agent ${shortId(t.seller_agent_id)}`
+        let type: ActivityEvent['type'] = 'trade_created'
+        let description = `Agent "${buyer}" started a new trade with "${seller}"`
+        if (t.status === 'completed' || t.status === 'complete') {
+          type = 'trade_completed'
+          description = `Agent "${buyer}" completed a trade with "${seller}"`
+        } else if (t.status === 'disputed') {
+          type = 'trade_disputed'
+          description = `Trade dispute opened between "${buyer}" and "${seller}"`
+        } else if (t.status === 'resolved') {
+          type = 'trade_confirmed'
+          description = `Trade confirmed and settled between "${buyer}" and "${seller}"`
+        }
 
-      const createdAt = new Date(t.created_at)
-      return {
-        type,
-        description,
-        buyer_name: buyer,
-        seller_name: seller,
-        timestamp: createdAt.toISOString(),
-        relative: relativeTime(createdAt),
-        createdAt,
-      }
-    })
+        const createdAt = safeDate(t.created_at) as Date
+        const ts = createdAt.toISOString()
+        return {
+          type,
+          description,
+          buyer_name: buyer,
+          seller_name: seller,
+          timestamp: ts,
+          relative: relativeTime(createdAt),
+          createdAt,
+        }
+      })
 
-    const ratingEvents: Array<ActivityEvent & { createdAt: Date }> = recentRatings.map((r) => {
-      const agent = nameById.get(r.rated_agent_id) || `Agent ${shortId(r.rated_agent_id)}`
-      const stars = '★'.repeat(Math.max(1, Math.min(5, Number(r.score) || 0)))
-      const createdAt = new Date(r.created_at)
-      return {
-        type: 'rating_received',
-        description: `Agent "${agent}" received a ${stars.padEnd(5, '☆')} rating`,
-        agent_name: agent,
-        timestamp: createdAt.toISOString(),
-        relative: relativeTime(createdAt),
-        createdAt,
-      }
-    })
+    const ratingEvents: Array<ActivityEvent & { createdAt: Date }> = recentRatings
+      .filter((r) => safeDate(r.created_at) !== null)
+      .map((r) => {
+        const agent = nameById.get(r.rated_agent_id) || `Agent ${shortId(r.rated_agent_id)}`
+        const stars = '★'.repeat(Math.max(1, Math.min(5, Number(r.score) || 0)))
+        const createdAt = safeDate(r.created_at) as Date
+        const ts = createdAt.toISOString()
+        return {
+          type: 'rating_received' as const,
+          description: `Agent "${agent}" received a ${stars.padEnd(5, '☆')} rating`,
+          agent_name: agent,
+          timestamp: ts,
+          relative: relativeTime(createdAt),
+          createdAt,
+        }
+      })
 
-    const registrationEvents: Array<ActivityEvent & { createdAt: Date }> = recentRegistrations.map((a) => {
-      const createdAt = new Date(a.created_at)
-      return {
-        type: 'agent_registered',
-        description: `New agent "${a.name || `Agent ${shortId(a.id)}`}" registered`,
-        agent_name: a.name || `Agent ${shortId(a.id)}`,
-        timestamp: createdAt.toISOString(),
-        relative: relativeTime(createdAt),
-        createdAt,
-      }
-    })
+    const registrationEvents: Array<ActivityEvent & { createdAt: Date }> = recentRegistrations
+      .filter((a) => safeDate(a.created_at) !== null)
+      .map((a) => {
+        const createdAt = safeDate(a.created_at) as Date
+        const ts = createdAt.toISOString()
+        return {
+          type: 'agent_registered' as const,
+          description: `New agent "${a.name || `Agent ${shortId(a.id)}`}" registered`,
+          agent_name: a.name || `Agent ${shortId(a.id)}`,
+          timestamp: ts,
+          relative: relativeTime(createdAt),
+          createdAt,
+        }
+      })
 
     const events = [...tradeEvents, ...ratingEvents, ...registrationEvents]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
