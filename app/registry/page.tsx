@@ -33,6 +33,10 @@ export default function RegistryPage() {
  const [loading, setLoading] = useState(true)
  const [filter, setFilter] = useState('')
  const [error, setError] = useState<string | null>(null)
+ const [lookupDomain, setLookupDomain] = useState('')
+ const [lookupResult, setLookupResult] = useState<any>(null)
+ const [lookupLoading, setLookupLoading] = useState(false)
+ const [lookupError, setLookupError] = useState<string | null>(null)
 
  useEffect(() => {
  fetch('/api/agents/list?limit=50')
@@ -55,6 +59,27 @@ export default function RegistryPage() {
  )
  )
 
+ const handleLookup = async () => {
+ if (!lookupDomain.trim()) return
+ setLookupLoading(true)
+ setLookupError(null)
+ setLookupResult(null)
+ try {
+ const domain = lookupDomain.trim().replace(/^https?:\/\//, '')
+ const res = await fetch(`/api/agents/lookup?domain=${encodeURIComponent(domain)}`)
+ const data = await res.json()
+ if (data.name || data.capabilities) {
+ setLookupResult(data)
+ } else {
+ setLookupError('No agent.json found at this domain')
+ }
+ } catch (e: any) {
+ setLookupError(e.message)
+ } finally {
+ setLookupLoading(false)
+ }
+ }
+
  return (
  <main style={s.page}>
  <p style={s.label}>› Registry</p>
@@ -66,6 +91,140 @@ export default function RegistryPage() {
  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>
  {loading ? '...' : `${filtered.length} agent${filtered.length !== 1 ? 's' : ''}`}
  </span>
+ </div>
+
+ <div style={{
+ background: '#111318',
+ border: '1px solid #21262d',
+ borderRadius: 12,
+ padding: 24,
+ marginBottom: 32,
+ }}>
+ <p style={{
+ fontFamily: 'JetBrains Mono, monospace',
+ fontSize: 11,
+ color: '#484f58',
+ textTransform: 'uppercase',
+ letterSpacing: '0.1em',
+ marginBottom: 12,
+ }}>
+ › Lookup Agent by Domain
+ </p>
+ <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+ <input
+ style={{
+ flex: 1,
+ background: '#0d1117',
+ border: '1px solid #21262d',
+ borderRadius: 8,
+ padding: '10px 14px',
+ color: '#e8e8e8',
+ fontFamily: 'JetBrains Mono, monospace',
+ fontSize: 13,
+ outline: 'none',
+ }}
+ placeholder="example.com"
+ value={lookupDomain}
+ onChange={e => setLookupDomain(e.target.value)}
+ onKeyDown={e => e.key === 'Enter' && handleLookup()}
+ />
+ <button
+ onClick={handleLookup}
+ disabled={lookupLoading}
+ style={{
+ background: '#ff4d4d',
+ color: '#fff',
+ border: 'none',
+ borderRadius: 8,
+ padding: '10px 20px',
+ fontWeight: 600,
+ fontSize: 14,
+ cursor: lookupLoading ? 'wait' : 'pointer',
+ fontFamily: 'inherit',
+ opacity: lookupLoading ? 0.7 : 1,
+ }}
+ >
+ {lookupLoading ? 'Looking up...' : 'Lookup →'}
+ </button>
+ </div>
+
+ {lookupError && (
+ <p style={{
+ fontFamily: 'JetBrains Mono, monospace',
+ fontSize: 12,
+ color: '#ff4d4d',
+ margin: 0,
+ }}>
+ ✗ {lookupError}
+ </p>
+ )}
+
+ {lookupResult && (
+ <div style={{
+ background: '#0d1117',
+ border: '1px solid #28c84033',
+ borderRadius: 8,
+ padding: 16,
+ marginTop: 8,
+ }}>
+ <div style={{
+ display: 'flex',
+ justifyContent: 'space-between',
+ marginBottom: 8,
+ }}>
+ <span style={{ fontWeight: 700, fontSize: 16 }}>
+ {lookupResult.name || 'Unknown Agent'}
+ </span>
+ <span style={{
+ fontFamily: 'JetBrains Mono, monospace',
+ fontSize: 11,
+ color: '#28c840',
+ background: '#28c84011',
+ border: '1px solid #28c84033',
+ borderRadius: 20,
+ padding: '2px 10px',
+ }}>
+ agent.json found ✓
+ </span>
+ </div>
+ {lookupResult.description && (
+ <p style={{ fontSize: 13, color: '#8b949e', marginBottom: 8, lineHeight: 1.6 }}>
+ {lookupResult.description}
+ </p>
+ )}
+ {lookupResult.capabilities?.length > 0 && (
+ <div style={{ marginBottom: 8 }}>
+ {lookupResult.capabilities.slice(0, 5).map((c: string) => (
+ <span key={c} style={{
+ fontFamily: 'JetBrains Mono, monospace',
+ fontSize: 11,
+ color: '#8b949e',
+ background: '#0a0b0f',
+ border: '1px solid #21262d',
+ borderRadius: 20,
+ padding: '2px 10px',
+ marginRight: 4,
+ display: 'inline-block',
+ marginBottom: 4,
+ }}>
+ {c}
+ </span>
+ ))}
+ </div>
+ )}
+ {lookupResult.endpoint && (
+ <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58', margin: 0 }}>
+ endpoint: {lookupResult.endpoint}
+ </p>
+ )}
+ <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58', marginTop: 8, marginBottom: 0 }}>
+ Add agent.json to your domain:{' '}
+ <a href="/docs" style={{ color: '#ff4d4d' }}>
+ see docs →
+ </a>
+ </p>
+ </div>
+ )}
  </div>
 
  {!loading && error && <div style={s.emptyBox}>Failed to load registry: {error}</div>}
