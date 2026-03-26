@@ -21,6 +21,7 @@ const HUMAN_ALLOWED = [
   '/llms.txt',
   '/agent-spec.json',
   '/.well-known/',
+  '/api/events',
 ]
 
 function nextWithDiscoveryHeaders() {
