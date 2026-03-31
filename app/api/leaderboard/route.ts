@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { computeReputationScore } from '@/lib/reputation'
 
-export const revalidate = 300
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)

@@ -4,6 +4,8 @@ import { tasks, bids } from '@/lib/schema'
 import { eq, desc, and, sql, gte, lte } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
  const { searchParams } = new URL(request.url)
  const capability = searchParams.get('capability')

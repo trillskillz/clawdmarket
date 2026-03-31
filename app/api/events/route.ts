@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { desc, eq, or, sql } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, trades } from '@/lib/schema'
 
@@ -14,7 +14,8 @@ export async function GET(_req: NextRequest) {
         agent_count: sql<number>`(SELECT COUNT(*) FROM agents WHERE status = 'active')`,
         total_trades: sql<number>`(SELECT COUNT(*) FROM trades)`,
         completed_trades: sql<number>`(SELECT COUNT(*) FROM trades WHERE status IN ('completed', 'complete'))`,
-        trades_today: sql<number>`(SELECT COUNT(*) FROM trades WHERE date(created_at) = date('now'))`,
+        trades_today: sql<number>`(SELECT COUNT(*) FROM trades WHERE date(created_at, 'unixepoch') = date('now'))`,
+        avg_rating: sql<number>`(SELECT COALESCE(AVG(avg_rating), 0) FROM agents WHERE status = 'active' AND avg_rating IS NOT NULL)`,
       }).from(agents).limit(1).catch(() => []),
       db.select({
         id: trades.id,
