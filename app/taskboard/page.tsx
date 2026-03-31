@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 const s = {
@@ -104,7 +104,14 @@ export default function TaskBoardPage() {
  },
  ]
 
- const loadTasks = useCallback(() => {
+ const [fetchTrigger, setFetchTrigger] = useState(0)
+
+ useEffect(() => {
+ let cancelled = false
+ let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+ async function doFetch() {
+ if (cancelled) return
  setLoading(true)
  setFetchError(null)
  const params = new URLSearchParams({ status: activeTab, limit: '50' })
@@ -112,21 +119,27 @@ export default function TaskBoardPage() {
  if (taskType) params.set('task_type', taskType)
  const controller = new AbortController()
  const timeout = setTimeout(() => controller.abort(), 10000)
- fetch(`/api/tasks?${params}`, { cache: 'no-store', signal: controller.signal })
- .then(r => { clearTimeout(timeout); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
- .then(d => { setTasks(d.tasks || []); setLoading(false) })
- .catch((err: any) => {
+ try {
+ const r = await fetch(`/api/tasks?${params}`, { cache: 'no-store', signal: controller.signal })
  clearTimeout(timeout)
- const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err.message
+ if (!r.ok) throw new Error(`HTTP ${r.status}`)
+ const d = await r.json()
+ if (!cancelled) { setTasks(d.tasks || []); setLoading(false) }
+ } catch (err: any) {
+ clearTimeout(timeout)
+ if (cancelled) return
+ const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err?.message
  console.error('[/taskboard] fetch failed:', msg)
- setFetchError('Failed to load tasks. Please try again.')
+ setFetchError('Failed to load tasks. Retrying in 5s...')
  setTasks([])
  setLoading(false)
- })
- return () => { clearTimeout(timeout); controller.abort() }
- }, [activeTab, filter, taskType])
+ retryTimer = setTimeout(doFetch, 5000)
+ }
+ }
 
- useEffect(() => { loadTasks() }, [loadTasks])
+ doFetch()
+ return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer) }
+ }, [activeTab, filter, taskType, fetchTrigger])
 
  const filtered = tasks.filter(t =>
  !filter ||
@@ -269,7 +282,7 @@ export default function TaskBoardPage() {
  {!loading && fetchError && (
  <div style={s.emptyBox}>
  <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 12 }}>{fetchError}</p>
- <button onClick={loadTasks} style={{ ...s.btn('outline'), fontSize: 12, padding: '8px 16px' }}>Retry</button>
+ <button onClick={() => setFetchTrigger(n => n + 1)} style={{ ...s.btn('outline'), fontSize: 12, padding: '8px 16px' }}>Retry</button>
  </div>
  )}
 
@@ -277,7 +290,7 @@ export default function TaskBoardPage() {
  <div style={s.emptyBox}>
  <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
  <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>
- {activeTab === 'open' ? 'No open tasks. Post the first one.' : `No ${activeTab} tasks`}
+ {activeTab === 'open' ? 'No open tasks yet. Post the first one.' : `No ${activeTab} tasks`}
  </h2>
  <p style={{ color: '#8b949e', fontSize: 16, maxWidth: 400, margin: '0 auto 24px', lineHeight: 1.6 }}>
  {activeTab === 'open'
@@ -423,7 +436,7 @@ export default function TaskBoardPage() {
  } else if (data.ok) {
  setShowPostModal(false)
  setForm({ title:'', description:'', capabilities:'', budget_usd:'', deadline_at:'' })
- loadTasks()
+ setFetchTrigger(n => n + 1)
  alert(`Task posted! ID: ${data.task_id}`)
  } else {
  alert(`Error: ${data.message || data.error}`)

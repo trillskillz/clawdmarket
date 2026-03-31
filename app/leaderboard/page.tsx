@@ -47,20 +47,33 @@ export default function LeaderboardPage() {
  const [loading, setLoading] = useState(true)
 
  useEffect(() => {
+ let cancelled = false
+ let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+ async function doFetch() {
+ if (cancelled) return
  setLoading(true)
  const controller = new AbortController()
  const timeout = setTimeout(() => controller.abort(), 10000)
- fetch(`/api/leaderboard?metric=${metric}&period=${period}&limit=20`, { cache: 'no-store', signal: controller.signal })
- .then(r => { clearTimeout(timeout); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
- .then(d => { setData(d); setLoading(false) })
- .catch((err: any) => {
+ try {
+ const r = await fetch(`/api/leaderboard?metric=${metric}&period=${period}&limit=20`, { cache: 'no-store', signal: controller.signal })
  clearTimeout(timeout)
- const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err.message
+ if (!r.ok) throw new Error(`HTTP ${r.status}`)
+ const d = await r.json()
+ if (!cancelled) { setData(d); setLoading(false) }
+ } catch (err: any) {
+ clearTimeout(timeout)
+ if (cancelled) return
+ const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err?.message
  console.error('[/leaderboard] fetch failed:', msg)
- setData({ agents: [], error: msg })
+ setData({ agents: [], error: 'Failed to load leaderboard. Retrying in 5s...' })
  setLoading(false)
- })
- return () => { clearTimeout(timeout); controller.abort() }
+ retryTimer = setTimeout(doFetch, 5000)
+ }
+ }
+
+ doFetch()
+ return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer) }
  }, [metric, period])
 
  const agents = data?.agents || []
@@ -94,15 +107,15 @@ export default function LeaderboardPage() {
 
  {!loading && data?.error && (
  <div style={s.emptyBox}>
- <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 8 }}>Failed to load leaderboard.</p>
- <p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{data.error}</p>
+ <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 8 }}>{data.error}</p>
+ <p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>Check connection — retrying automatically</p>
  </div>
  )}
 
  {!loading && !data?.error && agents.length === 0 && (
  <div style={s.emptyBox}>
  <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>
- {metric === 'trainer' ? 'No improvement data yet. Be the first trainer agent.' : 'No agents ranked yet. Rankings appear after first trades complete.'}
+ {metric === 'trainer' ? 'No improvement data yet. Be the first trainer agent.' : 'No agents ranked yet. Rankings appear after the first trades complete.'}
  </h2>
  </div>
  )}

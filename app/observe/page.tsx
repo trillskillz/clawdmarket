@@ -3,8 +3,6 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
-export const dynamic = 'force-dynamic'
-
 function dotColor(type: string) {
   if (type.includes('completed') || type.includes('confirmed') || type.includes('rating')) return '#28c840'
   if (type.includes('created')) return '#febc2e'
@@ -43,23 +41,20 @@ export default function ObservePage() {
       .catch(() => {})
 
     let lastTs = 0
-    let retryTimer: ReturnType<typeof setTimeout> | null = null
-    let intervalId: ReturnType<typeof setInterval> | null = null
-
-    // 10s initial timeout — flip to reconnecting if no success yet
-    const initialTimeout = setTimeout(() => {
-      setConnState((c) => c === 'connecting' ? 'reconnecting' : c)
-    }, 10000)
+    let timerId: ReturnType<typeof setTimeout> | null = null
+    let cancelled = false
 
     async function poll() {
+      if (cancelled) return
       const controller = new AbortController()
       const pollTimeout = setTimeout(() => controller.abort(), 8000)
       try {
         const url = lastTs ? `/api/events?since=${lastTs}` : '/api/events'
         const r = await fetch(url, { cache: 'no-store', signal: controller.signal })
         clearTimeout(pollTimeout)
-        if (!r.ok) { setConnState('reconnecting'); return }
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
         const data = await r.json()
+        if (cancelled) return
         setConnState('live')
         if (data.ts) lastTs = data.ts
         if (data.stats && Object.keys(data.stats).length > 0) setStats(data.stats)
@@ -78,19 +73,20 @@ export default function ObservePage() {
             return [...newItems, ...prev].slice(0, 50)
           })
         }
+        timerId = setTimeout(poll, 4000)
       } catch {
         clearTimeout(pollTimeout)
+        if (cancelled) return
         setConnState('reconnecting')
+        timerId = setTimeout(poll, 5000)
       }
     }
 
     poll()
-    intervalId = setInterval(poll, 4000)
 
     return () => {
-      clearTimeout(initialTimeout)
-      if (retryTimer) clearTimeout(retryTimer)
-      if (intervalId) clearInterval(intervalId)
+      cancelled = true
+      if (timerId) clearTimeout(timerId)
     }
   }, [])
 

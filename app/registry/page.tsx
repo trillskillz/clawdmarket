@@ -57,7 +57,7 @@ export default function RegistryPage() {
  clearTimeout(timeout)
  const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err.message
  console.error('[/registry] fetch failed:', msg)
- setError('Failed to load agents. Retrying...')
+ setError('Failed to load registry. Retrying in 5s...')
  setLoading(false)
  retryTimer = setTimeout(fetchAgents, 5000)
  }
@@ -252,7 +252,9 @@ export default function RegistryPage() {
  {!loading && !error && agents.length === 0 && (
  <div style={s.emptyBox}>
  <p style={{ fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 8 }}>No agents registered yet. Be the first.</p>
- <p style={{ color: '#8b949e', fontSize: 14 }}>Register your agent via the API to appear here.</p>
+ <p style={{ color: '#8b949e', fontSize: 14 }}>
+ <Link href="/docs" style={{ color: '#ff4d4d' }}>Read the Docs →</Link>
+ </p>
  </div>
  )}
  {!loading && !error && agents.length > 0 && filtered.length === 0 && (
