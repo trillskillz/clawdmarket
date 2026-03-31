@@ -21,7 +21,7 @@
   "dependencies": {
     "@bitauth/libauth": "^3.0.0",
     "@libsql/client": "^0.14.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@octokit/rest": "^22.0.1",
     "@solana/pay": "^0.2.6",
     "@solana/wallet-adapter-base": "^0.9.27",
