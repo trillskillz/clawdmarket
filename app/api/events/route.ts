@@ -1,84 +1,44 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { desc, eq, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
+import { agents, trades } from '@/lib/schema'
 
+export const maxDuration = 10
+export const revalidate = 0
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: NextRequest) {
- const encoder = new TextEncoder()
+export async function GET(_req: NextRequest) {
+  try {
+    const [statsRows, latestTrades, latestAgents] = await Promise.all([
+      db.select({
+        agent_count: sql<number>`(SELECT COUNT(*) FROM agents WHERE status = 'active')`,
+        total_trades: sql<number>`(SELECT COUNT(*) FROM trades)`,
+        completed_trades: sql<number>`(SELECT COUNT(*) FROM trades WHERE status IN ('completed', 'complete'))`,
+        trades_today: sql<number>`(SELECT COUNT(*) FROM trades WHERE date(created_at) = date('now'))`,
+      }).from(agents).limit(1).catch(() => []),
+      db.select({
+        id: trades.id,
+        buyer_id: trades.buyer_id,
+        seller_id: trades.seller_id,
+        status: trades.status,
+        created_at: trades.created_at,
+        buyer_name: sql<string>`(SELECT name FROM agents WHERE id = ${trades.buyer_id})`,
+        seller_name: sql<string>`(SELECT name FROM agents WHERE id = ${trades.seller_id})`,
+      }).from(trades).orderBy(desc(trades.created_at)).limit(5).catch(() => []),
+      db.select({
+        id: agents.id,
+        name: agents.name,
+        created_at: agents.created_at,
+      }).from(agents).where(eq(agents.status, 'active')).orderBy(desc(agents.created_at)).limit(5).catch(() => []),
+    ])
 
- const stream = new ReadableStream({
-  async start(controller) {
-   const send = (data: object) => {
-    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-   }
-
-   const stats = await (db as any).$client.execute(
-    `SELECT
-      (SELECT COUNT(*) FROM agents WHERE status='active') as agent_count,
-      (SELECT COUNT(*) FROM trades) as total_trades,
-      (SELECT COUNT(*) FROM trades WHERE status='completed') as completed_trades,
-      (SELECT COUNT(*) FROM trades WHERE date(created_at) = date('now')) as trades_today`
-   ).catch(() => null)
-
-   send({ type: 'stats', data: stats?.rows?.[0] || {} })
-
-   let lastId = ''
-   const interval = setInterval(async () => {
-    try {
-     const trades = await (db as any).$client.execute(
-      `SELECT t.id, t.buyer_id, t.seller_id, t.status,
-      t.amount, t.created_at,
-      a1.name as buyer_name,
-      a2.name as seller_name
-      FROM trades t
-      LEFT JOIN agents a1 ON a1.id = t.buyer_id
-      LEFT JOIN agents a2 ON a2.id = t.seller_id
-      ORDER BY t.created_at DESC LIMIT 1`
-     ).catch(() => null)
-
-     const latest = trades?.rows?.[0]
-     if (latest && String(latest.id) !== lastId) {
-      lastId = String(latest.id)
-      send({ type: 'trade', data: latest })
-
-      const newStats = await (db as any).$client.execute(
-       `SELECT
-        (SELECT COUNT(*) FROM agents WHERE status='active') as agent_count,
-        (SELECT COUNT(*) FROM trades) as total_trades,
-        (SELECT COUNT(*) FROM trades WHERE status='completed') as completed_trades,
-        (SELECT COUNT(*) FROM trades WHERE date(created_at) = date('now')) as trades_today`
-      ).catch(() => null)
-      send({ type: 'stats', data: newStats?.rows?.[0] || {} })
-     }
-
-     const agents = await (db as any).$client.execute(
-      `SELECT id, name, capabilities, created_at
-      FROM agents
-      ORDER BY created_at DESC LIMIT 1`
-     ).catch(() => null)
-
-     const latestAgent = agents?.rows?.[0]
-     if (latestAgent) {
-      send({ type: 'agent', data: latestAgent })
-     }
-
-     send({ type: 'ping', ts: Date.now() })
-    } catch {}
-   }, 3000)
-
-   request.signal.addEventListener('abort', () => {
-    clearInterval(interval)
-    controller.close()
-   })
-  },
- })
-
- return new Response(stream, {
-  headers: {
-   'Content-Type': 'text/event-stream',
-   'Cache-Control': 'no-cache',
-   Connection: 'keep-alive',
-   'X-Accel-Buffering': 'no',
-  },
- })
+    return NextResponse.json({
+      stats: statsRows[0] ?? {},
+      trades: latestTrades,
+      agents: latestAgents,
+      ts: Date.now(),
+    })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
 }

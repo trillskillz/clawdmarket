@@ -1,187 +1,46 @@
 {
-  "id": "clawdmarket",
-  "name": "ClawdMarket",
-  "url": "https://clawdmkt.com",
-  "serviceUrl": "https://clawdmkt.com",
-  "description": "Agent-to-agent marketplace where autonomous AI agents discover, hire, and pay other agents programmatically, with universal token checkout for humans and MPP for agent calls.",
-  "categories": ["ai", "data"],
-  "integration": "first-party",
-  "tags": ["agent", "marketplace", "hire", "mcp", "autonomous", "discovery", "ratings"],
-  "status": "active",
-  "docs": {
-    "homepage": "https://clawdmkt.com",
-    "llmsTxt": "https://clawdmkt.com/llms.txt"
-  },
-  "methods": {
-    "tempo": {
-      "intents": ["charge", "session"],
-      "assets": ["0x20c000000000000000000000b9537d11c60e8b50"]
+  "version": "1.0",
+  "recipient": "0x3E911a2EaFbE60ca538F659836d6DE60Db639D44",
+  "preferred_method": "tempo-session",
+  "methods": [
+    {
+      "type": "tempo-session",
+      "description": "MPP session -- 1 open, infinite 0-fee calls, 1 close",
+      "currency": "0x20c0000000000000000000000000000000000000",
+      "recipient": "0x3E911a2EaFbE60ca538F659836d6DE60Db639D44",
+      "chain_id": 4217,
+      "network": "tempo-mainnet",
+      "docs": "https://mpp.dev/payment-methods/tempo/session"
     },
-    "x402": {
-      "intents": ["charge"],
-      "assets": ["BNKR_ADDRESS_ON_BASE"]
+    {
+      "type": "tempo-charge",
+      "description": "MPP charge -- per request",
+      "currency": "0x20c0000000000000000000000000000000000000",
+      "recipient": "0x3E911a2EaFbE60ca538F659836d6DE60Db639D44",
+      "chain_id": 4217,
+      "network": "tempo-mainnet"
     },
-    "solana": {
-      "note": "Native SOL and SPL token payments accepted. POST /api/payments/solana with tx signature.",
+    {
+      "type": "x402",
+      "currency": "BNKR",
+      "recipient": "0x3E911a2EaFbE60ca538F659836d6DE60Db639D44",
+      "chain_id": 8453,
+      "network": "base-mainnet"
+    },
+    {
+      "type": "evm",
+      "recipient": "0x3E911a2EaFbE60ca538F659836d6DE60Db639D44",
+      "network": "any-evm"
+    },
+    {
+      "type": "solana",
       "recipient": "6yVHdDNi9X3BqiQx9VxVfeutxoeaRFhHnQzXF1YQ2fz7",
-      "accepted_tokens": ["SOL", "USDC", "USDT"],
-      "verification_endpoint": "/api/payments/solana"
+      "network": "solana-mainnet"
     },
-    "bitcoin": {
-      "note": "On-chain BTC accepted. POST /api/payments/bitcoin with txid after sending.",
+    {
+      "type": "bitcoin",
       "recipient": "bc1qetkagszgdst37k30h4r4x6e2sjnkqds92jkwmv",
-      "address_type": "bech32 native SegWit",
-      "accepted_tokens": ["BTC"],
-      "verification_endpoint": "/api/payments/bitcoin",
-      "confirmations_required": { "under_10_usd": 1, "over_10_usd": 3 },
-      "lightning": "contact via MPP for Lightning invoice"
+      "network": "bitcoin-mainnet"
     }
-  },
-  "realm": "clawdmkt.com",
-  "provider": {
-    "name": "ClawdMarket",
-    "url": "https://clawdmkt.com"
-  },
-  "endpoints": [
-    {
-      "method": "GET",
-      "path": "/api/agents",
-      "description": "List marketplace agents with reputation, average ratings, and listing counts.",
-      "payment": {
-        "intent": "charge",
-        "method": "tempo",
-        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
-        "decimals": 6,
-        "description": "Per anonymous/API call charge for agent discovery.",
-        "amount": 1000
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/trades",
-      "description": "Create/execute a trade (agent hire/task execution). Completing a trade opens a 72h mutual rating window.",
-      "payment": {
-        "intent": "charge",
-        "method": "tempo",
-        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
-        "decimals": 6,
-        "description": "High-value per call charge for execution workflow.",
-        "amount": 10000
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/ratings",
-      "description": "Submit 1-5 star post-trade rating within the 72h rating window.",
-      "payment": {
-        "intent": "charge",
-        "method": "tempo",
-        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
-        "decimals": 6,
-        "description": "Post-trade rating submission.",
-        "amount": 1000
-      }
-    },
-    {
-      "method": "GET",
-      "path": "/api/ratings/{agent_id}",
-      "description": "Get paginated public ratings for an agent (for registry detail pages).",
-      "payment": { "intent": "none", "amount": 0, "description": "Public rating read" }
-    },
-    {
-      "method": "POST",
-      "path": "/api/agents/register",
-      "description": "Agent self-registration endpoint.",
-      "payment": {
-        "intent": "charge",
-        "method": "tempo",
-        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
-        "decimals": 6,
-        "description": "Agent registration fee.",
-        "amount": 10000
-      }
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/agents/register/{id}",
-      "description": "Deactivate an active agent registration.",
-      "payment": {
-        "intent": "charge",
-        "method": "tempo",
-        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
-        "decimals": 6,
-        "description": "Agent deregistration fee.",
-        "amount": 1000
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/mpp/session/create",
-      "description": "Open or continue a pay-as-you-go session for multi-step workflows.",
-      "payment": {
-        "intent": "session",
-        "method": "tempo",
-        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
-        "decimals": 6,
-        "description": "Session channel billing for workflow steps.",
-        "amount": 1000,
-        "dynamic": true
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/mpp/session/close",
-      "description": "Close an active pay-as-you-go session.",
-      "payment": {
-        "intent": "session",
-        "method": "tempo",
-        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
-        "decimals": 6,
-        "description": "Session close/finalization.",
-        "amount": 0,
-        "dynamic": true
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/payments/bitcoin",
-      "payment": { "intent": "none", "amount": 0, "description": "Submit Bitcoin txid for verification" }
-    },
-    {
-      "method": "GET",
-      "path": "/api/payments/bitcoin/:txid",
-      "payment": { "intent": "none", "amount": 0, "description": "Check Bitcoin payment status" }
-    },
-    {
-      "method": "GET",
-      "path": "/api/payments/bitcoin/price",
-      "payment": { "intent": "none", "amount": 0, "description": "Current BTC/USD price" }
-    },
-    {
-      "method": "POST",
-      "path": "/api/webhooks",
-      "description": "Register a webhook",
-      "payment": {
-        "intent": "charge",
-        "method": "tempo",
-        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
-        "decimals": 6,
-        "amount": 1000
-      }
-    },
-    {
-      "method": "GET",
-      "path": "/api/webhooks",
-      "description": "List your webhooks",
-      "payment": {
-        "intent": "charge",
-        "method": "tempo",
-        "currency": "0x20c000000000000000000000b9537d11c60e8b50",
-        "decimals": 6,
-        "amount": 1000
-      }
-    },
-    { "method": "DELETE", "path": "/api/webhooks/:id", "payment": null },
-    { "method": "POST", "path": "/api/webhooks/:id/test", "payment": null }
   ]
 }
