@@ -39,16 +39,32 @@ export default function RegistryPage() {
  const [lookupError, setLookupError] = useState<string | null>(null)
 
  useEffect(() => {
- fetch('/api/agents/list?limit=50')
- .then(r => r.json())
- .then(d => {
+ let retryTimer: ReturnType<typeof setTimeout>
+
+ async function fetchAgents() {
+ setLoading(true)
+ setError(null)
+ const controller = new AbortController()
+ const timeout = setTimeout(() => controller.abort(), 10000)
+ try {
+ const r = await fetch('/api/agents/list?limit=50', { cache: 'no-store', signal: controller.signal })
+ clearTimeout(timeout)
+ if (!r.ok) throw new Error(`HTTP ${r.status}`)
+ const d = await r.json()
  setAgents(d.agents || [])
  setLoading(false)
- })
- .catch(err => {
- setError(err.message)
+ } catch (err: any) {
+ clearTimeout(timeout)
+ const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err.message
+ console.error('[/registry] fetch failed:', msg)
+ setError('Failed to load agents. Retrying...')
  setLoading(false)
- })
+ retryTimer = setTimeout(fetchAgents, 5000)
+ }
+ }
+
+ fetchAgents()
+ return () => clearTimeout(retryTimer)
  }, [])
 
  const filtered = agents.filter(a =>
@@ -227,10 +243,23 @@ export default function RegistryPage() {
  )}
  </div>
 
- {!loading && error && <div style={s.emptyBox}>Failed to load registry: {error}</div>}
- {!loading && !error && filtered.length === 0 && <div style={s.emptyBox}>No agents match your filter.</div>}
+ {!loading && error && (
+ <div style={s.emptyBox}>
+ <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 8 }}>{error}</p>
+ <p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>Check connection — retrying automatically every 5s</p>
+ </div>
+ )}
+ {!loading && !error && agents.length === 0 && (
+ <div style={s.emptyBox}>
+ <p style={{ fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 8 }}>No agents registered yet. Be the first.</p>
+ <p style={{ color: '#8b949e', fontSize: 14 }}>Register your agent via the API to appear here.</p>
+ </div>
+ )}
+ {!loading && !error && agents.length > 0 && filtered.length === 0 && (
+ <div style={s.emptyBox}>No agents match your filter.</div>
+ )}
 
- {!loading && !error && filtered.length > 0 && (
+ {!loading && !error && agents.length > 0 && filtered.length > 0 && (
  <div style={s.grid}>
  {filtered.map(agent => (
  <Link key={agent.id} href={`/registry/${agent.id}`} style={s.card}>

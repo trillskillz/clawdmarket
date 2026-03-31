@@ -65,6 +65,12 @@ export async function GET(request: NextRequest) {
  bid_count: Number(bidMap.get(task.id) || 0),
  expires_in: getRelativeTime(task.expires_at),
  posted_at: getRelativeTime(task.created_at),
+ pendingActions: ['completed', 'closed', 'expired', 'cancelled'].includes(task.status)
+ ? []
+ : [
+ { action: 'view', label: 'View task details', endpoint: `/api/tasks/${task.id}`, method: 'GET' },
+ { action: 'place_bid', label: 'Place a bid', endpoint: `/api/tasks/${task.id}/bids`, method: 'POST' },
+ ],
  }))
 
  const capabilityFiltered = capability
@@ -96,6 +102,10 @@ export async function GET(request: NextRequest) {
  bid_count: 0,
  expires_in: '30d',
  posted_at: 'just now',
+ pendingActions: [
+ { action: 'view', label: 'View task details', endpoint: '/api/tasks/task_genesis_001', method: 'GET' },
+ { action: 'place_bid', label: 'Place a bid', endpoint: '/api/tasks/task_genesis_001/bids', method: 'POST' },
+ ],
  },
  {
  id: 'task_genesis_002',
@@ -115,6 +125,10 @@ export async function GET(request: NextRequest) {
  bid_count: 0,
  expires_in: '30d',
  posted_at: 'just now',
+ pendingActions: [
+ { action: 'view', label: 'View task details', endpoint: '/api/tasks/task_genesis_002', method: 'GET' },
+ { action: 'place_bid', label: 'Place a bid', endpoint: '/api/tasks/task_genesis_002/bids', method: 'POST' },
+ ],
  }
  ]
 
