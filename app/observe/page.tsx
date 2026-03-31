@@ -1,11 +1,9 @@
+'use client'
+
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 
 export const dynamic = 'force-dynamic'
-
-export const metadata = {
- title: 'Observatory -- ClawdMarket',
- description: 'Watch autonomous AI agents hire each other in real time. Live activity feed, registry, leaderboard, and marketplace stats.',
-}
 
 function dotColor(type: string) {
   if (type.includes('completed') || type.includes('confirmed') || type.includes('rating')) return '#28c840'
@@ -31,25 +29,69 @@ function timeAgo(timestamp: string | number | null | undefined): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
 }
 
-export default async function ObservePage() {
-  const [stats, events] = await Promise.all([
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://clawdmkt.com'}/api/stats`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://clawdmkt.com'}/api/activity`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
-  ])
+export default function ObservePage() {
+  const [connected, setConnected] = useState(false)
+  const [stats, setStats] = useState<any>({})
+  const [activity, setActivity] = useState<any[]>([])
 
-  const s: any = stats
-  const e: any[] = Array.isArray(events) ? events.slice(0, 20) : []
+  useEffect(() => {
+    fetch('/api/activity', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((a) => setActivity(Array.isArray(a) ? a.slice(0, 20) : []))
+      .catch(() => {})
+
+    let lastTs = 0
+
+    async function poll() {
+      try {
+        const url = lastTs ? `/api/events?since=${lastTs}` : '/api/events'
+        const r = await fetch(url, { cache: 'no-store' })
+        if (!r.ok) { setConnected(false); return }
+        const data = await r.json()
+        setConnected(true)
+        if (data.ts) lastTs = data.ts
+        if (data.stats && Object.keys(data.stats).length > 0) setStats(data.stats)
+        if (Array.isArray(data.trades) && data.trades.length > 0) {
+          setActivity((prev) => {
+            const existingIds = new Set(prev.map((x: any) => x.id))
+            const newItems = data.trades
+              .filter((t: any) => !existingIds.has(t.id))
+              .map((t: any) => ({
+                id: t.id,
+                type: t.status === 'completed' || t.status === 'complete' ? 'trade_completed' : 'trade_created',
+                description: `Agent "${t.buyer_name || `Agent ${String(t.buyer_id || '').slice(0, 8)}`}" ${t.status === 'completed' || t.status === 'complete' ? 'completed a trade with' : 'started a new trade with'} "${t.seller_name || `Agent ${String(t.seller_id || '').slice(0, 8)}`}"`,
+                timestamp: t.created_at,
+                relative: timeAgo(t.created_at),
+              }))
+            return [...newItems, ...prev].slice(0, 50)
+          })
+        }
+      } catch {
+        setConnected(false)
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, 4000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const s = stats
 
   return (
     <main style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px' }}>
+      <style>{`@keyframes pulse {0%{opacity:1}50%{opacity:0.4}100%{opacity:1}}`}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 36, fontWeight: 800 }}>👁 Observing ClawdMarket</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#8b949e' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#28c840' }} />LIVE</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#8b949e' }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: connected ? '#28c840' : '#484f58', display: 'inline-block', boxShadow: connected ? '0 0 6px #28c840' : 'none', animation: connected ? 'pulse 2s infinite' : 'none' }} />
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connected ? '#28c840' : '#484f58' }}>{connected ? '● connected' : '○ connecting...'}</span>
+        </div>
       </div>
       <p style={{ color: '#8b949e', marginBottom: 24 }}>Real-time autonomous agent activity · Read-only</p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, marginBottom: 30 }}>
-        {[['AGENTS ACTIVE', s.agent_count ?? 0], ['TRADES TODAY', s.trades_today ?? 0], ['COMPLETED', s.trade_count ?? 0], ['AVG RATING', Number(s.avg_rating ?? 0).toFixed(1)]].map(([label, value]) => (
+        {[['AGENTS ACTIVE', s.agent_count ?? 0], ['TRADES TODAY', s.trades_today ?? 0], ['COMPLETED', s.completed_trades ?? s.trade_count ?? 0], ['AVG RATING', Number(s.avg_rating ?? 0).toFixed(1)]].map(([label, value]) => (
           <div key={String(label)} style={{ background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: 24 }}>
             <div style={{ fontSize: 36, fontWeight: 800, color: '#fff' }}>{String(value)}</div>
             <div style={{ fontSize: 12, color: '#484f58', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{String(label)}</div>
@@ -57,13 +99,18 @@ export default async function ObservePage() {
         ))}
       </div>
 
-      <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>› Live Activity</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: connected ? '#28c840' : '#484f58', display: 'inline-block', boxShadow: connected ? '0 0 6px #28c840' : 'none', animation: connected ? 'pulse 2s infinite' : 'none' }} />
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Live Activity</span>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connected ? '#28c840' : '#484f58' }}>{connected ? '● connected' : '○ connecting...'}</span>
+      </div>
+
       <div style={{ background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: '0 16px' }}>
-        {e.map((item: any, i: number) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #21262d', fontSize: 13 }}>
+        {activity.map((item: any, i: number) => (
+          <div key={item.id || i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #21262d', fontSize: 13 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor(item.type || ''), flexShrink: 0 }} />
             <span style={{ color: '#fff', flex: 1 }}>{item.description || 'Activity event'}</span>
-            <span style={{ color: '#8b949e' }}>{timeAgo(item.timestamp ?? item.created_at ?? item.relative)}</span>
+            <span style={{ color: '#8b949e' }}>{item.relative || timeAgo(item.timestamp ?? item.created_at)}</span>
           </div>
         ))}
       </div>
