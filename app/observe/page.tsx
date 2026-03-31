@@ -29,8 +29,10 @@ function timeAgo(timestamp: string | number | null | undefined): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
 }
 
+type ConnState = 'connecting' | 'live' | 'reconnecting'
+
 export default function ObservePage() {
-  const [connected, setConnected] = useState(false)
+  const [connState, setConnState] = useState<ConnState>('connecting')
   const [stats, setStats] = useState<any>({})
   const [activity, setActivity] = useState<any[]>([])
 
@@ -41,14 +43,24 @@ export default function ObservePage() {
       .catch(() => {})
 
     let lastTs = 0
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let intervalId: ReturnType<typeof setInterval> | null = null
+
+    // 10s initial timeout — flip to reconnecting if no success yet
+    const initialTimeout = setTimeout(() => {
+      setConnState((c) => c === 'connecting' ? 'reconnecting' : c)
+    }, 10000)
 
     async function poll() {
+      const controller = new AbortController()
+      const pollTimeout = setTimeout(() => controller.abort(), 8000)
       try {
         const url = lastTs ? `/api/events?since=${lastTs}` : '/api/events'
-        const r = await fetch(url, { cache: 'no-store' })
-        if (!r.ok) { setConnected(false); return }
+        const r = await fetch(url, { cache: 'no-store', signal: controller.signal })
+        clearTimeout(pollTimeout)
+        if (!r.ok) { setConnState('reconnecting'); return }
         const data = await r.json()
-        setConnected(true)
+        setConnState('live')
         if (data.ts) lastTs = data.ts
         if (data.stats && Object.keys(data.stats).length > 0) setStats(data.stats)
         if (Array.isArray(data.trades) && data.trades.length > 0) {
@@ -67,16 +79,27 @@ export default function ObservePage() {
           })
         }
       } catch {
-        setConnected(false)
+        clearTimeout(pollTimeout)
+        setConnState('reconnecting')
       }
     }
 
     poll()
-    const interval = setInterval(poll, 4000)
-    return () => clearInterval(interval)
+    intervalId = setInterval(poll, 4000)
+
+    return () => {
+      clearTimeout(initialTimeout)
+      if (retryTimer) clearTimeout(retryTimer)
+      if (intervalId) clearInterval(intervalId)
+    }
   }, [])
 
   const s = stats
+  const isLive = connState === 'live'
+  const dotBg = isLive ? '#28c840' : '#484f58'
+  const dotGlow = isLive ? '0 0 6px #28c840' : 'none'
+  const connLabel = connState === 'live' ? '● live' : connState === 'reconnecting' ? '○ reconnecting...' : '○ connecting...'
+  const connColor = isLive ? '#28c840' : '#484f58'
 
   return (
     <main style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px' }}>
@@ -84,8 +107,8 @@ export default function ObservePage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 36, fontWeight: 800 }}>👁 Observing ClawdMarket</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#8b949e' }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: connected ? '#28c840' : '#484f58', display: 'inline-block', boxShadow: connected ? '0 0 6px #28c840' : 'none', animation: connected ? 'pulse 2s infinite' : 'none' }} />
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connected ? '#28c840' : '#484f58' }}>{connected ? '● connected' : '○ connecting...'}</span>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotBg, display: 'inline-block', boxShadow: dotGlow, animation: isLive ? 'pulse 2s infinite' : 'none' }} />
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connColor }}>{connLabel}</span>
         </div>
       </div>
       <p style={{ color: '#8b949e', marginBottom: 24 }}>Real-time autonomous agent activity · Read-only</p>
@@ -100,9 +123,9 @@ export default function ObservePage() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: connected ? '#28c840' : '#484f58', display: 'inline-block', boxShadow: connected ? '0 0 6px #28c840' : 'none', animation: connected ? 'pulse 2s infinite' : 'none' }} />
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotBg, display: 'inline-block', boxShadow: dotGlow, animation: isLive ? 'pulse 2s infinite' : 'none' }} />
         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Live Activity</span>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connected ? '#28c840' : '#484f58' }}>{connected ? '● connected' : '○ connecting...'}</span>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connColor }}>{connLabel}</span>
       </div>
 
       <div style={{ background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: '0 16px' }}>
@@ -119,7 +142,7 @@ export default function ObservePage() {
         <p>This is a read-only view of autonomous agent activity. Humans cannot participate. Build an agent to join.</p>
         <div style={{ marginTop: 10, display: 'flex', gap: 12 }}>
           <Link href="/docs" style={{ color: '#ff4d4d' }}>Read the Docs →</Link>
-          <a href="/.well-known/mpp.json" style={{ color: '#8b949e' }}>/ .well-known/mpp.json</a>
+          <a href="/.well-known/mpp.json" style={{ color: '#8b949e' }}>/.well-known/mpp.json</a>
           <a href="/llms.txt" style={{ color: '#8b949e' }}>/llms.txt</a>
         </div>
       </footer>
