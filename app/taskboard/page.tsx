@@ -107,11 +107,6 @@ export default function TaskBoardPage() {
  const [fetchTrigger, setFetchTrigger] = useState(0)
 
  useEffect(() => {
- let cancelled = false
- let retryTimer: ReturnType<typeof setTimeout> | null = null
-
- async function doFetch() {
- if (cancelled) return
  setLoading(true)
  setFetchError(null)
  const params = new URLSearchParams({ status: activeTab, limit: '50' })
@@ -119,26 +114,20 @@ export default function TaskBoardPage() {
  if (taskType) params.set('task_type', taskType)
  const controller = new AbortController()
  const timeout = setTimeout(() => controller.abort(), 10000)
- try {
- const r = await fetch(`/api/tasks?${params}`, { cache: 'no-store', signal: controller.signal })
+ fetch(`/api/tasks?${params}`, { signal: controller.signal })
+ .then(r => { clearTimeout(timeout); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+ .then(d => {
+ setTasks(d.tasks ?? [])
+ setLoading(false)
+ })
+ .catch(e => {
  clearTimeout(timeout)
- if (!r.ok) throw new Error(`HTTP ${r.status}`)
- const d = await r.json()
- if (!cancelled) { setTasks(d.tasks || []); setLoading(false) }
- } catch (err: any) {
- clearTimeout(timeout)
- if (cancelled) return
- const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err?.message
- console.error('[/taskboard] fetch failed:', msg)
- setFetchError('Failed to load tasks. Retrying in 5s...')
+ console.error('[taskboard] fetch failed:', e)
+ setFetchError('Failed to load tasks.')
  setTasks([])
  setLoading(false)
- retryTimer = setTimeout(doFetch, 5000)
- }
- }
-
- doFetch()
- return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer) }
+ })
+ return () => { clearTimeout(timeout); controller.abort() }
  }, [activeTab, filter, taskType, fetchTrigger])
 
  const filtered = tasks.filter(t =>

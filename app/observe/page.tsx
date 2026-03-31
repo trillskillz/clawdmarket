@@ -35,31 +35,18 @@ export default function ObservePage() {
   const [activity, setActivity] = useState<any[]>([])
 
   useEffect(() => {
-    fetch('/api/activity', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((a) => setActivity(Array.isArray(a) ? a.slice(0, 20) : []))
-      .catch(() => {})
-
     let lastTs = 0
-    let timerId: ReturnType<typeof setTimeout> | null = null
-    let cancelled = false
-
-    async function poll() {
-      if (cancelled) return
-      const controller = new AbortController()
-      const pollTimeout = setTimeout(() => controller.abort(), 8000)
+    const poll = async () => {
       try {
         const url = lastTs ? `/api/events?since=${lastTs}` : '/api/events'
-        const r = await fetch(url, { cache: 'no-store', signal: controller.signal })
-        clearTimeout(pollTimeout)
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        const data = await r.json()
-        if (cancelled) return
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(res.statusText)
+        const data = await res.json()
         setConnState('live')
         if (data.ts) lastTs = data.ts
-        if (data.stats && Object.keys(data.stats).length > 0) setStats(data.stats)
-        if (Array.isArray(data.trades) && data.trades.length > 0) {
-          setActivity((prev) => {
+        if (data.stats) setStats(data.stats)
+        if (data.trades?.length) {
+          setActivity(prev => {
             const existingIds = new Set(prev.map((x: any) => x.id))
             const newItems = data.trades
               .filter((t: any) => !existingIds.has(t.id))
@@ -73,21 +60,14 @@ export default function ObservePage() {
             return [...newItems, ...prev].slice(0, 50)
           })
         }
-        timerId = setTimeout(poll, 4000)
-      } catch {
-        clearTimeout(pollTimeout)
-        if (cancelled) return
+      } catch (e) {
+        console.error('[observe] poll failed:', e)
         setConnState('reconnecting')
-        timerId = setTimeout(poll, 5000)
       }
     }
-
     poll()
-
-    return () => {
-      cancelled = true
-      if (timerId) clearTimeout(timerId)
-    }
+    const id = setInterval(poll, 4000)
+    return () => clearInterval(id)
   }, [])
 
   const s = stats

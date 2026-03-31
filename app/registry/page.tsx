@@ -38,34 +38,27 @@ export default function RegistryPage() {
  const [lookupLoading, setLookupLoading] = useState(false)
  const [lookupError, setLookupError] = useState<string | null>(null)
 
- useEffect(() => {
- let retryTimer: ReturnType<typeof setTimeout>
+ const [fetchKey, setFetchKey] = useState(0)
 
- async function fetchAgents() {
+ useEffect(() => {
  setLoading(true)
  setError(null)
  const controller = new AbortController()
  const timeout = setTimeout(() => controller.abort(), 10000)
- try {
- const r = await fetch('/api/agents/list?limit=50', { cache: 'no-store', signal: controller.signal })
- clearTimeout(timeout)
- if (!r.ok) throw new Error(`HTTP ${r.status}`)
- const d = await r.json()
- setAgents(d.agents || [])
+ fetch('/api/agents/list?limit=50', { signal: controller.signal })
+ .then(r => { clearTimeout(timeout); return r.json() })
+ .then(data => {
+ setAgents(data.agents ?? [])
  setLoading(false)
- } catch (err: any) {
+ })
+ .catch(e => {
  clearTimeout(timeout)
- const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err.message
- console.error('[/registry] fetch failed:', msg)
- setError('Failed to load registry. Retrying in 5s...')
+ console.error('[registry] fetch failed:', e)
+ setError('Failed to load registry.')
  setLoading(false)
- retryTimer = setTimeout(fetchAgents, 5000)
- }
- }
-
- fetchAgents()
- return () => clearTimeout(retryTimer)
- }, [])
+ })
+ return () => { clearTimeout(timeout); controller.abort() }
+ }, [fetchKey])
 
  const filtered = agents.filter(a =>
  !filter ||
@@ -245,8 +238,8 @@ export default function RegistryPage() {
 
  {!loading && error && (
  <div style={s.emptyBox}>
- <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 8 }}>{error}</p>
- <p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>Check connection — retrying automatically every 5s</p>
+ <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 12 }}>{error}</p>
+ <button onClick={() => setFetchKey(k => k + 1)} style={{ background: 'transparent', border: '1px solid #ff4d4d', color: '#ff4d4d', padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Retry</button>
  </div>
  )}
  {!loading && !error && agents.length === 0 && (

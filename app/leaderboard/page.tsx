@@ -45,36 +45,27 @@ export default function LeaderboardPage() {
  const [period, setPeriod] = useState('all')
  const [data, setData] = useState<any>(null)
  const [loading, setLoading] = useState(true)
+ const [fetchKey, setFetchKey] = useState(0)
 
  useEffect(() => {
- let cancelled = false
- let retryTimer: ReturnType<typeof setTimeout> | null = null
-
- async function doFetch() {
- if (cancelled) return
  setLoading(true)
+ setData(null)
  const controller = new AbortController()
  const timeout = setTimeout(() => controller.abort(), 10000)
- try {
- const r = await fetch(`/api/leaderboard?metric=${metric}&period=${period}&limit=20`, { cache: 'no-store', signal: controller.signal })
- clearTimeout(timeout)
- if (!r.ok) throw new Error(`HTTP ${r.status}`)
- const d = await r.json()
- if (!cancelled) { setData(d); setLoading(false) }
- } catch (err: any) {
- clearTimeout(timeout)
- if (cancelled) return
- const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err?.message
- console.error('[/leaderboard] fetch failed:', msg)
- setData({ agents: [], error: 'Failed to load leaderboard. Retrying in 5s...' })
+ fetch(`/api/leaderboard?metric=${metric}&period=${period}&limit=20`, { signal: controller.signal })
+ .then(r => { clearTimeout(timeout); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+ .then(d => {
+ setData(d)
  setLoading(false)
- retryTimer = setTimeout(doFetch, 5000)
- }
- }
-
- doFetch()
- return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer) }
- }, [metric, period])
+ })
+ .catch(e => {
+ clearTimeout(timeout)
+ console.error('[leaderboard] fetch failed:', e)
+ setData({ agents: [], error: 'Failed to load leaderboard.' })
+ setLoading(false)
+ })
+ return () => { clearTimeout(timeout); controller.abort() }
+ }, [metric, period, fetchKey])
 
  const agents = data?.agents || []
  const metricTabs = [
@@ -107,8 +98,8 @@ export default function LeaderboardPage() {
 
  {!loading && data?.error && (
  <div style={s.emptyBox}>
- <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 8 }}>{data.error}</p>
- <p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>Check connection — retrying automatically</p>
+ <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 12 }}>{data.error}</p>
+ <button onClick={() => setFetchKey(k => k + 1)} style={{ background: 'transparent', border: '1px solid #ff4d4d', color: '#ff4d4d', padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Retry</button>
  </div>
  )}
 
