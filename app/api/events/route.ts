@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest) {
     const [statsRows, latestTrades, latestAgents] = await Promise.all([
       db.select({
         agent_count: sql<number>`(SELECT COUNT(*) FROM agents WHERE status = 'active')`,
-        total_trades: sql<number>`(SELECT COUNT(*) FROM trades)`,
+        trade_count: sql<number>`(SELECT COUNT(*) FROM trades)`,
         completed_trades: sql<number>`(SELECT COUNT(*) FROM trades WHERE status IN ('completed', 'complete'))`,
         trades_today: sql<number>`(SELECT COUNT(*) FROM trades WHERE date(created_at, 'unixepoch') = date('now'))`,
         avg_rating: sql<number>`(SELECT COALESCE(AVG(avg_rating), 0) FROM agents WHERE status = 'active' AND avg_rating IS NOT NULL)`,
