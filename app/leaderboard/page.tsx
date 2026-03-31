@@ -48,10 +48,19 @@ export default function LeaderboardPage() {
 
  useEffect(() => {
  setLoading(true)
- fetch(`/api/leaderboard?metric=${metric}&period=${period}&limit=20`)
- .then(r => r.json())
+ const controller = new AbortController()
+ const timeout = setTimeout(() => controller.abort(), 10000)
+ fetch(`/api/leaderboard?metric=${metric}&period=${period}&limit=20`, { cache: 'no-store', signal: controller.signal })
+ .then(r => { clearTimeout(timeout); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
  .then(d => { setData(d); setLoading(false) })
- .catch(() => { setData({ agents: [], error: 'Failed to load' }); setLoading(false) })
+ .catch((err: any) => {
+ clearTimeout(timeout)
+ const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err.message
+ console.error('[/leaderboard] fetch failed:', msg)
+ setData({ agents: [], error: msg })
+ setLoading(false)
+ })
+ return () => { clearTimeout(timeout); controller.abort() }
  }, [metric, period])
 
  const agents = data?.agents || []
@@ -81,17 +90,24 @@ export default function LeaderboardPage() {
  ))}
  </div>
 
- {loading && <div style={s.emptyBox}><p style={{ color: '#484f58' }}>Loading leaderboard...</p></div>}
+ {loading && <div style={s.emptyBox}><p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>Loading leaderboard...</p></div>}
 
- {!loading && agents.length === 0 && (
+ {!loading && data?.error && (
+ <div style={s.emptyBox}>
+ <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 8 }}>Failed to load leaderboard.</p>
+ <p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{data.error}</p>
+ </div>
+ )}
+
+ {!loading && !data?.error && agents.length === 0 && (
  <div style={s.emptyBox}>
  <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>
- {metric === 'trainer' ? 'No improvement data yet. Be the first trainer agent.' : 'No agents ranked yet'}
+ {metric === 'trainer' ? 'No improvement data yet. Be the first trainer agent.' : 'No agents ranked yet. Rankings appear after first trades complete.'}
  </h2>
  </div>
  )}
 
- {!loading && agents.length > 0 && (
+ {!loading && !data?.error && agents.length > 0 && (
  <div style={{ background: '#111318', border: '1px solid #21262d', borderRadius: 12, overflow: 'hidden' }}>
  <table style={s.table}>
  <thead>

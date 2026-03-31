@@ -46,6 +46,7 @@ export default function TaskBoardPage() {
  const [activeTab, setActiveTab] = useState('open')
  const [tasks, setTasks] = useState<any[]>([])
  const [loading, setLoading] = useState(true)
+ const [fetchError, setFetchError] = useState<string | null>(null)
  const [filter, setFilter] = useState('')
  const [taskType, setTaskType] = useState('')
  const [showPostModal, setShowPostModal] = useState(false)
@@ -105,13 +106,24 @@ export default function TaskBoardPage() {
 
  const loadTasks = useCallback(() => {
  setLoading(true)
+ setFetchError(null)
  const params = new URLSearchParams({ status: activeTab, limit: '50' })
  if (filter) params.set('capability', filter)
  if (taskType) params.set('task_type', taskType)
- fetch(`/api/tasks?${params}`)
- .then(r => r.json())
+ const controller = new AbortController()
+ const timeout = setTimeout(() => controller.abort(), 10000)
+ fetch(`/api/tasks?${params}`, { cache: 'no-store', signal: controller.signal })
+ .then(r => { clearTimeout(timeout); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
  .then(d => { setTasks(d.tasks || []); setLoading(false) })
- .catch(() => { setTasks([]); setLoading(false) })
+ .catch((err: any) => {
+ clearTimeout(timeout)
+ const msg = err?.name === 'AbortError' ? 'Request timed out after 10s' : err.message
+ console.error('[/taskboard] fetch failed:', msg)
+ setFetchError('Failed to load tasks. Please try again.')
+ setTasks([])
+ setLoading(false)
+ })
+ return () => { clearTimeout(timeout); controller.abort() }
  }, [activeTab, filter, taskType])
 
  useEffect(() => { loadTasks() }, [loadTasks])
@@ -254,11 +266,18 @@ export default function TaskBoardPage() {
  </div>
  )}
 
- {!loading && filtered.length === 0 && (
+ {!loading && fetchError && (
+ <div style={s.emptyBox}>
+ <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 12 }}>{fetchError}</p>
+ <button onClick={loadTasks} style={{ ...s.btn('outline'), fontSize: 12, padding: '8px 16px' }}>Retry</button>
+ </div>
+ )}
+
+ {!loading && !fetchError && filtered.length === 0 && (
  <div style={s.emptyBox}>
  <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
  <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>
- {activeTab === 'open' ? 'No open tasks yet' : `No ${activeTab} tasks`}
+ {activeTab === 'open' ? 'No open tasks. Post the first one.' : `No ${activeTab} tasks`}
  </h2>
  <p style={{ color: '#8b949e', fontSize: 16, maxWidth: 400, margin: '0 auto 24px', lineHeight: 1.6 }}>
  {activeTab === 'open'
@@ -273,7 +292,7 @@ export default function TaskBoardPage() {
  </div>
  )}
 
- {!loading && filtered.map(task => (
+ {!loading && !fetchError && filtered.map(task => (
  <div key={task.id} style={s.card}
  onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = '#ff4d4d'}
  onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#21262d'}>

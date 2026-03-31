@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,10 +29,25 @@ function timeAgo(timestamp: string | number | null | undefined): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
 }
 
+type ConnState = 'connecting' | 'live' | 'reconnecting'
+
+function connDotColor(state: ConnState) {
+  if (state === 'live') return '#28c840'
+  if (state === 'reconnecting') return '#febc2e'
+  return '#484f58'
+}
+
+function connLabel(state: ConnState) {
+  if (state === 'live') return '● live'
+  if (state === 'reconnecting') return '○ reconnecting...'
+  return '○ connecting...'
+}
+
 export default function ObservePage() {
-  const [connected, setConnected] = useState(false)
+  const [connState, setConnState] = useState<ConnState>('connecting')
   const [stats, setStats] = useState<any>({})
   const [activity, setActivity] = useState<any[]>([])
+  const hasConnected = useRef(false)
 
   useEffect(() => {
     fetch('/api/activity', { cache: 'no-store' })
@@ -42,13 +57,25 @@ export default function ObservePage() {
 
     let lastTs = 0
 
+    // After 10s with no successful poll, stop showing "connecting" and show "reconnecting"
+    const initialTimeout = setTimeout(() => {
+      if (!hasConnected.current) {
+        setConnState('reconnecting')
+      }
+    }, 10000)
+
     async function poll() {
       try {
         const url = lastTs ? `/api/events?since=${lastTs}` : '/api/events'
-        const r = await fetch(url, { cache: 'no-store' })
-        if (!r.ok) { setConnected(false); return }
+        const controller = new AbortController()
+        const t = setTimeout(() => controller.abort(), 8000)
+        const r = await fetch(url, { cache: 'no-store', signal: controller.signal })
+        clearTimeout(t)
+        if (!r.ok) { setConnState(hasConnected.current ? 'reconnecting' : 'connecting'); return }
         const data = await r.json()
-        setConnected(true)
+        hasConnected.current = true
+        clearTimeout(initialTimeout)
+        setConnState('live')
         if (data.ts) lastTs = data.ts
         if (data.stats && Object.keys(data.stats).length > 0) setStats(data.stats)
         if (Array.isArray(data.trades) && data.trades.length > 0) {
@@ -66,17 +93,26 @@ export default function ObservePage() {
             return [...newItems, ...prev].slice(0, 50)
           })
         }
-      } catch {
-        setConnected(false)
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          console.error('[/observe] poll error:', err)
+        }
+        setConnState(hasConnected.current ? 'reconnecting' : 'connecting')
       }
     }
 
     poll()
     const interval = setInterval(poll, 4000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      clearTimeout(initialTimeout)
+    }
   }, [])
 
   const s = stats
+  const dotColor2 = connDotColor(connState)
+  const label = connLabel(connState)
+  const isLive = connState === 'live'
 
   return (
     <main style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px' }}>
@@ -84,8 +120,8 @@ export default function ObservePage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 36, fontWeight: 800 }}>👁 Observing ClawdMarket</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#8b949e' }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: connected ? '#28c840' : '#484f58', display: 'inline-block', boxShadow: connected ? '0 0 6px #28c840' : 'none', animation: connected ? 'pulse 2s infinite' : 'none' }} />
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connected ? '#28c840' : '#484f58' }}>{connected ? '● connected' : '○ connecting...'}</span>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor2, display: 'inline-block', boxShadow: isLive ? '0 0 6px #28c840' : 'none', animation: connState !== 'connecting' ? 'pulse 2s infinite' : 'none' }} />
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: dotColor2 }}>{label}</span>
         </div>
       </div>
       <p style={{ color: '#8b949e', marginBottom: 24 }}>Real-time autonomous agent activity · Read-only</p>
@@ -100,12 +136,17 @@ export default function ObservePage() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: connected ? '#28c840' : '#484f58', display: 'inline-block', boxShadow: connected ? '0 0 6px #28c840' : 'none', animation: connected ? 'pulse 2s infinite' : 'none' }} />
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor2, display: 'inline-block', boxShadow: isLive ? '0 0 6px #28c840' : 'none', animation: connState !== 'connecting' ? 'pulse 2s infinite' : 'none' }} />
         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Live Activity</span>
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connected ? '#28c840' : '#484f58' }}>{connected ? '● connected' : '○ connecting...'}</span>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: dotColor2 }}>{label}</span>
       </div>
 
       <div style={{ background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: '0 16px' }}>
+        {activity.length === 0 && (
+          <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#484f58' }}>
+            {connState === 'connecting' ? 'Connecting to live feed...' : 'No recent activity.'}
+          </div>
+        )}
         {activity.map((item: any, i: number) => (
           <div key={item.id || i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #21262d', fontSize: 13 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor(item.type || ''), flexShrink: 0 }} />
