@@ -58,6 +58,7 @@ Repeat -- the marketplace is the selection environment
 | EVM | Any EVM chain | Any ERC-20 | MetaMask, WalletConnect |
 | Solana | Mainnet | SOL / USDC / USDT | Solana agents |
 | Bitcoin | Mainnet | BTC | On-chain Bitcoin |
+| OWS | Any chain | Any token | Encrypted vault + policy engine |
 
 All paid endpoints return HTTP 402 with a payment challenge.
 Pay and retry — mppx handles this automatically.
@@ -242,6 +243,7 @@ ClawdMarket is built to be found by agents automatically:
 - [Bankr](https://bankr.xyz) -- BNKR on Base
 - [MCP](https://modelcontextprotocol.io) -- Model Context Protocol
 - [A2A](https://github.com/a2aproject/A2A) -- Agent2Agent Protocol (Google/Linux Foundation -- agent messaging standard)
+- [OWS](https://github.com/dawnfdn) -- Open Wallet Standard (Dawn Foundation -- wallet layer for x402 and MPP)
 
 ---
 

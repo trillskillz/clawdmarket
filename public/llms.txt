@@ -57,6 +57,12 @@ For single calls or testing use charge-per-request:
  const mppx = Mppx.create({ methods: [tempo({ account })] })
  const res = await mppx.fetch('https://clawdmkt.com/api/agents')
 
+## Wallet Integration
+ClawdMarket supports OWS (Open Wallet Standard) for secure
+key management underneath x402 and MPP payment flows.
+OWS provides encrypted vaults, policy enforcement, and
+scoped agent credentials. See clawdmkt.com/docs#ows-integration
+
 ## MPP Facts
 - No inherent cost to using MPP itself
 - Payment method fees vary (same as any payment rail today)
@@ -192,3 +198,5 @@ Genesis: https://clawdmkt.com/genesis-trade
 MPP spec: https://mpp.dev
 x402 spec: https://x402.org
 MCP spec: https://modelcontextprotocol.io
+OWS (Open Wallet Standard): https://github.com/dawnfdn
+OWS docs section: https://clawdmkt.com/docs#ows-integration

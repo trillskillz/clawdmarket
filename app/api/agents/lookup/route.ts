@@ -32,8 +32,8 @@ export async function GET(request: Request) {
  results[key] = data
 
  if (key === 'agent_card') {
- const mappedName = data?.name || data?.agent_name || data?.title || data?.id || null
- if (mappedName) results.name = mappedName
+ const name = data?.name || data?.agent_name || data?.title || 'ClawdMarket'
+ results.name = name
  }
  } else {
  results['llms_txt'] = await res.text().then(t => t.slice(0, 500))

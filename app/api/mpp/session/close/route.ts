@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Receipt } from 'mppx';
 import { mppx } from '@/lib/mpp';
 import { db } from '@/lib/db';
 
 const closeGate = mppx.session({ amount: '0', unitType: 'request' })(async () => NextResponse.json({ ok: true }));
 
-async function closeInDb(session_id: string) {
+async function closeInDb(session_id: string, closeTxHash?: string | null) {
   const client = (db as any)?.$client;
   const row = await client.execute({
     sql: `SELECT session_id, spent_amount FROM mpp_sessions WHERE session_id = ? ORDER BY created_at DESC LIMIT 1`,
@@ -14,11 +15,11 @@ async function closeInDb(session_id: string) {
   const spent_amount = String(row?.rows?.[0]?.spent_amount ?? '0');
 
   await client.execute({
-    sql: `UPDATE mpp_sessions SET status = 'closed', closed_at = datetime('now') WHERE session_id = ?`,
-    args: [session_id],
+    sql: `UPDATE mpp_sessions SET status = 'closed', closed_at = datetime('now'), close_tx_hash = ? WHERE session_id = ?`,
+    args: [closeTxHash ?? null, session_id],
   });
 
-  return { session_id, spent_amount };
+  return { session_id, spent_amount, close_tx_hash: closeTxHash ?? null };
 }
 
 export async function POST(request: NextRequest) {
@@ -28,19 +29,29 @@ export async function POST(request: NextRequest) {
 
   try {
     const gated = await closeGate(request);
+
+    let closeTxHash: string | null = null;
+    const receiptHeader = gated.headers.get('Payment-Receipt');
+    if (receiptHeader) {
+      try {
+        const receipt: any = Receipt.deserialize(receiptHeader);
+        closeTxHash = receipt?.txHash || receipt?.transactionHash || receipt?.closeTxHash || null;
+      } catch {}
+    }
+
     if (gated.status === 410) {
-      const session = await closeInDb(session_id);
+      const session = await closeInDb(session_id, closeTxHash);
       return NextResponse.json({ ok: true, status: 'closed', session });
     }
 
-    const session = await closeInDb(session_id);
+    const session = await closeInDb(session_id, closeTxHash);
     const res = NextResponse.json({ ok: true, status: 'closed', session });
     for (const [k, v] of gated.headers.entries()) res.headers.set(k, v);
     return res;
   } catch (err: any) {
     const msg = String(err?.message || '').toLowerCase();
     if (msg.includes('410') || msg.includes('channel-not-found') || msg.includes('channel not found')) {
-      const session = await closeInDb(session_id);
+      const session = await closeInDb(session_id, null);
       return NextResponse.json({ ok: true, status: 'closed', session });
     }
     return NextResponse.json({ error: 'session_close_failed', detail: err?.message || 'unknown' }, { status: 500 });

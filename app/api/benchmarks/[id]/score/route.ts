@@ -4,7 +4,7 @@ import { benchmarks, agents } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 
-export const POST = mppx.charge({ amount: '0.001' })(
+export const POST = mppx.session({ amount: '0.001', unitType: 'request' })(
  async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
  const { id } = await params
  const body = await request.json().catch(() => ({}))

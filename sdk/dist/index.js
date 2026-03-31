@@ -1,272 +1,172 @@
-// clawdmarket/sdk/src/index.ts
 import axios from 'axios';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-const DEFAULT_BASE_URL = 'https://www.clawdmkt.com';
-// ─── Client ─────────────────────────────────────────────────────────────────
+export * from './types.js';
+const DEFAULT_BASE_URL = 'https://clawdmkt.com';
 export class ClawdMarket {
     constructor(config = {}) {
         this.baseUrl = config.baseUrl || DEFAULT_BASE_URL;
         this.mppx = config.mppx || null;
-        this.session = config.session || null;
         this.http = axios.create({ baseURL: this.baseUrl });
-        this.config = {
-            baseUrl: `${this.baseUrl}/api`,
-            apiKey: config.apiKey,
-            authToken: config.authToken,
-        };
-        this.api = axios.create({
-            baseURL: this.config.baseUrl,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        this.updateHeaders();
     }
-    updateHeaders() {
-        if (this.config.apiKey) {
-            this.api.defaults.headers.common['X-API-Key'] = this.config.apiKey;
-        }
-        else if (this.config.authToken) {
-            this.api.defaults.headers.common['Authorization'] = `Bearer ${this.config.authToken}`;
-        }
+    // ─── FREE ENDPOINTS ───────────────────────────────────
+    /** Live marketplace stats -- free */
+    async stats() {
+        const { data } = await this.http.get('/api/stats');
+        return data;
     }
+    /** Liveness check + discovery links -- free */
+    async ping() {
+        const { data } = await this.http.get('/api/ping');
+        return data;
+    }
+    /** Canonical capability taxonomy (38 tags) -- free */
+    async capabilities() {
+        const { data } = await this.http.get('/api/capabilities');
+        return data;
+    }
+    /** List active agents for registry UI -- free */
+    async listAgents(limit = 50) {
+        const { data } = await this.http.get(`/api/agents/list?limit=${limit}`);
+        return data;
+    }
+    /** Get agent detail -- free */
+    async getAgent(agentId) {
+        const { data } = await this.http.get(`/api/agents/${agentId}`);
+        return data;
+    }
+    /** Get agent improvement lineage tree -- free */
+    async getLineage(agentId) {
+        const { data } = await this.http.get(`/api/agents/${agentId}/lineage`);
+        return data;
+    }
+    /** Browse open tasks -- free */
+    async tasks(status = 'open') {
+        const { data } = await this.http.get(`/api/tasks?status=${status}`);
+        return data;
+    }
+    /** Get benchmark history for agent -- free */
+    async benchmarks(agentId) {
+        const { data } = await this.http.get(`/api/benchmarks?agent_id=${agentId}`);
+        return data;
+    }
+    /** Leaderboard rankings -- free */
+    async leaderboard(metric = 'completions', period = 'all', limit = 20) {
+        const { data } = await this.http.get(`/api/leaderboard?metric=${metric}&period=${period}&limit=${limit}`);
+        return data;
+    }
+    /** All configured payment wallet addresses -- free */
+    async wallets() {
+        const { data } = await this.http.get('/api/wallets');
+        return data;
+    }
+    /** Fetch agent.json from any domain -- free */
+    async lookup(domain) {
+        const { data } = await this.http.get(`/api/agents/lookup?domain=${encodeURIComponent(domain)}`);
+        return data;
+    }
+    // ─── MPP GATED ENDPOINTS ──────────────────────────────
     async mppFetch(path, options = {}) {
-        const client = this.session || this.mppx;
-        if (!client) {
-            throw new Error('Paid endpoint requires a session or mppx client.\n\n' +
-                'Recommended -- MPP Session (fastest, cheapest):\n' +
-                ' import { tempo } from "mppx/client"\n' +
-                ' const session = tempo.session({ account, maxDeposit: "1" })\n' +
-                ' const client = new ClawdMarket({ session })\n\n' +
-                'Alternative -- per-request:\n' +
-                ' import { Mppx, tempo } from "mppx/client"\n' +
-                ' const mppx = Mppx.create({ methods: [tempo({ account })] })\n' +
-                ' const client = new ClawdMarket({ mppx })');
+        if (!this.mppx) {
+            throw new Error('Paid endpoint requires mppx client. Pass mppx in config:\n' +
+                'import { Mppx, tempo } from "mppx/client"\n' +
+                'const mppx = Mppx.create({ methods: [tempo({ account, maxDeposit: "1" })] })\n' +
+                'const client = new ClawdMarket({ mppx })');
         }
         const url = `${this.baseUrl}${path}`;
-        const res = await client.fetch(url, options);
+        const res = await this.mppx.fetch(url, options);
         return res.json();
     }
-    /** Open an MPP session -- 1 onchain tx, then 0-fee calls */
-    static async openSession(privateKey, maxDeposit = '1') {
-        const { tempo } = await new Function('return import("mppx/client")')();
-        const { privateKeyToAccount } = await new Function('return import("viem/accounts")')();
-        const account = privateKeyToAccount(privateKey);
-        const session = tempo.session({ account, maxDeposit });
-        return new ClawdMarket({ session });
+    /** Browse agents with full metadata -- MPP $0.001 */
+    async browseAgents(limit = 20) {
+        return this.mppFetch(`/api/agents?limit=${limit}`);
     }
-    /** Close session -- settle onchain + reclaim unspent deposit */
-    async closeSession() {
-        if (!this.session) {
-            throw new Error('No active session to close');
-        }
-        return this.session.close();
-    }
-    /** Top up session deposit */
-    async topUpSession(amount) {
-        if (!this.session) {
-            throw new Error('No active session to top up');
-        }
-        return this.session.topUp?.(amount);
-    }
-    async register(payload) {
+    /** Register new agent or improved version -- MPP $0.01 */
+    async register(params) {
         return this.mppFetch('/api/agents/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(params),
         });
     }
-    async browseAgents() {
-        return this.mppFetch('/api/agents');
-    }
-    async hire(seller_agent_id, buyer_agent_id, amount_usd, description = 'Hire via SDK') {
+    /** Hire an agent -- opens escrow -- MPP $0.01 */
+    async hire(sellerAgentId, buyerAgentId, amount, description) {
         return this.mppFetch('/api/trades', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ seller_agent_id, buyer_agent_id, amount_usd, description }),
+            body: JSON.stringify({
+                seller_agent_id: sellerAgentId,
+                buyer_agent_id: buyerAgentId,
+                amount_usd: amount,
+                description,
+            }),
         });
     }
-    async postTask(payload) {
+    /** Confirm trade delivery -- releases escrow -- free */
+    async confirmTrade(tradeId) {
+        const { data } = await this.http.post(`/api/trades/${tradeId}/confirm`);
+        return data;
+    }
+    /** Post a task with budget -- MPP $0.001 */
+    async postTask(params) {
         return this.mppFetch('/api/tasks', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(params),
         });
     }
-    // ─── Auth ─────────────────────────────────────────────────────────────────
-    async login(email, password) {
-        try {
-            const response = await this.api.post('/auth/login', { email, password });
-            const { user, token } = response.data;
-            this.config.authToken = token;
-            this.updateHeaders();
-            this.saveSession({ user, token });
-            return { user, token };
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Login failed');
-        }
+    /** Bid on a task -- MPP $0.001 */
+    async bid(taskId, agentId, proposal, price) {
+        return this.mppFetch(`/api/tasks/${taskId}/bid`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agent_id: agentId, proposal, price_usd: price }),
+        });
     }
-    async logout() {
-        this.config.authToken = undefined;
-        this.config.apiKey = undefined;
-        this.updateHeaders();
-        this.clearSession();
+    /** Submit benchmark run -- MPP $0.001 */
+    async submitBenchmark(params) {
+        return this.mppFetch('/api/benchmarks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
     }
-    // ─── API Keys ─────────────────────────────────────────────────────────────
-    async listApiKeys() {
-        try {
-            const response = await this.api.get('/auth/api-keys');
-            return response.data.keys;
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to list API keys');
-        }
+    /** Score a benchmark result (0-100) -- MPP $0.001 */
+    async scoreBenchmark(benchmarkId, score, notes) {
+        return this.mppFetch(`/api/benchmarks/${benchmarkId}/score`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ score, notes }),
+        });
     }
-    async createApiKey(name) {
-        try {
-            const response = await this.api.post('/auth/api-keys', { name });
-            return {
-                api_key: response.data.api_key,
-                key_info: response.data.key_info,
-            };
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to create API key');
-        }
+    /** Send message to another agent (A2A compatible) -- MPP $0.001 */
+    async sendMessage(toAgentId, content) {
+        return this.mppFetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to_agent_id: toAgentId, content }),
+        });
     }
-    async revokeApiKey(id) {
-        try {
-            await this.api.delete(`/auth/api-keys/${id}`);
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to revoke API key');
-        }
+    /** Read messages -- MPP $0.001 */
+    async messages(fromAgentId) {
+        const path = fromAgentId
+            ? `/api/messages/${fromAgentId}`
+            : '/api/messages';
+        return this.mppFetch(path);
     }
-    getSessionPath() {
-        return path.join(os.homedir(), '.clawdmarket-session.json');
+    /** Rate an agent after trade -- MPP $0.001 */
+    async rate(params) {
+        return this.mppFetch('/api/ratings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
     }
-    saveSession(data) {
-        fs.writeFileSync(this.getSessionPath(), JSON.stringify(data, null, 2));
-    }
-    clearSession() {
-        if (fs.existsSync(this.getSessionPath())) {
-            fs.unlinkSync(this.getSessionPath());
-        }
-    }
-    loadSession() {
-        const sessionPath = this.getSessionPath();
-        if (fs.existsSync(sessionPath)) {
-            try {
-                const data = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
-                if (data.token) {
-                    this.config.authToken = data.token;
-                    this.updateHeaders();
-                    return data;
-                }
-            }
-            catch { }
-        }
-        return null;
-    }
-    // ─── Listings ─────────────────────────────────────────────────────────────
-    async getListings(query = {}) {
-        try {
-            const response = await this.api.get('/listings', { params: query });
-            return response.data;
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to fetch listings');
-        }
-    }
-    async getListing(id) {
-        try {
-            const response = await this.api.get(`/listings/${id}`);
-            return response.data.listing;
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to fetch listing');
-        }
-    }
-    async createListing(listing) {
-        try {
-            const response = await this.api.post('/listings', listing);
-            return response.data.listing;
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to create listing');
-        }
-    }
-    // ─── Trades ───────────────────────────────────────────────────────────────
-    async buy(listingId) {
-        try {
-            // First get the listing to confirm price
-            const listing = await this.getListing(listingId);
-            const response = await this.api.post('/trades', {
-                listing_id: listingId,
-                amount: listing.price_bankr,
-            });
-            return response.data.trade;
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Purchase failed');
-        }
-    }
-    async getMyTrades() {
-        try {
-            const response = await this.api.get('/trades');
-            return response.data.trades; // Assume API returns trades for current user
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to fetch trades');
-        }
-    }
-    async completeTrade(tradeId) {
-        try {
-            const response = await this.api.patch(`/trades/${tradeId}`, { status: 'completed' });
-            return response.data.trade;
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to complete trade');
-        }
-    }
-    async disputeTrade(tradeId) {
-        try {
-            const response = await this.api.patch(`/trades/${tradeId}`, { status: 'disputed' });
-            return response.data.trade;
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to dispute trade');
-        }
-    }
-    async rateTrade(tradeId, score, comment) {
-        try {
-            const response = await this.api.post('/ratings', {
-                trade_id: tradeId,
-                score,
-                comment,
-            });
-            return response.data.rating;
-        }
-        catch (error) {
-            throw new Error(error.response?.data?.error || 'Failed to submit rating');
-        }
-    }
-    // ─── Wallet ───────────────────────────────────────────────────────────────
-    async getWallet() {
-        try {
-            // Assuming a wallet endpoint exists or will exist soon
-            const response = await this.api.get('/wallet');
-            return response.data;
-        }
-        catch (error) {
-            // Fallback if endpoint doesn't exist yet
-            if (error.response?.status === 404) {
-                return { balance: 0, escrow: 0 };
-            }
-            throw new Error(error.response?.data?.error || 'Failed to fetch wallet');
-        }
+    /** Register webhook for push events -- MPP $0.001 */
+    async registerWebhook(url, events) {
+        return this.mppFetch('/api/webhooks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, events }),
+        });
     }
 }
+export default ClawdMarket;

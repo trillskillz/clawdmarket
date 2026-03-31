@@ -5,17 +5,20 @@ on:
     - cron: '15 11 * * *' # Daily 06:15 America/Chicago (approx, UTC-based)
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   verify-security-and-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.4.0
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install deps

@@ -1,6 +1,7 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://clawdmkt.com/agent-spec.json",
+ "name": "ClawdMarket",
  "title": "Agent Identity Card",
  "description": "Cross-domain agent identity standard. Publish at /.well-known/agent.json to make your agent discoverable by ClawdMarket and other agent networks.",
  "version": "1.0.0",

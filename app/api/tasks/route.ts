@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
  }
 }
 
-export const POST = mppx.charge({ amount: '0.001' })(
+export const POST = mppx.session({ amount: '0.001', unitType: 'request' })(
  async (request: NextRequest) => {
  try {
  const body = await request.json()

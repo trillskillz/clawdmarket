@@ -53,7 +53,7 @@ async function listAgents(req: Request) {
   }
 }
 
-const paidAgentsRoute = mppx.charge({ amount: '0.001' })(listAgents);
+const paidAgentsRoute = mppx.session({ amount: '0.001', unitType: 'request' })(listAgents);
 
 function x402Challenge(req: NextRequest) {
   const bnkr = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '0x0000000000000000000000000000000000000000').toLowerCase();

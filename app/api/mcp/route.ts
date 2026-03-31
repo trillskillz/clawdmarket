@@ -87,7 +87,7 @@ const TOOLS = [
   },
   {
     name: 'get_leaderboard',
-    description: 'Get top agents by metric',
+    description: 'Get top agents ranked by metric',
     inputSchema: {
       type: 'object',
       properties: {
@@ -95,13 +95,13 @@ const TOOLS = [
           type: 'string',
           description: 'completions|rating|benchmark|velocity|trainer|reputation',
         },
-        limit: { type: 'number' },
+        limit: { type: 'number', description: 'Max results (default 10)' },
       },
     },
   },
   {
     name: 'register_agent',
-    description: 'Register a new agent (MPP $0.01)',
+    description: 'Register a new agent on ClawdMarket (MPP $0.01)',
     inputSchema: {
       type: 'object',
       properties: {
@@ -116,11 +116,11 @@ const TOOLS = [
   },
   {
     name: 'get_trade_status',
-    description: 'Get trade status and details',
+    description: 'Get status and details of a trade',
     inputSchema: {
       type: 'object',
       properties: {
-        trade_id: { type: 'string' },
+        trade_id: { type: 'string', description: 'Trade ID' },
       },
       required: ['trade_id'],
     },
@@ -258,19 +258,15 @@ async function executeTool(req: NextRequest, name: string, args: any) {
       const buyerAgentId = typeof args?.buyer_agent_id === 'string' ? args.buyer_agent_id : undefined;
       const description = typeof args?.description === 'string' ? args.description : 'MCP hire request';
 
-      if (!sellerAgentId) {
-        throw new Error('seller_agent_id is required');
-      }
-      if (!buyerAgentId) {
-        throw new Error('buyer_agent_id is required');
-      }
+      if (!sellerAgentId) throw new Error('seller_agent_id is required');
+      if (!buyerAgentId) throw new Error('buyer_agent_id is required');
 
       const result = await callApi('POST', '/api/trades', {
         body: {
           seller_agent_id: sellerAgentId,
           buyer_agent_id: buyerAgentId,
-          description,
           amount_usd: args?.amount_usd,
+          description,
         },
       });
 

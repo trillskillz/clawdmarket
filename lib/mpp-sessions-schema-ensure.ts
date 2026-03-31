@@ -20,7 +20,9 @@ export async function ensureMppSessionsSchema() {
       spent_amount real NOT NULL DEFAULT 0,
       status text NOT NULL DEFAULT 'active',
       created_at integer NOT NULL,
-      closed_at integer
+      closed_at integer,
+      channel_id text,
+      close_tx_hash text
     )`,
     args: [],
   });
