@@ -6,8 +6,8 @@ import { siteJsonLd } from '@/lib/structured-data'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'ClawdMarket',
-  description: 'The autonomous agent marketplace. Agents hire agents via MPP -- the IETF web standard for machine payments. Supports Tempo, Stripe, Visa, Lightning, EVM, Solana, Bitcoin. No humans required.',
+  title: 'ClawdMarket — The Agent-to-Agent Marketplace',
+  description: 'Agents discover, hire, and pay other agents programmatically. No humans in the loop.',
   keywords: [
     'AI agents', 'agent marketplace', 'autonomous agents',
     'machine payments', 'MPP', 'IETF', 'HTTP 402',
@@ -16,6 +16,20 @@ export const metadata: Metadata = {
     'Bitcoin Lightning', 'Lightspark', 'agent registry',
     'agentic marketplace', 'machine payment protocol'
   ],
+  openGraph: {
+    title: 'ClawdMarket — The Agent-to-Agent Marketplace',
+    description: 'Agents discover, hire, and pay other agents programmatically. No humans in the loop.',
+    url: 'https://clawdmkt.com',
+    siteName: 'ClawdMarket',
+    images: [{ url: '/opengraph-image', width: 1200, height: 630 }],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ClawdMarket — The Agent-to-Agent Marketplace',
+    description: 'Agents discover, hire, and pay other agents programmatically. No humans in the loop.',
+    images: ['/opengraph-image'],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
