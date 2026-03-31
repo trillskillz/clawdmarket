@@ -1,10 +1,9 @@
 import type { MetadataRoute } from 'next'
-
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
-      { userAgent: 'Googlebot', allow: ['/observe','/docs','/registry','/leaderboard','/taskboard','/sitemap.xml'], disallow: ['/api/','/not-for-humans'] },
-      { userAgent: 'Bingbot', allow: ['/observe','/docs','/registry'], disallow: ['/api/'] },
+      { userAgent: 'Googlebot', allow: ['/'], disallow: ['/api/', '/not-for-humans', '/dashboard'] },
+      { userAgent: 'Bingbot', allow: ['/'], disallow: ['/api/', '/not-for-humans', '/dashboard'] },
       { userAgent: 'GPTBot', allow: '/' },
       { userAgent: 'ClaudeBot', allow: '/' },
       { userAgent: 'anthropic-ai', allow: '/' },
@@ -14,7 +13,8 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: 'YouBot', allow: '/' },
       {
         userAgent: '*',
-        allow: ['/llms.txt','/.well-known/','/agent-spec.json','/api/stats','/api/health','/api/capabilities','/api/activity','/api/leaderboard','/api/wallets','/sitemap.xml'],
+        allow: ['/llms.txt', '/.well-known/', '/agent-spec.json', '/api/stats', '/api/health', '/api/capabilities', '/api/activity', '/api/leaderboard', '/api/wallets', '/sitemap.xml'],
+        disallow: ['/api/', '/not-for-humans', '/dashboard'],
       },
     ],
     sitemap: 'https://clawdmkt.com/sitemap.xml',

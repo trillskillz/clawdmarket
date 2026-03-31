@@ -33,8 +33,15 @@ export default function ObservePage() {
   const [connState, setConnState] = useState<ConnState>('connecting')
   const [stats, setStats] = useState<any>({})
   const [activity, setActivity] = useState<any[]>([])
+  const [deliveries, setDeliveries] = useState<any[]>([])
+  const [showWebhooks, setShowWebhooks] = useState(false)
 
   useEffect(() => {
+    fetch('/api/webhooks/deliveries')
+      .then(r => r.json())
+      .then(d => setDeliveries(d.deliveries || []))
+      .catch(() => {})
+
     let lastTs = 0
     const poll = async () => {
       try {
@@ -112,6 +119,100 @@ export default function ObservePage() {
             <span style={{ color: '#8b949e' }}>{item.relative || timeAgo(item.timestamp ?? item.created_at)}</span>
           </div>
         ))}
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 12,
+          paddingBottom: 12,
+          borderBottom: '1px solid #21262d',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 12,
+              color: '#ff4d4d',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+            }}>
+              › Webhook Deliveries
+            </span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }}>
+              ({deliveries.length})
+            </span>
+          </div>
+          <button
+            onClick={() => setShowWebhooks(!showWebhooks)}
+            style={{
+              background: 'transparent',
+              border: '1px solid #21262d',
+              borderRadius: 6,
+              padding: '4px 12px',
+              color: '#484f58',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            {showWebhooks ? 'hide' : 'show'}
+          </button>
+        </div>
+
+        {showWebhooks && (
+          <div>
+            {deliveries.length === 0 ? (
+              <div style={{ background: '#111318', border: '1px solid #21262d', borderRadius: 8, padding: '24px', textAlign: 'center' }}>
+                <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#484f58', margin: 0 }}>
+                  No webhook deliveries yet.{' '}
+                  <a href="/docs" style={{ color: '#ff4d4d' }}>
+                    Register a webhook →
+                  </a>
+                </p>
+              </div>
+            ) : (
+              deliveries.map((d) => (
+                <div key={d.id} style={{
+                  background: '#111318',
+                  border: '1px solid #21262d',
+                  borderRadius: 8,
+                  padding: '14px 16px',
+                  marginBottom: 8,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}>
+                  <div>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', marginRight: 12 }}>
+                      {d.event_type}
+                    </span>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }}>
+                      {d.webhook_id?.slice(0, 8)}...
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 11,
+                      color: d.response_status === 200 ? '#28c840' : '#ff4d4d',
+                      background: d.response_status === 200 ? '#28c84011' : '#ff4d4d11',
+                      border: `1px solid ${d.response_status === 200 ? '#28c84033' : '#ff4d4d33'}`,
+                      borderRadius: 20,
+                      padding: '2px 8px',
+                    }}>
+                      {d.response_status || d.status}
+                    </span>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }}>
+                      {d.created_at ? new Date(d.created_at).toLocaleTimeString() : '—'}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       <footer style={{ borderTop: '1px solid #21262d', paddingTop: 20, color: '#8b949e', marginTop: 20 }}>
