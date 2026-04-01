@@ -4,9 +4,6 @@ import { db } from '@/lib/db'
 import {
   tasks,
   bids,
-  listings,
-  trades,
-  trade_evidence,
   ratings,
   agents,
 } from '@/lib/schema'
@@ -113,6 +110,8 @@ async function recalculateAgentRating(agentId: string) {
 // ─── Cron handler ──────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  console.log('SEED CRON STARTED', new Date().toISOString())
+
   // Auth
   const auth = req.headers.get('authorization') || ''
   const expected = process.env.CRON_SECRET
@@ -242,11 +241,18 @@ export async function GET(req: NextRequest) {
     })
 
     // ── 8. Submit trade evidence with the real artifact ──
-    await db.insert(trade_evidence).values({
-      trade_id: tradeId,
-      submitter_agent_id: SEED_SELLER_ID,
-      content: JSON.stringify(artifact),
+    console.log('[cron/seed] step 8: inserting trade_evidence for trade', tradeId)
+    await (db as any).$client.execute({
+      sql: `INSERT INTO trade_evidence (id, trade_id, submitter_agent_id, content, created_at)
+            VALUES (?, ?, ?, ?, datetime('now'))`,
+      args: [
+        crypto.randomUUID(),
+        tradeId,
+        SEED_SELLER_ID,
+        JSON.stringify(artifact),
+      ],
     })
+    console.log('[cron/seed] step 8: trade_evidence inserted OK')
 
     // ── 9. Insert ratings from both sides ──
     const buyerScore = 4 + (dayOfYear() % 2) // alternates 4 and 5
@@ -263,27 +269,58 @@ export async function GET(req: NextRequest) {
     ]
     const commentIdx = dayOfYear() % comments.length
 
-    // Buyer rates seller
-    await db.insert(ratings).values({
-      trade_id: tradeId,
-      rater_id: SEED_BUYER_ID,
-      rated_id: SEED_SELLER_ID,
-      score: sellerScore,
-      comment: comments[commentIdx],
+    console.log('[cron/seed] step 9: BEGIN ratings inserts', {
+      tradeId,
+      buyerId: SEED_BUYER_ID,
+      sellerId: SEED_SELLER_ID,
+      buyerScore,
+      sellerScore,
+      nowUnix,
+      commentIdx,
     })
 
-    // Seller rates buyer
-    await db.insert(ratings).values({
-      trade_id: tradeId,
-      rater_id: SEED_SELLER_ID,
-      rated_id: SEED_BUYER_ID,
-      score: buyerScore,
-      comment: 'Clear task description, prompt acceptance.',
-    })
+    let ratingsError: string | null = null
+    try {
+      const rating1Id = crypto.randomUUID()
+      const rating1Args = [rating1Id, tradeId, SEED_BUYER_ID, SEED_SELLER_ID, sellerScore, comments[commentIdx], nowUnix]
+      console.log('[cron/seed] rating 1 (buyer→seller) SQL: INSERT INTO ratings (id, trade_id, rater_id, rated_id, score, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      console.log('[cron/seed] rating 1 args:', JSON.stringify(rating1Args))
+
+      const r1 = await (db as any).$client.execute({
+        sql: `INSERT INTO ratings (id, trade_id, rater_id, rated_id, score, comment, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: rating1Args,
+      })
+      console.log('[cron/seed] rating 1 result:', JSON.stringify({ rowsAffected: r1?.rowsAffected, lastInsertRowid: r1?.lastInsertRowid }))
+
+      const rating2Id = crypto.randomUUID()
+      const rating2Args = [rating2Id, tradeId, SEED_SELLER_ID, SEED_BUYER_ID, buyerScore, 'Clear task description, prompt acceptance.', nowUnix]
+      console.log('[cron/seed] rating 2 (seller→buyer) args:', JSON.stringify(rating2Args))
+
+      const r2 = await (db as any).$client.execute({
+        sql: `INSERT INTO ratings (id, trade_id, rater_id, rated_id, score, comment, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: rating2Args,
+      })
+      console.log('[cron/seed] rating 2 result:', JSON.stringify({ rowsAffected: r2?.rowsAffected, lastInsertRowid: r2?.lastInsertRowid }))
+
+      // Verify ratings actually exist
+      const verify = await (db as any).$client.execute({
+        sql: `SELECT id, rater_id, rated_id, score FROM ratings WHERE trade_id = ?`,
+        args: [tradeId],
+      })
+      console.log('[cron/seed] ratings verification — rows found:', verify?.rows?.length, JSON.stringify(verify?.rows))
+    } catch (ratingsErr: any) {
+      ratingsError = ratingsErr?.message ?? String(ratingsErr)
+      console.error('[cron/seed] RATINGS INSERT FAILED:', ratingsError)
+      console.error('[cron/seed] full error:', ratingsErr)
+    }
 
     // ── 10. Recalculate ratings for both agents ──
-    await recalculateAgentRating(SEED_SELLER_ID)
-    await recalculateAgentRating(SEED_BUYER_ID)
+    if (!ratingsError) {
+      await recalculateAgentRating(SEED_SELLER_ID)
+      await recalculateAgentRating(SEED_BUYER_ID)
+    }
 
     // ── 11. Mark task completed ──
     await db
@@ -298,6 +335,8 @@ export async function GET(req: NextRequest) {
       task_id: taskId,
       trade_id: tradeId,
       artifact_stories: artifact.story_count ?? 0,
+      ratings_ok: !ratingsError,
+      ratings_error: ratingsError,
     })
   } catch (err: any) {
     console.error('[cron/seed] failed:', err)

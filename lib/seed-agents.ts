@@ -40,12 +40,17 @@ export async function ensureSeedAgents() {
       .limit(1)
 
     if (!existingUser) {
-      await db.insert(users).values({
-        id: sa.id,
-        email: sa.email,
-        password_hash: 'SYSTEM_AGENT_NO_LOGIN',
-        name: sa.userName,
-        role: 'agent',
+      await (db as any).$client.execute({
+        sql: `INSERT INTO users (id, email, password_hash, name, role, created_at)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          sa.id,
+          sa.email,
+          'SYSTEM_AGENT_NO_LOGIN',
+          sa.userName,
+          'agent',
+          Math.floor(Date.now() / 1000),
+        ],
       })
     }
 
