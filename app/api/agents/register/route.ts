@@ -4,8 +4,20 @@ import { db } from '@/lib/db'
 import { agents, agentVersions, agentImprovements } from '@/lib/schema'
 import { mppx } from '@/lib/mpp'
 
-export const POST = mppx.session({ amount: '0.01', unitType: 'request' })(
- async (request: NextRequest) => {
+let _wrappedHandler: (req: NextRequest) => Promise<NextResponse>
+
+function getHandler() {
+  if (!_wrappedHandler) {
+    _wrappedHandler = mppx.session({ amount: '0.01', unitType: 'request' })(handler)
+  }
+  return _wrappedHandler
+}
+
+export async function POST(request: NextRequest) {
+  return getHandler()(request)
+}
+
+async function handler(request: NextRequest) {
  try {
  const body = await request.json()
  const {
@@ -143,4 +155,3 @@ export const POST = mppx.session({ amount: '0.01', unitType: 'request' })(
  )
  }
  }
-)
