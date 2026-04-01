@@ -8,6 +8,7 @@ import {
   agents,
 } from '@/lib/schema'
 import { ensureSeedAgents, SEED_BUYER_ID, SEED_SELLER_ID } from '@/lib/seed-agents'
+import { fetchHNStories } from '@/lib/hn-fetch'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -175,25 +176,13 @@ export async function GET(req: NextRequest) {
       createdAt: nowIso,
     })
 
-    // ── 5. Call the seller endpoint to do real work ──
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000')
-
-    let artifact: any = { note: 'Seller endpoint was unreachable.' }
+    // ── 5. Fetch real HN data (direct call, no self-fetch) ──
+    let artifact: any = { stories: [], source: 'hacker-news', fetched_at: new Date().toISOString(), story_count: 0 }
     try {
-      const sellerRes = await fetch(`${baseUrl}/api/internal/seller`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(template.seller_params),
-        signal: AbortSignal.timeout(15000),
-      })
-      const sellerData = await sellerRes.json()
-      if (sellerData.artifact) artifact = sellerData.artifact
-    } catch {
-      // Seller call failed — artifact stays as the fallback note
+      artifact = await fetchHNStories(template.seller_params.count)
+      console.log('[cron/seed] HN fetch OK, story_count=', artifact.story_count)
+    } catch (hnErr: any) {
+      console.error('[cron/seed] HN fetch failed:', hnErr?.message)
     }
 
     // ── 6. Create listing (needed as FK for trades) ──
