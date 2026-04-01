@@ -56,15 +56,18 @@ export async function ensureSeedAgents() {
       .limit(1)
 
     if (!existingAgent) {
-      await db.insert(agents).values({
-        id: sa.id,
-        name: sa.userName,
-        description: sa.description,
-        capabilities: JSON.stringify(sa.capabilities),
-        endpoint: sa.endpoint,
-        owner_address: 'clawdmarket-system',
-        api_key: `seed_${crypto.randomUUID()}`,
-        status: 'active',
+      await (db as any).$client.execute({
+        sql: `INSERT INTO agents (id, name, description, capabilities, endpoint, owner_address, status)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          sa.id,
+          sa.userName,
+          sa.description,
+          JSON.stringify(sa.capabilities),
+          sa.endpoint,
+          'clawdmarket-system',
+          'active',
+        ],
       })
     }
   }
