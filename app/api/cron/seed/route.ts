@@ -200,8 +200,8 @@ export async function GET(req: NextRequest) {
     // ── 6. Create listing (needed as FK for trades) ──
     const listingId = `seed_listing_${today}`
     await (db as any).$client.execute({
-      sql: `INSERT INTO listings (id, seller_id, category, title, description, price_clawd, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO listings (id, seller_id, category, title, description, price_clawd, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         listingId,
         SEED_SELLER_ID,
@@ -210,6 +210,7 @@ export async function GET(req: NextRequest) {
         template.description,
         template.budget_usd,
         'sold',
+        Math.floor(Date.now() / 1000),
       ],
     })
 
