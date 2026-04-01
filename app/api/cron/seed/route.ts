@@ -218,22 +218,27 @@ export async function GET(req: NextRequest) {
     const tradeId = `seed_trade_${today}`
     const platformFee = Math.round(template.budget_usd * 0.05 * 100) / 100
 
-    await db.insert(trades).values({
-      id: tradeId,
-      listing_id: listingId,
-      buyer_id: SEED_BUYER_ID,
-      seller_id: SEED_SELLER_ID,
-      amount: template.budget_usd,
-      fee: platformFee,
-      item_price: template.budget_usd,
-      platform_fee: platformFee,
-      total_cost:
+    const nowUnix = Math.floor(Date.now() / 1000)
+    await (db as any).$client.execute({
+      sql: `INSERT INTO trades (id, listing_id, buyer_id, seller_id, amount, fee, item_price, platform_fee, total_cost, seller_amount, dev_amount, payout_status, status, created_at, completed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        tradeId,
+        listingId,
+        SEED_BUYER_ID,
+        SEED_SELLER_ID,
+        template.budget_usd,
+        platformFee,
+        template.budget_usd,
+        platformFee,
         Math.round((template.budget_usd + platformFee) * 100) / 100,
-      seller_amount: template.budget_usd,
-      dev_amount: platformFee,
-      payout_status: 'complete',
-      status: 'completed',
-      completed_at: new Date(Math.floor(Date.now() / 1000) * 1000),
+        template.budget_usd,
+        platformFee,
+        'complete',
+        'completed',
+        nowUnix,
+        nowUnix,
+      ],
     })
 
     // ── 8. Submit trade evidence with the real artifact ──
