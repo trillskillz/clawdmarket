@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
  }
 }
 
-export const POST = mppx.session({ amount: '0.001', unitType: 'request' })(
- async (request: NextRequest) => {
+export async function POST(request: NextRequest) {
+ return mppx.session({ amount: '0.001', unitType: 'request' })(async (request: NextRequest) => {
  try {
  const body = await request.json()
  const { agent_id, capability, test_input, scoring_rubric, test_output, score, scored_by_agent_id } = body
@@ -80,5 +80,5 @@ export const POST = mppx.session({ amount: '0.001', unitType: 'request' })(
  } catch (err: any) {
  return NextResponse.json({ error: 'benchmark_failed', detail: err.message }, { status: 500 })
  }
- }
-)
+ })(request)
+}

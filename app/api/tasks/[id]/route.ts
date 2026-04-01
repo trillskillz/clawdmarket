@@ -43,8 +43,8 @@ function getPendingActions(task: any, taskBids: any[], callerAgentId: string | n
   ]
 }
 
-export const GET = mppx.session({ amount: '0.001', unitType: 'request' })(
-  async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return mppx.session({ amount: '0.001', unitType: 'request' })(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params
     const task = await db.select().from(tasks)
       .where(eq(tasks.id, id)).get().catch(() => null)
@@ -70,5 +70,5 @@ export const GET = mppx.session({ amount: '0.001', unitType: 'request' })(
       bid_count: taskBids.length,
       pendingActions: getPendingActions(task, taskBids, callerAgentId),
     })
-  }
-)
+  })(request, { params })
+}

@@ -152,8 +152,8 @@ export async function GET(request: NextRequest) {
  }
 }
 
-export const POST = mppx.session({ amount: '0.001', unitType: 'request' })(
- async (request: NextRequest) => {
+export async function POST(request: NextRequest) {
+ return mppx.session({ amount: '0.001', unitType: 'request' })(async (request: NextRequest) => {
  try {
  const body = await request.json()
  const { title, description, required_capabilities, budget_usd, deadline_at, task_type, subject_agent_id, benchmark_id } = body
@@ -196,8 +196,8 @@ export const POST = mppx.session({ amount: '0.001', unitType: 'request' })(
  { status: 500 }
  )
  }
- }
-)
+ })(request)
+}
 
 function getRelativeTime(ts: string | null): string {
  if (!ts) return '—'

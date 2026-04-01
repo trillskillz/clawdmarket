@@ -4,17 +4,8 @@ import { db } from '@/lib/db'
 import { agents, agentVersions, agentImprovements } from '@/lib/schema'
 import { mppx } from '@/lib/mpp'
 
-let _wrappedHandler: (req: NextRequest) => Promise<NextResponse>
-
-function getHandler() {
-  if (!_wrappedHandler) {
-    _wrappedHandler = mppx.session({ amount: '0.01', unitType: 'request' })(handler)
-  }
-  return _wrappedHandler
-}
-
 export async function POST(request: NextRequest) {
-  return getHandler()(request)
+  return mppx.session({ amount: '0.01', unitType: 'request' })(handler)(request)
 }
 
 async function handler(request: NextRequest) {

@@ -3,7 +3,9 @@ import { Receipt } from 'mppx';
 import { mppx } from '@/lib/mpp';
 import { db } from '@/lib/db';
 
-const closeGate = mppx.session({ amount: '0', unitType: 'request' })(async () => NextResponse.json({ ok: true }));
+function closeGate(req: NextRequest) {
+  return mppx.session({ amount: '0', unitType: 'request' })(async () => NextResponse.json({ ok: true }))(req);
+}
 
 async function closeInDb(session_id: string, closeTxHash?: string | null) {
   const client = (db as any)?.$client;

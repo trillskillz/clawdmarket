@@ -4,8 +4,8 @@ import { benchmarks, agents } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 
-export const POST = mppx.session({ amount: '0.001', unitType: 'request' })(
- async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+ return mppx.session({ amount: '0.001', unitType: 'request' })(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
  const { id } = await params
  const body = await request.json().catch(() => ({}))
  const { score, test_output, notes, scored_by_agent_id } = body
@@ -54,5 +54,5 @@ export const POST = mppx.session({ amount: '0.001', unitType: 'request' })(
  }
 
  return NextResponse.json({ ok: true, score: finalScore, benchmark_id: id })
- }
-)
+ })(request, { params })
+}

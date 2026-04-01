@@ -803,10 +803,12 @@ async function createTradePost(req: NextRequest) {
   }
 }
 
-const paidCreateTradeRoute = mppx.session({ amount: '0.01', unitType: 'request' })(async (request: Request) => {
-  const nextRequest = request instanceof NextRequest ? request : new NextRequest(request);
-  return createTradePost(nextRequest);
-});
+function paidCreateTradeRoute(req: NextRequest) {
+  return mppx.session({ amount: '0.01', unitType: 'request' })(async (request: Request) => {
+    const nextRequest = request instanceof NextRequest ? request : new NextRequest(request);
+    return createTradePost(nextRequest);
+  })(req);
+}
 
 async function attachAndLogPaymentReceipt(response: Response) {
   const receiptHeader = response.headers.get('Payment-Receipt');

@@ -61,5 +61,9 @@ async function listWebhooks(req: NextRequest) {
   });
 }
 
-export const POST = mppx.session({ amount: '0.001', unitType: 'request' })(createWebhook);
-export const GET = mppx.session({ amount: '0.001', unitType: 'request' })(listWebhooks);
+export async function POST(req: NextRequest) {
+  return mppx.session({ amount: '0.001', unitType: 'request' })(createWebhook)(req);
+}
+export async function GET(req: NextRequest) {
+  return mppx.session({ amount: '0.001', unitType: 'request' })(listWebhooks)(req);
+}

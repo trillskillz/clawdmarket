@@ -8,7 +8,9 @@ const log = (step: string, data: Record<string, unknown> = {}) => {
   console.log(JSON.stringify({ mpp_session: step, data }));
 };
 
-const sessionGate = mppx.session({ amount: '0', unitType: 'request' })(async () => NextResponse.json({ ok: true }));
+function sessionGate(req: NextRequest) {
+  return mppx.session({ amount: '0', unitType: 'request' })(async () => NextResponse.json({ ok: true }))(req);
+}
 
 async function ensureTable() {
   const client = (db as any)?.$client;

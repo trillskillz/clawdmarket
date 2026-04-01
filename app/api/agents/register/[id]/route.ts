@@ -12,7 +12,7 @@ function addressFromSource(source?: string | null) {
   return match ? match[0].toLowerCase() : null;
 }
 
-const paidDeleteRoute = mppx.session({ amount: '0.001', unitType: 'request' })(async (request: Request) => {
+async function deleteHandler(request: Request) {
   const req = request instanceof NextRequest ? request : new NextRequest(request);
   await ensureAgentsSchema();
 
@@ -40,8 +40,8 @@ const paidDeleteRoute = mppx.session({ amount: '0.001', unitType: 'request' })(a
     .where(and(eq(agents.id, id), eq(agents.owner_address, payerAddress)));
 
   return NextResponse.json({ ok: true });
-});
+}
 
 export async function DELETE(req: NextRequest) {
-  return paidDeleteRoute(req);
+  return mppx.session({ amount: '0.001', unitType: 'request' })(deleteHandler)(req);
 }
