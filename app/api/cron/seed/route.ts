@@ -209,7 +209,7 @@ export async function GET(req: NextRequest) {
         template.description,
         template.budget_usd,
         'sold',
-        Math.floor(Date.now() / 1000),
+        Number(Math.floor(Date.now() / 1000)),
       ],
     })
 
@@ -217,7 +217,7 @@ export async function GET(req: NextRequest) {
     const tradeId = `seed_trade_${today}`
     const platformFee = Math.round(template.budget_usd * 0.05 * 100) / 100
 
-    const nowUnix = Math.floor(Date.now() / 1000)
+    const nowUnix = Number(Math.floor(Date.now() / 1000))
     await (db as any).$client.execute({
       sql: `INSERT INTO trades (id, listing_id, buyer_id, seller_id, amount, fee, item_price, platform_fee, total_cost, seller_amount, dev_amount, payout_status, status, created_at, completed_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -291,7 +291,7 @@ export async function GET(req: NextRequest) {
               VALUES (?, ?, ?, ?, ?, ?, ?)`,
         args: rating1Args,
       })
-      console.log('[cron/seed] rating 1 result:', JSON.stringify({ rowsAffected: r1?.rowsAffected, lastInsertRowid: r1?.lastInsertRowid }))
+      console.log('[cron/seed] rating 1 result: rowsAffected=', r1?.rowsAffected, 'lastInsertRowid=', String(r1?.lastInsertRowid))
 
       const rating2Id = crypto.randomUUID()
       const rating2Args = [rating2Id, tradeId, SEED_SELLER_ID, SEED_BUYER_ID, buyerScore, 'Clear task description, prompt acceptance.', nowUnix]
@@ -302,14 +302,15 @@ export async function GET(req: NextRequest) {
               VALUES (?, ?, ?, ?, ?, ?, ?)`,
         args: rating2Args,
       })
-      console.log('[cron/seed] rating 2 result:', JSON.stringify({ rowsAffected: r2?.rowsAffected, lastInsertRowid: r2?.lastInsertRowid }))
+      console.log('[cron/seed] rating 2 result: rowsAffected=', r2?.rowsAffected, 'lastInsertRowid=', String(r2?.lastInsertRowid))
 
       // Verify ratings actually exist
       const verify = await (db as any).$client.execute({
         sql: `SELECT id, rater_id, rated_id, score FROM ratings WHERE trade_id = ?`,
         args: [tradeId],
       })
-      console.log('[cron/seed] ratings verification — rows found:', verify?.rows?.length, JSON.stringify(verify?.rows))
+      const verifyRows = verify?.rows?.map((r: any) => ({ id: r.id, rater_id: r.rater_id, rated_id: r.rated_id, score: Number(r.score) }))
+      console.log('[cron/seed] ratings verification — rows found:', verify?.rows?.length, JSON.stringify(verifyRows))
     } catch (ratingsErr: any) {
       ratingsError = ratingsErr?.message ?? String(ratingsErr)
       console.error('[cron/seed] RATINGS INSERT FAILED:', ratingsError)
