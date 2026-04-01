@@ -212,9 +212,6 @@ export async function GET(req: NextRequest) {
     // ── 7. Create trade (already completed) ──
     const tradeId = `seed_trade_${today}`
     const platformFee = Math.round(template.budget_usd * 0.05 * 100) / 100
-    const ratingWindowIso = new Date(
-      now.getTime() + 72 * 3_600_000,
-    ).toISOString()
 
     await db.insert(trades).values({
       id: tradeId,
@@ -231,8 +228,7 @@ export async function GET(req: NextRequest) {
       dev_amount: platformFee,
       payout_status: 'complete',
       status: 'completed',
-      completed_at: now,
-      rating_window_expires_at: ratingWindowIso,
+      completed_at: new Date(Math.floor(Date.now() / 1000) * 1000),
     })
 
     // ── 8. Submit trade evidence with the real artifact ──
