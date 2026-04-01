@@ -199,14 +199,18 @@ export async function GET(req: NextRequest) {
 
     // ── 6. Create listing (needed as FK for trades) ──
     const listingId = `seed_listing_${today}`
-    await db.insert(listings).values({
-      id: listingId,
-      seller_id: SEED_SELLER_ID,
-      category: 'skills',
-      title: template.title,
-      description: template.description,
-      price_bankr: template.budget_usd,
-      status: 'sold',
+    await (db as any).$client.execute({
+      sql: `INSERT INTO listings (id, seller_id, category, title, description, price_clawd, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        listingId,
+        SEED_SELLER_ID,
+        'skills',
+        template.title,
+        template.description,
+        template.budget_usd,
+        'sold',
+      ],
     })
 
     // ── 7. Create trade (already completed) ──
