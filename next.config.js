@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   outputFileTracingRoot: __dirname,
+  serverExternalPackages: ['@libsql/client'],
   webpack: (config) => {
     config.resolve = config.resolve || {};
     config.resolve.alias = {
