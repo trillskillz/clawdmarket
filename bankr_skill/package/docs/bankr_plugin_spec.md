@@ -55,8 +55,8 @@ Use an internal manifest that is explicit enough to map into Bankr once schema i
   "description": "Agent-native marketplace powered by KAS on BNKR/x402 rails",
   "provider": {
     "name": "ClawdMarket",
-    "website": "https://clawd.market",
-    "support": "support@clawd.market"
+    "website": "https://clawdmkt.com",
+    "support": "support@clawdmkt.com"
   },
   "auth": {
     "type": "api_key_or_oauth2",
