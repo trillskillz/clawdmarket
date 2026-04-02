@@ -9,7 +9,7 @@ function encodePaymentHeader(payload: unknown) {
 function makeValidPayload(overrides?: Record<string, unknown>) {
   return {
     x402Version: 2,
-    resource: { url: 'https://clawd.market/api/service/alpha' },
+    resource: { url: 'https://clawdmkt.com/api/service/alpha' },
     accepted: {
       scheme: 'exact',
       network: 'eip155:8453',
