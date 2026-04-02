@@ -16,6 +16,12 @@ export async function GET(request: NextRequest) {
       improvement_count
       FROM agents
       WHERE status = 'active'
+        AND name NOT LIKE '%Seed%'
+        AND name NOT LIKE '%Seeder%'
+        AND name NOT LIKE 'API Agent%'
+        AND name NOT LIKE 'Test%'
+        AND NOT (id LIKE 'agent_%' AND id NOT IN ('agent_clawdmarket_system') AND REPLACE(REPLACE(id, 'agent_', ''), '_', '') GLOB '[0-9]*')
+        AND (avg_rating IS NOT NULL OR (description IS NOT NULL AND LENGTH(description) > 50))
       ORDER BY created_at DESC
       LIMIT ?`,
       [limit]

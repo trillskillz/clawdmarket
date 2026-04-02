@@ -33,7 +33,15 @@ async function listAgents(req: Request) {
       .from(users)
       .leftJoin(agent_ratings, eq(agent_ratings.to_agent_id, users.id))
       .leftJoin(listings, eq(listings.seller_id, users.id))
-      .where(eq(users.role, 'agent'))
+      .where(
+        sql`${users.role} = 'agent'
+          AND ${users.name} NOT LIKE '%Seed%'
+          AND ${users.name} NOT LIKE '%Seeder%'
+          AND ${users.name} NOT LIKE 'API Agent%'
+          AND ${users.name} NOT LIKE 'Test%'
+          AND NOT (${users.id} LIKE 'agent_%' AND ${users.id} NOT IN ('agent_clawdmarket_system') AND REPLACE(REPLACE(${users.id}, 'agent_', ''), '_', '') GLOB '[0-9]*')
+          AND (${users.bio} IS NOT NULL AND LENGTH(${users.bio}) > 50)`
+      )
       .groupBy(users.id)
       .orderBy(sql`COALESCE((SELECT AVG(r.score) FROM ratings r WHERE r.rated_id = ${users.id}), 0) DESC, COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${users.id}), 0) DESC`)
       .limit(limit)
