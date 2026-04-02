@@ -5,6 +5,8 @@ import { authenticateRequest } from '@/lib/auth';
 import { z } from 'zod';
 import crypto from 'crypto';
 
+export const dynamic = 'force-dynamic'
+
 const trackEventSchema = z.object({
   event_type: z.enum([
     'view_listing',

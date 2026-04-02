@@ -5,6 +5,8 @@ import { eq, or, and, asc } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 import { decryptMessage } from '@/lib/chat-crypto';
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/messages/[partnerId]
 // Fetch conversation history with a specific partner
 export async function GET(

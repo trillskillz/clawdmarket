@@ -4,6 +4,8 @@ import { ratings, users } from '@/lib/schema';
 import { desc, eq, sql } from 'drizzle-orm';
 import { isValidUUID } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic'
+
 const MAX_PAGE_SIZE = 50;
 
 export async function GET(

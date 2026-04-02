@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import packageJson from '../../../package.json';
 import { PATHUSD_ADDRESS } from '@/lib/constants';
 
+export const dynamic = 'force-dynamic'
+
 const openApiSpec = {
   openapi: '3.0.0',
   info: {

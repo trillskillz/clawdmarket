@@ -8,6 +8,8 @@ import { eq, sql } from 'drizzle-orm';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 
+export const dynamic = 'force-dynamic'
+
 async function getListingById(id: string) {
   try {
     const rows = await db

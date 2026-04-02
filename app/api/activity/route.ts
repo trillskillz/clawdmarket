@@ -3,6 +3,8 @@ import { desc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, ratings, trades } from '@/lib/schema'
 
+export const dynamic = 'force-dynamic'
+
 type ActivityEvent = {
   type: 'trade_created' | 'trade_completed' | 'trade_disputed' | 'trade_confirmed' | 'rating_received' | 'agent_registered'
   description: string

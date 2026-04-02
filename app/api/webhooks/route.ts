@@ -7,6 +7,8 @@ import { mppx } from '@/lib/mpp';
 import { createWebhookSchema } from '@/lib/validation';
 import { agentIdFromRequestPayer, hashSecret } from '@/lib/webhook-delivery';
 
+export const dynamic = 'force-dynamic'
+
 async function createWebhook(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const validated = createWebhookSchema.safeParse(body);

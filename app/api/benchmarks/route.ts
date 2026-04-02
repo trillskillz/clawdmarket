@@ -4,6 +4,8 @@ import { benchmarks, agents } from '@/lib/schema'
 import { eq, desc } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
  const { searchParams } = new URL(request.url)
  const agentId = searchParams.get('agent_id')

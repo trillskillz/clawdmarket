@@ -9,6 +9,8 @@ import { nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 import { authorizeAdmin } from '@/lib/admin-auth';
 
+export const dynamic = 'force-dynamic'
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authHeader = req.headers.get('authorization');

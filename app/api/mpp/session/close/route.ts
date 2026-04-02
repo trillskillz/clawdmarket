@@ -3,6 +3,8 @@ import { Receipt } from 'mppx';
 import { mppx } from '@/lib/mpp';
 import { db } from '@/lib/db';
 
+export const dynamic = 'force-dynamic'
+
 function closeGate(req: NextRequest) {
   return mppx.session({ amount: '0', unitType: 'request' })(async () => NextResponse.json({ ok: true }))(req);
 }

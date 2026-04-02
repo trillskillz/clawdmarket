@@ -8,6 +8,8 @@ import { db } from '@/lib/db';
 import { contract_milestones, contracts, listings, trades, transactions, users, wallets } from '@/lib/schema';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 
+export const dynamic = 'force-dynamic'
+
 async function ensureTradeFeeColumns() {
   const statements = [
     "ALTER TABLE trades ADD COLUMN item_price real DEFAULT 0 NOT NULL",

@@ -6,6 +6,8 @@ import { validateCsrf } from '@/lib/csrf';
 import { isValidUUID } from '@/lib/validation';
 import { and, eq } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic'
+
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { agents, agentVersions, agentImprovements, benchmarks } from '@/lib/schema'
 import { eq, desc } from 'drizzle-orm'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(
  _request: NextRequest,
  { params }: { params: Promise<{ id: string }> }

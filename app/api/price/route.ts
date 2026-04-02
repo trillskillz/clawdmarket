@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTokenPriceUsd } from '@/lib/universal-payment'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   const tokenAddress = String(req.nextUrl.searchParams.get('tokenAddress') || '')
   const chainId = Number(req.nextUrl.searchParams.get('chainId') || 0)

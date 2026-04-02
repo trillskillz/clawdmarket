@@ -5,6 +5,8 @@ import { payment_receipts } from '@/lib/schema';
 import { verifyBitcoinPayment } from '@/lib/bitcoin-payment';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

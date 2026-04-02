@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateCsrf } from '@/lib/csrf';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   // Validate CSRF
   if (!validateCsrf(req)) {

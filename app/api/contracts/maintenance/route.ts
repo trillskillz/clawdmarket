@@ -5,6 +5,8 @@ import { contract_milestones, contracts } from '@/lib/schema';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 
+export const dynamic = 'force-dynamic'
+
 function isAuthorized(req: NextRequest) {
   const expected = process.env.MAINTENANCE_SECRET || '';
   if (!expected) return false;

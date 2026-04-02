@@ -3,6 +3,8 @@ import { and, eq, gte, inArray, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { payment_receipts, trades, users, mpp_sessions } from '@/lib/schema';
 
+export const dynamic = 'force-dynamic'
+
 const PATHUSD = '0x20c000000000000000000000b9537d11c60e8b50'.toLowerCase();
 
 function railFromReceipt(receipt: { route: string; currency: string | null }) {

@@ -5,6 +5,8 @@ import { db } from '@/lib/db'
 import { payment_receipts } from '@/lib/schema'
 import { getTokenPriceUsd } from '@/lib/universal-payment'
 
+export const dynamic = 'force-dynamic'
+
 const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)')
 const TREASURY = (process.env.TREASURY_ADDRESS || process.env.NEXT_PUBLIC_TREASURY_ADDRESS || '').toLowerCase()
 

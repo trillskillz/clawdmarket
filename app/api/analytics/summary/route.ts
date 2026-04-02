@@ -4,6 +4,8 @@ import { api_keys, analytics_events, listings, trades } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { gte } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic'
+
 async function ensureAnalyticsTable() {
   await (db as any).$client.execute({
     sql: `CREATE TABLE IF NOT EXISTS analytics_events (

@@ -5,6 +5,8 @@ import { listings } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

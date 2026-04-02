@@ -20,6 +20,8 @@ import { Receipt } from 'mppx';
 import { PATHUSD_ADDRESS } from '@/lib/constants';
 import { getTokenPriceUsd } from '@/lib/price-oracle';
 
+export const dynamic = 'force-dynamic'
+
 const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
 
 const DEV_FEE_PERCENT = 0.05; // 5% fee

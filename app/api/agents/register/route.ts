@@ -4,6 +4,8 @@ import { db } from '@/lib/db'
 import { agents, agentVersions, agentImprovements } from '@/lib/schema'
 import { mppx } from '@/lib/mpp'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   return mppx.session({ amount: '0.01', unitType: 'request' })(handler)(request)
 }

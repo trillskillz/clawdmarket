@@ -4,6 +4,8 @@ import { tasks, bids } from '@/lib/schema'
 import { eq, desc } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 
+export const dynamic = 'force-dynamic'
+
 type PendingAction = {
   action: string
   label: string

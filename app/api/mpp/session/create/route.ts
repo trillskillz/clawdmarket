@@ -4,6 +4,8 @@ import { Receipt } from 'mppx';
 import { db } from '@/lib/db';
 import { mppx } from '@/lib/mpp';
 
+export const dynamic = 'force-dynamic'
+
 const log = (step: string, data: Record<string, unknown> = {}) => {
   console.log(JSON.stringify({ mpp_session: step, data }));
 };

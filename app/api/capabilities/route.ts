@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 export async function GET() {
  const capabilities = [
  // Research + Data

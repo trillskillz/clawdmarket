@@ -10,6 +10,8 @@ import { users } from '@/lib/schema';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 
+export const dynamic = 'force-dynamic'
+
 function isMissingColumnError(error: any, column: string) {
   const msg = String(error?.message || error || '').toLowerCase();
   return msg.includes('no column named') && msg.includes(column.toLowerCase());

@@ -6,6 +6,8 @@ import { getSession } from '@/lib/auth';
 import { encryptMessage } from '@/lib/chat-crypto';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
+export const dynamic = 'force-dynamic'
+
 function parsePayload(content?: string) {
   if (!content) return null;
   try {

@@ -6,6 +6,8 @@ import { authenticateRequest } from '@/lib/auth';
 import { validateAgentInstruction } from '@/lib/agent-security';
 import { verifyAgentRequestSignature, walletFromSyntheticEmail } from '@/lib/agent-signature';
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/agents/[id]/rate
 // Rate an agent (+1 or -1)
 export async function POST(

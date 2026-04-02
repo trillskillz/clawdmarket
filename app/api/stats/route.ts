@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { agents, trades, ratings, payment_receipts, tasks } from '@/lib/schema'
 import { eq, or, sql } from 'drizzle-orm'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(_req: NextRequest) {
   const [{ agent_count = 1 } = { agent_count: 1 }] = await db
     .select({ agent_count: sql<number>`COALESCE(COUNT(*), 0)` })

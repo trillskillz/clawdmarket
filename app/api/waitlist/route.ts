@@ -6,6 +6,8 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { eq } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
   const rateLimitResult = rateLimit(`waitlist:${ip}`, { 

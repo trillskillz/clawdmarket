@@ -6,6 +6,8 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { storeResetToken } from '@/lib/password-reset';
 import { eq } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for') || 'unknown';
   const rateLimitResult = rateLimit(`forgot-password:${ip}`, {

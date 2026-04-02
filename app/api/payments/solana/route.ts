@@ -6,6 +6,8 @@ import { verifySolanaPayment } from '@/lib/solana-payment';
 import { SOLANA_USDC_MINT, SOLANA_USDT_MINT } from '@/lib/constants';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
+export const dynamic = 'force-dynamic'
+
 function tokenSymbolFromMint(mint?: string) {
   if (!mint || mint === 'SOL') return 'SOL';
   if (mint === SOLANA_USDC_MINT) return 'USDC';

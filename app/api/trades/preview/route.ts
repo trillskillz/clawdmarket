@@ -4,6 +4,8 @@ import { listings } from '@/lib/schema';
 import { eq, sql } from 'drizzle-orm';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
+export const dynamic = 'force-dynamic'
+
 const DEV_FEE_PERCENT = 0.05;
 
 function round2(n: number) {

@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm';
 import { authenticateRequest } from '@/lib/auth';
 import { authorizeAdmin } from '@/lib/admin-auth';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;

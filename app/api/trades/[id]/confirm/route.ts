@@ -6,6 +6,8 @@ import { authenticateRequest } from '@/lib/auth';
 import { isValidUUID } from '@/lib/validation';
 import { payerAddressFromRequest, finalizeTradeCompletion } from '@/lib/trade-escrow';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid trade ID' }, { status: 400 });

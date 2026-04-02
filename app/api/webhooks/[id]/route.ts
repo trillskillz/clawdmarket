@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { webhooks } from '@/lib/schema';
 import { agentIdFromRequestPayer } from '@/lib/webhook-delivery';
 
+export const dynamic = 'force-dynamic'
+
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const agentId = await agentIdFromRequestPayer(req);

@@ -8,6 +8,8 @@ import { encryptMessage } from '@/lib/chat-crypto';
 import { payerAddressFromRequest } from '@/lib/trade-escrow';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid trade ID' }, { status: 400 });

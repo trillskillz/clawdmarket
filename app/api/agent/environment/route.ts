@@ -12,6 +12,8 @@ import {
 } from '@/lib/agent-environment';
 import { desc, eq, or } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;

@@ -9,6 +9,8 @@ import { generateCsrfToken } from '@/lib/csrf';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { isIpBlacklisted, isUserBanned, trackUserIp } from '@/lib/agent-moderation';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
   if (await isIpBlacklisted(ip)) {

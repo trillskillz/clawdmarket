@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { tasks, bids } from '@/lib/schema'
 import { eq } from 'drizzle-orm'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(
  _request: NextRequest,
  { params }: { params: Promise<{ id: string, bid_id: string }> }

@@ -7,6 +7,8 @@ import { createContractSchema } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 
+export const dynamic = 'force-dynamic'
+
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 
 function round2(n: number) {

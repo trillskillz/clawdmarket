@@ -7,6 +7,8 @@ import { validateCsrf } from '@/lib/csrf';
 import { listings, watchlist } from '@/lib/schema';
 import { watchlistItemSchema } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic'
+
 async function getAuthedUser(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;

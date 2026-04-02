@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { payment_receipts } from '@/lib/schema';
 import { eq, and } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ signature: string }> }) {
   const { signature } = await params;
 

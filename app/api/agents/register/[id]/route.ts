@@ -6,6 +6,8 @@ import { ensureAgentsSchema } from '@/lib/agents-schema-ensure';
 import { mppx } from '@/lib/mpp';
 import { agents } from '@/lib/schema';
 
+export const dynamic = 'force-dynamic'
+
 function addressFromSource(source?: string | null) {
   if (!source) return null;
   const match = source.match(/0x[a-fA-F0-9]{40}/);

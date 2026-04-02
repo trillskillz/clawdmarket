@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { users } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic'
+
 async function getUserColumnNames(): Promise<Set<string>> {
   const cols = new Set<string>();
   try {

@@ -5,6 +5,8 @@ import { agent_sessions } from '@/lib/schema';
 import { envMeta } from '@/lib/agent-environment';
 import { sha256 } from '@/lib/agent-security';
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;

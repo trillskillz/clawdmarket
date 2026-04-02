@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kasPaymentHandler } from '@/lib/kas-payment-instance';
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ payment_id: string }> }) {
   const { payment_id } = await params;
   const payment = kasPaymentHandler.getPayment(payment_id);

@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { trades } from '@/lib/schema';
 import { finalizeTradeCompletion } from '@/lib/trade-escrow';
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization') || '';
   const expected = process.env.CRON_SECRET;

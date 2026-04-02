@@ -7,6 +7,8 @@ import { FALLBACK_AGENTS } from '@/lib/fallback-agents';
 import { getAgentRatingState } from '@/lib/agent-moderation';
 import { computeTrustScore } from '@/lib/trust-score';
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -7,6 +7,8 @@ import { validateCsrf } from '@/lib/csrf';
 import { isValidUUID } from '@/lib/validation';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 
+export const dynamic = 'force-dynamic'
+
 const MAX_PAGE_SIZE = 50;
 
 function parsePagination(req: NextRequest) {

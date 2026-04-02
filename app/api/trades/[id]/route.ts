@@ -11,6 +11,8 @@ import { validateAgentInstruction } from '@/lib/agent-security';
 import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
 import { encryptMessage } from '@/lib/chat-crypto';
 
+export const dynamic = 'force-dynamic'
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

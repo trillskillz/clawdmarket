@@ -7,6 +7,8 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq, or, desc, and, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/wallet — Get authenticated user's wallet balance + recent transactions
  */
