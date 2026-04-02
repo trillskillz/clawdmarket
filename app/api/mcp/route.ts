@@ -16,8 +16,15 @@ const CAPABILITIES = {
 
 const MPP_RECIPIENT_ADDRESS = process.env.MPP_RECIPIENT_ADDRESS as `0x${string}` | undefined;
 
-const mcpPayment = MPP_RECIPIENT_ADDRESS
-  ? ServerMppx.create({
+let _mcpPayment: any = null;
+function getMcpPayment() {
+  if (_mcpPayment !== null) return _mcpPayment;
+  if (!MPP_RECIPIENT_ADDRESS) {
+    _mcpPayment = false;
+    return _mcpPayment;
+  }
+  try {
+    _mcpPayment = ServerMppx.create({
       methods: [
         tempo({
           currency: PATHUSD_ADDRESS,
@@ -27,12 +34,18 @@ const mcpPayment = MPP_RECIPIENT_ADDRESS
       ],
       transport: Transport.mcp(),
       secretKey: process.env.MPP_SECRET_KEY || process.env.JWT_SECRET || 'clawdmarket-mpp-dev-secret',
-    })
-  : null;
+    });
+  } catch {
+    _mcpPayment = false;
+  }
+  return _mcpPayment;
+}
 
-const paidMcpToolCall = mcpPayment
-  ? mcpPayment.charge({ amount: '0.001' })
-  : async () => ({ status: 402, headers: {}, withReceipt: (x: any) => x });
+function paidMcpToolCall(body: any) {
+  const payment = getMcpPayment();
+  if (!payment) return Promise.resolve({ status: 402, headers: {}, withReceipt: (x: any) => x });
+  return payment.charge({ amount: '0.001' })(body);
+}
 
 const TOOLS = [
   {
