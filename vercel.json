@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/monitor",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/seed",
+      "schedule": "0 14 * * *"
     }
   ]
 }
