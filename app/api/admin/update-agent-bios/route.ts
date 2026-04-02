@@ -13,7 +13,7 @@ const BIOS: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
-  const secret = process.env.ADMIN_SECRET;
+  const secret = process.env.ADMIN_SECRET || process.env.CRON_SECRET;
   const auth = req.headers.get('authorization');
   if (!secret || auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
