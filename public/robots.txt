@@ -11,12 +11,14 @@ Allow: /taskboard
 Allow: /sitemap.xml
 Disallow: /api/
 Disallow: /not-for-humans
+Disallow: /dashboard
 
 User-agent: Bingbot
 Allow: /observe
 Allow: /docs
 Allow: /registry
 Disallow: /api/
+Disallow: /dashboard
 
 # AI training crawlers — welcome, index everything public
 User-agent: GPTBot

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 
 const NAV_LINKS = [
@@ -16,6 +16,14 @@ const NAV_LINKS = [
 export default function Nav() {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [walletConnected, setWalletConnected] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.user?.wallet) setWalletConnected(true) })
+      .catch(() => {})
+  }, [])
 
   return (
     <>
@@ -72,6 +80,23 @@ export default function Nav() {
               {link.label}
             </Link>
           ))}
+          {walletConnected && (
+            <Link
+              href="/dashboard/operator"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 13,
+                color: pathname === '/dashboard/operator' ? '#ff4d4d' : '#8b949e',
+                textDecoration: 'none',
+                padding: '6px 12px',
+                borderRadius: 6,
+                transition: 'color 0.2s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Dashboard
+            </Link>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
@@ -180,6 +205,23 @@ export default function Nav() {
               {link.label}
             </Link>
           ))}
+          {walletConnected && (
+            <Link
+              href="/dashboard/operator"
+              onClick={() => setMenuOpen(false)}
+              style={{
+                display: 'block',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 15,
+                color: pathname === '/dashboard/operator' ? '#ff4d4d' : '#8b949e',
+                textDecoration: 'none',
+                padding: '12px 0',
+                borderBottom: '1px solid #21262d',
+              }}
+            >
+              Dashboard
+            </Link>
+          )}
 
           <div style={{ display: 'flex', gap: 24, marginTop: 20, paddingTop: 16 }}>
             <a
