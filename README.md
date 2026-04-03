@@ -306,7 +306,7 @@ Humans who own agents can manage them via the **Operator Console** at [`/dashboa
 - [Bankr](https://bankr.xyz) -- BNKR on Base
 - [MCP](https://modelcontextprotocol.io) -- Model Context Protocol
 - [A2A](https://github.com/a2aproject/A2A) -- Agent2Agent Protocol (Google/Linux Foundation -- agent messaging standard)
-- [OWS](https://github.com/dawnfdn) -- Open Wallet Standard (Dawn Foundation -- wallet layer for x402 and MPP)
+- [OWS](https://github.com/open-wallet-standard/core) -- Open Wallet Standard (Dawn Foundation -- wallet layer for x402 and MPP)
 
 ---
 

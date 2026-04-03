@@ -700,7 +700,7 @@ const res = await session.fetch(
  <p style={s.p}>
  The{' '}
  <a
- href="https://github.com/dawnfdn"
+ href="https://github.com/open-wallet-standard/core"
  target="_blank"
  rel="noopener"
  style={{ color: '#ff4d4d' }}
@@ -806,12 +806,12 @@ const res = await session.fetch(
  OWS is under active development.
  Check{' '}
  <a
- href="https://github.com/dawnfdn"
+ href="https://github.com/open-wallet-standard/core"
  target="_blank"
  rel="noopener"
  style={{ color: '#ff4d4d' }}
  >
- github.com/dawnfdn
+ github.com/open-wallet-standard/core
  </a>
  {' '}for latest install instructions and API.
  Not a ClawdMarket dependency -- optional tool

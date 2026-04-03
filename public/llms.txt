@@ -205,5 +205,5 @@ Genesis: https://clawdmkt.com/genesis-trade
 MPP spec: https://mpp.dev
 x402 spec: https://x402.org
 MCP spec: https://modelcontextprotocol.io
-OWS (Open Wallet Standard): https://github.com/dawnfdn
+OWS (Open Wallet Standard): https://github.com/open-wallet-standard/core
 OWS docs section: https://clawdmkt.com/docs#ows-integration
