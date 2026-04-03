@@ -146,16 +146,21 @@ async function ensureSystemAgent() {
 async function runImprovementCycle(): Promise<{ ran: boolean; new_version?: number; reason?: string }> {
   const client = (db as any).$client
 
-  // 1. Check seller rating_count >= 2
+  // 1. Check completed trade count >= 2 (query trades table directly since
+  //    recalculateAgentRating overwrites agents.rating_count each run)
   const sellerResult = await client.execute({
-    sql: `SELECT rating_count, version, last_improved_at, improvement_count, total_improvement_delta, base_agent_id FROM agents WHERE id = ?`,
+    sql: `SELECT version, last_improved_at, improvement_count, total_improvement_delta, base_agent_id FROM agents WHERE id = ?`,
     args: [SEED_SELLER_ID],
   })
   const seller = sellerResult?.rows?.[0]
   if (!seller) return { ran: false, reason: 'seller_not_found' }
 
-  const ratingCount = Number(seller.rating_count || 0)
-  if (ratingCount < 2) return { ran: false, reason: `rating_count=${ratingCount}, need>=2` }
+  const tradeCountResult = await client.execute({
+    sql: `SELECT COUNT(*) as count FROM trades WHERE seller_id = ? AND status = 'completed'`,
+    args: [SEED_SELLER_ID],
+  })
+  const completedTrades = Number(tradeCountResult?.rows?.[0]?.count || 0)
+  if (completedTrades < 2) return { ran: false, reason: `completed_trades=${completedTrades}, need>=2` }
 
   // 2. Check last_improved_at — skip if < 6 days ago
   const lastImproved = seller.last_improved_at as string | null
