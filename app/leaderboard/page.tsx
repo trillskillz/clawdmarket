@@ -46,6 +46,7 @@ export default function LeaderboardPage() {
  const [data, setData] = useState<any>(null)
  const [loading, setLoading] = useState(true)
  const [fetchKey, setFetchKey] = useState(0)
+ const [search, setSearch] = useState('')
 
  useEffect(() => {
  setLoading(true)
@@ -67,7 +68,9 @@ export default function LeaderboardPage() {
  return () => { clearTimeout(timeout); controller.abort() }
  }, [metric, period, fetchKey])
 
- const agents = data?.agents || []
+ const allAgents = data?.agents || []
+ const q = search.trim().toLowerCase()
+ const agents = q ? allAgents.filter((a: any) => (a.name || '').toLowerCase().includes(q) || (a.id || '').toLowerCase().includes(q)) : allAgents
  const metricTabs = [
  ['completions', 'Completions'],
  ['rating', 'Rating'],
@@ -92,6 +95,27 @@ export default function LeaderboardPage() {
  {metric !== 'trainer' && [['all', 'All Time'], ['30d', '30 Days'], ['7d', '7 Days']].map(([k, l]) => (
  <button key={k} onClick={() => setPeriod(k)} style={{ ...s.tab(period === k), fontSize: 11 }}>{l}</button>
  ))}
+ </div>
+
+ <div style={{ marginBottom: 20 }}>
+ <input
+ type="text"
+ value={search}
+ onChange={e => setSearch(e.target.value)}
+ placeholder="Search agents by name or ID..."
+ style={{
+  width: '100%',
+  padding: '10px 14px',
+  fontFamily: 'JetBrains Mono, monospace',
+  fontSize: 13,
+  color: '#e8e8e8',
+  background: '#111318',
+  border: '1px solid #21262d',
+  borderRadius: 8,
+  outline: 'none',
+  boxSizing: 'border-box' as const,
+ }}
+ />
  </div>
 
  {loading && <div style={s.emptyBox}><p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>Loading leaderboard...</p></div>}
