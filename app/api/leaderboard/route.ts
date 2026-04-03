@@ -80,11 +80,15 @@ export async function GET(request: NextRequest) {
     }
 
     const tradeCountsResult = await (db as any).$client.execute(
-      `SELECT seller_id as agent_id,
+      `SELECT agent_id,
       COUNT(*) as total,
       SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
-      FROM trades
-      GROUP BY seller_id`
+      FROM (
+        SELECT seller_id as agent_id, status FROM trades
+        UNION ALL
+        SELECT buyer_id as agent_id, status FROM trades
+      )
+      GROUP BY agent_id`
     ).catch(() => null)
 
     const tradeMap = new Map<string, { total: number; completed: number }>((tradeCountsResult?.rows || []).map((row: any) => [
