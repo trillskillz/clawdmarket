@@ -143,24 +143,27 @@ async function ensureSystemAgent() {
   })
 }
 
+const MAX_VERSION = 50
+
 async function runImprovementCycle(): Promise<{ ran: boolean; new_version?: number; reason?: string }> {
   const client = (db as any).$client
 
-  // 1. Check completed trade count >= 2 (query trades table directly since
-  //    recalculateAgentRating overwrites agents.rating_count each run)
+  // 1. Check completed *seed* trade count >= 2 (only count trades created by
+  //    the seed cron — prevents external agents from inflating the count with
+  //    fake trades to force premature improvements)
   const sellerResult = await client.execute({
-    sql: `SELECT version, last_improved_at, improvement_count, total_improvement_delta, base_agent_id FROM agents WHERE id = ?`,
+    sql: `SELECT last_improved_at FROM agents WHERE id = ?`,
     args: [SEED_SELLER_ID],
   })
   const seller = sellerResult?.rows?.[0]
   if (!seller) return { ran: false, reason: 'seller_not_found' }
 
   const tradeCountResult = await client.execute({
-    sql: `SELECT COUNT(*) as count FROM trades WHERE seller_id = ? AND status = 'completed'`,
+    sql: `SELECT COUNT(*) as count FROM trades WHERE seller_id = ? AND status = 'completed' AND id LIKE 'seed_trade_%'`,
     args: [SEED_SELLER_ID],
   })
   const completedTrades = Number(tradeCountResult?.rows?.[0]?.count || 0)
-  if (completedTrades < 2) return { ran: false, reason: `completed_trades=${completedTrades}, need>=2` }
+  if (completedTrades < 2) return { ran: false, reason: `completed_seed_trades=${completedTrades}, need>=2` }
 
   // 2. Check last_improved_at — skip if < 6 days ago
   const lastImproved = seller.last_improved_at as string | null
@@ -172,12 +175,25 @@ async function runImprovementCycle(): Promise<{ ran: boolean; new_version?: numb
     }
   }
 
-  const currentVersion = Number(seller.version || 1)
+  // 3. Derive version from agent_versions chain (source of truth) rather than
+  //    trusting agents.version, which an external write could desync
+  const versionResult = await client.execute({
+    sql: `SELECT COUNT(*) as count FROM agent_versions WHERE agent_id = ?`,
+    args: [SEED_SELLER_ID],
+  })
+  const currentVersion = Number(versionResult?.rows?.[0]?.count || 0) + 1 // v1 has 0 version records
   const newVersion = currentVersion + 1
+
+  // 4. Hard version cap — prevents runaway lineage and bounds improvement_count
+  //    contribution to reputation score
+  if (newVersion > MAX_VERSION) {
+    return { ran: false, reason: `version_cap_reached (v${currentVersion}, max=${MAX_VERSION})` }
+  }
+
   const nowIso = new Date().toISOString()
   const improvementTaskId = `improve_seller_${todayDateStr()}`
 
-  // 3. Idempotency — skip if improvement task already exists for today
+  // 5. Idempotency — skip if improvement task already exists for today
   const existingTask = await client.execute({
     sql: `SELECT id FROM tasks WHERE id = ?`,
     args: [improvementTaskId],
@@ -186,12 +202,12 @@ async function runImprovementCycle(): Promise<{ ran: boolean; new_version?: numb
     return { ran: false, reason: 'improvement_task_already_exists' }
   }
 
-  // 4. Ensure system agent exists
+  // 6. Ensure system agent exists
   await ensureSystemAgent()
 
   const changeDescription = `v${currentVersion} → v${newVersion}: ${IMPROVEMENT_CHANGES[(newVersion - 2) % IMPROVEMENT_CHANGES.length]}`
 
-  // 5. Post improvement task to the task board
+  // 7. Post improvement task to the task board
   await client.execute({
     sql: `INSERT INTO tasks (id, poster_agent_id, title, description, required_capabilities, budget_usd, status, task_type, subject_agent_id, assigned_agent_id, winning_bid_id, created_at, expires_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -212,7 +228,7 @@ async function runImprovementCycle(): Promise<{ ran: boolean; new_version?: numb
     ],
   })
 
-  // 6. System bids on and accepts its own task
+  // 8. System bids on and accepts its own task
   await client.execute({
     sql: `INSERT INTO bids (id, task_id, bidder_agent_id, price_usd, message, eta_seconds, status, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -228,8 +244,9 @@ async function runImprovementCycle(): Promise<{ ran: boolean; new_version?: numb
     ],
   })
 
-  // 7. Update the seller agent record
-  await client.execute({
+  // 7. Update the seller agent record (optimistic lock on version — if someone
+  //    else bumped it between our read and write, rowsAffected will be 0)
+  const updateResult = await client.execute({
     sql: `UPDATE agents SET
             version = ?,
             parent_version_id = ?,
@@ -238,11 +255,14 @@ async function runImprovementCycle(): Promise<{ ran: boolean; new_version?: numb
             total_improvement_delta = COALESCE(total_improvement_delta, 0) + 0.05,
             last_improved_at = ?,
             improved_by_agent_id = ?
-          WHERE id = ?`,
-    args: [newVersion, SEED_SELLER_ID, SEED_SELLER_ID, nowIso, SYSTEM_AGENT_ID, SEED_SELLER_ID],
+          WHERE id = ? AND COALESCE(version, 1) = ?`,
+    args: [newVersion, SEED_SELLER_ID, SEED_SELLER_ID, nowIso, SYSTEM_AGENT_ID, SEED_SELLER_ID, currentVersion],
   })
+  if (updateResult.rowsAffected === 0) {
+    return { ran: false, reason: `version_conflict (expected v${currentVersion})` }
+  }
 
-  // 8. Record version snapshot in agent_versions
+  // 10. Record version snapshot in agent_versions
   await client.execute({
     sql: `INSERT INTO agent_versions (id, agent_id, base_agent_id, version, improved_by_agent_id, improvement_task_id, change_description, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -258,7 +278,7 @@ async function runImprovementCycle(): Promise<{ ran: boolean; new_version?: numb
     ],
   })
 
-  // 9. Record improvement in agent_improvements (feeds leaderboard trainer tab)
+  // 11. Record improvement in agent_improvements (feeds leaderboard trainer tab)
   await client.execute({
     sql: `INSERT INTO agent_improvements (id, base_agent_id, from_agent_id, to_agent_id, from_version, to_version, improved_by_agent_id, improvement_task_id, delta, cost_usd, change_description, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
