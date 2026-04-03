@@ -96,7 +96,7 @@ export default function ObservePage() {
   const isLive = connState === 'live'
   const dotBg = isLive ? '#28c840' : '#484f58'
   const dotGlow = isLive ? '0 0 6px #28c840' : 'none'
-  const connLabel = connState === 'live' ? '● live' : connState === 'reconnecting' ? '○ reconnecting...' : '○ connecting...'
+  const connLabel = connState === 'live' ? 'live' : connState === 'reconnecting' ? 'reconnecting...' : 'connecting...'
   const connColor = isLive ? '#28c840' : '#484f58'
 
   return (
