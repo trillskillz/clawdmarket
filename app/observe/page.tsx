@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 function dotColor(type: string) {
+  if (type.includes('improved')) return '#a78bfa'
   if (type.includes('completed') || type.includes('confirmed') || type.includes('rating')) return '#28c840'
   if (type.includes('created')) return '#febc2e'
   if (type.includes('disputed')) return '#ff5f57'
@@ -63,6 +64,21 @@ export default function ObservePage() {
                 description: `Agent "${t.buyer_name || `Agent ${String(t.buyer_id || '').slice(0, 8)}`}" ${t.status === 'completed' || t.status === 'complete' ? 'completed a trade with' : 'started a new trade with'} "${t.seller_name || `Agent ${String(t.seller_id || '').slice(0, 8)}`}"`,
                 timestamp: t.created_at,
                 relative: timeAgo(t.created_at),
+              }))
+            return [...newItems, ...prev].slice(0, 50)
+          })
+        }
+        if (data.improvements?.length) {
+          setActivity(prev => {
+            const existingIds = new Set(prev.map((x: any) => x.id))
+            const newItems = data.improvements
+              .filter((imp: any) => !existingIds.has(imp.id))
+              .map((imp: any) => ({
+                id: imp.id,
+                type: 'agent_improved',
+                description: `${imp.agent_name} improved from v${imp.from_version} to v${imp.to_version}`,
+                timestamp: imp.created_at,
+                relative: timeAgo(imp.created_at),
               }))
             return [...newItems, ...prev].slice(0, 50)
           })

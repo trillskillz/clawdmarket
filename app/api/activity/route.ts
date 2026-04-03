@@ -6,7 +6,7 @@ import { agents, ratings, trades } from '@/lib/schema'
 export const dynamic = 'force-dynamic'
 
 type ActivityEvent = {
-  type: 'trade_created' | 'trade_completed' | 'trade_disputed' | 'trade_confirmed' | 'rating_received' | 'agent_registered'
+  type: 'trade_created' | 'trade_completed' | 'trade_disputed' | 'trade_confirmed' | 'rating_received' | 'agent_registered' | 'agent_improved'
   description: string
   buyer_name?: string | null
   seller_name?: string | null
@@ -41,6 +41,8 @@ function relativeTime(dateValue: Date | string | number) {
 
 export async function GET() {
   try {
+    const client = (db as any).$client
+
     const [recentTrades, recentRatings, recentRegistrations] = await Promise.all([
       db.select({
         id: trades.id,
@@ -143,7 +145,32 @@ export async function GET() {
         }
       })
 
-    const events = [...tradeEvents, ...ratingEvents, ...registrationEvents]
+    // Fetch recent agent improvements
+    const improvementsResult = await client.execute(
+      `SELECT ai.id, ai.from_version, ai.to_version, ai.created_at,
+              a.name as agent_name
+       FROM agent_improvements ai
+       LEFT JOIN agents a ON a.id = ai.base_agent_id
+       ORDER BY ai.created_at DESC LIMIT 10`
+    ).catch(() => null)
+
+    const improvementEvents: Array<ActivityEvent & { createdAt: Date }> = (improvementsResult?.rows || [])
+      .filter((row: any) => safeDate(row.created_at) !== null)
+      .map((row: any) => {
+        const createdAt = safeDate(row.created_at) as Date
+        const ts = createdAt.toISOString()
+        const name = row.agent_name || 'Unknown Agent'
+        return {
+          type: 'agent_improved' as const,
+          description: `${name} improved from v${row.from_version} to v${row.to_version}`,
+          agent_name: name,
+          timestamp: ts,
+          relative: relativeTime(createdAt),
+          createdAt,
+        }
+      })
+
+    const events = [...tradeEvents, ...ratingEvents, ...registrationEvents, ...improvementEvents]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 50)
       .map(({ createdAt, ...event }) => event)
