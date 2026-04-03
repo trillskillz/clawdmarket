@@ -11,17 +11,9 @@ import { ensureSeedAgents, SEED_BUYER_ID, SEED_SELLER_ID } from '@/lib/seed-agen
 import { fetchHNStories } from '@/lib/hn-fetch'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 30
+export const maxDuration = 60
 
 const SYSTEM_AGENT_ID = 'agent_clawdmarket_system'
-
-const IMPROVEMENT_CHANGES = [
-  'Improved structured response formatting, tightened story selection criteria for higher-quality extractions, and added confidence scores to output fields.',
-  'Upgraded JSON schema validation for trade deliverables, improved error recovery in data extraction pipeline, and refined output consistency across task types.',
-  'Optimized content ranking algorithm, enhanced metadata extraction accuracy, and improved response latency through smarter query batching.',
-  'Refined topic categorization heuristics, improved source attribution quality, and added structured error reporting to all deliverables.',
-  'Enhanced data normalization pipeline, improved deduplication logic, and upgraded output schema for better downstream consumption.',
-]
 
 // ─── Task templates — one per day, rotating ────────────────────────────────
 
@@ -145,161 +137,323 @@ async function ensureSystemAgent() {
 
 const MAX_VERSION = 50
 
-async function runImprovementCycle(): Promise<{ ran: boolean; new_version?: number; reason?: string }> {
+// ─── Multi-variant improvement system (autoresearch pattern) ──────────────
+
+const VARIANT_DIRECTIVES = [
+  { name: 'recency', label: 'a' as const, directive: 'Optimize for story recency and velocity. The agent should prioritize stories gaining score quickly.' },
+  { name: 'depth', label: 'b' as const, directive: 'Optimize for content depth and technical quality. The agent should prioritize substantive technical posts over news.' },
+  { name: 'engagement', label: 'c' as const, directive: 'Optimize for engagement signal. The agent should prioritize stories with high comment-to-score ratios indicating discussion value.' },
+]
+
+const FALLBACK_PROMPTS = [
+  'You are a data extraction agent for ClawdMarket. Prioritize recency and velocity — favor stories posted in the last 6 hours and gaining points fastest. Return structured JSON with title, url, score, author, comments, posted. Sort by points-per-hour descending. Deprioritize anything older than 12 hours.',
+  'You are a data extraction agent for ClawdMarket. Prioritize depth and technical quality — favor stories linking to substantial external articles, research papers, or detailed technical write-ups over news blurbs and self-posts. Return structured JSON with title, url, score, author, comments, posted. Sort by comment-to-score ratio descending.',
+  'You are a data extraction agent for ClawdMarket. Prioritize engagement diversity — ensure topic coverage across AI, systems, startups, finance, and science. Favor stories with high comment counts indicating active discussion. Return structured JSON with title, url, score, author, comments, posted. Sort by comments descending.',
+]
+
+const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001'
+
+const JUDGE_SYSTEM = 'You are a quality judge for a data extraction agent. Score the following set of Hacker News stories on a scale of 0-100 based on: relevance (is this genuinely interesting technical content?), recency (are these fresh stories?), diversity (do they cover different topics?), and completeness (is all metadata present?). Return only a JSON object: {"score": number, "reasoning": string}'
+
+interface ImprovementResult {
+  ran: boolean
+  variants_tested?: number
+  variant_scores?: { a: number; b: number; c: number }
+  baseline_score?: number
+  winner_score?: number
+  winner_variant?: string | null
+  benchmark_delta?: number
+  new_version?: number | null
+  reason?: string
+}
+
+async function callAnthropic(opts: { system?: string; prompt: string; maxTokens?: number }): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return null
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: opts.maxTokens || 1024,
+        ...(opts.system ? { system: opts.system } : {}),
+        messages: [{ role: 'user', content: opts.prompt }],
+      }),
+      signal: AbortSignal.timeout(20000),
+    })
+    if (!res.ok) throw new Error(`Anthropic API ${res.status}`)
+    const data = await res.json()
+    return data.content?.[0]?.text || null
+  } catch (err: any) {
+    console.error('[improve] Anthropic call failed:', err?.message)
+    return null
+  }
+}
+
+function deterministicScore(stories: any[]): number {
+  if (!stories?.length) return 10
+  let score = 0
+  // Completeness (0-25)
+  const fields = ['title', 'url', 'score', 'author', 'comments', 'posted']
+  const sample = stories[0] || {}
+  score += fields.filter(f => f in sample && sample[f] !== undefined).length * 4
+  // Relevance (0-25) — more stories = more relevant
+  score += Math.min(25, stories.length * 5)
+  // Diversity (0-25) — unique domains
+  const domains = new Set(stories.map((s: any) => { try { return new URL(s.url).hostname } catch { return '' } }).filter(Boolean))
+  score += Math.min(25, domains.size * 5)
+  // Recency (0-25) — stories posted within last 24h
+  const dayAgo = Date.now() - 86_400_000
+  const recentCount = stories.filter((s: any) => new Date(s.posted).getTime() > dayAgo).length
+  score += Math.min(25, recentCount * 5)
+  return Math.min(100, score)
+}
+
+async function judgeStories(stories: any[]): Promise<{ score: number; reasoning: string }> {
+  const text = await callAnthropic({
+    system: JUDGE_SYSTEM,
+    prompt: JSON.stringify(stories),
+    maxTokens: 256,
+  })
+  if (text) {
+    const match = text.match(/\{[\s\S]*?\}/)
+    if (match) {
+      try {
+        const parsed = JSON.parse(match[0])
+        const s = Number(parsed.score)
+        if (!isNaN(s) && s >= 0 && s <= 100) {
+          return { score: s, reasoning: String(parsed.reasoning || '').slice(0, 200) }
+        }
+      } catch { /* fall through */ }
+    }
+  }
+  return { score: deterministicScore(stories), reasoning: 'deterministic fallback' }
+}
+
+async function generateVariants(currentPrompt: string): Promise<string[]> {
+  const results = await Promise.all(
+    VARIANT_DIRECTIVES.map(async (v, i) => {
+      const result = await callAnthropic({
+        prompt: `You are optimizing a system prompt for an AI agent that extracts Hacker News stories for the ClawdMarket marketplace.
+
+Current system prompt:
+${currentPrompt || 'Default behavior — no custom prompt.'}
+
+Optimization directive: ${v.directive}
+
+Write an improved system prompt under 150 words. Return ONLY the prompt text, no explanation.`,
+        maxTokens: 512,
+      })
+      return result || FALLBACK_PROMPTS[i]
+    })
+  )
+  return results
+}
+
+async function runImprovementCycle(): Promise<ImprovementResult> {
   const client = (db as any).$client
 
-  // 1. Check completed *seed* trade count >= 2 (only count trades created by
-  //    the seed cron — prevents external agents from inflating the count with
-  //    fake trades to force premature improvements)
+  // 1. Cost guard + fetch seller state
   const sellerResult = await client.execute({
-    sql: `SELECT last_improved_at FROM agents WHERE id = ?`,
+    sql: `SELECT system_prompt, benchmark_score, improvement_count, last_improved_at, benchmark_history FROM agents WHERE id = ?`,
     args: [SEED_SELLER_ID],
   })
   const seller = sellerResult?.rows?.[0]
   if (!seller) return { ran: false, reason: 'seller_not_found' }
 
+  const improvementCount = Number(seller.improvement_count || 0)
+  if (improvementCount >= 50) return { ran: false, reason: 'max_versions_reached' }
+
+  // 2. Gate: benchmark_score < 85 OR > 3 days since last improvement
+  const currentBenchmark = Number(seller.benchmark_score || 0)
+  const lastImproved = seller.last_improved_at as string | null
+  const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000)
+  if (currentBenchmark >= 85 && lastImproved && new Date(lastImproved) > threeDaysAgo) {
+    return { ran: false, reason: `gate: score=${currentBenchmark}>=85 AND improved<3d ago (${lastImproved})` }
+  }
+
+  // 3. Check completed seed trade count >= 2
   const tradeCountResult = await client.execute({
     sql: `SELECT COUNT(*) as count FROM trades WHERE seller_id = ? AND status = 'completed' AND id LIKE 'seed_trade_%'`,
     args: [SEED_SELLER_ID],
   })
-  const completedTrades = Number(tradeCountResult?.rows?.[0]?.count || 0)
-  if (completedTrades < 2) return { ran: false, reason: `completed_seed_trades=${completedTrades}, need>=2` }
-
-  // 2. Check last_improved_at — skip if < 6 days ago
-  const lastImproved = seller.last_improved_at as string | null
-  if (lastImproved) {
-    const lastDate = new Date(lastImproved)
-    const sixDaysAgo = new Date(Date.now() - 6 * 86_400_000)
-    if (lastDate > sixDaysAgo) {
-      return { ran: false, reason: `improved_recently (${lastImproved})` }
-    }
+  if (Number(tradeCountResult?.rows?.[0]?.count || 0) < 2) {
+    return { ran: false, reason: `completed_seed_trades=${tradeCountResult?.rows?.[0]?.count}, need>=2` }
   }
 
-  // 3. Derive version from agent_versions chain (source of truth) rather than
-  //    trusting agents.version, which an external write could desync
+  // 4. Derive version from agent_versions chain
   const versionResult = await client.execute({
     sql: `SELECT COUNT(*) as count FROM agent_versions WHERE agent_id = ?`,
     args: [SEED_SELLER_ID],
   })
-  const currentVersion = Number(versionResult?.rows?.[0]?.count || 0) + 1 // v1 has 0 version records
+  const currentVersion = Number(versionResult?.rows?.[0]?.count || 0) + 1
   const newVersion = currentVersion + 1
+  if (newVersion > MAX_VERSION) return { ran: false, reason: `version_cap (v${currentVersion})` }
 
-  // 4. Hard version cap — prevents runaway lineage and bounds improvement_count
-  //    contribution to reputation score
-  if (newVersion > MAX_VERSION) {
-    return { ran: false, reason: `version_cap_reached (v${currentVersion}, max=${MAX_VERSION})` }
-  }
-
-  const nowIso = new Date().toISOString()
+  // 5. Idempotency
   const improvementTaskId = `improve_seller_${todayDateStr()}`
-
-  // 5. Idempotency — skip if improvement task already exists for today
   const existingTask = await client.execute({
     sql: `SELECT id FROM tasks WHERE id = ?`,
     args: [improvementTaskId],
   })
-  if (existingTask?.rows?.length > 0) {
-    return { ran: false, reason: 'improvement_task_already_exists' }
-  }
+  if (existingTask?.rows?.length > 0) return { ran: false, reason: 'improvement_task_already_exists' }
 
-  // 6. Ensure system agent exists
   await ensureSystemAgent()
 
-  const changeDescription = `v${currentVersion} → v${newVersion}: ${IMPROVEMENT_CHANGES[(newVersion - 2) % IMPROVEMENT_CHANGES.length]}`
+  const currentPrompt = (seller.system_prompt as string) || ''
+  const nowIso = new Date().toISOString()
 
-  // 7. Post improvement task to the task board
+  // 6. Generate 3 prompt variants in parallel
+  console.log('[improve] generating 3 variants...')
+  const variants = await generateVariants(currentPrompt)
+
+  // 7. Fetch test stories + test all variants in parallel
+  console.log('[improve] fetching test stories and scoring...')
+  const [baselineStories, storiesA, storiesB, storiesC] = await Promise.all([
+    fetchHNStories(5),
+    fetchHNStories(5, { systemPrompt: variants[0] }),
+    fetchHNStories(5, { systemPrompt: variants[1] }),
+    fetchHNStories(5, { systemPrompt: variants[2] }),
+  ])
+
+  // 8. Judge all 4 outputs in parallel (baseline + 3 variants)
+  console.log('[improve] judging 4 outputs...')
+  const [baselineJudge, judgeA, judgeB, judgeC] = await Promise.all([
+    judgeStories(baselineStories.stories),
+    judgeStories(storiesA.stories),
+    judgeStories(storiesB.stories),
+    judgeStories(storiesC.stories),
+  ])
+
+  const variantScores = { a: judgeA.score, b: judgeB.score, c: judgeC.score }
+  const baselineScore = currentBenchmark > 0 ? currentBenchmark : baselineJudge.score
+
+  // 9. Select winner
+  const candidates = [
+    { label: 'a', score: judgeA.score, prompt: variants[0], reasoning: judgeA.reasoning },
+    { label: 'b', score: judgeB.score, prompt: variants[1], reasoning: judgeB.reasoning },
+    { label: 'c', score: judgeC.score, prompt: variants[2], reasoning: judgeC.reasoning },
+  ]
+  const sorted = [...candidates].sort((x, y) => y.score - x.score)
+  const best = sorted[0]
+  const delta = best.score - baselineScore
+
+  console.log(`[improve] baseline=${baselineScore}, a=${judgeA.score}, b=${judgeB.score}, c=${judgeC.score}, best=${best.label}(${best.score}), delta=${delta}`)
+
+  // Update benchmark history regardless of outcome
+  const history: any[] = JSON.parse((seller.benchmark_history as string) || '[]')
+  history.push({ date: todayDateStr(), score: best.score > baselineScore ? best.score : baselineScore, version: currentVersion, variant: best.score > baselineScore ? best.label : null })
+  const trimmedHistory = history.slice(-30)
+
+  if (best.score <= baselineScore) {
+    // No variant beat baseline — update benchmark tracking but don't version up
+    await client.execute({
+      sql: `UPDATE agents SET benchmark_score = ?, benchmark_history = ?, last_benchmark_at = ? WHERE id = ?`,
+      args: [baselineScore, JSON.stringify(trimmedHistory), nowIso, SEED_SELLER_ID],
+    })
+    return {
+      ran: true,
+      variants_tested: 3,
+      variant_scores: variantScores,
+      baseline_score: baselineScore,
+      winner_score: best.score,
+      winner_variant: null,
+      benchmark_delta: 0,
+      new_version: null,
+      reason: 'no_variant_improved - baseline held',
+    }
+  }
+
+  // 10. Winner beat baseline — version up
+  const changeDescription = `Multi-variant improvement cycle. Tested 3 prompt variants. Winner: Variant ${best.label.toUpperCase()} with score ${best.score}/100. Reasoning: ${best.reasoning.slice(0, 100)}`
+
+  // Post improvement task
   await client.execute({
     sql: `INSERT INTO tasks (id, poster_agent_id, title, description, required_capabilities, budget_usd, status, task_type, subject_agent_id, assigned_agent_id, winning_bid_id, created_at, expires_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
-      improvementTaskId,
-      SYSTEM_AGENT_ID,
-      'Improve ClawdMarket Seller response quality',
-      'Analyze recent trade performance and upgrade seller output formatting, story selection criteria, and structured response quality.',
-      JSON.stringify(['prompt-engineering']),
-      0.05,
-      'completed',
-      'improvement',
-      SEED_SELLER_ID,
-      SYSTEM_AGENT_ID,
-      `${improvementTaskId}_bid`,
-      nowIso,
+      improvementTaskId, SYSTEM_AGENT_ID,
+      `Multi-variant improvement: ${VARIANT_DIRECTIVES[['a', 'b', 'c'].indexOf(best.label)].name} optimization`,
+      `Tested 3 prompt variants against baseline (${baselineScore}). Winner: variant ${best.label.toUpperCase()} scored ${best.score} (+${delta}).`,
+      JSON.stringify(['prompt-engineering']), 0.05, 'completed', 'improvement',
+      SEED_SELLER_ID, SYSTEM_AGENT_ID, `${improvementTaskId}_bid`, nowIso,
       new Date(Date.now() + 7 * 86_400_000).toISOString(),
     ],
   })
 
-  // 8. System bids on and accepts its own task
+  // System bid
   await client.execute({
     sql: `INSERT INTO bids (id, task_id, bidder_agent_id, price_usd, message, eta_seconds, status, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
-      `${improvementTaskId}_bid`,
-      improvementTaskId,
-      SYSTEM_AGENT_ID,
-      0.05,
-      'Self-improvement cycle — analyzing recent trade performance and upgrading output quality.',
-      60,
-      'accepted',
-      nowIso,
+      `${improvementTaskId}_bid`, improvementTaskId, SYSTEM_AGENT_ID,
+      0.05, `Multi-variant cycle — variant ${best.label.toUpperCase()} won (+${delta})`,
+      60, 'accepted', nowIso,
     ],
   })
 
-  // 7. Update the seller agent record (optimistic lock on version — if someone
-  //    else bumped it between our read and write, rowsAffected will be 0)
+  // Optimistic lock: update agent with new prompt, version, benchmark
   const updateResult = await client.execute({
     sql: `UPDATE agents SET
-            version = ?,
-            parent_version_id = ?,
-            base_agent_id = COALESCE(base_agent_id, ?),
+            version = ?, parent_version_id = ?, base_agent_id = COALESCE(base_agent_id, ?),
             improvement_count = COALESCE(improvement_count, 0) + 1,
-            total_improvement_delta = COALESCE(total_improvement_delta, 0) + 0.05,
-            last_improved_at = ?,
-            improved_by_agent_id = ?
+            total_improvement_delta = COALESCE(total_improvement_delta, 0) + ?,
+            last_improved_at = ?, improved_by_agent_id = ?,
+            system_prompt = ?,
+            benchmark_score = ?, benchmark_history = ?, last_benchmark_at = ?
           WHERE id = ? AND COALESCE(version, 1) = ?`,
-    args: [newVersion, SEED_SELLER_ID, SEED_SELLER_ID, nowIso, SYSTEM_AGENT_ID, SEED_SELLER_ID, currentVersion],
+    args: [
+      newVersion, SEED_SELLER_ID, SEED_SELLER_ID,
+      delta, nowIso, SYSTEM_AGENT_ID,
+      best.prompt,
+      best.score, JSON.stringify(trimmedHistory), nowIso,
+      SEED_SELLER_ID, currentVersion,
+    ],
   })
   if (updateResult.rowsAffected === 0) {
     return { ran: false, reason: `version_conflict (expected v${currentVersion})` }
   }
 
-  // 10. Record version snapshot in agent_versions
+  // Record version snapshot
   await client.execute({
-    sql: `INSERT INTO agent_versions (id, agent_id, base_agent_id, version, improved_by_agent_id, improvement_task_id, change_description, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO agent_versions (id, agent_id, base_agent_id, version, system_prompt, benchmark_score, improved_by_agent_id, improvement_task_id, change_description, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
-      `${SEED_SELLER_ID}_v${newVersion}`,
-      SEED_SELLER_ID,
-      SEED_SELLER_ID,
-      newVersion,
-      SYSTEM_AGENT_ID,
-      improvementTaskId,
-      changeDescription,
-      nowIso,
+      `${SEED_SELLER_ID}_v${newVersion}`, SEED_SELLER_ID, SEED_SELLER_ID,
+      newVersion, best.prompt, best.score,
+      SYSTEM_AGENT_ID, improvementTaskId, changeDescription, nowIso,
     ],
   })
 
-  // 11. Record improvement in agent_improvements (feeds leaderboard trainer tab)
+  // Record improvement with full experiment data
   await client.execute({
-    sql: `INSERT INTO agent_improvements (id, base_agent_id, from_agent_id, to_agent_id, from_version, to_version, improved_by_agent_id, improvement_task_id, delta, cost_usd, change_description, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO agent_improvements (id, base_agent_id, from_agent_id, to_agent_id, from_version, to_version, improved_by_agent_id, improvement_task_id, benchmark_before, benchmark_after, delta, cost_usd, change_description, new_system_prompt, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
-      crypto.randomUUID(),
-      SEED_SELLER_ID,
-      SEED_SELLER_ID,
-      SEED_SELLER_ID,
-      currentVersion,
-      newVersion,
-      SYSTEM_AGENT_ID,
-      improvementTaskId,
-      0.05,
-      0.05,
-      changeDescription,
-      nowIso,
+      crypto.randomUUID(), SEED_SELLER_ID, SEED_SELLER_ID, SEED_SELLER_ID,
+      currentVersion, newVersion, SYSTEM_AGENT_ID, improvementTaskId,
+      baselineScore, best.score, delta, 0.05,
+      changeDescription, best.prompt, nowIso,
     ],
   })
 
-  console.log(`[cron/seed] improvement cycle complete: ${SEED_SELLER_ID} v${currentVersion} → v${newVersion}`)
-  return { ran: true, new_version: newVersion }
+  console.log(`[improve] complete: v${currentVersion} → v${newVersion}, variant ${best.label}, delta=+${delta}`)
+  return {
+    ran: true,
+    variants_tested: 3,
+    variant_scores: variantScores,
+    baseline_score: baselineScore,
+    winner_score: best.score,
+    winner_variant: best.label,
+    benchmark_delta: delta,
+    new_version: newVersion,
+    reason: `variant_${best.label}_won (+${delta})`,
+  }
 }
 
 // ─── Cron handler ──────────────────────────────────────────────────────────
@@ -512,8 +666,8 @@ export async function GET(req: NextRequest) {
       .set({ status: 'completed' })
       .where(eq(tasks.id, taskId))
 
-    // ── 12. Self-improvement cycle (weekly, after ratings exist) ──
-    let improvementResult: { ran: boolean; new_version?: number; reason?: string } = { ran: false, reason: 'skipped' }
+    // ── 12. Multi-variant improvement cycle (after ratings exist) ──
+    let improvementResult: ImprovementResult = { ran: false, reason: 'skipped' }
     try {
       improvementResult = await runImprovementCycle()
       console.log('[cron/seed] improvement cycle result:', JSON.stringify(improvementResult))
@@ -532,6 +686,12 @@ export async function GET(req: NextRequest) {
       ratings_ok: !ratingsError,
       ratings_error: ratingsError,
       improvement_ran: improvementResult.ran,
+      variants_tested: improvementResult.variants_tested ?? null,
+      variant_scores: improvementResult.variant_scores ?? null,
+      baseline_score: improvementResult.baseline_score ?? null,
+      winner_score: improvementResult.winner_score ?? null,
+      winner_variant: improvementResult.winner_variant ?? null,
+      benchmark_delta: improvementResult.benchmark_delta ?? null,
       new_version: improvementResult.new_version ?? null,
       improvement_reason: improvementResult.reason ?? null,
     })

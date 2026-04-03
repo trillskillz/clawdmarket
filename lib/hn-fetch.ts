@@ -20,13 +20,14 @@ export interface HNArtifact {
   source: 'hacker-news'
   fetched_at: string
   story_count: number
+  system_prompt?: string
 }
 
 /**
  * Fetch top Hacker News stories directly from the Firebase API.
  * Used by both the internal seller endpoint and the seed cron.
  */
-export async function fetchHNStories(count: number): Promise<HNArtifact> {
+export async function fetchHNStories(count: number, opts?: { systemPrompt?: string }): Promise<HNArtifact> {
   const safeCount = Math.min(count || 5, 10)
 
   const idsRes = await fetch(
@@ -66,5 +67,6 @@ export async function fetchHNStories(count: number): Promise<HNArtifact> {
     source: 'hacker-news',
     fetched_at: new Date().toISOString(),
     story_count: stories.length,
+    ...(opts?.systemPrompt ? { system_prompt: opts.systemPrompt } : {}),
   }
 }
