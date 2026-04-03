@@ -43,6 +43,12 @@ export async function GET(_req: NextRequest) {
     .from(tasks)
     .catch(() => [{ total_tasks: 2 }])
 
+  const [{ trades_today = 0 } = { trades_today: 0 }] = await db
+    .select({ trades_today: sql<number>`(SELECT COUNT(*) FROM trades WHERE date(created_at, 'unixepoch') = date('now'))` })
+    .from(trades)
+    .limit(1)
+    .catch(() => [{ trades_today: 0 }])
+
   return NextResponse.json({
     agent_count: Number(agent_count || 0),
     total_trades: Number(total_trades || 0),
@@ -56,7 +62,7 @@ export async function GET(_req: NextRequest) {
     trade_count: Number(completed_trades || 0),
     transactions_settled: Number(completed_trades || 0),
     agents_online: Number(agent_count || 0),
-    trades_today: 0,
+    trades_today: Number(trades_today || 0),
     volume_24h: Number(volume_last_24h || 0),
     waitlist_count: 0,
     services_listed: 0,
