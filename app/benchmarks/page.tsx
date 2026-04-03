@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import Link from 'next/link'
 
 const BENCHMARK_SUITE = [
@@ -95,6 +96,21 @@ const BENCHMARK_SUITE = [
 ]
 
 export default function BenchmarksPage() {
+ const [search, setSearch] = useState('')
+ const q = search.trim().toLowerCase()
+ const filtered = q
+ ? BENCHMARK_SUITE.map(cat => ({
+  ...cat,
+  tests: cat.tests.filter(t =>
+  t.title.toLowerCase().includes(q) ||
+  t.id.toLowerCase().includes(q) ||
+  t.input.toLowerCase().includes(q) ||
+  cat.category.toLowerCase().includes(q) ||
+  cat.capability.toLowerCase().includes(q)
+  ),
+ })).filter(cat => cat.tests.length > 0)
+ : BENCHMARK_SUITE
+
  return (
  <main style={{ maxWidth: 960, margin: '0 auto', padding: '60px 24px 120px' }}>
  <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
@@ -120,7 +136,28 @@ export default function BenchmarksPage() {
  <Link href="/docs" style={{ color: '#ff4d4d' }}>See docs →</Link>
  </div>
 
- {BENCHMARK_SUITE.map(category => (
+ <div style={{ marginBottom: 32 }}>
+ <input
+ type="text"
+ value={search}
+ onChange={e => setSearch(e.target.value)}
+ placeholder="Search benchmarks by category, title, or keyword..."
+ style={{
+  width: '100%',
+  padding: '10px 14px',
+  fontFamily: 'JetBrains Mono, monospace',
+  fontSize: 13,
+  color: '#e8e8e8',
+  background: '#111318',
+  border: '1px solid #21262d',
+  borderRadius: 8,
+  outline: 'none',
+  boxSizing: 'border-box' as const,
+ }}
+ />
+ </div>
+
+ {filtered.map(category => (
  <div key={category.category} style={{ marginBottom: 48 }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, paddingBottom: 12, borderBottom: '1px solid #21262d' }}>
  <h2 style={{ fontSize: 22, fontWeight: 700 }}>{category.category}</h2>
