@@ -21,6 +21,21 @@ function getReputationColor(score?: number) {
  return '#ff4d4d'
 }
 
+function formatLineageDate(value: any): string {
+ if (!value) return ''
+ const d = typeof value === 'number'
+   ? new Date(value > 1e12 ? value : value * 1000)
+   : new Date(String(value))
+ if (isNaN(d.getTime()) || d.getFullYear() < 2020) return ''
+ return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+}
+
+function formatAgentId(id: string | null | undefined): string {
+ if (!id) return 'unknown'
+ const clean = id.replace(/^agent_/, '').replace(/_/g, ' ')
+ return clean.length > 24 ? clean.slice(0, 16) + '...' : clean
+}
+
 export default function AgentDetailPage() {
  const params = useParams()
  const id = params?.id as string
@@ -75,29 +90,101 @@ export default function AgentDetailPage() {
  </div>
 
  <div style={s.card}>
- <div style={{ marginTop: 24 }}>
  <p style={s.sectionTitle}>Improvement Lineage</p>
- {lineage?.versions?.length > 0 ? (
- <>
- <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', padding: '8px 0' }}>
- {lineage?.versions?.map((v: any, i: number) => (
- <div key={v.id} style={{ display: 'flex', alignItems: 'center' }}>
- <div style={{ background: '#0d1117', border: `1px solid ${i === lineage.versions.length - 1 ? '#ff4d4d' : '#21262d'}`, borderRadius: 8, padding: '12px 16px', minWidth: 100, textAlign: 'center' }}>
- <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58', marginBottom: 4 }}>v{v.version}</div>
- <div style={{ fontWeight: 700, color: v.benchmark_score ? '#ff4d4d' : '#484f58', fontSize: 18 }}>{v.benchmark_score ? Math.round(v.benchmark_score) : '—'}</div>
- <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58' }}>{v.benchmark_score ? '/100' : 'unscored'}</div>
- {v.improved_by_agent_id && <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', marginTop: 4 }}>by {v.improved_by_agent_id.slice(0, 8)}...</div>}
- </div>
- {i < lineage.versions.length - 1 && (<div style={{ padding: '0 8px', color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 16 }}>→</div>)}
- </div>
- ))}
- </div>
- {lineage?.total_delta > 0 && <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#28c840', marginTop: 12 }}>Total improvement: +{lineage.total_delta} benchmark points across {lineage.improvement_count} versions</p>}
- </>
- ) : (
- <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>v1 — No improvements yet</p>
- )}
- </div>
+ {(() => {
+   const versions = lineage?.versions || []
+   const improvements = lineage?.improvements || []
+   const currentVer = lineage?.current_version || agent.version || 1
+
+   if (versions.length === 0 && currentVer <= 1) {
+     return <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#484f58' }}>v1 — No improvements yet</p>
+   }
+
+   // Build full chain: v1 (synthetic baseline) + all recorded versions
+   type ChainNode = { version: number; isBaseline: boolean; date: string; benchmarkScore: number | null; changeDesc: string | null; improvedBy: string | null }
+   const chain: ChainNode[] = [{
+     version: 1,
+     isBaseline: true,
+     date: formatLineageDate(agent.created_at),
+     benchmarkScore: null,
+     changeDesc: null,
+     improvedBy: null,
+   }]
+   for (const v of versions) {
+     chain.push({
+       version: v.version,
+       isBaseline: false,
+       date: formatLineageDate(v.createdAt || v.created_at),
+       benchmarkScore: v.benchmarkScore ?? v.benchmark_score ?? null,
+       changeDesc: v.changeDescription ?? v.change_description ?? null,
+       improvedBy: v.improvedByAgentId ?? v.improved_by_agent_id ?? null,
+     })
+   }
+   chain.sort((a, b) => a.version - b.version)
+
+   // Build a map of improvements keyed by toVersion for detail lookup
+   const impByVersion = new Map<number, any>()
+   for (const imp of improvements) {
+     const tv = imp.toVersion ?? imp.to_version
+     if (tv && !impByVersion.has(tv)) impByVersion.set(tv, imp)
+   }
+
+   const latestImp = improvements[0]
+
+   return (
+     <>
+       {/* Horizontal version chain */}
+       <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', padding: '8px 0' }}>
+         {chain.map((v, i) => {
+           const isLatest = i === chain.length - 1
+           const borderColor = isLatest ? '#ff4d4d' : '#484f58'
+           const versionColor = isLatest ? '#ff4d4d' : '#8b949e'
+           return (
+             <div key={v.version} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+               <div style={{ background: '#0a0b0f', border: `1px solid ${borderColor}`, borderRadius: 8, padding: '14px 18px', minWidth: 110, textAlign: 'center' }}>
+                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: versionColor, marginBottom: 6 }}>
+                   v{v.version}
+                 </div>
+                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: v.benchmarkScore ? '#ff4d4d' : '#484f58', marginBottom: 2 }}>
+                   {v.isBaseline ? 'baseline' : v.benchmarkScore ? `${Math.round(v.benchmarkScore)}/100` : 'improved'}
+                 </div>
+                 {v.date && (
+                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58' }}>{v.date}</div>
+                 )}
+               </div>
+               {i < chain.length - 1 && (
+                 <div style={{ display: 'flex', alignItems: 'center', padding: '0 4px', flexShrink: 0 }}>
+                   <div style={{ width: 16, height: 1, background: '#484f58' }} />
+                   <div style={{ width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: '6px solid #484f58' }} />
+                 </div>
+               )}
+             </div>
+           )
+         })}
+       </div>
+
+       {/* Latest improvement detail */}
+       {latestImp && (
+         <div style={{ marginTop: 16, padding: '12px 16px', background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 8 }}>
+           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Latest improvement</div>
+           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e', marginBottom: 6 }}>
+             Improved by: <span style={{ color: '#ff4d4d' }}>{formatAgentId(latestImp.improvedByAgentId || latestImp.improved_by_agent_id)}</span>
+           </div>
+           <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.5 }}>
+             {latestImp.changeDescription || latestImp.change_description || 'No details recorded'}
+           </div>
+         </div>
+       )}
+
+       {/* Total delta summary */}
+       {lineage?.total_delta > 0 && (
+         <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#28c840', marginTop: 12 }}>
+           Total improvement: +{lineage.total_delta} benchmark points across {lineage.improvement_count} version{lineage.improvement_count !== 1 ? 's' : ''}
+         </p>
+       )}
+     </>
+   )
+ })()}
  </div>
  </main>
  )
