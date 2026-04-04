@@ -12,11 +12,20 @@ function dotColor(type: string) {
   return '#ff4d4d'
 }
 
+function toDateSafe(timestamp: string | number): Date {
+  if (typeof timestamp === 'number') {
+    return new Date(timestamp <= 9999999999 ? timestamp * 1000 : timestamp)
+  }
+  if (/^\d+$/.test(timestamp)) {
+    const ts = Number(timestamp)
+    return new Date(ts <= 9999999999 ? ts * 1000 : ts)
+  }
+  return new Date(timestamp)
+}
+
 function timeAgo(timestamp: string | number | null | undefined): string {
   if (!timestamp) return '—'
-  const date = typeof timestamp === 'number'
-    ? new Date(timestamp > 1e12 ? timestamp : timestamp * 1000)
-    : new Date(timestamp)
+  const date = toDateSafe(timestamp)
   if (isNaN(date.getTime()) || date.getFullYear() < 2020) return '—'
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
   if (seconds < 60) return 'just now'
@@ -28,9 +37,7 @@ function timeAgo(timestamp: string | number | null | undefined): string {
 
 function fullTimestamp(timestamp: string | number | null | undefined): string {
   if (!timestamp) return ''
-  const date = typeof timestamp === 'number'
-    ? new Date(timestamp > 1e12 ? timestamp : timestamp * 1000)
-    : new Date(timestamp)
+  const date = toDateSafe(timestamp)
   if (isNaN(date.getTime())) return ''
   return date.toLocaleString('en-US', {
     weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
@@ -137,19 +144,13 @@ export default function ObservePage() {
           agents: data.agents?.length || 0,
         })
         if (data.trades?.length) {
-          setActivity(prev => {
-            const existingIds = new Set(prev.map((x: any) => x.id))
-            const newItems = data.trades
-              .filter((t: any) => !existingIds.has(t.id))
-              .map((t: any) => ({
-                id: t.id,
-                type: t.status === 'completed' || t.status === 'complete' ? 'trade_completed' : 'trade_created',
-                description: `Agent "${t.buyer_name || `Agent ${String(t.buyer_id || '').slice(0, 8)}`}" ${t.status === 'completed' || t.status === 'complete' ? 'completed a trade with' : 'started a new trade with'} "${t.seller_name || `Agent ${String(t.seller_id || '').slice(0, 8)}`}"`,
-                timestamp: t.created_at,
-                relative: timeAgo(t.created_at),
-              }))
-            return [...newItems, ...prev].slice(0, 50)
-          })
+          setActivity(data.trades.map((t: any) => ({
+            id: t.id,
+            type: t.status === 'completed' || t.status === 'complete' ? 'trade_completed' : 'trade_created',
+            description: `Agent "${t.buyer_name || `Agent ${String(t.buyer_id || '').slice(0, 8)}`}" ${t.status === 'completed' || t.status === 'complete' ? 'completed a trade with' : 'started a new trade with'} "${t.seller_name || `Agent ${String(t.seller_id || '').slice(0, 8)}`}"`,
+            timestamp: t.created_at,
+            relative: timeAgo(t.created_at),
+          })).slice(0, 50))
         }
         if (data.improvements?.length) {
           setActivity(prev => {
@@ -509,7 +510,7 @@ export default function ObservePage() {
                     {d.response_status || d.status}
                   </span>
                   <span style={mutedMono}>
-                    {d.created_at ? new Date(d.created_at).toLocaleTimeString() : '—'}
+                    {d.created_at ? toDateSafe(d.created_at).toLocaleTimeString() : '—'}
                   </span>
                 </div>
               </div>
