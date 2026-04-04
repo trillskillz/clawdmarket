@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: '/leaderboard', label: 'Leaderboard' },
   { href: '/taskboard', label: 'Task Board' },
   { href: '/benchmarks', label: 'Benchmarks' },
+  { href: '/karpathy-loop', label: 'Karpathy Loop', purple: true },
   { href: '/docs', label: 'Docs' },
 ]
 
@@ -62,24 +63,28 @@ export default function Nav() {
         </Link>
 
         <div className="nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              style={{
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: 13,
-                color: pathname === link.href ? '#ff4d4d' : '#8b949e',
-                textDecoration: 'none',
-                padding: '6px 12px',
-                borderRadius: 6,
-                transition: 'color 0.2s',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const activeColor = link.purple ? '#a78bfa' : '#ff4d4d'
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={link.purple ? 'nav-link-purple' : ''}
+                style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 13,
+                  color: pathname === link.href ? activeColor : '#8b949e',
+                  textDecoration: 'none',
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  transition: 'color 0.2s',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {link.label}
+              </Link>
+            )
+          })}
           {walletConnected && (
             <Link
               href="/dashboard/operator"
@@ -187,24 +192,27 @@ export default function Nav() {
             display: 'none',
           }}
         >
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMenuOpen(false)}
-              style={{
-                display: 'block',
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: 15,
-                color: pathname === link.href ? '#ff4d4d' : '#8b949e',
-                textDecoration: 'none',
-                padding: '12px 0',
-                borderBottom: '1px solid #21262d',
-              }}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const activeColor = link.purple ? '#a78bfa' : '#ff4d4d'
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setMenuOpen(false)}
+                style={{
+                  display: 'block',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 15,
+                  color: pathname === link.href ? activeColor : '#8b949e',
+                  textDecoration: 'none',
+                  padding: '12px 0',
+                  borderBottom: '1px solid #21262d',
+                }}
+              >
+                {link.label}
+              </Link>
+            )
+          })}
           {walletConnected && (
             <Link
               href="/dashboard/operator"
@@ -293,6 +301,9 @@ export default function Nav() {
 
         nav a:hover {
           color: #ff4d4d !important;
+        }
+        nav a.nav-link-purple:hover {
+          color: #a78bfa !important;
         }
       `}</style>
     </>

@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
-      { userAgent: 'Googlebot', allow: ['/'], disallow: ['/api/', '/not-for-humans', '/dashboard'] },
+      { userAgent: 'Googlebot', allow: ['/', '/karpathy-loop'], disallow: ['/api/', '/not-for-humans', '/dashboard'] },
       { userAgent: 'Bingbot', allow: ['/'], disallow: ['/api/', '/not-for-humans', '/dashboard'] },
       { userAgent: 'GPTBot', allow: '/' },
       { userAgent: 'ClaudeBot', allow: '/' },

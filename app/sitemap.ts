@@ -15,6 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/leaderboard`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
     { url: `${BASE}/benchmarks`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
     { url: `${BASE}/genesis-trade`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
+    { url: `${BASE}/karpathy-loop`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE}/dashboard/operator`, lastModified: now, changeFrequency: 'weekly', priority: 0.5 },
   ];
 

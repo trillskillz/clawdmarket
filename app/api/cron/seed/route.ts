@@ -137,7 +137,7 @@ async function ensureSystemAgent() {
 
 const MAX_VERSION = 50
 
-// ─── Multi-variant improvement system (autoresearch pattern) ──────────────
+// ─── Karpathy loop (autoresearch-style self-improvement) ──────────────────
 
 const VARIANT_DIRECTIVES = [
   { name: 'recency', label: 'a' as const, directive: 'Optimize for story recency and velocity. The agent should prioritize stories gaining score quickly.' },
@@ -370,7 +370,7 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
   }
 
   // 10. Winner beat baseline — version up
-  const changeDescription = `Multi-variant improvement cycle. Tested 3 prompt variants. Winner: Variant ${best.label.toUpperCase()} with score ${best.score}/100. Reasoning: ${best.reasoning.slice(0, 100)}`
+  const changeDescription = `Karpathy loop cycle. Tested 3 prompt variants. Winner: Variant ${best.label.toUpperCase()} with score ${best.score}/100. Reasoning: ${best.reasoning.slice(0, 100)}`
 
   // Post improvement task
   await client.execute({
@@ -378,7 +378,7 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       improvementTaskId, SYSTEM_AGENT_ID,
-      `Multi-variant improvement: ${VARIANT_DIRECTIVES[['a', 'b', 'c'].indexOf(best.label)].name} optimization`,
+      `Karpathy loop: ${VARIANT_DIRECTIVES[['a', 'b', 'c'].indexOf(best.label)].name} optimization`,
       `Tested 3 prompt variants against baseline (${baselineScore}). Winner: variant ${best.label.toUpperCase()} scored ${best.score} (+${delta}).`,
       JSON.stringify(['prompt-engineering']), 0.05, 'completed', 'improvement',
       SEED_SELLER_ID, SYSTEM_AGENT_ID, `${improvementTaskId}_bid`, nowIso,
@@ -392,7 +392,7 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       `${improvementTaskId}_bid`, improvementTaskId, SYSTEM_AGENT_ID,
-      0.05, `Multi-variant cycle — variant ${best.label.toUpperCase()} won (+${delta})`,
+      0.05, `Karpathy loop — variant ${best.label.toUpperCase()} won (+${delta})`,
       60, 'accepted', nowIso,
     ],
   })
@@ -666,7 +666,7 @@ export async function GET(req: NextRequest) {
       .set({ status: 'completed' })
       .where(eq(tasks.id, taskId))
 
-    // ── 12. Multi-variant improvement cycle (after ratings exist) ──
+    // ── 12. Karpathy loop (after ratings exist) ──
     let improvementResult: ImprovementResult = { ran: false, reason: 'skipped' }
     try {
       improvementResult = await runImprovementCycle()

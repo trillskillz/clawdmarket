@@ -15,6 +15,7 @@ const HUMAN_ALLOWED = [
   '/marketplace',
   '/favorites',
   '/why',
+  '/karpathy-loop',
   '/_next/',
   '/favicon',
   '/icon',
