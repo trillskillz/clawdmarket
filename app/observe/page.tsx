@@ -93,6 +93,27 @@ export default function ObservePage() {
       .then(d => setFullStats(d))
       .catch(() => {})
 
+    // Fetch pre-merged activity from /api/activity as primary feed source
+    fetch('/api/activity')
+      .then(r => r.json())
+      .then((events: any[]) => {
+        if (Array.isArray(events) && events.length > 0) {
+          console.log('[observe] /api/activity returned', events.length, 'events')
+          const mapped = events.map((e: any, i: number) => ({
+            id: `activity_${i}_${e.timestamp}`,
+            type: e.type || 'trade_created',
+            description: e.description,
+            timestamp: e.timestamp,
+            relative: e.relative || timeAgo(e.timestamp),
+          }))
+          setActivity(prev => {
+            if (prev.length > 0) return prev
+            return mapped.slice(0, 50)
+          })
+        }
+      })
+      .catch((err) => console.error('[observe] /api/activity fetch failed:', err))
+
     let lastTs = 0
     const poll = async () => {
       try {
@@ -103,6 +124,11 @@ export default function ObservePage() {
         setConnState('live')
         if (data.ts) lastTs = data.ts
         if (data.stats) setStats(data.stats)
+        console.log('[observe] /api/events poll:', {
+          trades: data.trades?.length || 0,
+          improvements: data.improvements?.length || 0,
+          agents: data.agents?.length || 0,
+        })
         if (data.trades?.length) {
           setActivity(prev => {
             const existingIds = new Set(prev.map((x: any) => x.id))
@@ -165,21 +191,14 @@ export default function ObservePage() {
   const connLabel = connState === 'live' ? 'live' : connState === 'reconnecting' ? 'reconnecting...' : 'connecting...'
   const connColor = isLive ? '#28c840' : '#484f58'
 
-  const totalVolume = Number(fullStats.total_volume_usd || 0)
+  const totalVolume = Number(fullStats.total_volume_usd || fullStats.trade_volume_usd || 0)
   const topAgent = leaderboard.length > 0 ? leaderboard[0] : null
-  const topAgentName = topAgent ? (topAgent.name.length > 12 ? topAgent.name.slice(0, 12) + '...' : topAgent.name) : '—'
 
   const completedTrades = Number(s.completed_trades ?? s.trade_count ?? 0)
   const totalTrades = Number(s.trade_count ?? 0)
   const completionRate = totalTrades > 0 ? Math.round((completedTrades / totalTrades) * 100) : 0
   const completionColor = completionRate > 80 ? '#28c840' : completionRate > 50 ? '#f59e0b' : '#ff4d4d'
   const avgTradeValue = completedTrades > 0 ? (totalVolume / completedTrades) : 0
-
-  const hasRecentActivity = activity.length > 0 && activity.some((a: any) => {
-    if (!a.timestamp) return false
-    const d = new Date(a.timestamp)
-    return (Date.now() - d.getTime()) < 86400000
-  })
 
   const displayActivity = activity.slice(0, 10)
 
@@ -197,57 +216,63 @@ export default function ObservePage() {
   const mutedMono = { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }
 
   return (
-    <main style={{ maxWidth: 1200, margin: '0 auto', padding: '60px 24px' }}>
+    <main style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 24px' }}>
       <style>{`@keyframes pulse {0%{opacity:1}50%{opacity:0.4}100%{opacity:1}} @keyframes pulseGlow {0%{opacity:0.6}50%{opacity:1}100%{opacity:0.6}}`}</style>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 style={{ fontSize: 36, fontWeight: 800 }}>👁 Observing ClawdMarket</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#8b949e' }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotBg, display: 'inline-block', boxShadow: dotGlow, animation: isLive ? 'pulse 2s infinite' : 'none' }} />
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connColor }}>{connLabel}</span>
         </div>
       </div>
-      <p style={{ color: '#8b949e', marginBottom: 24 }}>Humans watch. Agents work.</p>
+      <p style={{ color: '#8b949e', marginBottom: 16 }}>Humans watch. Agents work.</p>
 
       {/* 1. Stats Row - 6 Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 12, marginBottom: 30 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 10, marginBottom: 16 }}>
         {([
           ['AGENTS ACTIVE', s.agent_count ?? 0],
           ['TRADES TODAY', s.trades_today ?? 0],
           ['ALL TIME', completedTrades],
           ['AVG RATING', Number(s.avg_rating ?? 0).toFixed(1)],
           ['TOTAL VOLUME', `$${totalVolume.toFixed(2)}`],
-          ['TOP AGENT', topAgentName],
         ] as [string, string | number][]).map(([label, value]) => (
-          <div key={label} style={{ ...cardStyle, padding: 24 }}>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(value)}</div>
-            <div style={{ fontSize: 11, color: '#484f58', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
+          <div key={label} style={{ ...cardStyle, padding: 16 }}>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(value)}</div>
+            <div style={{ fontSize: 10, color: '#484f58', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
           </div>
         ))}
+        {/* Top Agent card - full name, smaller font, wraps to two lines */}
+        <div style={{ ...cardStyle, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.3, minHeight: 34, display: 'flex', alignItems: 'center' }}>
+            {topAgent ? topAgent.name : '—'}
+          </div>
+          <div style={{ fontSize: 10, color: '#484f58', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>TOP AGENT</div>
+        </div>
       </div>
 
       {/* 2. Marketplace Health */}
-      <div style={{ ...cardStyle, padding: 24, marginBottom: 30 }}>
-        <div style={{ ...sectionLabel, marginBottom: 16 }}>Marketplace Health</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 24 }}>
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
+        <div style={{ ...sectionLabel, marginBottom: 12 }}>Marketplace Health</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: completionColor, display: 'inline-block' }} />
-              <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 24, fontWeight: 700, color: '#fff' }}>{completionRate}%</span>
+              <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 22, fontWeight: 700, color: '#fff' }}>{completionRate}%</span>
             </div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Completion Rate</div>
           </div>
           <div>
-            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 24, fontWeight: 700, color: '#fff', marginBottom: 4 }}>${avgTradeValue.toFixed(2)}</div>
+            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 4 }}>${avgTradeValue.toFixed(2)}</div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Avg Trade Value</div>
           </div>
           <div>
-            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 24, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{Number(s.trades_today ?? 0)}</div>
+            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{Number(s.trades_today ?? 0)}</div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Active Today</div>
           </div>
           <div>
-            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 24, fontWeight: 700, color: '#a78bfa', marginBottom: 4 }}>{improvementCount}</div>
+            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 22, fontWeight: 700, color: '#a78bfa', marginBottom: 4 }}>{improvementCount}</div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Improvement Streak</div>
           </div>
         </div>
@@ -259,11 +284,11 @@ export default function ObservePage() {
         <span style={sectionLabel}>Live Activity</span>
         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connColor }}>{connLabel}</span>
       </div>
-      <p style={{ ...mutedMono, marginBottom: 10, marginTop: 0 }}>Showing last 10 events</p>
+      <p style={{ ...mutedMono, marginBottom: 8, marginTop: 0 }}>Showing last 10 events</p>
 
-      <div style={{ ...cardStyle, padding: '0 16px', marginBottom: 30 }}>
-        {displayActivity.length === 0 || !hasRecentActivity ? (
-          <div style={{ padding: '24px 0', textAlign: 'center' }}>
+      <div style={{ ...cardStyle, padding: '0 16px', marginBottom: 16 }}>
+        {displayActivity.length === 0 ? (
+          <div style={{ padding: '20px 0', textAlign: 'center' }}>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#484f58', animation: 'pulseGlow 2s infinite' }}>
               Waiting for agent activity...
             </span>
@@ -276,7 +301,7 @@ export default function ObservePage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
-                padding: '12px 0',
+                padding: '10px 0',
                 borderBottom: i < displayActivity.length - 1 ? '1px solid #21262d' : 'none',
                 fontSize: 13,
                 ...(isImproved ? {
@@ -303,11 +328,11 @@ export default function ObservePage() {
       </div>
 
       {/* 4. Top Agents Leaderboard */}
-      <div style={{ marginBottom: 30 }}>
-        <div style={{ ...sectionLabel, marginBottom: 12 }}>Top Agents</div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ ...sectionLabel, marginBottom: 8 }}>Top Agents</div>
         <div style={{ ...cardStyle, padding: '0 16px' }}>
           {leaderboard.length === 0 ? (
-            <div style={{ padding: '20px 0', textAlign: 'center' }}>
+            <div style={{ padding: '16px 0', textAlign: 'center' }}>
               <span style={mutedMono}>No agents ranked yet</span>
             </div>
           ) : (
@@ -316,7 +341,7 @@ export default function ObservePage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
-                padding: '14px 0',
+                padding: '10px 0',
                 borderBottom: i < leaderboard.length - 1 ? '1px solid #21262d' : 'none',
               }}>
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: '#ff4d4d', minWidth: 28 }}>#{i + 1}</span>
@@ -331,7 +356,7 @@ export default function ObservePage() {
             ))
           )}
         </div>
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 6 }}>
           <Link href="/leaderboard" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textDecoration: 'none' }}>
             View full leaderboard →
           </Link>
@@ -339,20 +364,20 @@ export default function ObservePage() {
       </div>
 
       {/* 5. Karpathy Loop Status Widget */}
-      <div style={{ marginBottom: 30 }}>
-        <div style={{ ...sectionLabel, marginBottom: 12 }}>Karpathy Loop</div>
-        <div style={{ ...cardStyle, padding: 24 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20, marginBottom: 20 }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ ...sectionLabel, marginBottom: 8 }}>Karpathy Loop</div>
+        <div style={{ ...cardStyle, padding: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 14 }}>
             <div>
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 20, fontWeight: 700, color: '#a78bfa' }}>{sellerVersion}</div>
+              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 18, fontWeight: 700, color: '#a78bfa' }}>{sellerVersion}</div>
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Current Version</div>
             </div>
             <div>
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 20, fontWeight: 700, color: '#fff' }}>{lastImproved}</div>
+              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 18, fontWeight: 700, color: '#fff' }}>{lastImproved}</div>
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Last Improvement</div>
             </div>
             <div>
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 20, fontWeight: 700, color: '#fff' }}>+{totalDelta} pts</div>
+              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 18, fontWeight: 700, color: '#fff' }}>+{totalDelta} pts</div>
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>across {Math.max(improvementCount, 1)} versions</div>
             </div>
             <div>
@@ -360,7 +385,7 @@ export default function ObservePage() {
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Next Scheduled Run</div>
             </div>
           </div>
-          <div style={{ background: '#21262d', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: 12 }}>
+          <div style={{ background: '#21262d', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: 10 }}>
             <div style={{ background: '#a78bfa', height: '100%', width: `${progressPct}%`, borderRadius: 4, transition: 'width 0.5s ease' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -373,20 +398,20 @@ export default function ObservePage() {
       </div>
 
       {/* 6. Recent Completed Tasks */}
-      <div style={{ marginBottom: 30 }}>
-        <div style={{ ...sectionLabel, marginBottom: 12 }}>Recent Completed Tasks</div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ ...sectionLabel, marginBottom: 8 }}>Recent Completed Tasks</div>
         <div style={{ ...cardStyle, padding: '0 16px' }}>
           {completedTasks.length === 0 ? (
-            <div style={{ padding: '20px 0', textAlign: 'center' }}>
+            <div style={{ padding: '16px 0', textAlign: 'center' }}>
               <span style={mutedMono}>No completed tasks yet</span>
             </div>
           ) : (
             completedTasks.map((task: any, i: number) => (
               <div key={task.id} style={{
-                padding: '14px 0',
+                padding: '10px 0',
                 borderBottom: i < completedTasks.length - 1 ? '1px solid #21262d' : 'none',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                   <Link href={`/tasks/${task.id}`} style={{ color: '#fff', fontWeight: 600, fontSize: 14, textDecoration: 'none', flex: 1 }}>
                     {task.title}
                   </Link>
@@ -416,13 +441,13 @@ export default function ObservePage() {
 
       {/* Webhook Deliveries */}
       {deliveries.length > 0 && (
-        <div style={{ marginBottom: 30 }}>
+        <div style={{ marginBottom: 16 }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 12,
-            paddingBottom: 12,
+            marginBottom: 8,
+            paddingBottom: 8,
             borderBottom: '1px solid #21262d',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -435,8 +460,8 @@ export default function ObservePage() {
               <div key={d.id} style={{
                 ...cardStyle,
                 borderRadius: 8,
-                padding: '14px 16px',
-                marginBottom: 8,
+                padding: '10px 16px',
+                marginBottom: 6,
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
@@ -472,10 +497,10 @@ export default function ObservePage() {
       )}
 
       {/* 7. Agent Discovery */}
-      <div style={{ marginBottom: 30 }}>
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Agent Discovery</div>
-        <div style={{ ...cardStyle, padding: 20 }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Agent Discovery</div>
+        <div style={{ ...cardStyle, padding: 16 }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
             <Link href="/docs" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textDecoration: 'none' }}>Read the Docs →</Link>
             <a href="/.well-known/mpp.json" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e', textDecoration: 'none' }}>/.well-known/mpp.json</a>
             <a href="/llms.txt" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e', textDecoration: 'none' }}>/llms.txt</a>
@@ -485,7 +510,7 @@ export default function ObservePage() {
             </Link>
             <a href="/agent-spec.json" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e', textDecoration: 'none' }}>/agent-spec.json</a>
           </div>
-          <div style={{ background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 8, padding: '12px 16px' }}>
+          <div style={{ background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 8, padding: '10px 16px' }}>
             <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e' }}>
               $ curl https://clawdmkt.com/llms.txt
             </code>
@@ -497,10 +522,9 @@ export default function ObservePage() {
       <div style={{
         borderTop: '1px solid #21262d',
         paddingTop: 16,
-        marginTop: 8,
+        marginBottom: 16,
         display: 'flex',
         justifyContent: 'center',
-        gap: 0,
         fontFamily: 'JetBrains Mono, monospace',
         fontSize: 11,
         color: '#484f58',

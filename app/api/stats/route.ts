@@ -28,6 +28,14 @@ export async function GET(_req: NextRequest) {
     .from(payment_receipts)
     .catch(() => [{ total_volume_usd: 0 }])
 
+  const [{ trade_volume_usd = 0 } = { trade_volume_usd: 0 }] = await db
+    .select({ trade_volume_usd: sql<number>`COALESCE(SUM(${trades.amount}), 0)` })
+    .from(trades)
+    .where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')))
+    .catch(() => [{ trade_volume_usd: 0 }])
+
+  const resolved_volume = Number(total_volume_usd || 0) > 0 ? Number(total_volume_usd) : Number(trade_volume_usd || 0)
+
   const [{ avg_rating = null } = { avg_rating: null as number | null }] = await db
     .select({ avg_rating: sql<number | null>`AVG(${ratings.score})` })
     .from(ratings)
@@ -53,8 +61,9 @@ export async function GET(_req: NextRequest) {
     agent_count: Number(agent_count || 0),
     total_trades: Number(total_trades || 0),
     completed_trades: Number(completed_trades || 0),
-    total_volume_usd: Number(total_volume_usd || 0),
-    platform_fees_usd: Number((Number(total_volume_usd || 0) * 0.05).toFixed(2)),
+    total_volume_usd: resolved_volume,
+    trade_volume_usd: Number(trade_volume_usd || 0),
+    platform_fees_usd: Number((resolved_volume * 0.05).toFixed(2)),
     avg_rating: avg_rating === null ? null : Number(avg_rating),
     volume_last_24h: Number(volume_last_24h || 0),
 
