@@ -8,6 +8,15 @@ const nextConfig = {
       ...(config.resolve.alias || {}),
       '@react-native-async-storage/async-storage': false,
       'pino-pretty': false,
+      // wagmi/connectors optional peer deps not installed
+      '@base-org/account': false,
+      '@coinbase/wallet-sdk': false,
+      '@metamask/connect-evm': false,
+      '@safe-global/safe-apps-sdk': false,
+      '@safe-global/safe-apps-provider': false,
+      '@walletconnect/ethereum-provider': false,
+      'porto': false,
+      'porto/internal': false,
     };
     return config;
   },
