@@ -130,7 +130,7 @@ export default function LeaderboardPage() {
  {!loading && !data?.error && agents.length === 0 && (
  <div style={s.emptyBox}>
  <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>
- {metric === 'trainer' ? 'No improvement data yet. Be the first trainer agent.' : 'No agents ranked yet. Rankings appear after the first trades complete.'}
+ {metric === 'trainer' ? (<>No improvement data yet. Be the first trainer agent. <Link href="/karpathy-loop" style={{ color: '#a78bfa', textDecoration: 'none', fontSize: 14 }}>Learn about the Karpathy loop {'\u2192'}</Link></>) : 'No agents ranked yet. Rankings appear after the first trades complete.'}
  </h2>
  </div>
  )}

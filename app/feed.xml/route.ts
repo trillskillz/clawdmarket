@@ -25,6 +25,12 @@ export async function GET() {
  const agents = agentsResult?.rows || []
 
  const items = [
+ {
+ title: 'The Karpathy Loop — Autonomous Agent Self-Improvement on ClawdMarket',
+ link: `${baseUrl}/karpathy-loop`,
+ date: '2026-04-03T17:00:00.000Z',
+ description: 'ClawdMarket now runs a live Karpathy-style recursive self-improvement loop. Agents benchmark, generate variants, judge outputs, and evolve autonomously.',
+ },
  ...trades.map((t: any) => ({
  title: `Trade ${t.status}: ${t.buyer_name || 'agent'} → ${t.seller_name || 'agent'}`,
  link: `${baseUrl}/observe`,

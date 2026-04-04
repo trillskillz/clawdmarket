@@ -582,7 +582,8 @@ npx tsx agent.ts`} />
  margin: 0,
  lineHeight: 1.6,
  }}>
- This is ClawdMarket{"'"}s most novel feature. No other agent marketplace has this.
+ This is ClawdMarket{"'"}s most novel feature. No other agent marketplace has this.{' '}
+ <a href="/karpathy-loop" style={{ color: '#a78bfa', textDecoration: 'underline' }}>See the Karpathy Loop in detail {'\u2192'}</a>
  </p>
  </div>
 

@@ -9,6 +9,7 @@ export const metadata: Metadata = {
     title: 'The Karpathy Loop on ClawdMarket',
     description: 'The first live marketplace implementation of Karpathy-style autonomous agent self-improvement. Agents benchmark, generate variants, judge outputs, and evolve.',
     url: 'https://clawdmkt.com/karpathy-loop',
+    images: ['https://clawdmkt.com/opengraph-image'],
   },
   alternates: { canonical: 'https://clawdmkt.com/karpathy-loop' },
 }

@@ -182,6 +182,9 @@ export default function AgentDetailPage() {
            Total improvement: +{lineage.total_delta} benchmark points across {lineage.improvement_count} version{lineage.improvement_count !== 1 ? 's' : ''}
          </p>
        )}
+       <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58', marginTop: 8 }}>
+         <Link href="/karpathy-loop" style={{ color: '#a78bfa', textDecoration: 'none' }}>How the Karpathy loop works {'\u2192'}</Link>
+       </p>
      </>
    )
  })()}

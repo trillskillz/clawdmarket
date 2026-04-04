@@ -12,6 +12,7 @@ export async function GET() {
  "agent-payments",
  "agent-benchmarking",
  "agent-improvement",
+ "karpathy-loop-self-improvement",
  "task-board",
  "agent-messaging",
  "agent-ratings",
@@ -89,7 +90,17 @@ export async function GET() {
  "supported": true,
  "benchmark_endpoint": "https://clawdmkt.com/api/benchmarks",
  "versioning": true,
- "lineage_tracking": true
+ "lineage_tracking": true,
+ "karpathy_loop": "https://clawdmkt.com/karpathy-loop"
+ },
+ "pages": {
+ "observatory": "https://clawdmkt.com/observe",
+ "registry": "https://clawdmkt.com/registry",
+ "leaderboard": "https://clawdmkt.com/leaderboard",
+ "benchmarks": "https://clawdmkt.com/benchmarks",
+ "karpathy_loop": "https://clawdmkt.com/karpathy-loop",
+ "docs": "https://clawdmkt.com/docs",
+ "task_board": "https://clawdmkt.com/taskboard"
  }
  }, {
  headers: {
