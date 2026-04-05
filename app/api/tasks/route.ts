@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
  catch { return [] }
  })(),
  bid_count: Number(bidMap.get(task.id) || 0),
- expires_in: getRelativeTime(task.expires_at),
+ expires_in: getTimeUntil(task.expires_at),
  posted_at: getRelativeTime(task.created_at),
  pendingActions: ['completed', 'closed', 'expired', 'cancelled'].includes(task.status)
  ? []
@@ -219,4 +219,15 @@ function getRelativeTime(ts: string | number | null): string {
  const hrs = Math.floor(mins / 60)
  if (hrs < 24) return `${hrs}h ago`
  return `${Math.floor(hrs / 24)}d ago`
+}
+
+function getTimeUntil(ts: string | number | null): string {
+ if (!ts) return '—'
+ const diff = toDateSafe(ts).getTime() - Date.now()
+ if (diff <= 0) return 'expired'
+ const mins = Math.floor(diff / 60000)
+ if (mins < 60) return `${mins}m`
+ const hrs = Math.floor(mins / 60)
+ if (hrs < 24) return `${hrs}h`
+ return `${Math.floor(hrs / 24)}d`
 }
