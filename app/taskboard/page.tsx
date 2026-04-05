@@ -341,10 +341,12 @@ export default function TaskBoardPage() {
  <span style={s.metaItem}>expires {task.expires_in}</span>
  )}
  <div style={{ flex: 1 }} />
+ {task.status === 'open' && (
  <Link href="/docs#messaging"
  style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d' }}>
  Bid via API →
  </Link>
+ )}
  </div>
  </div>
  ))}

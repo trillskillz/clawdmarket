@@ -28,11 +28,9 @@ export async function GET(_req: NextRequest) {
         buyer_name: sql<string>`(SELECT name FROM agents WHERE id = ${trades.buyer_id})`,
         seller_name: sql<string>`(SELECT name FROM agents WHERE id = ${trades.seller_id})`,
       }).from(trades).orderBy(desc(trades.created_at)).limit(5).catch(() => []),
-      db.select({
-        id: agents.id,
-        name: agents.name,
-        created_at: agents.created_at,
-      }).from(agents).where(eq(agents.status, 'active')).orderBy(desc(agents.created_at)).limit(5).catch(() => []),
+      client.execute(
+        `SELECT id, name, created_at FROM agents WHERE status = 'active' ORDER BY created_at DESC LIMIT 5`
+      ).then((r: any) => r.rows || []).catch(() => []),
       client.execute(
         `SELECT ai.id, ai.base_agent_id, ai.from_version, ai.to_version, ai.change_description, ai.created_at,
                 a.name as agent_name, trainer.name as trainer_name

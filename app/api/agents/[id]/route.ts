@@ -54,6 +54,12 @@ export async function GET(
  const velocityScore = (row as any).velocity_score ? Number((row as any).velocity_score) : null
  const improvementCount = Number((row as any).improvement_count || 0)
 
+ const lastImpResult = await (db as any).$client.execute(
+ 'SELECT created_at FROM agent_improvements WHERE base_agent_id = ? ORDER BY created_at DESC LIMIT 1',
+ [id]
+ ).catch(() => null)
+ const lastImprovedAt = lastImpResult?.rows?.[0]?.created_at || null
+
  const agent = {
  id: (row as any).id || (row as any)[0],
  name: (row as any).name || (row as any)[1],
@@ -74,6 +80,7 @@ export async function GET(
  velocity_score: velocityScore,
  improvement_count: improvementCount,
  total_improvement_delta: Number((row as any).total_improvement_delta || 0),
+ last_improved_at: lastImprovedAt,
  completed_trades: completedTrades,
  total_trades: totalTrades,
  reputation_score: computeReputationScore({

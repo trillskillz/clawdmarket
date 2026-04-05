@@ -143,44 +143,49 @@ export default function ObservePage() {
           improvements: data.improvements?.length || 0,
           agents: data.agents?.length || 0,
         })
-        if (data.trades?.length) {
-          setActivity(data.trades.map((t: any) => ({
-            id: t.id,
-            type: t.status === 'completed' || t.status === 'complete' ? 'trade_completed' : 'trade_created',
-            description: `Agent "${t.buyer_name || `Agent ${String(t.buyer_id || '').slice(0, 8)}`}" ${t.status === 'completed' || t.status === 'complete' ? 'completed a trade with' : 'started a new trade with'} "${t.seller_name || `Agent ${String(t.seller_id || '').slice(0, 8)}`}"`,
-            timestamp: t.created_at,
-            relative: timeAgo(t.created_at),
-          })).slice(0, 50))
-        }
-        if (data.improvements?.length) {
-          setActivity(prev => {
-            const existingIds = new Set(prev.map((x: any) => x.id))
-            const newItems = data.improvements
-              .filter((imp: any) => !existingIds.has(imp.id))
-              .map((imp: any) => ({
+        {
+          const allItems: any[] = []
+          if (data.trades?.length) {
+            for (const t of data.trades) {
+              allItems.push({
+                id: t.id,
+                type: t.status === 'completed' || t.status === 'complete' ? 'trade_completed' : 'trade_created',
+                description: `Agent "${t.buyer_name || `Agent ${String(t.buyer_id || '').slice(0, 8)}`}" ${t.status === 'completed' || t.status === 'complete' ? 'completed a trade with' : 'started a new trade with'} "${t.seller_name || `Agent ${String(t.seller_id || '').slice(0, 8)}`}"`,
+                timestamp: t.created_at,
+                relative: timeAgo(t.created_at),
+              })
+            }
+          }
+          if (data.improvements?.length) {
+            for (const imp of data.improvements) {
+              allItems.push({
                 id: imp.id,
                 type: 'agent_improved',
                 description: `${imp.agent_name} improved from v${imp.from_version} to v${imp.to_version}`,
                 timestamp: imp.created_at,
                 relative: timeAgo(imp.created_at),
-              }))
-            return [...newItems, ...prev].slice(0, 50)
-          })
-        }
-        if (data.agents?.length) {
-          setActivity(prev => {
-            const existingIds = new Set(prev.map((x: any) => x.id))
-            const newItems = data.agents
-              .filter((a: any) => !existingIds.has(`reg_${a.id}`))
-              .map((a: any) => ({
+              })
+            }
+          }
+          if (data.agents?.length) {
+            for (const a of data.agents) {
+              allItems.push({
                 id: `reg_${a.id}`,
                 type: 'agent_registered',
                 description: `New agent "${a.name || `Agent ${String(a.id).slice(0, 8)}`}" registered`,
                 timestamp: a.created_at,
                 relative: timeAgo(a.created_at),
-              }))
-            return [...newItems, ...prev].slice(0, 50)
-          })
+              })
+            }
+          }
+          if (allItems.length > 0) {
+            allItems.sort((a, b) => {
+              const ta = a.timestamp ? toDateSafe(a.timestamp).getTime() : 0
+              const tb = b.timestamp ? toDateSafe(b.timestamp).getTime() : 0
+              return tb - ta
+            })
+            setActivity(allItems.slice(0, 50))
+          }
         }
       } catch (e) {
         console.error('[observe] poll failed:', e)
@@ -214,7 +219,7 @@ export default function ObservePage() {
   const sellerVersion = sellerAgent ? `v${sellerAgent.version || 1}` : 'v1'
   const improvementCount = sellerAgent ? Number(sellerAgent.improvement_count || 0) : 0
   const totalDelta = Number(sellerAgent?.total_improvement_delta || sellerAgent?.totalImprovementDelta || 0).toFixed(1)
-  const lastImproved = sellerAgent?.created_at ? timeAgo(sellerAgent.created_at) : '—'
+  const lastImproved = sellerAgent?.last_improved_at ? timeAgo(sellerAgent.last_improved_at) : '—'
   const progressPct = Math.min((improvementCount / 50) * 100, 100)
 
   const gap = m ? 12 : 16
@@ -399,7 +404,7 @@ export default function ObservePage() {
             </div>
             <div>
               <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: m ? 16 : 18, fontWeight: 700, color: '#fff' }}>+{totalDelta} pts</div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>across {Math.max(improvementCount, 1)} versions</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{improvementCount > 0 ? `across ${improvementCount} cycle${improvementCount !== 1 ? 's' : ''}` : 'no cycles yet'}</div>
             </div>
             <div>
               <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: m ? 12 : 14, fontWeight: 700, color: '#28c840' }}>Daily at noon CT</div>
