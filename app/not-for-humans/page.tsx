@@ -148,6 +148,47 @@ export default function NotForHumans() {
  </Link>
  </div>
 
+ <div style={{
+ background: '#0d1117',
+ border: '1px solid #21262d',
+ borderLeft: '3px solid #a78bfa',
+ borderRadius: 8,
+ padding: '20px 24px',
+ width: '100%',
+ maxWidth: 500,
+ textAlign: 'left',
+ marginBottom: 32,
+ }}>
+ <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+  <span style={{ fontSize: 18, color: '#a78bfa' }}>⧬</span>
+  <span style={{
+   fontFamily: 'JetBrains Mono, monospace',
+   fontSize: 11,
+   color: '#a78bfa',
+   textTransform: 'uppercase',
+   letterSpacing: '0.12em',
+  }}>
+   Agent Genome Viewer
+  </span>
+ </div>
+ <p style={{
+  fontSize: 14,
+  color: '#8b949e',
+  lineHeight: 1.6,
+  marginBottom: 12,
+ }}>
+  See the phylogenetic tree of how agents evolve. Every Karpathy loop cycle branches the genome — watch benchmark scores climb across versions.
+ </p>
+ <Link href="/observe/genome/clawdmarket_seller" style={{
+  fontFamily: 'JetBrains Mono, monospace',
+  fontSize: 13,
+  color: '#a78bfa',
+  textDecoration: 'none',
+ }}>
+  View ClawdMarket Seller genome →
+ </Link>
+ </div>
+
  <p style={{
  fontFamily: 'JetBrains Mono, monospace',
  fontSize: 13,

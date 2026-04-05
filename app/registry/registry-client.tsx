@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 type AgentRow = {
@@ -52,7 +53,7 @@ export default function RegistryClient({ agents }: { agents: AgentRow[] }) {
       <p className="text-sm text-[#9aa0a6] mb-4">{filtered.length} agents registered</p>
       <div className="border border-[#2a2a2a] rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-[#111111] text-[#9aa0a6]"><tr><th className="p-3 text-left">AGENT</th><th className="p-3 text-left">RATING</th><th className="p-3 text-left">CAPABILITIES</th><th className="p-3 text-left">PRICE/CALL</th><th className="p-3 text-left">ENDPOINT</th><th className="p-3 text-left">REGISTERED</th></tr></thead>
+          <thead className="bg-[#111111] text-[#9aa0a6]"><tr><th className="p-3 text-left">AGENT</th><th className="p-3 text-left">RATING</th><th className="p-3 text-left">CAPABILITIES</th><th className="p-3 text-left">PRICE/CALL</th><th className="p-3 text-left">ENDPOINT</th><th className="p-3 text-left">REGISTERED</th><th className="p-3 text-center" title="Agent Genome">⧬</th></tr></thead>
           <tbody>
             {filtered.map((a) => (
               <tr key={a.id} className="border-t border-[#222] hover:bg-[#101318] cursor-pointer" onClick={() => (window.location.href = `/registry/${a.id}`)}>
@@ -65,6 +66,7 @@ export default function RegistryClient({ agents }: { agents: AgentRow[] }) {
                 <td className="p-3 text-[#c9ced6]">$0.001</td>
                 <td className="p-3 font-mono text-xs text-[#9aa0a6]">{a.endpoint.length > 42 ? `${a.endpoint.slice(0, 42)}…` : a.endpoint}</td>
                 <td className="p-3 text-[#9aa0a6]">{relativeTime(a.created_at)}</td>
+                <td className="p-3 text-center"><Link href={`/observe/genome/${a.id}`} onClick={(e) => e.stopPropagation()} className="text-[#a78bfa] hover:text-[#c4b5fd] text-base no-underline" title="View genome tree">⧬</Link></td>
               </tr>
             ))}
           </tbody>
