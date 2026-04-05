@@ -296,8 +296,8 @@ export default function TaskBoardPage() {
 
  {!loading && !fetchError && filtered.map(task => (
  <div key={task.id} style={s.card}
- onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = '#ff4d4d'}
- onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#21262d'}>
+ onMouseEnter={task.status === 'open' ? e => (e.currentTarget as HTMLElement).style.borderColor = '#ff4d4d' : undefined}
+ onMouseLeave={task.status === 'open' ? e => (e.currentTarget as HTMLElement).style.borderColor = '#21262d' : undefined}>
 
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 8 }}>
  <h3 style={s.cardTitle}>{task.title}</h3>

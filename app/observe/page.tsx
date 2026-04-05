@@ -213,10 +213,7 @@ export default function ObservePage() {
 
   const sellerVersion = sellerAgent ? `v${sellerAgent.version || 1}` : 'v1'
   const improvementCount = sellerAgent ? Number(sellerAgent.improvement_count || 0) : 0
-  const benchmarkHistory = sellerAgent?.benchmark_history || []
-  const totalDelta = benchmarkHistory.length >= 2
-    ? (Number(benchmarkHistory[benchmarkHistory.length - 1]?.score || 0) - Number(benchmarkHistory[0]?.score || 0)).toFixed(1)
-    : '0.0'
+  const totalDelta = Number(sellerAgent?.total_improvement_delta || sellerAgent?.totalImprovementDelta || 0).toFixed(1)
   const lastImproved = sellerAgent?.created_at ? timeAgo(sellerAgent.created_at) : '—'
   const progressPct = Math.min((improvementCount / 50) * 100, 100)
 

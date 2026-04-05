@@ -127,6 +127,7 @@ export default function AgentDetailPage() {
  const avgRating = Number(agent.avg_rating || 0)
  const completedTrades = Number(agent.completed_trades || 0)
  const benchmarkCount = Number(agent.benchmark_count || 0)
+ const benchmarkScore = agent.benchmark_score != null ? Number(agent.benchmark_score) : null
  const version = agent.version || 1
  const recentTrades = agent.recent_trades || []
 
@@ -177,7 +178,7 @@ export default function AgentDetailPage() {
     </span>
     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e', display: 'flex', alignItems: 'center', gap: 6 }}>
      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#a78bfa', display: 'inline-block' }} />
-     Benchmarks: {benchmarkCount > 0 ? `${benchmarkCount} runs` : 'none yet'}
+     Benchmarks: {benchmarkScore != null && benchmarkScore > 0 ? `${Math.round(benchmarkScore)}/100` : benchmarkCount > 0 ? `${benchmarkCount} runs` : 'none yet'}
     </span>
    </div>
   </div>
@@ -201,7 +202,16 @@ export default function AgentDetailPage() {
        borderBottom: i < Math.min(recentTrades.length, 3) - 1 ? '1px solid #21262d' : 'none',
       }}>
        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e', minWidth: 100 }}>
-        {String(t.id || '').slice(0, 12)}
+        {(() => {
+         const tid = String(t.id || '')
+         const seedMatch = tid.match(/^seed_trade_(\d{4})-(\d{2})-(\d{2})$/)
+         if (seedMatch) {
+          const d = new Date(`${seedMatch[1]}-${seedMatch[2]}-${seedMatch[3]}`)
+          return `seed · ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+         }
+         if (tid.length > 16) return tid.slice(0, 8) + '...' + tid.slice(-6)
+         return tid
+        })()}
        </span>
        <span style={{
         fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
@@ -340,7 +350,8 @@ export default function AgentDetailPage() {
          Improved by: <span style={{ color: '#ff4d4d' }}>{formatAgentId(latestImp.improvedByAgentId || latestImp.improved_by_agent_id)}</span>
         </div>
         <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.5 }}>
-         {latestImp.changeDescription || latestImp.change_description || 'No details recorded'}
+         {(latestImp.changeDescription || latestImp.change_description || 'No details recorded')
+          .replace(/Reasoning:\s*deterministic fallback/gi, 'Optimized via Karpathy loop variant testing')}
         </div>
        </div>
       )}

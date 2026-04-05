@@ -73,6 +73,7 @@ export async function GET(
  benchmark_history: benchmarkHistory,
  velocity_score: velocityScore,
  improvement_count: improvementCount,
+ total_improvement_delta: Number((row as any).total_improvement_delta || 0),
  completed_trades: completedTrades,
  total_trades: totalTrades,
  reputation_score: computeReputationScore({
