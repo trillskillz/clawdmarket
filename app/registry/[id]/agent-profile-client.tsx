@@ -128,7 +128,7 @@ export default function AgentDetailPage() {
  const completedTrades = Number(agent.completed_trades || 0)
  const benchmarkCount = Number(agent.benchmark_count || 0)
  const version = agent.version || 1
- const ratings = agent.ratings || []
+ const recentTrades = agent.recent_trades || []
 
  return (
  <main style={s.page}>
@@ -185,36 +185,51 @@ export default function AgentDetailPage() {
   {/* 3. Recent Activity */}
   <div style={s.card}>
    <p style={s.sectionTitle}>Recent Activity</p>
-   {ratings.length === 0 ? (
+   {recentTrades.length === 0 ? (
     <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#484f58' }}>No trades yet</p>
    ) : (
-    ratings.slice(0, 3).map((r: any, i: number) => (
-     <div key={r.id || i} style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '10px 0',
-      borderBottom: i < Math.min(ratings.length, 3) - 1 ? '1px solid #21262d' : 'none',
-     }}>
-      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e', minWidth: 100 }}>
-       {String(r.trade_id || r.id || '').slice(0, 12)}
-      </span>
-      <span style={{
-       fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
-       color: r.rater_id === id || r.rater_agent_id === id ? '#3b82f6' : '#28c840',
-       background: r.rater_id === id || r.rater_agent_id === id ? 'rgba(59,130,246,0.1)' : 'rgba(40,200,64,0.1)',
-       border: `1px solid ${r.rater_id === id || r.rater_agent_id === id ? 'rgba(59,130,246,0.3)' : 'rgba(40,200,64,0.3)'}`,
-       borderRadius: 20, padding: '2px 8px',
+    recentTrades.slice(0, 3).map((t: any, i: number) => {
+     const isBuyer = t.buyer_id === id
+     const roleLabel = isBuyer ? 'BUYER' : 'SELLER'
+     const roleColor = isBuyer ? '#3b82f6' : '#28c840'
+     const roleBg = isBuyer ? 'rgba(59,130,246,0.1)' : 'rgba(40,200,64,0.1)'
+     const roleBorder = isBuyer ? 'rgba(59,130,246,0.3)' : 'rgba(40,200,64,0.3)'
+     return (
+      <div key={t.id || i} style={{
+       display: 'flex', alignItems: 'center', gap: 12,
+       padding: '10px 0',
+       borderBottom: i < Math.min(recentTrades.length, 3) - 1 ? '1px solid #21262d' : 'none',
       }}>
-       {r.rater_id === id || r.rater_agent_id === id ? 'GAVE RATING' : 'RECEIVED'}
-      </span>
-      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#f59e0b' }}>
-       {'★'.repeat(Math.round(Number(r.score || 0)))}{'☆'.repeat(5 - Math.round(Number(r.score || 0)))}
-      </span>
-      <span style={{ flex: 1 }} />
-      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }}>
-       {timeAgo(r.created_at)}
-      </span>
-     </div>
-    ))
+       <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e', minWidth: 100 }}>
+        {String(t.id || '').slice(0, 12)}
+       </span>
+       <span style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+        color: roleColor, background: roleBg,
+        border: `1px solid ${roleBorder}`,
+        borderRadius: 20, padding: '2px 8px',
+       }}>
+        {roleLabel}
+       </span>
+       <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#28c840' }}>
+        ${Number(t.amount || 0).toFixed(2)}
+       </span>
+       <span style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+        color: t.status === 'completed' ? '#28c840' : '#f59e0b',
+        background: t.status === 'completed' ? 'rgba(40,200,64,0.1)' : 'rgba(245,158,11,0.1)',
+        border: `1px solid ${t.status === 'completed' ? 'rgba(40,200,64,0.3)' : 'rgba(245,158,11,0.3)'}`,
+        borderRadius: 20, padding: '2px 8px',
+       }}>
+        {t.status}
+       </span>
+       <span style={{ flex: 1 }} />
+       <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }}>
+        {timeAgo(t.created_at)}
+       </span>
+      </div>
+     )
+    })
    )}
   </div>
 

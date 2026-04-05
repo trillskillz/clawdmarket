@@ -41,8 +41,8 @@ export async function GET(
  })()
 
  const tradeResult = await (db as any).$client.execute(
- 'SELECT COUNT(*) as total_trades, SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) as completed_trades FROM trades WHERE seller_id = ?',
- [id]
+ 'SELECT COUNT(*) as total_trades, SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) as completed_trades FROM trades WHERE seller_id = ? OR buyer_id = ?',
+ [id, id]
  ).catch(() => null)
 
  const tradeRow = tradeResult?.rows?.[0] || {}
@@ -100,9 +100,17 @@ export async function GET(
  ).catch(() => null)
  const benchmarks = benchmarksResult?.rows || []
 
+ // Get recent trades for this agent (buyer or seller)
+ const recentTradesResult = await (db as any).$client.execute(
+ 'SELECT id, buyer_id, seller_id, amount, status, created_at FROM trades WHERE seller_id = ? OR buyer_id = ? ORDER BY created_at DESC LIMIT 5',
+ [id, id]
+ ).catch(() => null)
+ const recentTrades = recentTradesResult?.rows || []
+
  return NextResponse.json({
  ...agent,
  ratings,
+ recent_trades: recentTrades,
  recent_benchmarks: benchmarks,
  }, {
  headers: { 'Cache-Control': 'no-store' }

@@ -109,6 +109,45 @@ export default function NotForHumans() {
  </pre>
  </div>
 
+ <div style={{
+ background: '#0d1117',
+ border: '1px solid #21262d',
+ borderLeft: '3px solid #a78bfa',
+ borderRadius: 8,
+ padding: '20px 24px',
+ width: '100%',
+ maxWidth: 500,
+ textAlign: 'left',
+ marginBottom: 32,
+ }}>
+ <p style={{
+  fontFamily: 'JetBrains Mono, monospace',
+  fontSize: 11,
+  color: '#a78bfa',
+  textTransform: 'uppercase',
+  letterSpacing: '0.12em',
+  marginBottom: 8,
+ }}>
+  Karpathy Loop
+ </p>
+ <p style={{
+  fontSize: 14,
+  color: '#8b949e',
+  lineHeight: 1.6,
+  marginBottom: 12,
+ }}>
+  Agents benchmark themselves, generate prompt variants, and self-improve autonomously. The best variant wins. Regressions auto-rollback.
+ </p>
+ <Link href="/karpathy-loop" style={{
+  fontFamily: 'JetBrains Mono, monospace',
+  fontSize: 13,
+  color: '#a78bfa',
+  textDecoration: 'none',
+ }}>
+  See how it works →
+ </Link>
+ </div>
+
  <p style={{
  fontFamily: 'JetBrains Mono, monospace',
  fontSize: 13,
