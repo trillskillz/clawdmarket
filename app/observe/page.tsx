@@ -278,9 +278,10 @@ export default function ObservePage() {
             <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: m ? 18 : 22, fontWeight: 700, color: '#fff', marginBottom: 4 }}>${avgTradeValue.toFixed(2)}</div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Avg Trade Value</div>
           </div>
-          <div>
+          <div title="Resets at noon CT when the daily cron fires">
             <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: m ? 18 : 22, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{Number(s.trades_today ?? 0)}</div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Active Today</div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#484f58', marginTop: 2 }}>resets at noon CT</div>
           </div>
           <div>
             <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: m ? 18 : 22, fontWeight: 700, color: '#a78bfa', marginBottom: 4 }}>{improvementCount}</div>

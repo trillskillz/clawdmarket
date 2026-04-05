@@ -199,9 +199,20 @@ export async function POST(request: NextRequest) {
  })(request)
 }
 
-function getRelativeTime(ts: string | null): string {
+function toDateSafe(ts: string | number): Date {
+ if (typeof ts === 'number') {
+  return new Date(ts <= 9999999999 ? ts * 1000 : ts)
+ }
+ if (/^\d+$/.test(ts)) {
+  const n = Number(ts)
+  return new Date(n <= 9999999999 ? n * 1000 : n)
+ }
+ return new Date(ts)
+}
+
+function getRelativeTime(ts: string | number | null): string {
  if (!ts) return '—'
- const diff = Date.now() - new Date(ts).getTime()
+ const diff = Date.now() - toDateSafe(ts).getTime()
  const mins = Math.floor(diff / 60000)
  if (mins < 1) return 'just now'
  if (mins < 60) return `${mins}m ago`
