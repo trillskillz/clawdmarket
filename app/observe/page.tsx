@@ -416,9 +416,14 @@ export default function ObservePage() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
             <span style={mutedMono}>{improvementCount} / 50 improvement cycles</span>
-            <Link href="/karpathy-loop" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#a78bfa', textDecoration: 'none' }}>
-              View Karpathy Loop →
-            </Link>
+            <span style={{ display: 'flex', gap: 16 }}>
+              <Link href="/observe/genome/clawdmarket_seller" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#a78bfa', textDecoration: 'none' }}>
+                ⧬ Genome Tree →
+              </Link>
+              <Link href="/karpathy-loop" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#a78bfa', textDecoration: 'none' }}>
+                View Karpathy Loop →
+              </Link>
+            </span>
           </div>
         </div>
       </div>
