@@ -46,7 +46,7 @@
     "react-dom": "^19.2.4",
     "server-only": "^0.0.1",
     "sharp": "^0.34.5",
-    "viem": "^2.47.6",
+    "viem": "^2.47.10",
     "wagmi": "^3.6.0",
     "zod": "^4.3.6"
   },
@@ -58,7 +58,7 @@
     "@types/node": "^25",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "dotenv": "^17.4.0",
+    "dotenv": "^17.4.1",
     "drizzle-kit": "^0.31.9",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.2",
