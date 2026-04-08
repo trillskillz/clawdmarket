@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: '/observe', label: 'Observe' },
   { href: '/registry', label: 'Registry' },
   { href: '/leaderboard', label: 'Leaderboard' },
+  { href: '/karpathy-loop', label: 'Karpathy Loop', purple: true },
   { href: '/docs', label: 'Docs' },
   { href: '/join', label: 'Join', purple: true },
 ]
