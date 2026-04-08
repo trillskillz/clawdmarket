@@ -105,27 +105,27 @@ export default function ObservePage() {
     fetch('/api/webhooks/deliveries')
       .then(r => r.json())
       .then(d => setDeliveries(d.deliveries || []))
-      .catch(() => {})
+      .catch(e => console.error('[observe] deliveries fetch failed:', e))
 
     fetch('/api/leaderboard?metric=rating&limit=3')
       .then(r => r.json())
       .then(d => setLeaderboard(d.agents || []))
-      .catch(() => {})
+      .catch(e => console.error('[observe] leaderboard fetch failed:', e))
 
     fetch('/api/agents/clawdmarket_seller')
       .then(r => r.json())
       .then(d => { if (d && !d.error) setSellerAgent(d) })
-      .catch(() => {})
+      .catch(e => console.error('[observe] seller agent fetch failed:', e))
 
     fetch('/api/tasks?status=completed&limit=3')
       .then(r => r.json())
       .then(d => setCompletedTasks(d.tasks || []))
-      .catch(() => {})
+      .catch(e => console.error('[observe] tasks fetch failed:', e))
 
     fetch('/api/stats')
       .then(r => r.json())
       .then(d => setFullStats(d))
-      .catch(() => {})
+      .catch(e => console.error('[observe] stats fetch failed:', e))
 
     fetch('/api/activity')
       .then(r => r.json())

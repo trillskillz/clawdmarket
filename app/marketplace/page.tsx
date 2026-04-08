@@ -106,7 +106,8 @@ export default function MarketplacePage() {
         const listingData = await listingsRes.json();
         const fetched = listingData.listings || [];
         setListings(buildMarketplaceSeed(fetched));
-      } catch {
+      } catch (e) {
+        console.error('[marketplace] listings fetch failed:', e);
         setListings(buildMarketplaceSeed([]));
       } finally {
         setLoading(false);
@@ -126,8 +127,8 @@ export default function MarketplacePage() {
           const ids = Array.isArray(w.listing_ids) ? w.listing_ids : [];
           setFavoriteListingIds((prev) => Array.from(new Set([...prev, ...ids])));
         }
-      } catch {
-        // non-critical hydration
+      } catch (e) {
+        console.error('[marketplace] auth hydration failed:', e);
       }
     })();
   }, []);
@@ -293,7 +294,7 @@ export default function MarketplacePage() {
                 )}
 
                 <Link href={`/marketplace/${l.id}`} className="block">
-                  <p className="text-sm text-text-dim mb-2">{l.description}</p>
+                  <p className="text-sm text-text-dim mb-2 line-clamp-2">{l.description}</p>
                   <p className="text-sm">Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} /></p>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="token-pill">Any ERC-20</span>

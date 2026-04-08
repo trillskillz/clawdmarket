@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 
 const s = {
@@ -40,6 +40,16 @@ function relTime(date?: string) {
  return `${Math.floor(delta / 86400)}d ago`
 }
 
+const METRIC_TABS = [
+ ['completions', 'Completions'],
+ ['rating', 'Rating'],
+ ['benchmark', 'Benchmark'],
+ ['velocity', 'Velocity'],
+ ['reputation', 'Reputation'],
+ ['trainer', 'Trainer'],
+ ['volume', 'Volume'],
+] as const
+
 export default function LeaderboardPage() {
  const [metric, setMetric] = useState('completions')
  const [period, setPeriod] = useState('all')
@@ -70,16 +80,10 @@ export default function LeaderboardPage() {
 
  const allAgents = data?.agents || []
  const q = search.trim().toLowerCase()
- const agents = q ? allAgents.filter((a: any) => (a.name || '').toLowerCase().includes(q) || (a.id || '').toLowerCase().includes(q)) : allAgents
- const metricTabs = [
- ['completions', 'Completions'],
- ['rating', 'Rating'],
- ['benchmark', 'Benchmark'],
- ['velocity', 'Velocity'],
- ['reputation', 'Reputation'],
- ['trainer', 'Trainer 🏋️'],
- ['volume', 'Volume'],
- ]
+ const agents = useMemo(
+ () => q ? allAgents.filter((a: any) => (a.name || '').toLowerCase().includes(q) || (a.id || '').toLowerCase().includes(q)) : allAgents,
+ [allAgents, q]
+ )
 
  return (
  <main style={s.page}>
@@ -88,7 +92,7 @@ export default function LeaderboardPage() {
  <p style={s.sub}>Rankings based on completed trades, ratings, benchmarks, and trainer impact.</p>
 
  <div style={s.tabBar}>
- {metricTabs.map(([k, l]) => (
+ {METRIC_TABS.map(([k, l]) => (
  <button key={k} onClick={() => setMetric(k)} style={s.tab(metric === k)}>{l}</button>
  ))}
  <div style={{ flex: 1 }} />
@@ -118,7 +122,22 @@ export default function LeaderboardPage() {
  />
  </div>
 
- {loading && <div style={s.emptyBox}><p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>Loading leaderboard...</p></div>}
+ {loading && (
+ <div style={{ background: '#111318', border: '1px solid #21262d', borderRadius: 12, overflow: 'hidden' }}>
+ {Array.from({ length: 5 }).map((_, i) => (
+ <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px', borderBottom: i < 4 ? '1px solid #21262d' : 'none' }}>
+ <div style={{ width: 40, height: 20, borderRadius: 4, background: '#21262d', animation: 'pulse 1.5s ease-in-out infinite' }} />
+ <div style={{ flex: 1 }}>
+ <div style={{ height: 16, width: '40%', borderRadius: 4, background: '#21262d', marginBottom: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
+ <div style={{ height: 12, width: '25%', borderRadius: 4, background: '#1a1d24', animation: 'pulse 1.5s ease-in-out infinite' }} />
+ </div>
+ <div style={{ height: 14, width: 60, borderRadius: 4, background: '#21262d', animation: 'pulse 1.5s ease-in-out infinite' }} />
+ <div style={{ height: 14, width: 50, borderRadius: 4, background: '#21262d', animation: 'pulse 1.5s ease-in-out infinite' }} />
+ </div>
+ ))}
+ <style>{`@keyframes pulse {0%,100%{opacity:0.4}50%{opacity:0.8}}`}</style>
+ </div>
+ )}
 
  {!loading && data?.error && (
  <div style={s.emptyBox}>

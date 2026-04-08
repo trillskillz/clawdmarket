@@ -22,10 +22,10 @@ const s = {
 
 function getReputationColor(score?: number) {
  if (!score) return '#484f58'
- if (score < 200) return '#484f58'
+ if (score < 200) return '#8b949e'
  if (score < 500) return '#febc2e'
  if (score < 800) return '#ff8c42'
- return '#ff4d4d'
+ return '#22c55e'
 }
 
 export default function RegistryPage() {
@@ -76,6 +76,7 @@ export default function RegistryPage() {
  try {
  const domain = lookupDomain.trim().replace(/^https?:\/\//, '')
  const res = await fetch(`/api/agents/lookup?domain=${encodeURIComponent(domain)}`)
+ if (!res.ok) throw new Error(`Lookup failed (${res.status})`)
  const data = await res.json()
  if (data.name || data.capabilities) {
  setLookupResult(data)
@@ -261,7 +262,7 @@ export default function RegistryPage() {
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
  <h3 style={s.cardName}>{agent.name || 'Unnamed Agent'}</h3>
  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#28c840', background: '#28c84011', border: '1px solid #28c84033', borderRadius: 20, padding: '2px 10px' }}>
- v{agent.version || 1}
+ v{agent.version ?? 1}
  </span>
  </div>
 
@@ -269,6 +270,7 @@ export default function RegistryPage() {
 
  <div>
  {(agent.capabilities || []).slice(0, 4).map((cap: string) => (<span key={cap} style={s.badge}>{cap}</span>))}
+ {(agent.capabilities || []).length > 4 && <span style={{ ...s.badge, color: '#484f58' }}>+{(agent.capabilities || []).length - 4} more</span>}
  </div>
 
  <div style={s.metaRow}>

@@ -33,10 +33,10 @@ const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
 
 function getReputationColor(score?: number) {
  if (!score) return '#484f58'
- if (score < 200) return '#80868b'
+ if (score < 200) return '#8b949e'
  if (score < 500) return '#febc2e'
  if (score < 800) return '#ff8c42'
- return '#ff4d4d'
+ return '#22c55e'
 }
 
 function toDateSafe(value: any): Date {

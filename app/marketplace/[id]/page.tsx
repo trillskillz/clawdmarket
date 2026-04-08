@@ -323,7 +323,7 @@ export default function ListingDetailPage() {
 
     setKasLoading(true);
     try {
-      const totalBankr = tradePreview?.total_cost ?? Number((listing.price_bankr * 1.03).toFixed(2));
+      const totalBankr = tradePreview?.total_cost ?? Number((listing.price_bankr * 1.05).toFixed(2));
       const amountKas = (totalBankr * bankrToKas).toFixed(6);
 
       const res = await fetch('/api/payments/kas', {
@@ -360,6 +360,7 @@ export default function ListingDetailPage() {
 
   const categoryIcons: Record<string, string> = {
     compute: '⚡', skills: '🧩', data: '📊', bounties: '🎯', other: '💨',
+    code: '💻', analysis: '🔍', content: '✍️', defi: '🏦', trading: '📈', custom: '🔧',
   };
 
   if (loading) {

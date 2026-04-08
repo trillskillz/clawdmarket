@@ -1,6 +1,6 @@
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
-import AgentServicesList from '@/components/AgentServicesList';
+import AgentProfileClient from '@/components/AgentProfileClient';
 import { db } from '@/lib/db';
 import { users, listings, trades, ratings, agent_ratings } from '@/lib/schema';
 import { and, desc, eq, or, sql, gte } from 'drizzle-orm';
@@ -20,17 +20,13 @@ function walletFromEmail(email: string) {
   return email.replace('wallet_', '').replace('@wallet.local', '');
 }
 
-function shortWallet(wallet?: string | null) {
-  if (!wallet) return 'Not connected';
-  return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
-}
-
 type ResolvedAgent = {
   id: string;
   name: string;
   email: string;
   bio: string | null;
   avatar_url?: string | null;
+  avatar_emoji?: string | null;
   created_at: Date;
   isFallback?: boolean;
 };
@@ -66,9 +62,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const agent = await resolveAgent(slug);
   if (!agent) {
-    return {
-      title: 'Agent Not Found — ClawdMarket',
-    };
+    return { title: 'Agent Not Found — ClawdMarket' };
   }
 
   const wallet = walletFromEmail(agent.email);
@@ -111,7 +105,9 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ s
   if (!agent) return notFound();
 
   const wallet = walletFromEmail(agent.email);
+  const handle = toHandle(agent.name);
 
+  // ── Listings ────────────────────────────────────────────────────────────────
   const agentListings = agent.isFallback
     ? FALLBACK_LISTINGS.filter((l) => fallbackAgentForListingId(l.id).id === agent.id).map((l) => ({
         id: l.id,
@@ -132,10 +128,11 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ s
         .where(and(eq(listings.seller_id, agent.id), eq(listings.status, 'active')))
         .orderBy(desc(listings.created_at));
 
+  // ── Trades ──────────────────────────────────────────────────────────────────
   const completedTrades = agent.isFallback
     ? []
     : await db
-        .select({ id: trades.id })
+        .select({ id: trades.id, amount: trades.amount, created_at: trades.created_at })
         .from(trades)
         .where(and(eq(trades.seller_id, agent.id), or(eq(trades.status, 'completed'), eq(trades.status, 'complete'))));
 
@@ -145,6 +142,82 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ s
         .select({ id: trades.id })
         .from(trades)
         .where(and(eq(trades.seller_id, agent.id), eq(trades.status, 'disputed')));
+
+  // ── Recent trades (both buyer & seller) for activity feed ───────────────────
+  const recentTradesRaw = agent.isFallback
+    ? []
+    : await db
+        .select({
+          id: trades.id,
+          amount: trades.amount,
+          status: trades.status,
+          created_at: trades.created_at,
+          buyer_id: trades.buyer_id,
+          seller_id: trades.seller_id,
+        })
+        .from(trades)
+        .where(or(eq(trades.seller_id, agent.id), eq(trades.buyer_id, agent.id)))
+        .orderBy(desc(trades.created_at))
+        .limit(20);
+
+  // Resolve counterparty names
+  const counterpartyIds = new Set<string>();
+  for (const t of recentTradesRaw) {
+    const otherId = t.buyer_id === agent.id ? t.seller_id : t.buyer_id;
+    counterpartyIds.add(otherId);
+  }
+
+  const counterpartyNames: Record<string, string> = {};
+  if (counterpartyIds.size > 0) {
+    const counterparties = await db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(or(...[...counterpartyIds].map((cid) => eq(users.id, cid))));
+    for (const cp of counterparties) {
+      counterpartyNames[cp.id] = cp.name;
+    }
+  }
+
+  const recentTrades = recentTradesRaw.map((t) => {
+    const isBuyer = t.buyer_id === agent.id;
+    const otherId = isBuyer ? t.seller_id : t.buyer_id;
+    return {
+      id: t.id,
+      amount: t.amount,
+      status: t.status,
+      created_at: t.created_at ? new Date(t.created_at as any).toISOString() : new Date().toISOString(),
+      counterparty: counterpartyNames[otherId] || 'Unknown Agent',
+      role: isBuyer ? 'buyer' as const : 'seller' as const,
+    };
+  });
+
+  // ── Total volume ────────────────────────────────────────────────────────────
+  const totalVolume = completedTrades.reduce((sum, t) => sum + (t.amount ?? 0), 0);
+
+  // ── Trading partners ────────────────────────────────────────────────────────
+  const partnerCounts: Record<string, number> = {};
+  for (const t of recentTradesRaw) {
+    const otherId = t.buyer_id === agent.id ? t.seller_id : t.buyer_id;
+    partnerCounts[otherId] = (partnerCounts[otherId] || 0) + 1;
+  }
+  const tradingPartners = Object.entries(partnerCounts)
+    .map(([id, count]) => ({ name: counterpartyNames[id] || 'Unknown', trades: count }))
+    .sort((a, b) => b.trades - a.trades);
+
+  // ── Category breakdown ──────────────────────────────────────────────────────
+  const categoryCounts: Record<string, number> = {};
+  for (const l of agentListings) {
+    categoryCounts[l.category] = (categoryCounts[l.category] || 0) + 1;
+  }
+  const categoryBreakdown = Object.entries(categoryCounts)
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // ── Trust score computation ─────────────────────────────────────────────────
+  let likes = 0;
+  let dislikes = 0;
+  let totalRatingsCount = 0;
+  let recentRatings90d = 0;
 
   let trust = computeTrustScore({
     likes: 0,
@@ -169,15 +242,20 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ s
       .from(agent_ratings)
       .where(and(eq(agent_ratings.to_agent_id, agent.id), gte(agent_ratings.created_at, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000))));
 
+    likes = ratingState.likes;
+    dislikes = ratingState.dislikes;
+    totalRatingsCount = totalRatingsRow?.count || 0;
+    recentRatings90d = recentRatingsRow?.count || 0;
+
     trust = computeTrustScore({
       likes: ratingState.likes,
       dislikes: ratingState.dislikes,
       effectiveDislikes: ratingState.effectiveDislikes,
-      totalRatings: totalRatingsRow?.count || 0,
+      totalRatings: totalRatingsCount,
       completedTrades: completedTrades.length,
       disputedTrades: disputedTrades.length,
       accountAgeDays: Math.floor((Date.now() - new Date(agent.created_at as any).getTime()) / (1000 * 60 * 60 * 24)),
-      recentRatings90d: recentRatingsRow?.count || 0,
+      recentRatings90d,
     });
   } catch (err) {
     console.error('Agent trust computation fallback:', err);
@@ -186,24 +264,34 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ s
   return (
     <>
       <Nav />
-      <main className="px-6 pt-32 pb-20">
-        <div className="max-w-6xl mx-auto">
-          <div className="bg-bg2 border border-border rounded-2xl p-8 mb-8">
-            <h1 className="text-4xl font-bold mb-2">{agent.name}</h1>
-            <p className="text-text-dim mb-2">@{toHandle(agent.name)}</p>
-            <p className="text-sm text-text-dim mb-1">Wallet: <span className="font-mono">{shortWallet(wallet)}</span></p>
-            <p className={`text-sm font-semibold mb-1 ${trustScoreClass(trust.trustScore)}`}>Trust Score: {trust.trustScore} ({trust.confidence} confidence)</p>
-            <p className="text-xs text-text-dim mb-1">Based on: {trust.drivers[0]}</p>
-            <p className="text-sm text-text-dim mb-1">Total transactions completed: {completedTrades.length}</p>
-            <p className="text-sm text-text-dim mb-4">Member since: {new Date(agent.created_at as any).toLocaleDateString()}</p>
-            <p className="text-text-dim">{agent.bio || 'No bio provided yet.'}</p>
-          </div>
-
-          <section>
-            <h2 className="text-2xl font-bold mb-4">Listed Services</h2>
-            <AgentServicesList listings={agentListings} />
-          </section>
-        </div>
+      <main className="px-4 md:px-6 pt-32 pb-20">
+        <AgentProfileClient
+          agent={{
+            name: agent.name,
+            handle,
+            wallet,
+            bio: agent.bio,
+            avatar_url: agent.avatar_url,
+            avatar_emoji: (agent as any).avatar_emoji || null,
+            created_at: new Date(agent.created_at as any).toISOString(),
+            isFallback: agent.isFallback,
+          }}
+          trust={trust}
+          stats={{
+            completedTrades: completedTrades.length,
+            disputedTrades: disputedTrades.length,
+            totalRatings: totalRatingsCount,
+            likes,
+            dislikes,
+            servicesCount: agentListings.length,
+            totalVolume,
+            recentRatings90d,
+          }}
+          listings={agentListings}
+          recentTrades={recentTrades}
+          categoryBreakdown={categoryBreakdown}
+          tradingPartners={tradingPartners}
+        />
       </main>
       <Footer />
     </>
