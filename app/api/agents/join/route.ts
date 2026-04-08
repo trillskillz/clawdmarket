@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { agents } from '@/lib/schema'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -40,7 +39,6 @@ export async function POST(request: NextRequest) {
     const rateLimitKey = `join_${ip}`
     const now = Date.now()
 
-    // Simple in-memory rate limit (resets on deploy, acceptable for this)
     if (!globalRateLimit[rateLimitKey]) {
       globalRateLimit[rateLimitKey] = []
     }
@@ -63,29 +61,37 @@ export async function POST(request: NextRequest) {
       ? JSON.stringify(Array.isArray(capabilities) ? capabilities : [capabilities])
       : '[]'
 
-    // Ensure claim_code column exists (safe ALTER — SQLite ignores if already present)
     const client = (db as any).$client
-    await client.execute(
-      `ALTER TABLE agents ADD COLUMN claim_code TEXT`
-    ).catch(() => { /* column already exists */ })
-    await client.execute(
-      `ALTER TABLE agents ADD COLUMN claimed_at TEXT`
-    ).catch(() => { /* column already exists */ })
+    const nowUnix = Math.floor(Date.now() / 1000)
 
-    // Insert agent with status='inactive' until claimed
-    await db.insert(agents).values({
-      id: agentId,
-      name: name.trim(),
-      description: description.trim(),
-      capabilities: caps,
-      endpoint: '',
-      owner_address: '',
-      api_key: apiKey,
-      status: 'inactive',
-      version: 1,
-      baseAgentId: agentId,
-      claimCode: claimCode,
-      created_at: new Date(),
+    // Ensure claim_code and claimed_at columns exist in production DB
+    await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
+    await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+
+    // Use raw SQL to avoid Drizzle schema/DB column mismatch
+    await client.execute({
+      sql: `INSERT INTO agents (id, name, description, capabilities, endpoint, owner_address, api_key, status, version, base_agent_id, endpoint_failures, rating_count, benchmark_count, benchmark_history, improvement_count, total_improvement_delta, claim_code, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        agentId,
+        name.trim(),
+        description.trim(),
+        caps,
+        '',
+        '',
+        apiKey,
+        'inactive',
+        1,
+        agentId,
+        0,
+        0,
+        0,
+        '[]',
+        0,
+        0,
+        claimCode,
+        nowUnix,
+      ],
     })
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
@@ -114,5 +120,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Simple in-memory rate limiter (resets on cold start — fine for this use case)
 const globalRateLimit: Record<string, number[]> = {}

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { agents } from '@/lib/schema'
-import { eq } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,19 +21,24 @@ export async function GET(request: NextRequest) {
   const apiKey = auth.substring(7)
 
   try {
-    const agent = await db.select({
-      id: agents.id,
-      name: agents.name,
-      status: agents.status,
-      claimCode: agents.claimCode,
-      claimedAt: agents.claimedAt,
-      owner_address: agents.owner_address,
-      created_at: agents.created_at,
-    })
-      .from(agents)
-      .where(eq(agents.api_key, apiKey))
-      .get()
+    const client = (db as any).$client
 
+    // Use raw SQL — claim_code/claimed_at columns may not exist in older DBs
+    const result = await client.execute({
+      sql: `SELECT id, name, status, owner_address, created_at,
+                   claim_code, claimed_at
+            FROM agents WHERE api_key = ? LIMIT 1`,
+      args: [apiKey],
+    }).catch(async () => {
+      // Fallback without claim columns if they don't exist
+      return client.execute({
+        sql: `SELECT id, name, status, owner_address, created_at
+              FROM agents WHERE api_key = ? LIMIT 1`,
+        args: [apiKey],
+      })
+    })
+
+    const agent = result?.rows?.[0]
     if (!agent) {
       return NextResponse.json(
         { error: 'not_found', message: 'No agent found for this API key' },
@@ -43,8 +46,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const isClaimed = agent.status === 'active' && !!agent.claimedAt
-    const isPendingClaim = agent.status === 'inactive' && !!agent.claimCode && !agent.claimedAt
+    const claimCode = agent.claim_code as string | null
+    const claimedAt = agent.claimed_at as string | null
+    const agentStatus = agent.status as string
+
+    const isClaimed = agentStatus === 'active' && !!claimedAt
+    const isPendingClaim = agentStatus === 'inactive' && !!claimCode && !claimedAt
 
     let status: string
     if (isClaimed) {
@@ -52,7 +59,7 @@ export async function GET(request: NextRequest) {
     } else if (isPendingClaim) {
       status = 'pending_claim'
     } else {
-      status = agent.status
+      status = agentStatus
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
@@ -61,9 +68,9 @@ export async function GET(request: NextRequest) {
       agent_id: agent.id,
       name: agent.name,
       status,
-      claimed_at: agent.claimedAt || null,
+      claimed_at: claimedAt || null,
       owner: agent.owner_address || null,
-      claim_url: isPendingClaim ? `${baseUrl}/claim/${agent.claimCode}` : undefined,
+      claim_url: isPendingClaim ? `${baseUrl}/claim/${claimCode}` : undefined,
       profile_url: `${baseUrl}/registry/${agent.id}`,
     })
   } catch (err: any) {

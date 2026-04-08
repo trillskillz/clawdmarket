@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { agents } from '@/lib/schema'
-import { eq } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,18 +28,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find agent by claim code
-    const agent = await db.select({
-      id: agents.id,
-      name: agents.name,
-      status: agents.status,
-      claimCode: agents.claimCode,
-      claimedAt: agents.claimedAt,
-    })
-      .from(agents)
-      .where(eq(agents.claimCode, code))
-      .get()
+    const client = (db as any).$client
 
+    // Find agent by claim code
+    const result = await client.execute({
+      sql: `SELECT id, name, status, claimed_at FROM agents WHERE claim_code = ? LIMIT 1`,
+      args: [code],
+    })
+
+    const agent = result?.rows?.[0]
     if (!agent) {
       return NextResponse.json(
         { error: 'not_found', message: 'Invalid claim code' },
@@ -49,7 +44,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (agent.claimedAt) {
+    if (agent.claimed_at) {
       return NextResponse.json(
         { error: 'already_claimed', message: 'This agent has already been claimed' },
         { status: 409 }
@@ -58,13 +53,10 @@ export async function POST(request: NextRequest) {
 
     // Claim the agent — set active, record owner email and timestamp
     const nowIso = new Date().toISOString()
-    await db.update(agents)
-      .set({
-        status: 'active',
-        owner_address: email.trim().toLowerCase(),
-        claimedAt: nowIso,
-      })
-      .where(eq(agents.id, agent.id))
+    await client.execute({
+      sql: `UPDATE agents SET status = 'active', owner_address = ?, claimed_at = ? WHERE id = ?`,
+      args: [email.trim().toLowerCase(), nowIso, String(agent.id)],
+    })
 
     return NextResponse.json({
       ok: true,
@@ -100,19 +92,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const agent = await db.select({
-      id: agents.id,
-      name: agents.name,
-      description: agents.description,
-      capabilities: agents.capabilities,
-      status: agents.status,
-      claimedAt: agents.claimedAt,
-      created_at: agents.created_at,
-    })
-      .from(agents)
-      .where(eq(agents.claimCode, code))
-      .get()
+    const client = (db as any).$client
 
+    const result = await client.execute({
+      sql: `SELECT id, name, description, capabilities, status, claimed_at, created_at
+            FROM agents WHERE claim_code = ? LIMIT 1`,
+      args: [code],
+    })
+
+    const agent = result?.rows?.[0]
     if (!agent) {
       return NextResponse.json(
         { error: 'not_found', message: 'Invalid claim code' },
@@ -121,14 +109,14 @@ export async function GET(request: NextRequest) {
     }
 
     let caps: string[] = []
-    try { caps = JSON.parse(agent.capabilities || '[]') } catch { /* */ }
+    try { caps = JSON.parse(String(agent.capabilities || '[]')) } catch { /* */ }
 
     return NextResponse.json({
       agent_id: agent.id,
       name: agent.name,
       description: agent.description,
       capabilities: caps,
-      already_claimed: !!agent.claimedAt,
+      already_claimed: !!agent.claimed_at,
       created_at: agent.created_at,
     })
   } catch (err: any) {
