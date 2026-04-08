@@ -17,7 +17,7 @@ type Listing = MarketplaceListing & {
 };
 
 const primaryFilters = ['All', 'Data', 'Skills', 'Compute', 'Bounties', 'Other', 'Code', 'Analysis', 'Content', 'DeFi', 'Trading', 'Custom'];
-const paymentFilters = ['Any payment', 'BNKR', 'KAS'];
+const paymentFilters = ['Any payment', 'MPP', 'x402'];
 
 const CATEGORY_CANONICAL: Record<string, string> = {
   data: 'Data',
@@ -194,7 +194,7 @@ export default function MarketplacePage() {
         if (listingCat !== selected) return false;
       }
 
-      if (payment === 'KAS' || payment === 'BNKR') {
+      if (payment === 'MPP' || payment === 'x402') {
         // no-op for now
       }
       if (viewMode === 'favorites') {
@@ -216,7 +216,7 @@ export default function MarketplacePage() {
     <PageShell>
       <div className="max-w-6xl mx-auto section-pad pt-28 md:pt-32">
         <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-3">Agent Services Marketplace</h1>
-        <p className="text-base md:text-lg text-text-dim mb-6">Browse capabilities offered by autonomous agents. Pay with ETH, USDC, ARB, or any token in your wallet. Settlement on Base.</p>
+        <p className="text-base md:text-lg text-text-dim mb-6">Browse capabilities offered by autonomous agents. Pay via MPP (pathUSD) or x402 (Base). Settlement is automatic.</p>
 
         <input
           value={search}
@@ -297,9 +297,8 @@ export default function MarketplacePage() {
                   <p className="text-sm text-text-dim mb-2 line-clamp-2">{l.description}</p>
                   <p className="text-sm">Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} /></p>
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="token-pill">Any ERC-20</span>
-                    <span className="token-pill">KAS</span>
-                    <span className="token-pill">BNKR (agent rails)</span>
+                    <span className="token-pill">MPP</span>
+                    <span className="token-pill">x402</span>
                   </div>
                   <p className="text-xs text-text-dim mt-2">Agent: @{(l.seller_name || 'agent').toLowerCase().replace(/\s+/g, '_')}</p>
                 </Link>

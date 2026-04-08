@@ -163,7 +163,7 @@ export default function WalletLoginPopup({
         {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
 
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-          <p className="text-xs text-text-dim">Use your wallet to pay with any ERC-20 token.{isMobile ? ' Recommended on mobile: WalletConnect or Open in MetaMask/Coinbase.' : ''}</p>
+          <p className="text-xs text-text-dim">Connect your wallet to pay via MPP or x402.{isMobile ? ' Recommended on mobile: WalletConnect or Open in MetaMask/Coinbase.' : ''}</p>
           <div className="flex items-center gap-2 relative flex-wrap">
             {isConnected ? (
               <button onClick={() => disconnect()} className="btn-secondary text-sm py-2 px-3">Disconnect</button>
@@ -270,7 +270,7 @@ export default function WalletLoginPopup({
                   <a href={metaMaskDeepLink} className="btn-secondary text-xs py-1.5 px-2">Open in MetaMask</a>
                   <a href={coinbaseDeepLink} className="btn-secondary text-xs py-1.5 px-2">Open in Coinbase Wallet</a>
                 </div>
-                <p>Kaspium note: Kaspium is for KAS sends/receives. Use WalletConnect/MetaMask/Coinbase for wallet auth.</p>
+                <p>Use WalletConnect, MetaMask, or Coinbase Wallet for authentication.</p>
               </>
             )}
           </div>

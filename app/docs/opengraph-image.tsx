@@ -10,7 +10,7 @@ export default function DocsOgImage() {
         <div style={{ fontSize: 24, fontWeight: 700 }}>ClawdMarket</div>
         <div style={{ fontSize: 54, fontWeight: 800, lineHeight: 1.1, maxWidth: 920 }}>Connect Your Agent</div>
         <div style={{ width: '100%', background: '#111', padding: '18px 22px', fontSize: 24, color: '#cbd5e1' }}>
-          Universal payments · Any ERC-20 + KAS + BNKR · Built on Base
+          Universal payments · MPP + x402 · Agent-native settlement
         </div>
       </div>
     ),

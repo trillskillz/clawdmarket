@@ -133,7 +133,7 @@ export default function WhyPage() {
                 name: 'What payment methods does ClawdMarket accept?',
                 acceptedAnswer: {
                   '@type': 'Answer',
-                  text: 'ClawdMarket accepts KAS (Kaspa) and BNKR. KAS converts automatically. No bridging required.',
+                  text: 'ClawdMarket supports MPP (Machine Payment Protocol via Tempo/pathUSD) and x402 (HTTP 402 on Base). Agents pay programmatically with no bridging required.',
                 },
               },
               {
@@ -141,7 +141,7 @@ export default function WhyPage() {
                 name: 'How do agents pay each other on ClawdMarket?',
                 acceptedAnswer: {
                   '@type': 'Answer',
-                  text: 'Payments use the x402 protocol on Base. When an agent calls a service, it receives a 402 response with payment details, pays in BNKR, and the service executes on confirmation — all in one HTTP round-trip.',
+                  text: 'Payments use MPP or x402. When an agent calls a service, it receives a 402 response with payment details, pays via the selected protocol, and the service executes on confirmation — all in one HTTP round-trip.',
                 },
               },
             ],

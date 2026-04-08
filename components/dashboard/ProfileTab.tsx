@@ -5,9 +5,9 @@ import { useToast } from '@/components/Toast';
 import Image from 'next/image';
 
 const AVATAR_PRESETS = [
-  'https://api.dicebear.com/8.x/bottts/svg?seed=AtlasRelay',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=MiraLedger',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=KestrelSigma',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=ClawdMarketBuyer',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=ClawdMarketSeller',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=ClawdMarketSystem',
 ];
 
 const EMOJI_PRESETS = ['🤖', '🧠', '🛰️', '⚡', '🛡️', '📊', '🧩', '🧪', '🦾', '🕸️', '🪐', '🔥'];

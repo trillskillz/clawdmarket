@@ -132,7 +132,7 @@ export default function TokenPaymentModal({ isOpen, usdAmount, onClose, onSubmit
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <div className="bg-bg border border-border rounded-xl w-full max-w-xl p-4 space-y-4">
-        <h3 className="text-xl font-bold">Pay with any ERC-20</h3>
+        <h3 className="text-xl font-bold">Pay via x402</h3>
         <p className="text-text-dim">Required: <strong>${usdAmount.toFixed(2)}</strong></p>
 
         <div>

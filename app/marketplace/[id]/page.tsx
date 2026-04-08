@@ -305,7 +305,7 @@ export default function ListingDetailPage() {
         throw new Error(data?.error || 'Trade verification failed');
       }
 
-      toast('Trade successful! On-chain ERC-20 payment confirmed.', 'success');
+      toast('Trade successful! Payment confirmed via x402.', 'success');
       router.push('/dashboard');
     } finally {
       setTradeLoading(false);
@@ -317,7 +317,7 @@ export default function ListingDetailPage() {
 
     if (!isConnected || !connectedAddress) {
       setShowWalletLogin(true);
-      toast('Connect your wallet first to start KAS checkout.', 'error');
+      toast('Connect your wallet first to start MPP checkout.', 'error');
       return;
     }
 
@@ -338,7 +338,7 @@ export default function ListingDetailPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        toast(data?.message || data?.error || 'Failed to start KAS payment', 'error');
+        toast(data?.message || data?.error || 'Failed to start MPP payment', 'error');
         return;
       }
 
@@ -350,9 +350,9 @@ export default function ListingDetailPage() {
         status: data.status,
       });
 
-      toast('KAS payment created. Send KAS to the shown deposit address.', 'success');
+      toast('MPP payment created. Complete the payment session.', 'success');
     } catch (e: any) {
-      toast(e?.message || 'Failed to start KAS payment', 'error');
+      toast(e?.message || 'Failed to start MPP payment', 'error');
     } finally {
       setKasLoading(false);
     }
@@ -443,7 +443,7 @@ export default function ListingDetailPage() {
                     offers: {
                       '@type': 'Offer',
                       price: listing.price_bankr,
-                      priceCurrency: 'BNKR',
+                      priceCurrency: 'USD',
                       availability: listing.status === 'active' ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
                       seller: {
                         '@type': 'Person',
@@ -572,7 +572,7 @@ export default function ListingDetailPage() {
                             Processing...
                           </span>
                         ) : (
-                          'Pay with any token 🚀'
+                          'Pay via x402'
                         )}
                       </button>
 
@@ -581,7 +581,7 @@ export default function ListingDetailPage() {
                         disabled={kasLoading}
                         className="btn-secondary w-full py-3 mt-2"
                       >
-                        {kasLoading ? 'Preparing KAS checkout…' : 'Buy with KAS'}
+                        {kasLoading ? 'Preparing MPP session…' : 'Pay via MPP'}
                       </button>
                     </>
                   )
@@ -593,9 +593,9 @@ export default function ListingDetailPage() {
 
                 {kasPayment && (
                   <div className="mt-3 p-3 rounded-lg border border-border bg-bg/40 text-xs space-y-1">
-                    <div className="font-semibold text-text">KAS Checkout</div>
+                    <div className="font-semibold text-text">MPP Checkout</div>
                     <div>Status: <span className="text-accent2">{kasPayment.status}</span></div>
-                    <div>Amount: {kasPayment.amount_kas} KAS</div>
+                    <div>Amount: {kasPayment.amount_kas} pathUSD</div>
                     <div className="break-all">Deposit: {kasPayment.kas_deposit_address}</div>
                     <div className="flex gap-2">
                       <button
@@ -603,7 +603,7 @@ export default function ListingDetailPage() {
                         onClick={async () => {
                           try {
                             await navigator.clipboard.writeText(kasPayment.kas_deposit_address);
-                            toast('Copied KAS deposit address', 'success');
+                            toast('Copied deposit address', 'success');
                           } catch {
                             toast('Failed to copy address', 'error');
                           }
@@ -616,7 +616,7 @@ export default function ListingDetailPage() {
                     <div className="mt-2">
                       <Image
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(kasPayment.kas_deposit_address)}`}
-                        alt="KAS deposit QR"
+                        alt="Deposit QR"
                         width={112}
                         height={112}
                         unoptimized
@@ -624,14 +624,14 @@ export default function ListingDetailPage() {
                       />
                     </div>
                     <div className="text-text-dim">Expires: {new Date(kasPayment.expires_at).toLocaleString()}</div>
-                    {kasPayment.kas_received && <div>Received: {kasPayment.kas_received} KAS</div>}
+                    {kasPayment.kas_received && <div>Received: {kasPayment.kas_received} pathUSD</div>}
                     {kasPayment.conversion_status && <div>Conversion: {kasPayment.conversion_status}</div>}
                     {kasPayment.settled_at && <div className="text-green-400">Settled at {new Date(kasPayment.settled_at).toLocaleString()}</div>}
                   </div>
                 )}
                 
                 <p className="text-[10px] text-text-dim text-center mt-3 leading-tight">
-                  Payment settles on-chain via Base. Funds release to seller on confirmation.
+                  Payment via MPP or x402. Funds release to seller on confirmation.
                 </p>
               </div>
             </div>

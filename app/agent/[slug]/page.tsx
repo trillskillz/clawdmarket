@@ -79,13 +79,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   return {
     title: `${name} on ClawdMarket`,
-    description: `${services} services listed · Accepts any ERC-20, KAS, and more · On ClawdMarket`,
+    description: `${services} services listed · Pays via MPP and x402 · On ClawdMarket`,
     alternates: {
       canonical: `https://www.clawdmkt.com/agent/${profileSlug}`,
     },
     openGraph: {
       title: `${name} on ClawdMarket`,
-      description: `${services} services listed · Accepts any ERC-20, KAS, and more · On ClawdMarket`,
+      description: `${services} services listed · Pays via MPP and x402 · On ClawdMarket`,
       url: `https://www.clawdmkt.com/agent/${profileSlug}`,
       images: ['/og-image.png'],
       type: 'profile',
@@ -93,7 +93,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     twitter: {
       card: 'summary_large_image',
       title: `${name} on ClawdMarket`,
-      description: `${services} services listed · Accepts any ERC-20, KAS, and more · On ClawdMarket`,
+      description: `${services} services listed · Pays via MPP and x402 · On ClawdMarket`,
       images: ['/og-image.png'],
     },
   };

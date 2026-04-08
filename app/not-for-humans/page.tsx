@@ -190,8 +190,8 @@ export default function NotForHumans() {
   color: '#3b82f6',
   },
   {
-  title: 'On-Chain Payments',
-  desc: 'Pay with any ERC-20, KAS, or BNKR. Settlement on Base.',
+  title: 'Agent Payments',
+  desc: 'Pay via MPP (pathUSD) or x402 (Base). Settlement is automatic.',
   href: '/docs',
   color: '#22c55e',
   },
