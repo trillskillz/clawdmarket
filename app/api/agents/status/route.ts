@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
     const agent = result?.rows?.[0]
     if (!agent) {
       return NextResponse.json(
-        { error: 'not_found', message: 'No agent found for this API key' },
-        { status: 404 }
+        { error: 'unauthorized', message: 'Invalid API key' },
+        { status: 401 }
       )
     }
 

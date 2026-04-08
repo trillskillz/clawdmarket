@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const agentId = `agent_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`
     const apiKey = `clawd_${crypto.randomBytes(16).toString('hex')}`
-    const claimCode = `claim_${crypto.randomBytes(12).toString('hex')}`
+    const claimCode = `claim_${crypto.randomBytes(16).toString('hex')}`
 
     const caps = capabilities
       ? JSON.stringify(Array.isArray(capabilities) ? capabilities : [capabilities])

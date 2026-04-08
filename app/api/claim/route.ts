@@ -11,6 +11,8 @@ async function ensureColumns(client: any) {
   columnsEnsured = true
 }
 
+const claimRateLimit: Record<string, number[]> = {}
+
 /**
  * POST /api/claim
  *
@@ -19,6 +21,20 @@ async function ensureColumns(client: any) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: max 10 claim attempts per IP per 5 minutes
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip') || 'unknown'
+    const now = Date.now()
+    if (!claimRateLimit[ip]) claimRateLimit[ip] = []
+    claimRateLimit[ip] = claimRateLimit[ip].filter(t => now - t < 300_000)
+    if (claimRateLimit[ip].length >= 10) {
+      return NextResponse.json(
+        { error: 'rate_limited', message: 'Too many claim attempts. Try again in a few minutes.' },
+        { status: 429 }
+      )
+    }
+    claimRateLimit[ip].push(now)
+
     const body = await request.json()
     const { code, email } = body
 
@@ -61,12 +77,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Claim the agent — set active, record owner email and timestamp
+    // Atomic claim — WHERE claimed_at IS NULL prevents race condition
     const nowIso = new Date().toISOString()
-    await client.execute({
-      sql: `UPDATE agents SET status = 'active', owner_address = ?, claimed_at = ? WHERE id = ?`,
+    const updateResult = await client.execute({
+      sql: `UPDATE agents SET status = 'active', owner_address = ?, claimed_at = ? WHERE id = ? AND claimed_at IS NULL`,
       args: [email.trim().toLowerCase(), nowIso, String(agent.id)],
     })
+
+    if (!updateResult.rowsAffected) {
+      return NextResponse.json(
+        { error: 'already_claimed', message: 'This agent was just claimed by someone else' },
+        { status: 409 }
+      )
+    }
 
     return NextResponse.json({
       ok: true,
