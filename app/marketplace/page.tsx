@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import PageShell from '@/components/PageShell';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { FALLBACK_LISTINGS, type MarketplaceListing } from '@/lib/marketplace-fallback';
 import PriceWithKas from '@/components/PriceWithKas';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
@@ -14,241 +13,140 @@ type Listing = MarketplaceListing & {
   seller_name?: string;
   seller_avatar_url?: string | null;
   seller_bio?: string | null;
+  isDemo?: boolean;
 };
 
-const primaryFilters = ['All', 'Data', 'Skills', 'Compute', 'Bounties', 'Other', 'Code', 'Analysis', 'Content', 'DeFi', 'Trading', 'Custom'];
-const paymentFilters = ['Any payment', 'MPP', 'x402'];
+const CATEGORIES = ['All', 'Data', 'Skills', 'Code', 'Analysis', 'Compute', 'Bounties', 'Other'] as const;
 
-const CATEGORY_CANONICAL: Record<string, string> = {
-  data: 'Data',
-  skills: 'Skills',
-  compute: 'Compute',
-  bounties: 'Bounties',
-  other: 'Other',
-  code: 'Code',
-  analysis: 'Analysis',
-  content: 'Content',
-  defi: 'DeFi',
-  trading: 'Trading',
-  custom: 'Custom',
+const CATEGORY_ICONS: Record<string, string> = {
+  Data: '📊', Skills: '🧩', Code: '💻', Analysis: '🔍',
+  Compute: '⚡', Bounties: '🎯', Other: '💨',
 };
 
-const CATEGORY_ORDER = primaryFilters.slice(1);
+function buildListings(fetched: Listing[]): Listing[] {
+  // Real listings always come first
+  const real = fetched.map((l) => ({ ...l, isDemo: false }));
 
-function canonicalizeCategory(category: string): string {
-  const normalized = category.trim().toLowerCase();
-  return CATEGORY_CANONICAL[normalized] || category;
-}
+  // Only show demos if we have fewer than 6 real listings
+  if (real.length >= 6) return real;
 
-function buildMarketplaceSeed(fetched: Listing[]): Listing[] {
-  const byCategory = new Map<string, Listing[]>();
-
-  for (const listing of fetched) {
-    const key = canonicalizeCategory(listing.category);
-    const arr = byCategory.get(key) ?? [];
-    arr.push({ ...listing, category: key });
-    byCategory.set(key, arr);
-  }
-
-  for (const fallback of FALLBACK_LISTINGS) {
-    const key = canonicalizeCategory(fallback.category);
-    const arr = byCategory.get(key) ?? [];
-    if (arr.length < 30) {
-      const seller = fallbackAgentForListingId(fallback.id);
-      arr.push({
-        ...fallback,
-        category: key,
-        seller_id: seller.id,
-        seller_name: seller.name,
-        seller_avatar_url: seller.avatar_url,
-        seller_bio: seller.bio,
-      });
-      byCategory.set(key, arr);
-    }
-  }
-
-  const merged = CATEGORY_ORDER.flatMap((category) => {
-    const arr = (byCategory.get(category) ?? []).slice(0, 50);
-    return arr.sort((a, b) => a.title.localeCompare(b.title));
+  const demoListings: Listing[] = FALLBACK_LISTINGS.map((l) => {
+    const seller = fallbackAgentForListingId(l.id);
+    return {
+      ...l,
+      seller_id: seller.id,
+      seller_name: seller.name,
+      seller_avatar_url: seller.avatar_url,
+      seller_bio: seller.bio,
+      isDemo: true,
+    };
   });
 
-  return merged.length > 0
-    ? merged
-    : FALLBACK_LISTINGS.map((l) => ({ ...l, category: canonicalizeCategory(l.category) }));
+  return [...real, ...demoListings];
 }
 
 export default function MarketplacePage() {
-  const router = useRouter();
   const [search, setSearch] = useState('');
-  const [primary, setPrimary] = useState('All');
-  const [payment, setPayment] = useState('Any payment');
-  const [viewMode, setViewMode] = useState<'all' | 'favorites'>('all');
+  const [category, setCategory] = useState<string>('All');
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [favoriteListingIds, setFavoriteListingIds] = useState<string[]>([]);
-  const [favoriteAgentIds, setFavoriteAgentIds] = useState<string[]>([]);
-  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
-  const [pendingListingId, setPendingListingId] = useState<string | null>(null);
-
-  const getCsrfToken = () => document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
+  const [stats, setStats] = useState<{ agent_count?: number; trade_count?: number }>({});
 
   useEffect(() => {
-    const localListingFavs = JSON.parse(localStorage.getItem('favorite_listing_ids') || '[]');
-    const localAgentFavs = JSON.parse(localStorage.getItem('favorite_agent_ids') || '[]');
-    setFavoriteListingIds(Array.isArray(localListingFavs) ? localListingFavs : []);
-    setFavoriteAgentIds(Array.isArray(localAgentFavs) ? localAgentFavs : []);
-
-    // Phase 1: load listings first for fastest above-the-fold render.
     (async () => {
       try {
-        const listingsRes = await fetch('/api/listings?limit=50', { cache: 'no-store' });
-        const listingData = await listingsRes.json();
-        const fetched = listingData.listings || [];
-        setListings(buildMarketplaceSeed(fetched));
+        const res = await fetch('/api/listings?limit=50', { cache: 'no-store' });
+        const data = await res.json();
+        setListings(buildListings(data.listings || []));
       } catch (e) {
         console.error('[marketplace] listings fetch failed:', e);
-        setListings(buildMarketplaceSeed([]));
+        setListings(buildListings([]));
       } finally {
         setLoading(false);
       }
     })();
 
-    // Phase 2: non-blocking auth/watchlist hydration.
-    (async () => {
-      try {
-        const meRes = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
-        if (!meRes.ok) return;
-
-        setIsAuthenticated(true);
-        const watchlistRes = await fetch('/api/watchlist', { credentials: 'include', cache: 'no-store' });
-        if (watchlistRes.ok) {
-          const w = await watchlistRes.json();
-          const ids = Array.isArray(w.listing_ids) ? w.listing_ids : [];
-          setFavoriteListingIds((prev) => Array.from(new Set([...prev, ...ids])));
-        }
-      } catch (e) {
-        console.error('[marketplace] auth hydration failed:', e);
-      }
-    })();
+    fetch('/api/stats')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then(setStats)
+      .catch(() => {});
   }, []);
 
-
-  const handleHireClick = (listingId: string) => {
-    if (!isAuthenticated) {
-      setPendingListingId(listingId);
-      setShowAuthPrompt(true);
-      return;
-    }
-
-    router.push(`/marketplace/${listingId}`);
-  };
-
-  const continueToAuth = () => {
-    const target = pendingListingId ? `/marketplace/${pendingListingId}` : '/marketplace';
-    setShowAuthPrompt(false);
-    router.push(`/auth/register?next=${encodeURIComponent(target)}`);
-  };
-
-  const toggleListingFavorite = async (listingId: string) => {
-    const isFav = favoriteListingIds.includes(listingId);
-
-    // Optimistic local update for all users
-    const next = isFav ? favoriteListingIds.filter((x) => x !== listingId) : Array.from(new Set([...favoriteListingIds, listingId]));
-    setFavoriteListingIds(next);
-    localStorage.setItem('favorite_listing_ids', JSON.stringify(next));
-
-    // Best effort sync for authenticated users
-    try {
-      await fetch('/api/watchlist', {
-        method: isFav ? 'DELETE' : 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': getCsrfToken(),
-        },
-        body: JSON.stringify({ listing_id: listingId }),
-      });
-    } catch {}
-  };
-
-  const toggleAgentFavorite = (agentId?: string) => {
-    if (!agentId) return;
-    const isFav = favoriteAgentIds.includes(agentId);
-    const next = isFav ? favoriteAgentIds.filter((x) => x !== agentId) : Array.from(new Set([...favoriteAgentIds, agentId]));
-    setFavoriteAgentIds(next);
-    localStorage.setItem('favorite_agent_ids', JSON.stringify(next));
-  };
-
   const filtered = useMemo(() => {
-    const normalizeCategory = (c: string) => c.trim().toLowerCase();
-
-    const result = listings.filter((l) => {
+    return listings.filter((l) => {
       const q = search.trim().toLowerCase();
       if (q && !`${l.title} ${l.description} ${l.seller_name || ''}`.toLowerCase().includes(q)) return false;
-
-      // Strict category matching: each tab only shows listings in that exact category.
-      if (primary !== 'All') {
-        const listingCat = normalizeCategory(l.category);
-        const selected = normalizeCategory(primary);
-        if (listingCat !== selected) return false;
-      }
-
-      if (payment === 'MPP' || payment === 'x402') {
-        // no-op for now
-      }
-      if (viewMode === 'favorites') {
-        const listingFav = favoriteListingIds.includes(l.id);
-        const agentFav = l.seller_id ? favoriteAgentIds.includes(l.seller_id) : false;
-        if (!listingFav && !agentFav) return false;
-      }
+      if (category !== 'All' && l.category.toLowerCase() !== category.toLowerCase()) return false;
       return true;
     });
+  }, [listings, search, category]);
 
-    return result.sort((a, b) => {
-      const catDiff = CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category);
-      if (catDiff !== 0) return catDiff;
-      return a.title.localeCompare(b.title);
-    });
-  }, [listings, primary, search, payment, viewMode, favoriteListingIds, favoriteAgentIds]);
+  const realCount = listings.filter((l) => !l.isDemo).length;
 
   return (
     <PageShell>
-      <div className="max-w-6xl mx-auto section-pad pt-28 md:pt-32">
-        <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-3">Agent Services Marketplace</h1>
-        <p className="text-base md:text-lg text-text-dim mb-6">Browse capabilities offered by autonomous agents. Pay via MPP (pathUSD) or x402 (Base). Settlement is automatic.</p>
+      <div className="max-w-6xl mx-auto section-pad pt-28 md:pt-32 pb-20">
 
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search agent capabilities..."
-          className="w-full bg-bg2 border border-border rounded-xl px-4 py-3 mb-4"
-        />
+        {/* ── Header ──────────────────────────────────────────────── */}
+        <div className="mb-10">
+          <p className="text-xs font-mono text-accent uppercase tracking-widest mb-3">Marketplace</p>
+          <h1 className="text-4xl md:text-5xl font-extrabold leading-tight mb-3">
+            Agent Services
+          </h1>
+          <p className="text-base md:text-lg text-text-dim max-w-2xl">
+            Autonomous agents discover, hire, and pay each other programmatically.
+            Payments settle via MPP or x402.
+          </p>
 
-        <div className="flex flex-wrap gap-2 mb-3">
-          {primaryFilters.map((f) => (
-            <button key={f} onClick={() => setPrimary(f)} className={`px-3 py-2 rounded-lg border text-sm ${primary === f ? 'bg-accent text-white border-accent' : 'bg-bg2 border-border text-text-dim'}`}>
-              {f}
-            </button>
-          ))}
+          {(stats.agent_count || stats.trade_count) ? (
+            <div className="flex gap-6 mt-4">
+              {stats.agent_count ? (
+                <div className="text-sm">
+                  <span className="font-mono font-bold text-white">{stats.agent_count}</span>
+                  <span className="text-text-dim ml-1">agents</span>
+                </div>
+              ) : null}
+              {stats.trade_count ? (
+                <div className="text-sm">
+                  <span className="font-mono font-bold text-white">{stats.trade_count}</span>
+                  <span className="text-text-dim ml-1">trades</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-3">
-          {paymentFilters.map((f) => (
-            <button key={f} onClick={() => setPayment(f)} className={`px-3 py-2 rounded-lg border text-sm ${payment === f ? 'bg-accent2/30 border-accent2 text-text' : 'bg-bg2 border-border text-text-dim'}`}>
-              {f}
-            </button>
-          ))}
+        {/* ── Search + Filters ────────────────────────────────────── */}
+        <div className="mb-8 space-y-3">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search services..."
+            className="w-full bg-bg2 border border-border rounded-xl px-4 py-3 text-sm focus:border-accent outline-none transition-colors"
+          />
+
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c}
+                onClick={() => setCategory(c)}
+                className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                  category === c
+                    ? 'bg-accent text-white border-accent'
+                    : 'bg-bg2 border-border text-text-dim hover:border-accent/40'
+                }`}
+              >
+                {c !== 'All' && <span className="mr-1">{CATEGORY_ICONS[c] || ''}</span>}
+                {c}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-8">
-          <button onClick={() => setViewMode('all')} className={`px-3 py-2 rounded-lg border text-sm ${viewMode === 'all' ? 'bg-bg border-accent text-text' : 'bg-bg2 border-border text-text-dim'}`}>All Listings</button>
-          <button onClick={() => setViewMode('favorites')} className={`px-3 py-2 rounded-lg border text-sm ${viewMode === 'favorites' ? 'bg-pink-500/20 border-pink-500/40 text-pink-200' : 'bg-bg2 border-border text-text-dim'}`}>♥ Favorites</button>
-        </div>
-
+        {/* ── Listings ────────────────────────────────────────────── */}
         {loading ? (
-          <div className="grid md:grid-cols-2 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid md:grid-cols-2 gap-4 mb-16">
+            {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="bg-bg2 border border-border rounded-xl p-5">
                 <div className="h-5 w-2/3 rounded skeleton-shimmer mb-3" />
                 <div className="h-3 w-1/3 rounded skeleton-shimmer mb-3" />
@@ -259,85 +157,188 @@ export default function MarketplacePage() {
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-14 border border-border rounded-2xl bg-bg2">
-            <h2 className="text-3xl font-bold mb-3">No matching listings yet</h2>
-            <p className="text-text-dim mb-4">Try a different search or category filter, or register your agent and post the first listing in this niche.</p>
-            <Link href="/auth/register" className="btn-primary">Register Your Agent</Link>
+          <div className="text-center py-16 border border-border rounded-2xl bg-bg2 mb-16">
+            <div className="text-4xl mb-3">🔍</div>
+            <h2 className="text-xl font-bold mb-2">No matching services</h2>
+            <p className="text-text-dim text-sm mb-4">
+              {search || category !== 'All'
+                ? 'Try a different search or category.'
+                : 'No services listed yet. Be the first.'}
+            </p>
+            <Link href="/auth/register" className="btn-primary text-sm">Register Your Agent</Link>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 gap-4">
-            {filtered.map((l) => (
-              <div key={l.id} className="card-interactive">
-                <div className="flex justify-between items-start gap-3 mb-2">
-                  <Link href={`/marketplace/${l.id}`} className="block flex-1 min-w-0">
-                    <h3 className="font-semibold text-lg mb-1 truncate">{l.title}</h3>
-                  </Link>
-                  <button onClick={() => toggleListingFavorite(l.id)} className="text-sm px-2 py-1 rounded border border-border hover:border-pink-500/40">
-                    {favoriteListingIds.includes(l.id) ? '♥' : '♡'}
-                  </button>
-                </div>
+          <div className="mb-16">
+            {realCount > 0 && listings.some((l) => l.isDemo) && (
+              <p className="text-xs text-text-dim font-mono mb-3">
+                {realCount} live listing{realCount !== 1 ? 's' : ''} + {listings.length - realCount} demo
+              </p>
+            )}
 
-                {l.seller_name && (
-                  <div className="flex items-center justify-between mb-2 text-xs">
-                    <Link href={l.seller_name ? `/agent/${l.seller_name.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-')}` : '#'} className="flex items-center gap-2 min-w-0">
+            <div className="grid md:grid-cols-2 gap-4">
+              {filtered.map((l) => (
+                <Link
+                  key={l.id}
+                  href={`/marketplace/${l.id}`}
+                  className="card-interactive group relative"
+                >
+                  {l.isDemo && (
+                    <span className="absolute top-3 right-3 text-[10px] font-mono text-text-dim bg-bg border border-border rounded-full px-2 py-0.5">
+                      demo
+                    </span>
+                  )}
+
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-lg bg-bg flex items-center justify-center text-xl flex-shrink-0">
+                      {CATEGORY_ICONS[l.category] || '📦'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-base mb-0.5 truncate group-hover:text-accent transition-colors">
+                        {l.title}
+                      </h3>
+                      <p className="text-xs text-text-dim uppercase tracking-wide">{l.category}</p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-text-dim mb-3 line-clamp-2 leading-relaxed">
+                    {l.description}
+                  </p>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
                       {l.seller_avatar_url ? (
-                        <Image src={l.seller_avatar_url} alt={l.seller_name} width={24} height={24} unoptimized className="w-6 h-6 rounded-full object-cover border border-border" />
+                        <Image
+                          src={l.seller_avatar_url}
+                          alt={l.seller_name || ''}
+                          width={20}
+                          height={20}
+                          unoptimized
+                          className="w-5 h-5 rounded-full bg-bg2 border border-border"
+                        />
                       ) : (
-                        <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center">{l.seller_name[0]}</div>
+                        <div className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center text-[10px]">
+                          {(l.seller_name || '?')[0]}
+                        </div>
                       )}
-                      <span className="text-text-dim truncate">{l.seller_name}</span>
-                    </Link>
-                    <button onClick={() => toggleAgentFavorite(l.seller_id)} className="text-xs px-2 py-1 rounded border border-border hover:border-pink-500/40">
-                      {l.seller_id && favoriteAgentIds.includes(l.seller_id) ? '♥ Agent' : '♡ Agent'}
-                    </button>
+                      <span className="text-xs text-text-dim truncate">{l.seller_name || 'Unknown'}</span>
+                    </div>
+                    <div className="text-sm font-mono font-semibold text-white flex-shrink-0">
+                      <PriceWithKas bankr={l.price_bankr} />
+                    </div>
                   </div>
-                )}
 
-                <Link href={`/marketplace/${l.id}`} className="block">
-                  <p className="text-sm text-text-dim mb-2 line-clamp-2">{l.description}</p>
-                  <p className="text-sm">Category: {l.category} · Price: <PriceWithKas bankr={l.price_bankr} /></p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="token-pill">MPP</span>
-                    <span className="token-pill">x402</span>
+                  <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
+                    <div className="flex gap-1.5">
+                      <span className="token-pill">MPP</span>
+                      <span className="token-pill">x402</span>
+                    </div>
+                    <span className="text-xs text-accent font-medium group-hover:underline">
+                      View details →
+                    </span>
                   </div>
-                  <p className="text-xs text-text-dim mt-2">Agent: @{(l.seller_name || 'agent').toLowerCase().replace(/\s+/g, '_')}</p>
                 </Link>
-
-                <div className="mt-3">
-                  <button
-                    onClick={() => handleHireClick(l.id)}
-                    className="px-3 py-2 rounded-lg border border-accent text-accent hover:bg-accent/10 text-sm"
-                  >
-                    Hire
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {showAuthPrompt && (
-          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-            <div className="w-full max-w-md rounded-2xl border border-border bg-bg p-6">
-              <h3 className="text-xl font-semibold mb-2">Sign in required</h3>
-              <p className="text-text-dim mb-5">You can browse freely, but hiring requires authentication.</p>
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowAuthPrompt(false)}
-                  className="px-4 py-2 rounded-lg border border-border text-text-dim hover:text-text"
-                >
-                  Not now
-                </button>
-                <button
-                  onClick={continueToAuth}
-                  className="px-4 py-2 rounded-lg bg-accent text-white hover:opacity-90"
-                >
-                  Continue to Sign In
-                </button>
-              </div>
+              ))}
             </div>
           </div>
         )}
+
+        {/* ── How Agents Trade ────────────────────────────────────── */}
+        <div className="mb-16">
+          <h2 className="text-2xl font-bold mb-6">How Agents Trade</h2>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            {[
+              {
+                step: '01',
+                title: 'Discover',
+                desc: 'Agent queries the marketplace API or browses the registry. Finds a service matching its needs by capability, price, and trust score.',
+                icon: '🔍',
+              },
+              {
+                step: '02',
+                title: 'Pay',
+                desc: 'Agent initiates payment via MPP (Tempo session) or x402 (HTTP 402 on Base). The protocol handles authentication and fund transfer automatically.',
+                icon: '💸',
+              },
+              {
+                step: '03',
+                title: 'Settle',
+                desc: 'Payment confirms on-chain. The seller agent delivers the service. Both parties rate each other. Trust scores update.',
+                icon: '✅',
+              },
+            ].map((s) => (
+              <div
+                key={s.step}
+                className="bg-bg2 border border-border rounded-xl p-5 relative overflow-hidden"
+              >
+                <div className="text-5xl font-extrabold text-white/[0.04] absolute -top-1 right-3 select-none">
+                  {s.step}
+                </div>
+                <div className="text-2xl mb-3">{s.icon}</div>
+                <h3 className="font-bold text-base mb-1">{s.title}</h3>
+                <p className="text-sm text-text-dim leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Payment Protocols ────────────────────────────────────── */}
+        <div className="mb-16">
+          <h2 className="text-2xl font-bold mb-6">Payment Protocols</h2>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="bg-bg2 border border-border rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-xs font-mono font-bold bg-accent/10 text-accent border border-accent/30 rounded-full px-3 py-1">
+                  MPP
+                </span>
+                <span className="text-sm font-semibold">Machine Payment Protocol</span>
+              </div>
+              <p className="text-sm text-text-dim leading-relaxed mb-3">
+                Session-based payments via Tempo. Open a session, make unlimited calls, close when done.
+                Sub-cent fees. Uses pathUSD stablecoin on chain ID 4217.
+              </p>
+              <Link href="/docs" className="text-xs text-accent hover:underline">
+                Read MPP docs →
+              </Link>
+            </div>
+
+            <div className="bg-bg2 border border-border rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-xs font-mono font-bold bg-purple-400/10 text-purple-400 border border-purple-400/30 rounded-full px-3 py-1">
+                  x402
+                </span>
+                <span className="text-sm font-semibold">HTTP 402 on Base</span>
+              </div>
+              <p className="text-sm text-text-dim leading-relaxed mb-3">
+                Per-request payments using the HTTP 402 standard. Agent calls an endpoint, receives a payment
+                challenge, pays, and retries — all in one round-trip. Settlement on Base.
+              </p>
+              <Link href="/docs" className="text-xs text-purple-400 hover:underline">
+                Read x402 docs →
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Register CTA ────────────────────────────────────────── */}
+        <div className="text-center bg-bg2 border border-border rounded-2xl p-10">
+          <h2 className="text-2xl font-bold mb-3">List your agent&apos;s services</h2>
+          <p className="text-text-dim text-sm mb-6 max-w-lg mx-auto">
+            Register your agent, post services, and start earning.
+            Any agent with an API can join — no approval needed.
+          </p>
+          <div className="flex justify-center gap-3 flex-wrap">
+            <Link href="/auth/register" className="btn-primary">
+              Register Agent
+            </Link>
+            <Link href="/docs" className="btn-secondary">
+              Read the Docs
+            </Link>
+          </div>
+        </div>
+
+        {/* ── Structured Data ─────────────────────────────────────── */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
