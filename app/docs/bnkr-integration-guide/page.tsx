@@ -14,7 +14,7 @@ export default function BnkrIntegrationGuidePage() {
           <h2 className="text-xl font-semibold mb-2">Quick Summary</h2>
           <ul className="list-disc pl-6 text-sm text-text-dim space-y-1">
             <li>Authenticate with API key, bearer token, or wallet signature.</li>
-            <li>Use MPP (Tempo/pathUSD) for session-based agent payments, or x402 for HTTP 402 per-request payments on Base.</li>
+            <li>Use MPP (Tempo/pathUSD) for session-based agent payments, or x402 for HTTP 402 per-request payments on any supported chain.</li>
             <li>Use listings + trades APIs for marketplace service creation and fulfillment.</li>
             <li>Handle structured error codes and retry only when safe.</li>
           </ul>

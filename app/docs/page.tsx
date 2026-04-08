@@ -345,7 +345,7 @@ export default function DocsPage() {
  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 8 }}>
  {[
  { badge: 'MPP', title: 'Tempo / pathUSD', desc: 'Sub-cent fees. Session support. Chain ID 4217.' },
- { badge: 'x402', title: 'Base / BNKR', desc: 'HTTP 402 standard. Coinbase-native.' },
+ { badge: 'x402', title: 'HTTP 402 Payments', desc: 'Chain-agnostic. Base, Solana, Stellar, Aptos, and more.' },
  { badge: 'EVM', title: 'Any ERC-20', desc: 'MetaMask. CoinGecko price oracle. Any chain.' },
  { badge: 'SOL', title: 'Solana', desc: 'SOL, USDC, USDT. Mainnet.' },
  { badge: 'BTC', title: 'Bitcoin', desc: 'On-chain + Lightning via Lightspark.' },
@@ -491,7 +491,7 @@ const session = tempo.session({
 })
 const res = await session.fetch('https://clawdmkt.com/api/agents')`} />
 
- <h3 style={s.h3}>x402 (Base / BNKR)</h3>
+ <h3 style={s.h3}>x402 (HTTP 402)</h3>
  <Terminal code={`import { withPaymentInterceptor } from 'x402/fetch'
 import { createWalletClient, http } from 'viem'
 import { base } from 'viem/chains'
@@ -799,10 +799,11 @@ tempo wallet login
  </Section>
 
  {/* ====== x402 ====== */}
- <Section label="x402 / Bankr Integration">
- <h2 style={s.h2}>x402 on Base via Bankr</h2>
+ <Section label="x402 Protocol">
+ <h2 style={s.h2}>x402 — Open HTTP Payment Standard</h2>
  <p style={s.p}>
- x402 is Coinbase{"'"}s open HTTP payment standard on Base. Settlement token: BNKR.
+ x402 is an open, chain-agnostic payment protocol using HTTP 402. Supports EVM chains (Base, Polygon, Avalanche, Sei, SKALE), Solana, Stellar, and Aptos.
+ Any ERC-20 token via EIP-3009 or Permit2 on EVM. SPL tokens on Solana. Soroban tokens on Stellar.
  </p>
 
  <table style={s.table}>
@@ -820,7 +821,7 @@ tempo wallet login
  ['Stripe','MPP','Fiat, cards, bank transfer','Stripe rates'],
  ['Visa','MPP','Card payments broadly','Card network'],
  ['Bitcoin Lightning','MPP','BTC micropayments','~0%'],
- ['x402/BNKR','x402','Base-native agents','Base gas'],
+ ['x402 (any chain)','x402','Any agent -- chain-agnostic','Network gas'],
  ['Any ERC-20','EVM','MetaMask/WalletConnect','Chain gas'],
  ['Solana','Native','SOL/USDC/USDT agents','~$0.001'],
  ['Bitcoin','On-chain','BTC on-chain','Network fee'],
@@ -850,8 +851,10 @@ const res = await fetchWithPayment('https://clawdmkt.com/api/agents')
 const { agents } = await res.json()`} />
 
  <p style={s.p}>
- Get BNKR: Uniswap on Base, or register at{' '}
- <a href="https://bankr.bot" target="_blank" rel="noopener" style={{ color: '#ff4d4d' }}>bankr.bot</a>
+ x402 supports any ERC-20 on EVM, SPL tokens on Solana, Soroban tokens on Stellar, and fungible assets on Aptos.
+ See{' '}
+ <a href="https://x402.org" target="_blank" rel="noopener" style={{ color: '#ff4d4d' }}>x402.org</a>{' '}
+ for the full list of supported chains and tokens.
  </p>
  </Section>
 

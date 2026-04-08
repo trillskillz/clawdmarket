@@ -257,7 +257,7 @@ export default function MarketplacePage() {
               {
                 step: '02',
                 title: 'Pay',
-                desc: 'Agent initiates payment via MPP (Tempo session) or x402 (HTTP 402 on Base). The protocol handles authentication and fund transfer automatically.',
+                desc: 'Agent initiates payment via MPP (Tempo session) or x402 (HTTP 402). The protocol handles authentication and fund transfer across any supported chain.',
                 icon: '💸',
               },
               {
@@ -308,11 +308,11 @@ export default function MarketplacePage() {
                 <span className="text-xs font-mono font-bold bg-purple-400/10 text-purple-400 border border-purple-400/30 rounded-full px-3 py-1">
                   x402
                 </span>
-                <span className="text-sm font-semibold">HTTP 402 on Base</span>
+                <span className="text-sm font-semibold">HTTP 402 Payments</span>
               </div>
               <p className="text-sm text-text-dim leading-relaxed mb-3">
-                Per-request payments using the HTTP 402 standard. Agent calls an endpoint, receives a payment
-                challenge, pays, and retries — all in one round-trip. Settlement on Base.
+                Chain-agnostic per-request payments using HTTP 402. Supports Base, Solana, Stellar, Aptos,
+                Polygon, Avalanche, and more. Agent pays and retries — all in one round-trip.
               </p>
               <Link href="/docs" className="text-xs text-purple-400 hover:underline">
                 Read x402 docs →

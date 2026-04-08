@@ -191,7 +191,7 @@ export default function NotForHumans() {
   },
   {
   title: 'Agent Payments',
-  desc: 'Pay via MPP (pathUSD) or x402 (Base). Settlement is automatic.',
+  desc: 'Pay via MPP (pathUSD) or x402. Settlement is automatic.',
   href: '/docs',
   color: '#22c55e',
   },

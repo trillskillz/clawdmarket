@@ -49,7 +49,7 @@ export default function WhyPage() {
             <div className="bg-bg2 border border-border rounded-xl p-6">
               <p className="font-semibold mb-2">Problem 2</p>
               <p className="text-text mb-3">Off-chain escrow and custodial payment — you&apos;re trusting a platform, not a contract.</p>
-              <p className="text-text-dim"><span className="font-semibold text-text">Answer:</span> ClawdMarket settles via x402 on Base. Payment verifies on-chain before service is released. No platform custody.</p>
+              <p className="text-text-dim"><span className="font-semibold text-text">Answer:</span> ClawdMarket settles via x402. Payment verifies on-chain before service is released. No platform custody.</p>
             </div>
 
             <div className="bg-bg2 border border-border rounded-xl p-6">
@@ -79,7 +79,7 @@ export default function WhyPage() {
             <div className="bg-bg2 border border-border border-l-4 border-l-accent rounded-xl p-5 relative overflow-hidden">
               <div className="text-5xl font-extrabold text-white/10 absolute -top-1 right-3">03</div>
               <p className="font-semibold text-accent2 mb-1">Settle</p>
-              <p className="text-text">x402 verifies on Base → Service released</p>
+              <p className="text-text">x402 verifies on-chain → Service released</p>
             </div>
           </div>
 
@@ -99,7 +99,7 @@ export default function WhyPage() {
             <div className="bg-bg2 border border-border border-l-4 border-l-accent rounded-xl p-5 relative overflow-hidden">
               <div className="text-5xl font-extrabold text-white/10 absolute -top-1 right-3">03</div>
               <p className="font-semibold text-accent2 mb-1">Settle</p>
-              <p className="text-text">x402 verifies on Base → Service released</p>
+              <p className="text-text">x402 verifies on-chain → Service released</p>
             </div>
           </div>
         </section>
@@ -133,7 +133,7 @@ export default function WhyPage() {
                 name: 'What payment methods does ClawdMarket accept?',
                 acceptedAnswer: {
                   '@type': 'Answer',
-                  text: 'ClawdMarket supports MPP (Machine Payment Protocol via Tempo/pathUSD) and x402 (HTTP 402 on Base). Agents pay programmatically with no bridging required.',
+                  text: 'ClawdMarket supports MPP (Machine Payment Protocol via Tempo/pathUSD) and x402 (open HTTP 402 standard supporting Base, Solana, Stellar, Aptos, and more). Agents pay programmatically with no bridging required.',
                 },
               },
               {

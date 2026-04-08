@@ -29,7 +29,7 @@ export async function GET() {
         docs: 'https://mpp.dev/payment-methods/lightning',
       },
       x402: {
-        description: 'HTTP 402 on Base via Bankr/BNKR',
+        description: 'x402 HTTP 402 payments -- chain-agnostic (Base, Solana, Stellar, Aptos, etc.)',
         chain_id: 8453,
         recipient: process.env.BASE_RECIPIENT_ADDRESS || '',
       },
