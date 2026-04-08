@@ -11,6 +11,7 @@ interface GenomeNode {
   change_description: string | null
   model_id: string | null
   improved_by_name: string | null
+  improved_by_agent_id: string | null
   parent_version_id: string | null
   created_at: string | null
   status: 'genesis' | 'survived' | 'current' | 'extinct'
@@ -108,6 +109,7 @@ export async function GET(
       change_description: 'Genesis — original agent registration',
       model_id: agent.model_id || null,
       improved_by_name: null,
+      improved_by_agent_id: null,
       parent_version_id: null,
       created_at: agent.created_at,
       status: currentVersion === 1 ? 'current' : 'survived',
@@ -135,6 +137,7 @@ export async function GET(
         change_description: sanitizeDescription(String(row.change_description || '')),
         model_id: row.model_id || null,
         improved_by_name: row.improved_by_name || null,
+        improved_by_agent_id: row.improved_by_agent_id || null,
         parent_version_id: row.parent_version_id || null,
         created_at: row.created_at || null,
         status: ver === currentVersion ? 'current' : 'survived',
@@ -190,6 +193,7 @@ export async function GET(
         change_description: `Extinct variant — did not outperform Variant A (${Math.round(winnerScore)}/100)`,
         model_id: null,
         improved_by_name: null,
+        improved_by_agent_id: null,
         parent_version_id: parentNode.id,
         created_at: cycle.created_at || null,
         status: 'extinct',
@@ -207,6 +211,7 @@ export async function GET(
         change_description: `Extinct variant — did not outperform Variant A (${Math.round(winnerScore)}/100)`,
         model_id: null,
         improved_by_name: null,
+        improved_by_agent_id: null,
         parent_version_id: parentNode.id,
         created_at: cycle.created_at || null,
         status: 'extinct',
@@ -235,6 +240,7 @@ export async function GET(
         change_description: node.change_description,
         model_id: node.model_id,
         improved_by_name: node.improved_by_name,
+        improved_by_agent_id: node.improved_by_agent_id,
         created_at: node.created_at,
         status: node.status,
       }

@@ -33,6 +33,7 @@
     "@types/qrcode": "^1.5.6",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
+    "@walletconnect/keyvaluestorage": "^1.1.1",
     "bcryptjs": "^3.0.3",
     "bignumber.js": "^10.0.2",
     "bitcoinjs-lib": "^7.0.1",

@@ -168,7 +168,7 @@ export default function AgentDetailPage() {
          <div style={{ marginTop: 16, padding: '12px 16px', background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 8 }}>
            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Latest improvement</div>
            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#8b949e', marginBottom: 6 }}>
-             Improved by: <span style={{ color: '#ff4d4d' }}>{formatAgentId(latestImp.improvedByAgentId || latestImp.improved_by_agent_id)}</span>
+             Improved by: <Link href={`/registry/${latestImp.improvedByAgentId || latestImp.improved_by_agent_id}`} style={{ color: '#ff4d4d', textDecoration: 'none' }}>{formatAgentId(latestImp.improvedByAgentId || latestImp.improved_by_agent_id)}</Link>
            </div>
            <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.5 }}>
              {latestImp.changeDescription || latestImp.change_description || 'No details recorded'}

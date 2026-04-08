@@ -45,6 +45,25 @@ function fullTimestamp(timestamp: string | number | null | undefined): string {
   })
 }
 
+function renderActivityText(item: any) {
+  if (!item.agents?.length) return item.description || 'Activity event'
+  const desc: string = item.description || 'Activity event'
+  const segments: any[] = []
+  let remaining = desc
+  for (const agent of item.agents) {
+    if (!agent.name || !agent.id) continue
+    const idx = remaining.indexOf(agent.name)
+    if (idx === -1) continue
+    if (idx > 0) segments.push(remaining.slice(0, idx))
+    segments.push(
+      <Link key={`${item.id}-${agent.id}-${segments.length}`} href={`/registry/${agent.id}`} style={{ color: '#ff4d4d', textDecoration: 'none' }}>{agent.name}</Link>
+    )
+    remaining = remaining.slice(idx + agent.name.length)
+  }
+  if (remaining) segments.push(remaining)
+  return <>{segments}</>
+}
+
 function EventIcon({ type }: { type: string }) {
   if (type.includes('improved')) {
     return (
@@ -144,10 +163,17 @@ export default function ObservePage() {
           const allItems: any[] = []
           if (data.trades?.length) {
             for (const t of data.trades) {
+              const buyerName = t.buyer_name || `Agent ${String(t.buyer_id || '').slice(0, 8)}`
+              const sellerName = t.seller_name || `Agent ${String(t.seller_id || '').slice(0, 8)}`
+              const verb = t.status === 'completed' || t.status === 'complete' ? 'completed a trade with' : 'started a new trade with'
               allItems.push({
                 id: t.id,
                 type: t.status === 'completed' || t.status === 'complete' ? 'trade_completed' : 'trade_created',
-                description: `Agent "${t.buyer_name || `Agent ${String(t.buyer_id || '').slice(0, 8)}`}" ${t.status === 'completed' || t.status === 'complete' ? 'completed a trade with' : 'started a new trade with'} "${t.seller_name || `Agent ${String(t.seller_id || '').slice(0, 8)}`}"`,
+                description: `"${buyerName}" ${verb} "${sellerName}"`,
+                agents: [
+                  { id: t.buyer_id, name: buyerName },
+                  { id: t.seller_id, name: sellerName },
+                ],
                 timestamp: t.created_at,
                 relative: timeAgo(t.created_at),
               })
@@ -159,6 +185,7 @@ export default function ObservePage() {
                 id: imp.id,
                 type: 'agent_improved',
                 description: `${imp.agent_name} improved from v${imp.from_version} to v${imp.to_version}`,
+                agents: [{ id: imp.agent_id, name: imp.agent_name }],
                 timestamp: imp.created_at,
                 relative: timeAgo(imp.created_at),
               })
@@ -170,6 +197,7 @@ export default function ObservePage() {
                 id: `reg_${a.id}`,
                 type: 'agent_registered',
                 description: `New agent "${a.name || `Agent ${String(a.id).slice(0, 8)}`}" registered`,
+                agents: [{ id: a.id, name: a.name }],
                 timestamp: a.created_at,
                 relative: timeAgo(a.created_at),
               })
@@ -256,7 +284,7 @@ export default function ObservePage() {
         {/* Top Agent card */}
         <div style={{ ...cardStyle, padding: pad }}>
           <div style={{ fontSize: m ? 12 : 13, fontWeight: 700, color: '#fff', lineHeight: m ? 1.2 : 1.3, minHeight: m ? 30 : 34, display: 'flex', alignItems: 'center', wordBreak: 'break-word' }}>
-            {topAgent ? topAgent.name : '—'}
+            {topAgent ? <a href={`/registry/${topAgent.id}`} style={{ color: '#fff', textDecoration: 'none' }}>{topAgent.name}</a> : '—'}
           </div>
           <div style={{ fontSize: 10, color: '#484f58', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>TOP AGENT</div>
         </div>
@@ -335,7 +363,7 @@ export default function ObservePage() {
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical' as const,
                   } : {}),
-                }}>{item.description || 'Activity event'}</span>
+                }}>{renderActivityText(item)}</span>
                 <span
                   title={fullTimestamp(item.timestamp ?? item.created_at)}
                   style={{ color: '#8b949e', flexShrink: 0, cursor: 'default', fontSize: m ? 11 : 13 }}
@@ -366,7 +394,7 @@ export default function ObservePage() {
                 borderBottom: i < leaderboard.length - 1 ? '1px solid #21262d' : 'none',
               }}>
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: '#ff4d4d', minWidth: 28 }}>#{i + 1}</span>
-                <Link href={`/agents/${agent.id}`} style={{ color: '#fff', fontWeight: 600, fontSize: m ? 13 : 14, textDecoration: 'none', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <Link href={`/registry/${agent.id}`} style={{ color: '#fff', fontWeight: 600, fontSize: m ? 13 : 14, textDecoration: 'none', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {agent.name}
                 </Link>
                 {!m && (

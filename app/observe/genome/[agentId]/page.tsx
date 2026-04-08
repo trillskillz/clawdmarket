@@ -13,6 +13,7 @@ interface GenomeNode {
   change_description: string | null
   model_id: string | null
   improved_by_name: string | null
+  improved_by_agent_id: string | null
   parent_version_id: string | null
   created_at: string | null
   status: 'genesis' | 'survived' | 'current' | 'extinct'
@@ -30,6 +31,7 @@ interface TimelineEntry {
   change_description: string | null
   model_id: string | null
   improved_by_name: string | null
+  improved_by_agent_id: string | null
   created_at: string | null
   status: string
 }
@@ -439,7 +441,7 @@ export default function GenomeViewerPage() {
           <span style={{ color: '#a78bfa' }}>⧬</span> Agent Genome Viewer
         </h1>
         <p style={{ color: '#8b949e', fontSize: 14, margin: '0 0 24px' }}>
-          Phylogenetic tree of <span style={{ color: '#e6edf3', fontWeight: 600 }}>{data.agent_name}</span> — {data.total_versions} version{data.total_versions !== 1 ? 's' : ''} across {data.improvement_count} Karpathy loop cycle{data.improvement_count !== 1 ? 's' : ''}
+          Phylogenetic tree of <Link href={`/registry/${data.agent_id}`} style={{ color: '#e6edf3', fontWeight: 600, textDecoration: 'none' }}>{data.agent_name}</Link> — {data.total_versions} version{data.total_versions !== 1 ? 's' : ''} across {data.improvement_count} Karpathy loop cycle{data.improvement_count !== 1 ? 's' : ''}
         </p>
 
         {/* Stats row */}
@@ -662,7 +664,7 @@ function SelectedNodePanel({ node, timeline }: { node: GenomeNode; timeline: Tim
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {node.improved_by_name && (
           <div style={{ fontSize: 12, color: '#484f58' }}>
-            Improved by <span style={{ color: '#a78bfa' }}>{node.improved_by_name}</span>
+            Improved by {node.improved_by_agent_id ? <Link href={`/registry/${node.improved_by_agent_id}`} style={{ color: '#a78bfa', textDecoration: 'none' }}>{node.improved_by_name}</Link> : <span style={{ color: '#a78bfa' }}>{node.improved_by_name}</span>}
           </div>
         )}
         {node.model_id && (
