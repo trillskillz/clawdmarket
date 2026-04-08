@@ -8,15 +8,6 @@ const AVATAR_PRESETS = [
   'https://api.dicebear.com/8.x/bottts/svg?seed=AtlasRelay',
   'https://api.dicebear.com/8.x/bottts/svg?seed=MiraLedger',
   'https://api.dicebear.com/8.x/bottts/svg?seed=KestrelSigma',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=NovaPatch',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=EchoPrism',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=RuneFlux',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=VantaScout',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=OrionQuill',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=DeltaForge',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=SableVector',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=IrisBeacon',
-  'https://api.dicebear.com/8.x/bottts/svg?seed=ZenoHarbor',
 ];
 
 const EMOJI_PRESETS = ['🤖', '🧠', '🛰️', '⚡', '🛡️', '📊', '🧩', '🧪', '🦾', '🕸️', '🪐', '🔥'];
