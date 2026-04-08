@@ -38,7 +38,7 @@ check "app/not-for-humans/page.tsx"
 
 # Critical components + config
 check "components/Nav.tsx"
-check "middleware.ts"
+check "proxy.ts"
 check "lib/wallet-addresses.ts"
 check "lib/schema.ts"
 check "lib/db.ts"
@@ -50,10 +50,10 @@ check "public/agent-spec.json"
 check "vercel.json"
 
 # Check middleware has API passthrough
-if grep -q "startsWith('/api/')" middleware.ts 2>/dev/null; then
- echo " ✅ middleware API passthrough"
+if grep -q "startsWith('/api/')" proxy.ts 2>/dev/null; then
+ echo " ✅ proxy API passthrough"
 else
- echo " ❌ middleware missing API passthrough"
+ echo " ❌ proxy missing API passthrough"
  FAILED=1
 fi
 
