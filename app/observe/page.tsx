@@ -120,10 +120,7 @@ export default function ObservePage() {
             timestamp: e.timestamp,
             relative: e.relative || timeAgo(e.timestamp),
           }))
-          setActivity(prev => {
-            if (prev.length > 0) return prev
-            return mapped.slice(0, 50)
-          })
+          setActivity(mapped.slice(0, 50))
         }
       })
       .catch((err) => console.error('[observe] /api/activity fetch failed:', err))

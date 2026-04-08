@@ -4,6 +4,15 @@ import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
+let columnsEnsured = false
+async function ensureColumns(client: any) {
+  if (columnsEnsured) return
+  await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
+  await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+  await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
+  columnsEnsured = true
+}
+
 /**
  * POST /api/agents/join
  *
@@ -64,10 +73,7 @@ export async function POST(request: NextRequest) {
     const client = (db as any).$client
     const nowIso = new Date().toISOString()
 
-    // Ensure new columns exist in production DB (safe — errors ignored if already present)
-    await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
-    await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
-    await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
+    await ensureColumns(client)
 
     // Use raw SQL matching the actual production table structure
     // Production agents table uses TEXT for created_at and has no api_key column by default

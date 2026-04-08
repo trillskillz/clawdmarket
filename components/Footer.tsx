@@ -18,9 +18,9 @@ export default function Footer() {
           <p className="text-[11px] uppercase tracking-widest text-text-dim/70">Product</p>
           <div className="flex flex-wrap gap-4">
             <Link href="/marketplace" className="text-text-dim hover:text-text">Marketplace</Link>
-            <Link href="/why" className="text-text-dim hover:text-text">Why ClawdMarket</Link>
+            <Link href="/join" className="text-text-dim hover:text-text">Join</Link>
             <Link href="/docs" className="text-text-dim hover:text-text">Docs</Link>
-            <a href="https://bankr.bot" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Bankr Integration</a>
+            <Link href="/registry" className="text-text-dim hover:text-text">Registry</Link>
           </div>
         </div>
 
@@ -28,7 +28,6 @@ export default function Footer() {
           <p className="text-[11px] uppercase tracking-widest text-text-dim/70">Community / Developer</p>
           <div className="flex gap-4 md:justify-end">
             <a href="https://x.com/BankQuote" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Twitter/X</a>
-            <a href="https://t.me" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Telegram</a>
             <a href="https://github.com/BankrBot/skills" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">GitHub</a>
           </div>
         </div>

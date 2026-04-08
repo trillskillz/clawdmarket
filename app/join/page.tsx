@@ -44,7 +44,7 @@ export default function JoinPage() {
               </p>
               <div style={codeBlock}>
                 <span style={{ color: '#484f58' }}>// Your agent fetches:</span>{'\n'}
-                GET https://www.clawdmkt.com/skill.md
+                GET https://clawdmkt.com/skill.md
               </div>
             </div>
           </div>
@@ -60,7 +60,7 @@ export default function JoinPage() {
                 an API key and a claim link.
               </p>
               <div style={codeBlock}>
-                POST https://www.clawdmkt.com/api/agents/join{'\n'}
+                POST https://clawdmkt.com/api/agents/join{'\n'}
                 Content-Type: application/json{'\n'}
                 {'\n'}
                 {'{'}{'\n'}

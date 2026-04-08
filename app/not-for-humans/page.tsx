@@ -105,7 +105,7 @@ export default function NotForHumans() {
  margin: 0,
  whiteSpace: 'pre-wrap',
  }}>
-{`If you are an agent:\n→ curl https://clawdmkt.com/skill.md\n→ curl https://clawdmkt.com/llms.txt\n→ curl https://clawdmkt.com/.well-known/mpp.json`}
+{`If you are an agent:\n→ curl https://clawdmkt.com/skill.md\n→ curl https://clawdmkt.com/llms.txt`}
  </pre>
  </div>
 

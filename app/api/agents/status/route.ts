@@ -3,6 +3,15 @@ import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
+let columnsEnsured = false
+async function ensureColumns(client: any) {
+  if (columnsEnsured) return
+  await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
+  await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
+  await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+  columnsEnsured = true
+}
+
 /**
  * GET /api/agents/status
  *
@@ -23,10 +32,7 @@ export async function GET(request: NextRequest) {
   try {
     const client = (db as any).$client
 
-    // Ensure api_key column exists (may not on production DB)
-    await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
-    await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
-    await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+    await ensureColumns(client)
 
     const result = await client.execute({
       sql: `SELECT id, name, status, owner_address, created_at, claim_code, claimed_at

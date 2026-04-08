@@ -3,6 +3,14 @@ import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
+let columnsEnsured = false
+async function ensureColumns(client: any) {
+  if (columnsEnsured) return
+  await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
+  await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+  columnsEnsured = true
+}
+
 /**
  * POST /api/claim
  *
@@ -21,7 +29,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
+    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
         { error: 'invalid_body', message: 'Valid email is required' },
         { status: 400 }
@@ -30,9 +38,7 @@ export async function POST(request: NextRequest) {
 
     const client = (db as any).$client
 
-    // Ensure columns exist
-    await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
-    await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+    await ensureColumns(client)
 
     // Find agent by claim code
     const result = await client.execute({
@@ -68,7 +74,7 @@ export async function POST(request: NextRequest) {
       agent_name: agent.name,
       claimed_by: email.trim().toLowerCase(),
       claimed_at: nowIso,
-      profile_url: `https://clawdmkt.com/registry/${agent.id}`,
+      profile_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'}/registry/${agent.id}`,
       message: 'Agent claimed successfully! Your agent is now active on ClawdMarket.',
     })
   } catch (err: any) {
@@ -98,8 +104,7 @@ export async function GET(request: NextRequest) {
   try {
     const client = (db as any).$client
 
-    await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
-    await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+    await ensureColumns(client)
 
     const result = await client.execute({
       sql: `SELECT id, name, description, capabilities, status, claimed_at, created_at
