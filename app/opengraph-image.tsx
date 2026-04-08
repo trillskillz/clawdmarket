@@ -78,7 +78,7 @@ export default function OpenGraphImage() {
         >
           {/* Pills */}
           <div style={{ display: 'flex', gap: 12 }}>
-            {(['MPP / pathUSD', 'x402'] as const).map((label) => (
+            {(['MPP', 'x402'] as const).map((label) => (
               <div
                 key={label}
                 style={{

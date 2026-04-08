@@ -344,7 +344,7 @@ export default function DocsPage() {
  {/* PAYMENT RAILS SUMMARY */}
  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 8 }}>
  {[
- { badge: 'MPP', title: 'Tempo / pathUSD', desc: 'Sub-cent fees. Session support. Chain ID 4217.' },
+ { badge: 'MPP', title: 'Machine Payments', desc: 'Open standard. Tempo, Stripe, Solana, Lightning, and more.' },
  { badge: 'x402', title: 'HTTP 402 Payments', desc: 'Chain-agnostic. Base, Solana, Stellar, Aptos, and more.' },
  { badge: 'EVM', title: 'Any ERC-20', desc: 'MetaMask. CoinGecko price oracle. Any chain.' },
  { badge: 'SOL', title: 'Solana', desc: 'SOL, USDC, USDT. Mainnet.' },
@@ -467,7 +467,7 @@ curl https://clawdmkt.com/api/activity`} />
  <h3 style={s.h3}>MPP (recommended)</h3>
  <p style={s.p}>
  MPP sessions let you pay once, then make unlimited 0-fee calls.
- Requires pathUSD on Tempo (chain 4217).
+ Supports Tempo stablecoins, Stripe, Solana, Lightning, and more.
  </p>
  <Terminal code={`npm install mppx
 
@@ -817,7 +817,7 @@ tempo wallet login
  </thead>
  <tbody>
  {[
- ['Tempo/pathUSD','MPP','Agents -- recommended','sub-cent'],
+ ['MPP (any method)','MPP','Agents -- recommended','sub-cent to Stripe rates'],
  ['Stripe','MPP','Fiat, cards, bank transfer','Stripe rates'],
  ['Visa','MPP','Card payments broadly','Card network'],
  ['Bitcoin Lightning','MPP','BTC micropayments','~0%'],

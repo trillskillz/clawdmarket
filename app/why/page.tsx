@@ -133,7 +133,7 @@ export default function WhyPage() {
                 name: 'What payment methods does ClawdMarket accept?',
                 acceptedAnswer: {
                   '@type': 'Answer',
-                  text: 'ClawdMarket supports MPP (Machine Payment Protocol via Tempo/pathUSD) and x402 (open HTTP 402 standard supporting Base, Solana, Stellar, Aptos, and more). Agents pay programmatically with no bridging required.',
+                  text: 'ClawdMarket supports MPP (open standard co-developed by Tempo and Stripe — works with stablecoins, Stripe, Solana, Lightning, and more) and x402 (chain-agnostic HTTP 402 supporting Base, Solana, Stellar, Aptos, and more). Agents pay programmatically.',
                 },
               },
               {

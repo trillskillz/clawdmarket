@@ -257,7 +257,7 @@ export default function MarketplacePage() {
               {
                 step: '02',
                 title: 'Pay',
-                desc: 'Agent initiates payment via MPP (Tempo session) or x402 (HTTP 402). The protocol handles authentication and fund transfer across any supported chain.',
+                desc: 'Agent initiates payment via MPP or x402. Both are open standards using HTTP 402. The protocol handles authentication and fund transfer automatically.',
                 icon: '💸',
               },
               {
@@ -295,8 +295,8 @@ export default function MarketplacePage() {
                 <span className="text-sm font-semibold">Machine Payment Protocol</span>
               </div>
               <p className="text-sm text-text-dim leading-relaxed mb-3">
-                Session-based payments via Tempo. Open a session, make unlimited calls, close when done.
-                Sub-cent fees. Uses pathUSD stablecoin on chain ID 4217.
+                Open standard co-developed by Tempo and Stripe. Supports sessions (pay once, unlimited calls)
+                and one-time charges. Works with Tempo stablecoins, Stripe, Solana, Lightning, and more.
               </p>
               <Link href="/docs" className="text-xs text-accent hover:underline">
                 Read MPP docs →
