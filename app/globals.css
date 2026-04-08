@@ -48,3 +48,148 @@ button { cursor: pointer; font-family: inherit; }
 ::-webkit-scrollbar-track { background: #0a0b0f; }
 ::-webkit-scrollbar-thumb { background: #21262d; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #ff4d4d; }
+
+/* ─── Buttons ──────────────────────────────────────────────────────────────── */
+
+.btn-primary {
+  display: inline-block;
+  background: #ff4d4d;
+  color: #fff;
+  padding: 0.65rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  font-family: inherit;
+  text-align: center;
+}
+.btn-primary:hover {
+  background: #e63e3e;
+  transform: translateY(-1px);
+  color: #fff;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary {
+  display: inline-block;
+  background: transparent;
+  color: #8b949e;
+  padding: 0.65rem 1.5rem;
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+}
+.btn-secondary:hover {
+  border-color: #ff4d4d;
+  color: #fff;
+}
+
+/* ─── Cards ────────────────────────────────────────────────────────────────── */
+
+.card {
+  background: #111318;
+  border: 1px solid #21262d;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.card-interactive {
+  background: #111318;
+  border: 1px solid #21262d;
+  border-radius: 12px;
+  padding: 1.25rem;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.card-interactive:hover {
+  border-color: #ff4d4d44;
+  transform: translateY(-2px);
+}
+
+/* ─── Inputs ───────────────────────────────────────────────────────────────── */
+
+.input-field {
+  width: 100%;
+  background: #111318;
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  color: #fff;
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input-field:focus {
+  border-color: #ff4d4d;
+}
+
+/* ─── Token pills ──────────────────────────────────────────────────────────── */
+
+.token-pill {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8b949e;
+  background: #0a0b0f;
+  border: 1px solid #21262d;
+  border-radius: 20px;
+  padding: 2px 10px;
+}
+
+/* ─── Skeleton shimmer ─────────────────────────────────────────────────────── */
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #111318 25%, #1a1d26 50%, #111318 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Surface color ────────────────────────────────────────────────────────── */
+
+.bg-surface {
+  background: #111318;
+}
+
+/* ─── Section padding ──────────────────────────────────────────────────────── */
+
+.section-pad {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ─── Animations ───────────────────────────────────────────────────────────── */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out forwards;
+}
+
