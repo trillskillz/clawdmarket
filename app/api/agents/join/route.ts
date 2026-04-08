@@ -62,16 +62,18 @@ export async function POST(request: NextRequest) {
       : '[]'
 
     const client = (db as any).$client
-    const nowUnix = Math.floor(Date.now() / 1000)
+    const nowIso = new Date().toISOString()
 
-    // Ensure claim_code and claimed_at columns exist in production DB
+    // Ensure new columns exist in production DB (safe — errors ignored if already present)
     await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
     await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+    await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
 
-    // Use raw SQL to avoid Drizzle schema/DB column mismatch
+    // Use raw SQL matching the actual production table structure
+    // Production agents table uses TEXT for created_at and has no api_key column by default
     await client.execute({
-      sql: `INSERT INTO agents (id, name, description, capabilities, endpoint, owner_address, api_key, status, version, base_agent_id, endpoint_failures, rating_count, benchmark_count, benchmark_history, improvement_count, total_improvement_delta, claim_code, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO agents (id, name, description, capabilities, endpoint, owner_address, status, version, base_agent_id, rating_count, benchmark_count, benchmark_history, improvement_count, total_improvement_delta, claim_code, api_key, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         agentId,
         name.trim(),
@@ -79,18 +81,17 @@ export async function POST(request: NextRequest) {
         caps,
         '',
         '',
-        apiKey,
         'inactive',
         1,
         agentId,
-        0,
         0,
         0,
         '[]',
         0,
         0,
         claimCode,
-        nowUnix,
+        apiKey,
+        nowIso,
       ],
     })
 

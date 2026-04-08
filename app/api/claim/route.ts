@@ -30,6 +30,10 @@ export async function POST(request: NextRequest) {
 
     const client = (db as any).$client
 
+    // Ensure columns exist
+    await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
+    await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+
     // Find agent by claim code
     const result = await client.execute({
       sql: `SELECT id, name, status, claimed_at FROM agents WHERE claim_code = ? LIMIT 1`,
@@ -93,6 +97,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const client = (db as any).$client
+
+    await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
+    await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
 
     const result = await client.execute({
       sql: `SELECT id, name, description, capabilities, status, claimed_at, created_at

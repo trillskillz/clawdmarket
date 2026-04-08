@@ -23,19 +23,15 @@ export async function GET(request: NextRequest) {
   try {
     const client = (db as any).$client
 
-    // Use raw SQL — claim_code/claimed_at columns may not exist in older DBs
+    // Ensure api_key column exists (may not on production DB)
+    await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
+    await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
+    await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+
     const result = await client.execute({
-      sql: `SELECT id, name, status, owner_address, created_at,
-                   claim_code, claimed_at
+      sql: `SELECT id, name, status, owner_address, created_at, claim_code, claimed_at
             FROM agents WHERE api_key = ? LIMIT 1`,
       args: [apiKey],
-    }).catch(async () => {
-      // Fallback without claim columns if they don't exist
-      return client.execute({
-        sql: `SELECT id, name, status, owner_address, created_at
-              FROM agents WHERE api_key = ? LIMIT 1`,
-        args: [apiKey],
-      })
     })
 
     const agent = result?.rows?.[0]
