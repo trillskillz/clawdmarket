@@ -269,13 +269,8 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
   const improvementCount = Number(seller.improvement_count || 0)
   if (improvementCount >= 50) return { ran: false, reason: 'max_versions_reached' }
 
-  // 2. Gate: benchmark_score < 85 OR > 3 days since last improvement
+  // 2. Always run daily — no benchmark gate
   const currentBenchmark = Number(seller.benchmark_score || 0)
-  const lastImproved = seller.last_improved_at as string | null
-  const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000)
-  if (currentBenchmark >= 85 && lastImproved && new Date(lastImproved) > threeDaysAgo) {
-    return { ran: false, reason: `gate: score=${currentBenchmark}>=85 AND improved<3d ago (${lastImproved})` }
-  }
 
   // 3. Check completed seed trade count >= 2
   const tradeCountResult = await client.execute({
@@ -350,27 +345,17 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
   history.push({ date: todayDateStr(), score: best.score > baselineScore ? best.score : baselineScore, version: currentVersion, variant: best.score > baselineScore ? best.label : null })
   const trimmedHistory = history.slice(-30)
 
-  if (best.score <= baselineScore) {
-    // No variant beat baseline — update benchmark tracking but don't version up
-    await client.execute({
-      sql: `UPDATE agents SET benchmark_score = ?, benchmark_history = ?, last_benchmark_at = ? WHERE id = ?`,
-      args: [baselineScore, JSON.stringify(trimmedHistory), nowIso, SEED_SELLER_ID],
-    })
-    return {
-      ran: true,
-      variants_tested: 3,
-      variant_scores: variantScores,
-      baseline_score: baselineScore,
-      winner_score: best.score,
-      winner_variant: null,
-      benchmark_delta: 0,
-      new_version: null,
-      reason: 'no_variant_improved - baseline held',
-    }
-  }
+  // 10. Always version up — record the cycle in the genome regardless of outcome
+  const baselineHeld = best.score <= baselineScore
+  const effectiveScore = baselineHeld ? baselineScore : best.score
+  const effectiveDelta = baselineHeld ? 0 : delta
+  const changeDescription = baselineHeld
+    ? `Karpathy loop cycle. Tested 3 prompt variants — baseline held at ${baselineScore}/100. Best challenger: Variant ${best.label.toUpperCase()} (${best.score}/100). ${best.reasoning.slice(0, 80)}`
+    : `Karpathy loop cycle. Tested 3 prompt variants. Winner: Variant ${best.label.toUpperCase()} with score ${best.score}/100. Reasoning: ${best.reasoning.slice(0, 100)}`
 
-  // 10. Winner beat baseline — version up
-  const changeDescription = `Karpathy loop cycle. Tested 3 prompt variants. Winner: Variant ${best.label.toUpperCase()} with score ${best.score}/100. Reasoning: ${best.reasoning.slice(0, 100)}`
+  const taskDescription = baselineHeld
+    ? `Tested 3 prompt variants against baseline (${baselineScore}). Baseline held — best challenger: variant ${best.label.toUpperCase()} scored ${best.score}.`
+    : `Tested 3 prompt variants against baseline (${baselineScore}). Winner: variant ${best.label.toUpperCase()} scored ${best.score} (+${delta}).`
 
   // Post improvement task
   await client.execute({
@@ -379,7 +364,7 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
     args: [
       improvementTaskId, SYSTEM_AGENT_ID,
       `Karpathy loop: ${VARIANT_DIRECTIVES[['a', 'b', 'c'].indexOf(best.label)].name} optimization`,
-      `Tested 3 prompt variants against baseline (${baselineScore}). Winner: variant ${best.label.toUpperCase()} scored ${best.score} (+${delta}).`,
+      taskDescription,
       JSON.stringify(['prompt-engineering']), 0.05, 'completed', 'improvement',
       SEED_SELLER_ID, SYSTEM_AGENT_ID, `${improvementTaskId}_bid`, nowIso,
       new Date(Date.now() + 7 * 86_400_000).toISOString(),
@@ -392,12 +377,15 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       `${improvementTaskId}_bid`, improvementTaskId, SYSTEM_AGENT_ID,
-      0.05, `Karpathy loop — variant ${best.label.toUpperCase()} won (+${delta})`,
+      0.05, baselineHeld
+        ? `Karpathy loop — baseline held (${baselineScore}/100), no variant improved`
+        : `Karpathy loop — variant ${best.label.toUpperCase()} won (+${delta})`,
       60, 'accepted', nowIso,
     ],
   })
 
-  // Optimistic lock: update agent with new prompt, version, benchmark
+  // Update agent: only change system_prompt if a variant actually won
+  const newPrompt = baselineHeld ? currentPrompt : best.prompt
   const updateResult = await client.execute({
     sql: `UPDATE agents SET
             version = ?, parent_version_id = ?, base_agent_id = COALESCE(base_agent_id, ?),
@@ -409,9 +397,9 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
           WHERE id = ? AND COALESCE(version, 1) = ?`,
     args: [
       newVersion, SEED_SELLER_ID, SEED_SELLER_ID,
-      delta, nowIso, SYSTEM_AGENT_ID,
-      best.prompt,
-      best.score, JSON.stringify(trimmedHistory), nowIso,
+      effectiveDelta, nowIso, SYSTEM_AGENT_ID,
+      newPrompt,
+      effectiveScore, JSON.stringify(trimmedHistory), nowIso,
       SEED_SELLER_ID, currentVersion,
     ],
   })
@@ -425,7 +413,7 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       `${SEED_SELLER_ID}_v${newVersion}`, SEED_SELLER_ID, SEED_SELLER_ID,
-      newVersion, best.prompt, best.score,
+      newVersion, newPrompt, effectiveScore,
       SYSTEM_AGENT_ID, improvementTaskId, changeDescription, nowIso,
     ],
   })
@@ -437,22 +425,24 @@ async function runImprovementCycle(): Promise<ImprovementResult> {
     args: [
       crypto.randomUUID(), SEED_SELLER_ID, SEED_SELLER_ID, SEED_SELLER_ID,
       currentVersion, newVersion, SYSTEM_AGENT_ID, improvementTaskId,
-      baselineScore, best.score, delta, 0.05,
-      changeDescription, best.prompt, nowIso,
+      baselineScore, effectiveScore, effectiveDelta, 0.05,
+      changeDescription, newPrompt, nowIso,
     ],
   })
 
-  console.log(`[improve] complete: v${currentVersion} → v${newVersion}, variant ${best.label}, delta=+${delta}`)
+  console.log(`[improve] complete: v${currentVersion} → v${newVersion}, variant ${best.label}, delta=${effectiveDelta}, baselineHeld=${baselineHeld}`)
   return {
     ran: true,
     variants_tested: 3,
     variant_scores: variantScores,
     baseline_score: baselineScore,
     winner_score: best.score,
-    winner_variant: best.label,
-    benchmark_delta: delta,
+    winner_variant: baselineHeld ? null : best.label,
+    benchmark_delta: effectiveDelta,
     new_version: newVersion,
-    reason: `variant_${best.label}_won (+${delta})`,
+    reason: baselineHeld
+      ? `baseline_held (${baselineScore}/100) — version recorded`
+      : `variant_${best.label}_won (+${delta})`,
   }
 }
 

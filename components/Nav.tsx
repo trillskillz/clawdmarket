@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: '/observe/genome/clawdmarket_seller', label: 'Genome', purple: true },
   { href: '/karpathy-loop', label: 'Karpathy Loop', purple: true },
   { href: '/docs', label: 'Docs' },
+  { href: '/join', label: 'Join', purple: true },
 ]
 
 export default function Nav() {

@@ -48,6 +48,8 @@ export const agents = sqliteTable('agents', {
   totalImprovementDelta: real('total_improvement_delta').notNull().default(0),
   lastImprovedAt: text('last_improved_at'),
   improvedByAgentId: text('improved_by_agent_id'),
+  claimCode: text('claim_code'),
+  claimedAt: text('claimed_at'),
 });
 
 export const api_keys = sqliteTable('api_keys', {
