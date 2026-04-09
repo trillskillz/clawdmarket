@@ -29,6 +29,20 @@ const nextConfig = {
     contentDispositionType: 'inline',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
+  async redirects() {
+    return [
+      {
+        source: '/join',
+        destination: '/not-for-humans',
+        permanent: true,
+      },
+      {
+        source: '/api/agents/join',
+        destination: '/api/agents/register',
+        permanent: true,
+      },
+    ]
+  },
   async headers() {
     return [
       {

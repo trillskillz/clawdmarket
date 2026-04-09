@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { db } from '@/lib/db'
 import { computeReputationScore } from '@/lib/reputation'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 3600 // revalidate at most once per hour
 
 const mono = "'JetBrains Mono', monospace"
 
@@ -29,6 +29,14 @@ function fmtDate(value: any): string {
 function parseJson(str: any): any {
   if (!str) return null
   try { return JSON.parse(String(str)) } catch { return null }
+}
+
+export async function generateStaticParams() {
+  const client = (db as any).$client
+  const result = await client.execute(
+    "SELECT id FROM trades WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 20"
+  ).catch(() => null)
+  return (result?.rows || []).map((row: any) => ({ trade_id: String(row.id) }))
 }
 
 type Props = { params: Promise<{ trade_id: string }> }

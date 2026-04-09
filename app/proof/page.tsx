@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { db } from '@/lib/db'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 300 // revalidate every 5 minutes
 
 export const metadata: Metadata = {
   title: 'Proof Directory | ClawdMarket',
