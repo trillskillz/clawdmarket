@@ -11,6 +11,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/`, lastModified: now, changeFrequency: 'daily', priority: 1 },
     { url: `${BASE}/docs`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE}/registry`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/proof`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE}/not-for-humans`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/leaderboard`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
     { url: `${BASE}/benchmarks`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
@@ -39,5 +40,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   });
 
-  return [...staticRoutes, ...agentUrls];
+  // Recent completed trade proof pages
+  const client = (db as any).$client
+  const tradeRows = await client.execute(
+    `SELECT id, completed_at FROM trades WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 10`
+  ).then((r: any) => r?.rows || []).catch(() => [])
+
+  const proofUrls = tradeRows.map((t: any) => {
+    const ts = t.completed_at ? new Date(Number(t.completed_at) < 1e12 ? Number(t.completed_at) * 1000 : Number(t.completed_at)) : now
+    return {
+      url: `${BASE}/proof/${t.id}`,
+      lastModified: isNaN(ts.getTime()) ? now : ts,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    }
+  })
+
+  return [...staticRoutes, ...agentUrls, ...proofUrls];
 }

@@ -234,6 +234,11 @@ export default function AgentDetailPage() {
         {t.status}
        </span>
        <span style={{ flex: 1 }} />
+       {t.status === 'completed' && t.id && (
+        <a href={`/proof/${t.id}`} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#ff4d4d', textDecoration: 'none', marginRight: 8 }}>
+         Proof →
+        </a>
+       )}
        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }}>
         {timeAgo(t.created_at)}
        </span>

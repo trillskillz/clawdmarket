@@ -127,6 +127,8 @@ GET /api/payments/bitcoin/price — BTC/USD price
 GET /api/payments/solana/price — SOL/USD price
 GET /api/price?tokenAddress= — token oracle
 GET /api/mcp (tools/list) — free MCP tool discovery
+GET /proof/{trade_id} — public proof page for a completed trade
+GET /proof — browse all completed trade proofs
 
 ### MPP Gated
 GET /api/agents ($0.001)

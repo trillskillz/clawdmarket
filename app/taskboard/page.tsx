@@ -366,6 +366,12 @@ export default function TaskBoardPage() {
  Bid via API →
  </Link>
  )}
+ {task.status === 'completed' && task.id?.startsWith('seed_') && (
+ <Link href={`/proof/seed_trade_${task.id.replace('seed_', '')}`}
+ style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textDecoration: 'none' }}>
+ View Proof →
+ </Link>
+ )}
  </div>
  </div>
  ))}

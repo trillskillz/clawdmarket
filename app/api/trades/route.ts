@@ -19,6 +19,7 @@ import { mppx } from '@/lib/mpp';
 import { Receipt } from 'mppx';
 import { PATHUSD_ADDRESS } from '@/lib/constants';
 import { getTokenPriceUsd } from '@/lib/price-oracle';
+import { ensurePaymentRailColumn } from '@/lib/ensure-payment-rail';
 
 export const dynamic = 'force-dynamic'
 
@@ -310,6 +311,8 @@ async function createTradePost(req: NextRequest) {
   try {
     const body = await req.json();
     const validated = createTradeSchema.parse(body);
+    const VALID_RAILS = ['mpp', 'x402', 'evm', 'solana', 'bitcoin'] as const
+    const paymentRail = VALID_RAILS.includes(body.payment_rail) ? body.payment_rail : 'mpp'
 
     if (CONTRACTS_V1_ENABLED) {
       await ensureContractsSchema();
@@ -506,6 +509,10 @@ async function createTradePost(req: NextRequest) {
           })
           .returning();
 
+        // Set payment rail via raw SQL (column added dynamically)
+        await ensurePaymentRailColumn()
+        await (db as any).$client.execute({ sql: 'UPDATE trades SET payment_rail = ? WHERE id = ?', args: [paymentRail, trade.id] }).catch(() => {})
+
         await tx.insert(transactions).values({
           from_user_id: auth.userId,
           to_user_id: listing.seller_id,
@@ -678,6 +685,10 @@ async function createTradePost(req: NextRequest) {
           auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
         })
         .returning();
+
+      // Set payment rail via raw SQL (column added dynamically)
+      await ensurePaymentRailColumn()
+      await (db as any).$client.execute({ sql: 'UPDATE trades SET payment_rail = ? WHERE id = ?', args: [paymentRail, trade.id] }).catch(() => {})
 
       // Record transaction: Lock funds
       await tx.insert(transactions).values({

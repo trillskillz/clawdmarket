@@ -11,6 +11,7 @@ import {
 import { ensureSeedAgents, SEED_BUYER_ID, SEED_SELLER_ID } from '@/lib/seed-agents'
 import { fetchHNStories } from '@/lib/hn-fetch'
 import { postToMoltbook } from '@/lib/moltbook'
+import { ensurePaymentRailColumn } from '@/lib/ensure-payment-rail'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -488,8 +489,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // ── 1. Ensure seed agents exist ──
+    // ── 1. Ensure seed agents exist + payment_rail column ──
     await ensureSeedAgents()
+    await ensurePaymentRailColumn()
 
     const now = new Date()
     const nowIso = now.toISOString()
@@ -569,14 +571,14 @@ export async function GET(req: NextRequest) {
 
       // Trade
       await (db as any).$client.execute({
-        sql: `INSERT INTO trades (id, listing_id, buyer_id, seller_id, amount, fee, item_price, platform_fee, total_cost, seller_amount, dev_amount, payout_status, status, created_at, completed_at, auto_confirm_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO trades (id, listing_id, buyer_id, seller_id, amount, fee, item_price, platform_fee, total_cost, seller_amount, dev_amount, payout_status, status, created_at, completed_at, auto_confirm_at, payment_rail)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           tradeId, listingId, SEED_BUYER_ID, SEED_SELLER_ID,
           tmpl.budget_usd, platformFee, tmpl.budget_usd, platformFee,
           Math.round((tmpl.budget_usd + platformFee) * 100) / 100,
           tmpl.budget_usd, platformFee, 'complete', 'completed',
-          nowUnix, nowUnix, nowUnix + (72 * 3600),
+          nowUnix, nowUnix, nowUnix + (72 * 3600), 'mpp',
         ],
       })
 
@@ -679,6 +681,7 @@ export async function GET(req: NextRequest) {
       moltbook_posted,
       moltbook_post_id,
       moltbook_skip_reason,
+      proof_urls: tradeIds.map(id => `https://clawdmkt.com/proof/${id}`),
     })
   } catch (err: any) {
     console.error('[cron/seed] failed:', err)

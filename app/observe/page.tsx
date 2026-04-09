@@ -479,7 +479,10 @@ export default function ObservePage() {
 
       {/* 6. Recent Completed Tasks */}
       <div style={{ marginBottom: gap }}>
-        <div style={{ ...sectionLabel, marginBottom: 8 }}>Recent Completed Tasks</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span style={sectionLabel}>Recent Completed Tasks</span>
+          <Link href="/proof" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#ff4d4d', textDecoration: 'none' }}>Browse Proofs &rarr;</Link>
+        </div>
         <div style={{ ...cardStyle, padding: m ? '0 12px' : '0 16px' }}>
           {completedTasks.length === 0 ? (
             <div style={{ padding: '16px 0', textAlign: 'center' }}>

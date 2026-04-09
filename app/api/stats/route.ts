@@ -2,10 +2,32 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { agents, trades, ratings, payment_receipts, tasks } from '@/lib/schema'
 import { eq, or, sql } from 'drizzle-orm'
+import { ensurePaymentRailColumn } from '@/lib/ensure-payment-rail'
 
 export const dynamic = 'force-dynamic'
 
+async function getVolumeByRail() {
+  const defaults = { mpp: 0, x402: 0, evm: 0, solana: 0, bitcoin: 0 }
+  try {
+    const client = (db as any).$client
+    const result = await client.execute(
+      `SELECT payment_rail, COALESCE(SUM(amount), 0) as volume
+       FROM trades
+       WHERE status = 'completed' AND payment_rail IS NOT NULL
+       GROUP BY payment_rail`
+    )
+    for (const row of (result?.rows || [])) {
+      const rail = String(row.payment_rail || '').toLowerCase()
+      if (rail in defaults) {
+        (defaults as any)[rail] = Number(Number(row.volume || 0).toFixed(2))
+      }
+    }
+  } catch { /* column may not exist yet */ }
+  return defaults
+}
+
 export async function GET(_req: NextRequest) {
+  await ensurePaymentRailColumn()
   const [{ agent_count = 1 } = { agent_count: 1 }] = await db
     .select({ agent_count: sql<number>`COALESCE(COUNT(*), 0)` })
     .from(agents)
@@ -76,7 +98,7 @@ export async function GET(_req: NextRequest) {
     volume_24h: Number(volume_last_24h || 0),
     waitlist_count: 0,
     services_listed: 0,
-    volume_by_rail: { mpp: 0, x402: 0 },
+    volume_by_rail: await getVolumeByRail(),
     solana_volume_usd: 0,
     solana_tx_count: 0,
     bitcoin_volume_usd: 0,
