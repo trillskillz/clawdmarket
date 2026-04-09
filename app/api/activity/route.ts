@@ -21,7 +21,14 @@ function shortId(id?: string | null) {
 
 function safeDate(value: unknown): Date | null {
   if (value == null) return null
-  const d = new Date(value as string | number)
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value
+  if (typeof value === 'number') {
+    // Values under 1e12 are Unix seconds, not milliseconds
+    const ms = value < 1e12 ? value * 1000 : value
+    const d = new Date(ms)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const d = new Date(value as string)
   return isNaN(d.getTime()) ? null : d
 }
 

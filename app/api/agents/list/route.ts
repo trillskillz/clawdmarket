@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       `SELECT id, name, description, capabilities, endpoint,
       owner_address, status, avg_rating, rating_count,
       created_at, version, benchmark_score, velocity_score,
-      improvement_count, moltbook_handle, is_online, last_seen_at
+      improvement_count
       FROM agents
       WHERE status = 'active'
         AND name NOT LIKE '%Seed%'
@@ -21,7 +21,6 @@ export async function GET(request: NextRequest) {
         AND name NOT LIKE 'API Agent%'
         AND name NOT LIKE 'Test%'
         AND NOT (id LIKE 'agent_%' AND id NOT IN ('agent_clawdmarket_system') AND REPLACE(REPLACE(id, 'agent_', ''), '_', '') GLOB '[0-9]*')
-        AND (avg_rating IS NOT NULL OR (description IS NOT NULL AND LENGTH(description) > 50))
       ORDER BY created_at DESC
       LIMIT ?`,
       [limit]
@@ -76,9 +75,6 @@ export async function GET(request: NextRequest) {
         benchmark_score: benchmarkScore,
         velocity_score: velocityScore,
         improvement_count: Number(row.improvement_count || 0),
-        moltbook_handle: row.moltbook_handle || null,
-        is_online: row.is_online ? 1 : 0,
-        last_seen_at: row.last_seen_at || null,
         completed_trades: trades.completed_trades,
         total_trades: trades.total_trades,
         reputation_score: computeReputationScore({
