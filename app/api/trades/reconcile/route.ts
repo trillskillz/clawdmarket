@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     const [listing] = await db.select().from(listings).where(eq(listings.id, listingId)).limit(1);
     if (!listing) return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
 
-    const expectedToken = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '').trim();
+    const expectedToken = (process.env.X402_TOKEN_ADDRESS || process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '').trim();
     const expectedEscrow = (process.env.ESCROW_WALLET_ADDRESS || process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS || '').trim();
 
     if (!isAddress(expectedToken as `0x${string}`) || !isAddress(expectedEscrow as `0x${string}`)) {
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!tx.to || tx.to.toLowerCase() !== expectedToken.toLowerCase()) {
-      return NextResponse.json({ error: 'Transaction token does not match BANKR token' }, { status: 400 });
+      return NextResponse.json({ error: 'Transaction token does not match expected payment token' }, { status: 400 });
     }
 
     const decoded = decodeFunctionData({ abi: erc20Abi, data: tx.input });

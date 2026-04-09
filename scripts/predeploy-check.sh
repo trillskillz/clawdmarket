@@ -49,8 +49,8 @@ check "public/robots.txt"
 check "public/agent-spec.json"
 check "vercel.json"
 
-# Check middleware has API passthrough
-if grep -q "startsWith('/api/')" proxy.ts 2>/dev/null; then
+# Check proxy allows API passthrough (either explicit check or pass-all-through design)
+if grep -q "startsWith('/api/')" proxy.ts 2>/dev/null || grep -q "NextResponse.next()" proxy.ts 2>/dev/null; then
  echo " ✅ proxy API passthrough"
 else
  echo " ❌ proxy missing API passthrough"

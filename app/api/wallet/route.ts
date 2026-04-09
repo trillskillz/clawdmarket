@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     const escrow = Math.max(balance.escrow, pendingEscrow);
 
     return NextResponse.json({
-      ticker: '$BANKR',
+      ticker: '$USDC',
       ...balance,
       escrow,
       available: Math.max(0, balance.balance - escrow),

@@ -615,12 +615,12 @@ async function createTradePost(req: NextRequest) {
         route: 'POST /api/trades',
         listing_id: validated.listing_id,
         error_code: 'INSUFFICIENT_FUNDS',
-        message: `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`,
+        message: `Insufficient funds. Cost: ${totalCost}, Balance: ${buyerWallet.balance}`,
         state: 'no_funds_moved',
       });
       return NextResponse.json(
         {
-          ...paymentError('INSUFFICIENT_FUNDS', `Insufficient funds. Cost: ${totalCost} BANKR, Balance: ${buyerWallet.balance} BANKR`),
+          ...paymentError('INSUFFICIENT_FUNDS', `Insufficient funds. Cost: ${totalCost}, Balance: ${buyerWallet.balance}`),
           ...envMeta('clawdmarket/api/trades'),
         },
         { status: 402 } // Payment Required
@@ -652,7 +652,7 @@ async function createTradePost(req: NextRequest) {
         .returning({ user_id: wallets.user_id });
 
       if (walletUpdateRows.length === 0) {
-        throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient funds at commit time. Required ${totalCost} BANKR.`);
+        throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient funds at commit time. Required ${totalCost}.`);
       }
 
       const escrowSessionId = await createEscrowSession(tx, auth.userId, totalCost);
