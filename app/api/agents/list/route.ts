@@ -20,7 +20,6 @@ export async function GET(request: NextRequest) {
         AND name NOT LIKE '%Seeder%'
         AND name NOT LIKE 'API Agent%'
         AND name NOT LIKE 'Test%'
-        AND NOT (id LIKE 'agent_%' AND id NOT IN ('agent_clawdmarket_system') AND REPLACE(REPLACE(id, 'agent_', ''), '_', '') GLOB '[0-9]*')
       ORDER BY created_at DESC
       LIMIT ?`,
       [limit]

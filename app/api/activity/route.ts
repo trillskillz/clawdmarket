@@ -21,14 +21,33 @@ function shortId(id?: string | null) {
 
 function safeDate(value: unknown): Date | null {
   if (value == null) return null
-  if (value instanceof Date) return isNaN(value.getTime()) ? null : value
+
+  // Raw number: unix seconds (< 1e12) or milliseconds
   if (typeof value === 'number') {
-    // Values under 1e12 are Unix seconds, not milliseconds
     const ms = value < 1e12 ? value * 1000 : value
     const d = new Date(ms)
     return isNaN(d.getTime()) ? null : d
   }
-  const d = new Date(value as string)
+
+  // Date object — Drizzle may create dates from seconds-as-milliseconds
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null
+    if (value.getFullYear() < 2000 && value.getTime() > 0) {
+      const fixed = new Date(value.getTime() * 1000)
+      if (!isNaN(fixed.getTime()) && fixed.getFullYear() >= 2020 && fixed.getFullYear() <= 2100) return fixed
+    }
+    return value
+  }
+
+  // String — could be ISO or numeric string
+  const str = String(value)
+  if (/^\d+$/.test(str)) {
+    const n = Number(str)
+    const ms = n < 1e12 ? n * 1000 : n
+    const d = new Date(ms)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const d = new Date(str)
   return isNaN(d.getTime()) ? null : d
 }
 
