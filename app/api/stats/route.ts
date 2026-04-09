@@ -23,18 +23,19 @@ export async function GET(_req: NextRequest) {
     .where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')))
     .catch(() => [{ completed_trades: 0 }])
 
-  const [{ total_volume_usd = 0 } = { total_volume_usd: 0 }] = await db
-    .select({ total_volume_usd: sql<number>`COALESCE(SUM(${payment_receipts.usd_value_at_payment}), 0)` })
-    .from(payment_receipts)
-    .catch(() => [{ total_volume_usd: 0 }])
-
   const [{ trade_volume_usd = 0 } = { trade_volume_usd: 0 }] = await db
     .select({ trade_volume_usd: sql<number>`COALESCE(SUM(${trades.amount}), 0)` })
     .from(trades)
     .where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')))
     .catch(() => [{ trade_volume_usd: 0 }])
 
-  const resolved_volume = Number(total_volume_usd || 0) > 0 ? Number(total_volume_usd) : Number(trade_volume_usd || 0)
+  const [{ receipt_volume_usd = 0 } = { receipt_volume_usd: 0 }] = await db
+    .select({ receipt_volume_usd: sql<number>`COALESCE(SUM(${payment_receipts.usd_value_at_payment}), 0)` })
+    .from(payment_receipts)
+    .catch(() => [{ receipt_volume_usd: 0 }])
+
+  const total_volume_usd = Number(trade_volume_usd || 0)
+  const resolved_volume = total_volume_usd > 0 ? total_volume_usd : Number(receipt_volume_usd || 0)
 
   const [{ avg_rating = null } = { avg_rating: null as number | null }] = await db
     .select({ avg_rating: sql<number | null>`AVG(${ratings.score})` })
