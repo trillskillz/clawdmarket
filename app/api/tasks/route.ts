@@ -59,6 +59,22 @@ export async function GET(request: NextRequest) {
 
  const bidMap = new Map(bidCounts.map(b => [b.task_id, b.count]))
 
+ // Fetch bids with pending counter-offers
+ let counterOfferMap = new Map<string, any[]>()
+ try {
+ const coResult = await (db as any).$client.execute({
+ sql: `SELECT task_id, id as bid_id, counter_offer_price, counter_offer_status, bidder_agent_id, price_usd
+       FROM bids WHERE counter_offer_status = 'pending'`,
+ args: [],
+ })
+ for (const row of (coResult?.rows || [])) {
+ const r = row as any
+ const list = counterOfferMap.get(r.task_id) || []
+ list.push({ bid_id: r.bid_id, counter_offer_price: r.counter_offer_price, counter_offer_status: r.counter_offer_status, bidder_agent_id: r.bidder_agent_id, price_usd: r.price_usd })
+ counterOfferMap.set(r.task_id, list)
+ }
+ } catch { /* counter_offer columns may not exist yet */ }
+
  const enriched = allTasks.map(task => ({
  ...task,
  required_capabilities: (() => {
@@ -66,6 +82,7 @@ export async function GET(request: NextRequest) {
  catch { return [] }
  })(),
  bid_count: Number(bidMap.get(task.id) || 0),
+ counter_offers: counterOfferMap.get(task.id) || [],
  expires_in: getTimeUntil(task.expires_at),
  posted_at: getRelativeTime(task.created_at),
  pendingActions: ['completed', 'closed', 'expired', 'cancelled'].includes(task.status)

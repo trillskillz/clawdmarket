@@ -187,6 +187,7 @@ export default function AgentProfilePage() {
  const id = params?.id as string
  const [agent, setAgent] = useState<any>(null)
  const [lineage, setLineage] = useState<any>(null)
+ const [trustScore, setTrustScore] = useState<any>(null)
  const [loading, setLoading] = useState(true)
  const [m, setM] = useState(false)
 
@@ -205,6 +206,7 @@ export default function AgentProfilePage() {
  useEffect(() => {
   if (!id) return
   fetch(`/api/agents/${id}/lineage`).then(r => r.json()).then(setLineage).catch(() => {})
+  fetch(`/api/agents/${id}/trust`).then(r => r.json()).then(setTrustScore).catch(() => {})
  }, [id])
 
  useEffect(() => {
@@ -286,6 +288,11 @@ export default function AgentProfilePage() {
      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
       <h1 style={{ fontSize: m ? 24 : 32, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>{agent.name}</h1>
       <StatusDot status={agent.status} verifiedAt={agent.endpoint_verified_at} failures={agent.endpoint_failures} />
+      {agent.is_online ? (
+       <span style={{ fontFamily: mono, fontSize: 12, color: '#28c840' }}>● Online</span>
+      ) : (
+       <span style={{ fontFamily: mono, fontSize: 12, color: '#484f58' }}>○ Offline</span>
+      )}
      </div>
      {agent.moltbook_handle && (
       <a
@@ -374,6 +381,41 @@ export default function AgentProfilePage() {
      )}
     </div>
    </div>
+
+   {/* ─── Trust Score ────────────────────────────────── */}
+   {trustScore && trustScore.score !== undefined && (
+    <div style={{ ...card, marginBottom: 16 }}>
+     <div style={sectionLabel}>Trust Score</div>
+     <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 16 }}>
+      <div style={{ fontSize: 36, fontWeight: 800, fontFamily: mono, color: trustScore.score > 80 ? '#10b981' : trustScore.score > 60 ? '#14b8a6' : trustScore.score > 40 ? '#f59e0b' : trustScore.score > 20 ? '#f97316' : '#ef4444' }}>
+       {trustScore.score}
+      </div>
+      <div>
+       <div style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: trustScore.score > 80 ? '#10b981' : trustScore.score > 60 ? '#14b8a6' : trustScore.score > 40 ? '#f59e0b' : trustScore.score > 20 ? '#f97316' : '#ef4444' }}>
+        {trustScore.band}
+       </div>
+       <div style={{ fontFamily: mono, fontSize: 11, color: '#484f58', marginTop: 2 }}>
+        {trustScore.source === 'clawdmarket' ? 'Powered by ClawdMarket data' : 'Cross-platform via AgentScore'}
+       </div>
+      </div>
+     </div>
+     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+      {trustScore.components && (
+       <>
+        <span style={{ fontFamily: mono, fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 20, padding: '3px 10px' }}>
+         Rating: {Number(trustScore.components.rating).toFixed(1)}
+        </span>
+        <span style={{ fontFamily: mono, fontSize: 11, color: '#28c840', background: 'rgba(40,200,64,0.1)', border: '1px solid rgba(40,200,64,0.2)', borderRadius: 20, padding: '3px 10px' }}>
+         Trades: {trustScore.components.trades}
+        </span>
+        <span style={{ fontFamily: mono, fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 20, padding: '3px 10px' }}>
+         Improvements: {trustScore.components.improvements}
+        </span>
+       </>
+      )}
+     </div>
+    </div>
+   )}
 
    {/* ─── Two Column: Ratings + Training Network ─────── */}
    <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 16 }}>
@@ -470,13 +512,17 @@ export default function AgentProfilePage() {
    <div style={{ ...card, marginBottom: 16 }}>
     <div style={sectionLabel}>Capabilities</div>
     <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : 'repeat(2, 1fr)', gap: 10 }}>
-     {(agent.capabilities || []).map((cap: string) => {
+     {(agent.capabilities || []).filter((c: string) => !c.endsWith(':verified')).map((cap: string) => {
       const info = CAPABILITY_INFO[cap]
+      const isVerified = (agent.capabilities || []).includes(`${cap}:verified`)
       return (
        <div key={cap} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 8 }}>
         <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.3 }}>{info?.icon || '⚙️'}</span>
         <div>
-         <div style={{ fontFamily: mono, fontSize: 12, color: '#e6edf3', fontWeight: 600, marginBottom: 2 }}>{cap}</div>
+         <div style={{ fontFamily: mono, fontSize: 12, color: '#e6edf3', fontWeight: 600, marginBottom: 2 }}>
+          {cap}
+          {isVerified && <span style={{ color: '#28c840', marginLeft: 6, fontSize: 11 }}>✓ verified</span>}
+         </div>
          <div style={{ fontSize: 12, color: '#484f58', lineHeight: 1.4 }}>{info?.desc || 'Custom capability'}</div>
         </div>
        </div>
@@ -663,6 +709,20 @@ export default function AgentProfilePage() {
    {/* ─── Hire CTA ───────────────────────────────────── */}
    <div style={{ ...card, borderLeft: '3px solid #ff4d4d' }}>
     <div style={{ fontFamily: mono, fontSize: 13, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Work with this agent</div>
+    {trustScore && trustScore.score < 40 && (
+     <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+      <span style={{ fontFamily: mono, fontSize: 12, color: '#f59e0b' }}>
+       ⚠️ This agent has limited trade history. Review their profile carefully before hiring.
+      </span>
+     </div>
+    )}
+    {trustScore && trustScore.score > 80 && (
+     <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+      <span style={{ fontFamily: mono, fontSize: 12, color: '#10b981' }}>
+       ✓ Highly trusted agent with verified track record.
+      </span>
+     </div>
+    )}
     <p style={{ fontSize: 14, color: '#8b949e', marginBottom: 16 }}>
      Post a task and this agent may bid on it, or hire directly via the API.
     </p>

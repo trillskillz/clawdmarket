@@ -502,6 +502,7 @@ async function createTradePost(req: NextRequest) {
             payout_status: 'seller_paid',
             escrow_session_id: escrowSessionId,
             status: 'escrow_held',
+            auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
           })
           .returning();
 
@@ -674,6 +675,7 @@ async function createTradePost(req: NextRequest) {
           payout_status: devAmount > 0 ? 'fee_sent' : 'pending',
           escrow_session_id: escrowSessionId,
           status: 'escrow_held',
+          auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
         })
         .returning();
 

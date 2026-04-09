@@ -187,7 +187,9 @@ export default function OperatorConsole() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [capInputs, setCapInputs] = useState<Record<string, string>>({});
   const [savingCap, setSavingCap] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<'agents' | 'trades' | 'spend' | 'ratings'>('agents');
+  const [activeSection, setActiveSection] = useState<'agents' | 'trades' | 'spend' | 'ratings' | 'earnings'>('agents');
+  const [earnings, setEarnings] = useState<any>(null);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 
   /* ─── Auth check ─────────────────────────────────────────────────────── */
   const checkAuth = useCallback(async () => {
@@ -274,6 +276,13 @@ export default function OperatorConsole() {
       if (trRes.ok) { const d = await trRes.json(); setTrades(d.trades || []); }
       if (rtRes.ok) { const d = await rtRes.json(); setRatings(d.ratings || []); }
       if (stRes.ok) { const d = await stRes.json(); setSettings(d.settings || []); }
+      // Fetch earnings
+      if (address) {
+        try {
+          const erRes = await fetch(`/api/operator/earnings?wallet=${address}`, { credentials: 'include' });
+          if (erRes.ok) setEarnings(await erRes.json());
+        } catch {}
+      }
     } catch (e) {
       console.error('Operator fetch error', e);
     } finally {
@@ -419,6 +428,7 @@ export default function OperatorConsole() {
     { key: 'trades', label: 'Trades' },
     { key: 'spend', label: 'Spend Controls' },
     { key: 'ratings', label: 'Ratings' },
+    { key: 'earnings', label: 'Earnings' },
   ];
 
   return (
@@ -697,6 +707,81 @@ export default function OperatorConsole() {
         )}
 
         {/* ─── Ratings ─────────────────────────────────────────────────── */}
+        {activeSection === 'earnings' && (
+          <div style={cardStyle}>
+            <h2 style={{ fontFamily: C.sans, fontSize: 16, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 16 }}>
+              Earnings Overview
+            </h2>
+            {earnings ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+                  {[
+                    { label: 'TOTAL EARNED', value: `$${earnings.total_earned_usd.toFixed(2)}`, color: '#28c840' },
+                    { label: 'TOTAL SPENT', value: `$${earnings.total_spent_usd.toFixed(2)}`, color: '#3b82f6' },
+                    { label: 'PENDING', value: `$${earnings.pending_usd.toFixed(2)}`, color: '#f59e0b' },
+                    { label: 'COMPLETED', value: String(earnings.completed_trades), color: C.text },
+                  ].map(s => (
+                    <div key={s.label} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
+                      <div style={labelStyle}>{s.label}</div>
+                      <div style={{ fontFamily: C.mono, fontSize: 20, fontWeight: 700, color: s.color }}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <h3 style={{ fontFamily: C.sans, fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Recent Transactions</h3>
+                {earnings.transactions?.length > 0 ? (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>Trade ID</th>
+                          <th style={thStyle}>Role</th>
+                          <th style={thStyle}>Amount</th>
+                          <th style={thStyle}>Status</th>
+                          <th style={thStyle}>Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {earnings.transactions.map((tx: any) => (
+                          <tr key={tx.trade_id}>
+                            <td style={{ ...tdStyle, fontFamily: C.mono, fontSize: 11 }}>{tx.trade_id.slice(0, 12)}...</td>
+                            <td style={tdStyle}>
+                              <span style={{ display: 'inline-block', fontFamily: C.mono, fontSize: 11, padding: '2px 8px', borderRadius: 4, background: tx.role === 'SELLER' ? 'rgba(40,200,64,0.12)' : 'rgba(59,130,246,0.12)', color: tx.role === 'SELLER' ? '#28c840' : '#3b82f6' }}>{tx.role}</span>
+                            </td>
+                            <td style={{ ...tdStyle, color: '#28c840', fontFamily: C.mono }}>${Number(tx.amount).toFixed(2)}</td>
+                            <td style={tdStyle}><span style={statusBadge(tx.status)}>{tx.status}</span></td>
+                            <td style={tdStyle}>{fmtDate(tx.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p style={{ fontFamily: C.sans, fontSize: 13, color: C.textMuted }}>No transactions yet.</p>
+                )}
+                <div style={{ marginTop: 20 }}>
+                  <button onClick={() => setShowWithdrawModal(true)} style={btnPrimary}>Request Withdrawal</button>
+                </div>
+                {showWithdrawModal && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={e => e.target === e.currentTarget && setShowWithdrawModal(false)}>
+                    <div style={{ ...cardStyle, maxWidth: 440, width: '100%' }}>
+                      <h3 style={{ fontFamily: C.sans, fontSize: 18, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 12 }}>Request Withdrawal</h3>
+                      <p style={{ fontFamily: C.sans, fontSize: 14, color: C.textDim, lineHeight: 1.6, marginBottom: 20 }}>
+                        Withdrawals are handled via MPP session close. When your MPP session ends, funds are automatically settled to your configured wallet address.
+                      </p>
+                      <p style={{ fontFamily: C.mono, fontSize: 12, color: C.textMuted, marginBottom: 20 }}>
+                        Available balance: ${earnings.total_earned_usd.toFixed(2)} USD
+                      </p>
+                      <button onClick={() => setShowWithdrawModal(false)} style={btnSecondary}>Close</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p style={{ fontFamily: C.sans, fontSize: 13, color: C.textMuted }}>{loading ? 'Loading...' : 'Connect wallet to view earnings.'}</p>
+            )}
+          </div>
+        )}
+
         {activeSection === 'ratings' && (
           <div style={cardStyle}>
             <h2 style={{ fontFamily: C.sans, fontSize: 16, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 16 }}>

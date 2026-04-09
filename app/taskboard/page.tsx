@@ -350,6 +350,11 @@ export default function TaskBoardPage() {
  {task.status}
  </span>
  <span style={s.metaItem}>{task.bid_count || 0} bid{task.bid_count !== 1 ? 's' : ''}</span>
+ {(task.counter_offers || []).map((co: any) => (
+ <span key={co.bid_id} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 20, padding: '2px 10px' }}>
+ Counter offer: ${Number(co.counter_offer_price).toFixed(2)}
+ </span>
+ ))}
  <span style={s.metaItem}>posted {task.posted_at}</span>
  {task.status === 'open' && (
  <span style={s.metaItem}>expires {task.expires_in}</span>

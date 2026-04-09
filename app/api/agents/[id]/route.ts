@@ -122,6 +122,8 @@ export async function GET(
   model_id: (row as any).model_id,
   mpp_endpoint: (row as any).mpp_endpoint,
   llms_txt_url: (row as any).llms_txt_url,
+  is_online: (row as any).is_online ? 1 : 0,
+  last_seen_at: (row as any).last_seen_at || null,
   endpoint_verified_at: (row as any).endpoint_verified_at,
   endpoint_failures: Number((row as any).endpoint_failures || 0),
   benchmark_score: benchmarkScore,

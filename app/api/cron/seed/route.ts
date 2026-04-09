@@ -17,64 +17,73 @@ export const maxDuration = 60
 
 const SYSTEM_AGENT_ID = 'agent_clawdmarket_system'
 
-// ─── Task templates — one per day, rotating ────────────────────────────────
+// ─── 5 daily task groups — all posted each day, rotating titles ────────────
 
-const SEED_TASKS = [
+const DAILY_TASKS = [
   {
-    title: 'Extract top 5 Hacker News stories with metadata',
-    description:
-      'Fetch the current top stories from Hacker News. Return structured data including title, URL, score, author, and comment count for each story.',
-    capabilities: ['web-research', 'data-extraction'],
-    budget_usd: 0.05,
-    seller_params: { count: 5 },
+    key: 't1',
+    capabilities: ['web-research'],
+    budget_usd: 0.04,
+    description: 'Perform web research on the assigned topic and return structured findings with sources.',
+    titles: [
+      'Monitor AI agent news from the last 24 hours',
+      'Find top 3 trending GitHub repos today',
+      'Research latest MPP/x402 protocol updates',
+      'Find most discussed HN stories today',
+      'Summarize today\'s AI funding news',
+    ],
   },
   {
-    title: 'Identify trending topics on Hacker News front page',
-    description:
-      'Fetch the top 10 Hacker News stories and categorize them by topic (AI, crypto, systems, startups, etc). Return the topic distribution and top story per category.',
-    capabilities: ['web-research', 'summarization'],
+    key: 't2',
+    capabilities: ['data-extraction'],
     budget_usd: 0.03,
-    seller_params: { count: 10 },
+    description: 'Extract and structure data from public web sources into clean JSON.',
+    titles: [
+      'Extract and structure top 5 HN stories with metadata',
+      'Parse Hacker News job postings for AI roles',
+      'Extract GitHub trending repos with star counts',
+      'Structure top Product Hunt launches today',
+      'Extract RSS feed from a public tech blog',
+    ],
   },
   {
-    title: 'Fetch high-engagement Hacker News discussions',
-    description:
-      'Find the top 5 Hacker News stories with the highest comment counts. Return structured data with title, URL, score, author, comment count, and post time.',
-    capabilities: ['data-extraction', 'content-analysis'],
-    budget_usd: 0.04,
-    seller_params: { count: 5 },
-  },
-  {
-    title: 'Extract new Hacker News launches and Show HN posts',
-    description:
-      'Fetch recent Hacker News stories and filter for launches and Show HN posts. Return structured metadata for each matching story.',
-    capabilities: ['web-research', 'data-extraction'],
-    budget_usd: 0.04,
-    seller_params: { count: 8 },
-  },
-  {
-    title: 'Compile Hacker News reading list with summaries',
-    description:
-      'Fetch the top 5 highest-scored Hacker News stories. For each, return the title, link, author, score, and a one-line description based on the title context.',
-    capabilities: ['web-research', 'summarization'],
-    budget_usd: 0.05,
-    seller_params: { count: 5 },
-  },
-  {
-    title: 'Analyze Hacker News front page velocity',
-    description:
-      'Fetch the top 7 Hacker News stories and compute how quickly each gained points (score / hours since posted). Return ranked by velocity.',
-    capabilities: ['data-extraction', 'content-analysis'],
+    key: 't3',
+    capabilities: ['summarization'],
     budget_usd: 0.03,
-    seller_params: { count: 7 },
+    description: 'Summarize long-form content into concise, structured summaries.',
+    titles: [
+      'Summarize the top 3 AI papers from this week',
+      'Condense the latest OpenAI blog post',
+      'Summarize recent Anthropic model updates',
+      'Condense key points from HN front page',
+      'Summarize recent developments in agent payments',
+    ],
   },
   {
-    title: 'Extract Hacker News stories with external links',
-    description:
-      'Fetch the top 10 Hacker News stories and return only those that link to external URLs (not self-posts). Include domain, title, score, and author.',
-    capabilities: ['web-research', 'data-extraction'],
+    key: 't4',
+    capabilities: ['prompt-engineering'],
+    budget_usd: 0.05,
+    description: 'Design or improve system prompts for agent capabilities.',
+    titles: [
+      'Improve this agent system prompt for web research tasks',
+      'Design a prompt for structured data extraction agents',
+      'Optimize a bidding strategy prompt for marketplace agents',
+      'Create a self-evaluation prompt for agent benchmarking',
+      'Write a negotiation prompt for counter-offer scenarios',
+    ],
+  },
+  {
+    key: 't5',
+    capabilities: ['agent-discovery'],
     budget_usd: 0.04,
-    seller_params: { count: 10 },
+    description: 'Research and map the AI agent ecosystem including frameworks, protocols, and marketplaces.',
+    titles: [
+      'Map current AI agent marketplace landscape',
+      'Compare MPP vs x402 payment protocols',
+      'List top 5 agent frameworks and their capabilities',
+      'Research A2A protocol implementations',
+      'Find and compare agent trust scoring systems',
+    ],
   },
 ]
 
@@ -84,8 +93,8 @@ function todayDateStr() {
   return new Date().toISOString().slice(0, 10) // YYYY-MM-DD
 }
 
-function todayTaskId() {
-  return `seed_${todayDateStr()}`
+function todayTaskId(suffix: string = '') {
+  return `seed_${todayDateStr()}${suffix ? `_${suffix}` : ''}`
 }
 
 function dayOfYear() {
@@ -461,13 +470,13 @@ export async function GET(req: NextRequest) {
   }
 
   const today = todayDateStr()
-  const taskId = todayTaskId()
+  const firstTaskId = todayTaskId('t1')
 
   // ── Idempotency: skip if today's seed already exists ──
   const [existing] = await db
     .select({ id: tasks.id })
     .from(tasks)
-    .where(eq(tasks.id, taskId))
+    .where(eq(tasks.id, firstTaskId))
     .limit(1)
 
   if (existing) {
@@ -482,110 +491,22 @@ export async function GET(req: NextRequest) {
     // ── 1. Ensure seed agents exist ──
     await ensureSeedAgents()
 
-    // ── 2. Pick today's task template ──
-    const template = SEED_TASKS[dayOfYear() % SEED_TASKS.length]
     const now = new Date()
     const nowIso = now.toISOString()
     const expiresIso = new Date(now.getTime() + 7 * 86_400_000).toISOString()
+    const nowUnix = Number(Math.floor(Date.now() / 1000))
+    const doy = dayOfYear()
+    const taskIds: string[] = []
+    const tradeIds: string[] = []
 
-    // ── 3. Create task ──
-    await db.insert(tasks).values({
-      id: taskId,
-      posterAgentId: SEED_BUYER_ID,
-      title: template.title,
-      description: template.description,
-      requiredCapabilities: JSON.stringify(template.capabilities),
-      budgetUsd: template.budget_usd,
-      status: 'assigned',
-      taskType: 'general',
-      assignedAgentId: SEED_SELLER_ID,
-      winningBidId: `${taskId}_bid`,
-      createdAt: nowIso,
-      expiresAt: expiresIso,
-    })
-
-    // ── 4. Create bid (already accepted) ──
-    await db.insert(bids).values({
-      id: `${taskId}_bid`,
-      taskId: taskId,
-      bidderAgentId: SEED_SELLER_ID,
-      priceUsd: template.budget_usd,
-      message: 'ClawdMarket reference seller — ready to execute.',
-      etaSeconds: 30,
-      status: 'accepted',
-      createdAt: nowIso,
-    })
-
-    // ── 5. Fetch real HN data (direct call, no self-fetch) ──
+    // ── 2. Fetch real HN data once ──
     let artifact: any = { stories: [], source: 'hacker-news', fetched_at: new Date().toISOString(), story_count: 0 }
     try {
-      artifact = await fetchHNStories(template.seller_params.count)
+      artifact = await fetchHNStories(5)
       console.log('[cron/seed] HN fetch OK, story_count=', artifact.story_count)
     } catch (hnErr: any) {
       console.error('[cron/seed] HN fetch failed:', hnErr?.message)
     }
-
-    // ── 6. Create listing (needed as FK for trades) ──
-    const listingId = `seed_listing_${today}`
-    await (db as any).$client.execute({
-      sql: `INSERT INTO listings (id, seller_id, category, title, description, price_clawd, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        listingId,
-        SEED_SELLER_ID,
-        'skills',
-        template.title,
-        template.description,
-        template.budget_usd,
-        'sold',
-        Number(Math.floor(Date.now() / 1000)),
-      ],
-    })
-
-    // ── 7. Create trade (already completed) ──
-    const tradeId = `seed_trade_${today}`
-    const platformFee = Math.round(template.budget_usd * 0.05 * 100) / 100
-
-    const nowUnix = Number(Math.floor(Date.now() / 1000))
-    await (db as any).$client.execute({
-      sql: `INSERT INTO trades (id, listing_id, buyer_id, seller_id, amount, fee, item_price, platform_fee, total_cost, seller_amount, dev_amount, payout_status, status, created_at, completed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        tradeId,
-        listingId,
-        SEED_BUYER_ID,
-        SEED_SELLER_ID,
-        template.budget_usd,
-        platformFee,
-        template.budget_usd,
-        platformFee,
-        Math.round((template.budget_usd + platformFee) * 100) / 100,
-        template.budget_usd,
-        platformFee,
-        'complete',
-        'completed',
-        nowUnix,
-        nowUnix,
-      ],
-    })
-
-    // ── 8. Submit trade evidence with the real artifact ──
-    console.log('[cron/seed] step 8: inserting trade_evidence for trade', tradeId)
-    await (db as any).$client.execute({
-      sql: `INSERT INTO trade_evidence (id, trade_id, submitter_agent_id, content, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))`,
-      args: [
-        crypto.randomUUID(),
-        tradeId,
-        SEED_SELLER_ID,
-        JSON.stringify(artifact),
-      ],
-    })
-    console.log('[cron/seed] step 8: trade_evidence inserted OK')
-
-    // ── 9. Insert ratings from both sides ──
-    const buyerScore = 4 + (dayOfYear() % 2) // alternates 4 and 5
-    const sellerScore = 4 + ((dayOfYear() + 1) % 2)
 
     const comments = [
       'Fast delivery, structured output as requested.',
@@ -596,69 +517,105 @@ export async function GET(req: NextRequest) {
       'Accurate data with consistent formatting.',
       'Professional delivery, met all requirements.',
     ]
-    const commentIdx = dayOfYear() % comments.length
-
-    console.log('[cron/seed] step 9: BEGIN ratings inserts', {
-      tradeId,
-      buyerId: SEED_BUYER_ID,
-      sellerId: SEED_SELLER_ID,
-      buyerScore,
-      sellerScore,
-      nowUnix,
-      commentIdx,
-    })
 
     let ratingsError: string | null = null
-    try {
-      const rating1Id = crypto.randomUUID()
-      const rating1Args = [rating1Id, tradeId, SEED_BUYER_ID, SEED_SELLER_ID, sellerScore, comments[commentIdx], nowUnix]
-      console.log('[cron/seed] rating 1 (buyer→seller) SQL: INSERT INTO ratings (id, trade_id, rater_id, rated_id, score, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      console.log('[cron/seed] rating 1 args:', JSON.stringify(rating1Args))
 
-      const r1 = await (db as any).$client.execute({
-        sql: `INSERT INTO ratings (id, trade_id, rater_id, rated_id, score, comment, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: rating1Args,
+    // ── 3. Create 5 tasks, bids, listings, trades, evidence, and ratings ──
+    for (let i = 0; i < DAILY_TASKS.length; i++) {
+      const tmpl = DAILY_TASKS[i]
+      const taskId = todayTaskId(tmpl.key)
+      const title = tmpl.titles[doy % tmpl.titles.length]
+      const listingId = `seed_listing_${today}_${tmpl.key}`
+      const tradeId = `seed_trade_${today}_${tmpl.key}`
+      const platformFee = Math.round(tmpl.budget_usd * 0.05 * 100) / 100
+
+      taskIds.push(taskId)
+      tradeIds.push(tradeId)
+
+      // Task
+      await db.insert(tasks).values({
+        id: taskId,
+        posterAgentId: SEED_BUYER_ID,
+        title,
+        description: tmpl.description,
+        requiredCapabilities: JSON.stringify(tmpl.capabilities),
+        budgetUsd: tmpl.budget_usd,
+        status: 'assigned',
+        taskType: 'general',
+        assignedAgentId: SEED_SELLER_ID,
+        winningBidId: `${taskId}_bid`,
+        createdAt: nowIso,
+        expiresAt: expiresIso,
       })
-      console.log('[cron/seed] rating 1 result: rowsAffected=', r1?.rowsAffected, 'lastInsertRowid=', String(r1?.lastInsertRowid))
 
-      const rating2Id = crypto.randomUUID()
-      const rating2Args = [rating2Id, tradeId, SEED_SELLER_ID, SEED_BUYER_ID, buyerScore, 'Clear task description, prompt acceptance.', nowUnix]
-      console.log('[cron/seed] rating 2 (seller→buyer) args:', JSON.stringify(rating2Args))
-
-      const r2 = await (db as any).$client.execute({
-        sql: `INSERT INTO ratings (id, trade_id, rater_id, rated_id, score, comment, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: rating2Args,
+      // Bid
+      await db.insert(bids).values({
+        id: `${taskId}_bid`,
+        taskId: taskId,
+        bidderAgentId: SEED_SELLER_ID,
+        priceUsd: tmpl.budget_usd,
+        message: 'ClawdMarket reference seller — ready to execute.',
+        etaSeconds: 30,
+        status: 'accepted',
+        createdAt: nowIso,
       })
-      console.log('[cron/seed] rating 2 result: rowsAffected=', r2?.rowsAffected, 'lastInsertRowid=', String(r2?.lastInsertRowid))
 
-      // Verify ratings actually exist
-      const verify = await (db as any).$client.execute({
-        sql: `SELECT id, rater_id, rated_id, score FROM ratings WHERE trade_id = ?`,
-        args: [tradeId],
+      // Listing
+      await (db as any).$client.execute({
+        sql: `INSERT INTO listings (id, seller_id, category, title, description, price_clawd, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [listingId, SEED_SELLER_ID, 'skills', title, tmpl.description, tmpl.budget_usd, 'sold', nowUnix],
       })
-      const verifyRows = verify?.rows?.map((r: any) => ({ id: r.id, rater_id: r.rater_id, rated_id: r.rated_id, score: Number(r.score) }))
-      console.log('[cron/seed] ratings verification — rows found:', verify?.rows?.length, JSON.stringify(verifyRows))
-    } catch (ratingsErr: any) {
-      ratingsError = ratingsErr?.message ?? String(ratingsErr)
-      console.error('[cron/seed] RATINGS INSERT FAILED:', ratingsError)
-      console.error('[cron/seed] full error:', ratingsErr)
+
+      // Trade
+      await (db as any).$client.execute({
+        sql: `INSERT INTO trades (id, listing_id, buyer_id, seller_id, amount, fee, item_price, platform_fee, total_cost, seller_amount, dev_amount, payout_status, status, created_at, completed_at, auto_confirm_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          tradeId, listingId, SEED_BUYER_ID, SEED_SELLER_ID,
+          tmpl.budget_usd, platformFee, tmpl.budget_usd, platformFee,
+          Math.round((tmpl.budget_usd + platformFee) * 100) / 100,
+          tmpl.budget_usd, platformFee, 'complete', 'completed',
+          nowUnix, nowUnix, nowUnix + (72 * 3600),
+        ],
+      })
+
+      // Evidence
+      await (db as any).$client.execute({
+        sql: `INSERT INTO trade_evidence (id, trade_id, submitter_agent_id, content, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
+        args: [crypto.randomUUID(), tradeId, SEED_SELLER_ID, JSON.stringify(artifact)],
+      })
+
+      // Ratings
+      const sellerScore = 4 + ((doy + i) % 2)
+      const buyerScore = 4 + ((doy + i + 1) % 2)
+      const commentIdx = (doy + i) % comments.length
+
+      try {
+        await (db as any).$client.execute({
+          sql: `INSERT INTO ratings (id, trade_id, rater_id, rated_id, score, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [crypto.randomUUID(), tradeId, SEED_BUYER_ID, SEED_SELLER_ID, sellerScore, comments[commentIdx], nowUnix],
+        })
+        await (db as any).$client.execute({
+          sql: `INSERT INTO ratings (id, trade_id, rater_id, rated_id, score, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [crypto.randomUUID(), tradeId, SEED_SELLER_ID, SEED_BUYER_ID, buyerScore, 'Clear task description, prompt acceptance.', nowUnix],
+        })
+      } catch (ratingsErr: any) {
+        ratingsError = ratingsErr?.message ?? String(ratingsErr)
+        console.error(`[cron/seed] ratings insert failed for ${tradeId}:`, ratingsError)
+      }
+
+      // Mark task completed
+      await db.update(tasks).set({ status: 'completed' }).where(eq(tasks.id, taskId))
     }
 
-    // ── 10. Recalculate ratings for both agents ──
+    // ── 4. Recalculate ratings for both agents ──
     if (!ratingsError) {
       await recalculateAgentRating(SEED_SELLER_ID)
       await recalculateAgentRating(SEED_BUYER_ID)
     }
 
-    // ── 11. Mark task completed ──
-    await db
-      .update(tasks)
-      .set({ status: 'completed' })
-      .where(eq(tasks.id, taskId))
-
-    // ── 12. Karpathy loop (after ratings exist) ──
+    // ── 5. Karpathy loop (after ratings exist) ──
     let improvementResult: ImprovementResult = { ran: false, reason: 'skipped' }
     try {
       improvementResult = await runImprovementCycle()
@@ -704,8 +661,9 @@ export async function GET(req: NextRequest) {
       ok: true,
       seeded: true,
       date: today,
-      task_id: taskId,
-      trade_id: tradeId,
+      tasks_posted: 5,
+      task_ids: taskIds,
+      trade_ids: tradeIds,
       artifact_stories: artifact.story_count ?? 0,
       ratings_ok: !ratingsError,
       ratings_error: ratingsError,

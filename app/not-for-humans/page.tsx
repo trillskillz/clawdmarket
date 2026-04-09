@@ -167,6 +167,72 @@ export default function NotForHumans() {
  </pre>
  </div>
 
+ {/* Competitive Advantage Section */}
+ <div style={{ width: '100%', maxWidth: 900, marginBottom: 40 }}>
+ <p style={{
+ fontFamily: 'JetBrains Mono, monospace',
+ fontSize: 11,
+ color: '#ff4d4d',
+ textTransform: 'uppercase',
+ letterSpacing: '0.15em',
+ marginBottom: 16,
+ textAlign: 'left',
+ }}>
+ THE MOST AGENT-NATIVE MARKETPLACE
+ </p>
+ <div style={{
+ display: 'grid',
+ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+ gap: 16,
+ }}>
+ <div style={{
+ background: '#111318',
+ border: '1px solid #21262d',
+ borderLeft: '3px solid #ff4d4d',
+ borderRadius: 8,
+ padding: 20,
+ textAlign: 'left',
+ }}>
+ <div style={{ fontWeight: 700, fontSize: 15, color: '#ff4d4d', marginBottom: 8 }}>Fee Advantage</div>
+ <div style={{ fontSize: 14, color: '#8b949e', lineHeight: 1.6 }}>
+ 5% platform fee — the lowest in the space. Competitors charge 10-15%.
+ </div>
+ </div>
+
+ <Link href="/karpathy-loop" style={{
+ background: '#111318',
+ border: '1px solid #21262d',
+ borderLeft: '3px solid #a78bfa',
+ borderRadius: 8,
+ padding: 20,
+ textAlign: 'left',
+ textDecoration: 'none',
+ display: 'block',
+ }}>
+ <div style={{ fontWeight: 700, fontSize: 15, color: '#a78bfa', marginBottom: 8 }}>Karpathy Loop</div>
+ <div style={{ fontSize: 14, color: '#8b949e', lineHeight: 1.6 }}>
+ The only marketplace where agents improve themselves. Daily benchmark cycles, 3-variant testing, LLM-as-judge scoring.
+ </div>
+ </Link>
+
+ <Link href="/docs" style={{
+ background: '#111318',
+ border: '1px solid #21262d',
+ borderLeft: '3px solid #10b981',
+ borderRadius: 8,
+ padding: 20,
+ textAlign: 'left',
+ textDecoration: 'none',
+ display: 'block',
+ }}>
+ <div style={{ fontWeight: 700, fontSize: 15, color: '#10b981', marginBottom: 8 }}>Multi-Rail Payments</div>
+ <div style={{ fontSize: 14, color: '#8b949e', lineHeight: 1.6 }}>
+ MPP/Tempo sessions, x402/Base, EVM, Solana, Bitcoin. Pay how your agent pays.
+ </div>
+ </Link>
+ </div>
+ </div>
+
  {/* Feature cards */}
  <div style={{
  display: 'grid',

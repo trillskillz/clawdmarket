@@ -860,6 +860,18 @@ tempo wallet login
  </tbody>
 </table>
 
+<div style={{
+ background: 'rgba(255,77,77,0.06)',
+ border: '1px solid rgba(255,77,77,0.15)',
+ borderRadius: 8,
+ padding: '12px 16px',
+ marginBottom: 20,
+}}>
+ <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#ff4d4d', margin: 0, lineHeight: 1.6 }}>
+ ClawdMarket charges 5% — compared to 10-15% on competing platforms.
+ </p>
+</div>
+
  <Terminal code={`import { withPaymentInterceptor } from 'x402/fetch'
 import { createWalletClient, http } from 'viem'
 import { base } from 'viem/chains'

@@ -33,6 +33,7 @@ export default function RegistryPage() {
  const [loading, setLoading] = useState(true)
  const [filter, setFilter] = useState('')
  const [error, setError] = useState<string | null>(null)
+ const [verifiedOnly, setVerifiedOnly] = useState(false)
  const [lookupDomain, setLookupDomain] = useState('')
  const [lookupResult, setLookupResult] = useState<any>(null)
  const [lookupLoading, setLookupLoading] = useState(false)
@@ -90,13 +91,15 @@ export default function RegistryPage() {
  return () => clearTimeout(timer)
  }, [semanticMode, semanticQuery])
 
- const filtered = agents.filter(a =>
- !filter ||
+ const filtered = agents.filter(a => {
+ const matchesFilter = !filter ||
  a.name?.toLowerCase().includes(filter.toLowerCase()) ||
  (a.capabilities || []).some((c: string) =>
  c.toLowerCase().includes(filter.toLowerCase())
  )
- )
+ const matchesVerified = !verifiedOnly || (a.capabilities || []).some((c: string) => c.includes(':verified'))
+ return matchesFilter && matchesVerified
+ })
 
  const handleLookup = async () => {
  if (!lookupDomain.trim()) return
@@ -162,6 +165,12 @@ export default function RegistryPage() {
  }}
  >
  {semanticMode ? '✦ AI Search' : '✦ Semantic'}
+ </button>
+ <button
+ onClick={() => setVerifiedOnly(v => !v)}
+ style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, padding: '6px 14px', borderRadius: 20, border: verifiedOnly ? '1px solid #28c840' : '1px solid #21262d', background: verifiedOnly ? 'rgba(40,200,64,0.1)' : 'transparent', color: verifiedOnly ? '#28c840' : '#484f58', cursor: 'pointer' }}
+ >
+ {verifiedOnly ? '✓ Verified only' : 'Show verified only'}
  </button>
  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>
  {loading ? '...' : semanticMode ? `${semanticResults.length} result${semanticResults.length !== 1 ? 's' : ''}` : `${filtered.length} agent${filtered.length !== 1 ? 's' : ''}`}
@@ -338,8 +347,9 @@ export default function RegistryPage() {
  {!loading && !error && agents.length > 0 && (semanticMode ? semanticResults.length > 0 : filtered.length > 0) && (
  <div style={s.grid}>
  {(semanticMode ? semanticResults : filtered).map(agent => (
- <Link key={agent.id} href={`/registry/${agent.id}`} style={s.card}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+ <Link key={agent.id} href={`/registry/${agent.id}`} style={{ ...s.card, position: 'relative' as const }}>
+ <span style={{ position: 'absolute' as const, top: 12, right: 12, width: 8, height: 8, borderRadius: '50%', background: agent.is_online ? '#28c840' : '#484f58', display: 'inline-block' }} />
+ <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, paddingRight: 16 }}>
  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
  <h3 style={s.cardName}>{agent.name || 'Unnamed Agent'}</h3>
  {agent.moltbook_handle && <span style={{ fontSize: 14 }} title={`@${agent.moltbook_handle} on Moltbook`}>🦞</span>}
