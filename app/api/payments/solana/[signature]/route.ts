@@ -8,15 +8,20 @@ export const dynamic = 'force-dynamic'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ signature: string }> }) {
   const { signature } = await params;
 
-  const rows = await db
-    .select()
-    .from(payment_receipts)
-    .where(and(eq(payment_receipts.tx_hash, signature), eq(payment_receipts.chain_id, 999999)))
-    .limit(1);
+  try {
+    const rows = await db
+      .select()
+      .from(payment_receipts)
+      .where(and(eq(payment_receipts.tx_hash, signature), eq(payment_receipts.chain_id, 999999)))
+      .limit(1);
 
-  if (!rows[0]) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    if (!rows[0]) {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
+
+    return NextResponse.json(rows[0]);
+  } catch (error) {
+    console.error('Solana receipt lookup error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-
-  return NextResponse.json(rows[0]);
 }
