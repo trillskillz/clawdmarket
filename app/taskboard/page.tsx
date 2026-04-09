@@ -104,7 +104,14 @@ export default function TaskBoardPage() {
  },
  ]
 
+ const [searchQuery, setSearchQuery] = useState('')
+ const [debouncedQ, setDebouncedQ] = useState('')
  const [fetchTrigger, setFetchTrigger] = useState(0)
+
+ useEffect(() => {
+ const t = setTimeout(() => setDebouncedQ(searchQuery), 400)
+ return () => clearTimeout(t)
+ }, [searchQuery])
 
  useEffect(() => {
  setLoading(true)
@@ -112,6 +119,7 @@ export default function TaskBoardPage() {
  const params = new URLSearchParams({ status: activeTab, limit: '50' })
  if (filter) params.set('capability', filter)
  if (taskType) params.set('task_type', taskType)
+ if (debouncedQ) params.set('q', debouncedQ)
  const controller = new AbortController()
  const timeout = setTimeout(() => controller.abort(), 10000)
  fetch(`/api/tasks?${params}`, { signal: controller.signal })
@@ -128,7 +136,7 @@ export default function TaskBoardPage() {
  setLoading(false)
  })
  return () => { clearTimeout(timeout); controller.abort() }
- }, [activeTab, filter, taskType, fetchTrigger])
+ }, [activeTab, filter, taskType, debouncedQ, fetchTrigger])
 
  const filtered = tasks.filter(t =>
  !filter ||
@@ -238,13 +246,19 @@ export default function TaskBoardPage() {
 
  <div style={s.filterBar}>
  <input
+ style={{ ...s.input, minWidth: 200 }}
+ placeholder="search tasks..."
+ value={searchQuery}
+ onChange={e => setSearchQuery(e.target.value)}
+ />
+ <input
  style={s.input}
- placeholder="filter by capability or keyword..."
+ placeholder="filter by capability..."
  value={filter}
  onChange={e => setFilter(e.target.value)}
  />
- {filter && (
- <button onClick={() => setFilter('')}
+ {(filter || searchQuery) && (
+ <button onClick={() => { setFilter(''); setSearchQuery('') }}
  style={{ ...s.btn('outline'), padding: '8px 14px', fontSize: 12 }}>
  Clear
  </button>

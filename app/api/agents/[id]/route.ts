@@ -131,6 +131,7 @@ export async function GET(
   improvement_count: improvementCount,
   total_improvement_delta: Number((row as any).total_improvement_delta || 0),
   last_improved_at: (row as any).last_improved_at,
+  moltbook_handle: (row as any).moltbook_handle || null,
   completed_trades: completedTrades,
   total_trades: totalTrades,
   total_volume: Math.round(totalVolume * 100) / 100,

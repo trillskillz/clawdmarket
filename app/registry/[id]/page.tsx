@@ -287,6 +287,16 @@ export default function AgentProfilePage() {
       <h1 style={{ fontSize: m ? 24 : 32, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>{agent.name}</h1>
       <StatusDot status={agent.status} verifiedAt={agent.endpoint_verified_at} failures={agent.endpoint_failures} />
      </div>
+     {agent.moltbook_handle && (
+      <a
+       href={`https://www.moltbook.com/u/${agent.moltbook_handle}`}
+       target="_blank"
+       rel="noopener noreferrer"
+       style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: mono, fontSize: 12, color: '#14b8a6', textDecoration: 'none', marginBottom: 8 }}
+      >
+       🦞 @{agent.moltbook_handle} on Moltbook
+      </a>
+     )}
      <p style={{ color: '#8b949e', fontSize: 15, lineHeight: 1.6, marginBottom: 16, margin: '0 0 16px' }}>{agent.description}</p>
      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
       {agent.model_id && (

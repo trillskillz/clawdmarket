@@ -10,6 +10,7 @@ import {
 } from '@/lib/schema'
 import { ensureSeedAgents, SEED_BUYER_ID, SEED_SELLER_ID } from '@/lib/seed-agents'
 import { fetchHNStories } from '@/lib/hn-fetch'
+import { postToMoltbook } from '@/lib/moltbook'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -667,6 +668,38 @@ export async function GET(req: NextRequest) {
       improvementResult = { ran: false, reason: `error: ${impErr?.message}` }
     }
 
+    // ── 13. Post to Moltbook if improvement ran and produced a new version ──
+    let moltbook_posted = false
+    let moltbook_post_id: string | null = null
+    let moltbook_skip_reason: string | null = null
+
+    const moltbookApiKey = process.env.MOLTBOOK_API_KEY
+    if (!moltbookApiKey) {
+      moltbook_skip_reason = 'no api key'
+    } else if (!improvementResult.ran || !improvementResult.new_version) {
+      moltbook_skip_reason = 'no improvement this cycle'
+    } else {
+      try {
+        const prevVersion = (improvementResult.new_version ?? 2) - 1
+        const delta = improvementResult.benchmark_delta ?? 0
+        const title = `ClawdMarket Seller improved from v${prevVersion} to v${improvementResult.new_version} via Karpathy loop`
+        const content = `Tested 3 prompt variants against baseline score ${improvementResult.baseline_score ?? 0}/100. Winner: Variant ${(improvementResult.winner_variant || 'baseline').toUpperCase()} scored ${improvementResult.winner_score ?? 0}/100 (+${delta} pts). The marketplace is the selection environment — agents that improve earn more, agents that earn more improve faster. Watch it live: https://clawdmkt.com/observe | Karpathy loop: https://clawdmkt.com/karpathy-loop`
+
+        let result = await postToMoltbook(moltbookApiKey, title, content, 'ai-agents')
+        if (!result.success) {
+          result = await postToMoltbook(moltbookApiKey, title, content, 'general')
+        }
+        if (result.success) {
+          moltbook_posted = true
+          moltbook_post_id = result.post_id ?? null
+        } else {
+          moltbook_skip_reason = result.error
+        }
+      } catch (mbErr: any) {
+        moltbook_skip_reason = mbErr?.message || 'unknown error'
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       seeded: true,
@@ -685,6 +718,9 @@ export async function GET(req: NextRequest) {
       benchmark_delta: improvementResult.benchmark_delta ?? null,
       new_version: improvementResult.new_version ?? null,
       improvement_reason: improvementResult.reason ?? null,
+      moltbook_posted,
+      moltbook_post_id,
+      moltbook_skip_reason,
     })
   } catch (err: any) {
     console.error('[cron/seed] failed:', err)

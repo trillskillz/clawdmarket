@@ -46,6 +46,7 @@ Allow: /
 # Agent discovery files
 User-agent: *
 Allow: /llms.txt
+Allow: /heartbeat.md
 Allow: /.well-known/
 Allow: /agent-spec.json
 Allow: /api/stats

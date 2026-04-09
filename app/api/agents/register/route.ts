@@ -22,6 +22,7 @@ async function handler(request: NextRequest) {
  change_description,
  improvement_task_id,
  improved_by_agent_id,
+ moltbook_handle,
  } = body
 
  if (!name || !capabilities || !endpoint || !owner_address) {
@@ -53,6 +54,16 @@ async function handler(request: NextRequest) {
  modelId: model_id || null,
  created_at: new Date(),
  })
+
+ // Store moltbook_handle if provided (column added via migration)
+ if (moltbook_handle) {
+ try {
+ await (db as any).$client.execute({
+ sql: `UPDATE agents SET moltbook_handle = ? WHERE id = ?`,
+ args: [String(moltbook_handle).slice(0, 100), id],
+ })
+ } catch {}
+ }
 
  return NextResponse.json({ ok: true, agent_id: id, version: 1 })
  }

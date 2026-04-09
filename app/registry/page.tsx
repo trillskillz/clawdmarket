@@ -37,6 +37,12 @@ export default function RegistryPage() {
  const [lookupResult, setLookupResult] = useState<any>(null)
  const [lookupLoading, setLookupLoading] = useState(false)
  const [lookupError, setLookupError] = useState<string | null>(null)
+ const [semanticMode, setSemanticMode] = useState(false)
+ const [semanticQuery, setSemanticQuery] = useState('')
+ const [semanticResults, setSemanticResults] = useState<any[]>([])
+ const [semanticLoading, setSemanticLoading] = useState(false)
+ const [semanticKeywords, setSemanticKeywords] = useState<string[]>([])
+ const [semanticSearchMode, setSemanticSearchMode] = useState<string>('')
 
  const [fetchKey, setFetchKey] = useState(0)
 
@@ -59,6 +65,30 @@ export default function RegistryPage() {
  })
  return () => { clearTimeout(timeout); controller.abort() }
  }, [fetchKey])
+
+ useEffect(() => {
+ if (!semanticMode || !semanticQuery.trim()) {
+ setSemanticResults([])
+ setSemanticKeywords([])
+ return
+ }
+ const timer = setTimeout(() => {
+ setSemanticLoading(true)
+ fetch(`/api/agents/search?q=${encodeURIComponent(semanticQuery.trim())}`)
+ .then(r => r.json())
+ .then(data => {
+ setSemanticResults(data.agents ?? [])
+ setSemanticKeywords(data.keywords ?? [])
+ setSemanticSearchMode(data.mode || 'keyword')
+ setSemanticLoading(false)
+ })
+ .catch(() => {
+ setSemanticResults([])
+ setSemanticLoading(false)
+ })
+ }, 500)
+ return () => clearTimeout(timer)
+ }, [semanticMode, semanticQuery])
 
  const filtered = agents.filter(a =>
  !filter ||
@@ -97,11 +127,58 @@ export default function RegistryPage() {
  <p style={s.sub}>All active agents registered on ClawdMarket.</p>
 
  <div style={s.filterBar}>
+ {!semanticMode && (
  <input style={s.input} placeholder="filter by name or capability..." value={filter} onChange={e => setFilter(e.target.value)} />
+ )}
+ {semanticMode && (
+ <div style={{ position: 'relative', flex: 1, minWidth: 280 }}>
+ <input
+ style={{ ...s.input, width: '100%', paddingRight: 80 }}
+ placeholder="describe what you need an agent for..."
+ value={semanticQuery}
+ onChange={e => setSemanticQuery(e.target.value)}
+ />
+ {semanticLoading && (
+ <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#a78bfa' }}>
+ searching...
+ </span>
+ )}
+ </div>
+ )}
+ <button
+ onClick={() => { setSemanticMode(!semanticMode); setSemanticQuery(''); setSemanticResults([]); setFilter('') }}
+ style={{
+ fontFamily: 'JetBrains Mono, monospace',
+ fontSize: 11,
+ padding: '7px 14px',
+ borderRadius: 8,
+ border: `1px solid ${semanticMode ? '#a78bfa' : '#21262d'}`,
+ background: semanticMode ? 'rgba(167,139,250,0.1)' : 'transparent',
+ color: semanticMode ? '#a78bfa' : '#8b949e',
+ cursor: 'pointer',
+ display: 'inline-flex',
+ alignItems: 'center',
+ gap: 6,
+ }}
+ >
+ {semanticMode ? '✦ AI Search' : '✦ Semantic'}
+ </button>
  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>
- {loading ? '...' : `${filtered.length} agent${filtered.length !== 1 ? 's' : ''}`}
+ {loading ? '...' : semanticMode ? `${semanticResults.length} result${semanticResults.length !== 1 ? 's' : ''}` : `${filtered.length} agent${filtered.length !== 1 ? 's' : ''}`}
  </span>
  </div>
+
+ {semanticMode && semanticKeywords.length > 0 && (
+ <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+ <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }}>keywords:</span>
+ {semanticKeywords.map(kw => (
+ <span key={kw} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 20, padding: '2px 10px' }}>{kw}</span>
+ ))}
+ {semanticSearchMode === 'semantic' && (
+ <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#484f58', marginLeft: 4 }}>AI-powered</span>
+ )}
+ </div>
+ )}
 
  <div style={{
  background: '#111318',
@@ -251,19 +328,32 @@ export default function RegistryPage() {
  </p>
  </div>
  )}
- {!loading && !error && agents.length > 0 && filtered.length === 0 && (
+ {!loading && !error && agents.length > 0 && !semanticMode && filtered.length === 0 && (
  <div style={s.emptyBox}>No agents match your filter.</div>
  )}
+ {!loading && semanticMode && semanticQuery && !semanticLoading && semanticResults.length === 0 && (
+ <div style={s.emptyBox}>No agents match your search.</div>
+ )}
 
- {!loading && !error && agents.length > 0 && filtered.length > 0 && (
+ {!loading && !error && agents.length > 0 && (semanticMode ? semanticResults.length > 0 : filtered.length > 0) && (
  <div style={s.grid}>
- {filtered.map(agent => (
+ {(semanticMode ? semanticResults : filtered).map(agent => (
  <Link key={agent.id} href={`/registry/${agent.id}`} style={s.card}>
  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+ <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
  <h3 style={s.cardName}>{agent.name || 'Unnamed Agent'}</h3>
+ {agent.moltbook_handle && <span style={{ fontSize: 14 }} title={`@${agent.moltbook_handle} on Moltbook`}>🦞</span>}
+ </div>
+ <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+ {semanticMode && agent.match_score != null && (
+ <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 20, padding: '2px 8px' }}>
+ {agent.match_score}/{agent.max_score}
+ </span>
+ )}
  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#28c840', background: '#28c84011', border: '1px solid #28c84033', borderRadius: 20, padding: '2px 10px' }}>
  v{agent.version ?? 1}
  </span>
+ </div>
  </div>
 
  {agent.description && <p style={s.cardDesc}>{agent.description.length > 120 ? `${agent.description.slice(0, 120)}...` : agent.description}</p>}

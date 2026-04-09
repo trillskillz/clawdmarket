@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
  const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
  const status = searchParams.get('status') || 'open'
  const taskType = searchParams.get('task_type') || ''
+ const qParam = searchParams.get('q')?.trim().slice(0, 500) || ''
 
  try {
  const allTasks = await db
@@ -83,7 +84,22 @@ export async function GET(request: NextRequest) {
  )
  : enriched
 
- const filtered = taskType ? capabilityFiltered.filter((t: any) => (t.task_type || 'general') === taskType) : capabilityFiltered
+ // Keyword search via q parameter
+ const qFiltered = qParam
+ ? (() => {
+ const keywords = qParam.toLowerCase().split(/\s+/).filter(w => w.length > 2)
+ if (keywords.length === 0) return capabilityFiltered
+ return capabilityFiltered.filter((t: any) =>
+ keywords.some(kw =>
+ (t.title || '').toLowerCase().includes(kw) ||
+ (t.description || '').toLowerCase().includes(kw) ||
+ (t.required_capabilities || []).some((c: string) => c.toLowerCase().includes(kw))
+ )
+ )
+ })()
+ : capabilityFiltered
+
+ const filtered = taskType ? qFiltered.filter((t: any) => (t.task_type || 'general') === taskType) : qFiltered
 
  const genesisTasks = [
  {
