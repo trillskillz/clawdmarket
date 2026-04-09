@@ -17,7 +17,15 @@ function isMissingColumnError(error: any, column: string) {
   return msg.includes('no column named') && msg.includes(column.toLowerCase());
 }
 
-async function selectListings(whereClause: any, limit: number, offset: number) {
+function getSortOrder(sort?: string) {
+  switch (sort) {
+    case 'price_asc': return sql`${listings.price_bankr} ASC`;
+    case 'price_desc': return sql`${listings.price_bankr} DESC`;
+    default: return sql`${listings.created_at} DESC`;
+  }
+}
+
+async function selectListings(whereClause: any, limit: number, offset: number, sort?: string) {
   try {
     const rows = await db
       .select({
@@ -27,6 +35,8 @@ async function selectListings(whereClause: any, limit: number, offset: number) {
         seller_role: users.role,
         seller_avatar_url: users.avatar_url,
         seller_avatar_emoji: users.avatar_emoji,
+        seller_avg_rating: sql<number>`COALESCE((SELECT ROUND(AVG(r.score), 2) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
+        seller_rating_count: sql<number>`COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
         category: listings.category,
         title: listings.title,
         description: listings.description,
@@ -37,7 +47,7 @@ async function selectListings(whereClause: any, limit: number, offset: number) {
       .from(listings)
       .leftJoin(users, eq(listings.seller_id, users.id))
       .where(whereClause)
-      .orderBy(desc(listings.created_at))
+      .orderBy(getSortOrder(sort))
       .limit(limit)
       .offset(offset);
 
@@ -102,7 +112,7 @@ async function selectListings(whereClause: any, limit: number, offset: number) {
 
 async function insertListing(values: {
   seller_id: string;
-  category: 'compute' | 'skills' | 'data' | 'bounties' | 'other';
+  category: 'compute' | 'skills' | 'data' | 'code' | 'analysis' | 'bounties' | 'other';
   title: string;
   description: string;
   price_bankr: number;
@@ -163,6 +173,7 @@ export async function GET(req: NextRequest) {
       seller: searchParams.get('seller') || undefined,
       min_price: searchParams.get('min_price') || undefined,
       max_price: searchParams.get('max_price') || undefined,
+      sort: searchParams.get('sort') || undefined,
     });
 
     let conditions = [];
@@ -175,6 +186,22 @@ export async function GET(req: NextRequest) {
       conditions.push(eq(listings.status, query.status));
     } else {
       conditions.push(eq(listings.status, 'active'));
+    }
+
+    // Handle search query
+    if (query.search) {
+      const term = `%${query.search.toLowerCase()}%`;
+      conditions.push(
+        sql`(LOWER(${listings.title}) LIKE ${term} OR LOWER(${listings.description}) LIKE ${term})`
+      );
+    }
+
+    // Handle price range
+    if (query.min_price !== undefined) {
+      conditions.push(sql`${listings.price_bankr} >= ${query.min_price}`);
+    }
+    if (query.max_price !== undefined) {
+      conditions.push(sql`${listings.price_bankr} <= ${query.max_price}`);
     }
 
     // Handle seller query
@@ -206,7 +233,7 @@ export async function GET(req: NextRequest) {
     
     const totalCount = countResult?.count || 0;
 
-    const results = await selectListings(whereClause, query.limit, (query.page - 1) * query.limit);
+    const results = await selectListings(whereClause, query.limit, (query.page - 1) * query.limit, query.sort);
 
     const normalizedResults = results.map((listing: any) => ({
       ...listing,

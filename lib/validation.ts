@@ -23,7 +23,7 @@ export const createApiKeySchema = z.object({
 });
 
 export const createListingSchema = z.object({
-  category: z.enum(['compute', 'skills', 'data', 'bounties', 'other']),
+  category: z.enum(['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other']),
   title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title too long'),
   description: z.string().min(20, 'Description must be at least 20 characters').max(1000, 'Description too long'),
   price_bankr: z.number().min(0.01, 'Price must be at least 0.01').max(1000000000, 'Price must be at most 1,000,000,000'),
@@ -49,22 +49,23 @@ export const waitlistSchema = z.object({
 });
 
 export const listingsQuerySchema = z.object({
-  category: z.enum(['compute', 'skills', 'data', 'bounties', 'other']).optional(),
+  category: z.enum(['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other']).optional(),
   status: z.enum(['active', 'sold', 'expired']).optional(),
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().positive().max(100).optional().default(20),
-  search: z.string().optional(),
+  search: z.string().max(200).optional(),
   seller_id: z.string().uuid().optional(),
   seller: z.enum(['me']).optional(),
-  min_price: z.coerce.number().min(1).max(1000000000).optional(),
-  max_price: z.coerce.number().min(1).max(1000000000).optional(),
+  min_price: z.coerce.number().min(0).max(1000000000).optional(),
+  max_price: z.coerce.number().min(0).max(1000000000).optional(),
+  sort: z.enum(['newest', 'price_asc', 'price_desc']).optional(),
 });
 
 export const updateListingSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title too long').optional(),
   description: z.string().min(20, 'Description must be at least 20 characters').max(1000, 'Description too long').optional(),
   price_bankr: z.number().min(0.01, 'Price must be at least 0.01').max(1000000000, 'Price must be at most 1,000,000,000').optional(),
-  category: z.enum(['compute', 'skills', 'data', 'bounties', 'other']).optional(),
+  category: z.enum(['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other']).optional(),
 });
 
 export const updateTradeStatusSchema = z.object({

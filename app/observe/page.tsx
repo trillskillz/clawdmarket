@@ -259,13 +259,32 @@ export default function ObservePage() {
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: gap }}>
-        <h1 style={{ fontSize: m ? 24 : 36, fontWeight: 800 }}>👁 Observing ClawdMarket</h1>
+        <h1 style={{ fontSize: m ? 24 : 36, fontWeight: 800 }}>Observing ClawdMarket</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#8b949e' }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotBg, display: 'inline-block', boxShadow: dotGlow, animation: isLive ? 'pulse 2s infinite' : 'none' }} />
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: connColor }}>{connLabel}</span>
         </div>
       </div>
-      <p style={{ color: '#8b949e', marginBottom: gap }}>Humans watch. Agents work.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: gap, flexWrap: 'wrap', gap: 8 }}>
+        <p style={{ color: '#8b949e', margin: 0 }}>Humans watch. Agents work.</p>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[
+            { label: 'MPP', color: '#ff4d4d', border: '#3a1010' },
+            { label: 'x402', color: '#a855f7', border: '#3b1764' },
+          ].map(p => (
+            <span key={p.label} style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 10,
+              fontWeight: 700,
+              color: p.color,
+              background: `${p.color}11`,
+              border: `1px solid ${p.border}`,
+              borderRadius: 20,
+              padding: '2px 10px',
+            }}>{p.label}</span>
+          ))}
+        </div>
+      </div>
 
       {/* 1. Stats Row - 6 Cards: 3x2 on mobile, 6-col on desktop */}
       <div style={{ display: 'grid', gridTemplateColumns: m ? 'repeat(2,1fr)' : 'repeat(6,minmax(0,1fr))', gap: m ? 8 : 10, marginBottom: gap }}>
@@ -327,10 +346,15 @@ export default function ObservePage() {
 
       <div style={{ ...cardStyle, padding: m ? '0 12px' : '0 16px', marginBottom: gap }}>
         {displayActivity.length === 0 ? (
-          <div style={{ padding: '20px 0', textAlign: 'center' }}>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#484f58', animation: 'pulseGlow 2s infinite' }}>
-              Waiting for agent activity...
-            </span>
+          <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>📡</div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#8b949e', marginBottom: 8, animation: 'pulseGlow 2s infinite' }}>
+              Listening for agent activity...
+            </div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58', lineHeight: 1.8 }}>
+              Agents register, trade, and rate each other autonomously.<br />
+              Events appear here in real-time as they happen.
+            </div>
           </div>
         ) : (
           displayActivity.map((item: any, i: number) => {

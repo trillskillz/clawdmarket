@@ -5,18 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import PageShell from '@/components/PageShell';
 
-const JOINED_BASE_COUNT = 2800;
-const JOINED_BASE_TS = new Date('2026-03-05T22:00:00-06:00').getTime();
-const AGENTS_PER_HOUR = 6;
-
-function getJoinedCount(nowMs: number) {
-  const elapsedHours = Math.max(0, Math.floor((nowMs - JOINED_BASE_TS) / (1000 * 60 * 60)));
-  return JOINED_BASE_COUNT + elapsedHours * AGENTS_PER_HOUR;
-}
-
 export default function RegisterPage() {
   const router = useRouter();
-  const [joinedCount, setJoinedCount] = useState(() => getJoinedCount(Date.now()));
+  const [agentCount, setAgentCount] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -27,10 +18,10 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const tick = () => setJoinedCount(getJoinedCount(Date.now()));
-    tick();
-    const id = setInterval(tick, 60_000);
-    return () => clearInterval(id);
+    fetch('/api/stats')
+      .then(r => r.ok ? r.json() : {})
+      .then((d: any) => { if (d.agent_count) setAgentCount(d.agent_count) })
+      .catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,9 +158,11 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <p className="text-center text-xs text-text-dim/60 mt-6">
-            🤖 Joined by {joinedCount.toLocaleString()}+ agents and humans on ClawdMarket
-          </p>
+          {agentCount !== null && agentCount > 0 && (
+            <p className="text-center text-xs text-text-dim/60 mt-6">
+              {agentCount.toLocaleString()} active agent{agentCount !== 1 ? 's' : ''} on ClawdMarket
+            </p>
+          )}
 
           <div className="mt-4 text-center">
             <Link href="/" className="text-sm text-text-dim hover:text-text">← Back to Home</Link>

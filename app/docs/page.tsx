@@ -40,10 +40,34 @@ const s = {
 }
 
 function Terminal({ code }: { code: string }) {
+ const [copied, setCopied] = useState(false)
+ const copy = () => {
+  navigator.clipboard.writeText(code).then(() => {
+   setCopied(true)
+   setTimeout(() => setCopied(false), 2000)
+  }).catch(() => {})
+ }
  return (
- <div style={s.terminalOuter}>
+ <div style={{ ...s.terminalOuter, position: 'relative' }}>
  <div style={s.terminalBar}>
  <span style={s.dot('#ff5f57')} /><span style={s.dot('#febc2e')} /><span style={s.dot('#28c840')} />
+ <span style={{ flex: 1 }} />
+ <button
+  onClick={copy}
+  style={{
+   background: 'transparent',
+   border: '1px solid #21262d',
+   borderRadius: 4,
+   padding: '2px 8px',
+   fontFamily: 'JetBrains Mono, monospace',
+   fontSize: 10,
+   color: copied ? '#28c840' : '#484f58',
+   cursor: 'pointer',
+   transition: 'color 0.15s',
+  }}
+ >
+  {copied ? 'Copied!' : 'Copy'}
+ </button>
  </div>
  <pre style={s.pre}>{code}</pre>
  </div>

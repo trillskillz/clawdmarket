@@ -13,10 +13,18 @@ type Listing = MarketplaceListing & {
   seller_name?: string;
   seller_avatar_url?: string | null;
   seller_bio?: string | null;
+  seller_avg_rating?: number;
+  seller_rating_count?: number;
   isDemo?: boolean;
 };
 
 const CATEGORIES = ['All', 'Data', 'Skills', 'Code', 'Analysis', 'Compute', 'Bounties', 'Other'] as const;
+
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'price_asc', label: 'Price: Low → High' },
+  { value: 'price_desc', label: 'Price: High → Low' },
+] as const;
 
 const CATEGORY_ICONS: Record<string, string> = {
   Data: '📊', Skills: '🧩', Code: '💻', Analysis: '🔍',
@@ -48,6 +56,7 @@ function buildListings(fetched: Listing[]): Listing[] {
 export default function MarketplacePage() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('All');
+  const [sort, setSort] = useState<string>('newest');
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<{ agent_count?: number; trade_count?: number }>({});
@@ -73,13 +82,16 @@ export default function MarketplacePage() {
   }, []);
 
   const filtered = useMemo(() => {
-    return listings.filter((l) => {
+    const result = listings.filter((l) => {
       const q = search.trim().toLowerCase();
       if (q && !`${l.title} ${l.description} ${l.seller_name || ''}`.toLowerCase().includes(q)) return false;
       if (category !== 'All' && l.category.toLowerCase() !== category.toLowerCase()) return false;
       return true;
     });
-  }, [listings, search, category]);
+    if (sort === 'price_asc') result.sort((a, b) => (a.price_bankr ?? 0) - (b.price_bankr ?? 0));
+    else if (sort === 'price_desc') result.sort((a, b) => (b.price_bankr ?? 0) - (a.price_bankr ?? 0));
+    return result;
+  }, [listings, search, category, sort]);
 
   const realCount = listings.filter((l) => !l.isDemo).length;
 
@@ -118,12 +130,23 @@ export default function MarketplacePage() {
 
         {/* ── Search + Filters ────────────────────────────────────── */}
         <div className="mb-8 space-y-3">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search services..."
-            className="w-full bg-bg2 border border-border rounded-xl px-4 py-3 text-sm focus:border-accent outline-none transition-colors"
-          />
+          <div className="flex gap-3">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search services, agents, capabilities..."
+              className="flex-1 bg-bg2 border border-border rounded-xl px-4 py-3 text-sm focus:border-accent outline-none transition-colors"
+            />
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="bg-bg2 border border-border rounded-xl px-3 py-3 text-sm text-text-dim focus:border-accent outline-none transition-colors"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
 
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((c) => (
@@ -221,6 +244,11 @@ export default function MarketplacePage() {
                         </div>
                       )}
                       <span className="text-xs text-text-dim truncate">{l.seller_name || 'Unknown'}</span>
+                      {(l.seller_avg_rating ?? 0) > 0 && (
+                        <span className="text-[10px] font-mono text-yellow-500" title={`${l.seller_avg_rating?.toFixed(1)} avg from ${l.seller_rating_count} ratings`}>
+                          {'★'}{l.seller_avg_rating?.toFixed(1)}
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm font-mono font-semibold text-white flex-shrink-0">
                       <PriceWithKas bankr={l.price_bankr} />

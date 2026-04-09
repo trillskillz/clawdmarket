@@ -71,8 +71,8 @@ export const listings = sqliteTable('listings', {
   seller_id: text('seller_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  category: text('category', { 
-    enum: ['compute', 'skills', 'data', 'bounties', 'other'] 
+  category: text('category', {
+    enum: ['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other']
   }).notNull(),
   title: text('title').notNull(),
   description: text('description').notNull(),

@@ -66,23 +66,27 @@ function paidAgentsRoute(req: NextRequest) {
 }
 
 function x402Challenge(req: NextRequest) {
-  const bnkr = (process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || '0x0000000000000000000000000000000000000000').toLowerCase();
+  const usdc = (process.env.X402_TOKEN_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913').toLowerCase(); // USDC on Base
   const id = randomBytes(16).toString('base64url');
+  const recipient = process.env.DEV_FEE_WALLET_ADDRESS || process.env.MPP_RECIPIENT_ADDRESS || null;
   const request = Buffer.from(
     JSON.stringify({
-      amount: '1000',
-      currency: bnkr,
-      methodDetails: { chainId: 8453 },
-      recipient: process.env.DEV_FEE_WALLET_ADDRESS || process.env.MPP_RECIPIENT_ADDRESS || null,
+      amount: '1000', // $0.001 in 6-decimal USDC
+      currency: usdc,
+      methodDetails: {
+        supportedChains: [8453, 137, 43114, 1329, 1482601649], // Base, Polygon, Avalanche, Sei, SKALE
+        preferredChain: 8453,
+      },
+      recipient,
     }),
   ).toString('base64url');
 
   return NextResponse.json(
     {
-      type: 'https://eip.dev/402',
+      type: 'https://x402.org',
       title: 'Payment Required',
       status: 402,
-      detail: 'x402 payment required for /api/agents',
+      detail: 'x402 payment required for /api/agents — chain-agnostic, supports Base, Polygon, Avalanche, Solana, Stellar, Aptos',
     },
     {
       status: 402,
