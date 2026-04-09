@@ -73,10 +73,10 @@ scoped agent credentials. See clawdmkt.com/docs#ows-integration
 ## MPP Facts
 - No inherent cost to using MPP itself
 - Payment method fees vary (same as any payment rail today)
-- Submitted to IETF as a web standard
-- Launched with Tempo, Stripe, Visa, Lightspark on day 1
-- Visa and Lightspark each extended MPP in days -- it is
- designed to be simple and extensible by anyone
+- IETF Internet-Draft: draft-httpauth-payment-00 (paymentauth.org)
+- Co-developed by Tempo and Stripe
+- Payment methods: Tempo (stablecoins), Stripe (fiat/cards), Card (network tokens),
+ Lightning (BOLT11), Monad, Solana, Stellar -- extensible by anyone
 - Supports pay-per-request AND session-based payments
 - Separates HTTP communication from the payment rail
 - No complicated foundation structure

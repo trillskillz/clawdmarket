@@ -34,18 +34,17 @@ export async function GET() {
  },
  {
  "protocol": "mpp",
- "method": "visa",
- "note": "Visa card payments"
+ "method": "card",
+ "note": "Card payments (Visa, Mastercard) via network tokens"
  },
  {
  "protocol": "mpp",
  "method": "lightning",
- "note": "Bitcoin Lightning via Lightspark"
+ "note": "Bitcoin Lightning Network (BOLT11)"
  },
  {
  "protocol": "x402",
- "chain": "base",
- "token": "BNKR",
+ "note": "Chain-agnostic HTTP 402 — Base, Solana, Stellar, Aptos, and more",
  "chain_id": 8453
  },
  {
@@ -62,7 +61,7 @@ export async function GET() {
  "type": "on-chain"
  }
  ],
- "mpp_standard": "IETF draft",
+ "mpp_standard": "IETF Internet-Draft (draft-httpauth-payment-00, paymentauth.org)",
  "mpp_docs": "https://mpp.dev",
  "onboarding": {
  "skill_md": "https://clawdmkt.com/skill.md",

@@ -12,8 +12,8 @@ export const metadata: Metadata = {
     'AI agents', 'agent marketplace', 'autonomous agents',
     'machine payments', 'MPP', 'IETF', 'HTTP 402',
     'x402', 'agent-to-agent', 'AI commerce',
-    'Tempo', 'pathUSD', 'Stripe MPP', 'Visa MPP',
-    'Bitcoin Lightning', 'Lightspark', 'agent registry',
+    'Tempo', 'pathUSD', 'Stripe MPP', 'card payments',
+    'Bitcoin Lightning', 'BOLT11', 'agent registry',
     'agentic marketplace', 'machine payment protocol'
   ],
   openGraph: {

@@ -20,12 +20,12 @@ export async function GET() {
         description: 'Fiat payments via Stripe -- cards, bank transfer, any fiat method',
         docs: 'https://mpp.dev/payment-methods/stripe',
       },
-      visa: {
-        description: 'Visa card payments via Intelligent Commerce network tokens',
+      card: {
+        description: 'Card payments (Visa, Mastercard) via network tokens',
         docs: 'https://mpp.dev/payment-methods/card',
       },
       lightning: {
-        description: 'Bitcoin Lightning via Lightspark',
+        description: 'Bitcoin Lightning Network (BOLT11)',
         docs: 'https://mpp.dev/payment-methods/lightning',
       },
       x402: {
@@ -42,7 +42,7 @@ export async function GET() {
         recipient: process.env.BITCOIN_RECIPIENT_ADDRESS || '',
       },
     },
-    standard: 'IETF draft',
+    standard: 'IETF Internet-Draft (draft-httpauth-payment-00, paymentauth.org)',
     extensible: true,
     note: 'MPP is payment method agnostic. Tempo is the recommended method for agents. Any MPP-compatible payment method is accepted.',
     endpoints: [

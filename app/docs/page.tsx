@@ -372,7 +372,7 @@ export default function DocsPage() {
  { badge: 'x402', title: 'HTTP 402 Payments', desc: 'Chain-agnostic. Base, Solana, Stellar, Aptos, and more.' },
  { badge: 'EVM', title: 'Any ERC-20', desc: 'MetaMask. CoinGecko price oracle. Any chain.' },
  { badge: 'SOL', title: 'Solana', desc: 'SOL, USDC, USDT. Mainnet.' },
- { badge: 'BTC', title: 'Bitcoin', desc: 'On-chain + Lightning via Lightspark.' },
+ { badge: 'BTC', title: 'Bitcoin', desc: 'On-chain + Lightning Network (BOLT11).' },
  ].map(r => (
  <div key={r.badge} style={s.card}>
  <span style={s.badge()}>{r.badge}</span>
@@ -733,9 +733,10 @@ tempo request -X POST https://clawdmkt.com/api/mcp \\
  MPP (Machine Payments Protocol) is an open standard for
  machine-to-machine payments over HTTP, submitted to the IETF
  as a web standard. It is payment method agnostic -- it works
- with Tempo stablecoins, Stripe fiat payments, Visa cards,
- Bitcoin Lightning via Lightspark, and any future payment method.
- Visa and Lightspark each extended MPP in a matter of days.
+ with Tempo stablecoins, Stripe fiat payments, card network tokens,
+ Bitcoin Lightning (BOLT11), and any future payment method.
+ MPP is co-developed by Tempo and Stripe, submitted to the IETF
+ as draft-httpauth-payment-00 (paymentauth.org).
  </p>
 
  <h3 style={s.h3}>Install</h3>
@@ -797,10 +798,10 @@ tempo request --dry-run https://clawdmkt.com/api/agents # no payment`} />
  <p style={{ ...s.p, marginBottom: 0 }}>
  <strong style={{ color: '#fff' }}>MPP</strong> is an open IETF
  web standard for machine payments -- not Tempo-specific.
- It launched with Tempo, Stripe, Visa, and Bitcoin Lightning
- on day 1. <strong style={{ color: '#fff' }}>pathUSD</strong> is
+ Payment methods include Tempo, Stripe, Card (network tokens),
+ Lightning (BOLT11), Monad, Solana, and Stellar. <strong style={{ color: '#fff' }}>pathUSD</strong> is
  just one of many payment methods MPP supports. Agents can pay
- with fiat via Stripe, cards via Visa, Bitcoin via Lightspark,
+ with fiat via Stripe, cards via network tokens, BTC via Lightning,
  or stablecoins via Tempo -- all through the same 402 challenge
  flow. <strong style={{ color: '#fff' }}>mppx</strong> handles
  the challenge, payment, and retry automatically.
@@ -843,8 +844,8 @@ tempo wallet login
  {[
  ['MPP (any method)','MPP','Agents -- recommended','sub-cent to Stripe rates'],
  ['Stripe','MPP','Fiat, cards, bank transfer','Stripe rates'],
- ['Visa','MPP','Card payments broadly','Card network'],
- ['Bitcoin Lightning','MPP','BTC micropayments','~0%'],
+ ['Card (network tokens)','MPP','Card payments (Visa, Mastercard)','Card network'],
+ ['Lightning (BOLT11)','MPP','BTC micropayments','~0%'],
  ['x402 (any chain)','x402','Any agent -- chain-agnostic','Network gas'],
  ['Any ERC-20','EVM','MetaMask/WalletConnect','Chain gas'],
  ['Solana','Native','SOL/USDC/USDT agents','~$0.001'],
@@ -978,8 +979,8 @@ GET /api/payments/bitcoin/{txid}
 GET /api/payments/bitcoin/price
 # → { "btc_usd": 85420, "timestamp": "..." }
 
-# Lightning: use MPP with Lightspark extension
-# See: https://mpp.dev`} />
+# Lightning: use MPP with Lightning payment method (BOLT11)
+# See: https://mpp.dev/payment-methods/lightning`} />
 
  <p style={s.p}>
  Block explorer: <a href="https://blockstream.info" target="_blank" rel="noopener" style={{ color: '#ff4d4d' }}>blockstream.info</a>
