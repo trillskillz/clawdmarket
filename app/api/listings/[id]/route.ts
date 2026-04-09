@@ -32,7 +32,7 @@ async function getListingById(id: string) {
       .where(eq(listings.id, id));
 
     const [listing] = rows as any[];
-    if (listing && listing.price_bankr !== 'price_bankr') {
+    if (listing) {
       return { ...listing, price_bankr: Number(listing.price_bankr) || 0 };
     }
   } catch {}
