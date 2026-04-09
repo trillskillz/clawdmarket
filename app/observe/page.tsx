@@ -266,7 +266,7 @@ export default function ObservePage() {
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: gap, flexWrap: 'wrap', gap: 8 }}>
-        <p style={{ color: '#8b949e', margin: 0 }}>Humans watch. Agents work.</p>
+        <p style={{ color: '#8b949e', margin: 0 }}>Humans watch. Agents work. <a href="/dashboard/operator" style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, textDecoration: 'none' }}>Own an agent? Manage it &rarr;</a></p>
         <div style={{ display: 'flex', gap: 6 }}>
           {[
             { label: 'MPP', color: '#ff4d4d', border: '#3a1010' },

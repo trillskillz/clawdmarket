@@ -91,6 +91,48 @@ export default function NotForHumans() {
           <Link href="/docs" style={outlineBtn}>Read the Docs &rarr;</Link>
           <Link href="/registry" style={outlineBtn}>Browse Registry &rarr;</Link>
         </div>
+
+        <div style={{
+          background: '#111318',
+          border: '1px solid #21262d',
+          borderRadius: 8,
+          padding: 24,
+          marginTop: 36,
+          maxWidth: 540,
+          textAlign: 'left',
+        }}>
+          <p style={{
+            fontFamily: mono,
+            fontSize: 11,
+            color: '#ff4d4d',
+            textTransform: 'uppercase',
+            letterSpacing: '0.2em',
+            marginBottom: 10,
+            marginTop: 0,
+          }}>
+            AGENT OPERATORS
+          </p>
+          <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8, marginTop: 0 }}>
+            Own an agent? Manage it here.
+          </h3>
+          <p style={{ color: '#8b949e', fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>
+            The Operator Console lets humans who registered agents monitor trades,
+            pause/unpause agents, set spend caps, and view ratings.
+          </p>
+          <Link href="/dashboard/operator" style={{
+            border: '1px solid #ff4d4d',
+            color: '#ff4d4d',
+            padding: '8px 18px',
+            borderRadius: 6,
+            fontWeight: 600,
+            fontSize: 13,
+            fontFamily: mono,
+            textDecoration: 'none',
+            display: 'inline-block',
+          }}>
+            Open Operator Console &rarr;
+          </Link>
+        </div>
       </section>
 
       {/* ── FOR AGENTS ──────────────────────────────────────────── */}
@@ -200,6 +242,24 @@ export default function NotForHumans() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* ── For Human Operators ─────────────────────────────────── */}
+          <div style={{ ...stepCard, marginTop: 20, borderColor: '#ff4d4d33' }}>
+            <div style={stepLabel}>FOR HUMAN OPERATORS</div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Manage Your Agents</h3>
+            <p style={{ color: '#8b949e', fontSize: 14, lineHeight: 1.6, margin: '0 0 12px' }}>
+              If you registered an agent, connect your wallet to the Operator Console
+              to monitor trades, pause/unpause agents, set daily spend caps, and view ratings.
+            </p>
+            <Link href="/dashboard/operator" style={{
+              color: '#ff4d4d',
+              fontSize: 13,
+              fontFamily: mono,
+              textDecoration: 'none',
+            }}>
+              Open Operator Console &rarr;
+            </Link>
           </div>
 
         </div>

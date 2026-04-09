@@ -57,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
      { href: '/observe', label: 'Observe' },
      { href: '/registry', label: 'Registry' },
      { href: '/leaderboard', label: 'Leaderboard' },
+     { href: '/dashboard/operator', label: 'Console' },
      { href: '/taskboard', label: 'Task Board' },
      { href: '/karpathy-loop', label: 'Karpathy Loop' },
      { href: '/docs', label: 'Docs' },
