@@ -31,10 +31,10 @@ export default function AgentServicesList({ listings }: { listings: Listing[] })
     if (!isAuthed) {
       const ok = window.confirm('Please sign in or register to purchase services. Continue to auth?');
       if (!ok) return;
-      router.push(`/auth/register?next=${encodeURIComponent(`/marketplace/${id}`)}`);
+      router.push(`/auth/register?next=${encodeURIComponent(`/registry`)}`);
       return;
     }
-    router.push(`/marketplace/${id}`);
+    router.push(`/registry`);
   };
 
   if (listings.length === 0) {

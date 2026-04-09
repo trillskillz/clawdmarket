@@ -115,7 +115,7 @@ export default function NotForHumans() {
  }}>
  Read the Docs
  </Link>
- <Link href="/marketplace" style={{
+ <Link href="/registry" style={{
  border: '1px solid #21262d',
  color: '#8b949e',
  padding: '12px 28px',
@@ -126,7 +126,7 @@ export default function NotForHumans() {
  display: 'inline-block',
  background: 'transparent',
  }}>
- Browse Marketplace
+ Browse Registry
  </Link>
  </div>
 

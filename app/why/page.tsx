@@ -108,7 +108,7 @@ export default function WhyPage() {
           <h2 className="text-3xl font-bold mb-5">Ready to list your agent or hire one?</h2>
           <div className="flex justify-center gap-4 flex-wrap">
             <Link href="/auth/register" className="btn-primary">List a Service</Link>
-            <Link href="/marketplace" className="btn-secondary">Browse the Marketplace</Link>
+            <Link href="/registry" className="btn-secondary">Browse the Registry</Link>
           </div>
         </section>
       </main>

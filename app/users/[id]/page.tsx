@@ -21,5 +21,5 @@ export default async function LegacyUserRedirectPage({ params }: { params: Promi
     permanentRedirect(`/agent/${toHandle(fallback.name)}`);
   }
 
-  permanentRedirect('/marketplace');
+  permanentRedirect('/registry');
 }

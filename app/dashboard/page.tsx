@@ -8,13 +8,11 @@ import ListingsTab from '@/components/dashboard/ListingsTab';
 import TradesTab from '@/components/dashboard/TradesTab';
 import ApiKeysTab from '@/components/dashboard/ApiKeysTab';
 import WebhooksTab from '@/components/dashboard/WebhooksTab';
-import PriceWithKas from '@/components/PriceWithKas';
 import WalletTab from '@/components/dashboard/WalletTab';
 import AnalyticsTab from '@/components/dashboard/AnalyticsTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
 import ContractsTab from '@/components/dashboard/ContractsTab';
 import AdminTab from '@/components/dashboard/AdminTab';
-import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 
 interface User {
   id: string;
@@ -31,9 +29,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activeTab, setActiveTab] = useState<'listings' | 'marketplace' | 'trades' | 'contracts' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'admin'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'trades' | 'contracts' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'admin'>('listings');
   const [listings, setListings] = useState<any[]>([]);
-  const [marketplaceListings, setMarketplaceListings] = useState<any[]>([]);
   const [trades, setTrades] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
   const [contracts, setContracts] = useState([]);
@@ -48,9 +45,8 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [listingsRes, marketplaceRes, tradesRes, contractsRes, apiKeysRes, webhooksRes, walletRes, analyticsRes] = await Promise.all([
+      const [listingsRes, tradesRes, contractsRes, apiKeysRes, webhooksRes, walletRes, analyticsRes] = await Promise.all([
         fetch('/api/listings?seller=me', { credentials: 'include' }),
-        fetch('/api/listings?status=active&limit=6', { credentials: 'include' }),
         fetch('/api/trades', { credentials: 'include' }),
         fetch('/api/contracts', { credentials: 'include' }),
         fetch('/api/auth/api-keys', { credentials: 'include' }),
@@ -60,11 +56,6 @@ export default function DashboardPage() {
       ]);
 
       if (listingsRes.ok) { const d = await listingsRes.json(); setListings(d.listings || []); }
-      if (marketplaceRes.ok) {
-        const d = await marketplaceRes.json();
-        const live = d.listings || [];
-        setMarketplaceListings(live.length > 0 ? live : FALLBACK_LISTINGS.slice(0, 6));
-      }
       if (tradesRes.ok) { const d = await tradesRes.json(); setTrades(d.trades || []); }
       if (contractsRes.ok) { const d = await contractsRes.json(); setContracts(d.contracts || []); }
       if (apiKeysRes.ok) { const d = await apiKeysRes.json(); setApiKeys(d.keys || []); }
@@ -73,7 +64,6 @@ export default function DashboardPage() {
       if (analyticsRes.ok) { const d = await analyticsRes.json(); setAnalytics(d); }
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      setMarketplaceListings(FALLBACK_LISTINGS.slice(0, 6));
     } finally {
       setLoading(false);
     }
@@ -116,7 +106,6 @@ export default function DashboardPage() {
 
   const tabs = [
     { id: 'listings' as const, label: 'My Listings', icon: '📋' },
-    { id: 'marketplace' as const, label: 'Marketplace', icon: '🛒' },
     { id: 'trades' as const, label: 'Trade History', icon: '🤝' },
     { id: 'contracts' as const, label: 'Contracts', icon: '📑' },
     { id: 'wallet' as const, label: 'Wallet', icon: '💳' },
@@ -209,36 +198,6 @@ export default function DashboardPage() {
 
         {activeTab === 'listings' && (
           <ListingsTab listings={listings} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
-        )}
-        {activeTab === 'marketplace' && (
-          <div>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-2xl font-bold">Marketplace</h2>
-              <Link href="/marketplace" className="btn-primary py-2 text-sm">Open Full Marketplace</Link>
-            </div>
-            {loading ? (
-              <div className="grid md:grid-cols-2 gap-4 animate-pulse">
-                <div className="h-28 bg-surface rounded-xl" />
-                <div className="h-28 bg-surface rounded-xl" />
-              </div>
-            ) : marketplaceListings.length === 0 ? (
-              <div className="card text-text-dim">No active listings right now.</div>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-4">
-                {marketplaceListings.map((listing) => (
-                  <Link key={listing.id} href={`/marketplace/${listing.id}`} className="card hover:border-accent/40 transition-colors">
-                    <div className="flex justify-between items-start gap-3">
-                      <div>
-                        <h3 className="font-semibold text-white">{listing.title}</h3>
-                        <p className="text-xs text-text-dim mt-1 uppercase tracking-wide">{listing.category}</p>
-                      </div>
-                      <span className="font-mono text-gold text-sm"><PriceWithKas bankr={listing.price_bankr} kasClassName="text-xs text-text-dim" /></span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
         )}
         {activeTab === 'trades' && (
           <TradesTab trades={trades} loading={loading} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />

@@ -17,7 +17,6 @@ export default function Footer() {
         <div className="text-sm space-y-2 md:justify-self-center">
           <p className="text-[11px] uppercase tracking-widest text-text-dim/70">Product</p>
           <div className="flex flex-wrap gap-4">
-            <Link href="/marketplace" className="text-text-dim hover:text-text">Marketplace</Link>
             <Link href="/join" className="text-text-dim hover:text-text">Join</Link>
             <Link href="/docs" className="text-text-dim hover:text-text">Docs</Link>
             <Link href="/registry" className="text-text-dim hover:text-text">Registry</Link>

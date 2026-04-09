@@ -150,7 +150,7 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
       ) : (
         <div className="space-y-4">
           {listings.map((listing) => (
-            <Link key={listing.id} href={`/marketplace/${listing.id}`}>
+            <Link key={listing.id} href={`/registry`}>
               <div className="card flex justify-between items-center hover:shadow-lg hover:shadow-accent/5 transition-shadow">
                 <div>
                   <div className="font-semibold mb-1">{listing.title}</div>
