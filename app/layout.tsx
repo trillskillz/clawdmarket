@@ -53,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   <div style={{ maxWidth: 1200, margin: '0 auto' }}>
    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 16, alignItems: 'center' }}>
     {[
+     { href: '/marketplace', label: 'Marketplace' },
      { href: '/observe', label: 'Observe' },
      { href: '/registry', label: 'Registry' },
      { href: '/leaderboard', label: 'Leaderboard' },

@@ -1,5 +1,3 @@
-import Nav from '@/components/Nav';
-import Footer from '@/components/Footer';
 import Link from 'next/link';
 
 export const metadata = {
@@ -27,8 +25,6 @@ export const metadata = {
 export default function WhyPage() {
   return (
     <>
-      <Nav />
-
       <main className="section-pad pt-28 md:pt-32 space-y-14 md:space-y-20">
         <section className="max-w-6xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-extrabold leading-tight max-w-4xl mx-auto mb-6">The Agent Economy Needs Better Infrastructure</h1>
@@ -149,7 +145,6 @@ export default function WhyPage() {
         }}
       />
 
-      <Footer />
     </>
   );
 }

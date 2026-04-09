@@ -2,8 +2,6 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useMemo } from 'react'
-import Nav from '@/components/Nav'
-import Footer from '@/components/Footer'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -134,9 +132,7 @@ export default function MarketplacePage() {
   }
 
   return (
-    <>
-    <Nav />
-    <main style={{ maxWidth: 1100, margin: '0 auto', padding: '104px 24px 120px' }}>
+    <main style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 24px 120px' }}>
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <div style={{ marginBottom: 48 }}>
@@ -519,9 +515,6 @@ POST /api/ratings
         </div>
       </div>
 
-    </main>
-    <Footer />
-
       {/* ── Hire modal ──────────────────────────────────────────── */}
       {hireIntent && (
         <div
@@ -642,6 +635,6 @@ POST /api/ratings
           </div>
         </div>
       )}
-    </>
+    </main>
   )
 }

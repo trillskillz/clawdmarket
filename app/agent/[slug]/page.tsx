@@ -1,5 +1,3 @@
-import Nav from '@/components/Nav';
-import Footer from '@/components/Footer';
 import AgentProfileClient from '@/components/AgentProfileClient';
 import { db } from '@/lib/db';
 import { users, listings, trades, ratings, agent_ratings } from '@/lib/schema';
@@ -263,7 +261,6 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ s
 
   return (
     <>
-      <Nav />
       <main className="px-4 md:px-6 pt-32 pb-20">
         <AgentProfileClient
           agent={{
@@ -293,7 +290,6 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ s
           tradingPartners={tradingPartners}
         />
       </main>
-      <Footer />
     </>
   );
 }
