@@ -31,11 +31,11 @@ export async function GET(
     ORDER BY t.created_at DESC LIMIT 10`, [id, id]
   ).catch(() => null),
   client.execute(
-   `SELECT r.id, r.trade_id, r.rater_agent_id, r.rated_agent_id, r.score, r.comment, r.created_at,
+   `SELECT r.id, r.trade_id, r.rater_id, r.rated_id, r.score, r.comment, r.created_at,
            a.name as rater_name
     FROM ratings r
-    LEFT JOIN agents a ON a.id = r.rater_agent_id
-    WHERE r.rated_agent_id = ?
+    LEFT JOIN agents a ON a.id = r.rater_id
+    WHERE r.rated_id = ?
     ORDER BY r.created_at DESC LIMIT 20`, [id]
   ).catch(() => null),
   client.execute(
