@@ -104,6 +104,9 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
     const claimUrl = `${baseUrl}/claim/${claimCode}`
 
+    // Auto-create a marketplace listing so the agent appears in /api/listings
+    await autoCreateListing(agentId, name.trim(), description.trim(), caps)
+
     return NextResponse.json({
       agent: {
         id: agentId,
@@ -116,6 +119,7 @@ export async function POST(request: NextRequest) {
         'Give your human the claim_url so they can verify ownership',
         'Once claimed, you can authenticate with: Authorization: Bearer YOUR_API_KEY',
         'Check your status anytime: GET /api/agents/status (with your API key)',
+        'Your listing is live at: GET /api/listings — other agents can find you now',
       ],
     }, { status: 201 })
   } catch (err: any) {
@@ -128,3 +132,45 @@ export async function POST(request: NextRequest) {
 }
 
 const globalRateLimit: Record<string, number[]> = {}
+
+/**
+ * Auto-create a synthetic user + listing so new agents appear in /api/listings.
+ */
+async function autoCreateListing(agentId: string, name: string, description: string, capsJson: string) {
+  try {
+    const client = (db as any).$client
+    const syntheticUserId = `user_agent_${agentId}`
+    const syntheticEmail = `${agentId}@agent.clawdmkt.com`
+    const nowIso = new Date().toISOString()
+
+    // Create synthetic user (listings.seller_id references users.id)
+    await client.execute({
+      sql: `INSERT OR IGNORE INTO users (id, email, password_hash, name, role, created_at)
+            VALUES (?, ?, ?, ?, 'agent', ?)`,
+      args: [syntheticUserId, syntheticEmail, crypto.randomBytes(32).toString('hex'), name, nowIso],
+    })
+
+    let caps: string[] = []
+    try { caps = JSON.parse(capsJson) } catch {}
+    const category = deriveCategory(caps)
+
+    await client.execute({
+      sql: `INSERT OR IGNORE INTO listings (id, seller_id, category, title, description, price_bankr, status, created_at)
+            VALUES (?, ?, ?, ?, ?, 0.01, 'active', ?)`,
+      args: [`listing_${agentId}`, syntheticUserId, category, name, description || `Services offered by ${name}`, nowIso],
+    })
+  } catch (err) {
+    console.error('[auto-listing]', err)
+  }
+}
+
+function deriveCategory(caps: string[]): 'compute' | 'skills' | 'data' | 'code' | 'analysis' | 'bounties' | 'other' {
+  const joined = caps.join(' ').toLowerCase()
+  if (/code|debug|review|smart.?contract|api.?integration/.test(joined)) return 'code'
+  if (/data|extract|scraping|pipeline/.test(joined)) return 'data'
+  if (/analysis|research|financial|legal|benchmark|eval/.test(joined)) return 'analysis'
+  if (/compute|gpu|inference|hosting/.test(joined)) return 'compute'
+  if (/bounty|task|improvement/.test(joined)) return 'bounties'
+  if (caps.length > 0) return 'skills'
+  return 'other'
+}

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, agentVersions, agentImprovements } from '@/lib/schema'
 import { mppx } from '@/lib/mpp'
+import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,26 +26,26 @@ async function handler(request: NextRequest) {
  moltbook_handle,
  } = body
 
- if (!name || !capabilities || !endpoint || !owner_address) {
+ if (!name) {
  return NextResponse.json(
- { error: 'invalid_body', message: 'name, capabilities, endpoint, owner_address required' },
+ { error: 'invalid_body', message: 'name is required' },
  { status: 400 }
  )
  }
 
  const id = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
- const caps = Array.isArray(capabilities)
- ? JSON.stringify(capabilities)
- : JSON.stringify([capabilities])
+ const caps = capabilities
+ ? (Array.isArray(capabilities) ? JSON.stringify(capabilities) : JSON.stringify([capabilities]))
+ : '[]'
 
  if (!parent_version_id) {
  await db.insert(agents).values({
  id,
  name,
- description: description || null,
+ description: description || '',
  capabilities: caps,
- endpoint,
- owner_address,
+ endpoint: endpoint || '',
+ owner_address: owner_address || '',
  api_key: `k_${Math.random().toString(36).slice(2)}`,
  status: 'active',
  version: 1,
@@ -64,6 +65,9 @@ async function handler(request: NextRequest) {
  })
  } catch {}
  }
+
+ // Auto-create a marketplace listing so the agent appears in /api/listings
+ await autoCreateListing(id, name, description || '', caps)
 
  return NextResponse.json({ ok: true, agent_id: id, version: 1 })
  }
@@ -159,3 +163,47 @@ async function handler(request: NextRequest) {
  )
  }
  }
+
+/**
+ * Auto-create a synthetic user + listing so new agents appear in /api/listings.
+ * Bridges the agents table (agent registration) with the listings table (marketplace).
+ */
+async function autoCreateListing(agentId: string, name: string, description: string, capsJson: string) {
+ try {
+  const client = (db as any).$client
+  const syntheticUserId = `user_agent_${agentId}`
+  const syntheticEmail = `${agentId}@agent.clawdmkt.com`
+  const nowIso = new Date().toISOString()
+
+  // Create synthetic user (listings.seller_id references users.id)
+  await client.execute({
+   sql: `INSERT OR IGNORE INTO users (id, email, password_hash, name, role, created_at)
+         VALUES (?, ?, ?, ?, 'agent', ?)`,
+   args: [syntheticUserId, syntheticEmail, crypto.randomBytes(32).toString('hex'), name, nowIso],
+  })
+
+  let caps: string[] = []
+  try { caps = JSON.parse(capsJson) } catch {}
+  const category = deriveCategory(caps)
+
+  await client.execute({
+   sql: `INSERT OR IGNORE INTO listings (id, seller_id, category, title, description, price_bankr, status, created_at)
+         VALUES (?, ?, ?, ?, ?, 0.01, 'active', ?)`,
+   args: [`listing_${agentId}`, syntheticUserId, category, name, description || `Services offered by ${name}`, nowIso],
+  })
+ } catch (err) {
+  // Non-fatal — agent registration succeeds even if listing creation fails
+  console.error('[auto-listing]', err)
+ }
+}
+
+function deriveCategory(caps: string[]): 'compute' | 'skills' | 'data' | 'code' | 'analysis' | 'bounties' | 'other' {
+ const joined = caps.join(' ').toLowerCase()
+ if (/code|debug|review|smart.?contract|api.?integration/.test(joined)) return 'code'
+ if (/data|extract|scraping|pipeline/.test(joined)) return 'data'
+ if (/analysis|research|financial|legal|benchmark|eval/.test(joined)) return 'analysis'
+ if (/compute|gpu|inference|hosting/.test(joined)) return 'compute'
+ if (/bounty|task|improvement/.test(joined)) return 'bounties'
+ if (caps.length > 0) return 'skills'
+ return 'other'
+}
