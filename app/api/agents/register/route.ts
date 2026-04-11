@@ -48,22 +48,19 @@ async function handler(request: NextRequest) {
  : '[]'
 
  if (!parent_version_id) {
+ const client = (db as any).$client
  await ensureColumns()
- await db.insert(agents).values({
- id,
- name,
- description: description || '',
- capabilities: caps,
- endpoint: endpoint || '',
- owner_address: owner_address || '',
- api_key: `k_${Math.random().toString(36).slice(2)}`,
- status: 'active',
- version: 1,
- baseAgentId: id,
- systemPrompt: system_prompt || null,
- toolsConfig: JSON.stringify(tools_config || []),
- modelId: model_id || null,
- created_at: new Date(),
+ const apiKey = `k_${Math.random().toString(36).slice(2)}`
+ const nowIso = new Date().toISOString()
+
+ await client.execute({
+  sql: `INSERT INTO agents (id, name, description, capabilities, endpoint, owner_address, api_key, status, version, base_agent_id, rating_count, benchmark_count, benchmark_history, improvement_count, total_improvement_delta, system_prompt, tools_config, model_id, claim_code, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, 0, 0, '[]', 0, 0, ?, ?, ?, NULL, ?)`,
+  args: [
+   id, name, description || '', caps, endpoint || '', owner_address || '',
+   apiKey, id, system_prompt || null, JSON.stringify(tools_config || []),
+   model_id || null, nowIso,
+  ],
  })
 
  // Store moltbook_handle if provided (column added via migration)
@@ -99,33 +96,28 @@ async function handler(request: NextRequest) {
  const baseId = parent.baseAgentId || parent.id
 
  await ensureColumns()
- await db.insert(agents).values({
- id,
- name: name || parent.name,
- description: description || parent.description,
- capabilities: caps || parent.capabilities,
- endpoint: endpoint || parent.endpoint,
- owner_address,
- api_key: `k_${Math.random().toString(36).slice(2)}`,
- status: 'active',
- version: newVersion,
- baseAgentId: baseId,
- parentVersionId: parent_version_id,
- systemPrompt: system_prompt || null,
- toolsConfig: JSON.stringify(tools_config || []),
- modelId: model_id || parent.modelId,
- improvementCount: (parent.improvementCount || 0) + 1,
- improvedByAgentId: improved_by_agent_id || null,
- lastImprovedAt: new Date().toISOString(),
- benchmarkScore: parent.benchmarkScore,
- benchmarkHistory: parent.benchmarkHistory,
- velocityScore: parent.velocityScore,
- created_at: new Date(),
+ const vClient = (db as any).$client
+ const vApiKey = `k_${Math.random().toString(36).slice(2)}`
+ const vNow = new Date().toISOString()
+
+ await vClient.execute({
+  sql: `INSERT INTO agents (id, name, description, capabilities, endpoint, owner_address, api_key, status, version, base_agent_id, parent_version_id, system_prompt, tools_config, model_id, rating_count, benchmark_count, benchmark_history, improvement_count, total_improvement_delta, improved_by_agent_id, last_improved_at, benchmark_score, velocity_score, claim_code, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0, ?, ?, ?, ?, NULL, ?)`,
+  args: [
+   id, name || parent.name, description || parent.description,
+   caps || parent.capabilities, endpoint || parent.endpoint, owner_address || '',
+   vApiKey, newVersion, baseId, parent_version_id,
+   system_prompt || null, JSON.stringify(tools_config || []),
+   model_id || parent.modelId, parent.benchmarkHistory || '[]',
+   (parent.improvementCount || 0) + 1, improved_by_agent_id || null,
+   vNow, parent.benchmarkScore || null, parent.velocityScore || null, vNow,
+  ],
  })
 
- await db.update(agents)
- .set({ status: 'inactive' })
- .where(eq(agents.id, parent_version_id))
+ await vClient.execute({
+  sql: `UPDATE agents SET status = 'inactive' WHERE id = ?`,
+  args: [parent_version_id],
+ })
 
  const versionId = `av_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
  await db.insert(agentVersions).values({
