@@ -36,11 +36,6 @@ const nextConfig = {
         destination: '/not-for-humans',
         permanent: true,
       },
-      {
-        source: '/api/agents/join',
-        destination: '/api/agents/register',
-        permanent: true,
-      },
     ]
   },
   async headers() {

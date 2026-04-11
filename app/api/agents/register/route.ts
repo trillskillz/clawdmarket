@@ -7,6 +7,15 @@ import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
+let columnsEnsured = false
+async function ensureColumns() {
+  if (columnsEnsured) return
+  const client = (db as any).$client
+  await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
+  await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+  columnsEnsured = true
+}
+
 export async function POST(request: NextRequest) {
   return mppx.session({ amount: '0.01', unitType: 'request' })(handler)(request)
 }
@@ -39,6 +48,7 @@ async function handler(request: NextRequest) {
  : '[]'
 
  if (!parent_version_id) {
+ await ensureColumns()
  await db.insert(agents).values({
  id,
  name,
@@ -88,6 +98,7 @@ async function handler(request: NextRequest) {
  const newVersion = (parent.version || 1) + 1
  const baseId = parent.baseAgentId || parent.id
 
+ await ensureColumns()
  await db.insert(agents).values({
  id,
  name: name || parent.name,
