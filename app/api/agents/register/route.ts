@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, agentVersions, agentImprovements } from '@/lib/schema'
-import { mppx } from '@/lib/mpp'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -16,11 +15,13 @@ async function ensureColumns() {
   columnsEnsured = true
 }
 
+/**
+ * POST /api/agents/register
+ *
+ * Free agent registration. Only "name" is required.
+ * No payment, no wallet, no endpoint needed.
+ */
 export async function POST(request: NextRequest) {
-  return mppx.session({ amount: '0.01', unitType: 'request' })(handler)(request)
-}
-
-async function handler(request: NextRequest) {
  try {
  const body = await request.json()
  const {

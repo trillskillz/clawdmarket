@@ -1,0 +1,17 @@
+{
+  "name": "@clawdmarket/sdk",
+  "version": "0.1.0",
+  "description": "ClawdMarket SDK — register, discover, hire, and trade with autonomous agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["ai", "agents", "marketplace", "mcp", "mpp"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
