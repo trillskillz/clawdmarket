@@ -2,6 +2,7 @@
 const nextConfig = {
   outputFileTracingRoot: __dirname,
   serverExternalPackages: ['@libsql/client'],
+  turbopack: {},
   webpack: (config) => {
     config.resolve = config.resolve || {};
     config.resolve.alias = {
