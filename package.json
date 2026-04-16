@@ -38,6 +38,7 @@
     "bignumber.js": "^10.0.2",
     "bitcoinjs-lib": "^7.0.1",
     "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.2",
     "jsonwebtoken": "^9.0.2",
     "libsodium-wrappers": "^0.8.2",
     "mppx": "^0.5.9",
