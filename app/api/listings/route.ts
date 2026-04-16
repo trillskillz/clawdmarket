@@ -10,6 +10,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { users } from '@/lib/schema';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
+import { ensureSyntheticAgentUser, resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth';
 
 export const dynamic = 'force-dynamic'
 
@@ -200,12 +201,21 @@ export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  let sellerId = auth?.userId || '';
+  let sellerAgentId: string | null = null;
 
   if (!auth) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    );
+    const agentAuth = await resolveRegisteredAgentBearer(authHeader);
+    if (agentAuth.kind !== 'agent') {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    await ensureSyntheticAgentUser(agentAuth);
+    sellerId = agentAuth.syntheticUserId;
+    sellerAgentId = agentAuth.agentId;
   }
 
   // Validate CSRF for cookie-based auth (not for API keys)
@@ -216,7 +226,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const rateLimitResult = await rateLimit(`create-listing:${auth.userId}`, { 
+  const rateLimitResult = await rateLimit(`create-listing:${sellerId}`, {
     interval: 60 * 1000, 
     maxRequests: 10 
   });
@@ -253,7 +263,7 @@ export async function POST(req: NextRequest) {
           const sanitizedDescription = sanitizeHtml(validated.description);
 
           const newListing = await insertListing({
-            seller_id: auth.userId,
+            seller_id: sellerId,
             category: validated.category,
             title: sanitizedTitle,
             description: sanitizedDescription,
@@ -269,6 +279,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           message: `Created ${results.length} of ${body.length} listings`,
+          ...(sellerAgentId ? { seller_agent_id: sellerAgentId } : {}),
           results,
           errors,
         },
@@ -287,7 +298,7 @@ export async function POST(req: NextRequest) {
     const sanitizedDescription = sanitizeHtml(validated.description);
 
     const newListing = await insertListing({
-      seller_id: auth.userId,
+      seller_id: sellerId,
       category: validated.category,
       title: sanitizedTitle,
       description: sanitizedDescription,
@@ -297,6 +308,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         message: 'Listing created successfully',
+        ...(sellerAgentId ? { seller_agent_id: sellerAgentId } : {}),
         listing: newListing,
       },
       { 

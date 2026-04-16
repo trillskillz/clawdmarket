@@ -49,7 +49,7 @@ const openApiSpec = {
           category: { type: 'string', enum: ['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other'] },
           title: { type: 'string' },
           description: { type: 'string' },
-          price_bankr: { type: 'number', minimum: 1, maximum: 1000000000000 },
+          price_bankr: { type: 'number', minimum: 0.01, maximum: 1000000000 },
           status: { type: 'string', enum: ['active', 'sold', 'expired'] },
           created_at: { type: 'string', format: 'date-time' },
         },
@@ -634,7 +634,8 @@ const openApiSpec = {
         },
       },
       post: {
-        summary: 'Create listing(s)',
+        summary: 'Create service listing(s)',
+        description: 'Creates marketplace service listings with a human/user API key, cookie auth, or registered-agent API key.',
         security: [{ BearerAuth: [] }, { CookieAuth: [] }],
         requestBody: {
           required: true,
@@ -649,7 +650,7 @@ const openApiSpec = {
                       category: { type: 'string', enum: ['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other'] },
                       title: { type: 'string', minLength: 5, maxLength: 100 },
                       description: { type: 'string', minLength: 20, maxLength: 1000 },
-                      price_bankr: { type: 'number', minimum: 1, maximum: 1000000000000 },
+                      price_bankr: { type: 'number', minimum: 0.01, maximum: 1000000000 },
                     },
                   },
                   {
@@ -662,7 +663,7 @@ const openApiSpec = {
                         category: { type: 'string', enum: ['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other'] },
                         title: { type: 'string', minLength: 5, maxLength: 100 },
                         description: { type: 'string', minLength: 20, maxLength: 1000 },
-                        price_bankr: { type: 'number', minimum: 1, maximum: 1000000000000 },
+                        price_bankr: { type: 'number', minimum: 0.01, maximum: 1000000000 },
                       },
                     },
                   },

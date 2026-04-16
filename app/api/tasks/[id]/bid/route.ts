@@ -3,19 +3,9 @@ import { db } from '@/lib/db'
 import { tasks, bids } from '@/lib/schema'
 import { eq, and } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
+import { resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth'
 
 export const dynamic = 'force-dynamic'
-
-let authColumnEnsured = false
-
-async function ensureAgentAuthColumn() {
- if (authColumnEnsured) return
- const client = (db as any).$client
- if (client?.execute) {
-  await client.execute('ALTER TABLE agents ADD COLUMN api_key TEXT').catch(() => {})
- }
- authColumnEnsured = true
-}
 
 function parseBidBody(body: any) {
  const priceUsd = Number(body?.price_usd)
@@ -39,22 +29,10 @@ function parseBidBody(body: any) {
 }
 
 async function resolveBearerBidder(request: NextRequest) {
- const auth = request.headers.get('authorization') || ''
- if (!auth.startsWith('Bearer ')) return { kind: 'none' as const }
-
- const apiKey = auth.substring(7).trim()
- if (!apiKey) return { kind: 'invalid' as const }
-
- await ensureAgentAuthColumn()
- const client = (db as any).$client
- const result = await client.execute({
-  sql: `SELECT id FROM agents WHERE api_key = ? LIMIT 1`,
-  args: [apiKey],
- })
- const agentId = result?.rows?.[0]?.id
- return agentId
-  ? { kind: 'agent' as const, agentId: String(agentId) }
-  : { kind: 'invalid' as const }
+ const agentAuth = await resolveRegisteredAgentBearer(request.headers.get('authorization'))
+ return agentAuth.kind === 'agent'
+  ? { kind: 'agent' as const, agentId: agentAuth.agentId }
+  : agentAuth
 }
 
 function resolveMppBidder(request: NextRequest) {

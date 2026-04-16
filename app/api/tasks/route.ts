@@ -4,6 +4,7 @@ import { tasks, bids } from '@/lib/schema'
 import { eq, desc, and, sql, gte, lte } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 import { getTaskPendingActions } from '@/lib/agent-contract'
+import { resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -177,10 +178,13 @@ export async function GET(request: NextRequest) {
  }
 }
 
-export async function POST(request: NextRequest) {
- return mppx.session({ amount: '0.001', unitType: 'request' })(async (request: NextRequest) => {
- try {
- const body = await request.json()
+function resolveMppPoster(request: NextRequest) {
+ const receipt = (request as any).mppReceipt
+ const payer = receipt?.payer || receipt?.payerAddress || receipt?.from || receipt?.account
+ return typeof payer === 'string' && payer.trim().length > 0 ? payer.trim() : ''
+}
+
+async function createTask(body: any, posterAgentId: string) {
  const { title, description, required_capabilities, budget_usd, deadline_at, task_type, subject_agent_id, benchmark_id } = body
 
  if (!title || !description || !budget_usd) {
@@ -192,8 +196,14 @@ export async function POST(request: NextRequest) {
 
  const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
- const receipt = (request as any).mppReceipt
- const posterAgentId = receipt?.payer || 'anonymous'
+ const budgetUsd = Number(budget_usd)
+
+ if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) {
+ return NextResponse.json(
+ { error: 'invalid_body', message: 'budget_usd must be a positive number' },
+ { status: 400 }
+ )
+ }
 
  await db.insert(tasks).values({
  id,
@@ -203,7 +213,7 @@ export async function POST(request: NextRequest) {
  requiredCapabilities: JSON.stringify(
  Array.isArray(required_capabilities) ? required_capabilities : []
  ),
- budgetUsd: parseFloat(budget_usd),
+ budgetUsd,
  deadlineAt: deadline_at || null,
  status: 'open',
  taskType: ['general','benchmark','self_improvement'].includes(task_type) ? task_type : 'general',
@@ -213,7 +223,35 @@ export async function POST(request: NextRequest) {
  createdAt: new Date().toISOString(),
  })
 
- return NextResponse.json({ ok: true, task_id: id, expires_at: expiresAt })
+ return NextResponse.json({ ok: true, task_id: id, poster_agent_id: posterAgentId, expires_at: expiresAt })
+}
+
+export async function POST(request: NextRequest) {
+ const body = await request.clone().json().catch(() => ({}))
+
+ try {
+ const agentAuth = await resolveRegisteredAgentBearer(request.headers.get('authorization'))
+ if (agentAuth.kind === 'agent') {
+ return createTask(body, agentAuth.agentId)
+ }
+ if (agentAuth.kind === 'invalid') {
+ return NextResponse.json(
+ { error: 'unauthorized', message: 'Invalid agent API key' },
+ { status: 401 }
+ )
+ }
+
+ return mppx.session({ amount: '0.001', unitType: 'request' })(async (gatedRequest: NextRequest) => {
+ const posterAgentId = resolveMppPoster(gatedRequest)
+ if (!posterAgentId) {
+ return NextResponse.json(
+ { error: 'payment_required', message: 'Provide an agent API key or a valid MPP payment receipt' },
+ { status: 402 }
+ )
+ }
+
+ return createTask(body, posterAgentId)
+ })(request)
 
  } catch (err: any) {
  return NextResponse.json(
@@ -221,7 +259,6 @@ export async function POST(request: NextRequest) {
  { status: 500 }
  )
  }
- })(request)
 }
 
 function toDateSafe(ts: string | number): Date {

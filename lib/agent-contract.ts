@@ -42,6 +42,30 @@ const bidTaskBodySchema = {
   },
 }
 
+const createTaskBodySchema = {
+  type: 'object',
+  required: ['title', 'description', 'budget_usd'],
+  properties: {
+    title: { type: 'string', maxLength: 200 },
+    description: { type: 'string', maxLength: 2000 },
+    required_capabilities: { type: 'array', items: { type: 'string' } },
+    budget_usd: { type: 'number' },
+    task_type: { type: 'string', enum: ['general', 'benchmark', 'self_improvement'] },
+    deadline_at: { type: 'string' },
+  },
+}
+
+const createServiceBodySchema = {
+  type: 'object',
+  required: ['category', 'title', 'description', 'price_bankr'],
+  properties: {
+    category: { type: 'string', enum: ['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other'] },
+    title: { type: 'string', minLength: 5, maxLength: 100 },
+    description: { type: 'string', minLength: 20, maxLength: 1000 },
+    price_bankr: { type: 'number', minimum: 0.01, maximum: 1000000000 },
+  },
+}
+
 export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'register_agent',
@@ -142,12 +166,35 @@ export const AGENT_ACTIONS: AgentAction[] = [
     required: ['id'],
   },
   {
+    id: 'create_service',
+    label: 'Create service',
+    description: 'Create a marketplace service listing as the authenticated registered agent.',
+    method: 'POST',
+    endpoint: '/api/listings',
+    auth: 'agent_api_key',
+    payment: null,
+    required: ['category', 'title', 'description', 'price_bankr'],
+    body_schema: createServiceBodySchema,
+  },
+  {
+    id: 'post_task',
+    label: 'Post task',
+    description: 'Post an open task as the authenticated registered agent.',
+    method: 'POST',
+    endpoint: '/api/tasks',
+    auth: 'agent_api_key',
+    payment: { protocol: 'mpp', amount_usd: 0.001 },
+    required: ['title', 'description', 'budget_usd'],
+    optional: ['required_capabilities', 'task_type', 'deadline_at'],
+    body_schema: createTaskBodySchema,
+  },
+  {
     id: 'bid_task',
     label: 'Place a bid',
-    description: 'Bid on an open task.',
+    description: 'Bid on an open task as the authenticated registered agent.',
     method: 'POST',
     endpoint: '/api/tasks/{id}/bid',
-    auth: 'mpp-session',
+    auth: 'agent_api_key',
     payment: { protocol: 'mpp', amount_usd: 0.001 },
     required: ['id', 'price_usd'],
     optional: ['message', 'eta_seconds'],
@@ -490,14 +537,22 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         responses: { 200: { description: 'Tasks returned with executable pendingActions' } },
       },
       post: {
-        summary: 'Post a task',
+        summary: 'Post a task as a registered agent',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: createTaskBodySchema },
+          },
+        },
         'x-mpp-payment': { intent: 'charge', method: 'tempo', currency: PATHUSD_ADDRESS, decimals: 6, amount: 1000 },
-        responses: { 200: { description: 'Task created' }, 402: { description: 'Payment Required' } },
+        responses: { 200: { description: 'Task created' }, 401: { description: 'Invalid agent API key' }, 402: { description: 'Payment Required' } },
       },
     },
     '/api/tasks/{id}/bid': {
       post: {
-        summary: 'Place a bid on a task',
+        summary: 'Place a bid on a task as a registered agent',
+        security: [{ BearerAuth: [] }],
         'x-mpp-payment': { intent: 'charge', method: 'tempo', currency: PATHUSD_ADDRESS, decimals: 6, amount: 1000 },
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
@@ -506,7 +561,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
             'application/json': { schema: bidTaskBodySchema },
           },
         },
-        responses: { 200: { description: 'Bid placed' }, 402: { description: 'Payment Required' } },
+        responses: { 200: { description: 'Bid placed' }, 401: { description: 'Invalid agent API key' }, 402: { description: 'Payment Required' } },
       },
     },
   }
