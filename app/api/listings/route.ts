@@ -2,20 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { listings } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { createListingSchema, listingsQuerySchema, sanitizeHtml } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { users } from '@/lib/schema';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 
 export const dynamic = 'force-dynamic'
-
-function isMissingColumnError(error: any, column: string) {
-  const msg = String(error?.message || error || '').toLowerCase();
-  return msg.includes('no column named') && msg.includes(column.toLowerCase());
-}
 
 function getSortOrder(sort?: string) {
   switch (sort) {
@@ -26,88 +22,29 @@ function getSortOrder(sort?: string) {
 }
 
 async function selectListings(whereClause: any, limit: number, offset: number, sort?: string) {
-  try {
-    const rows = await db
-      .select({
-        id: listings.id,
-        seller_id: listings.seller_id,
-        seller_name: users.name,
-        seller_role: users.role,
-        seller_avatar_url: users.avatar_url,
-        seller_avatar_emoji: users.avatar_emoji,
-        seller_avg_rating: sql<number>`COALESCE((SELECT ROUND(AVG(r.score), 2) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
-        seller_rating_count: sql<number>`COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
-        category: listings.category,
-        title: listings.title,
-        description: listings.description,
-        price_bankr: listings.price_bankr,
-        status: listings.status,
-        created_at: listings.created_at,
-      })
-      .from(listings)
-      .leftJoin(users, eq(listings.seller_id, users.id))
-      .where(whereClause)
-      .orderBy(getSortOrder(sort))
-      .limit(limit)
-      .offset(offset);
-
-    // Legacy column check logic might need adjustment if leftJoin affects it, 
-    // but usually keys are checked on the result or error.
-    // Assuming simple success path first.
-    return rows;
-  } catch (error) {
-    if (!isMissingColumnError(error, 'price_bankr')) throw error;
-  }
-
-  // Fallback for legacy column names (omitted for brevity in this patch, assuming main path works or simple fallback)
-  // Re-implementing fallback with join:
-  try {
-    return await db
-      .select({
-        id: listings.id,
-        seller_id: listings.seller_id,
-        seller_name: users.name,
-        seller_role: users.role,
-        seller_avatar_url: users.avatar_url,
-        seller_avatar_emoji: users.avatar_emoji,
-        category: listings.category,
-        title: listings.title,
-        description: listings.description,
-        price_bankr: sql<number>`CAST(${sql.raw('price_clawd')} AS REAL)`,
-        status: listings.status,
-        created_at: listings.created_at,
-      })
-      .from(listings)
-      .leftJoin(users, eq(listings.seller_id, users.id))
-      .where(whereClause)
-      .orderBy(desc(listings.created_at))
-      .limit(limit)
-      .offset(offset);
-  } catch (legacyError) {
-     if (!isMissingColumnError(legacyError, 'price_clawd')) throw legacyError;
-     
-     return await db
-      .select({
-        id: listings.id,
-        seller_id: listings.seller_id,
-        seller_name: users.name,
-        seller_role: users.role,
-        seller_avatar_url: users.avatar_url,
-        seller_avatar_emoji: users.avatar_emoji,
-        category: listings.category,
-        title: listings.title,
-        description: listings.description,
-        price_bankr: sql<number>`CAST(${sql.raw('price')} AS REAL)`,
-        status: listings.status,
-        created_at: listings.created_at,
-      })
-      .from(listings)
-      .leftJoin(users, eq(listings.seller_id, users.id))
-      .where(whereClause)
-      .orderBy(desc(listings.created_at))
-      .limit(limit)
-      .offset(offset);
-  }
+  return db
+    .select({
+      id: listings.id,
+      seller_id: listings.seller_id,
+      seller_name: users.name,
+      seller_role: users.role,
+      seller_avatar_url: users.avatar_url,
+      seller_avatar_emoji: users.avatar_emoji,
+      seller_avg_rating: sql<number>`COALESCE((SELECT ROUND(AVG(r.score), 2) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
+      seller_rating_count: sql<number>`COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
+      category: listings.category,
+      title: listings.title,
+      description: listings.description,
+      price_bankr: listings.price_bankr,
+      status: listings.status,
+      created_at: listings.created_at,
+    })
+    .from(listings)
+    .leftJoin(users, eq(listings.seller_id, users.id))
+    .where(whereClause)
+    .orderBy(getSortOrder(sort))
+    .limit(limit)
+    .offset(offset);
 }
 
 async function insertListing(values: {
@@ -117,41 +54,18 @@ async function insertListing(values: {
   description: string;
   price_bankr: number;
 }) {
-  try {
-    const [row] = await db
-      .insert(listings)
-      .values(values)
-      .returning();
-    return row;
-  } catch (error) {
-    if (!isMissingColumnError(error, 'price_bankr')) throw error;
-
-    const id = crypto.randomUUID();
-
-    try {
-      await (db as any).$client.execute({
-        sql: 'INSERT INTO listings (id, seller_id, category, title, description, price_clawd, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],
-      });
-    } catch (legacyError) {
-      if (!isMissingColumnError(legacyError, 'price_clawd')) throw legacyError;
-
-      await (db as any).$client.execute({
-        sql: 'INSERT INTO listings (id, seller_id, category, title, description, price, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        args: [id, values.seller_id, values.category, values.title, values.description, values.price_bankr, 'active', new Date().toISOString()],
-      });
-    }
-
-    const [row] = await db.select().from(listings).where(eq(listings.id, id)).limit(1);
-    return row;
-  }
+  const [row] = await db
+    .insert(listings)
+    .values(values)
+    .returning();
+  return row;
 }
 
 export async function GET(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || 'unknown';
   const userAgent = req.headers.get('user-agent') || 'unknown';
   const rateKey = `listings-get:${ip}:${userAgent.slice(0, 80)}`;
-  const rateLimitResult = rateLimit(rateKey, { interval: 60 * 1000, maxRequests: 1000 });
+  const rateLimitResult = await rateLimit(rateKey, { interval: 60 * 1000, maxRequests: 1000 });
 
   if (!rateLimitResult.success) {
     return NextResponse.json(
@@ -255,7 +169,7 @@ export async function GET(req: NextRequest) {
         { status: 400 }
       );
     }
-    console.error('Listings fetch error:', error);
+    logger.error('Listings fetch error', { err: String(error) });
 
     const fallbackRows = FALLBACK_LISTINGS.slice(0, 50).map((l) => {
       const agent = fallbackAgentForListingId(l.id);
@@ -302,7 +216,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const rateLimitResult = rateLimit(`create-listing:${auth.userId}`, { 
+  const rateLimitResult = await rateLimit(`create-listing:${auth.userId}`, { 
     interval: 60 * 1000, 
     maxRequests: 10 
   });
@@ -397,7 +311,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    console.error('Listing creation error:', error);
+    logger.error('Listing creation error', { err: String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -56,6 +56,10 @@ export async function GET(request: NextRequest) {
       const benchmarkScore = row.benchmark_score ? Number(row.benchmark_score) : null
       const velocityScore = row.velocity_score ? Number(row.velocity_score) : null
 
+      const isInternal = String(row.endpoint || '').includes('/api/internal/')
+        || String(row.id || '').startsWith('clawdmarket_')
+        || String(row.owner_address || '').toLowerCase() === 'clawdmarket-system'
+
       return {
         id: row.id,
         name: row.name,
@@ -64,7 +68,7 @@ export async function GET(request: NextRequest) {
           try { return JSON.parse(String(row.capabilities || '[]')) }
           catch { return [] }
         })(),
-        endpoint: row.endpoint,
+        ...(isInternal ? {} : { endpoint: row.endpoint }),
         owner_address: row.owner_address,
         status: row.status || 'active',
         avg_rating: avgRating,

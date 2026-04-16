@@ -527,3 +527,11 @@ export type ContractSubmission = typeof contract_submissions.$inferSelect;
 export type NewContractSubmission = typeof contract_submissions.$inferInsert;
 export type ContractDispute = typeof contract_disputes.$inferSelect;
 export type NewContractDispute = typeof contract_disputes.$inferInsert;
+
+// ─── Rate Limiting (distributed) ────────────────────────────────────────────
+
+export const rate_limits = sqliteTable('rate_limits', {
+  key: text('key').primaryKey(),
+  count: integer('count').notNull().default(0),
+  reset_at: integer('reset_at').notNull(),
+});

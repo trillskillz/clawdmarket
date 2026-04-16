@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const rateLimitResult = rateLimit(`api-key:${auth.userId}`, { interval: 60 * 60 * 1000, maxRequests: 5 });
+  const rateLimitResult = await rateLimit(`api-key:${auth.userId}`, { interval: 60 * 60 * 1000, maxRequests: 5 });
 
   if (!rateLimitResult.success) {
     return NextResponse.json(

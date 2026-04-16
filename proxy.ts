@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { jwtVerify } from 'jose'
+
+const jwtSecret = new TextEncoder().encode(process.env.JWT_SECRET || '')
 
 function nextWithDiscoveryHeaders() {
   const response = NextResponse.next()
@@ -12,11 +15,34 @@ function nextWithDiscoveryHeaders() {
   return response
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
 
   if (path === '/') {
     return NextResponse.redirect(new URL('/not-for-humans', request.url))
+  }
+
+  if (path.startsWith('/dashboard')) {
+    const token = request.cookies.get('auth-token')?.value
+    if (!token) {
+      return NextResponse.redirect(new URL('/auth/login', request.url))
+    }
+
+    try {
+      const { payload } = await jwtVerify(token, jwtSecret)
+
+      if (path.startsWith('/dashboard/admin')) {
+        const adminIds = (process.env.ADMIN_USER_IDS || '').split(',').map(x => x.trim()).filter(Boolean)
+        const adminEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean)
+        const userId = String(payload.userId || '')
+        const email = String(payload.email || '').toLowerCase()
+        if (!adminIds.includes(userId) && !(email && adminEmails.includes(email))) {
+          return NextResponse.redirect(new URL('/dashboard', request.url))
+        }
+      }
+    } catch {
+      return NextResponse.redirect(new URL('/auth/login', request.url))
+    }
   }
 
   return nextWithDiscoveryHeaders()

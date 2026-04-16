@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { registerAgent } from '@/lib/moltbook'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,11 @@ export async function POST(req: NextRequest) {
   const expected = process.env.CRON_SECRET
   if (!expected || auth !== `Bearer ${expected}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const rl = await rateLimit('admin:moltbook-register', { interval: 60_000, maxRequests: 10 })
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: getRateLimitHeaders(rl) })
   }
 
   try {

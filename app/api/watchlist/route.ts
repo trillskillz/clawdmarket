@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
 
-  const limit = rateLimit(`watchlist-add:${auth.userId}`, { interval: 60 * 1000, maxRequests: 30 });
+  const limit = await rateLimit(`watchlist-add:${auth.userId}`, { interval: 60 * 1000, maxRequests: 30 });
   if (!limit.success) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(limit) });
   }
@@ -90,7 +90,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
 
-  const limit = rateLimit(`watchlist-remove:${auth.userId}`, { interval: 60 * 1000, maxRequests: 30 });
+  const limit = await rateLimit(`watchlist-remove:${auth.userId}`, { interval: 60 * 1000, maxRequests: 30 });
   if (!limit.success) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(limit) });
   }

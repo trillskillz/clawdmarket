@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for') || 'unknown';
-  const rateLimitResult = rateLimit(`reset-password:${ip}`, {
+  const rateLimitResult = await rateLimit(`reset-password:${ip}`, {
     interval: 60 * 60 * 1000,
     maxRequests: 5,
   });

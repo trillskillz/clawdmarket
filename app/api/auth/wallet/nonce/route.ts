@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-  const rl = rateLimit(`wallet-nonce:${ip}`, { interval: 60_000, maxRequests: 30 });
+  const rl = await rateLimit(`wallet-nonce:${ip}`, { interval: 60_000, maxRequests: 30 });
 
   if (!rl.success) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(rl) });

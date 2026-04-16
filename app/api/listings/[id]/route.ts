@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { listings, users } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { updateListingSchema, sanitizeHtml, isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { eq, sql } from 'drizzle-orm';
@@ -126,7 +127,7 @@ export async function GET(
 
     return NextResponse.json({ listing });
   } catch (error) {
-    console.error('Listing fetch error:', error);
+    logger.error('Listing fetch error', { err: String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -220,7 +221,7 @@ export async function PUT(
         { status: 400 }
       );
     }
-    console.error('Listing update error:', error);
+    logger.error('Listing update error', { err: String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -286,7 +287,7 @@ export async function DELETE(
       message: 'Listing deleted successfully',
     });
   } catch (error) {
-    console.error('Listing deletion error:', error);
+    logger.error('Listing deletion error', { err: String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

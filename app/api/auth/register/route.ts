@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
-  const rateLimitResult = rateLimit(`register:${ip}`, { interval: 60 * 1000, maxRequests: 5 });
+  const rateLimitResult = await rateLimit(`register:${ip}`, { interval: 3_600_000, maxRequests: 3 });
 
   if (!rateLimitResult.success) {
     return NextResponse.json(

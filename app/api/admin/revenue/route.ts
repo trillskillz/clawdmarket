@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq, gte, inArray, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { payment_receipts, trades, users, mpp_sessions } from '@/lib/schema';
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,11 @@ export async function GET(req: NextRequest) {
   const expected = process.env.ADMIN_SECRET || process.env.ADMIN_API_SECRET || '';
   if (!expected || secret !== expected) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  const rl = await rateLimit('admin:revenue', { interval: 60_000, maxRequests: 30 });
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: getRateLimitHeaders(rl) });
   }
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

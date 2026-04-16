@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { transactions, trades } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { getBalance } from '@/lib/wallet';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq, or, desc, and, sql } from 'drizzle-orm';
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   }
 
   const ip = req.headers.get('x-forwarded-for') || 'unknown';
-  const rateLimitResult = rateLimit(`wallet:${ip}`, { interval: 60 * 1000, maxRequests: 30 });
+  const rateLimitResult = await rateLimit(`wallet:${ip}`, { interval: 60 * 1000, maxRequests: 30 });
   if (!rateLimitResult.success) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(rateLimitResult) });
   }
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
       ...envMeta('clawdmarket/api/wallet'),
     }, { headers: getRateLimitHeaders(rateLimitResult) });
   } catch (error) {
-    console.error('Wallet fetch error:', error);
+    logger.error('Wallet fetch error', { err: String(error) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

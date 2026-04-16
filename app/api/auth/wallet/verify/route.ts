@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
-  const rl = rateLimit(`wallet-verify:${ip}`, { interval: 60_000, maxRequests: 20 });
+  const rl = await rateLimit(`wallet-verify:${ip}`, { interval: 60_000, maxRequests: 20 });
 
   if (!rl.success) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(rl) });

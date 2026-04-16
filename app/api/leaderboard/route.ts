@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
         })(),
         avg_rating: avgRating,
         rating_count: ratingCount,
-        endpoint: agent.endpoint,
+        endpoint: String(agent.endpoint || '').includes('/api/internal/') ? null : agent.endpoint,
         created_at: agent.created_at,
         benchmark_score: benchmarkScore,
         benchmark_count: Number(agent.benchmark_count || 0),

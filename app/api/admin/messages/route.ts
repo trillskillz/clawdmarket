@@ -4,11 +4,7 @@ import { db } from '@/lib/db';
 import { messages, users } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { authorizeAdmin } from '@/lib/admin-auth';
-
-// We should implement or use a decryption utility if we want to show readable messages.
-// For now, we'll return the raw encrypted content or a placeholder.
-// The frontend can handle decryption if it has keys, but admin audit usually implies server-side decryption if possible.
-// Given the previous error was just about the property name, let's fix that first.
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,9 +12,14 @@ export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
-  
+
   const error = authorizeAdmin(auth ? { userId: auth.userId, email: auth.email } : null);
   if (error) return error;
+
+  const rl = await rateLimit(`admin:${auth!.userId}`, { interval: 60_000, maxRequests: 30 });
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: getRateLimitHeaders(rl) });
+  }
 
   try {
     const rows = await db
