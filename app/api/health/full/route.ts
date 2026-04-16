@@ -7,6 +7,7 @@ type Check = {
   method: 'GET' | 'POST'
   path: string
   expectStatus: number
+  expectJsonStatus?: string
   headers?: Record<string, string>
   body?: string
 }
@@ -42,6 +43,18 @@ export async function GET(req: Request) {
     { name: 'docs_public', method: 'GET', path: '/docs', expectStatus: 200, headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120' } },
   ]
 
+  const selfTestApiKey = (process.env.CLAWDMARKET_SELF_TEST_API_KEY || '').trim()
+  if (selfTestApiKey) {
+    checks.push({
+      name: 'agent_self_test_authenticated',
+      method: 'GET',
+      path: '/api/agent/self-test',
+      expectStatus: 200,
+      expectJsonStatus: 'ok',
+      headers: { Authorization: `Bearer ${selfTestApiKey}` },
+    })
+  }
+
   const baseUrl = new URL(req.url).origin
 
   const results = await Promise.allSettled(
@@ -55,8 +68,26 @@ export async function GET(req: Request) {
           redirect: 'manual',
         })
         const latency = Date.now() - start
+        let jsonStatus: string | null = null
+        if (check.expectJsonStatus) {
+          try {
+            const data = await res.clone().json()
+            jsonStatus = typeof data?.status === 'string' ? data.status : null
+          } catch {
+            jsonStatus = null
+          }
+        }
         const passed = res.status === check.expectStatus
-        return { name: check.name, status: res.status, expected: check.expectStatus, passed, latency, path: check.path }
+          && (!check.expectJsonStatus || jsonStatus === check.expectJsonStatus)
+        return {
+          name: check.name,
+          status: res.status,
+          expected: check.expectStatus,
+          ...(check.expectJsonStatus ? { json_status: jsonStatus, expected_json_status: check.expectJsonStatus } : {}),
+          passed,
+          latency,
+          path: check.path,
+        }
       } catch (err: any) {
         return { name: check.name, status: 0, expected: check.expectStatus, passed: false, error: err.message, path: check.path }
       }
