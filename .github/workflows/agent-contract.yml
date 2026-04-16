@@ -38,5 +38,8 @@ jobs:
       - name: Agent contract tests
         run: pnpm run test:agent-contract
 
+      - name: Operator console proxy tests
+        run: node --import tsx --test tests/proxy/operator-console.test.ts
+
       - name: Production build
         run: pnpm run build

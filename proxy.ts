@@ -18,8 +18,9 @@ function nextWithDiscoveryHeaders() {
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
+  const isOperatorConsole = path === '/dashboard/operator' || path.startsWith('/dashboard/operator/')
 
-  if (path.startsWith('/dashboard')) {
+  if (path.startsWith('/dashboard') && !isOperatorConsole) {
     const token = request.cookies.get('auth-token')?.value
     if (!token) {
       return NextResponse.redirect(new URL('/auth/login', request.url))
