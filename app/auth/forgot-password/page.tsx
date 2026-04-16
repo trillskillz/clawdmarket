@@ -41,21 +41,16 @@ export default function ForgotPasswordPage() {
 
   return (
     <PageShell>
-      <div className="flex items-center justify-center relative min-h-[70vh]">
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-accent/8 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-gold/5 rounded-full blur-3xl" />
-        </div>
-
-        <div className="w-full max-w-md relative z-10 animate-fade-in-up">
-          <div className="card">
-            <h1 className="text-3xl font-bold mb-2 text-center">Forgot Password</h1>
-            <p className="text-text-dim text-center mb-8">Enter your email to receive a password reset link</p>
+      <div className="auth-screen">
+        <div className="auth-panel">
+          <div className="auth-card">
+            <h1 className="auth-title">Forgot Password</h1>
+            <p className="auth-subtitle">Enter your email to receive a password reset link</p>
 
             {!success ? (
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Email</label>
+              <form onSubmit={handleSubmit} className="auth-form">
+                <div className="auth-field">
+                  <label className="auth-label">Email</label>
                   <input
                     type="email"
                     value={email}
@@ -67,42 +62,42 @@ export default function ForgotPasswordPage() {
                 </div>
 
                 {error && (
-                  <div className="bg-red-400/10 border border-red-400/30 text-red-400 px-4 py-3 rounded-lg text-sm">
+                  <div className="auth-message auth-message-error">
                     {error}
                   </div>
                 )}
 
-                <button type="submit" disabled={loading} className="btn-primary w-full">
+                <button type="submit" disabled={loading} className="btn-primary auth-submit">
                   {loading ? 'Sending...' : 'Send Reset Link'}
                 </button>
               </form>
             ) : (
-              <div className="space-y-5">
-                <div className="bg-green-400/10 border border-green-400/30 text-green-400 px-4 py-3 rounded-lg text-sm">
+              <div className="auth-form">
+                <div className="auth-message auth-message-success">
                   If an account with that email exists, a reset link has been generated.
                 </div>
 
                 {resetToken && (
-                  <div className="bg-accent/10 border border-accent/30 px-4 py-3 rounded-lg text-sm">
-                    <p className="text-text-dim mb-2">🧪 <strong>Demo Mode:</strong> In production, this link would be sent via email.</p>
+                  <div className="auth-message auth-message-info">
+                    <p>Demo mode: in production, this link would be sent via email.</p>
                     <Link
                       href={`/auth/reset-password?token=${resetToken}`}
-                      className="text-accent2 hover:text-accent3 font-medium break-all"
+                      className="auth-primary-link auth-break-link"
                     >
-                      Click here to reset your password →
+                      Click here to reset your password
                     </Link>
                   </div>
                 )}
               </div>
             )}
 
-            <div className="mt-6 text-center text-sm">
-              <Link href="/auth/login" className="text-accent2 hover:text-accent3 font-medium">← Back to Login</Link>
+            <div className="auth-link-row auth-link-row-secondary">
+              <Link href="/auth/login" className="auth-primary-link">Back to Login</Link>
             </div>
           </div>
 
-          <div className="mt-4 text-center">
-            <Link href="/" className="text-sm text-text-dim hover:text-text">← Back to Home</Link>
+          <div className="auth-back-row">
+            <Link href="/" className="auth-muted-link">Back to Home</Link>
           </div>
         </div>
       </div>

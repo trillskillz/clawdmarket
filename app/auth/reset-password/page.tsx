@@ -48,14 +48,14 @@ function ResetPasswordForm() {
   };
 
   return (
-    <div className="card">
-      <h1 className="text-3xl font-bold mb-2 text-center">Reset Password</h1>
-      <p className="text-text-dim text-center mb-8">Enter your reset token and new password</p>
+    <div className="auth-card">
+      <h1 className="auth-title">Reset Password</h1>
+      <p className="auth-subtitle">Enter your reset token and new password</p>
 
       {!success ? (
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium mb-2">Reset Token</label>
+        <form onSubmit={handleSubmit} className="auth-form">
+          <div className="auth-field">
+            <label className="auth-label">Reset Token</label>
             <input
               type="text"
               value={token}
@@ -65,8 +65,8 @@ function ResetPasswordForm() {
               placeholder="Paste your reset token"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">New Password</label>
+          <div className="auth-field">
+            <label className="auth-label">New Password</label>
             <input
               type="password"
               value={password}
@@ -76,8 +76,8 @@ function ResetPasswordForm() {
               placeholder="••••••••"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">Confirm Password</label>
+          <div className="auth-field">
+            <label className="auth-label">Confirm Password</label>
             <input
               type="password"
               value={confirmPassword}
@@ -89,25 +89,25 @@ function ResetPasswordForm() {
           </div>
 
           {error && (
-            <div className="bg-red-400/10 border border-red-400/30 text-red-400 px-4 py-3 rounded-lg text-sm">
+            <div className="auth-message auth-message-error">
               {error}
             </div>
           )}
 
-          <button type="submit" disabled={loading} className="btn-primary w-full">
+          <button type="submit" disabled={loading} className="btn-primary auth-submit">
             {loading ? 'Resetting...' : 'Reset Password'}
           </button>
         </form>
       ) : (
-        <div className="space-y-5">
-          <div className="bg-green-400/10 border border-green-400/30 text-green-400 px-4 py-3 rounded-lg text-sm">
+        <div className="auth-form">
+          <div className="auth-message auth-message-success">
             Password has been reset successfully! Redirecting to login...
           </div>
         </div>
       )}
 
-      <div className="mt-6 text-center text-sm">
-        <Link href="/auth/login" className="text-accent2 hover:text-accent3 font-medium">← Back to Login</Link>
+      <div className="auth-link-row auth-link-row-secondary">
+        <Link href="/auth/login" className="auth-primary-link">Back to Login</Link>
       </div>
     </div>
   );
@@ -116,19 +116,14 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
   return (
     <PageShell>
-      <div className="flex items-center justify-center relative min-h-[70vh]">
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-accent/8 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-gold/5 rounded-full blur-3xl" />
-        </div>
-
-        <div className="w-full max-w-md relative z-10 animate-fade-in-up">
-          <Suspense fallback={<div className="card"><p className="text-center text-text-dim">Loading...</p></div>}>
+      <div className="auth-screen">
+        <div className="auth-panel">
+          <Suspense fallback={<div className="auth-card"><p className="auth-subtitle">Loading...</p></div>}>
             <ResetPasswordForm />
           </Suspense>
 
-          <div className="mt-4 text-center">
-            <Link href="/" className="text-sm text-text-dim hover:text-text">← Back to Home</Link>
+          <div className="auth-back-row">
+            <Link href="/" className="auth-muted-link">Back to Home</Link>
           </div>
         </div>
       </div>
