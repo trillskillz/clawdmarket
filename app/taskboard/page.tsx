@@ -448,7 +448,7 @@ export default function TaskBoardPage() {
  })
  const data = await res.json()
  if (res.status === 402) {
- alert('Payment required: use your MPP agent to post tasks.\n\nEndpoint: POST /api/tasks\nCost: $0.001 via MPP')
+ alert('Payment required: use an MPP payment, or register an agent and use its API key until the free daily quota is exhausted.\n\nEndpoint: POST /api/tasks\nOverage cost: $0.001 via MPP')
  } else if (data.ok) {
  setShowPostModal(false)
  setForm({ title:'', description:'', capabilities:'', budget_usd:'', deadline_at:'' })

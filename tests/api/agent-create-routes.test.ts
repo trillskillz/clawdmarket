@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { NextRequest } from 'next/server'
 import { POST as postListing } from '@/app/api/listings/route'
 import { POST as postTask } from '@/app/api/tasks/route'
+import { GET as getUsage } from '@/app/api/agents/usage/route'
 import { db } from '@/lib/db'
 
 const client = (db as any).$client
@@ -59,6 +60,15 @@ async function ensureSchema() {
       price_bankr real NOT NULL,
       status text NOT NULL DEFAULT 'active',
       created_at integer NOT NULL
+    )`,
+    args: [],
+  })
+
+  await client.execute({
+    sql: `CREATE TABLE IF NOT EXISTS rate_limits (
+      key text PRIMARY KEY NOT NULL,
+      count integer NOT NULL DEFAULT 0,
+      reset_at integer NOT NULL
     )`,
     args: [],
   })
@@ -187,6 +197,67 @@ test('POST /api/tasks accepts a registered-agent API key and records poster_agen
     args: [body.task_id],
   })
   assert.equal(taskResult.rows[0].poster_agent_id, agentId)
+})
+
+test('GET /api/agents/usage returns authenticated agent quotas and usage', async (t) => {
+  await ensureSchema()
+  const suffix = crypto.randomUUID()
+  const agentId = `agent_create_${suffix}`
+  const apiKey = `clawd_create_${suffix}`
+  t.after(() => cleanup(agentId, apiKey))
+  await seedAgent(agentId, apiKey)
+
+  const res = await getUsage(new NextRequest('http://localhost/api/agents/usage', {
+    headers: { authorization: `Bearer ${apiKey}` },
+  }))
+
+  assert.equal(res.status, 200)
+  const body = await res.json()
+  assert.equal(body.agent_id, agentId)
+  assert.equal(body.billing_model.task_posts, 'free_daily_quota_then_mpp')
+  assert.equal(typeof body.usage.task_posts.free_limit, 'number')
+  assert.equal(body.payment.retry_header, undefined)
+  assert.match(body.payment.over_quota_retry, /X-ClawdMarket-Agent-Key/)
+})
+
+test('POST /api/tasks returns payment_required after the registered-agent free quota is exhausted', async (t) => {
+  await ensureSchema()
+  const originalLimit = process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY
+  process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY = '1'
+
+  const suffix = crypto.randomUUID()
+  const agentId = `agent_create_${suffix}`
+  const apiKey = `clawd_create_${suffix}`
+  t.after(() => {
+    if (originalLimit === undefined) {
+      delete process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY
+    } else {
+      process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY = originalLimit
+    }
+    return cleanup(agentId, apiKey)
+  })
+  await seedAgent(agentId, apiKey)
+
+  const first = await postTask(jsonRequest('/api/tasks', {
+    title: 'Quota test task one',
+    description: 'First task should consume the single free daily task quota.',
+    required_capabilities: ['api-integration'],
+    budget_usd: 0.25,
+  }, apiKey))
+  assert.equal(first.status, 200)
+
+  const second = await postTask(jsonRequest('/api/tasks', {
+    title: 'Quota test task two',
+    description: 'Second task should require MPP overage payment.',
+    required_capabilities: ['api-integration'],
+    budget_usd: 0.25,
+  }, apiKey))
+
+  assert.equal(second.status, 402)
+  const body = await second.json()
+  assert.equal(body.error, 'payment_required')
+  assert.equal(body.quota.feature, 'task_posts')
+  assert.equal(body.payment.retry_header, 'X-ClawdMarket-Agent-Key')
 })
 
 test('POST /api/tasks does not create anonymous tasks without auth or payment', async () => {

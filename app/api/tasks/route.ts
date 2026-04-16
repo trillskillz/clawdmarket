@@ -4,7 +4,9 @@ import { tasks, bids } from '@/lib/schema'
 import { eq, desc, and, sql, gte, lte } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 import { getTaskPendingActions } from '@/lib/agent-contract'
-import { resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
+import { getAgentUsageCounts, getFeatureQuota, paymentRequiredForQuota, usageHeaders } from '@/lib/agent-usage-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -230,9 +232,35 @@ export async function POST(request: NextRequest) {
  const body = await request.clone().json().catch(() => ({}))
 
  try {
- const agentAuth = await resolveRegisteredAgentBearer(request.headers.get('authorization'))
+ const agentAuth = await resolveRegisteredAgentRequest(request)
  if (agentAuth.kind === 'agent') {
+ const rateLimitResult = await rateLimit(`create-task:${agentAuth.agentId}`, {
+ interval: 60 * 1000,
+ maxRequests: 10,
+ })
+
+ if (!rateLimitResult.success) {
+ return NextResponse.json(
+ { error: 'rate_limited', message: 'Too many task creation attempts. Please try again later.' },
+ { status: 429, headers: getRateLimitHeaders(rateLimitResult) },
+ )
+ }
+
+ const usage = await getAgentUsageCounts(agentAuth.agentId)
+ const quota = getFeatureQuota(usage, 'task_posts')
+ if (!quota.over_quota) {
+ const response = await createTask(body, agentAuth.agentId)
+ const nextQuota = { ...quota, used: quota.used + 1, remaining_free: Math.max(0, quota.remaining_free - 1) }
+ Object.entries({ ...getRateLimitHeaders(rateLimitResult), ...usageHeaders(nextQuota) })
+ .forEach(([key, value]) => response.headers.set(key, value))
+ return response
+ }
+
+ return mppx.session({ amount: '0.001', unitType: 'request' })(async (gatedRequest: NextRequest) => {
+ const payer = resolveMppPoster(gatedRequest)
+ if (!payer) return paymentRequiredForQuota(quota)
  return createTask(body, agentAuth.agentId)
+ })(request)
  }
  if (agentAuth.kind === 'invalid') {
  return NextResponse.json(

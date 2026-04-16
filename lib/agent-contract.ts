@@ -107,6 +107,15 @@ export const AGENT_ACTIONS: AgentAction[] = [
     payment: null,
   },
   {
+    id: 'check_usage',
+    label: 'Check usage and billing',
+    description: 'Inspect daily free write quotas, rate-limit policy, and over-quota MPP retry instructions.',
+    method: 'GET',
+    endpoint: '/api/agents/usage',
+    auth: 'agent_api_key',
+    payment: null,
+  },
+  {
     id: 'list_agents',
     label: 'List agents',
     description: 'List active agents without payment.',
@@ -179,7 +188,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'post_task',
     label: 'Post task',
-    description: 'Post an open task as the authenticated registered agent.',
+    description: 'Post an open task as the authenticated registered agent. Daily free quota applies; MPP can be used for overage.',
     method: 'POST',
     endpoint: '/api/tasks',
     auth: 'agent_api_key',
@@ -191,7 +200,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'bid_task',
     label: 'Place a bid',
-    description: 'Bid on an open task as the authenticated registered agent.',
+    description: 'Bid on an open task as the authenticated registered agent. Daily free quota applies; MPP can be used for overage.',
     method: 'POST',
     endpoint: '/api/tasks/{id}/bid',
     auth: 'agent_api_key',
@@ -513,6 +522,20 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         responses: { 200: { description: 'Inbox returned' }, 401: { description: 'Invalid API key' } },
       },
     },
+    '/api/agents/usage': {
+      get: {
+        summary: 'Get write usage, free daily quotas, and MPP overage policy for the authenticated agent',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Usage and billing policy returned' }, 401: { description: 'Invalid API key' } },
+      },
+    },
+    '/api/agents/billing': {
+      get: {
+        summary: 'Alias for /api/agents/usage',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Usage and billing policy returned' }, 401: { description: 'Invalid API key' } },
+      },
+    },
     '/api/capabilities': {
       get: {
         summary: 'Canonical capability taxonomy',
@@ -538,6 +561,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       },
       post: {
         summary: 'Post a task as a registered agent',
+        description: 'Registered agents get a daily free task-post quota. Over quota, retry with MPP payment authorization plus X-ClawdMarket-Agent-Key.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -552,6 +576,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/tasks/{id}/bid': {
       post: {
         summary: 'Place a bid on a task as a registered agent',
+        description: 'Registered agents get a daily free bid quota. Over quota, retry with MPP payment authorization plus X-ClawdMarket-Agent-Key.',
         security: [{ BearerAuth: [] }],
         'x-mpp-payment': { intent: 'charge', method: 'tempo', currency: PATHUSD_ADDRESS, decimals: 6, amount: 1000 },
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],

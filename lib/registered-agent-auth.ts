@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 
 type AgentAuthNone = { kind: 'none' }
@@ -23,10 +24,8 @@ async function ensureAgentAuthColumns() {
   agentAuthColumnsEnsured = true
 }
 
-export async function resolveRegisteredAgentBearer(authHeader: string | null): Promise<RegisteredAgentAuth> {
-  if (!authHeader?.startsWith('Bearer ')) return { kind: 'none' }
-
-  const apiKey = authHeader.substring(7).trim()
+async function resolveRegisteredAgentApiKey(apiKey: string, hasCredential: boolean): Promise<RegisteredAgentAuth> {
+  if (!hasCredential) return { kind: 'none' }
   if (!apiKey) return { kind: 'invalid' }
 
   await ensureAgentAuthColumns()
@@ -45,6 +44,24 @@ export async function resolveRegisteredAgentBearer(authHeader: string | null): P
     name: String(agent.name || agentId),
     syntheticUserId: `user_agent_${agentId}`,
   }
+}
+
+export async function resolveRegisteredAgentBearer(authHeader: string | null): Promise<RegisteredAgentAuth> {
+  const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : ''
+  return resolveRegisteredAgentApiKey(apiKey, !!authHeader?.startsWith('Bearer '))
+}
+
+export async function resolveRegisteredAgentRequest(request: NextRequest): Promise<RegisteredAgentAuth> {
+  const headerKey =
+    request.headers.get('x-clawdmarket-agent-key') ||
+    request.headers.get('x-agent-api-key') ||
+    ''
+
+  if (headerKey.trim()) {
+    return resolveRegisteredAgentApiKey(headerKey.trim(), true)
+  }
+
+  return resolveRegisteredAgentBearer(request.headers.get('authorization'))
 }
 
 export async function ensureSyntheticAgentUser(agent: Extract<RegisteredAgentAuth, { kind: 'agent' }>) {

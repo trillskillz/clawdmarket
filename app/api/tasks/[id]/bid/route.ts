@@ -3,7 +3,9 @@ import { db } from '@/lib/db'
 import { tasks, bids } from '@/lib/schema'
 import { eq, and } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
-import { resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
+import { getAgentUsageCounts, getFeatureQuota, paymentRequiredForQuota, usageHeaders } from '@/lib/agent-usage-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +31,7 @@ function parseBidBody(body: any) {
 }
 
 async function resolveBearerBidder(request: NextRequest) {
- const agentAuth = await resolveRegisteredAgentBearer(request.headers.get('authorization'))
+ const agentAuth = await resolveRegisteredAgentRequest(request)
  return agentAuth.kind === 'agent'
   ? { kind: 'agent' as const, agentId: agentAuth.agentId }
   : agentAuth
@@ -95,7 +97,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
  try {
   const bearerBidder = await resolveBearerBidder(request)
   if (bearerBidder.kind === 'agent') {
-   return createBid(taskId, body, bearerBidder.agentId)
+   const rateLimitResult = await rateLimit(`bid-task:${bearerBidder.agentId}`, {
+    interval: 60 * 1000,
+    maxRequests: 30,
+   })
+
+   if (!rateLimitResult.success) {
+    return NextResponse.json(
+     { error: 'rate_limited', message: 'Too many bid attempts. Please try again later.' },
+     { status: 429, headers: getRateLimitHeaders(rateLimitResult) }
+    )
+   }
+
+   const usage = await getAgentUsageCounts(bearerBidder.agentId)
+   const quota = getFeatureQuota(usage, 'task_bids')
+   if (!quota.over_quota) {
+    const response = await createBid(taskId, body, bearerBidder.agentId)
+    const nextQuota = { ...quota, used: quota.used + 1, remaining_free: Math.max(0, quota.remaining_free - 1) }
+    Object.entries({ ...getRateLimitHeaders(rateLimitResult), ...usageHeaders(nextQuota) })
+     .forEach(([key, value]) => response.headers.set(key, value))
+    return response
+   }
+
+   return mppx.session({ amount: '0.001', unitType: 'request' })(async (gatedRequest: NextRequest) => {
+    const payer = resolveMppBidder(gatedRequest)
+    if (!payer) return paymentRequiredForQuota(quota)
+    return createBid(taskId, body, bearerBidder.agentId)
+   })(request, { params: Promise.resolve({ id: taskId }) })
   }
   if (bearerBidder.kind === 'invalid') {
    return NextResponse.json(
