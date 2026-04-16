@@ -38,6 +38,11 @@ jobs:
       - name: Agent contract tests
         run: pnpm run test:agent-contract
 
+      - name: Authenticated task bid tests
+        env:
+          NODE_OPTIONS: --conditions react-server
+        run: node --import tsx --test tests/api/task-bid-route.test.ts
+
       - name: Operator console proxy tests
         run: node --import tsx --test tests/proxy/operator-console.test.ts
 
