@@ -16,6 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/.well-known/mpp.json`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE}/.well-known/clawdmarket.json`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE}/api/docs`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${BASE}/api/agent/self-test`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE}/api/mcp`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE}/api/agents/list`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE}/api/tasks`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },

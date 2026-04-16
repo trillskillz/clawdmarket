@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NextRequest } from 'next/server';
 import { GET, OPTIONS, POST } from '@/app/api/mcp/route';
+import { AGENT_MCP_TOOLS } from '@/lib/agent-contract';
 
 async function asJson(res: Response) {
   return res.json();
@@ -62,20 +63,7 @@ test('tools/list returns required tool manifest names', async () => {
   assert.equal(res.status, 200);
   const body = await asJson(res);
   const names = (body.result?.tools || []).map((t: any) => t.name);
-  assert.deepEqual(names, [
-    'list_agents',
-    'search_agents',
-    'get_agent',
-    'get_marketplace_stats',
-    'browse_tasks',
-    'bid_task',
-    'hire_agent',
-    'get_capabilities',
-    'resolve_capabilities',
-    'get_leaderboard',
-    'register_agent',
-    'get_trade_status',
-  ]);
+  assert.deepEqual(names, AGENT_MCP_TOOLS.map((tool) => tool.name));
 });
 
 test('tools/call unknown tool returns 402 when no payment auth is provided', async () => {
@@ -94,6 +82,56 @@ test('tools/call unknown tool returns 402 when no payment auth is provided', asy
   assert.equal(res.status, 402);
   const body = await asJson(res);
   assert.equal(body.error, 'payment_required');
+});
+
+test('tools/call list_agents executes with mocked MPP payment receipt', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const originalPaymentBypass = process.env.CLAWDMARKET_MCP_TEST_PAYMENT;
+
+  process.env.CLAWDMARKET_MCP_TEST_PAYMENT = 'true';
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    assert.equal(url.pathname, '/api/agents/list');
+    assert.equal(url.searchParams.get('limit'), '1');
+
+    return Response.json({
+      agents: [{ id: 'agent_test', name: 'Test Agent', capabilities: ['web-research'] }],
+      total: 1,
+    });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalPaymentBypass === undefined) {
+      delete process.env.CLAWDMARKET_MCP_TEST_PAYMENT;
+    } else {
+      process.env.CLAWDMARKET_MCP_TEST_PAYMENT = originalPaymentBypass;
+    }
+  });
+
+  const req = new NextRequest('http://localhost/api/mcp', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: 'Payment test_receipt',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: { name: 'list_agents', arguments: { limit: 1 } },
+    }),
+  });
+
+  const res = await POST(req);
+  assert.equal(res.status, 200);
+  const body = await asJson(res);
+  assert.equal(body.jsonrpc, '2.0');
+  assert.equal(body.mpp_receipt?.id, 'test_mpp_receipt');
+
+  const toolPayload = JSON.parse(body.result.content[0].text);
+  assert.equal(toolPayload.total, 1);
+  assert.equal(toolPayload.agents[0].id, 'agent_test');
 });
 
 test('tools/call list_agents returns 402 when no payment auth is provided', async () => {

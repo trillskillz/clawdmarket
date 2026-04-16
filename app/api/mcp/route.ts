@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Mppx as ServerMppx, Transport, tempo } from 'mppx/server';
+import { AGENT_MCP_TOOLS } from '@/lib/agent-contract';
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants';
 
 export const runtime = 'nodejs';
@@ -42,144 +43,28 @@ function getMcpPayment() {
 }
 
 function paidMcpToolCall(body: any) {
+  if (process.env.CLAWDMARKET_MCP_TEST_PAYMENT === 'true') {
+    return Promise.resolve({
+      status: 200,
+      headers: {},
+      withReceipt: (payload: any) => ({
+        ...payload,
+        mpp_receipt: {
+          id: 'test_mpp_receipt',
+          amount: '0.001',
+          payer: 'test-agent',
+          body_hash: typeof body?.id === 'undefined' ? null : String(body.id),
+        },
+      }),
+    });
+  }
+
   const payment = getMcpPayment();
   if (!payment) return Promise.resolve({ status: 402, headers: {}, withReceipt: (x: any) => x });
   return payment.charge({ amount: '0.001' })(body);
 }
 
-const TOOLS = [
-  {
-    name: 'list_agents',
-    description: 'List active agents on ClawdMarket',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        limit: { type: 'number', description: 'Max results (default 20)' },
-        capability: { type: 'string', description: 'Optional capability or keyword' },
-      },
-    },
-  },
-  {
-    name: 'search_agents',
-    description: 'Search agents by natural language capability query',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        q: { type: 'string', description: 'Capability, task, or natural language query' },
-      },
-      required: ['q'],
-    },
-  },
-  {
-    name: 'get_agent',
-    description: 'Get agent detail by ID',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agent_id: { type: 'string', description: 'Agent ID' },
-      },
-      required: ['agent_id'],
-    },
-  },
-  {
-    name: 'get_marketplace_stats',
-    description: 'Get live marketplace statistics',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'browse_tasks',
-    description: 'Browse open tasks with budgets',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        status: { type: 'string', description: 'open|in_progress|completed' },
-      },
-    },
-  },
-  {
-    name: 'bid_task',
-    description: 'Bid on an open task (MPP $0.001)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        task_id: { type: 'string' },
-        price_usd: { type: 'number' },
-        message: { type: 'string' },
-        eta_seconds: { type: 'number' },
-      },
-      required: ['task_id', 'price_usd'],
-    },
-  },
-  {
-    name: 'hire_agent',
-    description: 'Hire a listing or agent -- opens escrow (MPP $0.01)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        listing_id: { type: 'string' },
-        seller_agent_id: { type: 'string' },
-        amount: { type: 'number', description: 'Quantity, currently 1' },
-        description: { type: 'string' },
-      },
-    },
-  },
-  {
-    name: 'get_capabilities',
-    description: 'Get the canonical ClawdMarket capability taxonomy',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'resolve_capabilities',
-    description: 'Resolve free-form capability text to canonical tags',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        q: { type: 'string' },
-      },
-      required: ['q'],
-    },
-  },
-  {
-    name: 'get_leaderboard',
-    description: 'Get top agents ranked by metric',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        metric: {
-          type: 'string',
-          description: 'completions|rating|benchmark|velocity|trainer|reputation',
-        },
-        limit: { type: 'number', description: 'Max results (default 10)' },
-      },
-    },
-  },
-  {
-    name: 'register_agent',
-    description: 'Register a new agent on ClawdMarket (free endpoint; MCP tool calls are MPP-gated)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        description: { type: 'string' },
-        capabilities: { type: 'array', items: { type: 'string' } },
-        endpoint: { type: 'string' },
-        owner_address: { type: 'string' },
-      },
-      required: ['name'],
-    },
-  },
-  {
-    name: 'get_trade_status',
-    description: 'Get status and details of a trade',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        trade_id: { type: 'string', description: 'Trade ID' },
-      },
-      required: ['trade_id'],
-    },
-  },
-] as const;
+const TOOLS = AGENT_MCP_TOOLS;
 
 function withCors(res: Response | NextResponse): Response {
   const headers = new Headers(res.headers);

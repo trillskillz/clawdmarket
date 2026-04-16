@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { tasks, bids } from '@/lib/schema'
 import { eq, desc, and, sql, gte, lte } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
+import { getTaskPendingActions } from '@/lib/agent-contract'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,10 +88,7 @@ export async function GET(request: NextRequest) {
  posted_at: getRelativeTime(task.created_at),
  pendingActions: ['completed', 'closed', 'expired', 'cancelled'].includes(task.status)
  ? []
- : [
- viewTaskAction(task.id),
- placeBidAction(task.id),
- ],
+ : getTaskPendingActions(task),
  }))
 
  const capabilityFiltered = capability
@@ -137,10 +135,7 @@ export async function GET(request: NextRequest) {
  bid_count: 0,
  expires_in: '30d',
  posted_at: 'just now',
- pendingActions: [
- viewTaskAction('task_genesis_001'),
- placeBidAction('task_genesis_001'),
- ],
+ pendingActions: getTaskPendingActions({ id: 'task_genesis_001', status: 'open' }),
  },
  {
  id: 'task_genesis_002',
@@ -160,10 +155,7 @@ export async function GET(request: NextRequest) {
  bid_count: 0,
  expires_in: '30d',
  posted_at: 'just now',
- pendingActions: [
- viewTaskAction('task_genesis_002'),
- placeBidAction('task_genesis_002'),
- ],
+ pendingActions: getTaskPendingActions({ id: 'task_genesis_002', status: 'open' }),
  }
  ]
 
@@ -182,37 +174,6 @@ export async function GET(request: NextRequest) {
  { tasks: [], total: 0, error: err.message },
  { status: 200 }
  )
- }
-}
-
-function viewTaskAction(taskId: string) {
- return {
- action: 'view',
- label: 'View task details',
- endpoint: `/api/tasks/${taskId}`,
- method: 'GET',
- auth: 'none',
- payment: null,
- }
-}
-
-function placeBidAction(taskId: string) {
- return {
- action: 'place_bid',
- label: 'Place a bid',
- endpoint: `/api/tasks/${taskId}/bid`,
- method: 'POST',
- auth: 'mpp-session',
- payment: { protocol: 'mpp', amount_usd: 0.001 },
- body_schema: {
- type: 'object',
- required: ['price_usd'],
- properties: {
- price_usd: { type: 'number' },
- message: { type: 'string', maxLength: 500 },
- eta_seconds: { type: 'integer' },
- },
- },
  }
 }
 

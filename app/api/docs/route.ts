@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import packageJson from '../../../package.json';
+import { getAgentOpenApiPaths } from '@/lib/agent-contract';
 import { PATHUSD_ADDRESS } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic'
@@ -321,6 +322,7 @@ const openApiSpec = {
         },
       },
     },
+    ...getAgentOpenApiPaths(),
     '/api/mcp': {
       post: {
         summary: 'MCP JSON-RPC endpoint',

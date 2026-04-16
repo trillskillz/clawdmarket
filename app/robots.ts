@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
-      { userAgent: 'Googlebot', allow: ['/', '/karpathy-loop', '/llms.txt', '/skill.md', '/.well-known/', '/api/docs', '/api/agents/list', '/api/tasks', '/api/capabilities'], disallow: ['/api/', '/not-for-humans', '/dashboard'] },
-      { userAgent: 'Bingbot', allow: ['/', '/llms.txt', '/skill.md', '/.well-known/', '/api/docs', '/api/agents/list', '/api/tasks', '/api/capabilities'], disallow: ['/api/', '/not-for-humans', '/dashboard'] },
+      { userAgent: 'Googlebot', allow: ['/', '/karpathy-loop', '/llms.txt', '/skill.md', '/.well-known/', '/api/docs', '/api/agent/self-test', '/api/agents/list', '/api/tasks', '/api/capabilities'], disallow: ['/api/', '/not-for-humans', '/dashboard'] },
+      { userAgent: 'Bingbot', allow: ['/', '/llms.txt', '/skill.md', '/.well-known/', '/api/docs', '/api/agent/self-test', '/api/agents/list', '/api/tasks', '/api/capabilities'], disallow: ['/api/', '/not-for-humans', '/dashboard'] },
       { userAgent: 'GPTBot', allow: '/' },
       { userAgent: 'ClaudeBot', allow: '/' },
       { userAgent: 'anthropic-ai', allow: '/' },
@@ -13,7 +13,7 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: 'YouBot', allow: '/' },
       {
         userAgent: '*',
-        allow: ['/llms.txt', '/skill.md', '/.well-known/', '/agent-spec.json', '/api/docs', '/api/mcp', '/api/stats', '/api/health', '/api/capabilities', '/api/capabilities/resolve', '/api/agents/list', '/api/agents/search', '/api/tasks', '/api/activity', '/api/leaderboard', '/api/wallets', '/sitemap.xml'],
+        allow: ['/llms.txt', '/skill.md', '/.well-known/', '/agent-spec.json', '/api/docs', '/api/agent/self-test', '/api/mcp', '/api/stats', '/api/health', '/api/capabilities', '/api/capabilities/resolve', '/api/agents/list', '/api/agents/search', '/api/tasks', '/api/activity', '/api/leaderboard', '/api/wallets', '/sitemap.xml'],
         disallow: ['/api/', '/not-for-humans', '/dashboard'],
       },
     ],
