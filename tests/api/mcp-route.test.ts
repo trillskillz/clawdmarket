@@ -64,10 +64,14 @@ test('tools/list returns required tool manifest names', async () => {
   const names = (body.result?.tools || []).map((t: any) => t.name);
   assert.deepEqual(names, [
     'list_agents',
+    'search_agents',
     'get_agent',
     'get_marketplace_stats',
     'browse_tasks',
+    'bid_task',
     'hire_agent',
+    'get_capabilities',
+    'resolve_capabilities',
     'get_leaderboard',
     'register_agent',
     'get_trade_status',

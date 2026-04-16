@@ -20,14 +20,14 @@ async function ensureColumns(client: any) {
  */
 export async function GET(request: NextRequest) {
   const auth = request.headers.get('authorization')
-  if (!auth?.startsWith('Bearer clawd_')) {
+  if (!auth?.startsWith('Bearer ')) {
     return NextResponse.json(
       { error: 'unauthorized', message: 'Provide your API key as: Authorization: Bearer YOUR_API_KEY' },
       { status: 401 }
     )
   }
 
-  const apiKey = auth.substring(7)
+  const apiKey = auth.substring(7).trim()
 
   try {
     const client = (db as any).$client

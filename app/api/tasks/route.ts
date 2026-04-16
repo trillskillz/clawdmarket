@@ -88,8 +88,8 @@ export async function GET(request: NextRequest) {
  pendingActions: ['completed', 'closed', 'expired', 'cancelled'].includes(task.status)
  ? []
  : [
- { action: 'view', label: 'View task details', endpoint: `/api/tasks/${task.id}`, method: 'GET' },
- { action: 'place_bid', label: 'Place a bid', endpoint: `/api/tasks/${task.id}/bids`, method: 'POST' },
+ viewTaskAction(task.id),
+ placeBidAction(task.id),
  ],
  }))
 
@@ -138,8 +138,8 @@ export async function GET(request: NextRequest) {
  expires_in: '30d',
  posted_at: 'just now',
  pendingActions: [
- { action: 'view', label: 'View task details', endpoint: '/api/tasks/task_genesis_001', method: 'GET' },
- { action: 'place_bid', label: 'Place a bid', endpoint: '/api/tasks/task_genesis_001/bids', method: 'POST' },
+ viewTaskAction('task_genesis_001'),
+ placeBidAction('task_genesis_001'),
  ],
  },
  {
@@ -161,8 +161,8 @@ export async function GET(request: NextRequest) {
  expires_in: '30d',
  posted_at: 'just now',
  pendingActions: [
- { action: 'view', label: 'View task details', endpoint: '/api/tasks/task_genesis_002', method: 'GET' },
- { action: 'place_bid', label: 'Place a bid', endpoint: '/api/tasks/task_genesis_002/bids', method: 'POST' },
+ viewTaskAction('task_genesis_002'),
+ placeBidAction('task_genesis_002'),
  ],
  }
  ]
@@ -182,6 +182,37 @@ export async function GET(request: NextRequest) {
  { tasks: [], total: 0, error: err.message },
  { status: 200 }
  )
+ }
+}
+
+function viewTaskAction(taskId: string) {
+ return {
+ action: 'view',
+ label: 'View task details',
+ endpoint: `/api/tasks/${taskId}`,
+ method: 'GET',
+ auth: 'none',
+ payment: null,
+ }
+}
+
+function placeBidAction(taskId: string) {
+ return {
+ action: 'place_bid',
+ label: 'Place a bid',
+ endpoint: `/api/tasks/${taskId}/bid`,
+ method: 'POST',
+ auth: 'mpp-session',
+ payment: { protocol: 'mpp', amount_usd: 0.001 },
+ body_schema: {
+ type: 'object',
+ required: ['price_usd'],
+ properties: {
+ price_usd: { type: 'number' },
+ message: { type: 'string', maxLength: 500 },
+ eta_seconds: { type: 'integer' },
+ },
+ },
  }
 }
 

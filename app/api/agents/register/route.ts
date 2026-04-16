@@ -12,6 +12,7 @@ async function ensureColumns() {
   const client = (db as any).$client
   await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
   await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+  await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
   columnsEnsured = true
 }
 
@@ -51,16 +52,17 @@ export async function POST(request: NextRequest) {
  if (!parent_version_id) {
  const client = (db as any).$client
  await ensureColumns()
- const apiKey = `k_${Math.random().toString(36).slice(2)}`
+ const apiKey = `clawd_${crypto.randomBytes(16).toString('hex')}`
+ const claimCode = `claim_${crypto.randomBytes(16).toString('hex')}`
  const nowIso = new Date().toISOString()
 
  await client.execute({
   sql: `INSERT INTO agents (id, name, description, capabilities, endpoint, owner_address, api_key, status, version, base_agent_id, rating_count, benchmark_count, benchmark_history, improvement_count, total_improvement_delta, system_prompt, tools_config, model_id, claim_code, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, 0, 0, '[]', 0, 0, ?, ?, ?, NULL, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'inactive', 1, ?, 0, 0, '[]', 0, 0, ?, ?, ?, ?, ?)`,
   args: [
    id, name, description || '', caps, endpoint || '', owner_address || '',
    apiKey, id, system_prompt || null, JSON.stringify(tools_config || []),
-   model_id || null, nowIso,
+   model_id || null, claimCode, nowIso,
   ],
  })
 
@@ -77,7 +79,24 @@ export async function POST(request: NextRequest) {
  // Auto-create a marketplace listing so the agent appears in /api/listings
  await autoCreateListing(id, name, description || '', caps)
 
- return NextResponse.json({ ok: true, agent_id: id, version: 1 })
+ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
+
+ return NextResponse.json({
+  ok: true,
+  agent_id: id,
+  version: 1,
+  agent: {
+   id,
+   name,
+   api_key: apiKey,
+   claim_url: `${baseUrl}/claim/${claimCode}`,
+   profile_url: `${baseUrl}/registry/${id}`,
+  },
+  next_actions: [
+   { action: 'check_status', method: 'GET', endpoint: '/api/agents/status', auth: 'agent_api_key' },
+   { action: 'poll_inbox', method: 'GET', endpoint: '/api/agents/inbox', auth: 'agent_api_key' },
+  ],
+ }, { status: 201 })
  }
 
  const parent = await db.select().from(agents)
@@ -98,7 +117,7 @@ export async function POST(request: NextRequest) {
 
  await ensureColumns()
  const vClient = (db as any).$client
- const vApiKey = `k_${Math.random().toString(36).slice(2)}`
+ const vApiKey = `clawd_${crypto.randomBytes(16).toString('hex')}`
  const vNow = new Date().toISOString()
 
  await vClient.execute({
@@ -152,12 +171,21 @@ export async function POST(request: NextRequest) {
  createdAt: new Date().toISOString(),
  }).catch(() => {})
 
+ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
+
  return NextResponse.json({
  ok: true,
  agent_id: id,
  version: newVersion,
  base_agent_id: baseId,
  superseded: parent_version_id,
+ agent: {
+  id,
+  name: name || parent.name,
+  api_key: vApiKey,
+  claim_url: null,
+  profile_url: `${baseUrl}/registry/${id}`,
+ },
  })
 
  } catch (err: any) {

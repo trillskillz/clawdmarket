@@ -1,20 +1,23 @@
 import { NextResponse } from 'next/server'
+import { BITCOIN_RECIPIENT_ADDRESS, MPP_RECIPIENT_ADDRESS, PATHUSD_ADDRESS, SOLANA_RECIPIENT_ADDRESS, TEMPO_CHAIN_ID, TREASURY_ADDRESS } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
 export const revalidate = 3600
 
 export async function GET() {
+  const recipient = MPP_RECIPIENT_ADDRESS || TREASURY_ADDRESS || ''
+
   const descriptor = {
     name: 'ClawdMarket',
     status: 'active',
     methods: {
       tempo: {
         description: 'Tempo stablecoins (pathUSD) -- recommended for agents',
-        currency: 'pathUSD',
-        chain_id: 4217,
+        currency: PATHUSD_ADDRESS,
+        chain_id: TEMPO_CHAIN_ID,
         rpc: 'https://rpc.tempo.xyz',
-        recipient: process.env.TREASURY_ADDRESS || '',
+        recipient,
       },
       stripe: {
         description: 'Fiat payments via Stripe -- cards, bank transfer, any fiat method',
@@ -31,15 +34,15 @@ export async function GET() {
       x402: {
         description: 'x402 HTTP 402 payments -- chain-agnostic (Base, Solana, Stellar, Aptos, etc.)',
         chain_id: 8453,
-        recipient: process.env.BASE_RECIPIENT_ADDRESS || '',
+        recipient,
       },
       solana: {
         description: 'Solana -- SOL, USDC SPL, USDT SPL',
-        recipient: process.env.SOLANA_RECIPIENT_ADDRESS || '',
+        recipient: SOLANA_RECIPIENT_ADDRESS || '',
       },
       bitcoin: {
         description: 'Bitcoin on-chain',
-        recipient: process.env.BITCOIN_RECIPIENT_ADDRESS || '',
+        recipient: BITCOIN_RECIPIENT_ADDRESS || '',
       },
     },
     standard: 'IETF Internet-Draft (draft-httpauth-payment-00, paymentauth.org)',
@@ -53,10 +56,15 @@ export async function GET() {
       { method: 'GET', path: '/api/tasks', payment: null },
       { method: 'GET', path: '/api/benchmarks', payment: null },
       { method: 'GET', path: '/api/agents/:id/lineage', payment: null },
-      { method: 'GET', path: '/api/agents', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } },
-      { method: 'POST', path: '/api/agents/register', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 10000 } },
-      { method: 'POST', path: '/api/trades', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 10000 } },
-      { method: 'POST', path: '/api/tasks', payment: { intent: 'charge', method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, amount: 1000 } }
+      { method: 'GET', path: '/api/agents/list', payment: null },
+      { method: 'GET', path: '/api/agents/search', payment: null },
+      { method: 'POST', path: '/api/agents/register', payment: null },
+      { method: 'GET', path: '/api/agents/status', payment: null, auth: 'agent_api_key' },
+      { method: 'GET', path: '/api/agents/inbox', payment: null, auth: 'agent_api_key' },
+      { method: 'GET', path: '/api/agents', payment: { intent: 'charge', method: 'tempo', currency: PATHUSD_ADDRESS, decimals: 6, amount: 1000 } },
+      { method: 'POST', path: '/api/trades', payment: { intent: 'charge', method: 'tempo', currency: PATHUSD_ADDRESS, decimals: 6, amount: 10000 } },
+      { method: 'POST', path: '/api/tasks', payment: { intent: 'charge', method: 'tempo', currency: PATHUSD_ADDRESS, decimals: 6, amount: 1000 } },
+      { method: 'POST', path: '/api/tasks/:id/bid', payment: { intent: 'charge', method: 'tempo', currency: PATHUSD_ADDRESS, decimals: 6, amount: 1000 } }
     ],
   }
 

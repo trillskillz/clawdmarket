@@ -55,7 +55,19 @@ const TOOLS = [
       type: 'object',
       properties: {
         limit: { type: 'number', description: 'Max results (default 20)' },
+        capability: { type: 'string', description: 'Optional capability or keyword' },
       },
+    },
+  },
+  {
+    name: 'search_agents',
+    description: 'Search agents by natural language capability query',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        q: { type: 'string', description: 'Capability, task, or natural language query' },
+      },
+      required: ['q'],
     },
   },
   {
@@ -85,17 +97,46 @@ const TOOLS = [
     },
   },
   {
-    name: 'hire_agent',
-    description: 'Hire an agent -- opens escrow (MPP $0.01)',
+    name: 'bid_task',
+    description: 'Bid on an open task (MPP $0.001)',
     inputSchema: {
       type: 'object',
       properties: {
+        task_id: { type: 'string' },
+        price_usd: { type: 'number' },
+        message: { type: 'string' },
+        eta_seconds: { type: 'number' },
+      },
+      required: ['task_id', 'price_usd'],
+    },
+  },
+  {
+    name: 'hire_agent',
+    description: 'Hire a listing or agent -- opens escrow (MPP $0.01)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        listing_id: { type: 'string' },
         seller_agent_id: { type: 'string' },
-        buyer_agent_id: { type: 'string' },
-        amount_usd: { type: 'number' },
+        amount: { type: 'number', description: 'Quantity, currently 1' },
         description: { type: 'string' },
       },
-      required: ['seller_agent_id', 'buyer_agent_id', 'amount_usd'],
+    },
+  },
+  {
+    name: 'get_capabilities',
+    description: 'Get the canonical ClawdMarket capability taxonomy',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'resolve_capabilities',
+    description: 'Resolve free-form capability text to canonical tags',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        q: { type: 'string' },
+      },
+      required: ['q'],
     },
   },
   {
@@ -114,7 +155,7 @@ const TOOLS = [
   },
   {
     name: 'register_agent',
-    description: 'Register a new agent on ClawdMarket (MPP $0.01)',
+    description: 'Register a new agent on ClawdMarket (free endpoint; MCP tool calls are MPP-gated)',
     inputSchema: {
       type: 'object',
       properties: {
@@ -124,7 +165,7 @@ const TOOLS = [
         endpoint: { type: 'string' },
         owner_address: { type: 'string' },
       },
-      required: ['name', 'capabilities', 'owner_address'],
+      required: ['name'],
     },
   },
   {
@@ -236,16 +277,21 @@ async function executeTool(req: NextRequest, name: string, args: any) {
       const capability = typeof args?.capability === 'string' ? args.capability : undefined;
       const limit = typeof args?.limit === 'number' ? args.limit : 20;
 
-      const result = await callApi('GET', '/api/listings', {
-        query: {
-          status: 'active',
-          category: capability,
-          limit,
-          q: capability,
-        },
-      });
+      const result = capability
+        ? await callApi('GET', '/api/agents/search', { query: { q: capability } })
+        : await callApi('GET', '/api/agents/list', { query: { limit } });
 
       if (!result.ok) throw new Error(getErrorMessage(result.data, `list_agents failed (${result.status})`));
+      return result.data;
+    }
+
+    case 'search_agents': {
+      if (!args?.q || typeof args.q !== 'string') {
+        throw new Error('q is required');
+      }
+
+      const result = await callApi('GET', '/api/agents/search', { query: { q: args.q } });
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `search_agents failed (${result.status})`));
       return result.data;
     }
 
@@ -254,7 +300,7 @@ async function executeTool(req: NextRequest, name: string, args: any) {
         throw new Error('agent_id is required');
       }
 
-      const result = await callApi('GET', `/api/listings/${encodeURIComponent(args.agent_id)}`);
+      const result = await callApi('GET', `/api/agents/${encodeURIComponent(args.agent_id)}`);
       if (!result.ok) throw new Error(getErrorMessage(result.data, `get_agent failed (${result.status})`));
       return result.data;
     }
@@ -266,24 +312,51 @@ async function executeTool(req: NextRequest, name: string, args: any) {
       return result.data;
     }
 
+    case 'bid_task': {
+      if (!args?.task_id || typeof args.task_id !== 'string') throw new Error('task_id is required');
+      if (typeof args?.price_usd !== 'number') throw new Error('price_usd is required');
+
+      const result = await callApi('POST', `/api/tasks/${encodeURIComponent(args.task_id)}/bid`, {
+        body: {
+          price_usd: args.price_usd,
+          message: typeof args?.message === 'string' ? args.message : undefined,
+          eta_seconds: typeof args?.eta_seconds === 'number' ? args.eta_seconds : undefined,
+        },
+      });
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `bid_task failed (${result.status})`));
+      return result.data;
+    }
+
     case 'hire_agent': {
       const sellerAgentId = typeof args?.seller_agent_id === 'string' ? args.seller_agent_id : undefined;
-      const buyerAgentId = typeof args?.buyer_agent_id === 'string' ? args.buyer_agent_id : undefined;
+      const listingId = typeof args?.listing_id === 'string' ? args.listing_id : undefined;
       const description = typeof args?.description === 'string' ? args.description : 'MCP hire request';
 
-      if (!sellerAgentId) throw new Error('seller_agent_id is required');
-      if (!buyerAgentId) throw new Error('buyer_agent_id is required');
+      const resolvedListingId = listingId || (sellerAgentId ? `listing_${sellerAgentId}` : undefined);
+      if (!resolvedListingId) throw new Error('listing_id or seller_agent_id is required');
 
       const result = await callApi('POST', '/api/trades', {
         body: {
-          seller_agent_id: sellerAgentId,
-          buyer_agent_id: buyerAgentId,
-          amount_usd: args?.amount_usd,
+          listing_id: resolvedListingId,
+          amount: typeof args?.amount === 'number' ? args.amount : 1,
           description,
         },
       });
 
       if (!result.ok) throw new Error(getErrorMessage(result.data, `hire_agent failed (${result.status})`));
+      return result.data;
+    }
+
+    case 'get_capabilities': {
+      const result = await callApi('GET', '/api/capabilities');
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `get_capabilities failed (${result.status})`));
+      return result.data;
+    }
+
+    case 'resolve_capabilities': {
+      if (!args?.q || typeof args.q !== 'string') throw new Error('q is required');
+      const result = await callApi('GET', '/api/capabilities/resolve', { query: { q: args.q } });
+      if (!result.ok) throw new Error(getErrorMessage(result.data, `resolve_capabilities failed (${result.status})`));
       return result.data;
     }
 

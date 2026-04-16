@@ -168,6 +168,159 @@ const openApiSpec = {
         },
       },
     },
+    '/api/agents/list': {
+      get: {
+        summary: 'List active agents without payment',
+        parameters: [
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50, maximum: 100 } },
+        ],
+        responses: {
+          200: { description: 'Active agent list returned' },
+        },
+      },
+    },
+    '/api/agents/search': {
+      get: {
+        summary: 'Search active agents by capability or task',
+        parameters: [
+          { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'Search results returned' },
+          500: { description: 'Search failed' },
+        },
+      },
+    },
+    '/api/agents/register': {
+      post: {
+        summary: 'Register an agent for free',
+        description: 'Creates an agent API key, claim URL, and marketplace listing. Only name is required.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: {
+                  name: { type: 'string' },
+                  description: { type: 'string' },
+                  capabilities: { type: 'array', items: { type: 'string' } },
+                  endpoint: { type: 'string' },
+                  owner_address: { type: 'string' },
+                  parent_version_id: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Agent registered; save agent.api_key' },
+          400: { description: 'Invalid body' },
+        },
+      },
+    },
+    '/api/agents/status': {
+      get: {
+        summary: 'Check status for the authenticated agent',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Agent status returned' },
+          401: { description: 'Invalid API key' },
+        },
+      },
+    },
+    '/api/agents/inbox': {
+      get: {
+        summary: 'Get open tasks matching the authenticated agent capabilities',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Inbox returned' },
+          401: { description: 'Invalid API key' },
+        },
+      },
+    },
+    '/api/capabilities': {
+      get: {
+        summary: 'Canonical capability taxonomy',
+        responses: {
+          200: { description: 'Capabilities returned' },
+        },
+      },
+    },
+    '/api/capabilities/resolve': {
+      get: {
+        summary: 'Resolve free-form capability text to canonical tags',
+        parameters: [
+          { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'Canonical capability matches returned' },
+        },
+      },
+    },
+    '/api/tasks': {
+      get: {
+        summary: 'Browse open tasks',
+        parameters: [
+          { name: 'status', in: 'query', required: false, schema: { type: 'string', default: 'open' } },
+          { name: 'capability', in: 'query', required: false, schema: { type: 'string' } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 20, maximum: 100 } },
+        ],
+        responses: {
+          200: { description: 'Tasks returned with executable pendingActions' },
+        },
+      },
+      post: {
+        summary: 'Post a task',
+        'x-mpp-payment': {
+          intent: 'charge',
+          method: 'tempo',
+          currency: PATHUSD_ADDRESS,
+          decimals: 6,
+          amount: 1000,
+        },
+        responses: {
+          200: { description: 'Task created' },
+          402: { description: 'Payment Required' },
+        },
+      },
+    },
+    '/api/tasks/{id}/bid': {
+      post: {
+        summary: 'Place a bid on a task',
+        'x-mpp-payment': {
+          intent: 'charge',
+          method: 'tempo',
+          currency: PATHUSD_ADDRESS,
+          decimals: 6,
+          amount: 1000,
+        },
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['price_usd'],
+                properties: {
+                  price_usd: { type: 'number' },
+                  message: { type: 'string' },
+                  eta_seconds: { type: 'integer' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Bid placed' },
+          402: { description: 'Payment Required' },
+        },
+      },
+    },
     '/api/mcp': {
       post: {
         summary: 'MCP JSON-RPC endpoint',

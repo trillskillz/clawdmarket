@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { resolveCapabilityQuery } from '@/lib/capabilities'
+import { computeReputationScore } from '@/lib/reputation'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +12,10 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const keywords = await extractKeywords(q)
+    const keywords = normalizeKeywords([
+      ...(await extractKeywords(q)),
+      ...resolveCapabilityQuery(q),
+    ])
     if (keywords.length === 0) {
       return NextResponse.json({ agents: [], query: q, keywords: [] })
     }
@@ -40,7 +45,8 @@ export async function GET(req: NextRequest) {
 
     const sql = `
       SELECT id, name, description, capabilities, status, avg_rating, rating_count,
-             version, reputation_score, endpoint, owner_address, created_at, moltbook_handle,
+             version, endpoint, owner_address, created_at,
+             benchmark_score, velocity_score, improvement_count,
              (${scoreExpr}) as match_score
       FROM agents
       WHERE status = 'active' AND (${conditions.join(' OR ')})
@@ -62,8 +68,14 @@ export async function GET(req: NextRequest) {
       avg_rating: row.avg_rating ? Number(row.avg_rating) : null,
       rating_count: Number(row.rating_count || 0),
       version: row.version || 1,
-      reputation_score: Number(row.reputation_score || 0),
-      moltbook_handle: row.moltbook_handle || null,
+      reputation_score: computeReputationScore({
+        benchmark_score: row.benchmark_score ? Number(row.benchmark_score) : null,
+        avg_rating: row.avg_rating ? Number(row.avg_rating) : null,
+        rating_count: Number(row.rating_count || 0),
+        improvement_count: Number(row.improvement_count || 0),
+        velocity_score: row.velocity_score ? Number(row.velocity_score) : null,
+      }),
+      moltbook_handle: null,
       match_score: Number(row.match_score || 0),
       max_score: keywords.length,
     }))
@@ -76,10 +88,19 @@ export async function GET(req: NextRequest) {
     })
   } catch (err: any) {
     return NextResponse.json(
-      { agents: [], query: q, keywords: [], error: err.message },
-      { status: 200 }
+      { agents: [], query: q, keywords: [], error: 'search_failed', detail: err.message },
+      { status: 500 }
     )
   }
+}
+
+function normalizeKeywords(values: string[]): string[] {
+  return [...new Set(
+    values
+      .map((value) => value.toLowerCase().trim())
+      .filter((value) => value.length > 2)
+      .slice(0, 8)
+  )]
 }
 
 async function extractKeywords(query: string): Promise<string[]> {

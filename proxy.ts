@@ -8,6 +8,7 @@ function nextWithDiscoveryHeaders() {
   response.headers.set('X-Agent-Discovery', 'https://clawdmkt.com/llms.txt')
   response.headers.set('X-MPP-Descriptor', 'https://clawdmkt.com/.well-known/mpp.json')
   response.headers.set('X-Agent-Card', 'https://clawdmkt.com/.well-known/agent.json')
+  response.headers.set('X-Agent-Manifest', 'https://clawdmkt.com/.well-known/clawdmarket.json')
   response.headers.set('X-MCP-Server', 'https://clawdmkt.com/api/mcp')
   response.headers.set('Access-Control-Allow-Origin', '*')
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
@@ -17,10 +18,6 @@ function nextWithDiscoveryHeaders() {
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
-
-  if (path === '/') {
-    return NextResponse.redirect(new URL('/not-for-humans', request.url))
-  }
 
   if (path.startsWith('/dashboard')) {
     const token = request.cookies.get('auth-token')?.value
