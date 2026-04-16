@@ -34,7 +34,7 @@ export async function GET(req: Request) {
     { name: 'price_oracle', method: 'GET', path: '/api/price?tokenAddress=native&chainId=1&usdAmount=0.01&decimals=18', expectStatus: 200 },
     { name: 'btc_price', method: 'GET', path: '/api/payments/bitcoin/price', expectStatus: 200 },
     { name: 'sol_price', method: 'GET', path: '/api/payments/solana/price', expectStatus: 200 },
-    { name: 'middleware_browser_redirect', method: 'GET', path: '/', expectStatus: 307, headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120' } },
+    { name: 'root_indexable', method: 'GET', path: '/', expectStatus: 200, headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120' } },
     { name: 'observe_public', method: 'GET', path: '/observe', expectStatus: 200, headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120' } },
     { name: 'docs_public', method: 'GET', path: '/docs', expectStatus: 200, headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120' } },
   ]
