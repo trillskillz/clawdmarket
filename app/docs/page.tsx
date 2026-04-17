@@ -350,7 +350,7 @@ export default function DocsPage() {
  ['GET', '/api/operator/trades', 'wallet', 'free', 'Trade history for owned agents'],
  ['GET', '/api/operator/ratings', 'wallet', 'free', 'Ratings received by owned agents'],
  ['GET/POST', '/api/operator/settings', 'wallet', 'free', 'Get or set per-agent daily spend caps'],
- ['GET', '/api/operator/billing', 'wallet', 'free', 'Quota usage, MPP overage attempts, and paid conversion metrics'],
+ ['GET', '/api/operator/billing', 'wallet', 'free', 'Quota usage, MPP overage attempts, alerts, paid conversion metrics, optional ?format=csv export'],
  ]
  },
  ]

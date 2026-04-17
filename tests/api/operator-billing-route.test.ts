@@ -13,6 +13,8 @@ test('GET /api/operator/billing summarizes quota usage and overage conversions',
   ])
   const client = (db as any).$client
   await ensureAgentUsageEventsTable()
+  const originalTaskLimit = process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY
+  process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY = '1'
 
   await client.execute({
     sql: `CREATE TABLE IF NOT EXISTS agents (
@@ -67,6 +69,14 @@ test('GET /api/operator/billing summarizes quota usage and overage conversions',
     )`,
     args: [],
   })
+  await client.execute({
+    sql: `CREATE TABLE IF NOT EXISTS operator_settings (
+      agent_id text PRIMARY KEY NOT NULL,
+      daily_spend_cap real,
+      created_at integer NOT NULL DEFAULT (unixepoch())
+    )`,
+    args: [],
+  })
 
   const wallet = '0x1234567890abcdef1234567890abcdef12345678'
   const suffix = crypto.randomUUID()
@@ -74,10 +84,16 @@ test('GET /api/operator/billing summarizes quota usage and overage conversions',
   const now = new Date().toISOString()
 
   t.after(async () => {
+    if (originalTaskLimit === undefined) {
+      delete process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY
+    } else {
+      process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY = originalTaskLimit
+    }
     await client.execute({ sql: `DELETE FROM agent_usage_events WHERE agent_id = ?`, args: [agentId] }).catch(() => {})
     await client.execute({ sql: `DELETE FROM bids WHERE bidder_agent_id = ?`, args: [agentId] }).catch(() => {})
     await client.execute({ sql: `DELETE FROM tasks WHERE poster_agent_id = ? OR id = ?`, args: [agentId, `task_${suffix}`] }).catch(() => {})
     await client.execute({ sql: `DELETE FROM listings WHERE seller_id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
+    await client.execute({ sql: `DELETE FROM operator_settings WHERE agent_id = ?`, args: [agentId] }).catch(() => {})
     await client.execute({ sql: `DELETE FROM agents WHERE id = ?`, args: [agentId] }).catch(() => {})
   })
 
@@ -126,6 +142,11 @@ test('GET /api/operator/billing summarizes quota usage and overage conversions',
       `event_paid_bid_${suffix}`, agentId, now,
     ],
   })
+  await client.execute({
+    sql: `INSERT INTO operator_settings (agent_id, daily_spend_cap, created_at)
+          VALUES (?, ?, unixepoch())`,
+    args: [agentId, 0.001],
+  })
 
   const token = jwt.sign(
     { userId: `wallet_user_${suffix}`, email: `wallet_${wallet}@wallet.local`, role: 'human' },
@@ -142,11 +163,15 @@ test('GET /api/operator/billing summarizes quota usage and overage conversions',
   assert.equal(body.operator_address, wallet)
   assert.equal(body.agent_count, 1)
   assert.equal(body.features.task_posts.used_today, 1)
+  assert.equal(body.features.task_posts.free_limit, 1)
   assert.equal(body.features.task_bids.used_today, 1)
   assert.equal(body.features.service_listings.used_today, 1)
   assert.equal(body.overage.attempts_30d, 2)
   assert.equal(body.overage.paid_conversions_30d, 1)
+  assert.equal(body.overage.revenue_24h_usd, 0.001)
   assert.equal(body.overage.revenue_30d_usd, 0.001)
+  assert.ok(body.alerts.some((alert: any) => alert.code === 'quota_exhausted' && alert.feature === 'task_posts'))
+  assert.ok(body.alerts.some((alert: any) => alert.code === 'overage_cap_exceeded'))
   assert.equal(body.trend_7d.length, 7)
   assert.ok(body.trend_7d.some((point: any) => (
     point.overage_attempts === 2 &&
@@ -156,4 +181,17 @@ test('GET /api/operator/billing summarizes quota usage and overage conversions',
   assert.equal(body.agents[0].id, agentId)
   assert.equal(body.agents[0].quota.task_posts.used_today, 1)
   assert.equal(body.agents[0].overage.paid_conversions_30d, 1)
+  assert.equal(body.agents[0].settings.daily_spend_cap_usd, 0.001)
+  assert.ok(body.agents[0].alerts.length >= 2)
+
+  const csvRes = await GET(new NextRequest('http://localhost/api/operator/billing?format=csv', {
+    headers: { authorization: `Bearer ${token}` },
+  }))
+  assert.equal(csvRes.status, 200)
+  assert.match(csvRes.headers.get('content-type') || '', /text\/csv/)
+  const csv = await csvRes.text()
+  assert.match(csv, /^agent_id,agent_name,status/)
+  assert.match(csv, new RegExp(agentId))
+  assert.match(csv, /quota_exhausted/)
+  assert.match(csv, /overage_cap_exceeded/)
 })

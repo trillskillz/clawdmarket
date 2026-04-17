@@ -151,15 +151,29 @@ interface BillingAgent {
   name: string;
   status: string;
   quota: Record<BillingQuota['feature'], BillingQuota>;
+  settings: {
+    daily_spend_cap_usd: number | null;
+  };
   overage: {
     attempts_24h: number;
     attempts_30d: number;
     paid_conversions_24h: number;
     paid_conversions_30d: number;
     conversion_rate_30d: number;
+    revenue_24h_usd: number;
     revenue_30d_usd: number;
     last_paid_conversion_at: string | null;
   };
+  alerts: BillingAlert[];
+}
+
+interface BillingAlert {
+  severity: 'warning' | 'critical';
+  code: 'quota_near_exhaustion' | 'quota_exhausted' | 'overage_cap_near' | 'overage_cap_exceeded';
+  agent_id: string;
+  agent_name: string;
+  feature?: BillingQuota['feature'];
+  message: string;
 }
 
 interface BillingTrendPoint {
@@ -174,6 +188,7 @@ interface BillingData {
   window: { starts_at: string; ends_at: string; reset_at: string };
   features: Record<BillingQuota['feature'], BillingQuota>;
   overage: BillingAgent['overage'];
+  alerts: BillingAlert[];
   trend_7d: BillingTrendPoint[];
   agents: BillingAgent[];
 }
@@ -515,6 +530,8 @@ export default function OperatorConsole() {
     1,
     ...billingTrend.map((point) => Math.max(point.overage_attempts, point.paid_conversions)),
   );
+  const billingAlerts = billing?.alerts || [];
+  const criticalBillingAlerts = billingAlerts.filter((alert) => alert.severity === 'critical').length;
 
   return (
     <main style={{ background: C.bg, minHeight: '100vh', paddingTop: 56 }}>
@@ -813,17 +830,56 @@ export default function OperatorConsole() {
                 <div style={labelStyle}>Overage Spend</div>
                 <div style={bigNumStyle}>{loading ? '...' : `$${fmtBankr(billing?.overage.revenue_30d_usd ?? 0)}`}</div>
                 <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMuted, marginTop: 6 }}>
-                  30-day paid writes
+                  ${fmtBankr(billing?.overage.revenue_24h_usd ?? 0)} last 24h
                 </div>
               </div>
               <div style={cardStyle}>
-                <div style={labelStyle}>Quota Reset</div>
-                <div style={{ ...bigNumStyle, fontSize: 22 }}>{loading ? '...' : fmtDate(billing?.window.reset_at)}</div>
+                <div style={labelStyle}>Alerts</div>
+                <div style={{ ...bigNumStyle, color: criticalBillingAlerts > 0 ? C.accent : C.text }}>
+                  {loading ? '...' : billingAlerts.length}
+                </div>
                 <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMuted, marginTop: 6 }}>
-                  UTC daily window
+                  {criticalBillingAlerts} critical
                 </div>
               </div>
             </div>
+
+            {billingAlerts.length > 0 && (
+              <div style={{ ...cardStyle, marginBottom: 16, borderColor: criticalBillingAlerts > 0 ? C.accent : '#f59e0b' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', marginBottom: 12 }}>
+                  <h2 style={{ fontFamily: C.sans, fontSize: 16, fontWeight: 700, color: C.text, margin: 0 }}>
+                    Billing Alerts
+                  </h2>
+                  <span style={{ fontFamily: C.mono, fontSize: 11, color: C.textMuted }}>
+                    Reset {fmtDate(billing?.window.reset_at)}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {billingAlerts.slice(0, 6).map((alert, index) => (
+                    <div key={`${alert.agent_id}-${alert.code}-${alert.feature || 'spend'}-${index}`} style={{
+                      background: alert.severity === 'critical' ? 'rgba(255,77,77,0.10)' : 'rgba(245,158,11,0.10)',
+                      border: `1px solid ${alert.severity === 'critical' ? 'rgba(255,77,77,0.35)' : 'rgba(245,158,11,0.35)'}`,
+                      borderRadius: 6,
+                      padding: '10px 12px',
+                      display: 'grid',
+                      gap: 4,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                        <span style={{ fontFamily: C.sans, fontSize: 13, fontWeight: 700, color: C.text }}>
+                          {alert.agent_name}
+                        </span>
+                        <span style={{ fontFamily: C.mono, fontSize: 11, color: alert.severity === 'critical' ? C.accent : '#f59e0b' }}>
+                          {alert.code}
+                        </span>
+                      </div>
+                      <div style={{ fontFamily: C.sans, fontSize: 13, color: C.textDim }}>
+                        {alert.message}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 16 }}>
               {billingFeatureCards.map((item) => (
@@ -904,9 +960,14 @@ export default function OperatorConsole() {
                 <h2 style={{ fontFamily: C.sans, fontSize: 16, fontWeight: 700, color: C.text, margin: 0 }}>
                   Agent Billing
                 </h2>
-                <button style={btnSecondary} onClick={fetchAll}>
-                  Refresh
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <a href="/api/operator/billing?format=csv" style={{ ...btnSecondary, textDecoration: 'none' }}>
+                    Export CSV
+                  </a>
+                  <button style={btnSecondary} onClick={fetchAll}>
+                    Refresh
+                  </button>
+                </div>
               </div>
               {!billing && !loading ? (
                 <p style={{ fontFamily: C.sans, fontSize: 13, color: C.textMuted }}>Billing data unavailable.</p>
@@ -924,6 +985,8 @@ export default function OperatorConsole() {
                         <th style={thStyle}>Attempts</th>
                         <th style={thStyle}>Paid</th>
                         <th style={thStyle}>Spend</th>
+                        <th style={thStyle}>Cap</th>
+                        <th style={thStyle}>Alerts</th>
                         <th style={thStyle}>Last Paid</th>
                       </tr>
                     </thead>
@@ -952,6 +1015,12 @@ export default function OperatorConsole() {
                             {agent.overage.paid_conversions_30d}
                           </td>
                           <td style={{ ...tdStyle, fontFamily: C.mono }}>${fmtBankr(agent.overage.revenue_30d_usd)}</td>
+                          <td style={{ ...tdStyle, fontFamily: C.mono }}>
+                            {agent.settings.daily_spend_cap_usd != null ? `$${fmtBankr(agent.settings.daily_spend_cap_usd)}` : '\u2014'}
+                          </td>
+                          <td style={{ ...tdStyle, fontFamily: C.mono, color: agent.alerts.some((alert) => alert.severity === 'critical') ? C.accent : C.textDim }}>
+                            {agent.alerts.length}
+                          </td>
                           <td style={tdStyle}>{fmtDate(agent.overage.last_paid_conversion_at)}</td>
                         </tr>
                       ))}
