@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
-import { getAgentUsageCounts, getFeatureQuota, paymentRequiredForQuota, usageHeaders } from '@/lib/agent-usage-policy'
+import { getAgentUsageCounts, getFeatureQuota, paymentRequiredForQuota, recordAgentUsageEvent, usageHeaders } from '@/lib/agent-usage-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -113,16 +113,44 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
    const quota = getFeatureQuota(usage, 'task_bids')
    if (!quota.over_quota) {
     const response = await createBid(taskId, body, bearerBidder.agentId)
-    const nextQuota = { ...quota, used: quota.used + 1, remaining_free: Math.max(0, quota.remaining_free - 1) }
+    const wroteBid = response.status >= 200 && response.status < 300
+    if (wroteBid) {
+     await recordAgentUsageEvent({
+      agentId: bearerBidder.agentId,
+      feature: 'task_bids',
+      eventType: 'free_write',
+      route: 'POST /api/tasks/:id/bid',
+     })
+    }
+    const nextQuota = wroteBid ? { ...quota, used: quota.used + 1, remaining_free: Math.max(0, quota.remaining_free - 1) } : quota
     Object.entries({ ...getRateLimitHeaders(rateLimitResult), ...usageHeaders(nextQuota) })
      .forEach(([key, value]) => response.headers.set(key, value))
     return response
    }
 
+   await recordAgentUsageEvent({
+    agentId: bearerBidder.agentId,
+    feature: 'task_bids',
+    eventType: 'overage_challenge',
+    route: 'POST /api/tasks/:id/bid',
+    amountUsd: 0.001,
+   })
+
    return mppx.session({ amount: '0.001', unitType: 'request' })(async (gatedRequest: NextRequest) => {
     const payer = resolveMppBidder(gatedRequest)
     if (!payer) return paymentRequiredForQuota(quota)
-    return createBid(taskId, body, bearerBidder.agentId)
+    const response = await createBid(taskId, body, bearerBidder.agentId)
+    if (response.status >= 200 && response.status < 300) {
+     await recordAgentUsageEvent({
+      agentId: bearerBidder.agentId,
+      feature: 'task_bids',
+      eventType: 'paid_conversion',
+      route: 'POST /api/tasks/:id/bid',
+      payer,
+      amountUsd: 0.001,
+     })
+    }
+    return response
    })(request, { params: Promise.resolve({ id: taskId }) })
   }
   if (bearerBidder.kind === 'invalid') {

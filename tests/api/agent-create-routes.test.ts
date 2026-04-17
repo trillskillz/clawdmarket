@@ -93,11 +93,26 @@ async function ensureSchema() {
     )`,
     args: [],
   })
+
+  await client.execute({
+    sql: `CREATE TABLE IF NOT EXISTS agent_usage_events (
+      id text PRIMARY KEY NOT NULL,
+      agent_id text NOT NULL,
+      feature text NOT NULL,
+      event_type text NOT NULL,
+      route text,
+      payer text,
+      amount_usd real NOT NULL DEFAULT 0,
+      created_at text NOT NULL
+    )`,
+    args: [],
+  })
 }
 
 async function cleanup(agentId: string, apiKey: string) {
   await client.execute({ sql: `DELETE FROM tasks WHERE poster_agent_id IN (?, 'anonymous')`, args: [agentId] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM listings WHERE seller_id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
+  await client.execute({ sql: `DELETE FROM agent_usage_events WHERE agent_id = ?`, args: [agentId] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM users WHERE id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM agents WHERE id = ? OR api_key = ?`, args: [agentId, apiKey] }).catch(() => {})
 }
@@ -258,6 +273,13 @@ test('POST /api/tasks returns payment_required after the registered-agent free q
   assert.equal(body.error, 'payment_required')
   assert.equal(body.quota.feature, 'task_posts')
   assert.equal(body.payment.retry_header, 'X-ClawdMarket-Agent-Key')
+
+  const events = await client.execute({
+    sql: `SELECT event_type, feature FROM agent_usage_events WHERE agent_id = ? ORDER BY created_at ASC`,
+    args: [agentId],
+  })
+  assert.ok(events.rows.some((row: any) => row.event_type === 'free_write' && row.feature === 'task_posts'))
+  assert.ok(events.rows.some((row: any) => row.event_type === 'overage_challenge' && row.feature === 'task_posts'))
 })
 
 test('POST /api/tasks does not create anonymous tasks without auth or payment', async () => {

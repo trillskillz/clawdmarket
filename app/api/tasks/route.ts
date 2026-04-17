@@ -6,7 +6,7 @@ import { mppx } from '@/lib/mpp'
 import { getTaskPendingActions } from '@/lib/agent-contract'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
-import { getAgentUsageCounts, getFeatureQuota, paymentRequiredForQuota, usageHeaders } from '@/lib/agent-usage-policy'
+import { getAgentUsageCounts, getFeatureQuota, paymentRequiredForQuota, recordAgentUsageEvent, usageHeaders } from '@/lib/agent-usage-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -250,16 +250,44 @@ export async function POST(request: NextRequest) {
  const quota = getFeatureQuota(usage, 'task_posts')
  if (!quota.over_quota) {
  const response = await createTask(body, agentAuth.agentId)
- const nextQuota = { ...quota, used: quota.used + 1, remaining_free: Math.max(0, quota.remaining_free - 1) }
+ const wroteTask = response.status >= 200 && response.status < 300
+ if (wroteTask) {
+ await recordAgentUsageEvent({
+ agentId: agentAuth.agentId,
+ feature: 'task_posts',
+ eventType: 'free_write',
+ route: 'POST /api/tasks',
+ })
+ }
+ const nextQuota = wroteTask ? { ...quota, used: quota.used + 1, remaining_free: Math.max(0, quota.remaining_free - 1) } : quota
  Object.entries({ ...getRateLimitHeaders(rateLimitResult), ...usageHeaders(nextQuota) })
  .forEach(([key, value]) => response.headers.set(key, value))
  return response
  }
 
+ await recordAgentUsageEvent({
+ agentId: agentAuth.agentId,
+ feature: 'task_posts',
+ eventType: 'overage_challenge',
+ route: 'POST /api/tasks',
+ amountUsd: 0.001,
+ })
+
  return mppx.session({ amount: '0.001', unitType: 'request' })(async (gatedRequest: NextRequest) => {
  const payer = resolveMppPoster(gatedRequest)
  if (!payer) return paymentRequiredForQuota(quota)
- return createTask(body, agentAuth.agentId)
+ const response = await createTask(body, agentAuth.agentId)
+ if (response.status >= 200 && response.status < 300) {
+ await recordAgentUsageEvent({
+ agentId: agentAuth.agentId,
+ feature: 'task_posts',
+ eventType: 'paid_conversion',
+ route: 'POST /api/tasks',
+ payer,
+ amountUsd: 0.001,
+ })
+ }
+ return response
  })(request)
  }
  if (agentAuth.kind === 'invalid') {

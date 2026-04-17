@@ -3,6 +3,7 @@ import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { db } from '@/lib/db'
 
 export type AgentUsageFeature = 'task_posts' | 'task_bids' | 'service_listings'
+export type AgentUsageEventType = 'free_write' | 'overage_challenge' | 'paid_conversion'
 
 type AgentUsageCounts = Record<AgentUsageFeature, number>
 
@@ -49,6 +50,63 @@ export function getAgentUsageWindow(now = new Date()) {
     reset_at: ends.toISOString(),
     start_ms: starts.getTime(),
     start_seconds: Math.floor(starts.getTime() / 1000),
+  }
+}
+
+export async function ensureAgentUsageEventsTable() {
+  const client = (db as any).$client
+  await client.execute({
+    sql: `CREATE TABLE IF NOT EXISTS agent_usage_events (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      feature TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      route TEXT,
+      payer TEXT,
+      amount_usd REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )`,
+    args: [],
+  })
+  await client.execute({
+    sql: `CREATE INDEX IF NOT EXISTS idx_agent_usage_events_agent_created
+          ON agent_usage_events(agent_id, created_at DESC)`,
+    args: [],
+  })
+  await client.execute({
+    sql: `CREATE INDEX IF NOT EXISTS idx_agent_usage_events_type_created
+          ON agent_usage_events(event_type, created_at DESC)`,
+    args: [],
+  })
+}
+
+export async function recordAgentUsageEvent(input: {
+  agentId: string
+  feature: AgentUsageFeature
+  eventType: AgentUsageEventType
+  route?: string
+  payer?: string
+  amountUsd?: number
+}) {
+  try {
+    await ensureAgentUsageEventsTable()
+    await (db as any).$client.execute({
+      sql: `INSERT INTO agent_usage_events (
+        id, agent_id, feature, event_type, route, payer, amount_usd, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        crypto.randomUUID(),
+        input.agentId,
+        input.feature,
+        input.eventType,
+        input.route || null,
+        input.payer || null,
+        Number(input.amountUsd || 0),
+        new Date().toISOString(),
+      ],
+    })
+  } catch (error) {
+    console.error('[agent-usage-events]', error)
   }
 }
 

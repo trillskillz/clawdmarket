@@ -134,6 +134,50 @@ interface SpendSetting {
   spend_30d: number;
 }
 
+interface BillingQuota {
+  feature: 'task_posts' | 'task_bids' | 'service_listings';
+  used_today: number;
+  free_limit: number;
+  free_limit_today: number;
+  remaining_today: number;
+  over_quota: boolean;
+  utilization: number;
+  overage_payment_usd: number | null;
+  over_quota_agents?: number;
+}
+
+interface BillingAgent {
+  id: string;
+  name: string;
+  status: string;
+  quota: Record<BillingQuota['feature'], BillingQuota>;
+  overage: {
+    attempts_24h: number;
+    attempts_30d: number;
+    paid_conversions_24h: number;
+    paid_conversions_30d: number;
+    conversion_rate_30d: number;
+    revenue_30d_usd: number;
+    last_paid_conversion_at: string | null;
+  };
+}
+
+interface BillingTrendPoint {
+  date: string;
+  overage_attempts: number;
+  paid_conversions: number;
+  revenue_usd: number;
+}
+
+interface BillingData {
+  agent_count: number;
+  window: { starts_at: string; ends_at: string; reset_at: string };
+  features: Record<BillingQuota['feature'], BillingQuota>;
+  overage: BillingAgent['overage'];
+  trend_7d: BillingTrendPoint[];
+  agents: BillingAgent[];
+}
+
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
 function fmtDate(v: string | number | null | undefined): string {
   if (!v) return '\u2014';
@@ -145,6 +189,18 @@ function fmtDate(v: string | number | null | undefined): string {
 function fmtBankr(v: number | null | undefined): string {
   if (v == null) return '0';
   return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtPct(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return '0%';
+  return `${Math.round(v * 100)}%`;
+}
+
+function fmtShortDate(v: string | null | undefined): string {
+  if (!v) return '\u2014';
+  const d = new Date(`${v}T00:00:00Z`);
+  if (isNaN(d.getTime())) return '\u2014';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 function statusBadge(status: string): React.CSSProperties {
@@ -164,6 +220,12 @@ function starRating(score: number): string {
   const n = Math.round(Math.max(0, Math.min(5, score)));
   return '\u2605'.repeat(n) + '\u2606'.repeat(5 - n);
 }
+
+const billingFeatureLabels: Record<BillingQuota['feature'], string> = {
+  task_posts: 'Task Posts',
+  task_bids: 'Task Bids',
+  service_listings: 'Services',
+};
 
 /* ─── Component ───────────────────────────────────────────────────────────── */
 export default function OperatorConsole() {
@@ -187,8 +249,9 @@ export default function OperatorConsole() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [capInputs, setCapInputs] = useState<Record<string, string>>({});
   const [savingCap, setSavingCap] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<'agents' | 'trades' | 'spend' | 'ratings' | 'earnings'>('agents');
+  const [activeSection, setActiveSection] = useState<'agents' | 'trades' | 'spend' | 'billing' | 'ratings' | 'earnings'>('agents');
   const [earnings, setEarnings] = useState<any>(null);
+  const [billing, setBilling] = useState<BillingData | null>(null);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 
   /* ─── Auth check ─────────────────────────────────────────────────────── */
@@ -264,18 +327,20 @@ export default function OperatorConsole() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [ovRes, agRes, trRes, rtRes, stRes] = await Promise.all([
+      const [ovRes, agRes, trRes, rtRes, stRes, blRes] = await Promise.all([
         fetch('/api/operator/overview', { credentials: 'include' }),
         fetch('/api/operator/agents', { credentials: 'include' }),
         fetch(`/api/operator/trades?filter=${tradeFilter}`, { credentials: 'include' }),
         fetch('/api/operator/ratings', { credentials: 'include' }),
         fetch('/api/operator/settings', { credentials: 'include' }),
+        fetch('/api/operator/billing', { credentials: 'include' }),
       ]);
       if (ovRes.ok) setOverview(await ovRes.json());
       if (agRes.ok) { const d = await agRes.json(); setAgents(d.agents || []); }
       if (trRes.ok) { const d = await trRes.json(); setTrades(d.trades || []); }
       if (rtRes.ok) { const d = await rtRes.json(); setRatings(d.ratings || []); }
       if (stRes.ok) { const d = await stRes.json(); setSettings(d.settings || []); }
+      if (blRes.ok) setBilling(await blRes.json());
       // Fetch earnings
       if (address) {
         try {
@@ -288,7 +353,7 @@ export default function OperatorConsole() {
     } finally {
       setLoading(false);
     }
-  }, [tradeFilter]);
+  }, [address, tradeFilter]);
 
   useEffect(() => { if (authed) fetchAll(); }, [authed, fetchAll]);
 
@@ -427,9 +492,29 @@ export default function OperatorConsole() {
     { key: 'agents', label: 'Agents' },
     { key: 'trades', label: 'Trades' },
     { key: 'spend', label: 'Spend Controls' },
+    { key: 'billing', label: 'Billing' },
     { key: 'ratings', label: 'Ratings' },
     { key: 'earnings', label: 'Earnings' },
   ];
+
+  const billingFeatureCards = (['task_posts', 'task_bids', 'service_listings'] as const).map((feature) => {
+    const quota = billing?.features?.[feature];
+    return {
+      feature,
+      label: billingFeatureLabels[feature],
+      used: quota?.used_today ?? 0,
+      limit: quota?.free_limit_today ?? 0,
+      remaining: quota?.remaining_today ?? 0,
+      overQuotaAgents: quota?.over_quota_agents ?? 0,
+      utilization: quota?.utilization ?? 0,
+      paid: quota?.overage_payment_usd != null,
+    };
+  });
+  const billingTrend = billing?.trend_7d || [];
+  const billingTrendMax = Math.max(
+    1,
+    ...billingTrend.map((point) => Math.max(point.overage_attempts, point.paid_conversions)),
+  );
 
   return (
     <main style={{ background: C.bg, minHeight: '100vh', paddingTop: 56 }}>
@@ -704,6 +789,178 @@ export default function OperatorConsole() {
               </div>
             )}
           </div>
+        )}
+
+        {/* ─── Billing ────────────────────────────────────────────────── */}
+        {activeSection === 'billing' && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16, marginBottom: 16 }}>
+              <div style={cardStyle}>
+                <div style={labelStyle}>Overage Attempts</div>
+                <div style={bigNumStyle}>{loading ? '...' : billing?.overage.attempts_30d ?? 0}</div>
+                <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMuted, marginTop: 6 }}>
+                  {billing?.overage.attempts_24h ?? 0} last 24h
+                </div>
+              </div>
+              <div style={cardStyle}>
+                <div style={labelStyle}>Paid Conversions</div>
+                <div style={bigNumStyle}>{loading ? '...' : billing?.overage.paid_conversions_30d ?? 0}</div>
+                <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMuted, marginTop: 6 }}>
+                  {fmtPct(billing?.overage.conversion_rate_30d)} conversion
+                </div>
+              </div>
+              <div style={cardStyle}>
+                <div style={labelStyle}>Overage Spend</div>
+                <div style={bigNumStyle}>{loading ? '...' : `$${fmtBankr(billing?.overage.revenue_30d_usd ?? 0)}`}</div>
+                <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMuted, marginTop: 6 }}>
+                  30-day paid writes
+                </div>
+              </div>
+              <div style={cardStyle}>
+                <div style={labelStyle}>Quota Reset</div>
+                <div style={{ ...bigNumStyle, fontSize: 22 }}>{loading ? '...' : fmtDate(billing?.window.reset_at)}</div>
+                <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMuted, marginTop: 6 }}>
+                  UTC daily window
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 16 }}>
+              {billingFeatureCards.map((item) => (
+                <div key={item.feature} style={cardStyle}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline', marginBottom: 10 }}>
+                    <div>
+                      <div style={labelStyle}>{item.label}</div>
+                      <div style={{ fontFamily: C.mono, fontSize: 20, fontWeight: 700, color: C.text }}>
+                        {item.used} / {item.limit}
+                      </div>
+                    </div>
+                    <span style={{
+                      fontFamily: C.mono,
+                      fontSize: 11,
+                      color: item.paid ? C.accent : '#22c55e',
+                      border: `1px solid ${item.paid ? C.accent : '#22c55e'}`,
+                      borderRadius: 4,
+                      padding: '2px 6px',
+                    }}>
+                      {item.paid ? 'MPP' : 'FREE'}
+                    </span>
+                  </div>
+                  <div style={{ height: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.max(2, Math.min(100, Math.round(item.utilization * 100)))}%`,
+                      background: item.utilization >= 1 ? C.accent : '#22c55e',
+                    }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontFamily: C.mono, fontSize: 11, color: C.textMuted }}>
+                    <span>{item.remaining} free left</span>
+                    <span>{item.overQuotaAgents} agents capped</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ ...cardStyle, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', marginBottom: 18 }}>
+                <h2 style={{ fontFamily: C.sans, fontSize: 16, fontWeight: 700, color: C.text, margin: 0 }}>
+                  7-Day Overage Trend
+                </h2>
+                <div style={{ display: 'flex', gap: 12, fontFamily: C.mono, fontSize: 11, color: C.textMuted }}>
+                  <span><span style={{ color: C.accent }}>■</span> attempts</span>
+                  <span><span style={{ color: '#22c55e' }}>■</span> paid</span>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(42px, 1fr))', gap: 10, alignItems: 'end', minHeight: 160 }}>
+                {billingTrend.map((point) => {
+                  const attemptHeight = Math.max(4, Math.round((point.overage_attempts / billingTrendMax) * 112));
+                  const paidHeight = Math.max(4, Math.round((point.paid_conversions / billingTrendMax) * 112));
+                  return (
+                    <div key={point.date} style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, alignItems: 'end', height: 116 }}>
+                        <div
+                          title={`${point.overage_attempts} overage attempts`}
+                          style={{ height: attemptHeight, background: C.accent, borderRadius: 4 }}
+                        />
+                        <div
+                          title={`${point.paid_conversions} paid conversions`}
+                          style={{ height: paidHeight, background: '#22c55e', borderRadius: 4 }}
+                        />
+                      </div>
+                      <div style={{ fontFamily: C.mono, fontSize: 10, color: C.textMuted, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {fmtShortDate(point.date)}
+                      </div>
+                      <div style={{ fontFamily: C.mono, fontSize: 10, color: C.text, textAlign: 'center' }}>
+                        {point.overage_attempts}/{point.paid_conversions}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
+                <h2 style={{ fontFamily: C.sans, fontSize: 16, fontWeight: 700, color: C.text, margin: 0 }}>
+                  Agent Billing
+                </h2>
+                <button style={btnSecondary} onClick={fetchAll}>
+                  Refresh
+                </button>
+              </div>
+              {!billing && !loading ? (
+                <p style={{ fontFamily: C.sans, fontSize: 13, color: C.textMuted }}>Billing data unavailable.</p>
+              ) : billing?.agents.length === 0 && !loading ? (
+                <p style={{ fontFamily: C.sans, fontSize: 13, color: C.textMuted }}>No agents registered to this wallet.</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={thStyle}>Agent</th>
+                        <th style={thStyle}>Tasks</th>
+                        <th style={thStyle}>Bids</th>
+                        <th style={thStyle}>Services</th>
+                        <th style={thStyle}>Attempts</th>
+                        <th style={thStyle}>Paid</th>
+                        <th style={thStyle}>Spend</th>
+                        <th style={thStyle}>Last Paid</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(billing?.agents || []).map((agent) => (
+                        <tr key={agent.id}>
+                          <td style={{ ...tdStyle, color: C.text, fontWeight: 600 }}>
+                            <div>{agent.name}</div>
+                            <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMuted }}>{agent.id.slice(0, 18)}</div>
+                          </td>
+                          {(['task_posts', 'task_bids', 'service_listings'] as const).map((feature) => {
+                            const quota = agent.quota[feature];
+                            return (
+                              <td key={feature} style={tdStyle}>
+                                <div style={{ fontFamily: C.mono, color: quota.over_quota ? C.accent : C.text }}>
+                                  {quota.used_today}/{quota.free_limit}
+                                </div>
+                                <div style={{ fontFamily: C.mono, fontSize: 11, color: C.textMuted }}>
+                                  {fmtPct(quota.utilization)}
+                                </div>
+                              </td>
+                            );
+                          })}
+                          <td style={{ ...tdStyle, fontFamily: C.mono }}>{agent.overage.attempts_30d}</td>
+                          <td style={{ ...tdStyle, fontFamily: C.mono, color: agent.overage.paid_conversions_30d > 0 ? '#22c55e' : C.textDim }}>
+                            {agent.overage.paid_conversions_30d}
+                          </td>
+                          <td style={{ ...tdStyle, fontFamily: C.mono }}>${fmtBankr(agent.overage.revenue_30d_usd)}</td>
+                          <td style={tdStyle}>{fmtDate(agent.overage.last_paid_conversion_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* ─── Ratings ─────────────────────────────────────────────────── */}
