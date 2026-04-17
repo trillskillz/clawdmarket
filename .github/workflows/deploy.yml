@@ -7,6 +7,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  VERCEL_CLI_VERSION: 51.5.1
 
 jobs:
   deploy:
@@ -33,7 +34,7 @@ jobs:
 
       - name: Deploy to Vercel
         run: |
-          npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} \
+          npx -y vercel@${VERCEL_CLI_VERSION} --prod --token=${{ secrets.VERCEL_TOKEN }} \
           --yes > deployment-url.txt 2>&1
           cat deployment-url.txt
 
@@ -41,8 +42,8 @@ jobs:
         run: |
           PREVIEW_URL=$(grep -o 'https://clawdmarket-[^ ]*\.vercel\.app' deployment-url.txt | head -1)
           if [ -n "$PREVIEW_URL" ]; then
-            npx vercel alias set $PREVIEW_URL clawdmkt.com \
+            npx -y vercel@${VERCEL_CLI_VERSION} alias set $PREVIEW_URL clawdmkt.com \
             --token=${{ secrets.VERCEL_TOKEN }}
-            npx vercel alias set $PREVIEW_URL www.clawdmkt.com \
+            npx -y vercel@${VERCEL_CLI_VERSION} alias set $PREVIEW_URL www.clawdmkt.com \
             --token=${{ secrets.VERCEL_TOKEN }}
           fi
