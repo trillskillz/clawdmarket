@@ -3,6 +3,7 @@
 import { useAccount, useConnect, useDisconnect, useSignMessage, useSwitchChain } from 'wagmi';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { formatWalletConnectionError, getBrowserWalletConnectors } from '@/lib/wallet-connection';
 
 interface WalletLoginPopupProps {
   forceShow?: boolean;
@@ -27,15 +28,15 @@ export default function WalletLoginPopup({
   const [showWalletMenu, setShowWalletMenu] = useState(false);
   const [shouldShow, setShouldShow] = useState(forceShow);
 
-  const browserWalletConnectors = connectors.filter((c) => {
-    const name = c.name.toLowerCase();
-    return name.includes('metamask') || name.includes('rabby') || name.includes('injected');
-  });
+  const browserWalletConnectors = getBrowserWalletConnectors(connectors);
 
   const coinbaseConnector = connectors.find((c) => c.id.includes('coinbase') || c.name.toLowerCase().includes('coinbase'));
   const walletConnectConnector = connectors.find((c) => c.id.includes('walletconnect') || c.name.toLowerCase().includes('walletconnect'));
   const isMobile = typeof window !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const walletConnectConfigured = Boolean(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID);
+  const walletConnectConfigured = Boolean(
+    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_WC_PROJECT_ID,
+  );
   const dappUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.clawdmkt.com';
   const metaMaskDeepLink = `https://metamask.app.link/dapp/${dappUrl.replace(/^https?:\/\//, '')}`;
   const coinbaseDeepLink = `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(dappUrl)}`;
@@ -130,9 +131,9 @@ export default function WalletLoginPopup({
           router.push('/dashboard');
         }
       }, 500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus('error');
-      setError(err?.message || 'Wallet login failed');
+      setError(formatWalletConnectionError(err));
       // Disconnect on failure so user can retry cleanly
       disconnect();
     }
@@ -193,8 +194,8 @@ export default function WalletLoginPopup({
                         return;
                       }
                       await connectAsync({ connector: coinbaseConnector });
-                    } catch (e: any) {
-                      setError(e?.message || 'Coinbase Wallet connection failed');
+                    } catch (e: unknown) {
+                      setError(formatWalletConnectionError(e, coinbaseConnector?.name || 'Coinbase Wallet'));
                     }
                   }}
                   disabled={isConnecting || !coinbaseConnector}
@@ -217,8 +218,8 @@ export default function WalletLoginPopup({
                           setTimeout(() => reject(new Error('WalletConnect timed out. Try MetaMask/Coinbase deep link.')), 10000)
                         ),
                       ]);
-                    } catch (e: any) {
-                      setError(e?.message || 'WalletConnect failed');
+                    } catch (e: unknown) {
+                      setError(formatWalletConnectionError(e, walletConnectConnector?.name || 'WalletConnect'));
                     }
                   }}
                   disabled={isConnecting || !walletConnectConnector}
@@ -242,8 +243,8 @@ export default function WalletLoginPopup({
                               setError(null);
                               await connectAsync({ connector });
                               setShowWalletMenu(false);
-                            } catch (e: any) {
-                              setError(e?.message || `Failed to connect ${connector.name}`);
+                            } catch (e: unknown) {
+                              setError(formatWalletConnectionError(e, connector.name));
                             }
                           }}
                         >

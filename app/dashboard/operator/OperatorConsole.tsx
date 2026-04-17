@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useConnect, useDisconnect, useSignMessage, useSwitchChain } from 'wagmi';
 import Link from 'next/link';
+import { formatWalletConnectionError, getBrowserWalletConnectors } from '@/lib/wallet-connection';
 
 /* ─── Design tokens (inline, no Tailwind) ─────────────────────────────────── */
 const C = {
@@ -327,9 +328,9 @@ export default function OperatorConsole() {
 
       setAuthed(true);
       setAuthStatus('done');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setAuthStatus('error');
-      setAuthError(err?.message || 'Wallet login failed');
+      setAuthError(formatWalletConnectionError(err));
       disconnect();
     }
   }, [address, isConnected, authStatus, signMessageAsync, switchChainAsync, disconnect]);
@@ -417,10 +418,7 @@ export default function OperatorConsole() {
   /*  RENDER: Login gate                                                    */
   /* ═══════════════════════════════════════════════════════════════════════ */
   if (!authed) {
-    const browserWalletConnectors = connectors.filter((c) => {
-      const n = c.name.toLowerCase();
-      return n.includes('metamask') || n.includes('rabby') || n.includes('injected');
-    });
+    const browserWalletConnectors = getBrowserWalletConnectors(connectors);
     const coinbaseConnector = connectors.find((c) => c.id.includes('coinbase') || c.name.toLowerCase().includes('coinbase'));
     const walletConnectConnector = connectors.find((c) => c.id.includes('walletconnect') || c.name.toLowerCase().includes('walletconnect'));
 
@@ -454,19 +452,24 @@ export default function OperatorConsole() {
                   disabled={isConnecting}
                   onClick={async () => {
                     try { setAuthError(null); setAuthStatus('idle'); await connectAsync({ connector }); }
-                    catch (e: any) { setAuthError(e?.message || 'Failed to connect'); }
+                    catch (e: unknown) { setAuthError(formatWalletConnectionError(e, connector.name)); }
                   }}
                 >
                   {connector.name}
                 </button>
               ))}
+              {browserWalletConnectors.length === 0 && (
+                <p style={{ fontFamily: C.mono, fontSize: 12, color: C.textMuted, margin: 0 }}>
+                  No browser wallet detected. Install or unlock MetaMask, or use Coinbase Wallet.
+                </p>
+              )}
               {coinbaseConnector && (
                 <button
                   style={{ ...btnSecondary, width: 240, padding: '10px 14px', fontSize: 13 }}
                   disabled={isConnecting}
                   onClick={async () => {
                     try { setAuthError(null); setAuthStatus('idle'); await connectAsync({ connector: coinbaseConnector }); }
-                    catch (e: any) { setAuthError(e?.message || 'Failed to connect'); }
+                    catch (e: unknown) { setAuthError(formatWalletConnectionError(e, coinbaseConnector.name)); }
                   }}
                 >
                   Coinbase Wallet
@@ -478,7 +481,7 @@ export default function OperatorConsole() {
                   disabled={isConnecting}
                   onClick={async () => {
                     try { setAuthError(null); setAuthStatus('idle'); await connectAsync({ connector: walletConnectConnector }); }
-                    catch (e: any) { setAuthError(e?.message || 'Failed to connect'); }
+                    catch (e: unknown) { setAuthError(formatWalletConnectionError(e, walletConnectConnector.name)); }
                   }}
                 >
                   WalletConnect

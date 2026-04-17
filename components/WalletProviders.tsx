@@ -14,15 +14,18 @@ const chains = [mainnet, polygon, bsc, avalanche, arbitrum, optimism, base] as c
 
 export function WalletProviders({ children }: { children: ReactNode }) {
   const config = useMemo(() => {
-    const wcProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID || 'demo-project-id';
+    const wcProjectId =
+      process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ||
+      process.env.NEXT_PUBLIC_WC_PROJECT_ID;
 
     return createConfig({
       chains,
       connectors: [
-        injected(),
+        injected({ target: 'metaMask', unstable_shimAsyncInject: 1000 }),
         coinbaseWallet({ appName: 'ClawdMarket' }),
-        walletConnect({ projectId: wcProjectId }),
+        ...(wcProjectId ? [walletConnect({ projectId: wcProjectId })] : []),
       ],
+      multiInjectedProviderDiscovery: false,
       transports: {
         [mainnet.id]: http(),
         [polygon.id]: http(),
