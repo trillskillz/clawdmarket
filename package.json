@@ -36,7 +36,7 @@
     "@vercel/speed-insights": "^2.0.0",
     "@walletconnect/keyvaluestorage": "^1.1.1",
     "bcryptjs": "^3.0.3",
-    "bignumber.js": "^10.0.2",
+    "bignumber.js": "^11.1.4",
     "bitcoinjs-lib": "^7.0.1",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.2",
