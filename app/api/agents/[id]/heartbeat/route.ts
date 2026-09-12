@@ -1,23 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 
 export const dynamic = 'force-dynamic'
-
-let migrationChecked = false
-
-async function ensureHeartbeatColumns() {
-  if (migrationChecked) return
-  const client = (db as any).$client
-  const info = await client.execute({ sql: `PRAGMA table_info(agents)`, args: [] })
-  const cols = new Set((info?.rows || []).map((r: any) => String(r.name || r[1] || '')))
-  if (!cols.has('last_seen_at')) {
-    await client.execute({ sql: `ALTER TABLE agents ADD COLUMN last_seen_at INTEGER`, args: [] })
-  }
-  if (!cols.has('is_online')) {
-    await client.execute({ sql: `ALTER TABLE agents ADD COLUMN is_online INTEGER DEFAULT 0`, args: [] })
-  }
-  migrationChecked = true
-}
 
 export async function POST(
   req: NextRequest,
@@ -27,12 +12,17 @@ export async function POST(
     const { id } = await params
     const client = (db as any).$client
 
-    await ensureHeartbeatColumns()
+    const auth = await resolveRegisteredAgentRequest(req)
+    if (auth.kind !== 'agent') return NextResponse.json({ error: 'Invalid or missing agent API key' }, { status: 401 })
+    if (auth.agentId !== id) return NextResponse.json({ error: 'Agent API key does not match this agent' }, { status: 403 })
 
     // Verify agent exists
-    const agentRes = await client.execute({ sql: `SELECT id FROM agents WHERE id = ?`, args: [id] })
+    const agentRes = await client.execute({ sql: `SELECT id, status FROM agents WHERE id = ?`, args: [id] })
     if (!agentRes?.rows?.length) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+    if (String((agentRes.rows[0] as any).status) !== 'active') {
+      return NextResponse.json({ error: 'Agent must be active before sending heartbeats' }, { status: 403 })
     }
 
     // Update heartbeat

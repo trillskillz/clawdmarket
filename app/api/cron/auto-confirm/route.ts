@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { trades } from '@/lib/schema'
+import { eq } from 'drizzle-orm'
+import { finalizeTradeCompletion } from '@/lib/trade-escrow'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,8 +19,8 @@ export async function GET(req: NextRequest) {
   const dueResult = await client.execute({
     sql: `SELECT id FROM trades
           WHERE auto_confirm_at IS NOT NULL
-            AND auto_confirm_at < unixepoch()
-            AND status NOT IN ('completed', 'cancelled', 'refunded', 'disputed')`,
+            AND datetime(auto_confirm_at) <= datetime('now')
+            AND status = 'pending_release'`,
     args: [],
   })
 
@@ -27,10 +30,9 @@ export async function GET(req: NextRequest) {
   for (const row of dueRows) {
     const tradeId = (row as any).id
     try {
-      await client.execute({
-        sql: `UPDATE trades SET status = 'completed', completed_at = unixepoch(), payout_status = 'complete' WHERE id = ?`,
-        args: [tradeId],
-      })
+      const [trade] = await db.select().from(trades).where(eq(trades.id, String(tradeId))).limit(1)
+      if (!trade) continue
+      await finalizeTradeCompletion(trade, 'auto_confirm')
       confirmedIds.push(tradeId)
     } catch {
       // continue on error

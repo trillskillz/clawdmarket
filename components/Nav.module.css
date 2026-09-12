@@ -1,0 +1,233 @@
+.header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 100;
+  height: 72px;
+  border-bottom: 1px solid rgba(240, 236, 225, 0.12);
+  background: rgba(8, 10, 9, 0.82);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+.accountLink { white-space: nowrap; color: #efede4; font-size: 12px; border: 1px solid #4b5146; padding: 8px 12px; border-radius: 4px; }
+@media (max-width: 1180px) { .networkStatus { display: none !important; } }
+
+.nav {
+  width: min(1440px, 100%);
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 32px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 24px;
+}
+
+.brand {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #f5f2e9;
+  text-decoration: none;
+}
+
+.brandMark {
+  width: 25px;
+  height: 25px;
+  position: relative;
+  display: inline-block;
+  transform: rotate(45deg);
+}
+
+.brandMark span {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ff5c35;
+}
+
+.brandMark span:nth-child(1) { inset: 0 auto auto 0; }
+.brandMark span:nth-child(2) { inset: 0 0 auto auto; opacity: 0.46; }
+.brandMark span:nth-child(3) { inset: auto 0 0 auto; }
+
+.wordmark {
+  font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+}
+
+.wordmark span { color: #ff6a43; }
+
+.version {
+  color: #686d66;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  transform: translateY(-7px);
+}
+
+.desktopLinks {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.link,
+.activeLink {
+  position: relative;
+  padding: 10px 13px;
+  color: #92978f;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.link:hover,
+.activeLink { color: #f5f2e9; }
+
+.activeLink::after {
+  content: '';
+  position: absolute;
+  right: 13px;
+  bottom: 4px;
+  left: 13px;
+  height: 1px;
+  background: #ff5c35;
+}
+
+.actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.networkStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #7e847b;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #b9ef72;
+  box-shadow: 0 0 0 4px rgba(185, 239, 114, 0.1), 0 0 14px rgba(185, 239, 114, 0.65);
+  animation: statusPulse 2.4s ease-in-out infinite;
+}
+
+.menuButton {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(240, 236, 225, 0.16);
+  background: transparent;
+  display: none;
+  place-items: center;
+  color: #f5f2e9;
+}
+
+.menuIcon,
+.menuIconOpen {
+  position: relative;
+  width: 16px;
+  height: 10px;
+}
+
+.menuIcon::before,
+.menuIcon::after,
+.menuIconOpen::before,
+.menuIconOpen::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 16px;
+  height: 1px;
+  background: currentColor;
+  transition: transform 180ms ease, top 180ms ease;
+}
+
+.menuIcon::before { top: 1px; }
+.menuIcon::after { top: 8px; }
+.menuIconOpen::before { top: 5px; transform: rotate(45deg); }
+.menuIconOpen::after { top: 5px; transform: rotate(-45deg); }
+
+.mobileMenu {
+  visibility: hidden;
+  position: fixed;
+  inset: 72px 0 auto;
+  max-height: 0;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(240, 236, 225, 0.12);
+  background: #0b0d0c;
+  opacity: 0;
+  transition: max-height 260ms ease, opacity 180ms ease, visibility 260ms;
+}
+
+.mobileMenuOpen {
+  visibility: visible;
+  max-height: 560px;
+  opacity: 1;
+}
+
+.mobileMenuInner { padding: 24px; }
+
+.mobileLabel {
+  margin-bottom: 12px;
+  color: #686d66;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.mobileLink {
+  min-height: 54px;
+  border-top: 1px solid rgba(240, 236, 225, 0.1);
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  align-items: center;
+  color: #f5f2e9;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  text-decoration: none;
+}
+
+.mobileLink > span {
+  color: #686d66;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+}
+
+@keyframes statusPulse {
+  50% { opacity: 0.55; box-shadow: 0 0 0 7px rgba(185, 239, 114, 0); }
+}
+
+@media (max-width: 1100px) {
+  .nav { grid-template-columns: 1fr auto; }
+  .desktopLinks { display: none; }
+  .menuButton { display: grid; }
+}
+
+@media (max-width: 720px) {
+  .header { height: 64px; }
+  .nav { padding: 0 18px; gap: 12px; }
+  .mobileMenu { inset: 64px 0 auto; }
+  .networkStatus { display: none; }
+  .actions { gap: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statusDot { animation: none; }
+}

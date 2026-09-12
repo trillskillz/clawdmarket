@@ -5,7 +5,7 @@ import { verifyPassword, generateJWT } from '@/lib/auth';
 import { loginSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { generateCsrfToken } from '@/lib/csrf';
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { isIpBlacklisted, isUserBanned, trackUserIp } from '@/lib/agent-moderation';
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
-  const rateLimitResult = await rateLimit(`login:${ip}`, { interval: 60 * 1000, maxRequests: 10 });
+  const rateLimitResult = await rateLimit(`login:${ip}`, { interval: 60 * 1000, maxRequests: 10, failClosed: true });
 
   if (!rateLimitResult.success) {
     return NextResponse.json(
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, validated.email));
+      .where(sql`LOWER(${users.email}) = ${validated.email.toLowerCase()}`);
 
     if (!user) {
       return NextResponse.json(
@@ -108,9 +108,10 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: any) {
-    if (error.errors) {
+    const issues = error?.issues || error?.errors;
+    if (issues) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: 'Validation failed', details: issues },
         { status: 400 }
       );
     }

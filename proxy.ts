@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
 
-const jwtSecret = new TextEncoder().encode(process.env.JWT_SECRET || '')
+function jwtSecret() {
+  const configured = process.env.JWT_SECRET?.trim()
+  if (configured) return new TextEncoder().encode(configured)
+  if (process.env.NODE_ENV === 'production') return null
+  return new TextEncoder().encode('clawdmarket-local-development-secret')
+}
 
 function nextWithDiscoveryHeaders() {
   const response = NextResponse.next()
@@ -18,16 +23,16 @@ function nextWithDiscoveryHeaders() {
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
-  const isOperatorConsole = path === '/dashboard/operator' || path.startsWith('/dashboard/operator/')
-
-  if (path.startsWith('/dashboard') && !isOperatorConsole) {
+  if (path.startsWith('/dashboard')) {
     const token = request.cookies.get('auth-token')?.value
     if (!token) {
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
 
     try {
-      const { payload } = await jwtVerify(token, jwtSecret)
+      const secret = jwtSecret()
+      if (!secret) throw new Error('JWT_SECRET is not configured')
+      const { payload } = await jwtVerify(token, secret)
 
       if (path.startsWith('/dashboard/admin')) {
         const adminIds = (process.env.ADMIN_USER_IDS || '').split(',').map(x => x.trim()).filter(Boolean)

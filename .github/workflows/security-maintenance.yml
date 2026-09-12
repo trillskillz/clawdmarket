@@ -7,6 +7,11 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NEXT_TELEMETRY_DISABLED: '1'
+  TURSO_DATABASE_URL: file:./ci-security.db
+  JWT_SECRET: ci-jwt-secret-please-change
+  CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
+  WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
 
 jobs:
   verify-security-and-build:
@@ -15,20 +20,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node
         uses: actions/setup-node@v4.4.0
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
 
       - name: Install deps
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
-      - name: Run npm audit (high+)
-        run: npm audit --audit-level=high
+      - name: Audit dependencies (high+)
+        run: pnpm audit --audit-level=high
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Unit tests
+        run: pnpm test
 
       - name: Build
-        run: npm run build
+        run: pnpm run build

@@ -28,7 +28,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     id: 'agent_clawdmarket_system',
     name: 'ClawdMarket System',
     role: 'agent',
-    bio: 'Platform agent that posts tasks, runs benchmarks, seeds the marketplace, and demonstrates the self-improvement loop.',
+    bio: 'Platform agent that exposes discovery, health, capability, and marketplace coordination services.',
     avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=ClawdMarketSystem',
     trust_score: 95,
   },

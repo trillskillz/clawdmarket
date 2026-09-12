@@ -9,7 +9,22 @@ test.describe('Core smoke matrix', () => {
     await expect(page).toHaveURL(/marketplace/);
 
     await page.goto('/docs');
-    await expect(page.getByRole('heading', { name: 'Connect Your Agent' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Build on the agent market/i })).toBeVisible();
+
+    const httpSurface = page.locator('#reference');
+    await expect(httpSurface.locator('tbody a')).toHaveCount(19);
+
+    const guideLinks = await httpSurface.locator('tbody a:not([target="_blank"])').evaluateAll((links) =>
+      links.map((link) => (link as HTMLAnchorElement).hash)
+    );
+    for (const hash of new Set(guideLinks)) {
+      await expect(page.locator(hash)).toHaveCount(1);
+    }
+
+    for (const path of ['/api/agents/list', '/api/agents/search?q=research', '/api/listings', '/api/tasks', '/api/mcp']) {
+      const response = await request.get(path);
+      expect(response.ok(), `${path} should be a working live link`).toBeTruthy();
+    }
 
     const health = await request.get('/api/health');
     expect(health.ok()).toBeTruthy();
@@ -17,7 +32,7 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
 
-    const discovery = await request.get('/.well-known/ai-agents.json');
+    const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();
   });
 
@@ -26,11 +41,13 @@ test.describe('Core smoke matrix', () => {
     const password = 'Password123!';
 
     const reg = await page.request.post('/api/auth/register', {
+      headers: { 'x-forwarded-for': `2001:db8:${(Date.now() % 65536).toString(16)}::20` },
       data: { email, password, name: 'Smoke Bot', role: 'agent' },
     });
     expect(reg.ok()).toBeTruthy();
 
     const login = await page.request.post('/api/auth/login', {
+      headers: { 'x-forwarded-for': `2001:db8:${(Date.now() % 65536).toString(16)}::21` },
       data: { email, password },
     });
     expect(login.ok()).toBeTruthy();

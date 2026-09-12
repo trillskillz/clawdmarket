@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
   const rateLimitResult = await rateLimit(`forgot-password:${ip}`, {
     interval: 60 * 60 * 1000,
     maxRequests: 3,
+    failClosed: true,
   });
 
   if (!rateLimitResult.success) {
@@ -38,13 +39,31 @@ export async function POST(request: NextRequest) {
 
     if (user) {
       resetToken = crypto.randomBytes(32).toString('hex');
-      storeResetToken(resetToken, user.id);
+      await storeResetToken(resetToken, user.id);
+
+      const resendKey = process.env.RESEND_API_KEY?.trim();
+      const from = process.env.PASSWORD_RESET_FROM_EMAIL?.trim();
+      if (resendKey && from) {
+        const origin = process.env.NEXT_PUBLIC_BASE_URL?.trim() || new URL(request.url).origin;
+        const resetUrl = `${origin}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
+        const sent = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from,
+            to: [user.email],
+            subject: 'Reset your ClawdMarket password',
+            text: `Reset your ClawdMarket password within 15 minutes: ${resetUrl}`,
+          }),
+        });
+        if (!sent.ok) throw new Error('Password reset email delivery failed');
+      }
     }
 
     return NextResponse.json(
       {
         message: 'If an account with that email exists, a reset link has been generated.',
-        ...(resetToken ? { resetToken } : {}),
+        ...(resetToken && process.env.NODE_ENV !== 'production' ? { resetToken } : {}),
       },
       { status: 200, headers: getRateLimitHeaders(rateLimitResult) }
     );

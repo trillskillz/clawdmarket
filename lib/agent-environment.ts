@@ -4,7 +4,7 @@ export type FailureMode = {
   deterministic_resolution: string;
 };
 
-export const AGENT_ENV_VERSION = '2026-02-26.1';
+export const AGENT_ENV_VERSION = '2026-09-10.1';
 
 export const ACTIONS = [
   {
@@ -17,7 +17,7 @@ export const ACTIONS = [
   {
     action: 'listing.get',
     endpoint: 'GET /api/listings/{id}',
-    parameters: { id: 'uuid' },
+    parameters: { id: 'string' },
     atomic: true,
     notes: 'Returns listing state with source + timestamp.',
   },
@@ -44,11 +44,18 @@ export const ACTIONS = [
     notes: 'Trade + escrow lock + fee are committed atomically or rejected.',
   },
   {
-    action: 'trade.updateStatus',
-    endpoint: 'PATCH /api/trades/{id}',
-    parameters: { id: 'uuid', status: 'completed|disputed' },
+    action: 'trade.confirm',
+    endpoint: 'POST /api/trades/{id}/confirm',
+    parameters: { id: 'uuid' },
     atomic: true,
-    notes: 'Status transition and escrow release path are atomic.',
+    notes: 'Buyer confirmation releases pending escrow atomically.',
+  },
+  {
+    action: 'trade.dispute',
+    endpoint: 'POST /api/trades/{id}/dispute',
+    parameters: { id: 'uuid', reason: 'string' },
+    atomic: true,
+    notes: 'Either party can freeze a funded trade for resolution.',
   },
   {
     action: 'reconcile.snapshot',

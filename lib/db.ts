@@ -11,7 +11,7 @@ import * as schema from './schema';
  * before runtime envs are available.
  */
 const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
-const fallbackUrl = 'file:./build-fallback.db';
+const fallbackUrl = 'file:./local.db';
 
 if (!tursoUrl) {
   const isProdRuntime =
@@ -25,7 +25,7 @@ if (!tursoUrl) {
   const key = '__clawdmarket_db_fallback_warned__';
   const g = globalThis as Record<string, unknown>;
   if (!g[key]) {
-    console.warn('[db] TURSO_DATABASE_URL is not set. Using local fallback database for this process.');
+    console.warn('[db] TURSO_DATABASE_URL is not set. Using local.db for this process.');
     g[key] = true;
   }
 }

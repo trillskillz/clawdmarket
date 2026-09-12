@@ -1,11 +1,10 @@
 import AgentProfileClient from '@/components/AgentProfileClient';
 import { db } from '@/lib/db';
-import { users, listings, trades, ratings, agent_ratings } from '@/lib/schema';
-import { and, desc, eq, or, sql, gte } from 'drizzle-orm';
+import { users, listings, trades } from '@/lib/schema';
+import { and, desc, eq, or } from 'drizzle-orm';
 import { FALLBACK_AGENTS, fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
-import { getAgentRatingState } from '@/lib/agent-moderation';
-import { computeTrustScore, trustScoreClass } from '@/lib/trust-score';
+import { loadAgentTrust } from '@/lib/agent-trust';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
@@ -77,13 +76,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   return {
     title: `${name} on ClawdMarket`,
-    description: `${services} services listed · Pays via MPP and x402 · On ClawdMarket`,
+    description: `${services} services listed · Sandbox escrow and verified delivery · On ClawdMarket`,
     alternates: {
       canonical: `https://www.clawdmkt.com/agent/${profileSlug}`,
     },
     openGraph: {
       title: `${name} on ClawdMarket`,
-      description: `${services} services listed · Pays via MPP and x402 · On ClawdMarket`,
+      description: `${services} services listed · Sandbox escrow and verified delivery · On ClawdMarket`,
       url: `https://www.clawdmkt.com/agent/${profileSlug}`,
       images: ['/og-image.png'],
       type: 'profile',
@@ -91,7 +90,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     twitter: {
       card: 'summary_large_image',
       title: `${name} on ClawdMarket`,
-      description: `${services} services listed · Pays via MPP and x402 · On ClawdMarket`,
+      description: `${services} services listed · Sandbox escrow and verified delivery · On ClawdMarket`,
       images: ['/og-image.png'],
     },
   };
@@ -212,52 +211,11 @@ export default async function AgentProfilePage({ params }: { params: Promise<{ s
     .sort((a, b) => b.count - a.count);
 
   // ── Trust score computation ─────────────────────────────────────────────────
-  let likes = 0;
-  let dislikes = 0;
-  let totalRatingsCount = 0;
-  let recentRatings90d = 0;
-
-  let trust = computeTrustScore({
-    likes: 0,
-    dislikes: 0,
-    effectiveDislikes: 0,
-    totalRatings: 0,
-    completedTrades: completedTrades.length,
-    disputedTrades: disputedTrades.length,
-    accountAgeDays: Math.floor((Date.now() - new Date(agent.created_at as any).getTime()) / (1000 * 60 * 60 * 24)),
-    recentRatings90d: 0,
-  });
-
-  try {
-    const [totalRatingsRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(ratings)
-      .where(eq(ratings.rated_id, agent.id));
-
-    const ratingState = await getAgentRatingState(agent.id);
-    const [recentRatingsRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(agent_ratings)
-      .where(and(eq(agent_ratings.to_agent_id, agent.id), gte(agent_ratings.created_at, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000))));
-
-    likes = ratingState.likes;
-    dislikes = ratingState.dislikes;
-    totalRatingsCount = totalRatingsRow?.count || 0;
-    recentRatings90d = recentRatingsRow?.count || 0;
-
-    trust = computeTrustScore({
-      likes: ratingState.likes,
-      dislikes: ratingState.dislikes,
-      effectiveDislikes: ratingState.effectiveDislikes,
-      totalRatings: totalRatingsCount,
-      completedTrades: completedTrades.length,
-      disputedTrades: disputedTrades.length,
-      accountAgeDays: Math.floor((Date.now() - new Date(agent.created_at as any).getTime()) / (1000 * 60 * 60 * 24)),
-      recentRatings90d,
-    });
-  } catch (err) {
-    console.error('Agent trust computation fallback:', err);
-  }
+  const trust = await loadAgentTrust({ id: agent.id, created_at: agent.created_at });
+  const likes = trust.components.positiveRatings;
+  const dislikes = trust.components.negativeRatings;
+  const totalRatingsCount = trust.components.ratingCount;
+  const recentRatings90d = trust.components.recentRatings90d;
 
   return (
     <>

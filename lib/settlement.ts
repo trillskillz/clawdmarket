@@ -1,18 +1,14 @@
 import { db } from './db';
-import { listings, users, wallets, contracts, contract_milestones, mpp_sessions } from './schema';
-import { eq } from 'drizzle-orm';
-import { hashPassword } from './auth';
-import { createPublicClient, decodeEventLog, http, isAddress, parseAbiItem } from 'viem';
-import { FALLBACK_LISTINGS } from './marketplace-fallback';
-import { fallbackAgentForListingId } from './fallback-agents';
-import { ensureContractsSchema } from './contracts-schema-ensure';
+import { users, wallets, mpp_sessions, listings, trades, transactions } from './schema';
+import { and, eq, sql } from 'drizzle-orm';
+import { createPublicClient, decodeEventLog, erc20Abi, http, isAddress, parseAbiItem } from 'viem';
 import crypto from 'crypto';
+import { enforceAgentSpendPolicy } from './agent-spend-policy';
 
 const DEV_FEE_PERCENT = 0.05;
-const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
 
-export { DEV_FEE_PERCENT, CONTRACTS_V1_ENABLED };
+export { DEV_FEE_PERCENT };
 
 export function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -36,13 +32,65 @@ export class TradeRaceError extends Error {
   }
 }
 
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function createLedgerTrade(
+  tx: Transaction,
+  listing: typeof listings.$inferSelect,
+  buyerId: string,
+  feeRecipientId: string,
+  options: { agentId?: string | null } = {},
+) {
+  if (listing.seller_id === buyerId) throw new Error('Cannot buy your own work');
+  if (!Number.isFinite(listing.price_bankr) || listing.price_bankr <= 0) throw new Error('Invalid listing price');
+  const { sellerAmount, platformFee, totalCost } = calculateTradeFinancials(listing.price_bankr);
+  if (options.agentId) {
+    await enforceAgentSpendPolicy(tx, { agentId: options.agentId, buyerId, totalCost });
+  }
+  const claimed = await tx.update(listings).set({ status: 'sold' })
+    .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'))).returning({ id: listings.id });
+  if (!claimed.length) throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
+
+  const debit = await tx.update(wallets).set({
+    balance: sql`${wallets.balance} - ${totalCost}`,
+    escrow: sql`${wallets.escrow} + ${sellerAmount}`,
+  }).where(and(eq(wallets.user_id, buyerId), sql`${wallets.balance} >= ${totalCost}`)).returning({ id: wallets.user_id });
+  if (!debit.length) throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient test credits. Required ${totalCost}.`);
+
+  const sessionId = await createEscrowSession(tx, buyerId, totalCost);
+  const [trade] = await tx.insert(trades).values({
+    listing_id: listing.id, buyer_id: buyerId, seller_id: listing.seller_id,
+    amount: sellerAmount, fee: platformFee, item_price: listing.price_bankr,
+    platform_fee: platformFee, total_cost: totalCost, seller_amount: sellerAmount,
+    dev_amount: platformFee,
+    dev_wallet: (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || '').trim() || null,
+    payout_status: platformFee > 0 ? 'fee_sent' : 'pending', payment_rail: 'ledger',
+    escrow_session_id: sessionId, status: 'escrow_held',
+    auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
+  }).returning();
+  await tx.insert(transactions).values({
+    from_user_id: buyerId, amount: sellerAmount, type: 'escrow_lock', reference_id: trade.id,
+    memo: `Sandbox escrow lock for listing ${listing.id}`,
+  });
+  if (platformFee > 0) {
+    await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${platformFee}` }).where(eq(wallets.user_id, feeRecipientId));
+    await tx.insert(transactions).values({
+      from_user_id: buyerId, to_user_id: feeRecipientId, amount: platformFee,
+      type: 'fee', reference_id: trade.id, memo: 'Sandbox marketplace fee (5%)',
+    });
+  }
+  return trade;
+}
+
 export function getRpcUrl(chainId: number): string | null {
   const specific = process.env[`EVM_RPC_URL_${chainId}` as keyof NodeJS.ProcessEnv] as string | undefined;
   if (specific) return specific;
   if (process.env.EVM_RPC_URL) return process.env.EVM_RPC_URL;
   if (chainId === 1) return 'https://rpc.ankr.com/eth';
   if (chainId === 10) return 'https://rpc.ankr.com/optimism';
+  if (chainId === 56) return 'https://rpc.ankr.com/bsc';
   if (chainId === 137) return 'https://rpc.ankr.com/polygon';
+  if (chainId === 43114) return 'https://rpc.ankr.com/avalanche';
   if (chainId === 8453) return 'https://rpc.ankr.com/base';
   if (chainId === 42161) return 'https://rpc.ankr.com/arbitrum';
   return null;
@@ -62,6 +110,18 @@ export async function verifyErc20Transfer(params: {
   const receipt = await client.getTransactionReceipt({ hash: params.txHash });
   if (receipt.status !== 'success') {
     throw new Error('Payment transaction failed on-chain');
+  }
+  const transaction = await client.getTransaction({ hash: params.txHash });
+  if (params.buyerWallet && transaction.from.toLowerCase() !== params.buyerWallet.toLowerCase()) {
+    throw new Error('Payment transaction sender does not match the connected buyer wallet');
+  }
+  const tokenDecimals = Number(await client.readContract({
+    address: params.tokenAddress,
+    abi: erc20Abi,
+    functionName: 'decimals',
+  }));
+  if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 36) {
+    throw new Error('Token decimals could not be verified on-chain');
   }
 
   let tokenAmount = BigInt(0);
@@ -87,51 +147,7 @@ export async function verifyErc20Transfer(params: {
     throw new Error('No ERC-20 transfer to treasury found in transaction');
   }
 
-  return { tokenAmount };
-}
-
-export async function tryCreateContractForTrade(params: {
-  listingId: string;
-  buyerId: string;
-  sellerId: string;
-  sellerAmount: number;
-  devAmount: number;
-  totalCost: number;
-}) {
-  if (!CONTRACTS_V1_ENABLED) return;
-
-  try {
-    await ensureContractsSchema();
-    await db.transaction(async (tx) => {
-      const [contract] = await tx
-        .insert(contracts)
-        .values({
-          buyer_id: params.buyerId,
-          seller_id: params.sellerId,
-          listing_id: params.listingId,
-          total_amount: params.sellerAmount,
-          fee_amount: params.devAmount,
-          escrow_amount: params.totalCost,
-          state: 'IN_PROGRESS',
-          current_milestone_index: 0,
-        })
-        .returning();
-
-      await tx.insert(contract_milestones).values({
-        contract_id: contract.id,
-        milestone_index: 0,
-        title: 'Deliver service output',
-        amount: params.sellerAmount,
-        acceptance_spec: JSON.stringify({
-          required_artifacts: ['delivery_summary'],
-          notes: 'Seller must submit delivery artifacts. Buyer approves/rejects in dashboard.',
-        }),
-        state: 'ACTIVE',
-      });
-    });
-  } catch (e) {
-    console.error('contract creation non-fatal error:', e);
-  }
+  return { tokenAmount, tokenDecimals };
 }
 
 export async function createEscrowSession(tx: any, buyerId: string, reservedAmount: number) {
@@ -146,109 +162,24 @@ export async function createEscrowSession(tx: any, buyerId: string, reservedAmou
   return sessionId;
 }
 
-export async function ensureAdminFeeRecipient(): Promise<string | null> {
-  const adminWalletAddress = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim().toLowerCase();
-  if (!adminWalletAddress) return null;
-  if (!isAddress(adminWalletAddress as `0x${string}`)) {
-    console.error('Invalid ADMIN_BANKR_WALLET_ADDRESS configured');
-    return null;
+export async function ensureAdminFeeRecipient(): Promise<string> {
+  const adminWalletAddress = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || '').trim().toLowerCase();
+  const validExternalAddress = adminWalletAddress && isAddress(adminWalletAddress as `0x${string}`)
+    ? adminWalletAddress
+    : null;
+  if (adminWalletAddress && !validExternalAddress) {
+    console.error('Invalid marketplace fee wallet configured; fees will remain in the internal platform account');
   }
 
-  const syntheticEmail = `wallet_${adminWalletAddress}@wallet.local`;
-
-  let [adminUser] = await db.select().from(users).where(eq(users.email, syntheticEmail));
-  if (!adminUser) {
-    const passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
-    const inserted = await db
-      .insert(users)
-      .values({
-        email: syntheticEmail,
-        password_hash: passwordHash,
-        name: `AdminWallet_${adminWalletAddress.slice(2, 8)}`,
-        role: 'human',
-        bio: `Admin fee wallet ${adminWalletAddress}`,
-      })
-      .returning();
-    adminUser = inserted[0];
-  }
-
-  const [existingWallet] = await db.select().from(wallets).where(eq(wallets.user_id, adminUser.id));
-  if (!existingWallet) {
-    await db.insert(wallets).values({
-      user_id: adminUser.id,
-      balance: 0,
-      escrow: 0,
-    });
-  }
-
-  return adminUser.id;
-}
-
-function mapFallbackCategory(input: string): 'compute' | 'skills' | 'data' | 'bounties' | 'other' {
-  const c = input.toLowerCase();
-  if (c === 'data') return 'data';
-  if (c === 'code' || c === 'analysis' || c === 'content' || c === 'custom') return 'skills';
-  if (c === 'defi' || c === 'trading') return 'bounties';
-  return 'other';
-}
-
-export async function ensureSeededListingMaterialized(listingId: string) {
-  const fallback = FALLBACK_LISTINGS.find((l) => l.id === listingId);
-  if (!fallback) return null;
-
-  const seller = fallbackAgentForListingId(listingId);
-
-  let [sellerUser] = await db.select().from(users).where(eq(users.id, seller.id));
-  if (!sellerUser) {
-    const password_hash = await hashPassword(`${seller.id}:seeded-agent`);
-    const [createdUser] = await db
-      .insert(users)
-      .values({
-        id: seller.id,
-        email: `${seller.name.toLowerCase().replace(/\s+/g, '.')}@agents.clawdmarket.local`,
-        password_hash,
-        name: seller.name,
-        role: 'agent',
-        bio: seller.bio,
-        avatar_url: seller.avatar_url,
-      })
-      .returning();
-    sellerUser = createdUser;
-
-    await db.insert(wallets).values({
-      user_id: seller.id,
-      balance: 0,
-      escrow: 0,
-    });
-  }
-
-  let [listing] = await db.select().from(listings).where(eq(listings.id, listingId));
-  if (!listing) {
-    const [createdListing] = await db
-      .insert(listings)
-      .values({
-        id: listingId,
-        seller_id: seller.id,
-        category: mapFallbackCategory(fallback.category),
-        title: fallback.title,
-        description: fallback.description,
-        price_bankr: fallback.price_bankr,
-        status: 'active',
-      })
-      .returning();
-    listing = createdListing;
-  }
-
-  return listing;
-}
-
-export async function tradesHasFeeColumns() {
-  try {
-    const rs = await (db as any).$client.execute({ sql: "PRAGMA table_info('trades')", args: [] });
-    const rows = rs?.rows || [];
-    const names = new Set(rows.map((r: any) => String(r.name || r[1] || '').toLowerCase()));
-    return names.has('item_price') && names.has('platform_fee') && names.has('payout_status');
-  } catch {
-    return false;
-  }
+  const feeUserId = 'system_marketplace_fees';
+  await db.insert(users).values({
+    id: feeUserId,
+    email: 'fees@system.clawdmarket.local',
+    password_hash: crypto.randomBytes(32).toString('hex'),
+    name: 'ClawdMarket Fees',
+    role: 'human',
+    bio: validExternalAddress ? `External settlement wallet: ${validExternalAddress}` : 'Internal marketplace fee account',
+  }).onConflictDoNothing();
+  await db.insert(wallets).values({ user_id: feeUserId, balance: 0, escrow: 0 }).onConflictDoNothing();
+  return feeUserId;
 }

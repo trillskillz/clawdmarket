@@ -24,6 +24,11 @@ function getMcpPayment() {
     _mcpPayment = false;
     return _mcpPayment;
   }
+  const secretKey = process.env.MPP_SECRET_KEY || process.env.JWT_SECRET || '';
+  if (!secretKey) {
+    _mcpPayment = false;
+    return _mcpPayment;
+  }
   try {
     _mcpPayment = ServerMppx.create({
       methods: [
@@ -34,7 +39,7 @@ function getMcpPayment() {
         }),
       ],
       transport: Transport.mcp(),
-      secretKey: process.env.MPP_SECRET_KEY || process.env.JWT_SECRET || 'clawdmarket-mpp-dev-secret',
+      secretKey,
     });
   } catch {
     _mcpPayment = false;
@@ -60,7 +65,7 @@ function paidMcpToolCall(body: any) {
   }
 
   const payment = getMcpPayment();
-  if (!payment) return Promise.resolve({ status: 402, headers: {}, withReceipt: (x: any) => x });
+  if (!payment) return Promise.resolve({ status: 503 });
   return payment.charge({ amount: '0.001' })(body);
 }
 
@@ -70,7 +75,7 @@ function withCors(res: Response | NextResponse): Response {
   const headers = new Headers(res.headers);
   headers.set('Access-Control-Allow-Origin', '*');
   headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Agent-API-Key, X-ClawdMarket-Agent-Key, X-CSRF-Token');
   return new Response(res.body, { status: res.status, headers });
 }
 
@@ -97,6 +102,7 @@ function buildApiCaller(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieHeader = req.headers.get('cookie');
   const csrfHeader = req.headers.get('x-csrf-token');
+  const agentApiKey = req.headers.get('x-agent-api-key') || req.headers.get('x-clawdmarket-agent-key');
 
   return async function callApi(
     method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
@@ -121,6 +127,7 @@ function buildApiCaller(req: NextRequest) {
     if (authHeader) headers.set('Authorization', authHeader);
     if (cookieHeader) headers.set('Cookie', cookieHeader);
     if (csrfHeader) headers.set('X-CSRF-Token', csrfHeader);
+    if (agentApiKey) headers.set('X-Agent-API-Key', agentApiKey);
 
     let body: string | undefined;
     if (opts?.body !== undefined) {
@@ -197,41 +204,6 @@ async function executeTool(req: NextRequest, name: string, args: any) {
       return result.data;
     }
 
-    case 'bid_task': {
-      if (!args?.task_id || typeof args.task_id !== 'string') throw new Error('task_id is required');
-      if (typeof args?.price_usd !== 'number') throw new Error('price_usd is required');
-
-      const result = await callApi('POST', `/api/tasks/${encodeURIComponent(args.task_id)}/bid`, {
-        body: {
-          price_usd: args.price_usd,
-          message: typeof args?.message === 'string' ? args.message : undefined,
-          eta_seconds: typeof args?.eta_seconds === 'number' ? args.eta_seconds : undefined,
-        },
-      });
-      if (!result.ok) throw new Error(getErrorMessage(result.data, `bid_task failed (${result.status})`));
-      return result.data;
-    }
-
-    case 'hire_agent': {
-      const sellerAgentId = typeof args?.seller_agent_id === 'string' ? args.seller_agent_id : undefined;
-      const listingId = typeof args?.listing_id === 'string' ? args.listing_id : undefined;
-      const description = typeof args?.description === 'string' ? args.description : 'MCP hire request';
-
-      const resolvedListingId = listingId || (sellerAgentId ? `listing_${sellerAgentId}` : undefined);
-      if (!resolvedListingId) throw new Error('listing_id or seller_agent_id is required');
-
-      const result = await callApi('POST', '/api/trades', {
-        body: {
-          listing_id: resolvedListingId,
-          amount: typeof args?.amount === 'number' ? args.amount : 1,
-          description,
-        },
-      });
-
-      if (!result.ok) throw new Error(getErrorMessage(result.data, `hire_agent failed (${result.status})`));
-      return result.data;
-    }
-
     case 'get_capabilities': {
       const result = await callApi('GET', '/api/capabilities');
       if (!result.ok) throw new Error(getErrorMessage(result.data, `get_capabilities failed (${result.status})`));
@@ -250,22 +222,6 @@ async function executeTool(req: NextRequest, name: string, args: any) {
       const limit = typeof args?.limit === 'number' ? args.limit : undefined;
       const result = await callApi('GET', '/api/leaderboard', { query: { metric, limit } });
       if (!result.ok) throw new Error(getErrorMessage(result.data, `get_leaderboard failed (${result.status})`));
-      return result.data;
-    }
-
-    case 'register_agent': {
-      const result = await callApi('POST', '/api/agents/register', { body: args || {} });
-      if (!result.ok) throw new Error(getErrorMessage(result.data, `register_agent failed (${result.status})`));
-      return result.data;
-    }
-
-    case 'get_trade_status': {
-      if (!args?.trade_id || typeof args.trade_id !== 'string') {
-        throw new Error('trade_id is required');
-      }
-
-      const result = await callApi('GET', `/api/trades/${encodeURIComponent(args.trade_id)}`);
-      if (!result.ok) throw new Error(getErrorMessage(result.data, `get_trade_status failed (${result.status})`));
       return result.data;
     }
 
@@ -328,17 +284,15 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const auth = req.headers.get('authorization') || '';
-      if (!auth.toLowerCase().startsWith('payment ')) {
-        return withCors(NextResponse.json({ error: 'payment_required', message: 'MPP payment required for tools/call' }, { status: 402 }));
-      }
-
       const paymentGate: any = await paidMcpToolCall(body as any);
       if (paymentGate.status === 402) {
         if (paymentGate.challenge) {
           return withCors(NextResponse.json(paymentGate.challenge, { status: 402 }));
         }
         return withCors(NextResponse.json({ error: 'payment_required', message: 'MPP payment required for tools/call' }, { status: 402 }));
+      }
+      if (paymentGate.status !== 200 || typeof paymentGate.withReceipt !== 'function') {
+        return withCors(NextResponse.json({ error: 'payment_service_unavailable', message: 'MPP payment verification is not configured' }, { status: 503 }));
       }
 
       try {

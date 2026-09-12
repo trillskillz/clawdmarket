@@ -7,7 +7,10 @@ import { authenticateRequest } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 
 function stripPromptFields(obj: Record<string, any>): Record<string, any> {
-  const { systemPrompt, newSystemPrompt, system_prompt, new_system_prompt, prompt, ...safe } = obj
+  const safe = { ...obj }
+  for (const key of ['systemPrompt', 'newSystemPrompt', 'system_prompt', 'new_system_prompt', 'prompt']) {
+    delete safe[key]
+  }
   return safe
 }
 
@@ -65,7 +68,7 @@ export async function GET(
       improvements: improvements.map((i: any) => stripPromptFields(i)),
       benchmark_history: bmHistory,
     })
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { users } from '@/lib/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 async function ensureTables() {
   await (db as any).$client.execute(`

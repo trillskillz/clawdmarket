@@ -199,7 +199,7 @@ export async function GET() {
     const events = [...tradeEvents, ...ratingEvents, ...registrationEvents, ...improvementEvents]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 50)
-      .map(({ createdAt, ...event }) => event)
+      .map(({ createdAt: _createdAt, ...event }) => event)
 
     return NextResponse.json(events, {
       headers: {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { lookupRegisteredAgentApiKey } from '@/lib/registered-agent-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,7 @@ async function ensureColumns(client: any) {
   await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
   await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
   await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+  await client.execute(`ALTER TABLE agents ADD COLUMN owner_email TEXT`).catch(() => {})
   columnsEnsured = true
 }
 
@@ -34,12 +36,19 @@ export async function GET(request: NextRequest) {
 
     await ensureColumns(client)
 
-    const result = await client.execute({
-      sql: `SELECT id, name, status, owner_address, created_at, claim_code, claimed_at
-            FROM agents WHERE api_key = ? LIMIT 1`,
-      args: [apiKey],
-    })
+    const auth = await lookupRegisteredAgentApiKey(apiKey, { allowInactive: true })
+    if (auth.kind !== 'agent') {
+      return NextResponse.json(
+        { error: 'unauthorized', message: 'Invalid API key' },
+        { status: 401 }
+      )
+    }
 
+    const result = await client.execute({
+      sql: `SELECT id, name, status, owner_address, owner_email, created_at, claim_code, claimed_at
+            FROM agents WHERE id = ? LIMIT 1`,
+      args: [auth.agentId],
+    })
     const agent = result?.rows?.[0]
     if (!agent) {
       return NextResponse.json(
@@ -71,7 +80,8 @@ export async function GET(request: NextRequest) {
       name: agent.name,
       status,
       claimed_at: claimedAt || null,
-      owner: agent.owner_address || null,
+      owner_address: agent.owner_address || null,
+      owner_email: agent.owner_email || null,
       claim_url: isPendingClaim ? `${baseUrl}/claim/${claimCode}` : undefined,
       profile_url: `${baseUrl}/registry/${agent.id}`,
     })

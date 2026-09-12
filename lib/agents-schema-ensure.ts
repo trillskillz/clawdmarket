@@ -18,12 +18,16 @@ export async function ensureAgentsSchema() {
       capabilities text NOT NULL,
       endpoint text NOT NULL,
       owner_address text NOT NULL,
+      owner_email text,
       api_key text NOT NULL,
       status text NOT NULL DEFAULT 'active',
       endpoint_verified_at integer,
       endpoint_failures integer NOT NULL DEFAULT 0,
       mpp_endpoint text,
       llms_txt_url text,
+      moltbook_handle text,
+      last_seen_at integer,
+      is_online integer NOT NULL DEFAULT 0,
       created_at integer NOT NULL
     )`,
     args: [],
@@ -38,6 +42,10 @@ export async function ensureAgentsSchema() {
     "ALTER TABLE agents ADD COLUMN status text NOT NULL DEFAULT 'active'",
     'ALTER TABLE agents ADD COLUMN endpoint_verified_at integer',
     'ALTER TABLE agents ADD COLUMN endpoint_failures integer NOT NULL DEFAULT 0',
+    'ALTER TABLE agents ADD COLUMN owner_email text',
+    'ALTER TABLE agents ADD COLUMN moltbook_handle text',
+    'ALTER TABLE agents ADD COLUMN last_seen_at integer',
+    'ALTER TABLE agents ADD COLUMN is_online integer NOT NULL DEFAULT 0',
   ]) {
     try {
       await client.execute({ sql, args: [] });

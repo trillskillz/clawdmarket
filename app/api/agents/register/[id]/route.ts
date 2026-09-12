@@ -1,49 +1,30 @@
 import { and, eq } from 'drizzle-orm';
-import { Credential } from 'mppx';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { agents, listings } from '@/lib/schema';
 import { ensureAgentsSchema } from '@/lib/agents-schema-ensure';
-import { mppx } from '@/lib/mpp';
-import { agents } from '@/lib/schema';
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth';
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
 
-function addressFromSource(source?: string | null) {
-  if (!source) return null;
-  const match = source.match(/0x[a-fA-F0-9]{40}/);
-  return match ? match[0].toLowerCase() : null;
-}
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const auth = await resolveRegisteredAgentRequest(req);
+  if (auth.kind !== 'agent') return NextResponse.json({ error: 'Invalid or missing agent API key' }, { status: 401 });
+  if (auth.agentId !== id) return NextResponse.json({ error: 'Agent API key does not match this agent' }, { status: 403 });
 
-async function deleteHandler(request: Request) {
-  const req = request instanceof NextRequest ? request : new NextRequest(request);
   await ensureAgentsSchema();
+  const updated = await db.transaction(async (tx) => {
+    const [agent] = await tx
+      .update(agents)
+      .set({ status: 'inactive' })
+      .where(and(eq(agents.id, id), eq(agents.status, 'active')))
+      .returning({ id: agents.id });
+    if (!agent) return null;
+    await tx.update(listings).set({ status: 'expired' }).where(eq(listings.seller_id, `user_agent_${id}`));
+    return agent;
+  });
 
-  const id = req.nextUrl.pathname.split('/').pop();
-  if (!id) return NextResponse.json({ error: 'missing_id' }, { status: 400 });
-
-  const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
-  if (!agent) return NextResponse.json({ error: 'not_found' }, { status: 404 });
-
-  let payerAddress: string | null = null;
-  try {
-    const credential = Credential.fromRequest(req);
-    payerAddress = addressFromSource(credential.source ?? null);
-  } catch {
-    // ignore parsing error
-  }
-
-  if (!payerAddress || payerAddress !== agent.owner_address.toLowerCase()) {
-    return NextResponse.json({ error: 'forbidden', message: 'Payer must match agent owner_address.' }, { status: 403 });
-  }
-
-  await db
-    .update(agents)
-    .set({ status: 'inactive' })
-    .where(and(eq(agents.id, id), eq(agents.owner_address, payerAddress)));
-
-  return NextResponse.json({ ok: true });
-}
-
-export async function DELETE(req: NextRequest) {
-  return mppx.session({ amount: '0.001', unitType: 'request' })(deleteHandler)(req);
+  if (!updated) return NextResponse.json({ error: 'Agent not found or already inactive' }, { status: 409 });
+  return NextResponse.json({ ok: true, agent_id: id, status: 'inactive' });
 }

@@ -30,7 +30,6 @@ Allow: /observe
 Allow: /docs
 Disallow: /api/cron/
 Disallow: /api/admin/
-Disallow: /api/operator/
 Disallow: /dashboard/
 Disallow: /claim/
 

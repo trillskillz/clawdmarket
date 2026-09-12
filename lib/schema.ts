@@ -24,6 +24,7 @@ export const agents = sqliteTable('agents', {
   capabilities: text('capabilities').notNull(),
   endpoint: text('endpoint').notNull(),
   owner_address: text('owner_address').notNull(),
+  owner_email: text('owner_email'),
   api_key: text('api_key').notNull(),
   status: text('status', { enum: ['active', 'inactive'] }).notNull().default('active'),
   endpoint_verified_at: integer('endpoint_verified_at', { mode: 'timestamp' }),
@@ -50,6 +51,9 @@ export const agents = sqliteTable('agents', {
   improvedByAgentId: text('improved_by_agent_id'),
   claimCode: text('claim_code'),
   claimedAt: text('claimed_at'),
+  moltbookHandle: text('moltbook_handle'),
+  lastSeenAt: integer('last_seen_at', { mode: 'timestamp' }),
+  isOnline: integer('is_online', { mode: 'boolean' }).notNull().default(false),
 });
 
 export const api_keys = sqliteTable('api_keys', {
@@ -78,7 +82,7 @@ export const listings = sqliteTable('listings', {
   description: text('description').notNull(),
   price_bankr: real('price_bankr').notNull(),
   status: text('status', { 
-    enum: ['active', 'sold', 'expired'] 
+    enum: ['active', 'inactive', 'sold', 'expired']
   }).notNull().default('active'),
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
@@ -106,6 +110,7 @@ export const trades = sqliteTable('trades', {
   dev_wallet: text('dev_wallet'),
   fee_tx_hash: text('fee_tx_hash'),
   payout_status: text('payout_status', { enum: ['pending', 'fee_sent', 'seller_paid', 'complete'] }).notNull().default('pending'),
+  payment_rail: text('payment_rail', { enum: ['ledger', 'mpp', 'evm'] }).notNull().default('ledger'),
   status: text('status', {
     enum: ['pending', 'escrow_held', 'pending_release', 'completed', 'complete', 'disputed', 'resolved', 'cancelled']
   }).notNull().default('pending'),
@@ -147,6 +152,29 @@ export const bids = sqliteTable('bids', {
   etaSeconds: integer('eta_seconds'),
   status: text('status').notNull().default('pending'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
+export const task_workspaces = sqliteTable('task_workspaces', {
+  task_id: text('task_id').primaryKey().references(() => tasks.id),
+  trade_id: text('trade_id').unique().references(() => trades.id),
+  agreed_price: real('agreed_price'),
+  output_format: text('output_format').notNull().default('text'),
+  acceptance_criteria: text('acceptance_criteria').notNull().default('[]'),
+  required_json_keys: text('required_json_keys').notNull().default('[]'),
+  minimum_sources: integer('minimum_sources').notNull().default(0),
+  created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
+export const trade_deliveries = sqliteTable('trade_deliveries', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id),
+  submitter_id: text('submitter_id').notNull().references(() => users.id),
+  summary: text('summary').notNull(),
+  delivery_url: text('delivery_url'),
+  artifact_json: text('artifact_json'),
+  content_hash: text('content_hash').notNull(),
+  verification: text('verification').notNull(),
+  created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
 export const agentVersions = sqliteTable('agent_versions', {
@@ -262,11 +290,20 @@ export const waitlist = sqliteTable('waitlist', {
     .$defaultFn(() => new Date()),
 });
 
+export const password_reset_tokens = sqliteTable('password_reset_tokens', {
+  token_hash: text('token_hash').primaryKey(),
+  user_id: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expires_at: integer('expires_at').notNull(),
+  created_at: integer('created_at').notNull().$defaultFn(() => Date.now()),
+});
+
 export const webhooks = sqliteTable('webhooks', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   agent_id: text('agent_id')
     .notNull()
-    .references(() => agents.id, { onDelete: 'cascade' }),
+    // This is the authenticated principal's users.id. The historical column
+    // name is retained to avoid breaking API clients and deployed databases.
+    .references(() => users.id, { onDelete: 'cascade' }),
   url: text('url').notNull(),
   secret_hash: text('secret_hash').notNull(),
   events: text('events').notNull(),
@@ -334,7 +371,7 @@ export type NewTradeEvidence = typeof trade_evidence.$inferInsert;
 export type Rating = typeof ratings.$inferSelect;
 export type NewRating = typeof ratings.$inferInsert;
 
-// ─── $BANKR Tokenomics ───────────────────────────────────────────────────────
+// ─── Internal Ledger and Settlement ──────────────────────────────────────────
 
 export const wallets = sqliteTable('wallets', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -429,7 +466,9 @@ export const payment_receipts = sqliteTable('payment_receipts', {
   token_amount: text('token_amount'),
   usd_value_at_payment: real('usd_value_at_payment'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-});
+}, (table) => [
+  uniqueIndex('payment_receipts_tx_hash_unique').on(table.tx_hash),
+]);
 
 export const mpp_sessions = sqliteTable('mpp_sessions', {
   session_id: text('session_id').primaryKey(),

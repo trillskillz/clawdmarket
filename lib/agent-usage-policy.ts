@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { db } from '@/lib/db'
+import { getAgentSpendSnapshot } from '@/lib/agent-spend-policy'
 
 export type AgentUsageFeature = 'task_posts' | 'task_bids' | 'service_listings'
 export type AgentUsageEventType = 'free_write' | 'overage_challenge' | 'paid_conversion'
@@ -160,7 +161,10 @@ export function getFeatureQuota(counts: AgentUsageCounts, feature: AgentUsageFea
 }
 
 export async function getAgentUsageSnapshot(agentId: string) {
-  const counts = await getAgentUsageCounts(agentId)
+  const [counts, spending] = await Promise.all([
+    getAgentUsageCounts(agentId),
+    getAgentSpendSnapshot(agentId),
+  ])
   const window = getAgentUsageWindow()
 
   return {
@@ -179,6 +183,11 @@ export async function getAgentUsageSnapshot(agentId: string) {
       task_posts: getFeatureQuota(counts, 'task_posts'),
       task_bids: getFeatureQuota(counts, 'task_bids'),
       service_listings: getFeatureQuota(counts, 'service_listings'),
+    },
+    spending: {
+      ...spending,
+      enforcement: 'server_transaction' as const,
+      note: 'Limits apply to autonomous registered-agent purchases. Sandbox credits are non-redeemable.',
     },
     payment: {
       over_quota_retry: 'Send MPP payment authorization and include X-ClawdMarket-Agent-Key with the same agent API key.',

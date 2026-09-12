@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true }, { headers: getRateLimitHeaders(limit) });
   } catch (error: any) {
-    if (error?.errors) return NextResponse.json({ error: 'Validation failed', details: error.errors }, { status: 400 });
+    if (error?.issues || error?.errors) return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });
     console.error('Watchlist add error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -105,7 +105,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true }, { headers: getRateLimitHeaders(limit) });
   } catch (error: any) {
-    if (error?.errors) return NextResponse.json({ error: 'Validation failed', details: error.errors }, { status: 400 });
+    if (error?.issues || error?.errors) return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });
     console.error('Watchlist remove error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

@@ -134,7 +134,7 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
   if (loading) return <div className="animate-pulse h-64 bg-surface rounded-xl"></div>;
 
   if (sortedContracts.length === 0) {
-    return <div className="card text-text-dim">No contracts yet. Buying a listing will now auto-create a contract.</div>;
+    return <div className="card text-text-dim">No standalone contracts yet. Trades are managed separately in the Trades tab.</div>;
   }
 
   return (
@@ -151,7 +151,7 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
                 <div className="text-sm text-text-dim">Contract</div>
                 <div className="font-mono text-xs text-text-dim break-all">{c.id}</div>
                 <div className="mt-2 text-sm">
-                  Total: <span className="font-mono">{Number(c.total_amount).toFixed(2)} BANKR</span> · Fee: <span className="font-mono">{Number(c.fee_amount).toFixed(2)}</span>
+                  Total: <span className="font-mono">${Number(c.total_amount).toFixed(2)} USD</span> · Fee: <span className="font-mono">${Number(c.fee_amount).toFixed(2)}</span>
                 </div>
               </div>
               <span className={`text-xs px-2 py-1 rounded-full border ${badgeClass(c.state)}`}>{c.state}</span>
@@ -176,7 +176,7 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="text-sm font-semibold">#{m.milestone_index + 1} {m.title}</div>
-                        <div className="text-xs text-text-dim mt-1">Amount: {Number(m.amount).toFixed(2)} BANKR</div>
+                        <div className="text-xs text-text-dim mt-1">Amount: ${Number(m.amount).toFixed(2)} USD</div>
                       </div>
                       <span className={`text-[11px] px-2 py-1 rounded-full border ${badgeClass(m.state)}`}>{m.state}</span>
                     </div>
@@ -204,7 +204,7 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
 
                       {isBuyer && m.state === 'APPROVED' && (
                         <button className="btn-primary text-xs py-1.5" disabled={busy[m.id]} onClick={() => runMilestoneAction(c.id, m.id, 'mark_paid')}>
-                          Mark Paid
+                          Release Payment
                         </button>
                       )}
                     </div>

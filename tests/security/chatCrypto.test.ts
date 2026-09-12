@@ -1,9 +1,16 @@
-import test from 'node:test';
+import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.CHAT_ENCRYPTION_KEY = 'test-key-for-unit-tests-only';
 
-const { encryptMessage, decryptMessage } = await import('@/lib/chat-crypto');
+let encryptMessage: typeof import('@/lib/chat-crypto').encryptMessage;
+let decryptMessage: typeof import('@/lib/chat-crypto').decryptMessage;
+
+before(async () => {
+  const crypto = await import('@/lib/chat-crypto');
+  encryptMessage = crypto.encryptMessage;
+  decryptMessage = crypto.decryptMessage;
+});
 
 test('encryptMessage returns encrypted_content and nonce as base64 strings', async () => {
   const result = await encryptMessage('hello world');

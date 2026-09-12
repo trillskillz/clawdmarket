@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { contract_disputes } from '@/lib/schema';
+import { eq } from 'drizzle-orm';
 import { authenticateRequest } from '@/lib/auth';
 import { authorizeAdmin } from '@/lib/admin-auth';
 
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (error) return error;
 
   try {
-    const disputes = await db.select().from(contract_disputes);
+    const disputes = await db.select().from(contract_disputes).where(eq(contract_disputes.state, 'open'));
     return NextResponse.json({ disputes });
   } catch (err) {
     console.error('List disputes error:', err);

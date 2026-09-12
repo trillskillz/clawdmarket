@@ -3,6 +3,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { users } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
+import { validateCsrf } from '@/lib/csrf';
 
 export const dynamic = 'force-dynamic'
 
@@ -49,7 +50,6 @@ export async function GET(req: NextRequest) {
       { status: 401 }
     );
   }
-
   try {
     await ensureProfileColumns();
 
@@ -105,6 +105,9 @@ export async function PATCH(req: NextRequest) {
       { status: 401 }
     );
   }
+  if (!authHeader && !validateCsrf(req)) {
+    return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
+  }
 
   try {
     await ensureProfileColumns();
@@ -115,6 +118,10 @@ export async function PATCH(req: NextRequest) {
     const normalizedBio = typeof bio === 'string' ? bio.trim() : undefined;
     const normalizedAvatarUrl = typeof avatar_url === 'string' ? avatar_url.trim() : undefined;
     const normalizedAvatarEmoji = typeof avatar_emoji === 'string' ? avatar_emoji.trim() : undefined;
+
+    if (normalizedBio === undefined && normalizedAvatarUrl === undefined && normalizedAvatarEmoji === undefined) {
+      return NextResponse.json({ error: 'At least one profile field is required' }, { status: 400 });
+    }
 
     // Validate (basic)
     if (normalizedBio && normalizedBio.length > 500) {

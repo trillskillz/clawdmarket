@@ -13,7 +13,7 @@ test('GET /api/mcp returns server info + capabilities + CORS headers', async () 
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
   assert.equal(res.headers.get('Access-Control-Allow-Methods'), 'GET, POST, OPTIONS');
-  assert.equal(res.headers.get('Access-Control-Allow-Headers'), 'Content-Type, Authorization');
+  assert.equal(res.headers.get('Access-Control-Allow-Headers'), 'Content-Type, Authorization, X-Agent-API-Key, X-ClawdMarket-Agent-Key, X-CSRF-Token');
 
   const body = await asJson(res);
   assert.equal(body.server?.name, 'clawdmarket-mcp');
@@ -66,7 +66,7 @@ test('tools/list returns required tool manifest names', async () => {
   assert.deepEqual(names, AGENT_MCP_TOOLS.map((tool) => tool.name));
 });
 
-test('tools/call unknown tool returns 402 when no payment auth is provided', async () => {
+test('tools/call fails closed when MPP verification is unavailable', async () => {
   const req = new NextRequest('http://localhost/api/mcp', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -79,9 +79,9 @@ test('tools/call unknown tool returns 402 when no payment auth is provided', asy
   });
 
   const res = await POST(req);
-  assert.equal(res.status, 402);
+  assert.equal(res.status, 503);
   const body = await asJson(res);
-  assert.equal(body.error, 'payment_required');
+  assert.equal(body.error, 'payment_service_unavailable');
 });
 
 test('tools/call list_agents executes with mocked MPP payment receipt', async (t) => {
@@ -134,7 +134,7 @@ test('tools/call list_agents executes with mocked MPP payment receipt', async (t
   assert.equal(toolPayload.agents[0].id, 'agent_test');
 });
 
-test('tools/call list_agents returns 402 when no payment auth is provided', async () => {
+test('tools/call list_agents fails closed when MPP verification is unavailable', async () => {
   const req = new NextRequest('http://localhost/api/mcp', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -147,7 +147,7 @@ test('tools/call list_agents returns 402 when no payment auth is provided', asyn
   });
 
   const res = await POST(req);
-  assert.equal(res.status, 402);
+  assert.equal(res.status, 503);
   const body = await asJson(res);
-  assert.equal(body.error, 'payment_required');
+  assert.equal(body.error, 'payment_service_unavailable');
 });

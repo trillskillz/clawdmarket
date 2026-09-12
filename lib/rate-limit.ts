@@ -1,10 +1,9 @@
 import { db } from './db';
-import { rate_limits } from './schema';
-import { eq, and, gt, sql } from 'drizzle-orm';
 
 export interface RateLimitConfig {
   interval: number; // milliseconds
   maxRequests: number;
+  failClosed?: boolean;
 }
 
 const defaultConfig: RateLimitConfig = {
@@ -20,38 +19,32 @@ export async function rateLimit(
   const resetAt = now + config.interval;
 
   try {
-    const row = await db
-      .select()
-      .from(rate_limits)
-      .where(eq(rate_limits.key, identifier))
-      .limit(1)
-      .then(rows => rows[0]);
-
-    if (!row || now > row.reset_at) {
-      await db
-        .insert(rate_limits)
-        .values({ key: identifier, count: 1, reset_at: resetAt })
-        .onConflictDoUpdate({
-          target: rate_limits.key,
-          set: { count: 1, reset_at: resetAt },
-        });
-      return { success: true, limit: config.maxRequests, remaining: config.maxRequests - 1, reset: resetAt };
-    }
-
-    if (row.count >= config.maxRequests) {
-      return { success: false, limit: config.maxRequests, remaining: 0, reset: row.reset_at };
-    }
-
-    await db
-      .update(rate_limits)
-      .set({ count: sql`${rate_limits.count} + 1` })
-      .where(and(eq(rate_limits.key, identifier), gt(rate_limits.reset_at, now)));
-
-    const newCount = row.count + 1;
-    return { success: true, limit: config.maxRequests, remaining: config.maxRequests - newCount, reset: row.reset_at };
+    const result = await (db as any).$client.execute({
+      sql: `INSERT INTO rate_limits (key, count, reset_at)
+            VALUES (?, 1, ?)
+            ON CONFLICT(key) DO UPDATE SET
+              count = CASE WHEN rate_limits.reset_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
+              reset_at = CASE WHEN rate_limits.reset_at <= ? THEN ? ELSE rate_limits.reset_at END
+            RETURNING count, reset_at`,
+      args: [identifier.slice(0, 500), resetAt, now, now, resetAt],
+    });
+    const row = result?.rows?.[0];
+    const count = Number(row?.count ?? 1);
+    const reset = Number(row?.reset_at ?? resetAt);
+    const success = count <= config.maxRequests;
+    return {
+      success,
+      limit: config.maxRequests,
+      remaining: success ? Math.max(0, config.maxRequests - count) : 0,
+      reset,
+    };
   } catch {
-    // If DB is unavailable, fail open to avoid blocking all requests
-    return { success: true, limit: config.maxRequests, remaining: config.maxRequests - 1, reset: resetAt };
+    return {
+      success: !config.failClosed,
+      limit: config.maxRequests,
+      remaining: config.failClosed ? 0 : config.maxRequests - 1,
+      reset: resetAt,
+    };
   }
 }
 

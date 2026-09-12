@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 export function getAdminConfig() {
   const ids = (process.env.ADMIN_USER_IDS || '').split(',').map(x => x.trim()).filter(Boolean);

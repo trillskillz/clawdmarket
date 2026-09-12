@@ -1,10 +1,12 @@
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { agents, webhook_deliveries, webhooks } from '@/lib/schema';
-import { payerAddressFromRequest } from '@/lib/trade-escrow';
+import { webhook_deliveries, webhooks } from '@/lib/schema';
+import { assertSafeWebhookDestination } from '@/lib/webhook-url';
 
 export const ALLOWED_WEBHOOK_EVENTS = [
+  'task.assigned',
+  'task.bid_received',
   'trade.created',
   'trade.status_changed',
   'trade.completed',
@@ -14,6 +16,8 @@ export const ALLOWED_WEBHOOK_EVENTS = [
   'rating.received',
   'payment.received',
   'agent.deactivated',
+  'balance.changed',
+  'listing.sold',
 ] as const;
 
 export type WebhookEventType = (typeof ALLOWED_WEBHOOK_EVENTS)[number];
@@ -28,18 +32,26 @@ export function generateSignature(secret: string, body: string): string {
   return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
 }
 
-function signingKeyForWebhook(secretHash: string): string | null {
-  const key = process.env.WEBHOOK_SECRET_KEY;
-  if (!key) return null;
-  // Deterministic fallback key derivation since plaintext secret is intentionally not stored.
-  return createHmac('sha256', key).update(secretHash).digest('hex');
+function getWebhookMasterKey(): string {
+  const key = process.env.WEBHOOK_SECRET_KEY?.trim() || process.env.JWT_SECRET?.trim();
+  if (key) return key;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('WEBHOOK_SECRET_KEY or JWT_SECRET is required in production');
+  }
+  return 'clawdmarket-local-webhook-development-key';
 }
 
-export async function agentIdFromRequestPayer(req: Request): Promise<string | null> {
-  const payer = payerAddressFromRequest(req);
-  if (!payer) return null;
-  const [agent] = await db.select({ id: agents.id }).from(agents).where(eq(agents.owner_address, payer)).limit(1);
-  return agent?.id || null;
+export function createWebhookSecret(webhookId: string): string {
+  return createHmac('sha256', getWebhookMasterKey()).update(`webhook:${webhookId}`).digest('base64url');
+}
+
+async function signingKeyForWebhook(webhookId: string, secretHash: string): Promise<string | null> {
+  const secret = createWebhookSecret(webhookId);
+  const expectedHash = await hashSecret(secret);
+  const expected = Buffer.from(expectedHash);
+  const stored = Buffer.from(secretHash);
+  if (expected.length !== stored.length || !timingSafeEqual(expected, stored)) return null;
+  return secret;
 }
 
 export async function incrementFailureCount(webhookId: string) {
@@ -55,14 +67,14 @@ export async function incrementFailureCount(webhookId: string) {
 }
 
 export async function deliverWebhookEvent(
-  agentId: string,
+  principalId: string,
   eventType: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
   const rows = await db
     .select()
     .from(webhooks)
-    .where(and(eq(webhooks.agent_id, agentId), eq(webhooks.active, 1)));
+    .where(and(eq(webhooks.agent_id, principalId), eq(webhooks.active, 1)));
 
   for (const webhook of rows) {
     let subscribed = false;
@@ -74,34 +86,40 @@ export async function deliverWebhookEvent(
     }
     if (!subscribed) continue;
 
+    const deliveryId = randomUUID();
     const body = JSON.stringify({
       event: eventType,
       timestamp: new Date().toISOString(),
-      agent_id: agentId,
-      delivery_id: randomUUID(),
+      agent_id: principalId,
+      delivery_id: deliveryId,
       data: payload,
     });
 
-    const secret = signingKeyForWebhook(webhook.secret_hash);
-    const signature = secret ? generateSignature(secret, body) : 'unsigned';
+    const secret = await signingKeyForWebhook(webhook.id, webhook.secret_hash);
+    if (!secret) {
+      await incrementFailureCount(webhook.id);
+      continue;
+    }
+    const signature = generateSignature(secret, body);
 
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
+      await assertSafeWebhookDestination(webhook.url);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10_000);
+      timeout = setTimeout(() => controller.abort(), 10_000);
       const res = await fetch(webhook.url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-ClawdMarket-Signature': signature,
           'X-ClawdMarket-Event': eventType,
-          'X-ClawdMarket-Delivery': randomUUID(),
+          'X-ClawdMarket-Delivery': deliveryId,
           'User-Agent': 'ClawdMarket-Webhook/1.0',
         },
         body,
         signal: controller.signal,
+        redirect: 'error',
       });
-      clearTimeout(timeout);
-
       await db.insert(webhook_deliveries).values({
         id: randomUUID(),
         webhook_id: webhook.id,
@@ -133,6 +151,8 @@ export async function deliverWebhookEvent(
         attempts: 1,
         success: 0,
       });
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
   }
 }

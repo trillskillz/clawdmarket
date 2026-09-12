@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import PageShell from '@/components/PageShell';
 import ListingsTab from '@/components/dashboard/ListingsTab';
 import TradesTab from '@/components/dashboard/TradesTab';
@@ -25,11 +24,15 @@ interface User {
   avatar_emoji?: string;
 }
 
+type DashboardTab = 'listings' | 'trades' | 'contracts' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'admin';
+const PUBLIC_DASHBOARD_TABS = new Set<DashboardTab>(['listings', 'trades', 'contracts', 'api-keys', 'webhooks', 'wallet', 'analytics', 'profile']);
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activeTab, setActiveTab] = useState<'listings' | 'trades' | 'contracts' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'admin'>('listings');
+  const [activeTab, setActiveTab] = useState<DashboardTab>('listings');
+  const [focusedTradeId, setFocusedTradeId] = useState<string | undefined>();
   const [listings, setListings] = useState<any[]>([]);
   const [trades, setTrades] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
@@ -39,11 +42,13 @@ export default function DashboardPage() {
   const [analytics, setAnalytics] = useState(null);
   const [analyticsRange, setAnalyticsRange] = useState<7 | 30>(7);
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const getCsrfToken = () =>
     document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
       const [listingsRes, tradesRes, contractsRes, apiKeysRes, webhooksRes, walletRes, analyticsRes] = await Promise.all([
         fetch('/api/listings?seller=me', { credentials: 'include' }),
@@ -62,8 +67,18 @@ export default function DashboardPage() {
       if (webhooksRes.ok) { const d = await webhooksRes.json(); setWebhooksData(d.webhooks || []); }
       if (walletRes.ok) { const d = await walletRes.json(); setWallet(d); }
       if (analyticsRes.ok) { const d = await analyticsRes.json(); setAnalytics(d); }
+      const failedSections = [
+        ['listings', listingsRes],
+        ['trades', tradesRes],
+        ['contracts', contractsRes],
+        ['API keys', apiKeysRes],
+        ['webhooks', webhooksRes],
+        ['wallet', walletRes],
+      ].filter(([, response]) => !(response as Response).ok).map(([label]) => label);
+      setDataError(failedSections.length > 0 ? `Some account data could not be loaded: ${failedSections.join(', ')}.` : null);
     } catch (error) {
       console.error('Failed to fetch data:', error);
+      setDataError('The dashboard could not reach the marketplace API. Your account data has not been changed.');
     } finally {
       setLoading(false);
     }
@@ -92,6 +107,25 @@ export default function DashboardPage() {
   useEffect(() => {
     checkAuthAndFetch();
   }, [checkAuthAndFetch]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedTab = params.get('tab') as DashboardTab | null;
+    if (requestedTab && PUBLIC_DASHBOARD_TABS.has(requestedTab)) setActiveTab(requestedTab);
+    setFocusedTradeId(params.get('trade') || undefined);
+  }, []);
+
+  const selectTab = (tab: DashboardTab) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    if (tab === 'listings') url.searchParams.delete('tab');
+    else url.searchParams.set('tab', tab);
+    if (tab !== 'trades') {
+      url.searchParams.delete('trade');
+      setFocusedTradeId(undefined);
+    }
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  };
 
   const handleLogout = async () => {
     try {
@@ -148,15 +182,22 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* SDK Quick Start */}
+        {/* Agent integration */}
+        {dataError && (
+          <div role="alert" className="mb-6 flex flex-col justify-between gap-3 rounded-xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100 sm:flex-row sm:items-center">
+            <span>{dataError}</span>
+            <button type="button" onClick={() => void fetchData()} className="btn-secondary shrink-0 py-1.5 text-xs">Retry loading</button>
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <div className="card">
-            <h3 className="text-lg font-bold mb-2">SDK Quick Start 🔌</h3>
-            <p className="text-sm text-text-dim mb-4">Integrate your agent in seconds.</p>
+            <h3 className="text-lg font-bold mb-2">Agent Quick Start 🔌</h3>
+            <p className="text-sm text-text-dim mb-4">Read the live REST and MCP integration contract.</p>
             <div className="bg-bg p-3 rounded-lg border border-border flex items-center justify-between">
-              <code className="text-xs font-mono text-green-400">npm install clawdmarket-sdk</code>
+              <code className="text-xs font-mono text-green-400">curl https://clawdmkt.com/skill.md</code>
               <button 
-                onClick={() => navigator.clipboard.writeText('npm install clawdmarket-sdk')}
+                onClick={() => navigator.clipboard.writeText('curl https://clawdmkt.com/skill.md')}
                 className="text-xs text-accent hover:text-accent2"
               >
                 Copy
@@ -168,7 +209,7 @@ export default function DashboardPage() {
             <p className="text-sm text-text-dim mb-4">Your active agent identity.</p>
             <div className="flex gap-2">
               <button 
-                onClick={() => setActiveTab('api-keys')}
+                onClick={() => selectTab('api-keys')}
                 className="btn-primary py-2 text-xs"
               >
                 Manage API Keys
@@ -184,7 +225,7 @@ export default function DashboardPage() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => selectTab(tab.id)}
               className={`px-6 py-3 font-medium transition-colors border-b-2 whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-accent text-text'
@@ -200,7 +241,7 @@ export default function DashboardPage() {
           <ListingsTab listings={listings} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'trades' && (
-          <TradesTab trades={trades} loading={loading} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
+          <TradesTab trades={trades} loading={loading} currentUserId={user?.id} focusedTradeId={focusedTradeId} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'contracts' && (
           <ContractsTab contracts={contracts as any[]} loading={loading} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
@@ -226,7 +267,7 @@ export default function DashboardPage() {
           <WebhooksTab webhooks={webhooksData} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'admin' && isAdmin && (
-          <AdminTab currentUserId={user?.id || ''} />
+          <AdminTab getCsrfToken={getCsrfToken} />
         )}
       </div>
     </PageShell>

@@ -7,15 +7,23 @@ import { getTaskPendingActions } from '@/lib/agent-contract'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { getAgentUsageCounts, getFeatureQuota, paymentRequiredForQuota, recordAgentUsageEvent, usageHeaders } from '@/lib/agent-usage-policy'
+import { resolveRequestPrincipal } from '@/lib/request-principal'
+import { validateCsrf } from '@/lib/csrf'
+import { createTaskSchema } from '@/lib/validation'
+import { randomUUID } from 'node:crypto'
+import { attachVerifiedMppPrincipal, payerAddressFromRequest } from '@/lib/trade-escrow'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
  const { searchParams } = new URL(request.url)
  const capability = searchParams.get('capability')
- const budgetMin = parseFloat(searchParams.get('budget_min') || '0')
- const budgetMax = parseFloat(searchParams.get('budget_max') || '999999')
- const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
+ const parsedBudgetMin = Number(searchParams.get('budget_min') || '0')
+ const parsedBudgetMax = Number(searchParams.get('budget_max') || '999999')
+ const parsedLimit = Number.parseInt(searchParams.get('limit') || '20', 10)
+ const budgetMin = Number.isFinite(parsedBudgetMin) && parsedBudgetMin >= 0 ? parsedBudgetMin : 0
+ const budgetMax = Number.isFinite(parsedBudgetMax) && parsedBudgetMax >= budgetMin ? parsedBudgetMax : 999999
+ const limit = Number.isInteger(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 20
  const status = searchParams.get('status') || 'open'
  const taskType = searchParams.get('task_type') || ''
  const qParam = searchParams.get('q')?.trim().slice(0, 500) || ''
@@ -64,7 +72,7 @@ export async function GET(request: NextRequest) {
  const bidMap = new Map(bidCounts.map(b => [b.task_id, b.count]))
 
  // Fetch bids with pending counter-offers
- let counterOfferMap = new Map<string, any[]>()
+ const counterOfferMap = new Map<string, any[]>()
  try {
  const coResult = await (db as any).$client.execute({
  sql: `SELECT task_id, id as bid_id, counter_offer_price, counter_offer_status, bidder_agent_id, price_usd
@@ -162,8 +170,9 @@ export async function GET(request: NextRequest) {
  }
  ]
 
- const seeded = (filtered.length === 0 && status === 'open')
- ? (taskType ? genesisTasks.filter((t: any) => (t.task_type || 'general') === taskType) : genesisTasks)
+ const hasFilters = Boolean(capability || taskType || qParam || budgetMin > 0 || budgetMax < 999999)
+ const seeded = (filtered.length === 0 && status === 'open' && !hasFilters)
+ ? genesisTasks.map((task) => ({ ...task, is_demo: true, pendingActions: [] }))
  : filtered
 
  return NextResponse.json({
@@ -180,42 +189,28 @@ export async function GET(request: NextRequest) {
  }
 }
 
-function resolveMppPoster(request: NextRequest) {
- const receipt = (request as any).mppReceipt
- const payer = receipt?.payer || receipt?.payerAddress || receipt?.from || receipt?.account
- return typeof payer === 'string' && payer.trim().length > 0 ? payer.trim() : ''
-}
-
 async function createTask(body: any, posterAgentId: string) {
- const { title, description, required_capabilities, budget_usd, deadline_at, task_type, subject_agent_id, benchmark_id } = body
-
- if (!title || !description || !budget_usd) {
- return NextResponse.json(
- { error: 'invalid_body', message: 'title, description, budget_usd required' },
- { status: 400 }
- )
+ const validated = createTaskSchema.safeParse(body)
+ if (!validated.success) {
+  return NextResponse.json(
+   { error: 'invalid_body', message: 'Task parameters are invalid', details: validated.error.issues },
+   { status: 400 },
+  )
  }
-
- const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+ const { title, description, required_capabilities, budget_usd, deadline_at, task_type, subject_agent_id, benchmark_id } = validated.data
+ const id = `task_${randomUUID()}`
  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
- const budgetUsd = Number(budget_usd)
-
- if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) {
- return NextResponse.json(
- { error: 'invalid_body', message: 'budget_usd must be a positive number' },
- { status: 400 }
- )
+ if (deadline_at && new Date(deadline_at).getTime() <= Date.now()) {
+  return NextResponse.json({ error: 'invalid_body', message: 'deadline_at must be in the future' }, { status: 400 })
  }
 
  await db.insert(tasks).values({
  id,
  posterAgentId,
- title: title.slice(0, 200),
- description: description.slice(0, 2000),
- requiredCapabilities: JSON.stringify(
- Array.isArray(required_capabilities) ? required_capabilities : []
- ),
- budgetUsd,
+ title,
+ description,
+ requiredCapabilities: JSON.stringify(required_capabilities),
+ budgetUsd: budget_usd,
  deadlineAt: deadline_at || null,
  status: 'open',
  taskType: ['general','benchmark','self_improvement'].includes(task_type) ? task_type : 'general',
@@ -232,6 +227,26 @@ export async function POST(request: NextRequest) {
  const body = await request.clone().json().catch(() => ({}))
 
  try {
+ const principal = await resolveRequestPrincipal(request)
+ if (principal?.kind === 'account') {
+  if (principal.usesCookieAuth && !validateCsrf(request)) {
+   return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 })
+  }
+  const accountRateLimit = await rateLimit(`create-task-account:${principal.userId}`, {
+   interval: 60 * 1000,
+   maxRequests: 10,
+  })
+  if (!accountRateLimit.success) {
+   return NextResponse.json(
+    { error: 'rate_limited', message: 'Too many task creation attempts. Please try again later.' },
+    { status: 429, headers: getRateLimitHeaders(accountRateLimit) },
+   )
+  }
+  const response = await createTask(body, principal.agentId || principal.userId)
+  Object.entries(getRateLimitHeaders(accountRateLimit)).forEach(([key, value]) => response.headers.set(key, value))
+  return response
+ }
+
  const agentAuth = await resolveRegisteredAgentRequest(request)
  if (agentAuth.kind === 'agent') {
  const rateLimitResult = await rateLimit(`create-task:${agentAuth.agentId}`, {
@@ -273,8 +288,8 @@ export async function POST(request: NextRequest) {
  amountUsd: 0.001,
  })
 
- return mppx.session({ amount: '0.001', unitType: 'request' })(async (gatedRequest: NextRequest) => {
- const payer = resolveMppPoster(gatedRequest)
+ return mppx.charge({ amount: '0.001' })(async (gatedRequest: NextRequest) => {
+ const payer = payerAddressFromRequest(gatedRequest)
  if (!payer) return paymentRequiredForQuota(quota)
  const response = await createTask(body, agentAuth.agentId)
  if (response.status >= 200 && response.status < 300) {
@@ -297,12 +312,14 @@ export async function POST(request: NextRequest) {
  )
  }
 
- return mppx.session({ amount: '0.001', unitType: 'request' })(async (gatedRequest: NextRequest) => {
- const posterAgentId = resolveMppPoster(gatedRequest)
+ return mppx.charge({ amount: '0.001' })(async (gatedRequest: NextRequest) => {
+ attachVerifiedMppPrincipal(gatedRequest)
+ const paidPrincipal = await resolveRequestPrincipal(gatedRequest)
+ const posterAgentId = paidPrincipal?.agentId || ''
  if (!posterAgentId) {
  return NextResponse.json(
- { error: 'payment_required', message: 'Provide an agent API key or a valid MPP payment receipt' },
- { status: 402 }
+ { error: 'agent_registration_required', message: 'MPP payer must own a registered ClawdMarket agent' },
+ { status: 403 }
  )
  }
 

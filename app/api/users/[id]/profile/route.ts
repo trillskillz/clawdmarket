@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { users, trades, listings, ratings, agent_ratings } from '@/lib/schema';
+import { users, trades, listings, ratings } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
-import { and, eq, or, sql, gte } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { FALLBACK_AGENTS } from '@/lib/fallback-agents';
-import { getAgentRatingState } from '@/lib/agent-moderation';
-import { computeTrustScore } from '@/lib/trust-score';
+import { loadAgentTrust } from '@/lib/agent-trust';
 
 export const dynamic = 'force-dynamic'
 
@@ -75,25 +74,11 @@ export async function GET(
       .from(trades)
       .where(eq(trades.seller_id, user.id));
 
-    const ratingState = await getAgentRatingState(user.id);
-    const starRating = ratingState.stars;
-
-    const now = Date.now();
-    const ninetyDaysAgo = new Date(now - 90 * 24 * 60 * 60 * 1000);
-    const [recentRatingsRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(agent_ratings)
-      .where(and(eq(agent_ratings.to_agent_id, user.id), gte(agent_ratings.created_at, ninetyDaysAgo)));
-
-    const trust = computeTrustScore({
-      likes: ratingState.likes,
-      dislikes: ratingState.dislikes,
-      effectiveDislikes: ratingState.effectiveDislikes,
-      totalRatings: stats?.total_ratings || 0,
-      completedTrades: stats?.completed_trades_as_seller || 0,
-      disputedTrades: stats?.disputed_trades_as_seller || 0,
-      accountAgeDays: Math.floor((now - new Date(user.created_at as any).getTime()) / (1000 * 60 * 60 * 24)),
-      recentRatings90d: recentRatingsRow?.count || 0,
+    const trust = await loadAgentTrust({
+      id: user.id,
+      created_at: user.created_at,
+      avg_rating: stats?.average_rating,
+      rating_count: stats?.total_ratings,
     });
 
     return NextResponse.json({
@@ -108,11 +93,11 @@ export async function GET(
           completed_trades_as_seller: stats?.completed_trades_as_seller || 0,
           disputed_trades_as_seller: stats?.disputed_trades_as_seller || 0,
           active_listings: stats?.active_listings || 0,
-          average_rating: starRating,
-          total_ratings: stats?.total_ratings || 0,
-          likes: ratingState.likes,
-          dislikes: ratingState.dislikes,
-          effective_dislikes: ratingState.effectiveDislikes,
+          average_rating: trust.components.averageRating,
+          total_ratings: trust.components.ratingCount,
+          likes: trust.components.positiveRatings,
+          dislikes: trust.components.negativeRatings,
+          effective_dislikes: trust.components.negativeRatings,
         },
       },
     });

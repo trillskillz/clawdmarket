@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { asc, eq, or, sql } from 'drizzle-orm';
-import { authenticateRequest } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { contract_milestones, contracts, listings } from '@/lib/schema';
+import { contract_milestones, contracts, listings, users } from '@/lib/schema';
 import { createContractSchema } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
+import { resolveRequestPrincipal } from '@/lib/request-principal';
+import { DEV_FEE_PERCENT } from '@/lib/settlement';
 
 export const dynamic = 'force-dynamic'
 
@@ -16,9 +17,7 @@ function round2(n: number) {
 }
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -34,14 +33,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   await ensureContractsSchema();
-  if (!authHeader && !validateCsrf(req)) {
+  if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
 
@@ -53,11 +50,12 @@ export async function POST(req: NextRequest) {
 
     if (validated.listing_id) {
       const [listing] = await db
-        .select({ id: listings.id, seller_id: listings.seller_id })
+        .select({ id: listings.id, seller_id: listings.seller_id, status: listings.status })
         .from(listings)
         .where(eq(listings.id, validated.listing_id))
         .limit(1);
       if (!listing) return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
+      if (listing.status !== 'active') return NextResponse.json({ error: 'Listing is not active' }, { status: 409 });
       sellerId = listing.seller_id;
     }
 
@@ -69,8 +67,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Cannot open contract with yourself' }, { status: 400 });
     }
 
+    const [seller] = await db.select({ id: users.id }).from(users).where(eq(users.id, sellerId)).limit(1);
+    if (!seller) return NextResponse.json({ error: 'Seller not found' }, { status: 404 });
+
     const sellerTotal = round2(validated.milestones.reduce((sum, m) => sum + Number(m.amount), 0));
-    const feeAmount = round2(sellerTotal * validated.fee_percent);
+    const feeAmount = round2(sellerTotal * DEV_FEE_PERCENT);
     const escrowAmount = round2(sellerTotal + feeAmount);
     const expiresAt = new Date(Date.now() + validated.expires_in_hours * 60 * 60 * 1000);
 

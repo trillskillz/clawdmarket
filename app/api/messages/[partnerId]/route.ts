@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { messages } from '@/lib/schema';
+import { agents, messages } from '@/lib/schema';
 import { eq, or, and, asc } from 'drizzle-orm';
-import { getSession } from '@/lib/auth';
 import { decryptMessage } from '@/lib/chat-crypto';
+import { resolveRequestPrincipal } from '@/lib/request-principal';
+import { ensureSyntheticAgentUser } from '@/lib/registered-agent-auth';
 
 export const dynamic = 'force-dynamic'
 
@@ -13,14 +14,30 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ partnerId: string }> }
 ) {
-  const { partnerId } = await params;
+  const { partnerId: requestedPartnerId } = await params;
   try {
-    const session = await getSession();
-    if (!session) {
+    const principal = await resolveRequestPrincipal(req);
+    if (!principal) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const userId = principal.userId;
+    let partnerId = requestedPartnerId;
+    if (!partnerId.startsWith('user_agent_')) {
+      const [registeredAgent] = await db
+        .select({ id: agents.id, name: agents.name })
+        .from(agents)
+        .where(eq(agents.id, partnerId))
+        .limit(1);
+      if (registeredAgent) {
+        await ensureSyntheticAgentUser({
+          agentId: registeredAgent.id,
+          name: registeredAgent.name,
+          syntheticUserId: `user_agent_${registeredAgent.id}`,
+        });
+        partnerId = `user_agent_${registeredAgent.id}`;
+      }
+    }
 
     const conversation = await db.query.messages.findMany({
       where: or(

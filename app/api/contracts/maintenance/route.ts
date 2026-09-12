@@ -1,9 +1,11 @@
-import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
+import crypto from 'crypto';
+import { and, asc, eq, or, sql } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { contract_milestones, contracts } from '@/lib/schema';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
+import { ensureContractWallets, refundContractFunds } from '@/lib/contract-settlement';
 
 export const dynamic = 'force-dynamic'
 
@@ -11,10 +13,12 @@ function isAuthorized(req: NextRequest) {
   const expected = process.env.MAINTENANCE_SECRET || '';
   if (!expected) return false;
   const gotHeader = req.headers.get('x-maintenance-secret') || '';
-  const gotQuery = req.nextUrl.searchParams.get('secret') || '';
   const authz = req.headers.get('authorization') || '';
   const bearer = authz.startsWith('Bearer ') ? authz.slice(7) : '';
-  return gotHeader === expected || gotQuery === expected || bearer === expected;
+  return [gotHeader, bearer].some((candidate) => {
+    if (candidate.length !== expected.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(expected));
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -28,24 +32,37 @@ export async function POST(req: NextRequest) {
   let expiredContracts = 0;
   let autoApprovedMilestones = 0;
 
-  await db.transaction(async (tx) => {
-    const expirable = await tx
-      .select({ id: contracts.id })
+  const expirable = await db
+      .select({ id: contracts.id, buyer_id: contracts.buyer_id, seller_id: contracts.seller_id, total_amount: contracts.total_amount })
       .from(contracts)
       .where(
         and(
-          inArray(contracts.state, ['FUNDED', 'IN_PROGRESS', 'AWAITING_REVIEW', 'DISPUTED']),
+          eq(contracts.state, 'FUNDED'),
           sql`${contracts.expires_at} IS NOT NULL`,
           sql`${contracts.expires_at} <= ${now}`,
         )
       );
 
-    if (expirable.length > 0) {
-      await tx
+  for (const contract of expirable) {
+    await ensureContractWallets(contract.buyer_id, contract.seller_id);
+  }
+
+  await db.transaction(async (tx) => {
+    for (const contract of expirable) {
+      const expired = await tx
         .update(contracts)
-        .set({ state: 'EXPIRED', updated_at: now })
-        .where(inArray(contracts.id, expirable.map((c) => c.id)));
-      expiredContracts += expirable.length;
+        .set({ state: 'REFUNDED', updated_at: now })
+        .where(and(eq(contracts.id, contract.id), eq(contracts.state, 'FUNDED')))
+        .returning({ id: contracts.id });
+
+      if (expired.length > 0) {
+        await refundContractFunds(tx, {
+          contractId: contract.id,
+          buyerId: contract.buyer_id,
+          amount: contract.total_amount,
+        });
+        expiredContracts += 1;
+      }
     }
 
     const reviewMilestones = await tx
@@ -62,11 +79,12 @@ export async function POST(req: NextRequest) {
       const reviewedAt = new Date(m.updated_at as any).getTime();
       const deadline = reviewedAt + Number(m.review_window_hours || 24) * 60 * 60 * 1000;
       if (deadline <= now.getTime()) {
-        await tx
+        const approved = await tx
           .update(contract_milestones)
           .set({ state: 'APPROVED', updated_at: now })
-          .where(eq(contract_milestones.id, m.id));
-        autoApprovedMilestones += 1;
+          .where(and(eq(contract_milestones.id, m.id), eq(contract_milestones.state, 'AWAITING_BUYER_REVIEW')))
+          .returning({ id: contract_milestones.id });
+        autoApprovedMilestones += approved.length;
       }
     }
 

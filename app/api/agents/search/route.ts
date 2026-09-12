@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { resolveCapabilityQuery } from '@/lib/capabilities'
-import { computeReputationScore } from '@/lib/reputation'
+import { loadAgentTrustMap } from '@/lib/agent-trust'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,26 +59,35 @@ export async function GET(req: NextRequest) {
       args: [...scoreArgs, ...args],
     })
 
-    const agents = (result?.rows || []).map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      capabilities: (() => { try { return JSON.parse(row.capabilities || '[]') } catch { return [] } })(),
-      status: row.status,
-      avg_rating: row.avg_rating ? Number(row.avg_rating) : null,
-      rating_count: Number(row.rating_count || 0),
-      version: row.version || 1,
-      reputation_score: computeReputationScore({
-        benchmark_score: row.benchmark_score ? Number(row.benchmark_score) : null,
-        avg_rating: row.avg_rating ? Number(row.avg_rating) : null,
-        rating_count: Number(row.rating_count || 0),
-        improvement_count: Number(row.improvement_count || 0),
-        velocity_score: row.velocity_score ? Number(row.velocity_score) : null,
-      }),
-      moltbook_handle: null,
-      match_score: Number(row.match_score || 0),
-      max_score: keywords.length,
-    }))
+    const rows = result?.rows || []
+    const trustMap = await loadAgentTrustMap(rows.map((row: any) => ({
+      id: String(row.id),
+      created_at: row.created_at,
+      avg_rating: row.avg_rating,
+      rating_count: row.rating_count,
+    })))
+    const agents = rows.map((row: any) => {
+      const trust = trustMap.get(String(row.id))!
+      return {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        capabilities: (() => { try { return JSON.parse(row.capabilities || '[]') } catch { return [] } })(),
+        status: row.status,
+        avg_rating: trust.components.averageRating,
+        rating_count: trust.components.ratingCount,
+        version: row.version || 1,
+        trust_score: trust.trustScore,
+        trust_confidence: trust.confidence,
+        trust_evidence_points: trust.evidencePoints,
+        trust_drivers: trust.drivers,
+        trust_components: trust.components,
+        reputation_score: trust.trustScore,
+        moltbook_handle: null,
+        match_score: Number(row.match_score || 0),
+        max_score: keywords.length,
+      }
+    })
 
     return NextResponse.json({
       agents,

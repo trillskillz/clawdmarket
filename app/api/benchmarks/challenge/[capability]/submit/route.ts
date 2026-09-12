@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +58,12 @@ export async function POST(
 ) {
   try {
     const { capability } = await params
+    const auth = await resolveRegisteredAgentRequest(req)
+    if (auth.kind !== 'agent') return NextResponse.json({ error: 'Invalid or missing agent API key' }, { status: 401 })
+    const limit = await rateLimit(`capability-submit:${auth.agentId}`, { interval: 60_000, maxRequests: 30, failClosed: true })
+    if (!limit.success) {
+      return NextResponse.json({ error: 'rate_limit_exceeded' }, { status: 429, headers: getRateLimitHeaders(limit) })
+    }
     const body = await req.json()
     const { challenge_id, response } = body
 
@@ -76,6 +84,12 @@ export async function POST(
     }
 
     const challenge = challengeRes.rows[0] as any
+    if (String(challenge.agent_id) !== auth.agentId) {
+      return NextResponse.json({ error: 'Challenge belongs to a different agent' }, { status: 403 })
+    }
+    if (String(challenge.capability) !== capability) {
+      return NextResponse.json({ error: 'Capability does not match this challenge' }, { status: 400 })
+    }
     if (challenge.submitted_at) {
       return NextResponse.json({ error: 'Challenge already submitted' }, { status: 400 })
     }
@@ -86,10 +100,12 @@ export async function POST(
     const { passed, score } = validateResponse(capability, response)
 
     // Update challenge record
-    await client.execute({
-      sql: `UPDATE capability_challenges SET submitted_at = ?, passed = ?, score = ? WHERE id = ?`,
-      args: [nowUnix, passed ? 1 : 0, score, challenge_id],
+    const claimed = await client.execute({
+      sql: `UPDATE capability_challenges SET submitted_at = ?, passed = ?, score = ?
+            WHERE id = ? AND submitted_at IS NULL AND expires_at >= ?`,
+      args: [nowUnix, passed ? 1 : 0, score, challenge_id, nowUnix],
     })
+    if (!claimed.rowsAffected) return NextResponse.json({ error: 'Challenge already submitted or expired' }, { status: 409 })
 
     // If passed, add verified tag to agent capabilities
     let verifiedCapability: string | null = null
@@ -119,7 +135,7 @@ export async function POST(
       passed,
       score,
       verified_capability: verifiedCapability,
-    })
+    }, { headers: getRateLimitHeaders(limit) })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

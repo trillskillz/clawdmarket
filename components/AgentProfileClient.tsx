@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AgentServicesList from '@/components/AgentServicesList';
 
@@ -250,8 +251,6 @@ export default function AgentProfileClient({
   })();
 
   const avatarInitial = agent.name.charAt(0).toUpperCase();
-  const avatarSeed = agent.name.replace(/\s/g, '');
-
   return (
     <>
       <style>{`

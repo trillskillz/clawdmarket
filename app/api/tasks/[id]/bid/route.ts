@@ -6,6 +6,9 @@ import { mppx } from '@/lib/mpp'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { getAgentUsageCounts, getFeatureQuota, paymentRequiredForQuota, recordAgentUsageEvent, usageHeaders } from '@/lib/agent-usage-policy'
+import { resolveRequestPrincipal } from '@/lib/request-principal'
+import { attachVerifiedMppPrincipal, payerAddressFromRequest } from '@/lib/trade-escrow'
+import { deliverWebhookEvent } from '@/lib/webhook-delivery'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,12 +40,6 @@ async function resolveBearerBidder(request: NextRequest) {
   : agentAuth
 }
 
-function resolveMppBidder(request: NextRequest) {
- const receipt = (request as any).mppReceipt
- const payer = receipt?.payer || receipt?.payerAddress || receipt?.from || receipt?.account
- return typeof payer === 'string' && payer.trim().length > 0 ? payer.trim() : ''
-}
-
 async function createBid(taskId: string, body: any, bidderAgentId: string) {
  const parsed = parseBidBody(body)
  if ('error' in parsed) {
@@ -61,6 +58,12 @@ async function createBid(taskId: string, body: any, bidderAgentId: string) {
    { error: 'task_not_open', message: 'Task is no longer accepting bids' },
    { status: 409 }
   )
+ }
+ if (task.posterAgentId === bidderAgentId || task.posterAgentId === `user_agent_${bidderAgentId}`) {
+  return NextResponse.json({ error: 'Cannot bid on your own task' }, { status: 403 })
+ }
+ if (new Date(task.expiresAt).getTime() <= Date.now() || (task.deadlineAt && new Date(task.deadlineAt).getTime() <= Date.now())) {
+  return NextResponse.json({ error: 'task_expired' }, { status: 409 })
  }
 
  const existing = await db.select({ id: bids.id }).from(bids)
@@ -86,6 +89,12 @@ async function createBid(taskId: string, body: any, bidderAgentId: string) {
   status: 'pending',
   createdAt: new Date().toISOString(),
  })
+
+ await Promise.allSettled([(async () => {
+  const user = await db.$client.execute({ sql: 'SELECT id FROM users WHERE id = ?', args: [task.posterAgentId] })
+  const recipient = user.rows.length ? task.posterAgentId : `user_agent_${task.posterAgentId}`
+  await deliverWebhookEvent(recipient, 'task.bid_received', { task_id: taskId, bid_id: id, bidder_agent_id: bidderAgentId, workspace_url: `/taskboard/${taskId}` })
+ })()])
 
  return NextResponse.json({ ok: true, bid_id: id, bidder_agent_id: bidderAgentId })
 }
@@ -136,8 +145,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     amountUsd: 0.001,
    })
 
-   return mppx.session({ amount: '0.001', unitType: 'request' })(async (gatedRequest: NextRequest) => {
-    const payer = resolveMppBidder(gatedRequest)
+   return mppx.charge({ amount: '0.001' })(async (gatedRequest: NextRequest) => {
+    const payer = payerAddressFromRequest(gatedRequest)
     if (!payer) return paymentRequiredForQuota(quota)
     const response = await createBid(taskId, body, bearerBidder.agentId)
     if (response.status >= 200 && response.status < 300) {
@@ -160,12 +169,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
    )
   }
 
-  return mppx.session({ amount: '0.001', unitType: 'request' })(async (gatedRequest: NextRequest) => {
-   const bidderAgentId = resolveMppBidder(gatedRequest)
+  return mppx.charge({ amount: '0.001' })(async (gatedRequest: NextRequest) => {
+   attachVerifiedMppPrincipal(gatedRequest)
+   const paidPrincipal = await resolveRequestPrincipal(gatedRequest)
+   const bidderAgentId = paidPrincipal?.agentId || ''
    if (!bidderAgentId) {
     return NextResponse.json(
-     { error: 'payment_required', message: 'Provide an agent API key or a valid MPP payment receipt' },
-     { status: 402 }
+     { error: 'agent_registration_required', message: 'MPP payer must own a registered ClawdMarket agent' },
+     { status: 403 }
     )
    }
 

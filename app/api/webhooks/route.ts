@@ -5,7 +5,10 @@ import { db } from '@/lib/db';
 import { webhooks } from '@/lib/schema';
 import { mppx } from '@/lib/mpp';
 import { createWebhookSchema } from '@/lib/validation';
-import { agentIdFromRequestPayer, hashSecret } from '@/lib/webhook-delivery';
+import { createWebhookSecret, hashSecret } from '@/lib/webhook-delivery';
+import { resolveRequestPrincipal } from '@/lib/request-principal';
+import { validateCsrf } from '@/lib/csrf';
+import { assertSafeWebhookDestination } from '@/lib/webhook-url';
 
 export const dynamic = 'force-dynamic'
 
@@ -17,20 +20,25 @@ async function createWebhook(req: NextRequest) {
   }
 
   const { url, events } = validated.data;
-  if (!url.startsWith('https://')) {
-    return NextResponse.json({ error: 'invalid_url' }, { status: 400 });
+  const principal = await resolveRequestPrincipal(req);
+  if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (principal.usesCookieAuth && !validateCsrf(req)) {
+    return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
-
-  const agentId = await agentIdFromRequestPayer(req);
-  if (!agentId) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-
-  const secret = `${randomUUID()}${randomUUID()}`;
+  try {
+    await assertSafeWebhookDestination(url);
+  } catch {
+    return NextResponse.json({ error: 'invalid_url', message: 'Webhook destination must resolve to a public HTTPS address' }, { status: 400 });
+  }
+  const webhookId = randomUUID();
+  const secret = createWebhookSecret(webhookId);
   const secretHash = await hashSecret(secret);
 
   const [created] = await db
     .insert(webhooks)
     .values({
-      agent_id: agentId,
+      id: webhookId,
+      agent_id: principal.userId,
       url,
       secret_hash: secretHash,
       events: JSON.stringify(events),
@@ -38,12 +46,16 @@ async function createWebhook(req: NextRequest) {
     })
     .returning({ id: webhooks.id });
 
-  return NextResponse.json({ webhook_id: created.id, secret }, { status: 201 });
+  return NextResponse.json({
+    webhook_id: created.id,
+    webhook: { id: created.id, url, events, active: true },
+    secret,
+  }, { status: 201 });
 }
 
 async function listWebhooks(req: NextRequest) {
-  const agentId = await agentIdFromRequestPayer(req);
-  if (!agentId) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const principal = await resolveRequestPrincipal(req);
+  if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const rows = await db
     .select({
@@ -56,7 +68,7 @@ async function listWebhooks(req: NextRequest) {
       failure_count: webhooks.failure_count,
     })
     .from(webhooks)
-    .where(eq(webhooks.agent_id, agentId));
+    .where(eq(webhooks.agent_id, principal.userId));
 
   return NextResponse.json({
     webhooks: rows.map((w) => ({ ...w, events: JSON.parse(w.events || '[]') })),
@@ -64,8 +76,12 @@ async function listWebhooks(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const principal = await resolveRequestPrincipal(req);
+  if (principal) return createWebhook(req);
   return mppx.session({ amount: '0.001', unitType: 'request' })(createWebhook)(req);
 }
 export async function GET(req: NextRequest) {
+  const principal = await resolveRequestPrincipal(req);
+  if (principal) return listWebhooks(req);
   return mppx.session({ amount: '0.001', unitType: 'request' })(listWebhooks)(req);
 }

@@ -28,7 +28,7 @@
  "type": "object",
  "required": ["protocol"],
  "properties": {
- "protocol": { "enum": ["mpp", "x402", "evm", "solana", "bitcoin", "kaspa", "lightning"] },
+ "protocol": { "enum": ["ledger", "mpp", "evm"] },
  "address": { "type": "string" },
  "chain": { "type": "string" },
  "chain_id": { "type": "integer" },

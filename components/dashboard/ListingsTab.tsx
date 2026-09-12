@@ -5,6 +5,7 @@ import { useToast } from '@/components/Toast';
 import PriceWithKas from '@/components/PriceWithKas';
 import { SkeletonListItem } from '@/components/Skeleton';
 import Link from 'next/link';
+import { trackClientEvent } from '@/lib/client-analytics';
 
 interface Listing {
   id: string;
@@ -26,7 +27,7 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
   const { toast } = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
-    category: 'compute' as 'compute' | 'skills' | 'data' | 'bounties' | 'other',
+    category: 'analysis' as 'compute' | 'skills' | 'data' | 'code' | 'analysis' | 'bounties' | 'other',
     title: '',
     description: '',
     price_bankr: '',
@@ -50,8 +51,9 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
 
       if (res.ok) {
         setShowCreate(false);
-        setForm({ category: 'compute', title: '', description: '', price_bankr: '' });
-        toast('Listing created successfully!', 'success');
+        setForm({ category: 'analysis', title: '', description: '', price_bankr: '' });
+        toast('Listing is live and ready to hire.', 'success');
+        trackClientEvent('listing_created', { category: form.category, price_usd: Number(form.price_bankr) });
         await onRefresh();
       } else {
         const data = await res.json();
@@ -84,12 +86,15 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
           <h3 className="text-lg font-semibold mb-4">Create New Listing</h3>
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Category</label>
+              <label htmlFor="listing-category" className="block text-sm font-medium mb-2">Category</label>
               <select
+                id="listing-category"
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value as any })}
                 className="input-field"
               >
+                <option value="analysis">🔎 Research &amp; Analysis</option>
+                <option value="code">⌨ Code Review &amp; Development</option>
                 <option value="compute">⚡ Compute</option>
                 <option value="skills">🧩 Skills</option>
                 <option value="data">📊 Data</option>
@@ -98,39 +103,46 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Title</label>
+              <label htmlFor="listing-title" className="block text-sm font-medium mb-2">Title</label>
               <input
+                id="listing-title"
                 type="text"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 required
                 className="input-field"
-                placeholder="500 GPT-4 API calls"
+                minLength={5}
+                maxLength={100}
+                placeholder="Competitive landscape report"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Description</label>
+              <label htmlFor="listing-description" className="block text-sm font-medium mb-2">Description</label>
               <textarea
+                id="listing-description"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 required
+                minLength={20}
+                maxLength={1000}
                 rows={4}
                 className="input-field"
-                placeholder="Describe what you're offering..."
+                placeholder="Describe the deliverable, expected turnaround, and what the buyer receives."
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Price (USDT)</label>
+              <label htmlFor="listing-price" className="block text-sm font-medium mb-2">Price (USD)</label>
               <input
+                id="listing-price"
                 type="number"
-                step="1"
-                min={1}
-                max={999999999}
+                step="0.01"
+                min={0.01}
+                max={1000000000}
                 value={form.price_bankr}
                 onChange={(e) => setForm({ ...form, price_bankr: e.target.value })}
                 required
                 className="input-field"
-                placeholder="1 - 999,999,999"
+                placeholder="0.01 - 1,000,000,000"
               />
             </div>
             <div className="flex gap-3">
@@ -144,8 +156,9 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
       {listings.length === 0 ? (
         <div className="text-center py-12 text-text-dim">
           <div className="text-5xl mb-3">📋</div>
-          <p>You haven&apos;t created any listings yet.</p>
-          <p className="text-sm">Create your first listing to start trading!</p>
+          <p>You haven&apos;t published a service yet.</p>
+          <p className="text-sm mb-5">Start with one specific, repeatable deliverable a buyer can evaluate.</p>
+          <button type="button" onClick={() => setShowCreate(true)} className="btn-primary">Publish your first service</button>
         </div>
       ) : (
         <div className="space-y-4">

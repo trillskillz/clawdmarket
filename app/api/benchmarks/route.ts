@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { benchmarks, agents } from '@/lib/schema'
 import { eq, desc } from 'drizzle-orm'
-import { mppx } from '@/lib/mpp'
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
+
+const createBenchmarkSchema = z.object({
+ agent_id: z.string().trim().min(1).max(200),
+ capability: z.string().trim().min(1).max(80),
+ test_input: z.string().min(1).max(50_000),
+ scoring_rubric: z.string().max(5_000).optional(),
+})
 
 export async function GET(request: NextRequest) {
  const { searchParams } = new URL(request.url)
@@ -22,65 +31,45 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
- return mppx.session({ amount: '0.001', unitType: 'request' })(async (request: NextRequest) => {
  try {
- const body = await request.json()
- const { agent_id, capability, test_input, scoring_rubric, test_output, score, scored_by_agent_id } = body
+ const auth = await resolveRegisteredAgentRequest(request)
+ if (auth.kind !== 'agent') return NextResponse.json({ error: 'Invalid or missing agent API key' }, { status: 401 })
+ const evaluator = await db.select({ status: agents.status }).from(agents).where(eq(agents.id, auth.agentId)).get().catch(() => null)
+ if (!evaluator || evaluator.status !== 'active') return NextResponse.json({ error: 'Evaluator agent must be active' }, { status: 403 })
+ const rl = await rateLimit(`benchmark-create:${auth.agentId}`, { interval: 60_000, maxRequests: 20 })
+ if (!rl.success) return NextResponse.json({ error: 'rate_limited' }, { status: 429, headers: getRateLimitHeaders(rl) })
 
- if (!agent_id || !capability || !test_input) {
- return NextResponse.json(
- { error: 'invalid_body', message: 'agent_id, capability, test_input required' },
- { status: 400 }
- )
- }
+ const parsed = createBenchmarkSchema.safeParse(await request.json().catch(() => null))
+ if (!parsed.success) return NextResponse.json({ error: 'invalid_body', details: parsed.error.issues }, { status: 400 })
+ const { agent_id, capability, test_input, scoring_rubric } = parsed.data
 
  const agent = await db.select().from(agents)
  .where(eq(agents.id, agent_id)).get().catch(() => null)
  if (!agent) return NextResponse.json({ error: 'agent_not_found' }, { status: 404 })
 
- const id = `bm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+ const id = `bm_${crypto.randomUUID()}`
  const now = new Date().toISOString()
- const isScored = score !== undefined && score !== null
- const finalScore = isScored ? parseFloat(score) : null
 
  await db.insert(benchmarks).values({
  id,
  agentId: agent_id,
  capability,
  testInput: test_input,
- testOutput: test_output || null,
+ testOutput: null,
  scoringRubric: scoring_rubric || 'accuracy, completeness, response quality (0-100)',
- score: finalScore,
- scoredByAgentId: scored_by_agent_id || null,
- status: isScored ? 'scored' : 'pending',
+ score: null,
+ scoredByAgentId: null,
+ status: 'pending',
  createdAt: now,
- scoredAt: isScored ? now : null,
+ scoredAt: null,
  })
 
- if (isScored) {
- const history = (() => {
- try { return JSON.parse(agent.benchmarkHistory || '[]') }
- catch { return [] }
- })()
- history.push({ score: finalScore, at: now })
- const recentHistory = history.slice(-20)
- const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
- const oldEntry = recentHistory.find((h: any) => new Date(h.at).getTime() < thirtyDaysAgo)
- const velocity = oldEntry ? parseFloat((finalScore! - oldEntry.score).toFixed(2)) : null
-
- await db.update(agents).set({
- benchmarkScore: finalScore,
- benchmarkCount: (agent.benchmarkCount || 0) + 1,
- benchmarkHistory: JSON.stringify(recentHistory),
- velocityScore: velocity,
- lastBenchmarkAt: now,
- }).where(eq(agents.id, agent_id))
- }
-
- return NextResponse.json({ ok: true, benchmark_id: id, score: finalScore, status: isScored ? 'scored' : 'pending' })
+ return NextResponse.json(
+  { ok: true, benchmark_id: id, score: null, status: 'pending', evaluator_agent_id: auth.agentId },
+  { status: 201, headers: getRateLimitHeaders(rl) },
+ )
 
  } catch (err: any) {
  return NextResponse.json({ error: 'benchmark_failed', detail: err.message }, { status: 500 })
  }
- })(request)
 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { agents, trades, ratings, payment_receipts, tasks } from '@/lib/schema'
 import { eq, or, sql } from 'drizzle-orm'
@@ -7,7 +7,7 @@ import { ensurePaymentRailColumn } from '@/lib/ensure-payment-rail'
 export const dynamic = 'force-dynamic'
 
 async function getVolumeByRail() {
-  const defaults = { mpp: 0, x402: 0, evm: 0, solana: 0, bitcoin: 0 }
+  const defaults = { ledger: 0, mpp: 0, evm: 0 }
   try {
     const client = (db as any).$client
     const result = await client.execute(
@@ -26,7 +26,7 @@ async function getVolumeByRail() {
   return defaults
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   await ensurePaymentRailColumn()
   const [{ agent_count = 1 } = { agent_count: 1 }] = await db
     .select({ agent_count: sql<number>`COALESCE(COUNT(*), 0)` })
@@ -99,10 +99,6 @@ export async function GET(_req: NextRequest) {
     waitlist_count: 0,
     services_listed: 0,
     volume_by_rail: await getVolumeByRail(),
-    solana_volume_usd: 0,
-    solana_tx_count: 0,
-    bitcoin_volume_usd: 0,
-    bitcoin_tx_count: 0,
     total_tasks: Number(total_tasks || 0),
 
     discovery: {
@@ -114,7 +110,7 @@ export async function GET(_req: NextRequest) {
       wallets: 'https://clawdmkt.com/api/wallets',
       spec: 'https://clawdmkt.com/agent-spec.json',
     },
-    payment_methods: ['mpp', 'x402', 'evm', 'solana', 'bitcoin'],
+    payment_methods: ['ledger', 'mpp', 'evm'],
     platform_fee_pct: 5,
     self_improvement_supported: true,
     versioning_supported: true,

@@ -1,79 +1,52 @@
-#!/bin/bash
-echo "======================================"
-echo " ClawdMarket Pre-Deploy Check"
-echo "======================================"
+#!/usr/bin/env bash
+set -euo pipefail
 
-FAILED=0
+required_files=(
+  "app/api/agents/list/route.ts"
+  "app/api/contracts/route.ts"
+  "app/api/listings/route.ts"
+  "app/api/mcp/route.ts"
+  "app/api/tasks/route.ts"
+  "app/api/tasks/[id]/fund/route.ts"
+  "app/api/trades/route.ts"
+  "app/api/trades/[id]/delivery/route.ts"
+  "app/.well-known/agent.json/route.ts"
+  "app/.well-known/mpp.json/route.ts"
+  "app/docs/page.tsx"
+  "app/marketplace/page.tsx"
+  "app/taskboard/[id]/page.tsx"
+  "app/work/page.tsx"
+  "app/registry/page.tsx"
+  "lib/db.ts"
+  "lib/request-principal.ts"
+  "lib/schema.ts"
+  "lib/settlement.ts"
+  "public/agent-spec.json"
+  "app/llms.txt/route.ts"
+)
 
-check() {
- if [ -e "$1" ]; then
- echo " ✅ $1"
- else
- echo " ❌ MISSING: $1"
- FAILED=1
- fi
-}
-
-# Critical API routes
-check "app/api/tasks/route.ts"
-check "app/api/benchmarks/route.ts"
-check "app/api/capabilities/route.ts"
-check "app/api/ping/route.ts"
-check "app/api/wallets/route.ts"
-check "app/api/agents/list/route.ts"
-check "app/api/agents/[id]/route.ts"
-check "app/api/cron/monitor/route.ts"
-check "app/api/stats/route.ts"
-check "app/api/leaderboard/route.ts"
-check "app/api/activity/route.ts"
-
-# Critical pages
-check "app/taskboard/page.tsx"
-check "app/leaderboard/page.tsx"
-check "app/observe/page.tsx"
-check "app/registry/page.tsx"
-check "app/registry/[id]/page.tsx"
-check "app/docs/page.tsx"
-check "app/not-for-humans/page.tsx"
-
-# Critical components + config
-check "components/Nav.tsx"
-check "proxy.ts"
-check "lib/wallet-addresses.ts"
-check "lib/schema.ts"
-check "lib/db.ts"
-check "lib/mpp.ts"
-check "scripts/seed.ts"
-check "public/llms.txt"
-check "public/robots.txt"
-check "public/agent-spec.json"
-check "vercel.json"
-
-# Check proxy allows API passthrough (either explicit check or pass-all-through design)
-if grep -q "startsWith('/api/')" proxy.ts 2>/dev/null || grep -q "NextResponse.next()" proxy.ts 2>/dev/null; then
- echo " ✅ proxy API passthrough"
-else
- echo " ❌ proxy missing API passthrough"
- FAILED=1
-fi
-
-# Check schema has all tables
-TABLES="agents trades tasks bids benchmarks agent_versions agent_improvements"
-for table in $TABLES; do
- if grep -q "$table" lib/schema.ts 2>/dev/null; then
- echo " ✅ schema table: $table"
- else
- echo " ❌ schema missing table: $table"
- FAILED=1
- fi
+for required_file in "${required_files[@]}"; do
+  if [[ ! -f "$required_file" ]]; then
+    echo "Missing required deployment file: $required_file" >&2
+    exit 1
+  fi
 done
 
-echo "======================================"
-if [ $FAILED -eq 0 ]; then
- echo " ✅ ALL CHECKS PASSED -- safe to deploy"
- exit 0
-else
- echo " ❌ CHECKS FAILED -- do not deploy"
- echo " Fix missing files before deploying"
- exit 1
+if ! rg -q "startsWith\('/api/'\)|NextResponse\.next\(\)" proxy.ts; then
+  echo "proxy.ts does not expose the expected API passthrough" >&2
+  exit 1
 fi
+
+echo "Generating Next.js route types"
+pnpm exec next typegen
+
+echo "Checking TypeScript"
+pnpm run typecheck
+
+echo "Checking lint"
+pnpm run lint
+
+echo "Running automated tests"
+pnpm test
+
+echo "Pre-deploy checks passed"

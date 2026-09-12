@@ -4,6 +4,7 @@ import { analytics_events } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,13 @@ const trackEventSchema = z.object({
     'add_favorite',
     'remove_favorite',
     'view_profile',
-    'copy_install_cmd'
+    'copy_install_cmd',
+    'hire_started',
+    'trade_created',
+    'delivery_submitted',
+    'trade_completed',
+    'rating_submitted',
+    'listing_created',
   ]),
   metadata: z.record(z.string(), z.any()).optional(),
 });
@@ -35,7 +42,12 @@ async function ensureAnalyticsTable() {
 }
 
 function hashIp(ip: string) {
-  return crypto.createHash('sha256').update(ip + (process.env.JWT_SECRET || 'salt')).digest('hex').substring(0, 16);
+  let salt = process.env.ANALYTICS_SALT?.trim() || process.env.JWT_SECRET?.trim();
+  if (!salt) {
+    if (process.env.NODE_ENV === 'production') throw new Error('ANALYTICS_SALT or JWT_SECRET is required for analytics hashing');
+    salt = 'clawdmarket-local-analytics-salt';
+  }
+  return crypto.createHash('sha256').update(`${salt}:${ip}`).digest('hex').substring(0, 16);
 }
 
 export async function POST(req: NextRequest) {
@@ -48,8 +60,18 @@ export async function POST(req: NextRequest) {
     const cookieToken = req.cookies.get('auth-token')?.value;
     const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
     
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || req.headers.get('x-real-ip')
+      || 'unknown';
+    const limit = await rateLimit(`analytics:${ip}`, { interval: 60_000, maxRequests: 120, failClosed: true });
+    if (!limit.success) {
+      return NextResponse.json({ success: false, error: 'rate_limit_exceeded' }, { status: 429, headers: getRateLimitHeaders(limit) });
+    }
     const ip_hash = hashIp(ip);
+    const metadataJson = metadata ? JSON.stringify(metadata) : null;
+    if (metadataJson && metadataJson.length > 10_000) {
+      return NextResponse.json({ success: false, error: 'metadata_too_large' }, { status: 413 });
+    }
 
     // Ensure table exists (safe to call repeatedly in this lightweight setup)
     await ensureAnalyticsTable();
@@ -57,11 +79,11 @@ export async function POST(req: NextRequest) {
     await db.insert(analytics_events).values({
       user_id: auth?.userId || null,
       event_type,
-      metadata: metadata ? JSON.stringify(metadata) : null,
+      metadata: metadataJson,
       ip_hash,
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: getRateLimitHeaders(limit) });
   } catch (error) {
     console.error('Analytics error:', error);
     // Return success anyway to not break client

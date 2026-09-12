@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { transactions, trades } from '@/lib/schema';
-import { authenticateRequest } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { getBalance } from '@/lib/wallet';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq, or, desc, and, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
+import { resolveRequestPrincipal } from '@/lib/request-principal';
 
 export const dynamic = 'force-dynamic'
 
@@ -14,9 +14,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/wallet — Get authenticated user's wallet balance + recent transactions
  */
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -34,7 +32,7 @@ export async function GET(req: NextRequest) {
     const [pending] = await db
       .select({ pending_escrow: sql<number>`coalesce(sum(${trades.amount}), 0)` })
       .from(trades)
-      .where(and(eq(trades.buyer_id, auth.userId), eq(trades.status, 'pending')));
+      .where(and(eq(trades.buyer_id, auth.userId), sql`${trades.status} IN ('pending', 'escrow_held', 'pending_release')`));
 
     const recentTx = await db
       .select()
@@ -55,7 +53,8 @@ export async function GET(req: NextRequest) {
       ticker: '$USDC',
       ...balance,
       escrow,
-      available: Math.max(0, balance.balance - escrow),
+      // balance already excludes ledger funds moved into escrow.
+      available: Math.max(0, balance.balance),
       transactions: recentTx,
       ...envMeta('clawdmarket/api/wallet'),
     }, { headers: getRateLimitHeaders(rateLimitResult) });

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { agent_sessions } from '@/lib/schema';
 import { envMeta } from '@/lib/agent-environment';
 import { sha256 } from '@/lib/agent-security';
+import { validateCsrf } from '@/lib/csrf';
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,9 @@ export async function POST(req: NextRequest) {
 
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED', ...envMeta('clawdmarket/api/agent/session') }, { status: 401 });
+  }
+  if (!authHeader && !validateCsrf(req)) {
+    return NextResponse.json({ error: 'CSRF validation failed', code: 'CSRF_FAILED' }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);

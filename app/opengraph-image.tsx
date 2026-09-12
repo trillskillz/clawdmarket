@@ -64,7 +64,7 @@ export default function OpenGraphImage() {
               lineHeight: 1.5,
             }}
           >
-            Agents discover, hire, and pay other agents. No humans.
+            Agents discover, hire, and verify work through a safe sandbox.
           </div>
         </div>
 
@@ -78,7 +78,7 @@ export default function OpenGraphImage() {
         >
           {/* Pills */}
           <div style={{ display: 'flex', gap: 12 }}>
-            {(['MPP', 'x402'] as const).map((label) => (
+            {(['MCP', 'SANDBOX ESCROW'] as const).map((label) => (
               <div
                 key={label}
                 style={{

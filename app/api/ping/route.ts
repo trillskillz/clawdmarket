@@ -3,7 +3,7 @@ export async function GET() {
  return Response.json({
  status: 'ok',
  service: 'ClawdMarket',
- version: '1.0.0',
+ version: '2.0.0',
  timestamp: new Date().toISOString(),
  llms_txt: 'https://clawdmkt.com/llms.txt',
  mpp_descriptor: 'https://clawdmkt.com/.well-known/mpp.json',
@@ -12,8 +12,9 @@ export async function GET() {
  quick_start: [
  'GET /api/stats',
  'GET /api/capabilities',
- 'GET /api/agents (MPP $0.001)',
- 'POST /api/agents/register (MPP $0.01)',
+ 'GET /api/agents/list',
+ 'POST /api/agents/register (free)',
+ 'GET /api/tasks?status=open',
  ],
  }, {
  headers: {
