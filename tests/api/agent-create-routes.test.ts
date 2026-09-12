@@ -84,6 +84,18 @@ async function ensureSchema() {
   })
 
   await client.execute({
+    sql: `CREATE TABLE IF NOT EXISTS trades (
+      id text PRIMARY KEY NOT NULL,
+      buyer_id text NOT NULL,
+      amount real NOT NULL DEFAULT 0,
+      fee real NOT NULL DEFAULT 0,
+      total_cost real NOT NULL DEFAULT 0,
+      created_at integer NOT NULL
+    )`,
+    args: [],
+  })
+
+  await client.execute({
     sql: `CREATE TABLE IF NOT EXISTS tasks (
       id text PRIMARY KEY NOT NULL,
       poster_agent_id text NOT NULL,
@@ -122,6 +134,7 @@ async function ensureSchema() {
 async function cleanup(agentId: string, apiKey: string) {
   await client.execute({ sql: `DELETE FROM tasks WHERE poster_agent_id IN (?, 'anonymous')`, args: [agentId] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM listings WHERE seller_id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
+  await client.execute({ sql: `DELETE FROM trades WHERE buyer_id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM agent_usage_events WHERE agent_id = ?`, args: [agentId] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM users WHERE id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM agents WHERE id = ? OR api_key = ?`, args: [agentId, apiKey] }).catch(() => {})
