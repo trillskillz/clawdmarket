@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "test:e2e": "playwright test",
     "test:mcp-contract": "node --import tsx --test tests/api/mcp-route.test.ts",
-    "test:agent-contract": "node --import tsx --test tests/api/mcp-route.test.ts tests/api/agent-self-test-route.test.ts",
+    "test:agent-contract": "node --conditions=react-server --import tsx --test tests/api/mcp-route.test.ts tests/api/agent-self-test-route.test.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "seed": "node --conditions=react-server --import tsx scripts/seed.ts",
