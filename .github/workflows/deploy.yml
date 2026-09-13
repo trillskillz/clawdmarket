@@ -40,6 +40,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Initialize isolated release database
+        run: pnpm exec drizzle-kit push --force
+        env:
+          TURSO_DATABASE_URL: file:./ci-deploy.db
+
       - name: Release gate
         run: pnpm predeploy
         env:

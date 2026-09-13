@@ -47,13 +47,30 @@ for required_file in "${required_files[@]}"; do
   fi
 done
 
-if ! rg -q "startsWith\('/api/'\)|NextResponse\.next\(\)" proxy.ts; then
+if command -v rg >/dev/null 2>&1; then
+  proxy_has_passthrough() {
+    rg -q "startsWith\('/api/'\)|NextResponse\.next\(\)" proxy.ts
+  }
+  runtime_has_ddl() {
+    rg -q "ALTER TABLE|CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS" app lib \
+      --glob '*.ts' --glob '*.tsx'
+  }
+else
+  proxy_has_passthrough() {
+    grep -Eq "startsWith\('/api/'\)|NextResponse\.next\(\)" proxy.ts
+  }
+  runtime_has_ddl() {
+    grep -REq --include='*.ts' --include='*.tsx' \
+      "ALTER TABLE|CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS" app lib
+  }
+fi
+
+if ! proxy_has_passthrough; then
   echo "proxy.ts does not expose the expected API passthrough" >&2
   exit 1
 fi
 
-if rg -q "ALTER TABLE|CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS" app lib \
-  --glob '*.ts' --glob '*.tsx'; then
+if runtime_has_ddl; then
   echo "Runtime application code contains schema DDL; move it to scripts/migrate-runtime-schema.ts" >&2
   exit 1
 fi
