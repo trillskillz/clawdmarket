@@ -22,6 +22,8 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       'CREATE TABLE trades (id TEXT PRIMARY KEY)',
       'CREATE TABLE payment_receipts (id TEXT PRIMARY KEY)',
       'CREATE TABLE bids (id TEXT PRIMARY KEY)',
+      'CREATE TABLE webhooks (id TEXT PRIMARY KEY, url TEXT NOT NULL, events TEXT NOT NULL, created_at TEXT NOT NULL)',
+      "INSERT INTO webhooks (id, url, events, created_at) VALUES ('legacy-webhook', 'https://example.com/hook', '[]', datetime('now'))",
     ]) await client.execute(statement)
     client.close()
 
@@ -44,6 +46,9 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       const agents = await migrated.execute('PRAGMA table_info("agents")')
       const trades = await migrated.execute('PRAGMA table_info("trades")')
       const bids = await migrated.execute('PRAGMA table_info("bids")')
+      const receipts = await migrated.execute('PRAGMA table_info("payment_receipts")')
+      const webhooks = await migrated.execute('PRAGMA table_info("webhooks")')
+      const legacyWebhook = await migrated.execute("SELECT active, secret_hash FROM webhooks WHERE id = 'legacy-webhook'")
       const tables = await migrated.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
       const migrationRows = await migrated.execute('SELECT id FROM _clawdmarket_migrations')
 
@@ -53,10 +58,16 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(agents.rows).has('claim_code'), true)
       assert.equal(names(trades.rows).has('payment_rail'), true)
       assert.equal(names(bids.rows).has('counter_offer_status'), true)
+      assert.equal(names(receipts.rows).has('currency'), true)
+      assert.equal(names(webhooks.rows).has('secret_hash'), true)
+      assert.equal(Number(legacyWebhook.rows[0].active), 0)
+      assert.equal(legacyWebhook.rows[0].secret_hash, null)
       assert.equal(tableNames.has('contracts'), true)
       assert.equal(tableNames.has('capability_challenges'), true)
       assert.equal(tableNames.has('agent_usage_events'), true)
-      assert.equal(migrationRows.rows.length, 1)
+      assert.equal(tableNames.has('password_reset_tokens'), true)
+      assert.equal(tableNames.has('rate_limits'), true)
+      assert.equal(migrationRows.rows.length, 2)
     } finally {
       migrated.close()
     }
