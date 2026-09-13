@@ -1,7 +1,8 @@
 import 'dotenv/config'
 import { createClient, type Client } from '@libsql/client'
 
-const MIGRATION_ID = '2026-09-13-runtime-schema-v1'
+const RUNTIME_SCHEMA_MIGRATION_ID = '2026-09-13-runtime-schema-v1'
+const READINESS_GAPS_MIGRATION_ID = '2026-09-13-readiness-gaps-v2'
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`
@@ -194,6 +195,47 @@ async function runMigration(client: Client) {
   for (const statement of indexStatements) await client.execute(statement)
 }
 
+async function closeReadinessGaps(client: Client) {
+  await client.execute(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    token_hash TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`)
+  await client.execute(`CREATE TABLE IF NOT EXISTS rate_limits (
+    key TEXT PRIMARY KEY NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    reset_at INTEGER NOT NULL
+  )`)
+  await client.execute(`CREATE TABLE IF NOT EXISTS webhooks (
+    id TEXT PRIMARY KEY NOT NULL,
+    agent_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    secret_hash TEXT NOT NULL,
+    events TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_triggered_at TEXT,
+    failure_count INTEGER NOT NULL DEFAULT 0
+  )`)
+
+  await ensureColumns(client, 'payment_receipts', {
+    amount: 'REAL NOT NULL DEFAULT 0',
+    currency: "TEXT NOT NULL DEFAULT 'USD'",
+  })
+  await ensureColumns(client, 'webhooks', {
+    agent_id: 'TEXT',
+    secret_hash: 'TEXT',
+    // Legacy subscriptions lack recoverable signing material. Keep them
+    // inactive until their owner creates a new signed subscription.
+    active: 'INTEGER NOT NULL DEFAULT 0',
+    last_triggered_at: 'TEXT',
+    failure_count: 'INTEGER NOT NULL DEFAULT 0',
+  })
+
+  await client.execute('CREATE INDEX IF NOT EXISTS password_reset_tokens_expiry_idx ON password_reset_tokens(expires_at)')
+}
+
 async function main() {
   const configuredUrl = process.env.TURSO_DATABASE_URL?.trim()
   if (!configuredUrl && (process.env.CI === 'true' || process.env.VERCEL === '1')) {
@@ -208,21 +250,27 @@ async function main() {
     await client.execute(`CREATE TABLE IF NOT EXISTS _clawdmarket_migrations (
       id TEXT PRIMARY KEY NOT NULL, applied_at TEXT NOT NULL
     )`)
-    const existing = await client.execute({
-      sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',
-      args: [MIGRATION_ID],
-    })
-    if (existing.rows.length > 0) {
-      console.log(`Migration already applied: ${MIGRATION_ID}`)
-      return
-    }
+    const migrations = [
+      { id: RUNTIME_SCHEMA_MIGRATION_ID, run: runMigration },
+      { id: READINESS_GAPS_MIGRATION_ID, run: closeReadinessGaps },
+    ]
+    for (const migration of migrations) {
+      const existing = await client.execute({
+        sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',
+        args: [migration.id],
+      })
+      if (existing.rows.length > 0) {
+        console.log(`Migration already applied: ${migration.id}`)
+        continue
+      }
 
-    await runMigration(client)
-    await client.execute({
-      sql: 'INSERT INTO _clawdmarket_migrations (id, applied_at) VALUES (?, ?)',
-      args: [MIGRATION_ID, new Date().toISOString()],
-    })
-    console.log(`Migration applied: ${MIGRATION_ID}`)
+      await migration.run(client)
+      await client.execute({
+        sql: 'INSERT INTO _clawdmarket_migrations (id, applied_at) VALUES (?, ?)',
+        args: [migration.id, new Date().toISOString()],
+      })
+      console.log(`Migration applied: ${migration.id}`)
+    }
   } finally {
     client.close()
   }
