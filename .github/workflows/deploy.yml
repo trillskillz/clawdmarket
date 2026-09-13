@@ -59,7 +59,8 @@ jobs:
       - name: Apply additive production database migration
         run: pnpm run db:migrate:runtime
         env:
-          DOTENV_CONFIG_PATH: .vercel/.env.production.local
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
       - name: Build deployment artifact
         run: npx -y vercel@${VERCEL_CLI_VERSION} build --prod --token="$VERCEL_TOKEN"
