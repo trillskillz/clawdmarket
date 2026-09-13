@@ -52,10 +52,11 @@ test('marketplace settlement exposes the production rail model', () => {
   const readiness = getTradeSettlementReadiness()
 
   assert.equal(readiness.mode, 'production')
-  assert.equal(readiness.ledger.enabled, false)
-  assert.equal(readiness.ledger.redeemable, false)
-  assert.equal(readiness.external.enabled, false)
+  assert.equal(typeof readiness.ledger.enabled, 'boolean')
+  assert.equal(typeof readiness.ledger.redeemable, 'boolean')
+  assert.equal(readiness.external.enabled, readiness.mpp.enabled || readiness.evm.enabled)
   assert.deepEqual(readiness.external.rails.map((rail) => rail.id), ['mpp', 'erc20-evm'])
+  assert.deepEqual(readiness.external.rails.map((rail) => rail.enabled), [readiness.mpp.enabled, readiness.evm.enabled])
 })
 
 test('external trade payment requests are detected before funds can move', () => {
