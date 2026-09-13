@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -109,15 +109,19 @@ export const trades = sqliteTable('trades', {
   dev_amount: real('dev_amount').notNull().default(0),
   dev_wallet: text('dev_wallet'),
   fee_tx_hash: text('fee_tx_hash'),
-  payout_status: text('payout_status', { enum: ['pending', 'fee_sent', 'seller_paid', 'complete'] }).notNull().default('pending'),
+  payout_status: text('payout_status', { enum: ['pending', 'processing', 'fee_sent', 'seller_paid', 'refunded', 'partial', 'complete'] }).notNull().default('pending'),
   payment_rail: text('payment_rail', { enum: ['ledger', 'mpp', 'evm'] }).notNull().default('ledger'),
+  client_reference: text('client_reference').unique(),
   status: text('status', {
     enum: ['pending', 'escrow_held', 'pending_release', 'completed', 'complete', 'disputed', 'resolved', 'cancelled']
   }).notNull().default('pending'),
   escrow_session_id: text('escrow_session_id'),
+  payment_due_at: text('payment_due_at'),
+  funded_at: text('funded_at'),
   auto_confirm_at: text('auto_confirm_at'),
   dispute_reason: text('dispute_reason'),
   resolution: text('resolution', { enum: ['buyer', 'seller', 'split'] }),
+  resolution_seller_percent: real('resolution_seller_percent'),
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -151,6 +155,9 @@ export const bids = sqliteTable('bids', {
   message: text('message'),
   etaSeconds: integer('eta_seconds'),
   status: text('status').notNull().default('pending'),
+  counterOfferPrice: real('counter_offer_price'),
+  counterOfferMessage: text('counter_offer_message'),
+  counterOfferStatus: text('counter_offer_status').notNull().default('none'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
@@ -208,6 +215,20 @@ export const benchmarks = sqliteTable('benchmarks', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   scoredAt: text('scored_at'),
 });
+
+export const capability_challenges = sqliteTable('capability_challenges', {
+  id: text('id').primaryKey(),
+  agent_id: text('agent_id'),
+  capability: text('capability').notNull(),
+  challenge_data: text('challenge_data').notNull(),
+  expires_at: integer('expires_at').notNull(),
+  submitted_at: integer('submitted_at'),
+  passed: integer('passed', { mode: 'boolean' }),
+  score: real('score'),
+  created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  index('capability_challenges_agent_created_idx').on(table.agent_id, table.created_at),
+]);
 
 export const agentImprovements = sqliteTable('agent_improvements', {
   id: text('id').primaryKey(),
@@ -337,7 +358,9 @@ export const watchlist = sqliteTable('watchlist', {
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
-});
+}, (table) => [
+  index('watchlist_user_created_idx').on(table.user_id, table.created_at),
+]);
 
 export const analytics_events = sqliteTable('analytics_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -348,6 +371,42 @@ export const analytics_events = sqliteTable('analytics_events', {
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
+}, (table) => [
+  index('analytics_events_user_created_idx').on(table.user_id, table.created_at),
+]);
+
+export const agent_usage_events = sqliteTable('agent_usage_events', {
+  id: text('id').primaryKey(),
+  agent_id: text('agent_id').notNull(),
+  feature: text('feature').notNull(),
+  event_type: text('event_type').notNull(),
+  route: text('route'),
+  payer: text('payer'),
+  amount_usd: real('amount_usd').notNull().default(0),
+  created_at: text('created_at').notNull(),
+}, (table) => [
+  index('idx_agent_usage_events_agent_created').on(table.agent_id, table.created_at),
+  index('idx_agent_usage_events_type_created').on(table.event_type, table.created_at),
+]);
+
+export const user_ips = sqliteTable('user_ips', {
+  user_id: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  ip: text('ip').notNull(),
+  last_seen: integer('last_seen').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.user_id, table.ip] }),
+]);
+
+export const blacklisted_ips = sqliteTable('blacklisted_ips', {
+  ip: text('ip').primaryKey(),
+  reason: text('reason'),
+  created_at: integer('created_at').notNull(),
+});
+
+export const banned_users = sqliteTable('banned_users', {
+  user_id: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  reason: text('reason'),
+  created_at: integer('created_at').notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -456,6 +515,8 @@ export const fee_errors = sqliteTable('fee_errors', {
 export const payment_receipts = sqliteTable('payment_receipts', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   route: text('route').notNull(),
+  trade_id: text('trade_id').references(() => trades.id, { onDelete: 'cascade' }),
+  payment_rail: text('payment_rail', { enum: ['mpp', 'evm'] }),
   amount: real('amount').notNull(),
   currency: text('currency').notNull(),
   tx_hash: text('tx_hash'),
@@ -463,12 +524,64 @@ export const payment_receipts = sqliteTable('payment_receipts', {
   token_address: text('token_address'),
   chain_id: integer('chain_id'),
   token_symbol: text('token_symbol'),
+  token_decimals: integer('token_decimals'),
   token_amount: text('token_amount'),
+  token_usd_price: real('token_usd_price'),
   usd_value_at_payment: real('usd_value_at_payment'),
+  external_id: text('external_id'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 }, (table) => [
   uniqueIndex('payment_receipts_tx_hash_unique').on(table.tx_hash),
+  uniqueIndex('payment_receipts_trade_unique').on(table.trade_id),
+  uniqueIndex('payment_receipts_external_unique').on(table.payment_rail, table.external_id),
 ]);
+
+export const payout_addresses = sqliteTable('payout_addresses', {
+  user_id: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  address: text('address').notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+/**
+ * Durable, idempotent outbox for marketplace payouts and refunds. The signed
+ * transaction is persisted before broadcast, so a retry always rebroadcasts
+ * the same transaction instead of paying twice.
+ */
+export const settlement_transfers = sqliteTable('settlement_transfers', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  business_key: text('business_key').notNull().unique(),
+  trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['seller_payout', 'buyer_refund'] }).notNull(),
+  chain_id: integer('chain_id').notNull(),
+  token_address: text('token_address').notNull(),
+  from_address: text('from_address').notNull(),
+  to_address: text('to_address').notNull(),
+  token_amount: text('token_amount').notNull(),
+  usd_amount: real('usd_amount').notNull(),
+  nonce: integer('nonce'),
+  raw_transaction: text('raw_transaction'),
+  tx_hash: text('tx_hash'),
+  status: text('status', { enum: ['pending', 'signing', 'prepared', 'submitted', 'confirmed', 'failed'] }).notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  last_error: text('last_error'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  confirmed_at: integer('confirmed_at', { mode: 'timestamp' }),
+});
+
+export const settlement_nonces = sqliteTable('settlement_nonces', {
+  key: text('key').primaryKey(),
+  chain_id: integer('chain_id').notNull(),
+  wallet_address: text('wallet_address').notNull(),
+  next_nonce: integer('next_nonce').notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const mpp_store = sqliteTable('mpp_store', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
 
 export const mpp_sessions = sqliteTable('mpp_sessions', {
   session_id: text('session_id').primaryKey(),
@@ -497,7 +610,10 @@ export const contracts = sqliteTable('contracts', {
   dispute_id: text('dispute_id'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-});
+}, (table) => [
+  index('contracts_buyer_idx').on(table.buyer_id),
+  index('contracts_seller_idx').on(table.seller_id),
+]);
 
 export const contract_milestones = sqliteTable('contract_milestones', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -514,7 +630,10 @@ export const contract_milestones = sqliteTable('contract_milestones', {
   submission_id: text('submission_id'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-});
+}, (table) => [
+  index('contract_milestones_contract_idx').on(table.contract_id),
+  uniqueIndex('contract_milestones_contract_mi_idx').on(table.contract_id, table.milestone_index),
+]);
 
 export const contract_submissions = sqliteTable('contract_submissions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -524,7 +643,9 @@ export const contract_submissions = sqliteTable('contract_submissions', {
   auto_check_result: text('auto_check_result', { enum: ['pass', 'fail', 'inconclusive'] }).notNull().default('inconclusive'),
   auto_check_report: text('auto_check_report').notNull(),
   submitted_at: integer('submitted_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-});
+}, (table) => [
+  index('contract_submissions_milestone_idx').on(table.milestone_id),
+]);
 
 export const contract_disputes = sqliteTable('contract_disputes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -538,7 +659,9 @@ export const contract_disputes = sqliteTable('contract_disputes', {
   resolved_at: integer('resolved_at', { mode: 'timestamp' }),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-});
+}, (table) => [
+  index('contract_disputes_contract_idx').on(table.contract_id),
+]);
 
 export type AgentDirectory = typeof agents.$inferSelect;
 export type NewAgentDirectory = typeof agents.$inferInsert;

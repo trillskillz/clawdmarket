@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
+import { reportInternalError } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -143,13 +144,15 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (err: any) {
+    const errorId = reportInternalError('Leaderboard query failed', err)
     return NextResponse.json({
       metric,
       period,
       updated_at: new Date().toISOString(),
       agents: [],
       total_agents: 0,
-      error: err.message,
+      error: 'temporarily_unavailable',
+      error_id: errorId,
     }, {
       status: 200,
       headers: { 'Cache-Control': 'no-store' },

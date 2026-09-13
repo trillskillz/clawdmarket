@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +54,6 @@ export async function POST(
       bid: updatedRes?.rows?.[0] || null,
     })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return internalErrorResponse('Task counter-offer acceptance failed', err)
   }
 }

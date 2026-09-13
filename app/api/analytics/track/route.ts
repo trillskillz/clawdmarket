@@ -5,6 +5,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
+import { getRequestIp } from '@/lib/request-ip';
 
 export const dynamic = 'force-dynamic'
 
@@ -27,20 +28,6 @@ const trackEventSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
 });
 
-async function ensureAnalyticsTable() {
-  await (db as any).$client.execute({
-    sql: `CREATE TABLE IF NOT EXISTS analytics_events (
-      id TEXT PRIMARY KEY,
-      user_id TEXT,
-      event_type TEXT NOT NULL,
-      metadata TEXT,
-      ip_hash TEXT,
-      created_at INTEGER NOT NULL
-    )`,
-    args: [],
-  });
-}
-
 function hashIp(ip: string) {
   let salt = process.env.ANALYTICS_SALT?.trim() || process.env.JWT_SECRET?.trim();
   if (!salt) {
@@ -60,9 +47,7 @@ export async function POST(req: NextRequest) {
     const cookieToken = req.cookies.get('auth-token')?.value;
     const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
     
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || req.headers.get('x-real-ip')
-      || 'unknown';
+    const ip = getRequestIp(req);
     const limit = await rateLimit(`analytics:${ip}`, { interval: 60_000, maxRequests: 120, failClosed: true });
     if (!limit.success) {
       return NextResponse.json({ success: false, error: 'rate_limit_exceeded' }, { status: 429, headers: getRateLimitHeaders(limit) });
@@ -72,9 +57,6 @@ export async function POST(req: NextRequest) {
     if (metadataJson && metadataJson.length > 10_000) {
       return NextResponse.json({ success: false, error: 'metadata_too_large' }, { status: 413 });
     }
-
-    // Ensure table exists (safe to call repeatedly in this lightweight setup)
-    await ensureAnalyticsTable();
 
     await db.insert(analytics_events).values({
       user_id: auth?.userId || null,

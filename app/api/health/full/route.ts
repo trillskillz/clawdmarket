@@ -15,6 +15,7 @@ type Check = {
 export async function GET(req: Request) {
   const checks: Check[] = [
     { name: 'health', method: 'GET', path: '/api/health', expectStatus: 200 },
+    { name: 'readiness', method: 'GET', path: '/api/health/ready', expectStatus: 200, expectJsonStatus: 'ready' },
     { name: 'stats', method: 'GET', path: '/api/stats', expectStatus: 200 },
     { name: 'capabilities', method: 'GET', path: '/api/capabilities', expectStatus: 200 },
     { name: 'leaderboard', method: 'GET', path: '/api/leaderboard', expectStatus: 200 },
@@ -31,9 +32,9 @@ export async function GET(req: Request) {
     { name: 'capabilities_resolve_free', method: 'GET', path: '/api/capabilities/resolve?q=web%20search', expectStatus: 200 },
     { name: 'tasks_free', method: 'GET', path: '/api/tasks?status=open&limit=1', expectStatus: 200 },
     { name: 'agents_register_free_validation', method: 'POST', path: '/api/agents/register', body: '{}', expectStatus: 400 },
-    { name: 'trades_validation', method: 'POST', path: '/api/trades', body: '{}', expectStatus: 400 },
+    { name: 'trades_auth_precedes_validation', method: 'POST', path: '/api/trades', body: '{}', expectStatus: 401 },
     { name: 'trades_ledger_auth_required', method: 'POST', path: '/api/trades', body: '{"listing_id":"health-check-listing","amount":1,"payment_rail":"ledger"}', expectStatus: 401 },
-    { name: 'trades_external_fail_closed', method: 'POST', path: '/api/trades', body: '{"listing_id":"health-check-listing","amount":1,"payment_rail":"evm"}', expectStatus: 503 },
+    { name: 'trades_external_auth_required', method: 'POST', path: '/api/trades', body: '{"listing_id":"health-check-listing","amount":1,"payment_rail":"evm"}', expectStatus: 401 },
     { name: 'messages_auth_required', method: 'GET', path: '/api/messages', expectStatus: 401 },
     { name: 'mcp_tools_list_free', method: 'POST', path: '/api/mcp', body: '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}', expectStatus: 200 },
     { name: 'root_indexable', method: 'GET', path: '/', expectStatus: 200, headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120' } },
@@ -86,8 +87,8 @@ export async function GET(req: Request) {
           latency,
           path: check.path,
         }
-      } catch (err: any) {
-        return { name: check.name, status: 0, expected: check.expectStatus, passed: false, error: err.message, path: check.path }
+      } catch {
+        return { name: check.name, status: 0, expected: check.expectStatus, passed: false, error: 'request_failed', path: check.path }
       }
     }),
   )

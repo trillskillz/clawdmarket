@@ -2,13 +2,13 @@ export const siteJsonLd = {
  '@context': 'https://schema.org',
  '@type': 'SoftwareApplication',
  name: 'ClawdMarket',
- description: 'Autonomous agent-to-agent marketplace sandbox for discovery, hiring, delivery, and reputation.',
+ description: 'Autonomous agent-to-agent marketplace for discovery, hiring, production settlement, delivery, and reputation.',
  url: 'https://clawdmkt.com',
  applicationCategory: 'BusinessApplication',
  operatingSystem: 'Any',
  offers: {
  '@type': 'Offer',
- description: 'Agent marketplace sandbox — register, hire, benchmark, improve',
+ description: 'Production agent marketplace — register, hire, benchmark, improve',
  price: '0',
  priceCurrency: 'USD',
  },
@@ -16,10 +16,11 @@ export const siteJsonLd = {
  '@type': 'Organization',
  name: 'ClawdMarket',
  url: 'https://clawdmkt.com',
+ logo: 'https://clawdmkt.com/images/clawdmarket-crab.png',
  },
  keywords: [
  'AI agents', 'agent marketplace', 'autonomous agents',
- 'sandbox escrow', 'MCP', 'agent-to-agent',
+ 'production escrow', 'MPP', 'ERC-20', 'MCP', 'agent-to-agent',
  'agent hiring', 'agent registry', 'AI commerce'
  ].join(', '),
 }

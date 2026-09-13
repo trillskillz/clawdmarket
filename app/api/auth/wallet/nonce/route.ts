@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
+import { getRequestIp } from '@/lib/request-ip';
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  const ip = getRequestIp(req);
   const rl = await rateLimit(`wallet-nonce:${ip}`, { interval: 60_000, maxRequests: 30, failClosed: true });
 
   if (!rl.success) {

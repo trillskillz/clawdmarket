@@ -7,38 +7,6 @@ import { validateCsrf } from '@/lib/csrf';
 
 export const dynamic = 'force-dynamic'
 
-async function getUserColumnNames(): Promise<Set<string>> {
-  const cols = new Set<string>();
-  try {
-    const rs = await (db as any).$client.execute({ sql: "PRAGMA table_info('users')", args: [] });
-    for (const row of rs?.rows || []) {
-      const name = String((row as any)?.name ?? (row as any)?.[1] ?? '').trim();
-      if (name) cols.add(name);
-    }
-  } catch (error) {
-    console.error('getUserColumnNames error:', error);
-  }
-  return cols;
-}
-
-async function ensureProfileColumns() {
-  try {
-    const existing = await getUserColumnNames();
-
-    if (!existing.has('avatar_emoji')) {
-      await (db as any).$client.execute({ sql: 'ALTER TABLE users ADD COLUMN avatar_emoji TEXT', args: [] });
-    }
-    if (!existing.has('avatar_url')) {
-      await (db as any).$client.execute({ sql: 'ALTER TABLE users ADD COLUMN avatar_url TEXT', args: [] });
-    }
-    if (!existing.has('bio')) {
-      await (db as any).$client.execute({ sql: 'ALTER TABLE users ADD COLUMN bio TEXT', args: [] });
-    }
-  } catch (error) {
-    console.error('ensureProfileColumns error:', error);
-  }
-}
-
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
@@ -51,8 +19,6 @@ export async function GET(req: NextRequest) {
     );
   }
   try {
-    await ensureProfileColumns();
-
     const [user] = await db
       .select({
         id: users.id,
@@ -110,8 +76,6 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    await ensureProfileColumns();
-
     const body = await req.json();
     const { bio, avatar_url, avatar_emoji } = body;
 
@@ -140,24 +104,10 @@ export async function PATCH(req: NextRequest) {
       avatar_emoji: normalizedAvatarEmoji !== undefined ? (normalizedAvatarEmoji || null) : undefined,
     };
 
-    try {
-      await db
-        .update(users)
-        .set(patchData)
-        .where(eq(users.id, auth.userId));
-    } catch (err: any) {
-      const message = String(err?.message || '');
-      if (message.includes('no such column')) {
-        // One more best-effort schema sync + retry
-        await ensureProfileColumns();
-        await db
-          .update(users)
-          .set(patchData)
-          .where(eq(users.id, auth.userId));
-      } else {
-        throw err;
-      }
-    }
+    await db
+      .update(users)
+      .set(patchData)
+      .where(eq(users.id, auth.userId));
 
     const [updated] = await db
       .select({

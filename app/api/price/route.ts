@@ -3,13 +3,12 @@ import { getTokenDecimals, getTokenPriceUsd, usdToTokenAmount } from '@/lib/pric
 import BigNumber from 'bignumber.js'
 import { isAddress } from 'viem'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { getRequestIp } from '@/lib/request-ip'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || req.headers.get('x-real-ip')
-    || 'unknown'
+  const ip = getRequestIp(req)
   const limit = await rateLimit(`token-price:${ip}`, { interval: 60_000, maxRequests: 30, failClosed: true })
   if (!limit.success) {
     return NextResponse.json({ error: 'rate_limit_exceeded' }, { status: 429, headers: getRateLimitHeaders(limit) })

@@ -39,7 +39,7 @@ export async function createLedgerTrade(
   listing: typeof listings.$inferSelect,
   buyerId: string,
   feeRecipientId: string,
-  options: { agentId?: string | null } = {},
+  options: { agentId?: string | null; clientReference?: string | null } = {},
 ) {
   if (listing.seller_id === buyerId) throw new Error('Cannot buy your own work');
   if (!Number.isFinite(listing.price_bankr) || listing.price_bankr <= 0) throw new Error('Invalid listing price');
@@ -55,7 +55,7 @@ export async function createLedgerTrade(
     balance: sql`${wallets.balance} - ${totalCost}`,
     escrow: sql`${wallets.escrow} + ${sellerAmount}`,
   }).where(and(eq(wallets.user_id, buyerId), sql`${wallets.balance} >= ${totalCost}`)).returning({ id: wallets.user_id });
-  if (!debit.length) throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient test credits. Required ${totalCost}.`);
+  if (!debit.length) throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient account balance. Required ${totalCost}.`);
 
   const sessionId = await createEscrowSession(tx, buyerId, totalCost);
   const [trade] = await tx.insert(trades).values({
@@ -65,18 +65,19 @@ export async function createLedgerTrade(
     dev_amount: platformFee,
     dev_wallet: (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || '').trim() || null,
     payout_status: platformFee > 0 ? 'fee_sent' : 'pending', payment_rail: 'ledger',
+    client_reference: options.clientReference || null,
     escrow_session_id: sessionId, status: 'escrow_held',
     auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
   }).returning();
   await tx.insert(transactions).values({
     from_user_id: buyerId, amount: sellerAmount, type: 'escrow_lock', reference_id: trade.id,
-    memo: `Sandbox escrow lock for listing ${listing.id}`,
+    memo: `Account-balance escrow lock for listing ${listing.id}`,
   });
   if (platformFee > 0) {
     await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${platformFee}` }).where(eq(wallets.user_id, feeRecipientId));
     await tx.insert(transactions).values({
       from_user_id: buyerId, to_user_id: feeRecipientId, amount: platformFee,
-      type: 'fee', reference_id: trade.id, memo: 'Sandbox marketplace fee (5%)',
+      type: 'fee', reference_id: trade.id, memo: 'Marketplace fee (5%)',
     });
   }
   return trade;
@@ -85,6 +86,7 @@ export async function createLedgerTrade(
 export function getRpcUrl(chainId: number): string | null {
   const specific = process.env[`EVM_RPC_URL_${chainId}` as keyof NodeJS.ProcessEnv] as string | undefined;
   if (specific) return specific;
+  if (chainId === 4217 && process.env.TEMPO_RPC_URL) return process.env.TEMPO_RPC_URL;
   if (process.env.EVM_RPC_URL) return process.env.EVM_RPC_URL;
   if (chainId === 1) return 'https://rpc.ankr.com/eth';
   if (chainId === 10) return 'https://rpc.ankr.com/optimism';

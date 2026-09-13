@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { messages, trade_evidence, trades } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
@@ -46,7 +46,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const updated = await db.transaction(async (tx) => {
     const [claimed] = await tx.update(trades)
       .set({ status: 'disputed', dispute_reason: reason })
-      .where(and(eq(trades.id, trade.id), eq(trades.status, trade.status as any)))
+      .where(and(
+        eq(trades.id, trade.id),
+        eq(trades.status, trade.status as any),
+        ne(trades.payout_status, 'processing'),
+      ))
       .returning();
     if (!claimed) return null;
     if (evidenceContent || evidenceUrl) {
@@ -60,7 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return claimed;
   });
 
-  if (!updated) return NextResponse.json({ error: 'Trade already updated' }, { status: 409 });
+  if (!updated) return NextResponse.json({ error: 'Trade already updated or settlement has started' }, { status: 409 });
 
   await Promise.allSettled([
     (async () => {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { resolveCapabilityQuery } from '@/lib/capabilities'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,10 +97,10 @@ export async function GET(req: NextRequest) {
       mode: process.env.ANTHROPIC_API_KEY ? 'semantic' : 'keyword',
     })
   } catch (err: any) {
-    return NextResponse.json(
-      { agents: [], query: q, keywords: [], error: 'search_failed', detail: err.message },
-      { status: 500 }
-    )
+    return internalErrorResponse('Agent search failed', err, {
+      code: 'search_failed',
+      message: 'Agent search is temporarily unavailable. Retry with the error ID if the problem continues.',
+    })
   }
 }
 

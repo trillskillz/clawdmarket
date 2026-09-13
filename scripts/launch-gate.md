@@ -9,7 +9,7 @@ Target: clawdmkt.com
 - [x] Production build passes
 - [x] Payment test suite passes (29/29 tests)
 - [x] Security test suite passes (signature, rate-limit, wallet guards)
-- [x] Ledger escrow, MPP fail-closed behavior, and ERC-20 verification tested
+- [ ] Managed-balance escrow, MPP funding/payout, and ERC-20 funding/payout tested on the configured production rails
 
 ### API Health
 Testing live endpoints...

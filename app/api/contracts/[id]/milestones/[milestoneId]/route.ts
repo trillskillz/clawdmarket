@@ -5,7 +5,6 @@ import { contract_disputes, contract_milestones, contract_submissions, contracts
 import { milestoneActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionMilestone, nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
-import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import {
   ContractSettlementError,
@@ -52,7 +51,6 @@ export async function PATCH(
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  await ensureContractsSchema();
   if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }

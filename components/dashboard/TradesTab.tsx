@@ -8,6 +8,7 @@ import RatingModal from '@/components/RatingModal';
 import DeliveryModal from '@/components/DeliveryModal';
 import PriceWithKas from '@/components/PriceWithKas';
 import { trackClientEvent } from '@/lib/client-analytics';
+import ExternalTradeCheckout, { type ExternalCheckout } from '@/components/ExternalTradeCheckout';
 
 interface Trade {
   id: string;
@@ -23,6 +24,8 @@ interface Trade {
   created_at: string;
   auto_confirm_at?: string | null;
   payment_rail?: 'ledger' | 'mpp' | 'evm';
+  payout_status?: string;
+  checkout?: ExternalCheckout | null;
   rated_by_caller?: boolean | number;
 }
 
@@ -38,7 +41,7 @@ interface TradesTabProps {
 const COMPLETE_STATUSES = new Set(['completed', 'complete', 'resolved']);
 
 function TradeProgress({ status }: { status: string }) {
-  const currentStep = COMPLETE_STATUSES.has(status) ? 3 : status === 'pending_release' ? 2 : 1;
+  const currentStep = COMPLETE_STATUSES.has(status) ? 3 : status === 'pending_release' ? 2 : status === 'pending' ? 0 : 1;
   const interrupted = ['disputed', 'cancelled'].includes(status);
   const steps = ['Funded', 'Delivered', 'Released'];
 
@@ -63,7 +66,7 @@ export default function TradesTab({ trades, loading, currentUserId, focusedTrade
   const { toast } = useToast();
   const [actionId, setActionId] = useState<string | null>(null);
   const [filterRole, setFilterRole] = useState<'all' | 'bought' | 'sold'>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'escrow_held' | 'pending_release' | 'completed' | 'complete' | 'disputed' | 'resolved' | 'cancelled'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'escrow_held' | 'pending_release' | 'completed' | 'complete' | 'disputed' | 'resolved' | 'cancelled'>('all');
   const [ratingTradeId, setRatingTradeId] = useState<string | null>(null);
   const [deliveryTrade, setDeliveryTrade] = useState<Trade | null>(null);
 
@@ -95,9 +98,13 @@ export default function TradesTab({ trades, loading, currentUserId, focusedTrade
         body: JSON.stringify(status === 'disputed' ? { reason } : {}),
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to update trade');
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || 'Failed to update trade');
+
+      if (status === 'completed' && result.status === 'settlement_processing') {
+        toast('Delivery accepted. The blockchain payout is submitted and will finalize after confirmation.', 'success');
+        if (onRefresh) onRefresh();
+        return;
       }
 
       toast(isDispute ? 'Trade disputed.' : 'Trade completed! Funds released.', 'success');
@@ -224,6 +231,7 @@ export default function TradesTab({ trades, loading, currentUserId, focusedTrade
             className="bg-bg border border-border rounded-lg px-3 py-1.5 focus:border-accent outline-none"
           >
             <option value="all">All Statuses</option>
+            <option value="pending">Awaiting payment</option>
             <option value="escrow_held">Awaiting delivery</option>
             <option value="pending_release">Awaiting release</option>
             <option value="completed">Completed</option>
@@ -250,6 +258,7 @@ export default function TradesTab({ trades, loading, currentUserId, focusedTrade
             const isFocused = trade.id === focusedTradeId;
             const displayAmount = isBuyer ? (trade.total_cost ?? trade.amount + trade.fee) : (trade.seller_amount ?? trade.amount);
             const reviewDeadline = trade.status === 'pending_release' && trade.auto_confirm_at ? new Date(trade.auto_confirm_at) : null;
+            const settlementProcessing = trade.payout_status === 'processing';
             
             return (
               <div id={`trade-${trade.id}`} key={trade.id} className={`card scroll-mt-28 ${isFocused ? 'ring-2 ring-accent/70' : ''}`}>
@@ -272,11 +281,11 @@ export default function TradesTab({ trades, loading, currentUserId, focusedTrade
                   <div className="flex items-center gap-3 justify-between md:justify-end w-full">
                     <div className="text-right">
                       <div className="font-mono font-bold text-gold"><PriceWithKas bankr={displayAmount} kasClassName="text-xs text-text-dim" /></div>
-                      <div className="mt-1 font-mono text-[9px] uppercase text-text-dim">{isBuyer ? 'total paid' : 'seller proceeds'}</div>
+                      <div className="mt-1 font-mono text-[9px] uppercase text-text-dim">{isBuyer ? trade.status === 'pending' ? 'total due' : 'total paid' : 'seller proceeds'}</div>
                     </div>
                     <div className={`text-xs px-2 py-1 rounded-full inline-block text-center min-w-[80px] ${
                       (trade.status === 'completed' || trade.status === 'complete') ? 'bg-green-400/10 text-green-400' :
-                      ['escrow_held', 'pending_release'].includes(trade.status) ? 'bg-gold/10 text-gold' :
+                      ['pending', 'escrow_held', 'pending_release'].includes(trade.status) ? 'bg-gold/10 text-gold' :
                       'bg-red-400/10 text-red-400'
                     }`}>
                       {trade.status}
@@ -288,17 +297,17 @@ export default function TradesTab({ trades, loading, currentUserId, focusedTrade
                       <>
                         <button 
                           onClick={() => handleUpdateStatus(trade.id, 'disputed')}
-                          disabled={actionId === trade.id}
+                          disabled={actionId === trade.id || settlementProcessing}
                           className="text-xs text-text-dim hover:text-red-400 px-2 py-1 transition-colors"
                         >
                           Report Issue
                         </button>
                         <button 
                           onClick={() => handleUpdateStatus(trade.id, 'completed')}
-                          disabled={actionId === trade.id || trade.status === 'escrow_held'}
+                          disabled={actionId === trade.id || trade.status === 'escrow_held' || settlementProcessing}
                           className="btn-primary py-1.5 px-3 text-xs whitespace-nowrap bg-green-600 hover:bg-green-500 disabled:opacity-50"
                         >
-                          {actionId === trade.id ? '...' : trade.status === 'escrow_held' ? 'Awaiting delivery' : 'Release escrow'}
+                          {actionId === trade.id ? '...' : settlementProcessing ? 'Settlement processing' : trade.status === 'escrow_held' ? 'Awaiting delivery' : 'Release escrow'}
                         </button>
                       </>
                     )}
@@ -307,7 +316,7 @@ export default function TradesTab({ trades, loading, currentUserId, focusedTrade
                       <div className="flex items-center gap-2">
                          <button 
                           onClick={() => handleUpdateStatus(trade.id, 'disputed')}
-                          disabled={actionId === trade.id}
+                          disabled={actionId === trade.id || settlementProcessing}
                           className="text-xs text-text-dim hover:text-red-400 px-2 py-1 transition-colors"
                         >
                           Report Issue
@@ -329,15 +338,21 @@ export default function TradesTab({ trades, loading, currentUserId, focusedTrade
 
                 <TradeProgress status={trade.status} />
 
+                {trade.status === 'pending' && isBuyer && trade.checkout && <ExternalTradeCheckout tradeId={trade.id} checkout={trade.checkout} onUpdated={onRefresh} />}
+
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <p className="text-text-dim">
                     {trade.status === 'escrow_held' && isSeller && 'Next: submit the finished work for buyer review.'}
                     {trade.status === 'escrow_held' && isBuyer && 'Next: send requirements and wait for the seller to deliver.'}
-                    {trade.status === 'pending_release' && isBuyer && 'Next: review the delivery, then release escrow or report an issue.'}
-                    {trade.status === 'pending_release' && isSeller && 'The buyer is reviewing your delivery.'}
+                    {trade.status === 'pending_release' && settlementProcessing && 'The external settlement transaction is processing. This trade will complete after network confirmation.'}
+                    {trade.status === 'pending_release' && !settlementProcessing && isBuyer && 'Next: review the delivery, then release escrow or report an issue.'}
+                    {trade.status === 'pending_release' && !settlementProcessing && isSeller && 'The buyer is reviewing your delivery.'}
                     {COMPLETE_STATUSES.has(trade.status) && 'Settlement is complete. The permanent receipt is available below.'}
-                    {trade.status === 'disputed' && 'Escrow is frozen while the dispute is reviewed.'}
-                    {trade.status === 'cancelled' && 'This transaction was cancelled.'}
+                    {trade.status === 'disputed' && !settlementProcessing && 'Escrow is frozen while the dispute is reviewed.'}
+                    {trade.status === 'disputed' && settlementProcessing && 'The dispute decision is final and its payout/refund transactions are processing.'}
+                    {trade.status === 'cancelled' && trade.payout_status === 'processing' && 'A late payment was verified and its full refund is processing.'}
+                    {trade.status === 'cancelled' && trade.payout_status === 'refunded' && 'This reservation was cancelled and its late payment was refunded.'}
+                    {trade.status === 'cancelled' && !['processing', 'refunded'].includes(trade.payout_status || '') && 'This transaction was cancelled.'}
                   </p>
                   {reviewDeadline && !Number.isNaN(reviewDeadline.getTime()) && <p className="text-text-dim">Auto-release: {reviewDeadline.toLocaleString()}</p>}
                   <div className="flex flex-wrap gap-2">

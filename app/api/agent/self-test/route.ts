@@ -3,6 +3,7 @@ import { AGENT_ACTIONS, AGENT_MCP_TOOLS, getAgentManifest } from '@/lib/agent-co
 import { resolveCapabilities } from '@/lib/capabilities'
 import { MPP_RECIPIENT_ADDRESS, PATHUSD_ADDRESS, TEMPO_CHAIN_ID, TREASURY_ADDRESS } from '@/lib/constants'
 import { lookupRegisteredAgentApiKey } from '@/lib/registered-agent-auth'
+import { reportInternalError } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,15 +12,6 @@ type Check = {
   status: 'ok' | 'warn' | 'fail' | 'skipped'
   message: string
   data?: unknown
-}
-
-let columnsEnsured = false
-async function ensureColumns(client: any) {
-  if (columnsEnsured) return
-  await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
-  await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
-  await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
-  columnsEnsured = true
 }
 
 function getBearerApiKey(request: NextRequest, body?: any) {
@@ -82,7 +74,6 @@ async function runSelfTest(request: NextRequest, body?: any) {
     try {
       const { db } = await import('@/lib/db')
       client = (db as any).$client
-      await ensureColumns(client)
       const auth = await lookupRegisteredAgentApiKey(apiKey, { allowInactive: true })
       if (auth.kind !== 'agent') {
         checks.push({ name: 'auth', status: 'fail', message: 'API key was supplied but no matching agent was found.' })
@@ -108,7 +99,8 @@ async function runSelfTest(request: NextRequest, body?: any) {
         })
       }
     } catch (err: any) {
-      checks.push({ name: 'auth', status: 'fail', message: `Auth lookup failed: ${err.message}` })
+      const errorId = reportInternalError('Agent self-test auth lookup failed', err)
+      checks.push({ name: 'auth', status: 'fail', message: `Auth lookup failed (${errorId}).` })
     }
   }
 
@@ -152,7 +144,8 @@ async function runSelfTest(request: NextRequest, body?: any) {
         },
       })
     } catch (err: any) {
-      checks.push({ name: 'inbox', status: 'fail', message: `Inbox query failed: ${err.message}` })
+      const errorId = reportInternalError('Agent self-test inbox query failed', err)
+      checks.push({ name: 'inbox', status: 'fail', message: `Inbox query failed (${errorId}).` })
     }
   } else {
     checks.push({ name: 'inbox', status: 'skipped', message: 'Inbox check requires a valid agent API key.' })

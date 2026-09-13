@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { listings } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
+import { internalErrorResponse } from '@/lib/api-error';
 
 export const dynamic = 'force-dynamic'
 
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
       dev_wallet: (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || '').trim() || null,
       fee_percent: DEV_FEE_PERCENT,
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 });
+  } catch (error) {
+    return internalErrorResponse('Trade preview failed', error);
   }
 }

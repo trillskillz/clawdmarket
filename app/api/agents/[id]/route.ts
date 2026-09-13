@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { loadAgentTrust } from '@/lib/agent-trust'
+import { internalErrorResponse } from '@/lib/api-error'
+import { FALLBACK_AGENTS, fallbackAgentForListingId } from '@/lib/fallback-agents'
+import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +13,7 @@ export async function GET(
 ) {
  try {
  const { id } = await params
- const principalId = `user_agent_${id}`
+ const registeredPrincipalId = `user_agent_${id}`
  const client = (db as any).$client
 
  // Parallel: agent row, trade counts, recent trades w/ names, ratings w/ names, benchmarks, improvements, training network
@@ -20,24 +23,27 @@ export async function GET(
    `SELECT COUNT(*) as total_trades,
            SUM(CASE WHEN status IN ('completed', 'complete') THEN 1 ELSE 0 END) as completed_trades,
            SUM(CASE WHEN status IN ('completed', 'complete') THEN CAST(amount AS REAL) ELSE 0 END) as total_volume
-    FROM trades WHERE seller_id IN (?, ?) OR buyer_id IN (?, ?)`, [id, principalId, id, principalId]
+    FROM trades WHERE seller_id IN (?, ?)`, [id, registeredPrincipalId]
   ).catch(() => null),
   client.execute(
    `SELECT t.id, t.buyer_id, t.seller_id, t.amount, t.status, t.created_at,
-           b.name as buyer_name, s.name as seller_name
+           COALESCE(b.name, bu.name) as buyer_name, COALESCE(s.name, su.name) as seller_name
     FROM trades t
     LEFT JOIN agents b ON b.id = t.buyer_id OR ('user_agent_' || b.id) = t.buyer_id
     LEFT JOIN agents s ON s.id = t.seller_id OR ('user_agent_' || s.id) = t.seller_id
+    LEFT JOIN users bu ON bu.id = t.buyer_id
+    LEFT JOIN users su ON su.id = t.seller_id
     WHERE t.seller_id IN (?, ?) OR t.buyer_id IN (?, ?)
-    ORDER BY t.created_at DESC LIMIT 10`, [id, principalId, id, principalId]
+    ORDER BY t.created_at DESC LIMIT 10`, [id, registeredPrincipalId, id, registeredPrincipalId]
   ).catch(() => null),
   client.execute(
    `SELECT r.id, r.trade_id, r.rater_id, r.rated_id, r.score, r.comment, r.created_at,
-           a.name as rater_name
+           COALESCE(a.name, u.name) as rater_name
     FROM ratings r
     LEFT JOIN agents a ON a.id = r.rater_id OR ('user_agent_' || a.id) = r.rater_id
+    LEFT JOIN users u ON u.id = r.rater_id
     WHERE r.rated_id IN (?, ?)
-    ORDER BY r.created_at DESC LIMIT 20`, [id, principalId]
+    ORDER BY r.created_at DESC LIMIT 20`, [id, registeredPrincipalId]
   ).catch(() => null),
   client.execute(
    'SELECT id, capability, score, run_time_ms, status, created_at FROM benchmarks WHERE agent_id = ? ORDER BY created_at DESC LIMIT 10', [id]
@@ -73,15 +79,69 @@ export async function GET(
   ).catch(() => null),
  ])
 
- const row = agentRes?.rows?.[0]
+ let row: any = agentRes?.rows?.[0]
+ let profileKind: 'registered_agent' | 'account_seller' | 'reference' = 'registered_agent'
+ let principalId = registeredPrincipalId
  if (!row) {
-  return NextResponse.json({ error: 'not_found', message: 'Agent not found' }, { status: 404 })
+  const accountRes = await client.execute(
+   'SELECT id, name, bio, role, avatar_url, avatar_emoji, email, created_at FROM users WHERE id = ? LIMIT 1',
+   [id],
+  ).catch(() => null)
+  const account = accountRes?.rows?.[0] as any
+  if (account) {
+   profileKind = 'account_seller'
+   principalId = id
+   const walletMatch = String(account.email || '').match(/^wallet_(0x[a-fA-F0-9]{40})@wallet\.local$/)
+   row = {
+    ...account,
+    description: account.bio || 'Marketplace seller on ClawdMarket.',
+    capabilities: '[]',
+    endpoint: null,
+    owner_address: walletMatch?.[1] || null,
+    status: 'active',
+   }
+  } else {
+   const reference = FALLBACK_AGENTS.find((agent) => agent.id === id)
+   if (!reference) return NextResponse.json({ error: 'not_found', message: 'Seller not found' }, { status: 404 })
+   profileKind = 'reference'
+   principalId = id
+   row = {
+    ...reference,
+    description: reference.bio,
+    capabilities: JSON.stringify(FALLBACK_LISTINGS
+     .filter((listing) => fallbackAgentForListingId(listing.id).id === id)
+     .map((listing) => listing.category.toLowerCase())),
+    endpoint: null,
+    owner_address: null,
+    status: 'active',
+    created_at: new Date().toISOString(),
+   }
+  }
  }
 
- const capabilities = (() => {
+ let capabilities = (() => {
   const raw = (row as any).capabilities || '[]'
   try { return JSON.parse(String(raw)) } catch { return [] }
  })()
+ if (capabilities.length === 0) {
+  const categories = await client.execute(
+   'SELECT DISTINCT category FROM listings WHERE seller_id IN (?, ?) AND status = ?',
+   [id, registeredPrincipalId, 'active'],
+  ).catch(() => null)
+  capabilities = (categories?.rows || []).map((item: any) => String(item.category)).filter(Boolean)
+ }
+
+ const liveListings = profileKind === 'reference'
+  ? FALLBACK_LISTINGS
+    .filter((listing) => fallbackAgentForListingId(listing.id).id === id)
+    .map((listing) => ({ ...listing, status: 'preview' }))
+  : ((await client.execute(
+    `SELECT id, title, description, category, price_bankr, status, created_at
+     FROM listings
+     WHERE seller_id IN (?, ?) AND status = 'active'
+     ORDER BY created_at DESC`,
+    [id, registeredPrincipalId],
+   ).catch(() => null))?.rows || [])
 
  const benchmarkHistory = (() => {
   const raw = (row as any).benchmark_history || '[]'
@@ -112,6 +172,10 @@ export async function GET(
   id: (row as any).id,
   name: (row as any).name,
   description: (row as any).description,
+  profile_kind: profileKind,
+  principal_id: principalId,
+  avatar_url: (row as any).avatar_url || null,
+  avatar_emoji: (row as any).avatar_emoji || null,
   capabilities,
   endpoint: (row as any).endpoint,
   owner_address: (row as any).owner_address,
@@ -158,6 +222,7 @@ export async function GET(
 
  return NextResponse.json({
   ...agent,
+  active_listings: liveListings,
   ratings,
   recent_trades: recentTradesRes?.rows || [],
   recent_benchmarks: benchmarksRes?.rows || [],
@@ -169,7 +234,6 @@ export async function GET(
  })
 
  } catch (err: any) {
- console.error('[agent detail]', err)
- return NextResponse.json({ error: 'internal_error', message: err.message }, { status: 500 })
+ return internalErrorResponse('Agent detail lookup failed', err)
  }
 }

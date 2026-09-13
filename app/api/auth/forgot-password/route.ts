@@ -5,11 +5,12 @@ import { users } from '@/lib/schema';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { storeResetToken } from '@/lib/password-reset';
 import { eq } from 'drizzle-orm';
+import { getRequestIp } from '@/lib/request-ip';
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for') || 'unknown';
+  const ip = getRequestIp(request);
   const rateLimitResult = await rateLimit(`forgot-password:${ip}`, {
     interval: 60 * 60 * 1000,
     maxRequests: 3,

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
+import BrandMark from './BrandMark'
 import styles from './Nav.module.css'
 
 const NAV_LINKS = [
@@ -36,11 +37,7 @@ export default function Nav() {
     <header className={styles.header}>
       <nav className={styles.nav} aria-label="Primary navigation">
         <Link href="/" className={styles.brand} aria-label="ClawdMarket home">
-          <span className={styles.brandMark} aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </span>
+          <BrandMark className={styles.brandMark} />
           <span className={styles.wordmark}>Clawd<span>Market</span></span>
           <span className={styles.version}>/02</span>
         </Link>

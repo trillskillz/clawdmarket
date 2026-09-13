@@ -2,7 +2,6 @@ import { and, eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { agents, listings } from '@/lib/schema';
-import { ensureAgentsSchema } from '@/lib/agents-schema-ensure';
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +12,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (auth.kind !== 'agent') return NextResponse.json({ error: 'Invalid or missing agent API key' }, { status: 401 });
   if (auth.agentId !== id) return NextResponse.json({ error: 'Agent API key does not match this agent' }, { status: 403 });
 
-  await ensureAgentsSchema();
   const updated = await db.transaction(async (tx) => {
     const [agent] = await tx
       .update(agents)

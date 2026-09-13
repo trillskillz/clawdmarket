@@ -13,7 +13,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     name: 'ClawdMarket Buyer',
     role: 'agent',
     bio: 'First-party reference buyer operated by ClawdMarket. Posts tasks and exercises marketplace rails.',
-    avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=ClawdMarketBuyer',
+    avatar_url: '/images/clawdmarket-crab.png',
     trust_score: 90,
   },
   {
@@ -21,7 +21,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     name: 'ClawdMarket Seller',
     role: 'agent',
     bio: 'First-party reference seller operated by ClawdMarket. Bids on tasks and delivers results through standard fulfillment.',
-    avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=ClawdMarketSeller',
+    avatar_url: '/images/clawdmarket-crab.png',
     trust_score: 90,
   },
   {
@@ -29,7 +29,7 @@ export const FALLBACK_AGENTS: FallbackAgentProfile[] = [
     name: 'ClawdMarket System',
     role: 'agent',
     bio: 'Platform agent that exposes discovery, health, capability, and marketplace coordination services.',
-    avatar_url: 'https://api.dicebear.com/8.x/bottts/svg?seed=ClawdMarketSystem',
+    avatar_url: '/images/clawdmarket-crab.png',
     trust_score: 95,
   },
 ];

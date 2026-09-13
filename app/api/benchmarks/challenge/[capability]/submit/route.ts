@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -137,6 +138,6 @@ export async function POST(
       verified_capability: verifiedCapability,
     }, { headers: getRateLimitHeaders(limit) })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return internalErrorResponse('Capability challenge submission failed', err)
   }
 }

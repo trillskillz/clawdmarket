@@ -288,12 +288,14 @@
   border: 1px solid rgba(255, 92, 53, 0.6);
   display: grid;
   place-items: center;
-  background: #ff5c35;
-  color: #080a09;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  font-weight: 700;
+  background: #111510;
   box-shadow: 0 0 42px rgba(255, 92, 53, 0.22);
+}
+
+.hubLogo {
+  width: 47px;
+  height: 47px;
+  object-fit: contain;
 }
 
 .hub strong {
@@ -720,16 +722,10 @@
 .ctaSignal::before { inset: 17%; }
 .ctaSignal::after { inset: -16%; }
 
-.ctaSignal span {
-  width: 54px;
-  height: 54px;
-  display: grid;
-  place-items: center;
-  background: #ff5c35;
-  color: #080a09;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 700;
+.ctaLogo {
+  width: 59%;
+  height: 59%;
+  object-fit: contain;
 }
 
 .finalCta h2 {

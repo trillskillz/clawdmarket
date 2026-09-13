@@ -4,7 +4,6 @@ import { tasks, bids, task_workspaces } from '@/lib/schema'
 import { and, eq, ne } from 'drizzle-orm'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
-import { ensureTaskWorkspaceSchema } from '@/lib/task-workspace-schema'
 import { deliverWebhookEvent } from '@/lib/webhook-delivery'
 
 export const dynamic = 'force-dynamic'
@@ -41,8 +40,6 @@ export async function POST(
  if (new Date(task.expiresAt).getTime() <= Date.now() || (task.deadlineAt && new Date(task.deadlineAt).getTime() <= Date.now())) {
   return NextResponse.json({ error: 'task_expired' }, { status: 409 })
  }
- await ensureTaskWorkspaceSchema()
-
  const assigned = await db.transaction(async (tx) => {
   const [currentBid] = await tx.select().from(bids).where(and(eq(bids.id, bid_id), eq(bids.taskId, id), eq(bids.status, 'pending'))).limit(1)
   if (!currentBid) return false

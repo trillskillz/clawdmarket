@@ -2,7 +2,6 @@ import { Credential } from 'mppx';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { messages, mpp_sessions, trades, transactions, wallets, tasks, task_workspaces } from '@/lib/schema';
-import { ensureTaskWorkspaceSchema } from '@/lib/task-workspace-schema';
 import { encryptMessage } from '@/lib/chat-crypto';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
@@ -51,7 +50,6 @@ async function sendMessage(sender_id: string, receiver_id: string, payload: Reco
 }
 
 export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect, reason: 'buyer_confirm' | 'auto_confirm') {
-  await ensureTaskWorkspaceSchema();
   const now = Date.now();
   const ratingWindowIso = new Date(now + 72 * 60 * 60 * 1000).toISOString();
   const externalFunding = isExternallyFundedTrade(trade);
@@ -62,7 +60,7 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
       .set({
         status: 'completed',
         completed_at: new Date(),
-        payout_status: externalFunding ? 'pending' : 'complete',
+        payout_status: 'complete',
         rating_window_expires_at: ratingWindowIso,
       })
       .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending_release')))
@@ -78,23 +76,16 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
         .where(and(eq(tasks.id, workspace.task_id), eq(tasks.status, 'assigned')));
     }
 
-    await tx.insert(wallets).values({ user_id: trade.seller_id, balance: 0, escrow: 0 }).onConflictDoNothing();
-
-    // On-chain purchases are held by the configured treasury. Ledger purchases
-    // reserve the seller amount in the buyer's escrow balance.
     if (!externalFunding) {
+      await tx.insert(wallets).values({ user_id: trade.seller_id, balance: 0, escrow: 0 }).onConflictDoNothing();
       const released = await tx
         .update(wallets)
         .set({ escrow: sql`MAX(0, ${wallets.escrow} - ${trade.amount})` })
         .where(and(eq(wallets.user_id, trade.buyer_id), sql`${wallets.escrow} >= ${trade.amount}`))
         .returning({ user_id: wallets.user_id });
       if (released.length === 0) throw new Error('ESCROW_BALANCE_MISMATCH');
+      await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${trade.amount}` }).where(eq(wallets.user_id, trade.seller_id));
     }
-
-    await tx
-      .update(wallets)
-      .set({ balance: sql`${wallets.balance} + ${trade.amount}` })
-      .where(eq(wallets.user_id, trade.seller_id));
 
     await tx.insert(transactions).values({
       from_user_id: trade.buyer_id,
@@ -103,8 +94,8 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
       type: 'escrow_release',
       reference_id: trade.id,
       memo: externalFunding
-        ? 'Seller ledger claim recorded; external payout pending'
-        : 'Sandbox ledger escrow released',
+        ? 'External seller payout confirmed'
+        : 'Account-balance escrow released',
     });
 
     await tx
@@ -129,13 +120,13 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
     deliverWebhookEvent(trade.seller_id, 'trade.status_changed', { trade_id: trade.id, old_status: 'pending_release', new_status: 'completed' }),
     deliverWebhookEvent(trade.buyer_id, 'trade.completed', {
       trade_id: trade.id,
-      seller_credit_amount: trade.amount,
-      payout_status: externalFunding ? 'pending' : 'complete',
+      seller_amount: trade.amount,
+      payout_status: 'complete',
     }),
     deliverWebhookEvent(trade.seller_id, 'trade.completed', {
       trade_id: trade.id,
-      seller_credit_amount: trade.amount,
-      payout_status: externalFunding ? 'pending' : 'complete',
+      seller_amount: trade.amount,
+      payout_status: 'complete',
     }),
   ];
   if (reason === 'auto_confirm') {

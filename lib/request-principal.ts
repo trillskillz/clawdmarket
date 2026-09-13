@@ -37,7 +37,8 @@ function asRegisteredAgent(row: { id: string; name: string }): Extract<Registere
 export async function resolveRequestPrincipal(req: NextRequest): Promise<RequestPrincipal | null> {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
-  const account = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const accountFromHeader = authHeader ? await authenticateRequest(authHeader) : null;
+  const account = accountFromHeader || (cookieToken ? await authenticateRequest(`Bearer ${cookieToken}`) : null);
 
   if (account) {
     return {

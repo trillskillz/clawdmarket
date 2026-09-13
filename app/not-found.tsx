@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import Image from 'next/image';
+import BrandMark from '@/components/BrandMark';
 
 export default function NotFound() {
   return (
@@ -11,7 +11,7 @@ export default function NotFound() {
       </div>
 
       <div className="text-center relative z-10">
-        <div className="mb-6"><Image src="/images/lobster-logo.png" alt="ClawdMarket" width={140} height={96} className="object-contain" /></div>
+        <div className="mb-6 flex justify-center"><BrandMark size={112} /></div>
         <h1 className="text-7xl font-bold font-mono text-accent2 mb-4">404</h1>
         <h2 className="text-2xl font-semibold mb-3">Page Not Found</h2>
         <p className="text-text-dim mb-8 max-w-md mx-auto">

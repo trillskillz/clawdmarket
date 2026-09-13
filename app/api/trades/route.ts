@@ -5,17 +5,12 @@ import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
-import { eq, or, desc, sql } from 'drizzle-orm';
+import { and, eq, or, desc, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
 import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
-import { ensurePaymentRailColumn } from '@/lib/ensure-payment-rail';
 import { logger } from '@/lib/logger';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
-import {
-  EXTERNAL_TRADE_PAYMENT_ERROR,
-  isExternalTradePaymentRequested,
-} from '@/lib/trade-settlement-readiness';
 import {
   calculateTradeFinancials,
   TradeRaceError,
@@ -23,22 +18,12 @@ import {
   ensureAdminFeeRecipient,
 } from '@/lib/settlement';
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy';
+import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy';
+import { getPaymentReadiness } from '@/lib/payment-config';
+import { payoutAddressForUser } from '@/lib/external-settlement';
+import { checkoutForTrade } from '@/lib/trade-checkout';
 
 export const dynamic = 'force-dynamic'
-
-function externalTradePaymentsUnavailableResponse() {
-  return NextResponse.json(
-    {
-      success: false,
-      ...EXTERNAL_TRADE_PAYMENT_ERROR,
-      ...envMeta('clawdmarket/api/trades'),
-    },
-    {
-      status: 503,
-      headers: { 'Cache-Control': 'no-store' },
-    },
-  );
-}
 
 async function createTradePost(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -80,6 +65,7 @@ async function createTradePost(req: NextRequest) {
   try {
     const body = await req.json();
     const validated = createTradeSchema.parse(body);
+    const clientReference = validated.client_reference || req.headers.get('idempotency-key') || crypto.randomUUID();
     if (validated.listing_id.startsWith('demo-')) {
       return NextResponse.json(
         { error: 'Preview listings cannot be purchased', code: 'DEMO_LISTING' },
@@ -87,11 +73,12 @@ async function createTradePost(req: NextRequest) {
       );
     }
 
-    // Marketplace funds must never enter a platform treasury without a
-    // production seller-payout path. Keep external rails fail-closed before
-    // any payment verification or transfer can run.
-    if (auth.kind === 'mpp' || isExternalTradePaymentRequested(body)) {
-      return externalTradePaymentsUnavailableResponse();
+    const [existingTrade] = await db.select().from(trades).where(eq(trades.client_reference, clientReference)).limit(1);
+    if (existingTrade) {
+      if (existingTrade.buyer_id !== auth.userId || existingTrade.listing_id !== validated.listing_id) {
+        return NextResponse.json({ error: 'Idempotency key already belongs to another trade', code: 'IDEMPOTENCY_CONFLICT' }, { status: 409 });
+      }
+      return NextResponse.json({ message: 'Existing trade returned.', trade: existingTrade, code: 'TRADE_EXISTS', checkout: checkoutForTrade(existingTrade) });
     }
 
     const [listing]: any = await db
@@ -157,9 +144,67 @@ async function createTradePost(req: NextRequest) {
     const itemPrice = Number(listing.price_bankr);
     const { totalCost, sellerAmount, devAmount } = calculateTradeFinancials(itemPrice);
 
-    // Existing installations may predate this column. Ensure it before
-    // opening a transaction, then persist the rail as part of the trade insert.
-    await ensurePaymentRailColumn();
+    if (validated.payment_rail === 'mpp' || validated.payment_rail === 'evm') {
+      const readiness = getPaymentReadiness();
+      const railReady = validated.payment_rail === 'mpp' ? readiness.mpp.enabled : readiness.evm.enabled;
+      if (!railReady) {
+        return NextResponse.json({
+          error: `${validated.payment_rail.toUpperCase()} settlement is not configured on this deployment`,
+          code: 'PAYMENT_RAIL_NOT_CONFIGURED',
+          state: 'no_funds_moved',
+        }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+      }
+      const sellerPayout = await payoutAddressForUser(listing.seller_id);
+      if (!sellerPayout) {
+        return NextResponse.json({
+          error: 'The seller must configure a payout wallet before accepting external payments',
+          code: 'SELLER_PAYOUT_ADDRESS_REQUIRED',
+          state: 'no_funds_moved',
+        }, { status: 409 });
+      }
+      const [newTrade] = await db.transaction(async (tx) => {
+        if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost });
+        const claimed = await tx.update(listings).set({ status: 'sold' })
+          .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'))).returning({ id: listings.id });
+        if (!claimed.length) throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
+        return tx.insert(trades).values({
+          listing_id: listing.id,
+          buyer_id: auth.userId,
+          seller_id: listing.seller_id,
+          amount: sellerAmount,
+          fee: devAmount,
+          item_price: itemPrice,
+          platform_fee: devAmount,
+          total_cost: totalCost,
+          seller_amount: sellerAmount,
+          dev_amount: devAmount,
+          dev_wallet: process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || null,
+          payout_status: 'pending',
+          payment_rail: validated.payment_rail,
+          client_reference: clientReference,
+          payment_due_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+          status: 'pending',
+          auto_confirm_at: new Date(Date.now() + (30 * 60 + 259200) * 1000).toISOString(),
+        }).returning();
+      });
+      const checkout = checkoutForTrade(newTrade);
+      Promise.all([
+        fireWebhook(auth.userId, 'trade.created', { trade: newTrade, checkout }),
+        fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade, checkout }),
+      ]).catch(err => logger.error('Webhook error', { err: String(err) }));
+      return NextResponse.json({
+        message: 'Trade reserved. Complete payment before the checkout deadline.',
+        trade: newTrade,
+        checkout,
+        code: 'TRADE_PAYMENT_REQUIRED',
+        fee_info: { item_price: sellerAmount, platform_fee: devAmount, total_cost: totalCost },
+        ...envMeta('clawdmarket/api/trades'),
+      }, { status: 201, headers: getRateLimitHeaders(rateLimitResult) });
+    }
+
+    if (!getPaymentReadiness().ledger.enabled) {
+      return NextResponse.json({ error: 'Account-balance settlement is not enabled', code: 'PAYMENT_RAIL_NOT_CONFIGURED' }, { status: 503 });
+    }
 
     // ─── INTERNAL LEDGER ESCROW ───
 
@@ -199,7 +244,7 @@ async function createTradePost(req: NextRequest) {
 
     const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
 
-    const newTrade = await db.transaction((tx) => createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { agentId: auth.agentId }));
+    const newTrade = await db.transaction((tx) => createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { agentId: auth.agentId, clientReference }));
     // ─── ESCROW LOGIC END ───
 
     // Fire webhooks (fire-and-forget, don't block response)
@@ -301,30 +346,9 @@ async function createTradePost(req: NextRequest) {
   }
 }
 
-async function paidCreateTradeRoute(req: NextRequest) {
-  const body = await req.clone().json().catch(() => null);
-  const parsed = createTradeSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.issues }, { status: 400 });
-  }
-
-  if (parsed.data.listing_id.startsWith('demo-')) {
-    return NextResponse.json(
-      { error: 'Preview listings cannot be purchased', code: 'DEMO_LISTING' },
-      { status: 409 },
-    );
-  }
-
-  if (String(body?.payment_rail || '').toLowerCase() === 'ledger') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  return externalTradePaymentsUnavailableResponse();
-}
-
 export async function POST(req: NextRequest) {
   const principal = await resolveRequestPrincipal(req);
-  return principal ? createTradePost(req) : paidCreateTradeRoute(req);
+  return principal ? createTradePost(req) : NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
 export async function GET(req: NextRequest) {
@@ -357,6 +381,8 @@ export async function GET(req: NextRequest) {
           fee_tx_hash: trades.fee_tx_hash,
           payout_status: trades.payout_status,
           payment_rail: trades.payment_rail,
+          payment_due_at: trades.payment_due_at,
+          funded_at: trades.funded_at,
           status: trades.status,
           auto_confirm_at: trades.auto_confirm_at,
           created_at: trades.created_at,
@@ -373,7 +399,15 @@ export async function GET(req: NextRequest) {
         .where(or(eq(trades.buyer_id, auth.userId), eq(trades.seller_id, auth.userId)))
         .orderBy(desc(trades.created_at));
 
-    return NextResponse.json({ trades: userTrades, ...envMeta('clawdmarket/api/trades') });
+    return NextResponse.json({
+      trades: userTrades.map((trade) => ({
+        ...trade,
+        checkout: trade.buyer_id === auth.userId && trade.status === 'pending' && ['mpp', 'evm'].includes(trade.payment_rail)
+          ? checkoutForTrade(trade)
+          : null,
+      })),
+      ...envMeta('clawdmarket/api/trades'),
+    });
   } catch (error: any) {
     logger.error('Trades fetch error', { err: error?.message });
     return NextResponse.json(

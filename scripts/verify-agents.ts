@@ -1,7 +1,6 @@
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { agents } from '@/lib/schema';
-import { ensureAgentsSchema } from '@/lib/agents-schema-ensure';
 
 async function verifyEndpoint(endpoint: string): Promise<boolean> {
   try {
@@ -24,7 +23,6 @@ async function verifyEndpoint(endpoint: string): Promise<boolean> {
 }
 
 async function main() {
-  await ensureAgentsSchema();
   const threshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const staleAgents = await db

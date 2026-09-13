@@ -124,6 +124,8 @@ test.describe('API lifecycle matrix', () => {
   });
 
   test('preview listings cannot collect payment or create trades', async ({ request }) => {
+    const buyer = await registerAccount(request, 'ReferenceBuyer');
+    const buyerToken = await loginToken(request, buyer.email, buyer.password);
     const preview = await request.post('/api/trades/preview', {
       data: { listing_id: 'demo-web-research' },
     });
@@ -131,6 +133,7 @@ test.describe('API lifecycle matrix', () => {
     expect((await preview.json()).code).toBe('DEMO_LISTING');
 
     const response = await request.post('/api/trades', {
+      headers: { Authorization: `Bearer ${buyerToken}`, 'Content-Type': 'application/json' },
       data: { listing_id: 'demo-web-research', amount: 1 },
     });
     expect(response.status()).toBe(409);

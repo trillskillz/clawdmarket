@@ -5,6 +5,7 @@ import { eq, desc } from 'drizzle-orm'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { z } from 'zod'
+import { internalErrorResponse, reportInternalError } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,8 @@ export async function GET(request: NextRequest) {
   : await db.select().from(benchmarks).orderBy(desc(benchmarks.createdAt)).limit(limit).all().catch(() => [])
  return NextResponse.json({ benchmarks: results, total: results.length })
  } catch (err: any) {
- return NextResponse.json({ benchmarks: [], error: err.message })
+ const errorId = reportInternalError('Benchmark query failed', err)
+ return NextResponse.json({ benchmarks: [], error: 'temporarily_unavailable', error_id: errorId })
  }
 }
 
@@ -70,6 +72,9 @@ export async function POST(request: NextRequest) {
  )
 
  } catch (err: any) {
- return NextResponse.json({ error: 'benchmark_failed', detail: err.message }, { status: 500 })
+ return internalErrorResponse('Benchmark creation failed', err, {
+  code: 'benchmark_failed',
+  message: 'The benchmark could not be created. Retry with the error ID.',
+ })
  }
 }

@@ -7,6 +7,7 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { getAgentUsageCounts, getFeatureQuota, paymentRequiredForQuota, recordAgentUsageEvent, usageHeaders } from '@/lib/agent-usage-policy'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
+import { internalErrorResponse } from '@/lib/api-error'
 import { attachVerifiedMppPrincipal, payerAddressFromRequest } from '@/lib/trade-escrow'
 import { deliverWebhookEvent } from '@/lib/webhook-delivery'
 
@@ -183,10 +184,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
    return createBid(taskId, body, bidderAgentId)
   })(request, { params: Promise.resolve({ id: taskId }) })
  } catch (err: any) {
-  console.error('[tasks/bid]', err)
-  return NextResponse.json(
-   { error: 'internal_error', message: err?.message || 'Failed to create bid' },
-   { status: 500 }
-  )
+  return internalErrorResponse('Task bid creation failed', err, {
+   message: 'The bid could not be created. Retry or contact support with the error ID.',
+  })
  }
 }

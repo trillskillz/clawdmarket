@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -261,8 +262,7 @@ export async function GET(
     })
 
   } catch (err: any) {
-    console.error('[genome]', err)
-    return NextResponse.json({ error: 'internal_error', message: err.message }, { status: 500 })
+    return internalErrorResponse('Agent genome lookup failed', err)
   }
 }
 

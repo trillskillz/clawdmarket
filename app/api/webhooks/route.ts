@@ -78,10 +78,10 @@ async function listWebhooks(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const principal = await resolveRequestPrincipal(req);
   if (principal) return createWebhook(req);
-  return mppx.session({ amount: '0.001', unitType: 'request' })(createWebhook)(req);
+  return mppx.charge({ amount: '0.001' })(createWebhook)(req);
 }
 export async function GET(req: NextRequest) {
   const principal = await resolveRequestPrincipal(req);
   if (principal) return listWebhooks(req);
-  return mppx.session({ amount: '0.001', unitType: 'request' })(listWebhooks)(req);
+  return mppx.charge({ amount: '0.001' })(listWebhooks)(req);
 }

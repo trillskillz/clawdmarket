@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { loadAgentTrust } from '@/lib/agent-trust'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +39,6 @@ export async function GET(
       components: trust.components,
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return internalErrorResponse('Agent trust lookup failed', err)
   }
 }

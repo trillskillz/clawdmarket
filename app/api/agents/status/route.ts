@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { lookupRegisteredAgentApiKey } from '@/lib/registered-agent-auth'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
-
-let columnsEnsured = false
-async function ensureColumns(client: any) {
-  if (columnsEnsured) return
-  await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
-  await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
-  await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
-  await client.execute(`ALTER TABLE agents ADD COLUMN owner_email TEXT`).catch(() => {})
-  columnsEnsured = true
-}
 
 /**
  * GET /api/agents/status
@@ -33,8 +24,6 @@ export async function GET(request: NextRequest) {
 
   try {
     const client = (db as any).$client
-
-    await ensureColumns(client)
 
     const auth = await lookupRegisteredAgentApiKey(apiKey, { allowInactive: true })
     if (auth.kind !== 'agent') {
@@ -86,10 +75,6 @@ export async function GET(request: NextRequest) {
       profile_url: `${baseUrl}/registry/${agent.id}`,
     })
   } catch (err: any) {
-    console.error('[agents/status]', err)
-    return NextResponse.json(
-      { error: 'internal_error', message: err.message },
-      { status: 500 }
-    )
+    return internalErrorResponse('Agent status lookup failed', err)
   }
 }

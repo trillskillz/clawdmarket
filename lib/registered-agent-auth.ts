@@ -14,17 +14,6 @@ type AgentAuthValid = {
 
 export type RegisteredAgentAuth = AgentAuthNone | AgentAuthInvalid | AgentAuthValid
 
-let agentAuthColumnsEnsured = false
-
-async function ensureAgentAuthColumns() {
-  if (agentAuthColumnsEnsured) return
-  const client = (db as any).$client
-  if (client?.execute) {
-    await client.execute('ALTER TABLE agents ADD COLUMN api_key TEXT').catch(() => {})
-  }
-  agentAuthColumnsEnsured = true
-}
-
 export function hashAgentApiKey(apiKey: string): string {
   return crypto.createHash('sha256').update(apiKey).digest('hex')
 }
@@ -44,7 +33,6 @@ async function resolveRegisteredAgentApiKey(
   if (!hasCredential) return { kind: 'none' }
   if (!apiKey) return { kind: 'invalid' }
 
-  await ensureAgentAuthColumns()
   const client = (db as any).$client
   const hashed = hashAgentApiKey(apiKey)
   const result = await client.execute({

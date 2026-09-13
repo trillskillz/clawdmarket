@@ -4,11 +4,12 @@ import { waitlist } from '@/lib/schema';
 import { waitlistSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq } from 'drizzle-orm';
+import { getRequestIp } from '@/lib/request-ip';
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  const ip = getRequestIp(req);
   const rateLimitResult = await rateLimit(`waitlist:${ip}`, { 
     interval: 60 * 60 * 1000, // 1 hour
     maxRequests: 3 

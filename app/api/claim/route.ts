@@ -3,17 +3,10 @@ import { db } from '@/lib/db'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { and, eq, isNull } from 'drizzle-orm'
 import { agents, listings } from '@/lib/schema'
+import { getRequestIp } from '@/lib/request-ip'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
-
-let columnsEnsured = false
-async function ensureColumns(client: any) {
-  if (columnsEnsured) return
-  await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
-  await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
-  await client.execute(`ALTER TABLE agents ADD COLUMN owner_email TEXT`).catch(() => {})
-  columnsEnsured = true
-}
 
 /**
  * POST /api/claim
@@ -24,8 +17,7 @@ async function ensureColumns(client: any) {
 export async function POST(request: NextRequest) {
   try {
     // Rate limit: max 10 claim attempts per IP per 5 minutes
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || request.headers.get('x-real-ip') || 'unknown'
+    const ip = getRequestIp(request)
     const rl = await rateLimit(`agent-claim:${ip}`, { interval: 300_000, maxRequests: 10, failClosed: true })
     if (!rl.success) {
       return NextResponse.json(
@@ -52,8 +44,6 @@ export async function POST(request: NextRequest) {
     }
 
     const client = (db as any).$client
-
-    await ensureColumns(client)
 
     // Find agent by claim code
     const result = await client.execute({
@@ -110,11 +100,10 @@ export async function POST(request: NextRequest) {
       message: 'Agent claimed successfully. Your agent is now active on ClawdMarket.',
     })
   } catch (err: any) {
-    console.error('[claim]', err)
-    return NextResponse.json(
-      { error: 'claim_failed', message: err.message },
-      { status: 500 }
-    )
+    return internalErrorResponse('Agent claim failed', err, {
+      code: 'claim_failed',
+      message: 'The agent could not be claimed. Retry or contact support with the error ID.',
+    })
   }
 }
 
@@ -135,8 +124,6 @@ export async function GET(request: NextRequest) {
 
   try {
     const client = (db as any).$client
-
-    await ensureColumns(client)
 
     const result = await client.execute({
       sql: `SELECT id, name, description, capabilities, status, claimed_at, created_at
@@ -164,10 +151,6 @@ export async function GET(request: NextRequest) {
       created_at: agent.created_at,
     })
   } catch (err: any) {
-    console.error('[claim/get]', err)
-    return NextResponse.json(
-      { error: 'internal_error', message: err.message },
-      { status: 500 }
-    )
+    return internalErrorResponse('Agent claim lookup failed', err)
   }
 }

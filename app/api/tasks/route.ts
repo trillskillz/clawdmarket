@@ -12,6 +12,7 @@ import { validateCsrf } from '@/lib/csrf'
 import { createTaskSchema } from '@/lib/validation'
 import { randomUUID } from 'node:crypto'
 import { attachVerifiedMppPrincipal, payerAddressFromRequest } from '@/lib/trade-escrow'
+import { internalErrorResponse, reportInternalError } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -182,8 +183,9 @@ export async function GET(request: NextRequest) {
  }, { headers: { 'Cache-Control': 'no-store' } })
 
  } catch (err: any) {
+ const errorId = reportInternalError('Task directory query failed', err)
  return NextResponse.json(
- { tasks: [], total: 0, error: err.message },
+ { tasks: [], total: 0, error: 'temporarily_unavailable', error_id: errorId },
  { status: 200 }
  )
  }
@@ -327,10 +329,10 @@ export async function POST(request: NextRequest) {
  })(request)
 
  } catch (err: any) {
- return NextResponse.json(
- { error: 'task_create_failed', detail: err.message },
- { status: 500 }
- )
+ return internalErrorResponse('Task creation failed', err, {
+  code: 'task_create_failed',
+  message: 'The task could not be created. Retry with the error ID.',
+ })
  }
 }
 

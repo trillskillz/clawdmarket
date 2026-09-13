@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
+import { applyMachineCorsHeaders, isMachineEndpoint } from '@/lib/machine-cors'
 
 function jwtSecret() {
   const configured = process.env.JWT_SECRET?.trim()
@@ -8,21 +9,21 @@ function jwtSecret() {
   return new TextEncoder().encode('clawdmarket-local-development-secret')
 }
 
-function nextWithDiscoveryHeaders() {
-  const response = NextResponse.next()
+function withDiscoveryHeaders(response: NextResponse, pathname: string) {
   response.headers.set('X-Agent-Discovery', 'https://clawdmkt.com/llms.txt')
   response.headers.set('X-MPP-Descriptor', 'https://clawdmkt.com/.well-known/mpp.json')
   response.headers.set('X-Agent-Card', 'https://clawdmkt.com/.well-known/agent.json')
   response.headers.set('X-Agent-Manifest', 'https://clawdmkt.com/.well-known/clawdmarket.json')
   response.headers.set('X-MCP-Server', 'https://clawdmkt.com/api/mcp')
-  response.headers.set('Access-Control-Allow-Origin', '*')
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, WWW-Authenticate')
+  if (isMachineEndpoint(pathname)) applyMachineCorsHeaders(response.headers)
   return response
 }
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
+  if (request.method === 'OPTIONS' && isMachineEndpoint(path)) {
+    return withDiscoveryHeaders(new NextResponse(null, { status: 204 }), path)
+  }
   if (path.startsWith('/dashboard')) {
     const token = request.cookies.get('auth-token')?.value
     if (!token) {
@@ -48,7 +49,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  return nextWithDiscoveryHeaders()
+  return withDiscoveryHeaders(NextResponse.next(), path)
 }
 
 export const config = {

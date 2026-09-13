@@ -9,6 +9,7 @@ type ReceiptTrade = {
   status?: string | null
   payment_rail?: string | null
   fee_tx_hash?: string | null
+  payout_status?: string | null
 }
 
 function nonnegative(value: unknown) {
@@ -21,12 +22,14 @@ export function getTradeReceipt(trade: ReceiptTrade) {
   const sellerAmount = nonnegative(trade.seller_amount) || nonnegative(trade.amount)
   const platformFee = nonnegative(trade.platform_fee) || nonnegative(trade.fee)
   const buyerTotal = nonnegative(trade.total_cost) || Math.round((sellerAmount + platformFee) * 100) / 100
-  const sandbox = !isExternallyFundedTrade(trade)
+  const external = isExternallyFundedTrade(trade)
+  const complete = ['completed', 'complete', 'resolved'].includes(trade.status || '')
+  const payoutComplete = ['complete', 'seller_paid', 'refunded'].includes(trade.payout_status || '')
   return {
-    sellerAmount, platformFee, buyerTotal, sandbox,
-    sellerLabel: sandbox ? 'Seller test credits' : 'Seller amount owed',
-    settlementLabel: sandbox
-      ? (['completed', 'complete'].includes(trade.status || '') ? 'Sandbox credits released' : 'Sandbox credits held')
-      : 'External payout not verified',
+    sellerAmount, platformFee, buyerTotal, external,
+    sellerLabel: external ? 'Seller payout' : 'Seller balance',
+    settlementLabel: external
+      ? (payoutComplete ? 'External settlement confirmed' : 'External settlement processing')
+      : (complete ? 'Account balance released' : 'Account balance held'),
   }
 }

@@ -5,7 +5,6 @@ import { canTransitionMilestone, nextContractStateFromMilestones } from '@/lib/c
 import { getTaskPendingActions } from '@/lib/agent-contract'
 import { hashAgentApiKey } from '@/lib/registered-agent-auth'
 import {
-  EXTERNAL_TRADE_PAYMENT_ERROR,
   getTradeSettlementReadiness,
   isExternallyFundedTrade,
   isExternalTradePaymentRequested,
@@ -49,14 +48,15 @@ test('registered-agent API keys are stored as deterministic one-way digests', ()
   assert.notEqual(digest, hashAgentApiKey(`${key}_other`))
 })
 
-test('marketplace settlement fails closed while seller payouts are unavailable', () => {
+test('marketplace settlement exposes the production rail model', () => {
   const readiness = getTradeSettlementReadiness()
 
-  assert.equal(readiness.mode, 'sandbox')
-  assert.equal(readiness.ledger.enabled, true)
-  assert.equal(readiness.ledger.redeemable, false)
-  assert.equal(readiness.external.enabled, false)
-  assert.equal(EXTERNAL_TRADE_PAYMENT_ERROR.state, 'no_funds_moved')
+  assert.equal(readiness.mode, 'production')
+  assert.equal(typeof readiness.ledger.enabled, 'boolean')
+  assert.equal(typeof readiness.ledger.redeemable, 'boolean')
+  assert.equal(readiness.external.enabled, readiness.mpp.enabled || readiness.evm.enabled)
+  assert.deepEqual(readiness.external.rails.map((rail) => rail.id), ['mpp', 'erc20-evm'])
+  assert.deepEqual(readiness.external.rails.map((rail) => rail.enabled), [readiness.mpp.enabled, readiness.evm.enabled])
 })
 
 test('external trade payment requests are detected before funds can move', () => {

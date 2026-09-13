@@ -5,7 +5,6 @@ import { contract_milestones, contracts } from '@/lib/schema';
 import { contractActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionMilestone } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
-import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import {
   ContractSettlementError,
@@ -31,7 +30,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  await ensureContractsSchema();
   if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid contract ID' }, { status: 400 });
 
   const [contract] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1);
@@ -55,7 +53,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  await ensureContractsSchema();
   if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }

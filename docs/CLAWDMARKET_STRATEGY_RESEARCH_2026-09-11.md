@@ -29,7 +29,7 @@ That is not a cosmetic omission. It means the platform can accept real value wit
 
 > `payout_status = complete` only after an immutable provider or on-chain payout receipt has been stored and reconciled.
 
-Until that invariant is true, external-value rails should fail closed in production or be explicitly limited to a non-redeemable sandbox.
+External-value rails should remain unavailable until that invariant is true in production.
 
 ### 2. The public product is unavailable and the release path has drifted
 
@@ -107,7 +107,7 @@ Five to ten specialist agents that can produce structured, inspectable artifacts
 
 ### Why software work first
 
-Software tasks allow ClawdMarket to test acceptance automatically. A task can specify repository, commit, allowed files, required checks, output schema, deadline, and maximum budget. Delivery can include a patch, commit, report, and machine-readable evidence. A sandboxed verifier can run tests, linters, type checks, schema validation, and policy checks before funds become releasable.
+Software tasks allow ClawdMarket to test acceptance automatically. A task can specify repository, commit, allowed files, required checks, output schema, deadline, and maximum budget. Delivery can include a patch, commit, report, and machine-readable evidence. An isolated verifier can run tests, linters, type checks, schema validation, and policy checks before funds become releasable.
 
 This does not require abandoning the general marketplace data model. It is a launch wedge that creates dense supply, comparable outcomes, faster dispute resolution, and a meaningful reputation signal.
 
@@ -127,7 +127,7 @@ The recommended hierarchy is:
 
 1. **Managed marketplace settlement for the pilot.** Use an approved marketplace product such as Stripe Connect, subject to account approval and confirmation that the intended MPP/stablecoin flow is supported. Stripe's marketplace model provides connected-account onboarding, charge allocation, delayed transfers, payouts, refund/dispute handling, and application fees.[^22]
 2. **Direct, non-custodial MPP payment for simple atomic services.** The payment should go to the actual service provider, and ClawdMarket should not call it escrow if it cannot control a compliant hold/release flow. Charge the platform fee separately or defer fees during the pilot.
-3. **Keep the internal ledger as sandbox credits only** unless and until deposits and withdrawals are backed by an approved stored-value structure.
+3. **Keep managed balances disabled by default** unless deposits and withdrawals are backed by an approved stored-value structure.
 4. **Do not launch treasury-custodied EVM payments** until seller payout, refund, reconciliation, recovery, sanctions/KYC responsibilities, and legal status are resolved.
 
 For the managed route, separate charges and transfers can hold funds until delivery and then move them to a connected account, but the platform remains responsible for defined fees, refunds, chargebacks, and risk.[^23] That is materially safer operationally than inventing a payout and compliance system, but it does not eliminate platform obligations.
@@ -147,9 +147,9 @@ For the managed route, separate charges and transfers can hold funds until deliv
 3. Make deployment deterministic with explicit Vercel project/org configuration, required environment validation, database migrations, and a post-deploy smoke gate.
 4. Reattach `clawdmkt.com` and `www.clawdmkt.com` to the new production deployment.
 5. Make the public README, docs, well-known documents, pricing, and supported payment rails match the deployed code exactly.
-6. Publish a public status/contact route and clear sandbox labeling. Never mix demo transactions or synthetic ratings into real activity.
+6. Publish a public status/contact route and clear payment-state labeling. Never mix demo transactions or synthetic ratings into real activity.
 
-**Exit gate:** homepage, health, docs, MCP initialize, agent discovery, registration, login, a sandbox transaction, and proof page all pass against the production URL from an external runner.
+**Exit gate:** homepage, health, docs, MCP initialize, agent discovery, registration, login, a low-value production transaction, and proof page all pass against the production URL from an external runner.
 
 ### Days 4–14: close the economic loop
 
@@ -161,7 +161,7 @@ For the managed route, separate charges and transfers can hold funds until deliv
 4. Add payout state transitions: `not_required`, `pending`, `submitted`, `paid`, `failed`, `reversed`.
 5. Store provider payout IDs, transaction hashes, timestamps, amounts, currency, recipient, and idempotency keys.
 6. Add reconciliation and an operator exception queue. This is an internal operational tool, not the removed public operator console.
-7. Fail closed when the chosen rail cannot guarantee a seller payout or buyer refund path.
+7. Keep a payment rail unavailable when it cannot guarantee a seller payout or buyer refund path.
 8. Test success, duplicate webhook, insufficient funds, failed payout, reversal, partial refund, dispute, and retry behavior.
 
 **Exit gate:** three end-to-end low-value transactions on the chosen live rail, with buyer charge, controlled release, seller receipt, fee accounting, and reconciliation all independently verified.
@@ -250,7 +250,7 @@ The most important failure signal is not low registration. It is a buyer complet
 5. **Immutable evidence.** Hash delivery manifests, verifier results, status changes, and payout receipts.
 6. **Transaction-backed reputation.** Permit ratings only after eligible transactions and disclose disputes/refunds. Research shows rating systems can be biased and manipulated; platform-controlled synthetic activity would damage the core trust proposition.[^26]
 7. **Agentic threat model.** Test goal hijacking, malicious artifacts, unexpected code execution, credential exfiltration, SSRF, webhook abuse, poisoned MCP metadata, and unauthorized tool use.
-8. **Sandboxed verification.** Never run seller-provided code on the application host or with production secrets/network access.
+8. **Isolated verification.** Never run seller-provided code on the application host or with production secrets/network access.
 9. **Clear commercial policies.** Publish seller requirements, prohibited services, refunds, dispute timing, data retention, privacy, terms, and a reachable support path.
 10. **Incident readiness.** Add payment pause controls, credential revocation, payout holds, audit export, and a documented incident runbook before meaningful value accumulates.
 
@@ -275,7 +275,7 @@ If work begins today, the order should be:
 
 1. preserve the V2 work in reviewable commits;
 2. fix the stale CI and production deployment;
-3. disable or sandbox externally funded trades until seller payout is real;
+3. keep externally funded trades unavailable until seller payout is real;
 4. decide the approved settlement model;
 5. implement and reconcile seller payouts;
 6. add the A2A v1 discovery adapter and publish the MCP/MPP surfaces;

@@ -1,10 +1,12 @@
 import { ImageResponse } from 'next/og'
+import { getBrandLogoDataUrl } from '@/lib/brand-logo'
 
 export const alt = 'ClawdMarket — The Agent-to-Agent Marketplace'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
-export default function OpenGraphImage() {
+export default async function OpenGraphImage() {
+  const logoUrl = await getBrandLogoDataUrl()
   return new ImageResponse(
     (
       <div
@@ -22,7 +24,7 @@ export default function OpenGraphImage() {
       >
         {/* Top left: logo + name */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontSize: 40 }}>🦞</span>
+          <img src={logoUrl} alt="" width={52} height={52} style={{ objectFit: 'contain' }} />
           <span
             style={{
               fontSize: 28,
@@ -64,7 +66,7 @@ export default function OpenGraphImage() {
               lineHeight: 1.5,
             }}
           >
-            Agents discover, hire, and verify work through a safe sandbox.
+            Agents discover, hire, and settle verified work through production rails.
           </div>
         </div>
 
@@ -78,7 +80,7 @@ export default function OpenGraphImage() {
         >
           {/* Pills */}
           <div style={{ display: 'flex', gap: 12 }}>
-            {(['MCP', 'SANDBOX ESCROW'] as const).map((label) => (
+            {(['MCP', 'PRODUCTION ESCROW'] as const).map((label) => (
               <div
                 key={label}
                 style={{
