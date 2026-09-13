@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AGENT_ACTIONS, AGENT_MCP_TOOLS, getAgentManifest } from '@/lib/agent-contract'
 import { resolveCapabilities } from '@/lib/capabilities'
 import { MPP_RECIPIENT_ADDRESS, PATHUSD_ADDRESS, TEMPO_CHAIN_ID, TREASURY_ADDRESS } from '@/lib/constants'
+import { lookupRegisteredAgentApiKey } from '@/lib/registered-agent-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,8 @@ async function ensureColumns(client: any) {
 }
 
 function getBearerApiKey(request: NextRequest, body?: any) {
+  const headerKey = request.headers.get('x-clawdmarket-agent-key') || request.headers.get('x-agent-api-key')
+  if (headerKey?.trim()) return headerKey.trim()
   const auth = request.headers.get('authorization') || ''
   if (auth.startsWith('Bearer ')) return auth.substring(7).trim()
   if (typeof body?.api_key === 'string') return body.api_key.trim()
@@ -80,15 +83,16 @@ async function runSelfTest(request: NextRequest, body?: any) {
       const { db } = await import('@/lib/db')
       client = (db as any).$client
       await ensureColumns(client)
-      const result = await client.execute({
-        sql: `SELECT id, name, status, capabilities, claim_code, claimed_at
-              FROM agents WHERE api_key = ? LIMIT 1`,
-        args: [apiKey],
-      })
-      agent = result?.rows?.[0] || null
-      if (!agent) {
+      const auth = await lookupRegisteredAgentApiKey(apiKey, { allowInactive: true })
+      if (auth.kind !== 'agent') {
         checks.push({ name: 'auth', status: 'fail', message: 'API key was supplied but no matching agent was found.' })
       } else {
+        const result = await client.execute({
+          sql: `SELECT id, name, status, capabilities, claim_code, claimed_at
+                FROM agents WHERE id = ? LIMIT 1`,
+          args: [auth.agentId],
+        })
+        agent = result?.rows?.[0] || null
         agentCaps = parseCapabilities(agent.capabilities)
         checks.push({
           name: 'auth',
@@ -126,26 +130,23 @@ async function runSelfTest(request: NextRequest, body?: any) {
     },
   })
 
-  if (agent) {
+  if (agent && agent.status !== 'active') {
+    checks.push({ name: 'inbox', status: 'warn', message: 'Claim and activate this agent before using the inbox.' })
+  } else if (agent) {
     try {
-      const tasksResult = await client.execute({
-        sql: `SELECT id, title, required_capabilities, budget_usd
-              FROM tasks WHERE status = 'open' ORDER BY created_at DESC LIMIT 50`,
-        args: [],
-      })
-      const allTasks = tasksResult?.rows || []
-      const matching = allTasks.filter((task: any) => {
-        const required = parseCapabilities(task.required_capabilities)
-        if (required.length === 0) return true
-        return required.some((capability) => agentCaps.includes(capability))
-      })
+      const { GET: getInbox } = await import('@/app/api/agents/inbox/route')
+      const response = await getInbox(new NextRequest(new URL('/api/agents/inbox', request.url), {
+        headers: { 'X-Agent-API-Key': apiKey },
+      }))
+      const inbox = await response.json()
+      if (!response.ok) throw new Error(`Inbox returned HTTP ${response.status}`)
       checks.push({
         name: 'inbox',
         status: 'ok',
-        message: 'Inbox query is reachable for this API key.',
+        message: 'The inbox route authenticated this API key and loaded its work.',
         data: {
-          matching_tasks: matching.length,
-          all_open_tasks: allTasks.length,
+          matching_tasks: inbox.matching_tasks.length,
+          all_open_tasks: inbox.all_open_tasks,
           poll_interval_seconds: 1800,
           endpoint: '/api/agents/inbox',
         },
@@ -192,6 +193,8 @@ async function runSelfTest(request: NextRequest, body?: any) {
     checks,
     next_actions: failed.length > 0
       ? ['Fix failing checks, then rerun /api/agent/self-test']
+      : agent?.status === 'inactive'
+        ? ['Open the private claim URL saved during registration', 'Rerun /api/agent/self-test after activation']
       : apiKey
         ? ['Poll /api/agents/inbox', 'Browse /api/tasks?status=open', 'Bid using each task pendingActions endpoint']
         : ['POST /api/agents/register', 'Save agent.api_key', 'Rerun /api/agent/self-test with Authorization: Bearer YOUR_API_KEY'],

@@ -6,7 +6,13 @@ async function getKey() {
   if (cachedKey) return cachedKey;
   await sodium.ready;
 
-  const envKey = process.env.CHAT_ENCRYPTION_KEY || process.env.JWT_SECRET || 'clawdmarket-chat-fallback-key';
+  let envKey = process.env.CHAT_ENCRYPTION_KEY?.trim() || process.env.JWT_SECRET?.trim();
+  if (!envKey) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('CHAT_ENCRYPTION_KEY or JWT_SECRET is required in production');
+    }
+    envKey = 'clawdmarket-local-chat-development-key';
+  }
   // Derive fixed-size key from secret material
   const material = sodium.from_string(envKey);
   cachedKey = sodium.crypto_generichash(32, material, null);

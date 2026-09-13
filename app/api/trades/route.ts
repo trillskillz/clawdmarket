@@ -1,45 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users, wallets, transactions, fee_errors, payment_receipts } from '@/lib/schema';
-import { authenticateRequest } from '@/lib/auth';
+import { trades, listings, users, wallets, fee_errors, ratings } from '@/lib/schema';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { fireWebhook } from '@/lib/webhooks';
-import { and, eq, or, desc, sql } from 'drizzle-orm';
-import { formatUnits, isAddress } from 'viem';
+import { eq, or, desc, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
 import { validateAgentInstruction } from '@/lib/agent-security';
 import { logPaymentFailure, paymentError } from '@/lib/payment-failure';
-import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
-import { mppx } from '@/lib/mpp';
-import { Receipt } from 'mppx';
-import { PATHUSD_ADDRESS } from '@/lib/constants';
-import { getTokenPriceUsd } from '@/lib/price-oracle';
 import { ensurePaymentRailColumn } from '@/lib/ensure-payment-rail';
 import { logger } from '@/lib/logger';
+import { resolveRequestPrincipal } from '@/lib/request-principal';
 import {
-  CONTRACTS_V1_ENABLED,
+  EXTERNAL_TRADE_PAYMENT_ERROR,
+  isExternalTradePaymentRequested,
+} from '@/lib/trade-settlement-readiness';
+import {
   calculateTradeFinancials,
   TradeRaceError,
-  verifyErc20Transfer,
-  tryCreateContractForTrade,
-  createEscrowSession,
+  createLedgerTrade,
   ensureAdminFeeRecipient,
-  ensureSeededListingMaterialized,
-  tradesHasFeeColumns,
 } from '@/lib/settlement';
+import { AgentSpendPolicyError } from '@/lib/agent-spend-policy';
 
 export const dynamic = 'force-dynamic'
 
-const TX_HASH_RE = /^0x([A-Fa-f0-9]{64})$/;
-const MPP_TRADE_EXECUTION_PRICE_USD = 0.01;
-const MPP_CURRENCY_PATH_USD = PATHUSD_ADDRESS;
+function externalTradePaymentsUnavailableResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      ...EXTERNAL_TRADE_PAYMENT_ERROR,
+      ...envMeta('clawdmarket/api/trades'),
+    },
+    {
+      status: 503,
+      headers: { 'Cache-Control': 'no-store' },
+    },
+  );
+}
 
 async function createTradePost(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!auth) {
     return NextResponse.json(
@@ -49,7 +52,7 @@ async function createTradePost(req: NextRequest) {
   }
 
   // Validate CSRF for cookie-based auth
-  if (!authHeader && !validateCsrf(req)) {
+  if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json(
       { error: 'CSRF validation failed' },
       { status: 403 }
@@ -77,28 +80,30 @@ async function createTradePost(req: NextRequest) {
   try {
     const body = await req.json();
     const validated = createTradeSchema.parse(body);
-    const VALID_RAILS = ['mpp', 'x402', 'evm', 'solana', 'bitcoin'] as const
-    const paymentRail = VALID_RAILS.includes(body.payment_rail) ? body.payment_rail : 'mpp'
-
-    if (CONTRACTS_V1_ENABLED) {
-      await ensureContractsSchema();
+    if (validated.listing_id.startsWith('demo-')) {
+      return NextResponse.json(
+        { error: 'Preview listings cannot be purchased', code: 'DEMO_LISTING' },
+        { status: 409 },
+      );
     }
 
-    // Fetch listing (materialize seeded fallback listings when needed)
-    let [listing]: any = await db
+    // Marketplace funds must never enter a platform treasury without a
+    // production seller-payout path. Keep external rails fail-closed before
+    // any payment verification or transfer can run.
+    if (auth.kind === 'mpp' || isExternalTradePaymentRequested(body)) {
+      return externalTradePaymentsUnavailableResponse();
+    }
+
+    const [listing]: any = await db
       .select()
       .from(listings)
       .where(eq(listings.id, validated.listing_id));
-
-    if (!listing && validated.listing_id.startsWith('fb-')) {
-      listing = await ensureSeededListingMaterialized(validated.listing_id);
-    }
 
     if (!listing) {
       await logPaymentFailure({
         buyer_id: auth.userId,
         amount: validated.amount,
-        token: 'bnkr',
+        token: 'ledger',
         route: 'POST /api/trades',
         listing_id: validated.listing_id,
         error_code: 'LISTING_NOT_FOUND',
@@ -116,7 +121,7 @@ async function createTradePost(req: NextRequest) {
         buyer_id: auth.userId,
         seller_id: listing.seller_id,
         amount: validated.amount,
-        token: 'bnkr',
+        token: 'ledger',
         route: 'POST /api/trades',
         listing_id: validated.listing_id,
         error_code: 'LISTING_NOT_ACTIVE',
@@ -150,222 +155,13 @@ async function createTradePost(req: NextRequest) {
     }
 
     const itemPrice = Number(listing.price_bankr);
-    const { itemPrice: tradeAmount, platformFee: fee, totalCost, sellerAmount, devAmount } = calculateTradeFinancials(itemPrice);
-    const devWalletAddress = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || '').trim() || null;
+    const { totalCost, sellerAmount, devAmount } = calculateTradeFinancials(itemPrice);
 
-    const bodyPaymentMode = (body?.payment_mode || '').toString();
-    const onchain = body?.onchain || null;
+    // Existing installations may predate this column. Ensure it before
+    // opening a transaction, then persist the rail as part of the trade insert.
+    await ensurePaymentRailColumn();
 
-    if (bodyPaymentMode === 'onchain') {
-      const treasuryAddressRaw = (
-        process.env.TREASURY_ADDRESS ||
-        process.env.MPP_TREASURY_ADDRESS ||
-        process.env.MPP_RECIPIENT_ADDRESS ||
-        process.env.ESCROW_WALLET_ADDRESS ||
-        process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS ||
-        ''
-      ).trim();
-
-      if (!treasuryAddressRaw || !isAddress(treasuryAddressRaw)) {
-        return NextResponse.json(
-          { error: 'On-chain treasury wallet is not configured on server' },
-          { status: 500 }
-        );
-      }
-
-      if (!onchain) {
-        return NextResponse.json({ error: 'Missing on-chain payment payload' }, { status: 400 });
-      }
-
-      const tokenAddress = String(onchain.tokenAddress || onchain.token_address || '').trim();
-      const txHash = String(onchain.txHash || onchain.escrow_tx_hash || '').trim();
-      const buyerWalletRaw = String(onchain.buyerWallet || onchain.buyer_wallet || '').trim();
-      const tokenSymbol = String(onchain.tokenSymbol || onchain.token_symbol || '').trim() || null;
-      const chainId = Number(onchain.chainId || onchain.chain_id || 0);
-      const tokenDecimals = Number(onchain.decimals);
-
-      if (!isAddress(tokenAddress)) {
-        return NextResponse.json({ error: 'Invalid token address' }, { status: 400 });
-      }
-      if (!Number.isInteger(chainId) || chainId <= 0) {
-        return NextResponse.json({ error: 'Invalid on-chain payment payload (chainId)' }, { status: 400 });
-      }
-      if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 36) {
-        return NextResponse.json({ error: 'Invalid token decimals' }, { status: 400 });
-      }
-      if (!TX_HASH_RE.test(txHash)) {
-        return NextResponse.json({ error: 'Invalid on-chain payment transaction hash format' }, { status: 400 });
-      }
-
-      let buyerWallet: `0x${string}` | undefined;
-      if (buyerWalletRaw) {
-        if (!isAddress(buyerWalletRaw)) {
-          return NextResponse.json({ error: 'Invalid buyer wallet address' }, { status: 400 });
-        }
-        buyerWallet = buyerWalletRaw as `0x${string}`;
-      }
-
-      let tokenAmount: bigint;
-      try {
-        const verification = await verifyErc20Transfer({
-          chainId,
-          tokenAddress: tokenAddress as `0x${string}`,
-          txHash: txHash as `0x${string}`,
-          treasuryAddress: treasuryAddressRaw as `0x${string}`,
-          buyerWallet,
-        });
-        tokenAmount = verification.tokenAmount;
-      } catch (error: any) {
-        return NextResponse.json({ error: error?.message || 'On-chain transfer verification failed' }, { status: 402 });
-      }
-
-      const tokenPriceUsd = await getTokenPriceUsd(tokenAddress, chainId);
-      if (tokenPriceUsd == null) {
-        return NextResponse.json(
-          { error: 'Token price could not be verified. Use a token with a CoinGecko listing.' },
-          { status: 402 },
-        );
-      }
-
-      const tokenAmountFloat = Number(formatUnits(tokenAmount, tokenDecimals));
-      const usdValueAtPayment = tokenAmountFloat * tokenPriceUsd;
-      const minRequiredUsd = totalCost * 0.98;
-      if (!Number.isFinite(usdValueAtPayment) || usdValueAtPayment < minRequiredUsd) {
-        return NextResponse.json(
-          { error: `Insufficient on-chain payment value. Required at least $${minRequiredUsd.toFixed(4)}, received $${usdValueAtPayment.toFixed(4)}.` },
-          { status: 402 },
-        );
-      }
-
-      const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
-
-      const newTrade = await db.transaction(async (tx) => {
-        const claimedRows = await tx
-          .update(listings)
-          .set({ status: 'sold' })
-          .where(and(eq(listings.id, validated.listing_id), eq(listings.status, 'active')))
-          .returning({ id: listings.id });
-
-        if (claimedRows.length === 0) {
-          throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
-        }
-
-        const escrowSessionId = await createEscrowSession(tx, auth.userId, totalCost);
-
-        const [trade] = await tx
-          .insert(trades)
-          .values({
-            listing_id: validated.listing_id,
-            buyer_id: auth.userId,
-            seller_id: listing.seller_id,
-            amount: sellerAmount,
-            fee: devAmount,
-            item_price: itemPrice,
-            platform_fee: devAmount,
-            total_cost: totalCost,
-            seller_amount: sellerAmount,
-            dev_amount: devAmount,
-            dev_wallet: devWalletAddress,
-            // Single on-chain payment tx covers item + dev fee.
-            fee_tx_hash: txHash,
-            payout_status: 'seller_paid',
-            escrow_session_id: escrowSessionId,
-            status: 'escrow_held',
-            auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
-          })
-          .returning();
-
-        // Set payment rail via raw SQL (column added dynamically)
-        await ensurePaymentRailColumn()
-        await (db as any).$client.execute({ sql: 'UPDATE trades SET payment_rail = ? WHERE id = ?', args: [paymentRail, trade.id] }).catch(() => {})
-
-        await tx.insert(transactions).values({
-          from_user_id: auth.userId,
-          to_user_id: listing.seller_id,
-          amount: sellerAmount,
-          type: 'transfer',
-          reference_id: trade.id,
-          memo: `On-chain escrow payment (single tx: ${txHash})`,
-        });
-
-        if (devAmount > 0) {
-          if (adminFeeRecipientUserId) {
-            await tx
-              .update(wallets)
-              .set({ balance: sql`${wallets.balance} + ${devAmount}` })
-              .where(eq(wallets.user_id, adminFeeRecipientUserId));
-          }
-
-          await tx.insert(transactions).values({
-            from_user_id: auth.userId,
-            to_user_id: adminFeeRecipientUserId,
-            amount: devAmount,
-            type: 'fee',
-            reference_id: trade.id,
-            memo: `On-chain dev fee allocation (single tx: ${txHash})`,
-          });
-        }
-
-        return trade;
-      });
-
-      await tryCreateContractForTrade({
-        listingId: validated.listing_id,
-        buyerId: auth.userId,
-        sellerId: listing.seller_id,
-        sellerAmount,
-        devAmount,
-        totalCost,
-      });
-
-      await db.insert(payment_receipts).values({
-        route: 'POST /api/trades',
-        amount: totalCost,
-        currency: tokenAddress.toLowerCase(),
-        tx_hash: txHash,
-        payer_address: buyerWallet || null,
-        token_address: tokenAddress.toLowerCase(),
-        chain_id: chainId,
-        token_symbol: tokenSymbol,
-        token_amount: tokenAmount.toString(),
-        usd_value_at_payment: usdValueAtPayment,
-      });
-
-      Promise.all([
-        fireWebhook(auth.userId, 'trade.created', { trade: newTrade }),
-        fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade }),
-        fireWebhook(listing.seller_id, 'listing.sold', { listing_id: validated.listing_id, trade: newTrade }),
-      ]).catch(err => logger.error('Webhook error', { err: String(err) }));
-
-      return NextResponse.json(
-        {
-          message: 'Trade initiated successfully with on-chain ERC-20 payment.',
-          trade: newTrade,
-          code: 'TRADE_CREATED_ONCHAIN',
-          fee_info: {
-            item_price: sellerAmount,
-            platform_fee: devAmount,
-            total_cost: totalCost,
-            seller_amount: sellerAmount,
-            dev_amount: devAmount,
-            dev_wallet: process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || null,
-            admin_fee_wallet_configured: Boolean(process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS),
-          },
-          onchain_receipts: {
-            payment_tx_hash: txHash,
-            escrow_tx_hash: txHash,
-            fee_tx_hash: txHash,
-          },
-          ...envMeta('clawdmarket/api/trades'),
-        },
-        {
-          status: 201,
-          headers: getRateLimitHeaders(rateLimitResult),
-        }
-      );
-    }
-
-    // ─── LEDGER ESCROW LOGIC (legacy fallback) ───
+    // ─── INTERNAL LEDGER ESCROW ───
 
     // 1. Check buyer balance
     const [buyerWallet] = await db
@@ -385,7 +181,7 @@ async function createTradePost(req: NextRequest) {
         buyer_id: auth.userId,
         seller_id: listing.seller_id,
         amount: totalCost,
-        token: 'bnkr',
+        token: 'ledger',
         route: 'POST /api/trades',
         listing_id: validated.listing_id,
         error_code: 'INSUFFICIENT_FUNDS',
@@ -403,101 +199,8 @@ async function createTradePost(req: NextRequest) {
 
     const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
 
-    // 2. Perform atomic trade creation & fund locking
-    // Note: Drizzle's `db.transaction` works with @libsql/client (Turso)
-    const newTrade = await db.transaction(async (tx) => {
-      const claimedRows = await tx
-        .update(listings)
-        .set({ status: 'sold' })
-        .where(and(eq(listings.id, validated.listing_id), eq(listings.status, 'active')))
-        .returning({ id: listings.id });
-
-      if (claimedRows.length === 0) {
-        throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
-      }
-
-      const walletUpdateRows = await tx
-        .update(wallets)
-        .set({
-          balance: sql`${wallets.balance} - ${totalCost}`,
-          escrow: sql`${wallets.escrow} + ${tradeAmount}`,
-        })
-        .where(and(eq(wallets.user_id, auth.userId), sql`${wallets.balance} >= ${totalCost}`))
-        .returning({ user_id: wallets.user_id });
-
-      if (walletUpdateRows.length === 0) {
-        throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient funds at commit time. Required ${totalCost}.`);
-      }
-
-      const escrowSessionId = await createEscrowSession(tx, auth.userId, totalCost);
-
-      const [trade] = await tx
-        .insert(trades)
-        .values({
-          listing_id: validated.listing_id,
-          buyer_id: auth.userId,
-          seller_id: listing.seller_id,
-          amount: sellerAmount,
-          fee: devAmount,
-          item_price: itemPrice,
-          platform_fee: devAmount,
-          total_cost: totalCost,
-          seller_amount: sellerAmount,
-          dev_amount: devAmount,
-          dev_wallet: devWalletAddress,
-          payout_status: devAmount > 0 ? 'fee_sent' : 'pending',
-          escrow_session_id: escrowSessionId,
-          status: 'escrow_held',
-          auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
-        })
-        .returning();
-
-      // Set payment rail via raw SQL (column added dynamically)
-      await ensurePaymentRailColumn()
-      await (db as any).$client.execute({ sql: 'UPDATE trades SET payment_rail = ? WHERE id = ?', args: [paymentRail, trade.id] }).catch(() => {})
-
-      // Record transaction: Lock funds
-      await tx.insert(transactions).values({
-        from_user_id: auth.userId,
-        amount: tradeAmount,
-        type: 'escrow_lock',
-        reference_id: trade.id,
-        memo: `Escrow lock for listing ${validated.listing_id}`,
-      });
-
-      // Record transaction: Fee (credited to configured admin fee wallet when available)
-      if (fee > 0) {
-        if (adminFeeRecipientUserId) {
-          await tx
-            .update(wallets)
-            .set({ balance: sql`${wallets.balance} + ${fee}` })
-            .where(eq(wallets.user_id, adminFeeRecipientUserId));
-        }
-
-        await tx.insert(transactions).values({
-          from_user_id: auth.userId,
-          to_user_id: adminFeeRecipientUserId,
-          amount: fee,
-          type: 'fee',
-          reference_id: trade.id,
-          memo: adminFeeRecipientUserId
-            ? 'Marketplace fee (5%) credited to admin wallet'
-            : 'Marketplace fee (5%) with no admin wallet configured',
-        });
-      }
-
-      return trade;
-    });
+    const newTrade = await db.transaction((tx) => createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { agentId: auth.agentId }));
     // ─── ESCROW LOGIC END ───
-
-    await tryCreateContractForTrade({
-      listingId: validated.listing_id,
-      buyerId: auth.userId,
-      sellerId: listing.seller_id,
-      sellerAmount,
-      devAmount,
-      totalCost,
-    });
 
     // Fire webhooks (fire-and-forget, don't block response)
     Promise.all([
@@ -509,7 +212,7 @@ async function createTradePost(req: NextRequest) {
 
     return NextResponse.json(
       {
-        message: 'Trade initiated successfully. Payment verified on-chain before service release.',
+        message: 'Trade initiated successfully with ledger funds held in escrow.',
         trade: newTrade,
         code: 'TRADE_CREATED',
         fee_info: {
@@ -518,8 +221,8 @@ async function createTradePost(req: NextRequest) {
           total_cost: totalCost,
           seller_amount: sellerAmount,
           dev_amount: devAmount,
-          dev_wallet: process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS || null,
-          admin_fee_wallet_configured: Boolean(process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.ADMIN_BANKR_WALLET_ADDRESS),
+          dev_wallet: process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || null,
+          admin_fee_wallet_configured: Boolean(process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS),
         },
         ...envMeta('clawdmarket/api/trades'),
       },
@@ -549,16 +252,27 @@ async function createTradePost(req: NextRequest) {
       const status = error.code === 'LISTING_ALREADY_CLAIMED' ? 409 : 402;
       await logPaymentFailure({
         buyer_id: auth.userId,
-        token: 'bnkr',
+        token: 'ledger',
         route: 'POST /api/trades',
         error_code: error.code,
         message: error.message,
         state: 'no_funds_moved',
       });
       return NextResponse.json(
-        { ...paymentError(error.code, error.message), ...envMeta('clawdmarket/api/trades') },
+        {
+          ...paymentError(error.code, error.message),
+          ...envMeta('clawdmarket/api/trades'),
+        },
         { status }
       );
+    }
+
+    if (error instanceof AgentSpendPolicyError) {
+      return NextResponse.json({
+        ...paymentError(error.code, error.message),
+        spending_policy: error.policy,
+        ...envMeta('clawdmarket/api/trades'),
+      }, { status: 409 });
     }
 
     const zodIssues = error?.errors || error?.issues;
@@ -571,80 +285,50 @@ async function createTradePost(req: NextRequest) {
     logger.error('Trade creation error', { err: error?.message });
     await logPaymentFailure({
       buyer_id: auth.userId,
-      token: 'bnkr',
+      token: 'ledger',
       route: 'POST /api/trades',
       error_code: 'INTERNAL_ERROR',
       message: error?.message || 'Internal server error',
       state: 'no_funds_moved',
     });
     return NextResponse.json(
-      { ...paymentError('INTERNAL_ERROR', 'Internal server error'), ...envMeta('clawdmarket/api/trades') },
+      {
+        ...paymentError('INTERNAL_ERROR', 'Internal server error'),
+        ...envMeta('clawdmarket/api/trades'),
+      },
       { status: 500 }
     );
   }
 }
 
-function paidCreateTradeRoute(req: NextRequest) {
-  return mppx.session({ amount: '0.01', unitType: 'request' })(async (request: Request) => {
-    const nextRequest = request instanceof NextRequest ? request : new NextRequest(request);
-    return createTradePost(nextRequest);
-  })(req);
-}
-
-async function attachAndLogPaymentReceipt(response: Response) {
-  const receiptHeader = response.headers.get('Payment-Receipt');
-  if (!receiptHeader) return response;
-
-  let receipt: Record<string, any> | null = null;
-  try {
-    receipt = Receipt.deserialize(receiptHeader) as Record<string, any>;
-  } catch {
-    receipt = null;
+async function paidCreateTradeRoute(req: NextRequest) {
+  const body = await req.clone().json().catch(() => null);
+  const parsed = createTradeSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Validation failed', details: parsed.error.issues }, { status: 400 });
   }
 
-  if (receipt) {
-    try {
-      await db.insert(payment_receipts).values({
-        route: 'POST /api/trades',
-        amount: MPP_TRADE_EXECUTION_PRICE_USD,
-        currency: MPP_CURRENCY_PATH_USD,
-        tx_hash: String(receipt.txHash || receipt.reference || '') || null,
-        payer_address: String(receipt.payer || receipt.payerAddress || receipt.from || '') || null,
-      });
-    } catch (error) {
-      logger.error('Failed to persist payment receipt', { err: String(error) });
-    }
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json') || !receipt) return response;
-
-  try {
-    const body = await response.clone().json();
+  if (parsed.data.listing_id.startsWith('demo-')) {
     return NextResponse.json(
-      {
-        ...body,
-        mpp_receipt: receipt,
-      },
-      {
-        status: response.status,
-        headers: response.headers,
-      },
+      { error: 'Preview listings cannot be purchased', code: 'DEMO_LISTING' },
+      { status: 409 },
     );
-  } catch {
-    return response;
   }
+
+  if (String(body?.payment_rail || '').toLowerCase() === 'ledger') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  return externalTradePaymentsUnavailableResponse();
 }
 
 export async function POST(req: NextRequest) {
-  const response = await paidCreateTradeRoute(req);
-  return attachAndLogPaymentReceipt(response);
+  const principal = await resolveRequestPrincipal(req);
+  return principal ? createTradePost(req) : paidCreateTradeRoute(req);
 }
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!auth) {
     return NextResponse.json(
@@ -654,10 +338,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const hasFeeColumns = await tradesHasFeeColumns();
-
-    if (hasFeeColumns) {
-      const userTrades = await db
+    const userTrades = await db
         .select({
           id: trades.id,
           listing_id: trades.listing_id,
@@ -675,9 +356,16 @@ export async function GET(req: NextRequest) {
           dev_wallet: trades.dev_wallet,
           fee_tx_hash: trades.fee_tx_hash,
           payout_status: trades.payout_status,
+          payment_rail: trades.payment_rail,
           status: trades.status,
+          auto_confirm_at: trades.auto_confirm_at,
           created_at: trades.created_at,
           completed_at: trades.completed_at,
+          rated_by_caller: sql<number>`EXISTS(
+            SELECT 1 FROM ${ratings}
+            WHERE ${ratings.trade_id} = ${trades.id}
+              AND ${ratings.rater_id} = ${auth.userId}
+          )`,
         })
         .from(trades)
         .leftJoin(listings, eq(trades.listing_id, listings.id))
@@ -685,30 +373,7 @@ export async function GET(req: NextRequest) {
         .where(or(eq(trades.buyer_id, auth.userId), eq(trades.seller_id, auth.userId)))
         .orderBy(desc(trades.created_at));
 
-      return NextResponse.json({ trades: userTrades, ...envMeta('clawdmarket/api/trades') });
-    }
-
-    const legacyTrades = await db
-      .select({
-        id: trades.id,
-        listing_id: trades.listing_id,
-        listing_title: listings.title,
-        buyer_id: trades.buyer_id,
-        buyer_name: users.name,
-        seller_id: trades.seller_id,
-        amount: trades.amount,
-        fee: trades.fee,
-        status: trades.status,
-        created_at: trades.created_at,
-        completed_at: trades.completed_at,
-      })
-      .from(trades)
-      .leftJoin(listings, eq(trades.listing_id, listings.id))
-      .leftJoin(users, eq(trades.buyer_id, users.id))
-      .where(or(eq(trades.buyer_id, auth.userId), eq(trades.seller_id, auth.userId)))
-      .orderBy(desc(trades.created_at));
-
-    return NextResponse.json({ trades: legacyTrades, schema_mode: 'legacy', ...envMeta('clawdmarket/api/trades') });
+    return NextResponse.json({ trades: userTrades, ...envMeta('clawdmarket/api/trades') });
   } catch (error: any) {
     logger.error('Trades fetch error', { err: error?.message });
     return NextResponse.json(

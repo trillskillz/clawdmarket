@@ -51,8 +51,11 @@ if (!canRunReadTests) {
     assert.equal(typeof bal.raw, 'bigint');
   });
 
-  test('can estimate BNKR transfer gas on Base Sepolia', async () => {
-    if (!fundedKey) return test.skip('AGENT_WALLET_PRIVATE_KEY not set');
+  test('can estimate BNKR transfer gas on Base Sepolia', async (t) => {
+    if (!fundedKey) {
+      t.skip('AGENT_WALLET_PRIVATE_KEY not set');
+      return;
+    }
 
     const wallet = new BaseWalletService({
       network: 'base-sepolia',
@@ -69,10 +72,14 @@ if (!canRunReadTests) {
     assert.ok(gas > 0n);
   });
 
-  test('optional live transfer + incoming detection (disabled by default)', async () => {
-    if (!fundedKey) return test.skip('AGENT_WALLET_PRIVATE_KEY not set');
+  test('optional live transfer + incoming detection (disabled by default)', { timeout: 120_000 }, async (t) => {
+    if (!fundedKey) {
+      t.skip('AGENT_WALLET_PRIVATE_KEY not set');
+      return;
+    }
     if (process.env.RUN_LIVE_BASE_SEPOLIA_TRANSFER !== '1') {
-      return test.skip('Set RUN_LIVE_BASE_SEPOLIA_TRANSFER=1 to enable live transfer test');
+      t.skip('Set RUN_LIVE_BASE_SEPOLIA_TRANSFER=1 to enable live transfer test');
+      return;
     }
 
     const wallet = new BaseWalletService({
@@ -92,5 +99,5 @@ if (!canRunReadTests) {
     const incoming = await wallet.waitForIncomingBNKR(receiver, { timeoutMs: 90_000, fromBlock });
     assert.ok(incoming, 'expected incoming transfer to be detected');
     assert.equal(incoming?.to.toLowerCase(), receiver.toLowerCase());
-  }, 120_000);
+  });
 }

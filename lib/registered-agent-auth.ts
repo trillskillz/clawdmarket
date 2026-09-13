@@ -9,6 +9,7 @@ type AgentAuthValid = {
   agentId: string
   name: string
   syntheticUserId: string
+  status: 'active' | 'inactive'
 }
 
 export type RegisteredAgentAuth = AgentAuthNone | AgentAuthInvalid | AgentAuthValid
@@ -24,18 +25,45 @@ async function ensureAgentAuthColumns() {
   agentAuthColumnsEnsured = true
 }
 
-async function resolveRegisteredAgentApiKey(apiKey: string, hasCredential: boolean): Promise<RegisteredAgentAuth> {
+export function hashAgentApiKey(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex')
+}
+
+export async function lookupRegisteredAgentApiKey(
+  apiKey: string,
+  options: { allowInactive?: boolean } = {},
+): Promise<RegisteredAgentAuth> {
+  return resolveRegisteredAgentApiKey(apiKey, Boolean(apiKey), options)
+}
+
+async function resolveRegisteredAgentApiKey(
+  apiKey: string,
+  hasCredential: boolean,
+  options: { allowInactive?: boolean } = {},
+): Promise<RegisteredAgentAuth> {
   if (!hasCredential) return { kind: 'none' }
   if (!apiKey) return { kind: 'invalid' }
 
   await ensureAgentAuthColumns()
   const client = (db as any).$client
+  const hashed = hashAgentApiKey(apiKey)
   const result = await client.execute({
-    sql: `SELECT id, name FROM agents WHERE api_key = ? LIMIT 1`,
-    args: [apiKey],
+    sql: `SELECT id, name, status, api_key FROM agents WHERE api_key IN (?, ?) LIMIT 1`,
+    args: [hashed, apiKey],
   })
   const agent = result?.rows?.[0]
   if (!agent?.id) return { kind: 'invalid' }
+
+  const status = agent.status === 'active' ? 'active' : 'inactive'
+  if (!options.allowInactive && status !== 'active') return { kind: 'invalid' }
+
+  // Transparently upgrade API keys created by older releases from plaintext.
+  if (agent.api_key === apiKey) {
+    await client.execute({
+      sql: `UPDATE agents SET api_key = ? WHERE id = ? AND api_key = ?`,
+      args: [hashed, String(agent.id), apiKey],
+    })
+  }
 
   const agentId = String(agent.id)
   return {
@@ -43,6 +71,7 @@ async function resolveRegisteredAgentApiKey(apiKey: string, hasCredential: boole
     agentId,
     name: String(agent.name || agentId),
     syntheticUserId: `user_agent_${agentId}`,
+    status,
   }
 }
 
@@ -64,7 +93,11 @@ export async function resolveRegisteredAgentRequest(request: NextRequest): Promi
   return resolveRegisteredAgentBearer(request.headers.get('authorization'))
 }
 
-export async function ensureSyntheticAgentUser(agent: Extract<RegisteredAgentAuth, { kind: 'agent' }>) {
+export async function ensureSyntheticAgentUser(agent: {
+  agentId: string
+  name: string
+  syntheticUserId: string
+}) {
   const client = (db as any).$client
   const nowIso = new Date().toISOString()
 
@@ -78,5 +111,10 @@ export async function ensureSyntheticAgentUser(agent: Extract<RegisteredAgentAut
       agent.name,
       nowIso,
     ],
+  })
+  await client.execute({
+    sql: `INSERT OR IGNORE INTO wallets (user_id, balance, escrow, created_at)
+          VALUES (?, 0, 0, ?)`,
+    args: [agent.syntheticUserId, nowIso],
   })
 }

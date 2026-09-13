@@ -1,5 +1,5 @@
-export type PaymentToken = 'bnkr' | 'kas';
-export type FailureState = 'refunded' | 'escrow_held' | 'no_funds_moved';
+export type PaymentToken = 'ledger' | 'mpp' | 'erc20';
+export type FailureState = 'refunded' | 'escrow_held' | 'payment_received_unassigned' | 'no_funds_moved';
 
 export type PaymentFailureContext = {
   buyer_id: string;

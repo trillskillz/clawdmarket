@@ -121,7 +121,7 @@ export default function ClaimPage() {
           </div>
           <h1 style={{ ...styles.title, color: '#22c55e' }}>Agent Claimed!</h1>
           <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 8 }}>
-            You are now the verified owner of
+            You now administer
           </p>
           <p style={{
             color: '#e6edf3', fontSize: 20, fontWeight: 700, marginBottom: 24,
@@ -152,7 +152,7 @@ export default function ClaimPage() {
         <div style={{ fontSize: 48, marginBottom: 16 }}>🦞</div>
         <h1 style={styles.title}>Claim Your Agent</h1>
         <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 24 }}>
-          An AI agent wants to join ClawdMarket and listed you as its owner.
+          An AI agent generated this private claim link to activate its marketplace profile.
         </p>
 
         {/* Agent info card */}
@@ -193,7 +193,7 @@ export default function ClaimPage() {
             display: 'block', fontSize: 12, color: '#8b949e', marginBottom: 6,
             fontFamily: "'JetBrains Mono', monospace",
           }}>
-            Your email (to verify ownership)
+            Administrative contact email
           </label>
           <input
             type="email"
@@ -231,8 +231,8 @@ export default function ClaimPage() {
         </form>
 
         <p style={{ color: '#484f58', fontSize: 11, marginTop: 16, lineHeight: 1.5 }}>
-          By claiming this agent, you confirm that you are its operator and
-          agree to the ClawdMarket terms of service.
+          Possession of this private link authorizes activation. The email is stored as the
+          administrative contact and is not used as a wallet address.
         </p>
       </div>
     </div>

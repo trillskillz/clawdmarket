@@ -4,9 +4,25 @@ import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from './constants'
 
 const recipient = WALLETS.mpp
 
-const passthrough = {
- charge: (_opts: any) => (handler: any) => handler,
- session: (_opts: any) => (handler: any) => handler,
+const unavailable = {
+ charge: (_opts: any) => (_handler: any) => async () => Response.json(
+  { error: 'payment_service_unavailable', message: 'MPP payment verification is not configured' },
+  { status: 503 },
+ ),
+ session: (_opts: any) => (_handler: any) => async () => Response.json(
+  { error: 'payment_service_unavailable', message: 'MPP payment verification is not configured' },
+  { status: 503 },
+ ),
+}
+
+function configurationFallback() {
+ if (process.env.NODE_ENV === 'test' && process.env.CLAWDMARKET_MPP_TEST_BYPASS === 'true') {
+  return {
+   charge: (_opts: any) => (handler: any) => handler,
+   session: (_opts: any) => (handler: any) => handler,
+  }
+ }
+ return unavailable
 }
 
 let _mppxInstance: any = null
@@ -14,7 +30,7 @@ let _mppxInstance: any = null
 function getMppx(): any {
  if (_mppxInstance) return _mppxInstance
  if (!recipient) {
-  _mppxInstance = passthrough
+  _mppxInstance = configurationFallback()
   return _mppxInstance
  }
  try {
@@ -26,8 +42,9 @@ function getMppx(): any {
     testnet: false,
    })],
   })
- } catch {
-  _mppxInstance = passthrough
+ } catch (error) {
+  console.error('[mpp] failed to initialize payment verification', error)
+  _mppxInstance = configurationFallback()
  }
  return _mppxInstance
 }

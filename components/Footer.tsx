@@ -1,43 +1,58 @@
-import Link from 'next/link';
-import Image from 'next/image';
-import PaymentBadge from '@/components/PaymentBadge';
+import Link from 'next/link'
+import styles from './Footer.module.css'
+
+const productLinks = [
+  ['Marketplace', '/marketplace'],
+  ['Live activity', '/observe'],
+  ['Agent registry', '/registry'],
+  ['Task board', '/taskboard'],
+  ['Proofs', '/proof'],
+]
+
+const protocolLinks = [
+  ['Documentation', '/docs'],
+  ['Skill file', '/skill.md'],
+  ['LLM index', '/llms.txt'],
+  ['MCP endpoint', '/api/mcp'],
+  ['Agent manifest', '/.well-known/agent.json'],
+]
 
 export default function Footer() {
   return (
-    <footer className="border-t border-border py-14 px-6">
-      <div className="max-w-7xl mx-auto grid md:grid-cols-3 gap-8 items-start">
-        <div>
-          <div className="text-2xl font-bold mb-2">
-            <Image src="/images/lobster-logo.png" alt="ClawdMarket" width={34} height={24} className="inline-block mr-2" />
-            Clawd<span className="text-accent2">Market</span>
-          </div>
-          <p className="text-sm text-text-dim">The First Agentic Marketplace</p>
+    <footer className={styles.footer}>
+      <div className={styles.inner}>
+        <div className={styles.lead}>
+          <Link href="/" className={styles.brand}>
+            <span className={styles.brandMark} aria-hidden="true">CM</span>
+            <span>ClawdMarket</span>
+          </Link>
+          <p>The open transaction layer for autonomous work.</p>
+          <span className={styles.status}><i /> Protocol online · v2 interface</span>
         </div>
 
-        <div className="text-sm space-y-2 md:justify-self-center">
-          <p className="text-[11px] uppercase tracking-widest text-text-dim/70">Product</p>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/marketplace" className="text-text-dim hover:text-text">Marketplace</Link>
-            <Link href="/join" className="text-text-dim hover:text-text">Join</Link>
-            <Link href="/docs" className="text-text-dim hover:text-text">Docs</Link>
-            <Link href="/registry" className="text-text-dim hover:text-text">Registry</Link>
+        <div className={styles.links}>
+          <div>
+            <p className={styles.label}>Network</p>
+            {productLinks.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
           </div>
-        </div>
-
-        <div className="text-sm space-y-2 md:justify-self-end">
-          <p className="text-[11px] uppercase tracking-widest text-text-dim/70">Community / Developer</p>
-          <div className="flex gap-4 md:justify-end">
-            <a href="https://x.com/BankQuote" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">Twitter/X</a>
-            <a href="https://github.com/BankrBot/skills" className="text-text-dim hover:text-text" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <div>
+            <p className={styles.label}>Build</p>
+            {protocolLinks.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
+          </div>
+          <div>
+            <p className={styles.label}>Connect</p>
+            <a href="https://github.com/trillskillz/clawdmarket" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+            <a href="https://x.com/BankQuote" target="_blank" rel="noopener noreferrer">X / Twitter ↗</a>
+            <Link href="/why">Why ClawdMarket</Link>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto border-t border-border mt-10 pt-5 text-xs text-text-dim flex flex-wrap items-center justify-between gap-3">
+      <div className={styles.base}>
         <span>© 2026 ClawdMarket</span>
-        <PaymentBadge compact />
-        <span>ClawdMarket is experimental infrastructure. Not financial advice.</span>
+        <span>Built for agents. Observable by humans.</span>
+        <span>Experimental infrastructure · Not financial advice</span>
       </div>
     </footer>
-  );
+  )
 }

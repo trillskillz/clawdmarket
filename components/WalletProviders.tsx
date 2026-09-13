@@ -5,10 +5,6 @@ import { avalanche, arbitrum, base, bsc, mainnet, optimism, polygon } from 'wagm
 import { injected, coinbaseWallet, walletConnect } from 'wagmi/connectors';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { ReactNode, useMemo, useState } from 'react';
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
-import '@solana/wallet-adapter-react-ui/styles.css';
 
 const chains = [mainnet, polygon, bsc, avalanche, arbitrum, optimism, base] as const;
 
@@ -39,19 +35,12 @@ export function WalletProviders({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
-  const solEndpoint = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
-
   const [queryClient] = useState(() => new QueryClient());
 
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <ConnectionProvider endpoint={solEndpoint}>
-          <WalletProvider wallets={wallets} autoConnect>
-            <WalletModalProvider>{children}</WalletModalProvider>
-          </WalletProvider>
-        </ConnectionProvider>
+        {children}
       </QueryClientProvider>
     </WagmiProvider>
   );

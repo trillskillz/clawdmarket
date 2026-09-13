@@ -29,7 +29,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/genesis-trade`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
     { url: `${BASE}/karpathy-loop`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE}/join`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${BASE}/dashboard/operator`, lastModified: now, changeFrequency: 'weekly', priority: 0.5 },
     { url: `${BASE}/heartbeat.md`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
   ];
 

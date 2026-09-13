@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { listings } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
 import { logger } from '@/lib/logger';
-import { createListingSchema, listingsQuerySchema, sanitizeHtml } from '@/lib/validation';
+import { createListingSchema, listingsQuerySchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { eq, and, sql } from 'drizzle-orm';
@@ -11,6 +11,7 @@ import { users } from '@/lib/schema';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { ensureSyntheticAgentUser, resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth';
+import { loadAgentTrustMap } from '@/lib/agent-trust';
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,10 @@ async function selectListings(whereClause: any, limit: number, offset: number, s
       seller_avatar_emoji: users.avatar_emoji,
       seller_avg_rating: sql<number>`COALESCE((SELECT ROUND(AVG(r.score), 2) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
       seller_rating_count: sql<number>`COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
+      agent_id: sql<string>`COALESCE((SELECT a.id FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), ${listings.seller_id})`,
+      agent_created_at: sql<string | number | null>`COALESCE((SELECT a.created_at FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), ${users.created_at})`,
+      agent_capabilities: sql<string>`COALESCE((SELECT a.capabilities FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), '[]')`,
+      completed_trades: sql<number>`COALESCE((SELECT COUNT(*) FROM trades t WHERE t.seller_id = ${listings.seller_id} AND t.status IN ('completed', 'complete')), 0)`,
       category: listings.category,
       title: listings.title,
       description: listings.description,
@@ -91,7 +96,7 @@ export async function GET(req: NextRequest) {
       sort: searchParams.get('sort') || undefined,
     });
 
-    let conditions = [];
+    const conditions = [];
     
     if (query.category) {
       conditions.push(eq(listings.category, query.category));
@@ -150,12 +155,26 @@ export async function GET(req: NextRequest) {
 
     const results = await selectListings(whereClause, query.limit, (query.page - 1) * query.limit, query.sort);
 
-    const normalizedResults = results.map((listing: any) => ({
-      ...listing,
-      price_bankr: Number.isFinite(Number(listing.price_bankr))
-        ? Number(listing.price_bankr)
-        : 0,
-    }));
+    const trustInputs = [...new Map(results.map((listing: any) => [String(listing.agent_id), {
+      id: String(listing.agent_id),
+      created_at: listing.agent_created_at,
+      avg_rating: listing.seller_avg_rating,
+      rating_count: listing.seller_rating_count,
+    }])).values()];
+    const trustMap = await loadAgentTrustMap(trustInputs);
+    const normalizedResults = results.map((listing: any) => {
+      const { agent_created_at: _agentCreatedAt, ...publicListing } = listing;
+      const trust = trustMap.get(String(listing.agent_id));
+      return {
+        ...publicListing,
+        price_bankr: Number.isFinite(Number(listing.price_bankr))
+          ? Number(listing.price_bankr)
+          : 0,
+        agent_trust: trust?.trustScore ?? 0,
+        agent_trust_confidence: trust?.confidence ?? 'low',
+        agent_trust_drivers: trust?.drivers ?? ['No verified marketplace activity'],
+      };
+    });
 
     return NextResponse.json({
       listings: normalizedResults,
@@ -164,9 +183,10 @@ export async function GET(req: NextRequest) {
       total: totalCount,
     });
   } catch (error: any) {
-    if (error.errors) {
+    const issues = error?.issues || error?.errors;
+    if (issues) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: 'Validation failed', details: issues },
         { status: 400 }
       );
     }
@@ -182,6 +202,12 @@ export async function GET(req: NextRequest) {
         seller_avatar_url: agent.avatar_url,
         seller_avatar_emoji: null,
         seller_bio: agent.bio,
+        agent_id: agent.id,
+        agent_capabilities: JSON.stringify([l.category.toLowerCase()]),
+        agent_trust: agent.trust_score,
+        agent_trust_confidence: 'low',
+        agent_trust_drivers: ['Fallback profile; live marketplace evidence unavailable'],
+        completed_trades: 0,
         status: 'active',
         created_at: new Date().toISOString(),
       };
@@ -259,14 +285,11 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < body.length; i++) {
         try {
           const validated = createListingSchema.parse(body[i]);
-          const sanitizedTitle = sanitizeHtml(validated.title);
-          const sanitizedDescription = sanitizeHtml(validated.description);
-
           const newListing = await insertListing({
             seller_id: sellerId,
             category: validated.category,
-            title: sanitizedTitle,
-            description: sanitizedDescription,
+            title: validated.title,
+            description: validated.description,
             price_bankr: validated.price_bankr,
           });
 
@@ -293,15 +316,11 @@ export async function POST(req: NextRequest) {
     // Single listing creation
     const validated = createListingSchema.parse(body);
 
-    // Sanitize text inputs
-    const sanitizedTitle = sanitizeHtml(validated.title);
-    const sanitizedDescription = sanitizeHtml(validated.description);
-
     const newListing = await insertListing({
       seller_id: sellerId,
       category: validated.category,
-      title: sanitizedTitle,
-      description: sanitizedDescription,
+      title: validated.title,
+      description: validated.description,
       price_bankr: validated.price_bankr,
     });
 
@@ -317,9 +336,10 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error: any) {
-    if (error.errors) {
+    const issues = error?.issues || error?.errors;
+    if (issues) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: 'Validation failed', details: issues },
         { status: 400 }
       );
     }

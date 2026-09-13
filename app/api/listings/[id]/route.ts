@@ -1,67 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { listings, users } from '@/lib/schema';
-import { authenticateRequest } from '@/lib/auth';
 import { logger } from '@/lib/logger';
-import { updateListingSchema, sanitizeHtml, isValidUUID } from '@/lib/validation';
+import { updateListingSchema, sanitizeHtml, isValidListingId } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
+import { resolveRequestPrincipal } from '@/lib/request-principal';
 
 export const dynamic = 'force-dynamic'
 
 async function getListingById(id: string) {
-  try {
-    const rows = await db
-      .select({
-        id: listings.id,
-        seller_id: listings.seller_id,
-        seller_name: users.name,
-        seller_role: users.role,
-        seller_bio: users.bio,
-        seller_avatar_url: users.avatar_url,
-        category: listings.category,
-        title: listings.title,
-        description: listings.description,
-        price_bankr: listings.price_bankr,
-        status: listings.status,
-        created_at: listings.created_at,
-      })
-      .from(listings)
-      .leftJoin(users, eq(listings.seller_id, users.id))
-      .where(eq(listings.id, id));
-
-    const [listing] = rows as any[];
-    if (listing) {
-      return { ...listing, price_bankr: Number(listing.price_bankr) || 0 };
-    }
-  } catch {}
-
-  try {
-    const rows = await db
-      .select({
-        id: listings.id,
-        seller_id: listings.seller_id,
-        seller_name: users.name,
-        seller_role: users.role,
-        seller_bio: users.bio,
-        seller_avatar_url: users.avatar_url,
-        category: listings.category,
-        title: listings.title,
-        description: listings.description,
-        price_bankr: sql<number>`CAST(${sql.raw('price_clawd')} AS REAL)`,
-        status: listings.status,
-        created_at: listings.created_at,
-      })
-      .from(listings)
-      .leftJoin(users, eq(listings.seller_id, users.id))
-      .where(eq(listings.id, id));
-
-    const [listing] = rows;
-    if (listing) return { ...listing, price_bankr: Number(listing.price_bankr) || 0 };
-  } catch {}
-
   const rows = await db
     .select({
       id: listings.id,
@@ -73,7 +23,7 @@ async function getListingById(id: string) {
       category: listings.category,
       title: listings.title,
       description: listings.description,
-      price_bankr: sql<number>`CAST(${sql.raw('price')} AS REAL)`,
+      price_bankr: listings.price_bankr,
       status: listings.status,
       created_at: listings.created_at,
     })
@@ -93,12 +43,14 @@ export async function GET(
   try {
     let listing: any = null;
 
-    if (!isValidUUID(id)) {
-      const fallback = FALLBACK_LISTINGS.find((x) => x.id === id);
-      if (!fallback) {
-        return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
-      }
+    if (!isValidListingId(id)) {
+      return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
+    }
 
+    listing = await getListingById(id);
+    if (!listing) {
+      const fallback = FALLBACK_LISTINGS.find((x) => x.id === id);
+      if (fallback) {
       const seller = fallbackAgentForListingId(fallback.id);
       listing = {
         id: fallback.id,
@@ -114,8 +66,7 @@ export async function GET(
         status: 'active',
         created_at: new Date().toISOString(),
       };
-    } else {
-      listing = await getListingById(id);
+      }
     }
 
     if (!listing) {
@@ -140,9 +91,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!auth) {
     return NextResponse.json(
@@ -152,7 +101,7 @@ export async function PUT(
   }
 
   // Validate CSRF for cookie-based auth
-  if (!authHeader && !validateCsrf(req)) {
+  if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json(
       { error: 'CSRF validation failed' },
       { status: 403 }
@@ -160,7 +109,7 @@ export async function PUT(
   }
 
   try {
-    if (!isValidUUID(id)) {
+    if (!isValidListingId(id)) {
       return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
     }
 
@@ -181,6 +130,9 @@ export async function PUT(
         { error: 'You can only update your own listings' },
         { status: 403 }
       );
+    }
+    if (listing.status !== 'active') {
+      return NextResponse.json({ error: 'Only active listings can be updated' }, { status: 409 });
     }
 
     const body = await req.json();
@@ -215,9 +167,10 @@ export async function PUT(
       listing: updatedListing,
     });
   } catch (error: any) {
-    if (error.errors) {
+    const issues = error?.issues || error?.errors;
+    if (issues) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: 'Validation failed', details: issues },
         { status: 400 }
       );
     }
@@ -234,9 +187,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!auth) {
     return NextResponse.json(
@@ -246,7 +197,7 @@ export async function DELETE(
   }
 
   // Validate CSRF for cookie-based auth
-  if (!authHeader && !validateCsrf(req)) {
+  if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json(
       { error: 'CSRF validation failed' },
       { status: 403 }
@@ -254,7 +205,7 @@ export async function DELETE(
   }
 
   try {
-    if (!isValidUUID(id)) {
+    if (!isValidListingId(id)) {
       return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
     }
 
@@ -276,12 +227,15 @@ export async function DELETE(
         { status: 403 }
       );
     }
+    if (listing.status !== 'active' && listing.status !== 'inactive') {
+      return NextResponse.json({ error: 'Only unsold listings can be removed' }, { status: 409 });
+    }
 
     // Soft delete by setting status to expired
     await db
       .update(listings)
       .set({ status: 'expired' })
-      .where(eq(listings.id, id));
+      .where(and(eq(listings.id, id), eq(listings.seller_id, auth.userId)));
 
     return NextResponse.json({
       message: 'Listing deleted successfully',

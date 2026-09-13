@@ -1,24 +1,26 @@
 name: Production Smoke
 
 on:
+  workflow_run:
+    workflows: [Deploy to Vercel]
+    types: [completed]
   workflow_dispatch:
     inputs:
       base_url:
         description: 'Production base URL (defaults to secret PROD_BASE_URL or clawdmarket-five alias)'
         required: false
         type: string
-  push:
-    branches: [main]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      BASE_URL: ${{ inputs.base_url != '' && inputs.base_url || (secrets.PROD_BASE_URL != '' && secrets.PROD_BASE_URL || 'https://www.clawdmkt.com') }}
+      BASE_URL: ${{ (github.event_name == 'workflow_dispatch' && inputs.base_url != '' && inputs.base_url) || (secrets.PROD_BASE_URL != '' && secrets.PROD_BASE_URL) || 'https://www.clawdmkt.com' }}
       SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
       SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
       ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
@@ -49,8 +51,8 @@ jobs:
           [ "$code" = "200" ] || fail "/api/docs expected 200 got $code"
           pass "/api/docs"
 
-          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/.well-known/ai-agents.json")
-          [ "$code" = "200" ] || fail "/.well-known/ai-agents.json expected 200 got $code"
+          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/.well-known/agent.json")
+          [ "$code" = "200" ] || fail "/.well-known/agent.json expected 200 got $code"
           pass "agent discovery"
 
           login_payload=$(printf '{"email":"%s","password":"%s"}' "$SMOKE_EMAIL" "$SMOKE_PASSWORD")

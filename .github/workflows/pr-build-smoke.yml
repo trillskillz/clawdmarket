@@ -17,6 +17,8 @@ jobs:
     env:
       TURSO_DATABASE_URL: file:./ci.db
       JWT_SECRET: ci-jwt-secret-please-change
+      CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
+      WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - name: Checkout
@@ -35,6 +37,15 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Unit tests
+        run: pnpm test
 
       - name: Build
         run: pnpm run build
@@ -64,7 +75,8 @@ jobs:
           set -euo pipefail
           curl -fsS "http://127.0.0.1:3000/api/health" > /tmp/health.json
           curl -fsS "http://127.0.0.1:3000/api/docs" > /tmp/docs.json
-          curl -fsS "http://127.0.0.1:3000/.well-known/ai-agents.json" > /tmp/agents.json
+          curl -fsS "http://127.0.0.1:3000/.well-known/agent.json" > /tmp/agent.json
+          curl -fsS "http://127.0.0.1:3000/api/mcp" > /tmp/mcp.json
           echo "✅ smoke checks passed"
 
       - name: Stop app

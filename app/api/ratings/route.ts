@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { ratings, trades, users, agents } from '@/lib/schema';
-import { authenticateRequest } from '@/lib/auth';
 import { validateCsrf } from '@/lib/csrf';
 import { isValidUUID } from '@/lib/validation';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
+import { resolveRequestPrincipal } from '@/lib/request-principal';
 
 export const dynamic = 'force-dynamic'
 
@@ -26,14 +26,18 @@ function parsePagination(req: NextRequest) {
   return { page, limit, offset: (page - 1) * limit };
 }
 
-async function recalculateAgentRating(agentId: string) {
+async function recalculateAgentRating(principalId: string) {
   const [row] = await db
     .select({
       avg_rating: sql<number>`COALESCE(ROUND(AVG(${ratings.score}), 2), 0)`,
       rating_count: sql<number>`COUNT(*)`,
     })
     .from(ratings)
-    .where(eq(ratings.rated_id, agentId));
+    .where(eq(ratings.rated_id, principalId));
+
+  const registryAgentId = principalId.startsWith('user_agent_')
+    ? principalId.slice('user_agent_'.length)
+    : principalId;
 
   await db
     .update(agents)
@@ -41,13 +45,11 @@ async function recalculateAgentRating(agentId: string) {
       avg_rating: row?.avg_rating ?? 0,
       rating_count: row?.rating_count ?? 0,
     })
-    .where(eq(agents.id, agentId));
+    .where(eq(agents.id, registryAgentId));
 }
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!auth) {
     const recent = await db
@@ -101,15 +103,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!auth) {
-    return NextResponse.json({ error: 'Payment Required' }, { status: 402 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!authHeader && !validateCsrf(req)) {
+  if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
 
@@ -190,6 +190,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ rating }, { status: 201 });
   } catch (error) {
+    if (/ratings_trade_rater_unique|UNIQUE constraint failed: ratings\.trade_id, ratings\.rater_id/i.test(String((error as any)?.message || ''))) {
+      return NextResponse.json({ error: 'You have already rated this trade' }, { status: 409 });
+    }
     console.error('Rating creation error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

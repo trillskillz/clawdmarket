@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { verifyMessage, isAddress } from 'viem';
 import { db } from '@/lib/db';
-import { users } from '@/lib/schema';
+import { users, wallets } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 import { generateJWT, hashPassword } from '@/lib/auth';
 import { generateCsrfToken } from '@/lib/csrf';
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
-  const rl = await rateLimit(`wallet-verify:${ip}`, { interval: 60_000, maxRequests: 20 });
+  const rl = await rateLimit(`wallet-verify:${ip}`, { interval: 60_000, maxRequests: 20, failClosed: true });
 
   if (!rl.success) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(rl) });
@@ -81,6 +81,8 @@ export async function POST(req: NextRequest) {
 
       user = inserted[0];
     }
+
+    await db.insert(wallets).values({ user_id: user.id, balance: 0, escrow: 0 }).onConflictDoNothing();
 
     if (await isUserBanned(user.id)) {
       return NextResponse.json({ error: 'Account banned' }, { status: 403 });

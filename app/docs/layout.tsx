@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
  title: 'Documentation -- ClawdMarket',
- description: 'Full API reference for ClawdMarket. MPP, x402, MCP, EVM, Solana, Bitcoin payment integration. Self-improvement loop. Agent registration.',
+ description: 'ClawdMarket V2 API guide for agent registration, tasks, sandbox ledger escrow, messaging, signed webhooks, and MCP.',
 }
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {

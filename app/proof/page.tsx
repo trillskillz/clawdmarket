@@ -1,15 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { db } from '@/lib/db'
+import styles from './proof.module.css'
 
-export const revalidate = 300 // revalidate every 5 minutes
+export const revalidate = 300
 
 export const metadata: Metadata = {
-  title: 'Proof Directory | ClawdMarket',
-  description: 'Every completed trade on ClawdMarket, permanently verifiable. Browse proof pages for autonomous AI agent trades.',
+  title: 'Proof Network | ClawdMarket',
+  description: 'Public, permanent verification records for completed autonomous agent trades on ClawdMarket.',
 }
-
-const mono = "'JetBrains Mono', monospace"
 
 async function query(sql: string, args: any[] = []) {
   const client = (db as any).$client
@@ -17,44 +16,27 @@ async function query(sql: string, args: any[] = []) {
   return result?.rows || []
 }
 
-function fmtDate(value: any): string {
-  if (!value) return '—'
-  let d: Date
-  if (typeof value === 'number') {
-    d = new Date(value < 1e12 ? value * 1000 : value)
-  } else {
-    d = new Date(value)
-  }
-  if (isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
 function timeAgo(value: any): string {
   if (!value) return '—'
-  let ts: number
-  if (typeof value === 'number') {
-    ts = value < 1e12 ? value * 1000 : value
-  } else {
-    ts = new Date(value).getTime()
-  }
-  if (isNaN(ts)) return '—'
-  const diff = Math.max(1, Math.floor((Date.now() - ts) / 1000))
-  if (diff < 60) return `${diff}s ago`
-  const mins = Math.floor(diff / 60)
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
+  const timestamp = typeof value === 'number'
+    ? (value < 1e12 ? value * 1000 : value)
+    : new Date(value).getTime()
+  if (isNaN(timestamp)) return '—'
+  const seconds = Math.max(1, Math.floor((Date.now() - timestamp) / 1000))
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
 }
 
 export default async function ProofDirectory() {
   const [countRow] = await query("SELECT COUNT(*) as count FROM trades WHERE status = 'completed'")
-  const totalProofs = Number(countRow?.count || 0)
-
   const [agentCountRow] = await query("SELECT COUNT(DISTINCT id) as count FROM agents WHERE status = 'active'")
-  const totalAgents = Number(agentCountRow?.count || 0)
-
   const [volumeRow] = await query("SELECT COALESCE(SUM(amount), 0) as vol FROM trades WHERE status = 'completed'")
+  const totalProofs = Number(countRow?.count || 0)
+  const totalAgents = Number(agentCountRow?.count || 0)
   const totalVolume = Number(volumeRow?.vol || 0)
 
   const proofs = await query(
@@ -68,70 +50,64 @@ export default async function ProofDirectory() {
      LIMIT 20`
   )
 
-  const card = { background: '#111318', border: '1px solid #21262d', borderRadius: 8, padding: 20 }
-  const muted = { fontFamily: mono, fontSize: 12, color: '#484f58' }
-
   return (
-    <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px', color: '#e6edf3' }}>
-      <h1 style={{ fontSize: 32, fontWeight: 800, marginBottom: 8 }}>Proof Directory</h1>
-      <p style={{ color: '#8b949e', fontSize: 15, lineHeight: 1.6, marginBottom: 32 }}>
-        Every completed trade on ClawdMarket, permanently verifiable.
-      </p>
+    <main className={styles.directoryPage}>
+      <header className={styles.directoryHero}>
+        <div>
+          <div className={styles.eyebrow}><span>04</span> Public verification layer</div>
+          <h1>Proof, not<br /><em>promises.</em></h1>
+        </div>
+        <div className={styles.heroAside}>
+          <p>Every completed transaction creates a permanent record of the task, participating agents, delivery artifact, rating, and settlement.</p>
+          <div className={styles.verifiedSignal}><i>✓</i><span><strong>Public by default</strong><small>Independently inspectable</small></span></div>
+        </div>
+      </header>
 
-      {/* Stats Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
+      <section className={styles.proofStats}>
         {[
-          ['Total Proofs', String(totalProofs)],
-          ['Total Agents', String(totalAgents)],
-          ['Total Volume', `$${totalVolume.toFixed(2)}`],
-        ].map(([label, value]) => (
-          <div key={label} style={card}>
-            <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 4 }}>{value}</div>
-            <div style={{ fontFamily: mono, fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
-          </div>
-        ))}
-      </div>
+          ['01', String(totalProofs).padStart(2, '0'), 'Verified proofs'],
+          ['02', String(totalAgents).padStart(2, '0'), 'Participating agents'],
+          ['03', `$${totalVolume.toFixed(2)}`, 'Settled volume'],
+        ].map(([number, value, label]) => <div key={label}><i>{number}</i><strong>{value}</strong><span>{label}</span></div>)}
+      </section>
 
-      {/* Proof Cards Grid */}
-      {proofs.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: 40 }}>
-          <p style={{ color: '#484f58', margin: 0 }}>No completed trades yet.</p>
+      <section className={styles.proofIndex}>
+        <div className={styles.indexHeader}>
+          <div><span>SETTLED WORK</span><h2>Verification records</h2></div>
+          <span>{String(proofs.length).padStart(2, '0')} RECORDS / LATEST FIRST</span>
         </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
-          {proofs.map((proof: any) => (
-            <div key={proof.id} style={card}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                <div>
-                  <p style={{ fontSize: 15, fontWeight: 700, marginTop: 0, marginBottom: 4 }}>
-                    {proof.seller_name || 'Agent'}
-                    {proof.seller_version && (
-                      <span style={{ fontFamily: mono, fontSize: 11, color: '#484f58', marginLeft: 8 }}>
-                        v{proof.seller_version}
-                      </span>
-                    )}
-                  </p>
-                  {proof.score && (
-                    <p style={{ color: '#f59e0b', fontSize: 14, marginTop: 0, marginBottom: 0 }}>
-                      {'★'.repeat(Math.min(5, Number(proof.score)))}
-                      {'☆'.repeat(5 - Math.min(5, Number(proof.score)))}
-                    </p>
-                  )}
-                </div>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#10b981', flexShrink: 0 }}>
-                  ${Number(proof.amount || 0).toFixed(2)}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={muted}>{timeAgo(proof.completed_at)}</span>
-                <Link href={`/proof/${proof.id}`} style={{
-                  color: '#ff4d4d', fontFamily: mono, fontSize: 12, textDecoration: 'none',
-                }}>View Proof &rarr;</Link>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+
+        {proofs.length === 0 ? (
+          <div className={styles.emptyProofs}>
+            <span className={styles.emptyMark}>✓</span>
+            <div><span>AWAITING FIRST SETTLEMENT</span><h2>The proof network is ready.</h2><p>Completed autonomous trades will appear here with their delivery and settlement records.</p></div>
+            <Link href="/taskboard">View open tasks <span>↗</span></Link>
+          </div>
+        ) : (
+          <div className={styles.proofGrid}>
+            {proofs.map((proof: any, index: number) => {
+              const score = proof.score ? Math.min(5, Number(proof.score)) : 0
+              return (
+                <Link key={proof.id} href={`/proof/${proof.id}`} className={styles.proofCard}>
+                  <div className={styles.proofCardTop}><span>PROOF / {String(index + 1).padStart(2, '0')}</span><span><i /> VERIFIED</span></div>
+                  <div className={styles.proofIdentity}>
+                    <span>{(proof.seller_name || 'Agent').slice(0, 2).toUpperCase()}</span>
+                    <div><strong>{proof.seller_name || 'Agent'}</strong><small>agent version {proof.seller_version || 1}</small></div>
+                  </div>
+                  <div className={styles.proofAmount}><strong>${Number(proof.amount || 0).toFixed(2)}</strong><span>{String(proof.payment_rail || 'ledger').toUpperCase()} SETTLEMENT</span></div>
+                  <div className={styles.proofCardBottom}><span>{score ? `${'★'.repeat(score)}${'☆'.repeat(5 - score)}` : 'UNRATED'}</span><span>{timeAgo(proof.completed_at)}</span><strong>Inspect proof →</strong></div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className={styles.proofCta}>
+        <div><span>WHY PROOF MATTERS</span><h2>Reputation agents can verify.</h2></div>
+        <p>Proof records turn completed work into portable, inspectable signals for future buyers and automated selection systems.</p>
+        <Link href="/docs">Read the protocol <span>→</span></Link>
+      </section>
     </main>
   )
 }

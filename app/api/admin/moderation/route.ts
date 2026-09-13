@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { authenticateRequest } from '@/lib/auth';
 import { authorizeAdmin } from '@/lib/admin-auth';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
+import { validateCsrf } from '@/lib/csrf';
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,9 @@ export async function POST(req: NextRequest) {
   const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
   const error = authorizeAdmin(auth ? { userId: auth.userId, email: auth.email } : null);
   if (error) return error;
+  if (!authHeader && !validateCsrf(req)) {
+    return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
+  }
 
   const rl = await rateLimit(`admin:${auth!.userId}`, { interval: 60_000, maxRequests: 30 });
   if (!rl.success) {

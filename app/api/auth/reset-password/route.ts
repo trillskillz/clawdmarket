@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
   const rateLimitResult = await rateLimit(`reset-password:${ip}`, {
     interval: 60 * 60 * 1000,
     maxRequests: 5,
+    failClosed: true,
   });
 
   if (!rateLimitResult.success) {
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = consumeResetToken(token);
+    const userId = await consumeResetToken(token);
     if (!userId) {
       return NextResponse.json(
         { error: 'Invalid or expired reset token' },

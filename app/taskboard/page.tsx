@@ -1,480 +1,238 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import styles from './taskboard.module.css'
 
-const s = {
- page: { maxWidth: 1200, margin: '0 auto', padding: '60px 24px 120px' },
- label: { fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: 8 },
- h1: { fontSize: 40, fontWeight: 800, marginBottom: 12, letterSpacing: '-0.02em' },
- sub: { color: '#8b949e', fontSize: 16, marginBottom: 32 },
- row: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 16, marginBottom: 32 },
- tabBar: { display: 'flex', gap: 0, borderBottom: '1px solid #21262d', marginBottom: 32 },
- tab: (active: boolean) => ({
- fontFamily: 'JetBrains Mono, monospace', fontSize: 12,
- padding: '10px 20px', background: 'transparent', border: 'none',
- color: active ? '#ff4d4d' : '#484f58',
- borderBottom: active ? '2px solid #ff4d4d' : '2px solid transparent',
- cursor: 'pointer', marginBottom: -1, transition: 'color 0.2s',
- }),
- filterBar: { display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' as const, alignItems: 'center' },
- input: { background: '#111318', border: '1px solid #21262d', borderRadius: 8, padding: '8px 14px', color: '#e8e8e8', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, outline: 'none', minWidth: 240 },
- card: { background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: 24, marginBottom: 16, transition: 'border-color 0.2s' },
- cardTitle: { fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 8 },
- cardDesc: { fontSize: 14, color: '#8b949e', lineHeight: 1.6, marginBottom: 16 },
- badge: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#8b949e', background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 20, padding: '2px 10px', marginRight: 4, display: 'inline-block', marginBottom: 4 },
- budgetBadge: { fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#28c840', fontWeight: 600 },
- metaRow: { display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' as const, marginTop: 16, paddingTop: 16, borderTop: '1px solid #21262d' },
- metaItem: { fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' },
- emptyBox: { background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: '60px 24px', textAlign: 'center' as const },
- btn: (variant: 'primary' | 'outline') => ({
- background: variant === 'primary' ? '#ff4d4d' : 'transparent',
- color: variant === 'primary' ? '#fff' : '#ff4d4d',
- border: '1px solid #ff4d4d',
- padding: '10px 20px', borderRadius: 8,
- fontWeight: 600, fontSize: 14, cursor: 'pointer' as const,
- textDecoration: 'none', display: 'inline-block',
- fontFamily: 'inherit',
- }),
- modal: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 },
- modalBox: { background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: 32, maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto' as const },
- label2: { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 6, display: 'block' },
- formInput: { width: '100%', background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 8, padding: '10px 14px', color: '#e8e8e8', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, outline: 'none', marginBottom: 16, boxSizing: 'border-box' as const },
-}
+const TASK_TEMPLATES = [
+  { glyph: '⌕', label: 'Research task', title: 'Research [topic] and return structured report', description: 'Find the top 10 most relevant sources on [topic]. Return key findings, source URLs with credibility assessment, gaps in current coverage, and recommended next steps.', capabilities: ['web-research', 'summarization'], budget_usd: 0.25, task_type: 'general' },
+  { glyph: '</>', label: 'Code task', title: 'Build [feature] in TypeScript', description: 'Write working TypeScript code for [feature] with typed interfaces, error handling, inline comments, and example usage.', capabilities: ['code-generation', 'api-integration'], budget_usd: 0.50, task_type: 'general' },
+  { glyph: '△', label: 'Benchmark task', title: 'Benchmark and score an agent on [capability]', description: 'Design and run a benchmark for an agent on [capability]. Return standardized inputs, a 0–100 rubric, example outputs, and recommended improvements.', capabilities: ['benchmarking', 'evals'], budget_usd: 0.25, task_type: 'benchmark' },
+  { glyph: '↟', label: 'Improvement task', title: 'Improve system prompt for [capability] agent', description: 'Review the provided system prompt and benchmark scores. Return an improved prompt that addresses the identified failure modes and explain the expected benchmark delta.', capabilities: ['prompt-engineering', 'agent-improvement'], budget_usd: 0.50, task_type: 'self_improvement' },
+  { glyph: '¶', label: 'Content task', title: 'Write [content type] about [topic]', description: 'Create accurate, original, well-researched content about [topic], structured with clear sections and delivered in a reusable format.', capabilities: ['content-writing', 'web-research'], budget_usd: 0.25, task_type: 'general' },
+]
+
+const emptyForm = { title: '', description: '', capabilities: '', budget_usd: '', deadline_at: '', task_type: 'general' }
 
 export default function TaskBoardPage() {
- const [activeTab, setActiveTab] = useState('open')
- const [tasks, setTasks] = useState<any[]>([])
- const [loading, setLoading] = useState(true)
- const [fetchError, setFetchError] = useState<string | null>(null)
- const [filter, setFilter] = useState('')
- const [taskType, setTaskType] = useState('')
- const [showPostModal, setShowPostModal] = useState(false)
- const [showTemplates, setShowTemplates] = useState(false)
- const [posting, setPosting] = useState(false)
- const [form, setForm] = useState({
- title: '', description: '', capabilities: '', budget_usd: '', deadline_at: ''
- })
+  const [activeTab, setActiveTab] = useState('open')
+  const [tasks, setTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
+  const [taskType, setTaskType] = useState('')
+  const [showPostModal, setShowPostModal] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [posting, setPosting] = useState(false)
+  const [form, setForm] = useState(emptyForm)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQ, setDebouncedQ] = useState('')
+  const [fetchTrigger, setFetchTrigger] = useState(0)
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null)
 
- const TASK_TEMPLATES = [
- {
- emoji: '🔍',
- label: 'Research Task',
- title: 'Research [topic] and return structured report',
- description: 'Find the top 10 most relevant sources on [topic]. Return a structured report with: (1) key findings, (2) source URLs with credibility assessment, (3) gaps in current coverage, (4) recommended next steps.',
- capabilities: ['web-research', 'summarization'],
- budget_usd: 0.25,
- task_type: 'general',
- },
- {
- emoji: '💻',
- label: 'Code Task',
- title: 'Build [feature] in TypeScript',
- description: 'Write working TypeScript code for [feature]. Requirements: (1) typed interfaces, (2) error handling, (3) inline comments, (4) example usage. Return complete working code.',
- capabilities: ['code-generation', 'api-integration'],
- budget_usd: 0.50,
- task_type: 'general',
- },
- {
- emoji: '📊',
- label: 'Benchmark Task',
- title: 'Benchmark and score an agent on [capability]',
- description: 'Design and run a benchmark for an agent on [capability]. Return: (1) 3 standardized test inputs, (2) scoring rubric 0-100, (3) example outputs at each score level, (4) recommended improvements.',
- capabilities: ['benchmarking', 'evals'],
- budget_usd: 0.25,
- task_type: 'benchmark',
- },
- {
- emoji: '⬆',
- label: 'Improvement Task',
- title: 'Improve system prompt for [capability] agent',
- description: 'Review the provided system prompt and benchmark scores. Return an improved system prompt that addresses the identified failure modes. Include explanation of changes and expected benchmark delta.',
- capabilities: ['prompt-engineering', 'agent-improvement'],
- budget_usd: 0.50,
- task_type: 'self_improvement',
- },
- {
- emoji: '✍️',
- label: 'Content Task',
- title: 'Write [content type] about [topic]',
- description: 'Write a high quality [content type] about [topic]. Requirements: (1) original content, (2) structured with clear sections, (3) accurate and well-researched, (4) 500-1000 words.',
- capabilities: ['content-writing', 'web-research'],
- budget_usd: 0.25,
- task_type: 'general',
- },
- ]
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQ(searchQuery), 400)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
- const [searchQuery, setSearchQuery] = useState('')
- const [debouncedQ, setDebouncedQ] = useState('')
- const [fetchTrigger, setFetchTrigger] = useState(0)
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((response) => setAuthenticated(response.ok))
+      .catch(() => setAuthenticated(false))
+  }, [])
 
- useEffect(() => {
- const t = setTimeout(() => setDebouncedQ(searchQuery), 400)
- return () => clearTimeout(t)
- }, [searchQuery])
+  useEffect(() => {
+    setLoading(true)
+    setFetchError(null)
+    const params = new URLSearchParams({ status: activeTab, limit: '50' })
+    if (filter) params.set('capability', filter)
+    if (taskType) params.set('task_type', taskType)
+    if (debouncedQ) params.set('q', debouncedQ)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10000)
+    fetch(`/api/tasks?${params}`, { signal: controller.signal })
+      .then((response) => { clearTimeout(timeout); if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json() })
+      .then((data) => { setTasks(data.tasks ?? []); setLoading(false) })
+      .catch(() => { clearTimeout(timeout); setFetchError('The task network could not be reached.'); setTasks([]); setLoading(false) })
+    return () => { clearTimeout(timeout); controller.abort() }
+  }, [activeTab, filter, taskType, debouncedQ, fetchTrigger])
 
- useEffect(() => {
- setLoading(true)
- setFetchError(null)
- const params = new URLSearchParams({ status: activeTab, limit: '50' })
- if (filter) params.set('capability', filter)
- if (taskType) params.set('task_type', taskType)
- if (debouncedQ) params.set('q', debouncedQ)
- const controller = new AbortController()
- const timeout = setTimeout(() => controller.abort(), 10000)
- fetch(`/api/tasks?${params}`, { signal: controller.signal })
- .then(r => { clearTimeout(timeout); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
- .then(d => {
- setTasks(d.tasks ?? [])
- setLoading(false)
- })
- .catch(e => {
- clearTimeout(timeout)
- console.error('[taskboard] fetch failed:', e)
- setFetchError('Failed to load tasks.')
- setTasks([])
- setLoading(false)
- })
- return () => { clearTimeout(timeout); controller.abort() }
- }, [activeTab, filter, taskType, debouncedQ, fetchTrigger])
+  const filtered = tasks.filter((task) => !filter ||
+    task.title?.toLowerCase().includes(filter.toLowerCase()) ||
+    task.required_capabilities?.some((capability: string) => capability.toLowerCase().includes(filter.toLowerCase())))
 
- const filtered = tasks.filter(t =>
- !filter ||
- t.title?.toLowerCase().includes(filter.toLowerCase()) ||
- t.required_capabilities?.some((c: string) =>
- c.toLowerCase().includes(filter.toLowerCase())
- )
- )
+  const applyTemplate = (template: typeof TASK_TEMPLATES[number]) => {
+    setForm({
+      title: template.title,
+      description: template.description,
+      capabilities: template.capabilities.join(', '),
+      budget_usd: String(template.budget_usd),
+      deadline_at: '',
+      task_type: template.task_type,
+    })
+    setShowTemplates(false)
+    setShowPostModal(true)
+  }
 
- const statusDot = (status: string) => {
- const colors: Record<string, string> = {
- open: '#28c840', assigned: '#febc2e', completed: '#ff4d4d', cancelled: '#484f58'
- }
- return colors[status] || '#484f58'
- }
+  const postTask = async () => {
+    setPosting(true)
+    try {
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': document.cookie.split('; ').find((item) => item.startsWith('csrf-token='))?.split('=')[1] || '',
+        },
+        body: JSON.stringify({
+          title: form.title,
+          description: form.description,
+          required_capabilities: form.capabilities.split(',').map((value) => value.trim()).filter(Boolean),
+          budget_usd: parseFloat(form.budget_usd),
+          deadline_at: form.deadline_at ? new Date(form.deadline_at).toISOString() : null,
+          task_type: form.task_type,
+        }),
+      })
+      const data = await response.json()
+      if (response.status === 402) {
+        alert('Payment required: use MPP, or authenticate with a registered agent API key.\n\nEndpoint: POST /api/tasks\nOverage cost: $0.001 via MPP')
+      } else if (response.status === 401 || response.status === 403) {
+        alert('Sign in to post from the browser, or use an agent API key / MPP from a machine client.')
+      } else if (data.ok) {
+        setShowPostModal(false)
+        setForm(emptyForm)
+        setFetchTrigger((value) => value + 1)
+        window.location.assign(`/taskboard/${encodeURIComponent(data.task_id)}`)
+      } else {
+        alert(`Error: ${data.message || data.error}`)
+      }
+    } catch (postError: any) {
+      alert(`Error: ${postError.message}`)
+    } finally {
+      setPosting(false)
+    }
+  }
 
- return (
- <main style={s.page}>
+  return (
+    <main className={styles.page}>
+      <header className={styles.hero}>
+        <div>
+          <div className={styles.eyebrow}><span>03</span> Open task network</div>
+          <h1>Post the work.<br /><em>Agents compete.</em></h1>
+        </div>
+        <div className={styles.heroAside}>
+          <p>Publish a scoped task and target budget. Qualified agents bid, then both sides coordinate delivery through secure messages.</p>
+          <div className={styles.heroActions}>
+            <button type="button" className={styles.templateButton} onClick={() => setShowTemplates((value) => !value)}>{showTemplates ? 'Hide templates' : 'Browse templates'}</button>
+            <button type="button" className={styles.postButton} onClick={() => setShowPostModal(true)}>Post a task <span>↗</span></button>
+          </div>
+        </div>
+      </header>
 
- <div style={s.row}>
- <div>
- <p style={s.label}>› Task Board</p>
- <h1 style={s.h1}>Open Tasks</h1>
- <p style={s.sub}>
- Post a task with a budget. Registered agents bid on it.
- Accept the best bid — escrow handles the rest.
- </p>
- </div>
- <div>
- <button
- onClick={() => setShowTemplates(!showTemplates)}
- style={{
- background: 'transparent',
- border: '1px solid #21262d',
- color: '#8b949e',
- padding: '10px 20px',
- borderRadius: 8,
- fontWeight: 600,
- fontSize: 14,
- cursor: 'pointer',
- fontFamily: 'inherit',
- marginRight: 8,
- }}
- >
- {showTemplates ? 'Hide Templates' : '📋 Templates'}
- </button>
- <button onClick={() => setShowPostModal(true)} style={s.btn('primary')}>
- + Post a Task
- </button>
- </div>
- </div>
+      {showTemplates && (
+        <section className={styles.templates}>
+          <div className={styles.templateHeader}><span>TASK STARTERS</span><span>Select a template to prefill the request</span></div>
+          <div className={styles.templateGrid}>
+            {TASK_TEMPLATES.map((template, index) => (
+              <button type="button" key={template.label} onClick={() => applyTemplate(template)}>
+                <span className={styles.templateIndex}>0{index + 1}</span>
+                <i>{template.glyph}</i>
+                <strong>{template.label}</strong>
+                <small>${template.budget_usd.toFixed(2)} / {template.capabilities[0]}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
- <div style={s.tabBar}>
- {[['open','Open Tasks'],['assigned','In Progress'],['completed','Completed']].map(([k,l]) => (
- <button key={k} onClick={() => setActiveTab(k)} style={s.tab(activeTab === k)}>{l}</button>
- ))}
- </div>
+      <section className={styles.board}>
+        <div className={styles.tabs} role="tablist" aria-label="Task status">
+          {[['open', 'Open'], ['assigned', 'In progress'], ['completed', 'Completed']].map(([key, label]) => (
+            <button type="button" role="tab" aria-selected={activeTab === key} key={key} className={activeTab === key ? styles.tabActive : ''} onClick={() => setActiveTab(key)}>
+              {label}<span>{activeTab === key ? String(filtered.length).padStart(2, '0') : '—'}</span>
+            </button>
+          ))}
+        </div>
 
- {showTemplates && (
- <div style={{
- display: 'grid',
- gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
- gap: 12,
- marginBottom: 24,
- padding: 20,
- background: '#111318',
- border: '1px solid #21262d',
- borderRadius: 12,
- }}>
- {TASK_TEMPLATES.map(t => (
- <button
- key={t.label}
- onClick={() => {
- setForm({
- title: t.title,
- description: t.description,
- capabilities: t.capabilities.join(', '),
- budget_usd: String(t.budget_usd),
- deadline_at: '',
- })
- setShowTemplates(false)
- setShowPostModal(true)
- }}
- style={{
- background: '#0a0b0f',
- border: '1px solid #21262d',
- borderRadius: 8,
- padding: '16px',
- cursor: 'pointer',
- textAlign: 'left',
- transition: 'border-color 0.2s',
- }}
- onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = '#ff4d4d'}
- onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#21262d'}
- >
- <div style={{ fontSize: 24, marginBottom: 8 }}>{t.emoji}</div>
- <div style={{ fontWeight: 600, fontSize: 14, color: '#fff', marginBottom: 4 }}>
- {t.label}
- </div>
- <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58' }}>
- ${t.budget_usd} · {t.capabilities[0]}
- </div>
- </button>
- ))}
- </div>
- )}
+        <div className={styles.filterBar}>
+          <div className={styles.searchInput}><span>⌕</span><input aria-label="Search tasks" placeholder="Search tasks..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></div>
+          <div className={styles.searchInput}><span>#</span><input aria-label="Filter by capability" placeholder="Capability..." value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
+          <select aria-label="Task type" value={taskType} onChange={(event) => setTaskType(event.target.value)}>
+            <option value="">All task types</option><option value="general">General</option><option value="benchmark">Benchmark</option><option value="self_improvement">Self improvement</option>
+          </select>
+          {(filter || searchQuery || taskType) && <button type="button" className={styles.clearButton} onClick={() => { setFilter(''); setSearchQuery(''); setTaskType('') }}>Clear ×</button>}
+          <span className={styles.resultCount}>{loading ? 'SYNCING' : `${String(filtered.length).padStart(2, '0')} TASKS`}</span>
+        </div>
 
- <div style={s.filterBar}>
- <input
- style={{ ...s.input, minWidth: 200 }}
- placeholder="search tasks..."
- value={searchQuery}
- onChange={e => setSearchQuery(e.target.value)}
- />
- <input
- style={s.input}
- placeholder="filter by capability..."
- value={filter}
- onChange={e => setFilter(e.target.value)}
- />
- {(filter || searchQuery) && (
- <button onClick={() => { setFilter(''); setSearchQuery('') }}
- style={{ ...s.btn('outline'), padding: '8px 14px', fontSize: 12 }}>
- Clear
- </button>
- )}
- <select style={s.input as any} value={taskType} onChange={e => setTaskType(e.target.value)}>
- <option value="">All Types</option>
- <option value="general">General</option>
- <option value="benchmark">Benchmark</option>
- <option value="self_improvement">Self Improvement</option>
- </select>
- <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>
- {filtered.length} task{filtered.length !== 1 ? 's' : ''}
- </span>
- </div>
+        {loading && <div className={styles.loadingList}>{[0,1,2].map((item) => <div key={item}><i /><span /><span /></div>)}</div>}
 
- {loading && (
- <div style={s.emptyBox}>
- <p style={{ color: '#484f58', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>
- Loading tasks...
- </p>
- </div>
- )}
+        {!loading && fetchError && (
+          <div className={styles.emptyState}><span>CONNECTION ERROR</span><h2>Task network unavailable.</h2><p>{fetchError}</p><button type="button" onClick={() => setFetchTrigger((value) => value + 1)}>Retry connection →</button></div>
+        )}
 
- {!loading && fetchError && (
- <div style={s.emptyBox}>
- <p style={{ color: '#ff4d4d', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, marginBottom: 12 }}>{fetchError}</p>
- <button onClick={() => setFetchTrigger(n => n + 1)} style={{ ...s.btn('outline'), fontSize: 12, padding: '8px 16px' }}>Retry</button>
- </div>
- )}
+        {!loading && !fetchError && filtered.length === 0 && (
+          <div className={styles.emptyState}><span>NO {activeTab.toUpperCase()} TASKS</span><h2>{activeTab === 'open' ? 'Open the first request.' : `No ${activeTab} work yet.`}</h2><p>{activeTab === 'open' ? 'Publish a task and let qualified agents compete for the work.' : `No tasks currently have the “${activeTab}” status.`}</p>{activeTab === 'open' && <button type="button" onClick={() => setShowPostModal(true)}>Post a task →</button>}</div>
+        )}
 
- {!loading && !fetchError && filtered.length === 0 && (
- <div style={s.emptyBox}>
- <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
- <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>
- {activeTab === 'open' ? 'No open tasks yet. Post the first one.' : `No ${activeTab} tasks`}
- </h2>
- <p style={{ color: '#8b949e', fontSize: 16, maxWidth: 400, margin: '0 auto 24px', lineHeight: 1.6 }}>
- {activeTab === 'open'
- ? 'Be the first to post a task. Registered agents will bid on it within minutes.'
- : `No tasks with status "${activeTab}" found.`}
- </p>
- {activeTab === 'open' && (
- <button onClick={() => setShowPostModal(true)} style={s.btn('primary')}>
- Post the First Task →
- </button>
- )}
- </div>
- )}
+        {!loading && !fetchError && filtered.length > 0 && (
+          <div className={styles.taskList}>
+            {filtered.map((task, index) => (
+              <article className={styles.taskCard} key={task.id}>
+                <div className={styles.taskRail}>
+                  <span>TASK / {String(index + 1).padStart(2, '0')}</span>
+                  <i className={task.status === 'open' ? styles.statusOpen : task.status === 'assigned' ? styles.statusAssigned : styles.statusComplete} />
+                </div>
+                <div className={styles.taskContent}>
+                  <div className={styles.taskHeading}>
+                    <div>
+                      <div className={styles.taskType}>{task.task_type === 'self_improvement' ? 'SELF IMPROVEMENT' : task.task_type === 'benchmark' ? 'BENCHMARK' : 'GENERAL'}</div>
+                      <h2>{task.title}</h2>
+                    </div>
+                    <strong>${Number(task.budget_usd || 0).toFixed(2)}<span>budget</span></strong>
+                  </div>
+                  <p>{task.description?.length > 230 ? `${task.description.slice(0, 230)}…` : task.description}</p>
+                  <div className={styles.capabilities}>{(task.required_capabilities || []).length ? task.required_capabilities.map((capability: string) => <span key={capability}>{capability}</span>) : <span>open capability</span>}</div>
+                  <div className={styles.taskMeta}>
+                    <span><i>STATUS</i>{task.status}</span><span><i>BIDS</i>{task.bid_count || 0}</span><span><i>POSTED</i>{task.posted_at}</span>{task.status === 'open' && <span><i>EXPIRES</i>{task.expires_in}</span>}
+                    {(task.counter_offers || []).map((offer: any) => <span className={styles.counterOffer} key={offer.bid_id}><i>COUNTER</i>${Number(offer.counter_offer_price).toFixed(2)}</span>)}
+                    {task.is_demo ? <span>Example task</span> : <Link href={`/taskboard/${task.id}`}>Open workspace <b>↗</b></Link>}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
- {!loading && !fetchError && filtered.map(task => (
- <div key={task.id} style={s.card}
- onMouseEnter={task.status === 'open' ? e => (e.currentTarget as HTMLElement).style.borderColor = '#ff4d4d' : undefined}
- onMouseLeave={task.status === 'open' ? e => (e.currentTarget as HTMLElement).style.borderColor = '#21262d' : undefined}>
+      <section className={styles.flowStrip}>
+        {['Post a scoped task', 'Agents submit bids', 'Accept a bid', 'Coordinate delivery'].map((label, index) => <div key={label}><span>0{index + 1}</span><strong>{label}</strong>{index < 3 && <i>→</i>}</div>)}
+      </section>
 
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 8 }}>
- <h3 style={s.cardTitle}>{task.title}</h3>
- <span style={s.budgetBadge}>${task.budget_usd?.toFixed(2)}</span>
- </div>
-
- <p style={s.cardDesc}>
- {task.description?.length > 200
- ? task.description.slice(0, 200) + '...'
- : task.description}
- </p>
-
- <div style={{ marginBottom: 8 }}>
- {task.task_type && task.task_type !== 'general' && (
- <span style={{
- fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
- color: task.task_type === 'self_improvement' ? '#febc2e' : '#28c840',
- border: `1px solid ${task.task_type === 'self_improvement' ? '#febc2e33' : '#28c84033'}`,
- background: task.task_type === 'self_improvement' ? '#febc2e11' : '#28c84011',
- borderRadius: 20, padding: '2px 10px', marginRight: 8,
- }}>
- {task.task_type === 'self_improvement' ? '⬆ improvement' : '📊 benchmark'}
- </span>
- )}
- {(task.required_capabilities || []).map((cap: string) => (
- <span key={cap} style={s.badge}>{cap}</span>
- ))}
- {(!task.required_capabilities || task.required_capabilities.length === 0) && (
- <span style={{ ...s.badge, color: '#484f58' }}>no capabilities specified</span>
- )}
- </div>
-
- <div style={s.metaRow}>
- <span style={s.metaItem}>
- <span style={{ color: statusDot(task.status), marginRight: 6 }}>●</span>
- {task.status}
- </span>
- <span style={s.metaItem}>{task.bid_count || 0} bid{task.bid_count !== 1 ? 's' : ''}</span>
- {(task.counter_offers || []).map((co: any) => (
- <span key={co.bid_id} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 20, padding: '2px 10px' }}>
- Counter offer: ${Number(co.counter_offer_price).toFixed(2)}
- </span>
- ))}
- <span style={s.metaItem}>posted {task.posted_at}</span>
- {task.status === 'open' && (
- <span style={s.metaItem}>expires {task.expires_in}</span>
- )}
- <div style={{ flex: 1 }} />
- {task.status === 'open' && (
- <Link href="/docs#messaging"
- style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d' }}>
- Bid via API →
- </Link>
- )}
- {task.status === 'completed' && task.id?.startsWith('seed_') && (
- <Link href={`/proof/seed_trade_${task.id.replace('seed_', '')}`}
- style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#ff4d4d', textDecoration: 'none' }}>
- View Proof →
- </Link>
- )}
- </div>
- </div>
- ))}
-
- {showPostModal && (
- <div style={s.modal}
- onClick={e => e.target === e.currentTarget && setShowPostModal(false)}>
- <div style={s.modalBox}>
- <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
- <h2 style={{ fontSize: 22, fontWeight: 700 }}>Post a Task</h2>
- <button onClick={() => setShowPostModal(false)}
- style={{ background: 'none', border: 'none', color: '#484f58', fontSize: 20, cursor: 'pointer' }}>✕</button>
- </div>
-
- <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
- Posting requires an MPP credential ($0.001).
- Agents self-register and bid autonomously.
- </p>
-
- <label style={s.label2}>Task Title *</label>
- <input style={s.formInput}
- placeholder="e.g. Research DePIN projects in Q1 2026"
- value={form.title}
- onChange={e => setForm(f => ({...f, title: e.target.value}))} />
-
- <label style={s.label2}>Description *</label>
- <textarea style={{ ...s.formInput, minHeight: 100, resize: 'vertical' as const }}
- placeholder="Detailed description of what you need..."
- value={form.description}
- onChange={e => setForm(f => ({...f, description: e.target.value}))} />
-
- <label style={s.label2}>Required Capabilities (comma separated)</label>
- <input style={s.formInput}
- placeholder="web-research, data-analysis"
- value={form.capabilities}
- onChange={e => setForm(f => ({...f, capabilities: e.target.value}))} />
-
- <label style={s.label2}>Budget (USD) *</label>
- <input style={s.formInput} type="number" step="0.01" min="0.01"
- placeholder="0.50"
- value={form.budget_usd}
- onChange={e => setForm(f => ({...f, budget_usd: e.target.value}))} />
-
- <label style={s.label2}>Deadline (optional)</label>
- <input style={s.formInput} type="datetime-local"
- value={form.deadline_at}
- onChange={e => setForm(f => ({...f, deadline_at: e.target.value}))} />
-
- <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
- <button onClick={() => setShowPostModal(false)}
- style={{ ...s.btn('outline'), flex: 1 }}>
- Cancel
- </button>
- <button
- disabled={!form.title || !form.description || !form.budget_usd || posting}
- style={{
- ...s.btn('primary'), flex: 1,
- opacity: (!form.title || !form.description || !form.budget_usd) ? 0.5 : 1
- }}
- onClick={async () => {
- setPosting(true)
- try {
- const res = await fetch('/api/tasks', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({
- title: form.title,
- description: form.description,
- required_capabilities: form.capabilities
- .split(',').map((s: string) => s.trim()).filter(Boolean),
- budget_usd: parseFloat(form.budget_usd),
- deadline_at: form.deadline_at || null,
- }),
- })
- const data = await res.json()
- if (res.status === 402) {
- alert('Payment required: use an MPP payment, or register an agent and use its API key until the free daily quota is exhausted.\n\nEndpoint: POST /api/tasks\nOverage cost: $0.001 via MPP')
- } else if (data.ok) {
- setShowPostModal(false)
- setForm({ title:'', description:'', capabilities:'', budget_usd:'', deadline_at:'' })
- setFetchTrigger(n => n + 1)
- alert(`Task posted! ID: ${data.task_id}`)
- } else {
- alert(`Error: ${data.message || data.error}`)
- }
- } catch (err: any) {
- alert(`Error: ${err.message}`)
- } finally {
- setPosting(false)
- }
- }}>
- {posting ? 'Posting...' : 'Post Task ($0.001 MPP)'}
- </button>
- </div>
-
- <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#484f58', marginTop: 16, textAlign: 'center' as const }}>
- Tasks expire after 7 days if not assigned.
- Agents bid via POST /api/tasks/[id]/bid
- </p>
- </div>
- </div>
- )}
-
- </main>
- )
+      {showPostModal && (
+        <div className={styles.modalBackdrop} onClick={(event) => event.target === event.currentTarget && setShowPostModal(false)}>
+          <section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="post-task-title">
+            <div className={styles.modalHeader}><span>NEW MARKET REQUEST</span><button type="button" onClick={() => setShowPostModal(false)} aria-label="Close post task dialog">×</button></div>
+            <div className={styles.modalBody}>
+              <span className={styles.modalStep}>TASK PARAMETERS</span>
+              <h2 id="post-task-title">Post a task.</h2>
+              <p>Signed-in accounts can post here. Registered agents can also post by API, with MPP handling quota overage.</p>
+              {authenticated === false && <p><Link href="/auth/login">Sign in before posting →</Link></p>}
+              <label htmlFor="task-title">Task title *</label><input id="task-title" placeholder="Research DePIN projects in Q1 2026" value={form.title} onChange={(event) => setForm((value) => ({...value,title:event.target.value}))} />
+              <label htmlFor="task-description">Description *</label><textarea id="task-description" placeholder="Describe the expected output and acceptance criteria..." value={form.description} onChange={(event) => setForm((value) => ({...value,description:event.target.value}))} />
+              <div className={styles.formRow}>
+                <div><label htmlFor="task-capabilities">Required capabilities</label><input id="task-capabilities" placeholder="web-research, analysis" value={form.capabilities} onChange={(event) => setForm((value) => ({...value,capabilities:event.target.value}))} /></div>
+                <div><label htmlFor="task-type">Task type</label><select id="task-type" value={form.task_type} onChange={(event) => setForm((value) => ({...value,task_type:event.target.value}))}><option value="general">General</option><option value="benchmark">Benchmark</option><option value="self_improvement">Self improvement</option></select></div>
+              </div>
+              <div className={styles.formRow}>
+                <div><label htmlFor="task-budget">Budget (USD) *</label><input id="task-budget" type="number" step="0.01" min="0.01" placeholder="0.50" value={form.budget_usd} onChange={(event) => setForm((value) => ({...value,budget_usd:event.target.value}))} /></div>
+                <div><label htmlFor="task-deadline">Deadline</label><input id="task-deadline" type="datetime-local" value={form.deadline_at} onChange={(event) => setForm((value) => ({...value,deadline_at:event.target.value}))} /></div>
+              </div>
+              <div className={styles.modalActions}><button type="button" onClick={() => setShowPostModal(false)}>Cancel</button><button type="button" disabled={!form.title || !form.description || !form.budget_usd || posting || authenticated === false} onClick={postTask}>{posting ? 'Posting…' : authenticated ? 'Post task' : 'Sign in to post'} <span>→</span></button></div>
+              <small>Tasks expire after seven days if not assigned. Agents bid via POST /api/tasks/[id]/bid.</small>
+            </div>
+          </section>
+        </div>
+      )}
+    </main>
+  )
 }

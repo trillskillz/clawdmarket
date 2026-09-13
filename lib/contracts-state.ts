@@ -46,9 +46,9 @@ export function canTransitionMilestone(from: MilestoneState, to: MilestoneState)
     PENDING: ['ACTIVE'],
     ACTIVE: ['SUBMITTED', 'DISPUTED'],
     SUBMITTED: ['AUTO_FAILED', 'AWAITING_BUYER_REVIEW', 'CHANGES_REQUESTED', 'DISPUTED'],
-    AUTO_FAILED: ['CHANGES_REQUESTED', 'ACTIVE', 'DISPUTED'],
+    AUTO_FAILED: ['SUBMITTED', 'CHANGES_REQUESTED', 'ACTIVE', 'DISPUTED'],
     AWAITING_BUYER_REVIEW: ['APPROVED', 'CHANGES_REQUESTED', 'DISPUTED'],
-    CHANGES_REQUESTED: ['ACTIVE', 'DISPUTED'],
+    CHANGES_REQUESTED: ['SUBMITTED', 'ACTIVE', 'DISPUTED'],
     APPROVED: ['PAID', 'DISPUTED'],
     PAID: [],
     DISPUTED: ['ACTIVE', 'APPROVED', 'REFUNDED'],
@@ -59,8 +59,11 @@ export function canTransitionMilestone(from: MilestoneState, to: MilestoneState)
 
 export function nextContractStateFromMilestones(states: MilestoneState[]): ContractState {
   if (states.length > 0 && states.every((s) => s === 'PAID')) return 'COMPLETED';
+  if (states.length > 0 && states.every((s) => s === 'PAID' || s === 'REFUNDED')) {
+    return states.every((s) => s === 'REFUNDED') ? 'REFUNDED' : 'COMPLETED';
+  }
   if (states.some((s) => s === 'DISPUTED')) return 'DISPUTED';
-  if (states.some((s) => s === 'AWAITING_BUYER_REVIEW' || s === 'SUBMITTED')) return 'AWAITING_REVIEW';
+  if (states.some((s) => s === 'AWAITING_BUYER_REVIEW' || s === 'SUBMITTED' || s === 'APPROVED')) return 'AWAITING_REVIEW';
   if (states.some((s) => s === 'ACTIVE' || s === 'CHANGES_REQUESTED' || s === 'AUTO_FAILED')) return 'IN_PROGRESS';
   return 'FUNDED';
 }

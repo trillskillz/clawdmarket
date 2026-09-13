@@ -38,21 +38,20 @@ function fmtAgentName(id: string | null | undefined): string {
  return id.replace(/^agent_/, '').replace(/_/g, ' ')
 }
 
-function repColor(score?: number) {
- if (!score) return '#484f58'
- if (score < 200) return '#80868b'
- if (score < 500) return '#febc2e'
- if (score < 800) return '#ff8c42'
- return '#ff4d4d'
+function trustColor(score?: number) {
+ if (score == null) return '#484f58'
+ if (score < 50) return '#ff5f57'
+ if (score < 65) return '#febc2e'
+ if (score < 80) return '#14b8a6'
+ return '#28c840'
 }
 
-function repTier(score?: number): string {
- if (!score) return 'Unranked'
- if (score < 200) return 'Newcomer'
- if (score < 400) return 'Established'
- if (score < 600) return 'Trusted'
- if (score < 800) return 'Elite'
- return 'Legendary'
+function trustTier(score?: number): string {
+ if (score == null) return 'Unverified'
+ if (score < 50) return 'Caution'
+ if (score < 65) return 'Developing'
+ if (score < 80) return 'Trusted'
+ return 'Highly trusted'
 }
 
 const CAPABILITY_INFO: Record<string, { desc: string; icon: string }> = {
@@ -98,15 +97,15 @@ function Sparkline({ data, width = 200, height = 48, color = '#ff4d4d' }: { data
  )
 }
 
-// ─── Reputation Ring ───────────────────────────────────────
+// ─── Trust Ring ────────────────────────────────────────────
 
-function RepRing({ score, size = 140 }: { score: number; size?: number }) {
- const maxScore = 1000
+function TrustRing({ score, size = 140 }: { score: number; size?: number }) {
+ const maxScore = 100
  const pct = Math.min(score / maxScore, 1)
  const r = (size - 12) / 2
  const circ = 2 * Math.PI * r
  const offset = circ * (1 - pct)
- const color = repColor(score)
+ const color = trustColor(score)
  return (
   <svg width={size} height={size} style={{ display: 'block' }}>
    <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#21262d" strokeWidth="8" />
@@ -116,7 +115,7 @@ function RepRing({ score, size = 140 }: { score: number; size?: number }) {
     style={{ transition: 'stroke-dashoffset 1s ease' }}
    />
    <text x={size / 2} y={size / 2 - 6} textAnchor="middle" fill={color} fontSize="28" fontWeight="800" fontFamily={mono}>{score}</text>
-   <text x={size / 2} y={size / 2 + 16} textAnchor="middle" fill="#484f58" fontSize="10" fontFamily={mono}>{repTier(score)}</text>
+   <text x={size / 2} y={size / 2 + 16} textAnchor="middle" fill="#484f58" fontSize="10" fontFamily={mono}>{trustTier(score)}</text>
   </svg>
  )
 }
@@ -149,26 +148,9 @@ function RatingBar({ label, count, max }: { label: string; count: number; max: n
  )
 }
 
-// ─── Reputation Breakdown Bar ──────────────────────────────
-
-function RepBreakdownBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
- const pct = max > 0 ? (value / max) * 100 : 0
- return (
-  <div style={{ marginBottom: 10 }}>
-   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-    <span style={{ fontFamily: mono, fontSize: 11, color: '#8b949e' }}>{label}</span>
-    <span style={{ fontFamily: mono, fontSize: 11, color }}>{Math.round(value)}/{max}</span>
-   </div>
-   <div style={{ height: 6, background: '#21262d', borderRadius: 3, overflow: 'hidden' }}>
-    <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.5s ease' }} />
-   </div>
-  </div>
- )
-}
-
 // ─── Status Dot ────────────────────────────────────────────
 
-function StatusDot({ status, verifiedAt, failures }: { status: string; verifiedAt: any; failures: number }) {
+function StatusDot({ status, failures }: { status: string; failures: number }) {
  const isHealthy = status === 'active' && failures < 3
  const color = isHealthy ? '#28c840' : status === 'active' ? '#f59e0b' : '#ff5f57'
  const label = isHealthy ? 'Healthy' : status === 'active' ? 'Degraded' : 'Inactive'
@@ -186,8 +168,6 @@ export default function AgentProfilePage() {
  const params = useParams()
  const id = params?.id as string
  const [agent, setAgent] = useState<any>(null)
- const [lineage, setLineage] = useState<any>(null)
- const [trustScore, setTrustScore] = useState<any>(null)
  const [loading, setLoading] = useState(true)
  const [m, setM] = useState(false)
 
@@ -204,12 +184,6 @@ export default function AgentProfilePage() {
  }, [id])
 
  useEffect(() => {
-  if (!id) return
-  fetch(`/api/agents/${id}/lineage`).then(r => r.json()).then(setLineage).catch(() => {})
-  fetch(`/api/agents/${id}/trust`).then(r => r.json()).then(setTrustScore).catch(() => {})
- }, [id])
-
- useEffect(() => {
   if (!agent?.name) return
   document.title = `${agent.name} — ClawdMarket`
   const setMeta = (prop: string, content: string) => {
@@ -218,22 +192,13 @@ export default function AgentProfilePage() {
    el.content = content
   }
   setMeta('og:title', `${agent.name} — ClawdMarket Agent`)
-  setMeta('og:description', `REP ${agent.reputation_score || 0} · ${Number(agent.avg_rating || 0).toFixed(1)}★ · v${agent.version || 1} · ${agent.completed_trades || 0} trades`)
+  setMeta('og:description', `Trust ${agent.trust_score ?? 0}/100 (${agent.trust_confidence || 'low'} confidence) · ${Number(agent.avg_rating || 0).toFixed(1)}★ · ${agent.completed_trades || 0} trades`)
  }, [agent])
 
  // Computed data
  const benchHistory = useMemo(() => {
   if (!agent?.benchmark_history?.length) return []
   return agent.benchmark_history.map((h: any) => typeof h === 'number' ? h : (h?.score ?? h?.benchmark_score ?? 0))
- }, [agent])
-
- const repBreakdown = useMemo(() => {
-  if (!agent) return { bench: 0, rating: 0, completion: 0, velocity: 0 }
-  const bench = agent.benchmark_score ? (agent.benchmark_score / 100) * 400 : 0
-  const rating = (agent.avg_rating && agent.rating_count > 0) ? (agent.avg_rating / 5) * 300 : 0
-  const completion = agent.total_trades > 0 ? (agent.completed_trades / agent.total_trades) * 200 : 0
-  const velocity = Math.min(agent.velocity_score || 0, 100)
-  return { bench: Math.round(bench), rating: Math.round(rating), completion: Math.round(completion), velocity: Math.round(velocity) }
  }, [agent])
 
  if (loading) return (
@@ -250,12 +215,13 @@ export default function AgentProfilePage() {
   <main style={{ maxWidth: 960, margin: '0 auto', padding: '80px 24px 120px', textAlign: 'center' }}>
    <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }}>🦞</div>
    <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Agent Not Found</h1>
-   <p style={{ color: '#8b949e', marginBottom: 24 }}>This agent doesn't exist or has been removed.</p>
+   <p style={{ color: '#8b949e', marginBottom: 24 }}>This agent does not exist or has been removed.</p>
    <Link href="/registry" style={{ fontFamily: mono, fontSize: 13, color: '#ff4d4d', textDecoration: 'none' }}>← Back to Registry</Link>
   </main>
  )
 
- const rep = agent.reputation_score || 0
+ const trustScore = agent.trust
+ const trustValue = agent.trust_score ?? trustScore?.score ?? 0
  const avgRating = Number(agent.avg_rating || 0)
  const completedTrades = Number(agent.completed_trades || 0)
  const totalTrades = Number(agent.total_trades || 0)
@@ -282,12 +248,12 @@ export default function AgentProfilePage() {
    {/* ─── Hero Section ───────────────────────────────── */}
    <div style={{ ...card, marginBottom: 16, padding: m ? 20 : 32, display: 'flex', gap: m ? 16 : 32, flexDirection: m ? 'column' : 'row', alignItems: m ? 'center' : 'flex-start' }}>
     <div style={{ flexShrink: 0, textAlign: 'center' }}>
-     <RepRing score={rep} size={m ? 120 : 140} />
+     <TrustRing score={trustValue} size={m ? 120 : 140} />
     </div>
     <div style={{ flex: 1, minWidth: 0 }}>
      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
       <h1 style={{ fontSize: m ? 24 : 32, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>{agent.name}</h1>
-      <StatusDot status={agent.status} verifiedAt={agent.endpoint_verified_at} failures={agent.endpoint_failures} />
+      <StatusDot status={agent.status} failures={agent.endpoint_failures} />
       {agent.is_online ? (
        <span style={{ fontFamily: mono, fontSize: 12, color: '#28c840' }}>● Online</span>
       ) : (
@@ -339,16 +305,24 @@ export default function AgentProfilePage() {
     ))}
    </div>
 
-   {/* ─── Two Column: Reputation + Benchmark ─────────── */}
+   {/* ─── Two Column: Trust + Benchmark ──────────────── */}
    <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 16 }}>
 
-    {/* Reputation Breakdown */}
+    {/* Explainable trust evidence */}
     <div style={card}>
-     <div style={sectionLabel}>Reputation Breakdown</div>
-     <RepBreakdownBar label="Benchmark (40%)" value={repBreakdown.bench} max={400} color="#ff4d4d" />
-     <RepBreakdownBar label="Ratings (30%)" value={repBreakdown.rating} max={300} color="#f59e0b" />
-     <RepBreakdownBar label="Completion (20%)" value={repBreakdown.completion} max={200} color="#28c840" />
-     <RepBreakdownBar label="Velocity (10%)" value={repBreakdown.velocity} max={100} color="#3b82f6" />
+     <div style={sectionLabel}>Trust Evidence</div>
+     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+      <strong style={{ font: `800 28px ${mono}`, color: trustColor(trustValue) }}>{trustValue}/100</strong>
+      <span style={{ font: `700 11px ${mono}`, color: trustScore?.confidence === 'high' ? '#28c840' : trustScore?.confidence === 'medium' ? '#febc2e' : '#8b949e', textTransform: 'uppercase' }}>
+       {trustScore?.confidence || 'low'} confidence · {Math.round(trustScore?.evidence_points || 0)} pts
+      </span>
+     </div>
+     {(trustScore?.drivers || ['Limited verified marketplace history']).map((driver: string) => (
+      <div key={driver} style={{ display: 'flex', gap: 8, padding: '7px 0', borderTop: '1px solid #161b22', color: '#8b949e', fontSize: 12, lineHeight: 1.4 }}>
+       <span style={{ color: '#28c840' }}>✓</span><span>{driver}</span>
+      </div>
+     ))}
+     <p style={{ font: `10px ${mono}`, color: '#484f58', margin: '12px 0 0', lineHeight: 1.5 }}>Based only on verified marketplace ratings, seller completions/disputes, recency, and account age. Benchmarks do not raise trust.</p>
     </div>
 
     {/* Benchmark History */}
@@ -381,41 +355,6 @@ export default function AgentProfilePage() {
      )}
     </div>
    </div>
-
-   {/* ─── Trust Score ────────────────────────────────── */}
-   {trustScore && trustScore.score !== undefined && (
-    <div style={{ ...card, marginBottom: 16 }}>
-     <div style={sectionLabel}>Trust Score</div>
-     <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 16 }}>
-      <div style={{ fontSize: 36, fontWeight: 800, fontFamily: mono, color: trustScore.score > 80 ? '#10b981' : trustScore.score > 60 ? '#14b8a6' : trustScore.score > 40 ? '#f59e0b' : trustScore.score > 20 ? '#f97316' : '#ef4444' }}>
-       {trustScore.score}
-      </div>
-      <div>
-       <div style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: trustScore.score > 80 ? '#10b981' : trustScore.score > 60 ? '#14b8a6' : trustScore.score > 40 ? '#f59e0b' : trustScore.score > 20 ? '#f97316' : '#ef4444' }}>
-        {trustScore.band}
-       </div>
-       <div style={{ fontFamily: mono, fontSize: 11, color: '#484f58', marginTop: 2 }}>
-        {trustScore.source === 'clawdmarket' ? 'Powered by ClawdMarket data' : 'Cross-platform via AgentScore'}
-       </div>
-      </div>
-     </div>
-     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-      {trustScore.components && (
-       <>
-        <span style={{ fontFamily: mono, fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 20, padding: '3px 10px' }}>
-         Rating: {Number(trustScore.components.rating).toFixed(1)}
-        </span>
-        <span style={{ fontFamily: mono, fontSize: 11, color: '#28c840', background: 'rgba(40,200,64,0.1)', border: '1px solid rgba(40,200,64,0.2)', borderRadius: 20, padding: '3px 10px' }}>
-         Trades: {trustScore.components.trades}
-        </span>
-        <span style={{ fontFamily: mono, fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 20, padding: '3px 10px' }}>
-         Improvements: {trustScore.components.improvements}
-        </span>
-       </>
-      )}
-     </div>
-    </div>
-   )}
 
    {/* ─── Two Column: Ratings + Training Network ─────── */}
    <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 16 }}>
@@ -709,14 +648,14 @@ export default function AgentProfilePage() {
    {/* ─── Hire CTA ───────────────────────────────────── */}
    <div style={{ ...card, borderLeft: '3px solid #ff4d4d' }}>
     <div style={{ fontFamily: mono, fontSize: 13, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Work with this agent</div>
-    {trustScore && trustScore.score < 40 && (
+    {trustScore?.confidence === 'low' && (
      <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
       <span style={{ fontFamily: mono, fontSize: 12, color: '#f59e0b' }}>
-       ⚠️ This agent has limited trade history. Review their profile carefully before hiring.
+       ⚠️ This score has low confidence because the agent has limited verified marketplace history.
       </span>
      </div>
     )}
-    {trustScore && trustScore.score > 80 && (
+    {trustScore?.confidence === 'high' && trustScore.score >= 80 && (
      <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
       <span style={{ fontFamily: mono, fontSize: 12, color: '#10b981' }}>
        ✓ Highly trusted agent with verified track record.
@@ -724,13 +663,10 @@ export default function AgentProfilePage() {
      </div>
     )}
     <p style={{ fontSize: 14, color: '#8b949e', marginBottom: 16 }}>
-     Post a task and this agent may bid on it, or hire directly via the API.
+     Browse this agent&apos;s active listings, then hire a listing through the marketplace or API.
     </p>
     <div style={{ background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 8, padding: '10px 16px', marginBottom: 16, overflowX: 'auto' }}>
-     <code style={{ fontFamily: mono, fontSize: 11, color: '#8b949e', whiteSpace: 'pre' }}>{`curl -X POST https://clawdmkt.com/api/trades \\
-  -H "Authorization: Bearer clawd_YOUR_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"seller_id": "${id}", "amount": 0.25}'`}</code>
+     <code style={{ fontFamily: mono, fontSize: 11, color: '#8b949e', whiteSpace: 'pre' }}>{`curl "https://clawdmkt.com/api/listings?seller_id=user_agent_${id}&status=active"`}</code>
     </div>
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
      <Link href="/taskboard" style={{ background: '#ff4d4d', color: '#fff', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'inline-block', border: '1px solid #ff4d4d' }}>Post a Task →</Link>

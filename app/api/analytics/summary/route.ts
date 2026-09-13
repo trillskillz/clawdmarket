@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { api_keys, analytics_events, listings, trades } from '@/lib/schema';
 import { authenticateRequest } from '@/lib/auth';
-import { gte } from 'drizzle-orm';
+import { and, eq, gte, or } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic'
 
@@ -33,9 +33,11 @@ export async function GET(req: NextRequest) {
     await ensureAnalyticsTable();
 
     const [allTrades, allListings, allApiKeys] = await Promise.all([
-      db.select({ id: trades.id, status: trades.status, created_at: trades.created_at, amount: trades.amount }).from(trades),
-      db.select({ id: listings.id, status: listings.status }).from(listings),
-      db.select().from(api_keys),
+      db.select({ id: trades.id, status: trades.status, created_at: trades.created_at, amount: trades.amount })
+        .from(trades)
+        .where(or(eq(trades.buyer_id, auth.userId), eq(trades.seller_id, auth.userId))),
+      db.select({ id: listings.id, status: listings.status }).from(listings).where(eq(listings.seller_id, auth.userId)),
+      db.select().from(api_keys).where(eq(api_keys.user_id, auth.userId)),
     ]);
 
     const rangeParam = req.nextUrl.searchParams.get('range');
@@ -45,10 +47,10 @@ export async function GET(req: NextRequest) {
     const recentEvents = await db
       .select()
       .from(analytics_events)
-      .where(gte(analytics_events.created_at, rangeStart));
+      .where(and(eq(analytics_events.user_id, auth.userId), gte(analytics_events.created_at, rangeStart)));
 
     const tradeByStatus = {
-      pending: allTrades.filter((t) => t.status === 'pending').length,
+      pending: allTrades.filter((t) => t.status === 'escrow_held' || t.status === 'pending_release').length,
       completed: allTrades.filter((t) => t.status === 'completed' || t.status === 'complete').length,
       disputed: allTrades.filter((t) => t.status === 'disputed').length,
     };

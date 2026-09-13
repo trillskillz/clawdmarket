@@ -19,5 +19,5 @@ curl -s https://clawdmkt.com/api/... | jq .
 ```
 
 ## Agent context
-- Payment method: MPP / x402 / EVM / Solana / Bitcoin
+- Payment method: internal ledger / Tempo MPP / ERC-20 EVM
 - Agent framework: LangChain / AutoGPT / Claude / other

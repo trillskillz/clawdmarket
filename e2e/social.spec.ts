@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Social features: profiles, ratings, messaging', () => {
+test.describe('Social features: profiles and messaging', () => {
+  const ipRun = (Date.now() % 65536).toString(16);
   const agentA = {
     email: `social.a.${Date.now()}@example.com`,
     password: 'Password123!',
@@ -14,16 +15,19 @@ test.describe('Social features: profiles, ratings, messaging', () => {
 
   test('register two agents and view profiles', async ({ request }) => {
     const regA = await request.post('/api/auth/register', {
+      headers: { 'x-forwarded-for': `2001:db8:${ipRun}::30` },
       data: { ...agentA, role: 'agent' },
     });
     expect(regA.ok()).toBeTruthy();
 
     const regB = await request.post('/api/auth/register', {
+      headers: { 'x-forwarded-for': `2001:db8:${ipRun}::31` },
       data: { ...agentB, role: 'agent' },
     });
     expect(regB.ok()).toBeTruthy();
 
     const loginA = await request.post('/api/auth/login', {
+      headers: { 'x-forwarded-for': `2001:db8:${ipRun}::41` },
       data: { email: agentA.email, password: agentA.password },
     });
     expect(loginA.ok()).toBeTruthy();
@@ -35,11 +39,18 @@ test.describe('Social features: profiles, ratings, messaging', () => {
   });
 
   test('update profile bio and avatar', async ({ request }) => {
-    await request.post('/api/auth/login', {
+    const login = await request.post('/api/auth/login', {
+      headers: { 'x-forwarded-for': `2001:db8:${ipRun}::42` },
       data: { email: agentA.email, password: agentA.password },
     });
+    expect(login.ok()).toBeTruthy();
+
+    const storage = await request.storageState();
+    const csrfToken = storage.cookies.find((cookie) => cookie.name === 'csrf-token')?.value;
+    expect(csrfToken).toBeTruthy();
 
     const update = await request.patch('/api/auth/me', {
+      headers: { 'x-csrf-token': csrfToken! },
       data: {
         bio: 'Test social agent for E2E',
         avatar_emoji: '🤖',
@@ -54,9 +65,11 @@ test.describe('Social features: profiles, ratings, messaging', () => {
   });
 
   test('edit profile page loads', async ({ page }) => {
-    await page.request.post('/api/auth/login', {
+    const login = await page.request.post('/api/auth/login', {
+      headers: { 'x-forwarded-for': `2001:db8:${ipRun}::43` },
       data: { email: agentA.email, password: agentA.password },
     });
+    expect(login.ok()).toBeTruthy();
 
     await page.goto('/dashboard/profile');
     await expect(page.getByRole('heading', { name: 'Edit Profile' })).toBeVisible();
@@ -67,53 +80,35 @@ test.describe('Social features: profiles, ratings, messaging', () => {
     await expect(page).toHaveURL(/registry/);
   });
 
-  test('agent rating API accepts valid rating', async ({ request }) => {
-    const loginA = await request.post('/api/auth/login', {
-      data: { email: agentA.email, password: agentA.password },
-    });
-    const loginData = await loginA.json();
-
-    const loginB = await request.post('/api/auth/login', {
-      data: { email: agentB.email, password: agentB.password },
-    });
-    expect(loginB.ok()).toBeTruthy();
-
-    const meB = await request.get('/api/auth/me');
-    const meBData = await meB.json();
-
-    if (meBData.user?.id) {
-      const rate = await request.post(`/api/agents/${meBData.user.id}/rate`, {
-        data: { score: 1 },
-      });
-      const rateStatus = rate.status();
-      expect([200, 201, 400, 403]).toContain(rateStatus);
-    }
-  });
-
   test('messaging API handles send and retrieve', async ({ request }) => {
     const loginA = await request.post('/api/auth/login', {
+      headers: { 'x-forwarded-for': `2001:db8:${ipRun}::44` },
       data: { email: agentA.email, password: agentA.password },
     });
     expect(loginA.ok()).toBeTruthy();
+    const aData = await loginA.json();
 
     const loginB = await request.post('/api/auth/login', {
+      headers: { 'x-forwarded-for': `2001:db8:${ipRun}::45` },
       data: { email: agentB.email, password: agentB.password },
     });
+    expect(loginB.ok()).toBeTruthy();
     const bData = await loginB.json();
 
     if (bData.user?.id) {
       const send = await request.post('/api/messages', {
+        headers: { Authorization: `Bearer ${aData.token}` },
         data: {
           receiver_id: bData.user.id,
           content: 'Hello from E2E test!',
         },
       });
-      const sendStatus = send.status();
-      expect([200, 201, 400]).toContain(sendStatus);
+      expect(send.status()).toBe(201);
 
-      const thread = await request.get(`/api/messages/${bData.user.id}`);
-      const threadStatus = thread.status();
-      expect([200, 404]).toContain(threadStatus);
+      const thread = await request.get(`/api/messages/${bData.user.id}`, {
+        headers: { Authorization: `Bearer ${aData.token}` },
+      });
+      expect(thread.status()).toBe(200);
     }
   });
 });

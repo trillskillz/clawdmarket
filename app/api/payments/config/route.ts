@@ -1,22 +1,27 @@
 import { NextResponse } from 'next/server';
-
-const DEFAULT_ESCROW = '0x3E911a2EaFbE60ca538F659836d6DE60Db639D44';
-const DEFAULT_FEE = '';
-const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'; // USDC on Base
+import { getTradeSettlementReadiness } from '@/lib/trade-settlement-readiness';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const escrowWallet = (process.env.ESCROW_WALLET_ADDRESS || process.env.NEXT_PUBLIC_ESCROW_WALLET_ADDRESS || DEFAULT_ESCROW).trim();
-  const feeWallet = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || process.env.NEXT_PUBLIC_DEV_FEE_WALLET_ADDRESS || process.env.TREASURY_ADDRESS || process.env.NEXT_PUBLIC_TREASURY_ADDRESS || DEFAULT_FEE).trim();
-  const tokenAddress = (process.env.X402_TOKEN_ADDRESS || process.env.BANKR_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_BANKR_TOKEN_ADDRESS || USDC_BASE).trim();
+  const treasuryWallet = (process.env.TREASURY_ADDRESS || process.env.NEXT_PUBLIC_TREASURY_ADDRESS || '').trim();
+  const feeWallet = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || '').trim();
+  const mppRecipient = (process.env.MPP_RECIPIENT_ADDRESS || process.env.TREASURY_ADDRESS || '').trim();
+  const tradeSettlement = getTradeSettlementReadiness();
 
   return NextResponse.json({
-    chain: 'base',
-    token_address: tokenAddress,
-    escrow_wallet: escrowWallet,
-    fee_wallet: feeWallet,
-    supported_protocols: ['mpp', 'x402'],
+    treasury_wallet: treasuryWallet || null,
+    fee_wallet: feeWallet || null,
+    mpp_recipient: mppRecipient || null,
+    ledger_enabled: true,
+    ledger_redeemable: false,
+    erc20_configured: false,
+    erc20_recipient_configured: Boolean(treasuryWallet),
+    mpp_configured: Boolean(mppRecipient && process.env.MPP_SECRET_KEY),
+    mpp_trade_enabled: false,
+    supported_protocols: ['ledger'],
+    platform_payment_protocols: Boolean(mppRecipient && process.env.MPP_SECRET_KEY) ? ['mpp-tempo'] : [],
+    trade_settlement: tradeSettlement,
   }, {
     headers: { 'Cache-Control': 'no-store' },
   });

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { and, eq, isNull } from 'drizzle-orm'
+import { agents, listings } from '@/lib/schema'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,10 +11,9 @@ async function ensureColumns(client: any) {
   if (columnsEnsured) return
   await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
   await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
+  await client.execute(`ALTER TABLE agents ADD COLUMN owner_email TEXT`).catch(() => {})
   columnsEnsured = true
 }
-
-const claimRateLimit: Record<string, number[]> = {}
 
 /**
  * POST /api/claim
@@ -24,16 +26,13 @@ export async function POST(request: NextRequest) {
     // Rate limit: max 10 claim attempts per IP per 5 minutes
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || request.headers.get('x-real-ip') || 'unknown'
-    const now = Date.now()
-    if (!claimRateLimit[ip]) claimRateLimit[ip] = []
-    claimRateLimit[ip] = claimRateLimit[ip].filter(t => now - t < 300_000)
-    if (claimRateLimit[ip].length >= 10) {
+    const rl = await rateLimit(`agent-claim:${ip}`, { interval: 300_000, maxRequests: 10, failClosed: true })
+    if (!rl.success) {
       return NextResponse.json(
         { error: 'rate_limited', message: 'Too many claim attempts. Try again in a few minutes.' },
-        { status: 429 }
+        { status: 429, headers: getRateLimitHeaders(rl) }
       )
     }
-    claimRateLimit[ip].push(now)
 
     const body = await request.json()
     const { code, email } = body
@@ -79,12 +78,22 @@ export async function POST(request: NextRequest) {
 
     // Atomic claim — WHERE claimed_at IS NULL prevents race condition
     const nowIso = new Date().toISOString()
-    const updateResult = await client.execute({
-      sql: `UPDATE agents SET status = 'active', owner_address = ?, claimed_at = ? WHERE id = ? AND claimed_at IS NULL`,
-      args: [email.trim().toLowerCase(), nowIso, String(agent.id)],
+    const normalizedEmail = email.trim().toLowerCase()
+    const claimed = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(agents)
+        .set({ status: 'active', owner_email: normalizedEmail, claimedAt: nowIso })
+        .where(and(eq(agents.id, String(agent.id)), isNull(agents.claimedAt)))
+        .returning({ id: agents.id })
+      if (!updated) return null
+      await tx
+        .update(listings)
+        .set({ status: 'active' })
+        .where(and(eq(listings.id, `listing_${String(agent.id)}`), eq(listings.status, 'inactive')))
+      return updated
     })
 
-    if (!updateResult.rowsAffected) {
+    if (!claimed) {
       return NextResponse.json(
         { error: 'already_claimed', message: 'This agent was just claimed by someone else' },
         { status: 409 }
@@ -95,10 +104,10 @@ export async function POST(request: NextRequest) {
       ok: true,
       agent_id: agent.id,
       agent_name: agent.name,
-      claimed_by: email.trim().toLowerCase(),
+      administrative_contact: normalizedEmail,
       claimed_at: nowIso,
       profile_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'}/registry/${agent.id}`,
-      message: 'Agent claimed successfully! Your agent is now active on ClawdMarket.',
+      message: 'Agent claimed successfully. Your agent is now active on ClawdMarket.',
     })
   } catch (err: any) {
     console.error('[claim]', err)

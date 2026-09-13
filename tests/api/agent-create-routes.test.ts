@@ -51,6 +51,16 @@ async function ensureSchema() {
   })
 
   await client.execute({
+    sql: `CREATE TABLE IF NOT EXISTS wallets (
+      user_id text PRIMARY KEY NOT NULL,
+      balance real NOT NULL DEFAULT 0,
+      escrow real NOT NULL DEFAULT 0,
+      created_at integer NOT NULL
+    )`,
+    args: [],
+  })
+
+  await client.execute({
     sql: `CREATE TABLE IF NOT EXISTS listings (
       id text PRIMARY KEY NOT NULL,
       seller_id text NOT NULL,
@@ -69,6 +79,18 @@ async function ensureSchema() {
       key text PRIMARY KEY NOT NULL,
       count integer NOT NULL DEFAULT 0,
       reset_at integer NOT NULL
+    )`,
+    args: [],
+  })
+
+  await client.execute({
+    sql: `CREATE TABLE IF NOT EXISTS trades (
+      id text PRIMARY KEY NOT NULL,
+      buyer_id text NOT NULL,
+      amount real NOT NULL DEFAULT 0,
+      fee real NOT NULL DEFAULT 0,
+      total_cost real NOT NULL DEFAULT 0,
+      created_at integer NOT NULL
     )`,
     args: [],
   })
@@ -112,6 +134,7 @@ async function ensureSchema() {
 async function cleanup(agentId: string, apiKey: string) {
   await client.execute({ sql: `DELETE FROM tasks WHERE poster_agent_id IN (?, 'anonymous')`, args: [agentId] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM listings WHERE seller_id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
+  await client.execute({ sql: `DELETE FROM trades WHERE buyer_id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM agent_usage_events WHERE agent_id = ?`, args: [agentId] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM users WHERE id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM agents WHERE id = ? OR api_key = ?`, args: [agentId, apiKey] }).catch(() => {})
@@ -235,7 +258,7 @@ test('GET /api/agents/usage returns authenticated agent quotas and usage', async
   assert.match(body.payment.over_quota_retry, /X-ClawdMarket-Agent-Key/)
 })
 
-test('POST /api/tasks returns payment_required after the registered-agent free quota is exhausted', async (t) => {
+test('POST /api/tasks fails closed after quota when MPP verification is unavailable', async (t) => {
   await ensureSchema()
   const originalLimit = process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY
   process.env.CLAWDMARKET_FREE_AGENT_TASKS_PER_DAY = '1'
@@ -268,11 +291,9 @@ test('POST /api/tasks returns payment_required after the registered-agent free q
     budget_usd: 0.25,
   }, apiKey))
 
-  assert.equal(second.status, 402)
+  assert.equal(second.status, 503)
   const body = await second.json()
-  assert.equal(body.error, 'payment_required')
-  assert.equal(body.quota.feature, 'task_posts')
-  assert.equal(body.payment.retry_header, 'X-ClawdMarket-Agent-Key')
+  assert.equal(body.error, 'payment_service_unavailable')
 
   const events = await client.execute({
     sql: `SELECT event_type, feature FROM agent_usage_events WHERE agent_id = ? ORDER BY created_at ASC`,
@@ -292,7 +313,7 @@ test('POST /api/tasks does not create anonymous tasks without auth or payment', 
     budget_usd: 0.25,
   }))
 
-  assert.equal(res.status, 402)
+  assert.equal(res.status, 503)
   const body = await res.json()
-  assert.equal(body.error, 'payment_required')
+  assert.equal(body.error, 'payment_service_unavailable')
 })

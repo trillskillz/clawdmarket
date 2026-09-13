@@ -1,22 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
-import { authenticateRequest } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { contract_milestones, contracts } from '@/lib/schema';
 import { contractActionSchema, isValidUUID } from '@/lib/validation';
-import { canTransitionContract, canTransitionMilestone, nextContractStateFromMilestones } from '@/lib/contracts-state';
+import { canTransitionMilestone } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
 import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
+import { resolveRequestPrincipal } from '@/lib/request-principal';
+import {
+  ContractSettlementError,
+  ensureContractWallets,
+  lockContractFunds,
+  refundContractFunds,
+} from '@/lib/contract-settlement';
+import { ensureAdminFeeRecipient } from '@/lib/settlement';
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
 
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 
+class ContractActionError extends Error {
+  constructor(message: string, public readonly status = 400) {
+    super(message);
+  }
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -40,91 +51,119 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const authHeader = req.headers.get('authorization');
-  const cookieToken = req.cookies.get('auth-token')?.value;
-  const auth = await authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
+  const auth = await resolveRequestPrincipal(req);
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   await ensureContractsSchema();
-  if (!authHeader && !validateCsrf(req)) {
+  if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
   if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid contract ID' }, { status: 400 });
 
   try {
-    const body = await req.json();
-    const validated = contractActionSchema.parse(body);
-
+    const validated = contractActionSchema.parse(await req.json());
     const [contract] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1);
     if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
-
     if (contract.buyer_id !== auth.userId && contract.seller_id !== auth.userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const now = new Date();
-    let nextState = contract.state;
+    if (validated.action === 'fund' && auth.userId !== contract.buyer_id) {
+      return NextResponse.json({ error: 'Only the buyer can fund this contract' }, { status: 403 });
+    }
+    if (validated.action === 'start' && auth.userId !== contract.seller_id) {
+      return NextResponse.json({ error: 'Only the seller can start this contract' }, { status: 403 });
+    }
+    if (validated.action === 'cancel' && auth.userId !== contract.buyer_id) {
+      return NextResponse.json({ error: 'Only the buyer can cancel this contract' }, { status: 403 });
+    }
 
+    let feeRecipientId: string | null = null;
     if (validated.action === 'fund') {
-      if (auth.userId !== contract.buyer_id) return NextResponse.json({ error: 'Only buyer can fund' }, { status: 403 });
-      nextState = 'FUNDED';
-    }
-
-    if (validated.action === 'start') {
-      if (auth.userId !== contract.seller_id) return NextResponse.json({ error: 'Only seller can start' }, { status: 403 });
-      nextState = 'IN_PROGRESS';
-    }
-
-    if (validated.action === 'cancel') {
-      if (contract.state !== 'DRAFT' && contract.state !== 'FUNDED') {
-        return NextResponse.json({ error: 'Only draft/funded contracts can be canceled' }, { status: 400 });
-      }
-      nextState = 'CANCELED';
-    }
-
-    if (validated.action === 'expire') {
-      if (contract.expires_at && new Date(contract.expires_at).getTime() > Date.now()) {
-        return NextResponse.json({ error: 'Contract has not expired yet' }, { status: 400 });
-      }
-      nextState = 'EXPIRED';
-    }
-
-    if (!canTransitionContract(contract.state as any, nextState as any) && nextState !== contract.state) {
-      return NextResponse.json({ error: `Invalid transition ${contract.state} -> ${nextState}` }, { status: 400 });
+      await ensureContractWallets(contract.buyer_id, contract.seller_id);
+      feeRecipientId = await ensureAdminFeeRecipient();
     }
 
     await db.transaction(async (tx) => {
+      const now = new Date();
+
+      if (validated.action === 'fund') {
+        const claimed = await tx
+          .update(contracts)
+          .set({ state: 'FUNDED', updated_at: now })
+          .where(and(eq(contracts.id, contract.id), eq(contracts.state, 'DRAFT')))
+          .returning({ id: contracts.id });
+        if (claimed.length === 0) throw new ContractActionError('Contract is no longer awaiting funding', 409);
+
+        await lockContractFunds(tx, {
+          contractId: contract.id,
+          buyerId: contract.buyer_id,
+          sellerAmount: contract.total_amount,
+          feeAmount: contract.fee_amount,
+          feeRecipientId,
+        });
+      }
+
       if (validated.action === 'start') {
-        const milestones = await tx
+        const claimed = await tx
+          .update(contracts)
+          .set({ state: 'IN_PROGRESS', updated_at: now })
+          .where(and(eq(contracts.id, contract.id), eq(contracts.state, 'FUNDED')))
+          .returning({ id: contracts.id });
+        if (claimed.length === 0) throw new ContractActionError('Contract is not funded or has already started', 409);
+
+        const [first] = await tx
           .select()
           .from(contract_milestones)
           .where(eq(contract_milestones.contract_id, contract.id))
-          .orderBy(asc(contract_milestones.milestone_index));
-
-        const first = milestones[0];
+          .orderBy(asc(contract_milestones.milestone_index))
+          .limit(1);
         if (first && canTransitionMilestone(first.state as any, 'ACTIVE')) {
           await tx
             .update(contract_milestones)
             .set({ state: 'ACTIVE', updated_at: now })
-            .where(eq(contract_milestones.id, first.id));
+            .where(and(eq(contract_milestones.id, first.id), eq(contract_milestones.state, first.state as any)));
         }
       }
 
-      await tx
-        .update(contracts)
-        .set({ state: nextState as any, updated_at: now })
-        .where(and(eq(contracts.id, contract.id), eq(contracts.state, contract.state as any)));
-
-      if (validated.action === 'fund') {
-        const milestones = await tx
-          .select({ state: contract_milestones.state })
-          .from(contract_milestones)
-          .where(eq(contract_milestones.contract_id, contract.id));
-        const derived = nextContractStateFromMilestones(milestones.map((m) => m.state as any));
-        if (derived !== 'FUNDED') {
-          await tx.update(contracts).set({ state: 'FUNDED' }).where(eq(contracts.id, contract.id));
+      if (validated.action === 'cancel') {
+        if (contract.state !== 'DRAFT' && contract.state !== 'FUNDED') {
+          throw new ContractActionError('Only draft or funded contracts can be canceled', 409);
         }
+        const canceled = await tx
+          .update(contracts)
+          .set({ state: 'CANCELED', updated_at: now })
+          .where(and(eq(contracts.id, contract.id), eq(contracts.state, contract.state as any)))
+          .returning({ id: contracts.id });
+        if (canceled.length === 0) throw new ContractActionError('Contract state changed; refresh and try again', 409);
+        if (contract.state === 'FUNDED') {
+          await refundContractFunds(tx, {
+            contractId: contract.id,
+            buyerId: contract.buyer_id,
+            amount: contract.total_amount,
+          });
+        }
+      }
+
+      if (validated.action === 'expire') {
+        if (contract.state !== 'FUNDED') {
+          throw new ContractActionError('Only an unstarted funded contract can expire', 409);
+        }
+        if (!contract.expires_at || new Date(contract.expires_at).getTime() > Date.now()) {
+          throw new ContractActionError('Contract has not expired yet');
+        }
+        const expired = await tx
+          .update(contracts)
+          .set({ state: 'REFUNDED', updated_at: now })
+          .where(and(eq(contracts.id, contract.id), eq(contracts.state, 'FUNDED')))
+          .returning({ id: contracts.id });
+        if (expired.length === 0) throw new ContractActionError('Contract state changed; refresh and try again', 409);
+        await refundContractFunds(tx, {
+          contractId: contract.id,
+          buyerId: contract.buyer_id,
+          amount: contract.total_amount,
+        });
       }
     });
 
@@ -133,6 +172,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } catch (error: any) {
     if (error?.issues || error?.errors) {
       return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });
+    }
+    if (error instanceof ContractSettlementError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.code === 'INSUFFICIENT_BALANCE' ? 402 : 409 });
+    }
+    if (error instanceof ContractActionError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error('Contract action error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

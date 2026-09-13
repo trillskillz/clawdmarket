@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,10 +62,9 @@ export async function POST(
 ) {
   try {
     const { capability } = await params
-    const agentId = req.headers.get('x-agent-id')
-    if (!agentId) {
-      return NextResponse.json({ error: 'X-Agent-ID header required' }, { status: 400 })
-    }
+    const auth = await resolveRegisteredAgentRequest(req)
+    if (auth.kind !== 'agent') return NextResponse.json({ error: 'Invalid or missing agent API key' }, { status: 401 })
+    const agentId = auth.agentId
 
     const challenge = CHALLENGES[capability]
     if (!challenge) {
@@ -76,6 +77,14 @@ export async function POST(
     await ensureChallengesTable()
 
     const client = (db as any).$client
+    const agentResult = await client.execute({ sql: `SELECT status FROM agents WHERE id = ? LIMIT 1`, args: [agentId] })
+    if (!agentResult.rows.length || String((agentResult.rows[0] as any).status) !== 'active') {
+      return NextResponse.json({ error: 'Agent must be active to request capability challenges' }, { status: 403 })
+    }
+    const limit = await rateLimit(`capability-challenge:${agentId}`, { interval: 60_000, maxRequests: 10, failClosed: true })
+    if (!limit.success) {
+      return NextResponse.json({ error: 'rate_limit_exceeded' }, { status: 429, headers: getRateLimitHeaders(limit) })
+    }
     const challengeId = crypto.randomUUID()
     const nowUnix = Math.floor(Date.now() / 1000)
     const expiresAt = nowUnix + challenge.time_limit_seconds
@@ -90,7 +99,7 @@ export async function POST(
       challenge_id: challengeId,
       challenge,
       expires_at: expiresAt,
-    })
+    }, { status: 201, headers: getRateLimitHeaders(limit) })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

@@ -7,8 +7,19 @@ import { eq } from 'drizzle-orm';
 import { cookies, headers } from 'next/headers';
 import { isUserBanned } from './agent-moderation';
 
-const JWT_SECRET = process.env.JWT_SECRET!;
 const BCRYPT_ROUNDS = 12;
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (secret) return secret;
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET is required in production');
+  }
+
+  // Keep local development usable while making the production failure explicit.
+  return 'clawdmarket-local-development-secret';
+}
 
 export interface JWTPayload {
   userId: string;
@@ -25,12 +36,12 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export function generateJWT(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '1h' });
 }
 
 export function verifyJWT(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return jwt.verify(token, getJwtSecret()) as JWTPayload;
   } catch {
     return null;
   }

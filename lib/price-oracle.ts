@@ -1,5 +1,6 @@
 import { createPublicClient, http, isAddress, parseAbi, formatUnits } from 'viem';
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants';
+import BigNumber from 'bignumber.js';
 
 type CacheEntry = { value: number | null; expiresAt: number };
 const CACHE_TTL_MS = 60_000;
@@ -56,9 +57,27 @@ function getRpcUrl(chainId: number): string | null {
   if (chainId === 1) return 'https://rpc.ankr.com/eth';
   if (chainId === 10) return 'https://rpc.ankr.com/optimism';
   if (chainId === 137) return 'https://rpc.ankr.com/polygon';
+  if (chainId === 56) return 'https://rpc.ankr.com/bsc';
+  if (chainId === 43114) return 'https://rpc.ankr.com/avalanche';
   if (chainId === 8453) return 'https://rpc.ankr.com/base';
   if (chainId === 42161) return 'https://rpc.ankr.com/arbitrum';
   return null;
+}
+
+export async function getTokenDecimals(tokenAddress: string, chainId: number): Promise<number | null> {
+  const rpcUrl = getRpcUrl(chainId);
+  if (!rpcUrl || !isAddress(tokenAddress)) return null;
+  try {
+    const client = createPublicClient({ transport: http(rpcUrl) });
+    const decimals = Number(await client.readContract({
+      address: tokenAddress as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: 'decimals',
+    }));
+    return Number.isInteger(decimals) && decimals >= 0 && decimals <= 36 ? decimals : null;
+  } catch {
+    return null;
+  }
 }
 
 async function getPriceFromCoinGecko(tokenAddress: string, chainId: number): Promise<number | null> {
@@ -156,8 +175,13 @@ export async function usdToTokenAmount(
     throw new Error('Invalid USD amount');
   }
 
-  const base = BigInt(10) ** BigInt(decimals);
-  const tokensRequired = usdAmount / price;
-  const scaled = Math.ceil(tokensRequired * Number(base));
-  return BigInt(scaled);
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+    throw new Error('Invalid token decimals');
+  }
+  const scaled = new BigNumber(usdAmount)
+    .dividedBy(price)
+    .multipliedBy(new BigNumber(10).pow(decimals))
+    .integerValue(BigNumber.ROUND_CEIL);
+  if (!scaled.isFinite() || scaled.isNegative()) throw new Error('Invalid token amount');
+  return BigInt(scaled.toFixed(0));
 }

@@ -35,3 +35,6 @@ scripts/setup-vercel-env.sh
 build-fallback.db
 local.db
 ci.db
+ci-*.db
+playwright-report/
+test-results/

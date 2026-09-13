@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { desc, eq, sql } from 'drizzle-orm'
+import { NextResponse } from 'next/server'
+import { desc, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, trades } from '@/lib/schema'
 
@@ -7,7 +7,7 @@ export const maxDuration = 10
 export const revalidate = 0
 export const dynamic = 'force-dynamic'
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
     const client = (db as any).$client
 

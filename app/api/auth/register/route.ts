@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { users } from '@/lib/schema';
+import { users, wallets } from '@/lib/schema';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { registerSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { isIpBlacklisted, trackUserIp } from '@/lib/agent-moderation';
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
-  const rateLimitResult = await rateLimit(`register:${ip}`, { interval: 3_600_000, maxRequests: 3 });
+  const rateLimitResult = await rateLimit(`register:${ip}`, { interval: 3_600_000, maxRequests: 3, failClosed: true });
 
   if (!rateLimitResult.success) {
     return NextResponse.json(
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const [existingUser] = await db
       .select()
       .from(users)
-      .where(eq(users.email, validated.email));
+      .where(sql`LOWER(${users.email}) = ${validated.email.toLowerCase()}`);
 
     if (existingUser) {
       return NextResponse.json(
@@ -57,15 +57,19 @@ export async function POST(req: NextRequest) {
     const password_hash = await hashPassword(validated.password);
 
     // Create user
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        email: validated.email,
-        password_hash,
-        name: validated.name,
-        role: validated.role,
-      })
-      .returning();
+    const newUser = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(users)
+        .values({
+          email: validated.email.toLowerCase(),
+          password_hash,
+          name: validated.name,
+          role: validated.role,
+        })
+        .returning();
+      await tx.insert(wallets).values({ user_id: created.id, balance: 0, escrow: 0 });
+      return created;
+    });
 
     await trackUserIp(newUser.id, ip);
 
@@ -85,11 +89,15 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error: any) {
-    if (error.errors) {
+    const issues = error?.issues || error?.errors;
+    if (issues) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: 'Validation failed', details: issues },
         { status: 400 }
       );
+    }
+    if (/unique constraint failed:\s*users\.email/i.test(String(error?.message || ''))) {
+      return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
     }
     console.error('Registration error:', error);
     return NextResponse.json(

@@ -1,21 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @config "../tailwind.config.ts";
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+:root {
+ --site-bg: #080a09;
+ --site-surface: #0e110f;
+ --site-surface-raised: #141815;
+ --site-ink: #f5f2e9;
+ --site-muted: #92978f;
+ --site-dim: #626861;
+ --site-line: rgba(240, 236, 225, 0.12);
+ --site-signal: #ff5c35;
+ --site-lime: #b9ef72;
+}
+
 html { scroll-behavior: smooth; }
 
 body {
- background: #0a0b0f;
- color: #ffffff;
+ background: var(--site-bg);
+ color: var(--site-ink);
  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
  min-height: 100vh;
  overflow-x: hidden;
  position: relative;
 }
 
-/* Starfield + corner glow */
+/* Quiet grid and signal glows shared by the public interface. */
 body::before {
  content: '';
  position: fixed;
@@ -23,24 +35,18 @@ body::before {
  z-index: 0;
  pointer-events: none;
  background:
- radial-gradient(ellipse 60% 40% at 0% 0%, rgba(255,77,77,0.06) 0%, transparent 60%),
- radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255,77,77,0.04) 0%, transparent 60%),
- radial-gradient(1px 1px at 8% 15%, rgba(255,255,255,0.18) 0%, transparent 100%),
- radial-gradient(1px 1px at 22% 45%, rgba(255,255,255,0.12) 0%, transparent 100%),
- radial-gradient(1px 1px at 38% 8%, rgba(255,255,255,0.14) 0%, transparent 100%),
- radial-gradient(1px 1px at 55% 72%, rgba(255,255,255,0.10) 0%, transparent 100%),
- radial-gradient(1px 1px at 68% 28%, rgba(255,255,255,0.13) 0%, transparent 100%),
- radial-gradient(1px 1px at 78% 55%, rgba(255,255,255,0.09) 0%, transparent 100%),
- radial-gradient(1px 1px at 88% 18%, rgba(255,255,255,0.11) 0%, transparent 100%),
- radial-gradient(1px 1px at 92% 82%, rgba(255,255,255,0.08) 0%, transparent 100%),
- radial-gradient(1px 1px at 15% 88%, rgba(255,255,255,0.10) 0%, transparent 100%),
- radial-gradient(1px 1px at 45% 95%, rgba(255,255,255,0.07) 0%, transparent 100%),
- radial-gradient(2px 2px at 62% 38%, rgba(255,77,77,0.07) 0%, transparent 100%),
- radial-gradient(2px 2px at 32% 65%, rgba(255,77,77,0.05) 0%, transparent 100%);
+ radial-gradient(ellipse 56% 42% at 4% -8%, rgba(255, 92, 53, 0.08), transparent 65%),
+ radial-gradient(ellipse 45% 35% at 96% 108%, rgba(185, 239, 114, 0.035), transparent 68%),
+ linear-gradient(rgba(240, 236, 225, 0.018) 1px, transparent 1px),
+ linear-gradient(90deg, rgba(240, 236, 225, 0.018) 1px, transparent 1px);
+ background-size: auto, auto, 64px 64px, 64px 64px;
 }
 
-/* Ensure content renders above pseudo-element */
-nav, main, footer, section, div { position: relative; z-index: 1; }
+.site-content {
+ position: relative;
+ z-index: 1;
+ padding-top: 72px;
+}
 
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; font-family: inherit; }
@@ -50,6 +56,15 @@ button { cursor: pointer; font-family: inherit; }
 ::-webkit-scrollbar-track { background: #0a0b0f; }
 ::-webkit-scrollbar-thumb { background: #21262d; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #ff4d4d; }
+
+::selection {
+ background: var(--site-signal);
+ color: #080a09;
+}
+
+@media (max-width: 720px) {
+ .site-content { padding-top: 64px; }
+}
 
 /* ─── Buttons ──────────────────────────────────────────────────────────────── */
 

@@ -45,7 +45,7 @@ const METRIC_TABS = [
  ['rating', 'Rating'],
  ['benchmark', 'Benchmark'],
  ['velocity', 'Velocity'],
- ['reputation', 'Reputation'],
+ ['trust', 'Trust'],
  ['trainer', 'Trainer'],
  ['volume', 'Volume'],
 ] as const
@@ -78,7 +78,7 @@ export default function LeaderboardPage() {
  return () => { clearTimeout(timeout); controller.abort() }
  }, [metric, period, fetchKey])
 
- const allAgents = data?.agents || []
+ const allAgents = useMemo(() => data?.agents || [], [data?.agents])
  const q = search.trim().toLowerCase()
  const agents = useMemo(
  () => q ? allAgents.filter((a: any) => (a.name || '').toLowerCase().includes(q) || (a.id || '').toLowerCase().includes(q)) : allAgents,
@@ -89,7 +89,7 @@ export default function LeaderboardPage() {
  <main style={s.page}>
  <p style={s.label}>› Leaderboard</p>
  <h1 style={s.h1}>Top Agents</h1>
- <p style={s.sub}>Rankings based on completed trades, ratings, benchmarks, and trainer impact.</p>
+ <p style={s.sub}>Compare verified work history, rating evidence, benchmarks, and trust confidence.</p>
 
  <div style={s.tabBar}>
  {METRIC_TABS.map(([k, l]) => (
@@ -171,6 +171,7 @@ export default function LeaderboardPage() {
  ) : (
  <>
  <th style={s.th}>Rating</th>
+ <th style={s.th}>Trust</th>
  <th style={s.th}>Benchmark</th>
  <th style={s.th}>Completed</th>
  <th style={s.th}>Joined</th>
@@ -198,6 +199,7 @@ export default function LeaderboardPage() {
  ) : (
  <>
  <td style={s.td}>{agent.avg_rating ? `★ ${Number(agent.avg_rating).toFixed(1)}` : 'unrated'}</td>
+ <td style={s.td}><strong style={{ color: Number(agent.trust_score || 0) >= 65 ? '#28c840' : '#f59e0b' }}>{agent.trust_score ?? 0}/100</strong><div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#484f58', textTransform: 'uppercase' }}>{agent.trust_confidence || 'low'} confidence</div></td>
  <td style={s.td}>{agent.benchmark_score ? Number(agent.benchmark_score).toFixed(1) : '—'}</td>
  <td style={s.td}>{agent.completed_trades || 0}</td>
  <td style={s.td}>{agent.created_at ? new Date(agent.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}</td>

@@ -34,7 +34,7 @@ export default function AgentServicesList({ listings }: { listings: Listing[] })
       router.push(`/auth/register?next=${encodeURIComponent(`/registry`)}`);
       return;
     }
-    router.push(`/registry`);
+    router.push(`/marketplace?listing=${encodeURIComponent(id)}`);
   };
 
   if (listings.length === 0) {
@@ -50,8 +50,7 @@ export default function AgentServicesList({ listings }: { listings: Listing[] })
           <p className="text-sm text-text-dim mb-3 line-clamp-3">{l.description}</p>
           <p className="text-sm mb-1">Price: <PriceWithKas bankr={l.price_bankr} /></p>
           <div className="mb-3 flex items-center gap-2">
-            <span className="token-pill">MPP</span>
-            <span className="token-pill">x402</span>
+            <span className="token-pill">Sandbox ledger</span>
           </div>
           <button onClick={() => hire(l.id)} className="px-3 py-2 rounded-lg border border-accent text-accent hover:bg-accent/10 text-sm">Hire</button>
         </div>

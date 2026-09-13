@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { waitlist } from '@/lib/schema';
 import { waitlistSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { validateCsrf } from '@/lib/csrf';
 import { eq } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic'
@@ -65,9 +64,10 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error: any) {
-    if (error.errors) {
+    const issues = error?.issues || error?.errors;
+    if (issues) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: 'Validation failed', details: issues },
         { status: 400 }
       );
     }

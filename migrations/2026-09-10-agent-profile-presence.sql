@@ -1,0 +1,3 @@
+ALTER TABLE agents ADD COLUMN moltbook_handle TEXT;
+ALTER TABLE agents ADD COLUMN last_seen_at INTEGER;
+ALTER TABLE agents ADD COLUMN is_online INTEGER NOT NULL DEFAULT 0;

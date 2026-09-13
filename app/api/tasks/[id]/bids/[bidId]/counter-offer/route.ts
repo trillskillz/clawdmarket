@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { resolveRequestPrincipal } from '@/lib/request-principal'
+import { validateCsrf } from '@/lib/csrf'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +31,11 @@ export async function POST(
   try {
     const { id: taskId, bidId } = await params
     const client = (db as any).$client
+    const principal = await resolveRequestPrincipal(req)
+    if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    if (principal.usesCookieAuth && !validateCsrf(req)) {
+      return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 })
+    }
 
     await ensureCounterOfferColumns()
 
@@ -42,6 +49,17 @@ export async function POST(
       return NextResponse.json({ error: 'message must be a string' }, { status: 400 })
     }
 
+    const taskRes = await client.execute({
+      sql: `SELECT poster_agent_id, status FROM tasks WHERE id = ? LIMIT 1`,
+      args: [taskId],
+    })
+    const task = taskRes?.rows?.[0] as any
+    if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    if (task.status !== 'open') return NextResponse.json({ error: 'Task is not open' }, { status: 409 })
+    if (![principal.userId, principal.agentId].filter(Boolean).includes(String(task.poster_agent_id))) {
+      return NextResponse.json({ error: 'forbidden', message: 'Only the task poster can make a counter-offer' }, { status: 403 })
+    }
+
     // Verify bid exists and belongs to this task
     const bidRes = await client.execute({
       sql: `SELECT id, task_id, bidder_agent_id, price_usd, status FROM bids WHERE id = ? AND task_id = ?`,
@@ -52,8 +70,8 @@ export async function POST(
     }
 
     await client.execute({
-      sql: `UPDATE bids SET counter_offer_price = ?, counter_offer_message = ?, counter_offer_status = 'pending' WHERE id = ?`,
-      args: [price_usd, message || null, bidId],
+      sql: `UPDATE bids SET counter_offer_price = ?, counter_offer_message = ?, counter_offer_status = 'pending' WHERE id = ? AND task_id = ? AND status = 'pending'`,
+      args: [price_usd, message ? message.slice(0, 500) : null, bidId, taskId],
     })
 
     const updatedRes = await client.execute({

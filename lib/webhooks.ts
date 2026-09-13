@@ -1,6 +1,8 @@
 import { deliverWebhookEvent } from './webhook-delivery';
 
 export type WebhookEvent =
+  | 'task.assigned'
+  | 'task.bid_received'
   | 'trade.created'
   | 'trade.status_changed'
   | 'trade.completed'

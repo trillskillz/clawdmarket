@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { computeReputationScore } from '@/lib/reputation'
+import { loadAgentTrustMap } from '@/lib/agent-trust'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -64,6 +64,12 @@ export async function GET(request: NextRequest) {
     ).catch(() => null)
 
     const allAgents = agentsResult?.rows || []
+    const trustMap = await loadAgentTrustMap(allAgents.map((agent: any) => ({
+      id: String(agent.id),
+      created_at: agent.created_at,
+      avg_rating: agent.avg_rating,
+      rating_count: agent.rating_count,
+    })))
 
     if (allAgents.length === 0) {
       return NextResponse.json({
@@ -79,32 +85,15 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const tradeCountsResult = await (db as any).$client.execute(
-      `SELECT agent_id,
-      COUNT(*) as total,
-      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
-      FROM (
-        SELECT seller_id as agent_id, status FROM trades
-        UNION ALL
-        SELECT buyer_id as agent_id, status FROM trades
-      )
-      GROUP BY agent_id`
-    ).catch(() => null)
-
-    const tradeMap = new Map<string, { total: number; completed: number }>((tradeCountsResult?.rows || []).map((row: any) => [
-      row.agent_id,
-      { total: Number(row.total || 0), completed: Number(row.completed || 0) },
-    ]))
-
     const enriched = allAgents.map((agent: any) => {
-      const tradeData = tradeMap.get(agent.id) || { total: 0, completed: 0 }
-      const avgRating = agent.avg_rating ? Number(agent.avg_rating) : null
-      const ratingCount = Number(agent.rating_count || 0)
+      const trust = trustMap.get(String(agent.id))!
+      const avgRating = trust.components.averageRating
+      const ratingCount = trust.components.ratingCount
       const benchmarkScore = agent.benchmark_score ? Number(agent.benchmark_score) : null
       const velocityScore = agent.velocity_score ? Number(agent.velocity_score) : null
       const improvementCount = Number(agent.improvement_count || 0)
-      const completedTrades = Number(tradeData.completed || 0)
-      const totalTrades = Number(tradeData.total || 0)
+      const completedTrades = trust.components.completedTrades
+      const totalTrades = trust.components.totalTrades
 
       return {
         id: agent.id,
@@ -124,15 +113,11 @@ export async function GET(request: NextRequest) {
         version: Number(agent.version || 1),
         completed_trades: completedTrades,
         total_trades: totalTrades,
-        reputation_score: computeReputationScore({
-          benchmark_score: benchmarkScore,
-          avg_rating: avgRating,
-          rating_count: ratingCount,
-          improvement_count: improvementCount,
-          velocity_score: velocityScore,
-          completed_trades: completedTrades,
-          total_trades: totalTrades,
-        }),
+        trust_score: trust.trustScore,
+        trust_confidence: trust.confidence,
+        trust_evidence_points: trust.evidencePoints,
+        trust_drivers: trust.drivers,
+        reputation_score: trust.trustScore,
       }
     })
 
@@ -140,7 +125,7 @@ export async function GET(request: NextRequest) {
       if (metric === 'rating') return (b.avg_rating || 0) - (a.avg_rating || 0)
       if (metric === 'velocity') return (b.velocity_score || 0) - (a.velocity_score || 0)
       if (metric === 'benchmark') return (b.benchmark_score || 0) - (a.benchmark_score || 0)
-      if (metric === 'reputation') return (b.reputation_score || 0) - (a.reputation_score || 0)
+      if (metric === 'trust' || metric === 'reputation') return (b.trust_score || 0) - (a.trust_score || 0)
       if (metric === 'completions') return b.completed_trades - a.completed_trades
       return b.completed_trades - a.completed_trades
     }).slice(0, limit)

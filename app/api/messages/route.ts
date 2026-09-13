@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { messages, trades, users } from '@/lib/schema';
+import { agents, messages, users } from '@/lib/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import { getSession } from '@/lib/auth';
 import { encryptMessage } from '@/lib/chat-crypto';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
+import { resolveRequestPrincipal } from '@/lib/request-principal';
+import { validateCsrf } from '@/lib/csrf';
+import { ensureSyntheticAgentUser } from '@/lib/registered-agent-auth';
+
+import { DeliveryError, submitTradeDelivery } from '@/lib/trade-delivery';
 
 export const dynamic = 'force-dynamic'
 
@@ -21,12 +25,42 @@ function parsePayload(content?: string) {
 // Send an encrypted message
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Payment Required' }, { status: 402 });
+    const principal = await resolveRequestPrincipal(req);
+    if (!principal) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (principal.usesCookieAuth && !validateCsrf(req)) {
+      return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
     }
 
-    const { receiverId, content, encryptedContent, nonce } = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    let receiverId = String(body.receiverId || body.receiver_id || body.to_agent_id || '').trim();
+    let content = typeof body.content === 'string' ? body.content : '';
+    if (!content && typeof body.type === 'string') {
+      content = JSON.stringify({ type: body.type, payload: body.payload ?? null });
+    }
+    const encryptedContent = body.encryptedContent || body.encrypted_content;
+    const nonce = body.nonce;
+
+    if (receiverId && !receiverId.startsWith('user_agent_')) {
+      const [registeredAgent] = await db
+        .select({ id: agents.id, name: agents.name })
+        .from(agents)
+        .where(and(eq(agents.id, receiverId), eq(agents.status, 'active')))
+        .limit(1);
+      if (registeredAgent) {
+        await ensureSyntheticAgentUser({
+          agentId: registeredAgent.id,
+          name: registeredAgent.name,
+          syntheticUserId: `user_agent_${registeredAgent.id}`,
+        });
+        receiverId = `user_agent_${registeredAgent.id}`;
+      }
+    }
 
     if (!receiverId || (!content && (!encryptedContent || !nonce))) {
       return NextResponse.json(
@@ -34,56 +68,45 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (receiverId === principal.userId) {
+      return NextResponse.json({ error: 'Cannot message yourself' }, { status: 400 });
+    }
+    if (content.length > 10_000 || String(encryptedContent || '').length > 20_000 || String(nonce || '').length > 512) {
+      return NextResponse.json({ error: 'Message payload is too large' }, { status: 413 });
+    }
+
+    const [receiver] = await db.select({ id: users.id }).from(users).where(eq(users.id, receiverId)).limit(1);
+    if (!receiver) {
+      return NextResponse.json({ error: 'Receiver not found' }, { status: 404 });
+    }
+
+    const parsed = parsePayload(content);
+    if (parsed?.type === 'task_complete' && typeof parsed?.trade_id === 'string') {
+      const { delivery, message } = await submitTradeDelivery(parsed.trade_id, principal.userId, parsed, receiverId);
+      return NextResponse.json({ ...message, delivery_id: delivery.id }, { status: 201 });
+    }
 
     const payload = content
       ? await encryptMessage(content)
       : { encrypted_content: encryptedContent, nonce };
 
     const message = await db.insert(messages).values({
-      sender_id: session.user.id,
+      sender_id: principal.userId,
       receiver_id: receiverId,
       encrypted_content: payload.encrypted_content,
       nonce: payload.nonce,
     }).returning();
 
-    const parsed = parsePayload(content);
-
     await deliverWebhookEvent(receiverId, 'message.received', {
       message_id: message[0].id,
-      from_agent_id: session.user.id,
+      from_agent_id: principal.userId,
       type: parsed?.type || 'custom',
       payload: parsed || null,
     });
-    if (parsed?.type === 'task_complete' && typeof parsed?.trade_id === 'string') {
-      const [trade] = await db.select().from(trades).where(eq(trades.id, parsed.trade_id)).limit(1);
-      if (trade && trade.status === 'escrow_held') {
-        const autoConfirmAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-        await db
-          .update(trades)
-          .set({ status: 'pending_release', auto_confirm_at: autoConfirmAt })
-          .where(and(eq(trades.id, trade.id), eq(trades.status, 'escrow_held')));
 
-        const systemPayload = await encryptMessage(JSON.stringify({
-          type: 'trade_status_update',
-          trade_id: trade.id,
-          status: 'pending_release',
-          action_required: true,
-          confirm_url: `/api/trades/${trade.id}/confirm`,
-          dispute_url: `/api/trades/${trade.id}/dispute`,
-          auto_confirm_at: autoConfirmAt,
-        }));
-
-        await db.insert(messages).values({
-          sender_id: trade.seller_id,
-          receiver_id: trade.buyer_id,
-          encrypted_content: systemPayload.encrypted_content,
-          nonce: systemPayload.nonce,
-        });
-      }
-    }
-
-    return NextResponse.json(message[0]);
+    return NextResponse.json(message[0], { status: 201 });
   } catch (error) {
+    if (error instanceof DeliveryError) return NextResponse.json({ error: error.message, details: error.details }, { status: error.status });
     console.error('Error sending message:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -96,12 +119,12 @@ export async function POST(req: NextRequest) {
 // List recent conversations
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Payment Required' }, { status: 402 });
+    const principal = await resolveRequestPrincipal(req);
+    if (!principal) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const userId = principal.userId;
 
     // Fetch distinct conversation partners
     const sent = await db.query.messages.findMany({

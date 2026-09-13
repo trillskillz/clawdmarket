@@ -1,0 +1,46 @@
+.page { max-width: 1180px; margin: 0 auto; padding: 112px 28px 80px; color: #e9e8e0; }
+.breadcrumb { display: flex; gap: 12px; margin-bottom: 24px; color: #9fa79c; font-size: 13px; }
+.page a { color: #f58a69; text-underline-offset: 4px; }
+.page a:hover { text-decoration: underline; }
+.header { display: grid; grid-template-columns: 1fr 220px; gap: 40px; margin: 40px 0 30px; }
+.header h1 { font: 500 clamp(30px, 4vw, 48px)/1.12 'Space Grotesk', sans-serif; letter-spacing: -.04em; margin: 12px 0 20px; }
+.header p { line-height: 1.7; color: #b2b7ad; white-space: pre-wrap; }
+.header aside { align-self: center; padding-left: 24px; border-left: 1px solid #343a32; }
+.header aside strong { display: block; font-size: 34px; color: #b9ef72; }
+.header aside span { font-size: 12px; color: #b2b7ad; }
+.eyebrow { color: #b2baaa; font: 11px 'JetBrains Mono', monospace; letter-spacing: .08em; }
+.stages { list-style: none; display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid #343a32; margin-bottom: 28px; padding: 0; }
+.stages li { padding: 15px; font-size: 12px; }
+.stages li + li { border-left: 1px solid #343a32; }
+.stages span { display: block; color: #8c9784; font-size: 10px; margin-bottom: 6px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 24px; }
+.panel, .access { border: 1px solid #343a32; background: #0e120f; padding: 24px; margin-bottom: 24px; border-radius: 10px; }
+.panel h2 { font: 500 22px 'Space Grotesk', sans-serif; margin: 0 0 18px; }
+.panel h3 { margin: 20px 0 12px; font-size: 15px; }
+.panel p, .access p { color: #b2b7ad; font-size: 13px; line-height: 1.7; margin: 12px 0; }
+.panel ul { margin: 14px 0; padding-left: 22px; color: #c4cbbf; line-height: 1.8; font-size: 13px; }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.tags span { border: 1px solid #384231; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #b9dca1; }
+.page form { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.page label { font-size: 12px; color: #ced1c6; margin-top: 8px; }
+.page input:not([type=checkbox]), .page textarea, .page select { width: 100%; min-height: 42px; border: 1px solid #47513d; background: #080b09; color: #efefe8; border-radius: 5px; padding: 10px; font-size: 14px; }
+.page input:focus-visible, .page textarea:focus-visible, .page select:focus-visible, .page button:focus-visible, .page a:focus-visible { outline: 2px solid #b9ef72; outline-offset: 3px; }
+.page button { background: #d8edb6; color: #0e130b; padding: 11px 16px; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.page button:disabled { opacity: .45; cursor: not-allowed; }
+.page summary { cursor: pointer; color: #c7d0ba; font-size: 13px; }
+.page details { margin-top: 18px; }
+.bid { padding: 18px 0; border-top: 1px solid #343a32; }
+.bid > div { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; }
+.bid small { color: #a5af9b; display: block; margin-bottom: 12px; }
+.page pre { overflow: auto; max-height: 400px; background: #080b09; padding: 16px; font-size: 12px; margin: 18px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.page dl { display: grid; grid-template-columns: 1fr auto; gap: 12px; font-size: 13px; margin: 22px 0; }
+.page dt { color: #adb7a2; }
+.check { display: flex; gap: 10px; align-items: flex-start; line-height: 1.6; }
+.check input { margin-top: 4px; }
+.hash { display: block; overflow-wrap: anywhere; font-size: 11px; margin-top: 12px; color: #b4c89e; }
+.error, .notice { padding: 16px; margin: 18px 0; border: 1px solid #74483d; border-radius: 6px; background: #2b1812; color: #ffc5b0; font-size: 14px; }
+.notice { background: #152010; border-color: #495e32; color: #ceeeb1; }
+.receipt { display: block; margin-top: 20px; }
+.preserve { white-space: pre-wrap; }
+@media(max-width: 850px) { .grid, .header { grid-template-columns: 1fr; } .header aside { border-left: 0; padding-left: 0; } .stages { grid-template-columns: repeat(3, 1fr); } .stages li:nth-child(4) { border-left: 0; } .stages li:nth-child(n+4) { border-top: 1px solid #343a32; } }
+@media(max-width: 500px) { .page { padding: 100px 16px 60px; } .panel { padding: 18px; } .bid > div { flex-direction: column; } }

@@ -8,6 +8,10 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   VERCEL_CLI_VERSION: 51.5.1
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  NEXT_TELEMETRY_DISABLED: '1'
 
 jobs:
   deploy:
@@ -15,35 +19,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js
         uses: actions/setup-node@v4.4.0
         with:
           node-version: '24'
+          cache: pnpm
 
-      - name: Install pnpm
-        run: npm install -g pnpm
+      - name: Validate deployment configuration
+        run: |
+          set -euo pipefail
+          [ -n "${VERCEL_TOKEN:-}" ] || { echo "Missing VERCEL_TOKEN" >&2; exit 1; }
+          [ -n "${VERCEL_ORG_ID:-}" ] || { echo "Missing VERCEL_ORG_ID" >&2; exit 1; }
+          [ -n "${VERCEL_PROJECT_ID:-}" ] || { echo "Missing VERCEL_PROJECT_ID" >&2; exit 1; }
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
+      - name: Release gate
+        run: pnpm predeploy
         env:
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_DATABASE_URL: file:./ci-deploy.db
+          JWT_SECRET: ci-jwt-secret-please-change
+          CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
+          WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
+
+      - name: Pull production configuration
+        run: npx -y vercel@${VERCEL_CLI_VERSION} pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build deployment artifact
+        run: npx -y vercel@${VERCEL_CLI_VERSION} build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy to Vercel
         run: |
-          npx -y vercel@${VERCEL_CLI_VERSION} --prod --token=${{ secrets.VERCEL_TOKEN }} \
-          --yes > deployment-url.txt 2>&1
-          cat deployment-url.txt
+          set -euo pipefail
+          DEPLOYMENT_URL=$(npx -y vercel@${VERCEL_CLI_VERSION} deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN")
+          printf '%s\n' "$DEPLOYMENT_URL" | tee deployment-url.txt
 
       - name: Alias domains
         run: |
-          PREVIEW_URL=$(grep -o 'https://clawdmarket-[^ ]*\.vercel\.app' deployment-url.txt | head -1)
-          if [ -n "$PREVIEW_URL" ]; then
-            npx -y vercel@${VERCEL_CLI_VERSION} alias set $PREVIEW_URL clawdmkt.com \
-            --token=${{ secrets.VERCEL_TOKEN }}
-            npx -y vercel@${VERCEL_CLI_VERSION} alias set $PREVIEW_URL www.clawdmkt.com \
-            --token=${{ secrets.VERCEL_TOKEN }}
-          fi
+          set -euo pipefail
+          DEPLOYMENT_URL=$(tail -n 1 deployment-url.txt)
+          [ -n "$DEPLOYMENT_URL" ] || { echo "Deployment URL was not captured" >&2; exit 1; }
+          npx -y vercel@${VERCEL_CLI_VERSION} alias set "$DEPLOYMENT_URL" clawdmkt.com --token="$VERCEL_TOKEN"
+          npx -y vercel@${VERCEL_CLI_VERSION} alias set "$DEPLOYMENT_URL" www.clawdmkt.com --token="$VERCEL_TOKEN"
+
+      - name: Verify production aliases
+        run: |
+          set -euo pipefail
+          for path in /api/health /api/docs /.well-known/agent.json; do
+            curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors "https://www.clawdmkt.com${path}" > /dev/null
+          done

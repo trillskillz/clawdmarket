@@ -1,15 +1,57 @@
+import { isIP } from 'node:net'
+import { NextRequest } from 'next/server'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { assertSafeWebhookDestination } from '@/lib/webhook-url'
+
 export const dynamic = 'force-dynamic'
-export async function GET(request: Request) {
- const { searchParams } = new URL(request.url)
- const domain = searchParams.get('domain')
+
+const MAX_DISCOVERY_BYTES = 64 * 1024
+
+function isValidDomain(domain: string): boolean {
+ if (domain.length > 253 || !domain.includes('.') || isIP(domain)) return false
+ return domain.split('.').every((label) => (
+ label.length > 0
+ && label.length <= 63
+ && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)
+ ))
+}
+
+async function readLimitedBody(response: Response): Promise<string> {
+ if (!response.body) return ''
+ const reader = response.body.getReader()
+ const decoder = new TextDecoder()
+ let total = 0
+ let body = ''
+ while (true) {
+ const { done, value } = await reader.read()
+ if (done) break
+ total += value.byteLength
+ if (total > MAX_DISCOVERY_BYTES) {
+ await reader.cancel()
+ throw new Error('response_too_large')
+ }
+ body += decoder.decode(value, { stream: true })
+ }
+ return body + decoder.decode()
+}
+
+export async function GET(request: NextRequest) {
+ const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+ || request.headers.get('x-real-ip')
+ || 'unknown'
+ const limit = await rateLimit(`agent-lookup:${ip}`, { interval: 60_000, maxRequests: 20, failClosed: true })
+ if (!limit.success) {
+ return Response.json({ error: 'rate_limit_exceeded' }, { status: 429, headers: getRateLimitHeaders(limit) })
+ }
+
+ const domain = request.nextUrl.searchParams.get('domain')
 
  if (!domain) {
  return Response.json({ error: 'domain required' }, { status: 400 })
  }
 
- // Sanitize domain
- const clean = domain.replace(/[^a-zA-Z0-9.-]/g, '').toLowerCase()
- if (!clean) return Response.json({ error: 'invalid domain' }, { status: 400 })
+ const clean = domain.trim().toLowerCase().replace(/\.$/, '')
+ if (!isValidDomain(clean)) return Response.json({ error: 'invalid domain' }, { status: 400 })
 
  const urls = [
  `https://${clean}/.well-known/agent.json`,
@@ -21,14 +63,17 @@ export async function GET(request: Request) {
 
  for (const url of urls) {
  try {
+ await assertSafeWebhookDestination(url)
  const res = await fetch(url, {
  headers: { 'User-Agent': 'ClawdMarket/1.0 agent-lookup' },
  signal: AbortSignal.timeout(5000),
+ redirect: 'error',
  })
  if (res.ok) {
+ const body = await readLimitedBody(res)
  const contentType = res.headers.get('content-type') || ''
  if (contentType.includes('json')) {
- const data = await res.json()
+ const data = JSON.parse(body)
  const key = url.includes('agent.json') ? 'agent_card' : url.includes('mpp') ? 'mpp_descriptor' : 'data'
  results[key] = data
 
@@ -37,7 +82,7 @@ export async function GET(request: Request) {
  results.name = name
  }
  } else {
- results['llms_txt'] = await res.text().then(t => t.slice(0, 500))
+ results['llms_txt'] = body.slice(0, 500)
  }
  results.found.push(url)
  }
@@ -45,6 +90,6 @@ export async function GET(request: Request) {
  }
 
  return Response.json(results, {
- headers: { 'Cache-Control': 'public, max-age=300' }
+ headers: { 'Cache-Control': 'public, max-age=300', ...getRateLimitHeaders(limit) }
  })
 }

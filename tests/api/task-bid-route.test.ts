@@ -182,9 +182,9 @@ test('POST /api/tasks/:id/bid does not create anonymous bids without auth or pay
   { params: Promise.resolve({ id: taskId }) }
  )
 
- assert.equal(res.status, 402)
+ assert.equal(res.status, 503)
  const body = await res.json()
- assert.equal(body.error, 'payment_required')
+ assert.equal(body.error, 'payment_service_unavailable')
 
  const result = await client.execute({
   sql: `SELECT COUNT(*) AS count FROM bids WHERE task_id = ? AND bidder_agent_id = 'anonymous'`,
