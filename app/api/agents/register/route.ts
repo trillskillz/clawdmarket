@@ -7,10 +7,10 @@ import { isAddress } from 'viem'
 import { z } from 'zod'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { hashAgentApiKey, resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
+import { getRequestIp } from '@/lib/request-ip'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
-
-let columnsEnsured = false
 
 const agentRegistrationSchema = z.object({
  name: z.string().trim().min(2).max(100),
@@ -26,19 +26,6 @@ const agentRegistrationSchema = z.object({
  improvement_task_id: z.string().max(200).optional(),
  moltbook_handle: z.string().trim().max(100).optional(),
 })
-async function ensureColumns() {
-  if (columnsEnsured) return
-  const client = (db as any).$client
-  await client.execute(`ALTER TABLE agents ADD COLUMN claim_code TEXT`).catch(() => {})
-  await client.execute(`ALTER TABLE agents ADD COLUMN claimed_at TEXT`).catch(() => {})
- await client.execute(`ALTER TABLE agents ADD COLUMN api_key TEXT`).catch(() => {})
- await client.execute(`ALTER TABLE agents ADD COLUMN owner_email TEXT`).catch(() => {})
- await client.execute(`ALTER TABLE agents ADD COLUMN moltbook_handle TEXT`).catch(() => {})
- await client.execute(`ALTER TABLE agents ADD COLUMN last_seen_at INTEGER`).catch(() => {})
- await client.execute(`ALTER TABLE agents ADD COLUMN is_online INTEGER NOT NULL DEFAULT 0`).catch(() => {})
-  columnsEnsured = true
-}
-
 /**
  * POST /api/agents/register
  *
@@ -47,7 +34,7 @@ async function ensureColumns() {
  */
 export async function POST(request: NextRequest) {
  try {
- const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown'
+ const ip = getRequestIp(request)
  const rl = await rateLimit(`agent-register:${ip}`, { interval: 60 * 60 * 1000, maxRequests: 5, failClosed: true })
  if (!rl.success) return NextResponse.json({ error: 'rate_limited', message: 'Too many registration attempts' }, { status: 429, headers: getRateLimitHeaders(rl) })
 
@@ -75,7 +62,6 @@ export async function POST(request: NextRequest) {
  : null
 
  if (!parent_version_id) {
- await ensureColumns()
  const apiKey = `clawd_${crypto.randomBytes(16).toString('hex')}`
  const claimCode = `claim_${crypto.randomBytes(16).toString('hex')}`
  const nowIso = new Date().toISOString()
@@ -161,7 +147,6 @@ export async function POST(request: NextRequest) {
  const newVersion = (parent.version || 1) + 1
  const baseId = parent.baseAgentId || parent.id
 
- await ensureColumns()
  const vApiKey = `clawd_${crypto.randomBytes(16).toString('hex')}`
  const vNow = new Date().toISOString()
  const versionId = `av_${crypto.randomUUID()}`
@@ -282,12 +267,12 @@ export async function POST(request: NextRequest) {
  if (err?.message === 'PARENT_VERSION_ALREADY_SUPERSEDED') {
   return NextResponse.json({ error: 'conflict', message: 'This parent version was already superseded' }, { status: 409 })
  }
- return NextResponse.json(
- { error: 'registration_failed', detail: err.message },
- { status: 500 }
- )
+ return internalErrorResponse('Agent registration failed', err, {
+  code: 'registration_failed',
+  message: 'Registration could not be completed. Retry or contact support with the error ID.',
+ })
  }
- }
+}
 
 function parseCapabilities(raw: unknown): string[] {
  if (Array.isArray(raw)) return raw.filter((item): item is string => typeof item === 'string')

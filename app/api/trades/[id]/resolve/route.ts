@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { messages, mpp_sessions, trades, transactions, wallets } from '@/lib/schema';
+import { trades } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
-import { encryptMessage } from '@/lib/chat-crypto';
-import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 import { authenticateRequest } from '@/lib/auth';
 import { authorizeAdmin } from '@/lib/admin-auth';
 import { validateCsrf } from '@/lib/csrf';
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
+import { SettlementError, settleExternallyFundedTrade } from '@/lib/external-settlement';
+import { finalizeTradeDispute, type TradeResolution } from '@/lib/trade-dispute';
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 120
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -42,77 +43,51 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const buyerShare = Math.round((trade.amount - sellerShare) * 100) / 100;
     const externalFunding = isExternallyFundedTrade(trade);
 
-    const updated = await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(trades)
-        .set({ status: 'resolved', resolution, payout_status: externalFunding ? 'pending' : 'complete', completed_at: new Date() })
-        .where(and(eq(trades.id, trade.id), eq(trades.status, 'disputed')))
+    let tradeToFinalize = trade;
+    if (externalFunding) {
+      const [claimed] = await db.update(trades)
+        .set({ resolution, resolution_seller_percent: splitPercent, payout_status: 'processing' })
+        .where(and(
+          eq(trades.id, trade.id),
+          eq(trades.status, 'disputed'),
+          isNull(trades.resolution),
+          isNull(trades.resolution_seller_percent),
+        ))
         .returning();
-      if (!claimed) return null;
-
-      await tx.insert(wallets).values({ user_id: trade.buyer_id, balance: 0, escrow: 0 }).onConflictDoNothing();
-      await tx.insert(wallets).values({ user_id: trade.seller_id, balance: 0, escrow: 0 }).onConflictDoNothing();
-
-      if (!externalFunding) {
-        const released = await tx.update(wallets)
-          .set({ escrow: sql`${wallets.escrow} - ${trade.amount}` })
-          .where(and(eq(wallets.user_id, trade.buyer_id), sql`${wallets.escrow} >= ${trade.amount}`))
-          .returning({ user_id: wallets.user_id });
-        if (released.length === 0) throw new Error('ESCROW_BALANCE_MISMATCH');
+      if (claimed) {
+        tradeToFinalize = claimed;
+      } else {
+        const [current] = await db.select().from(trades).where(eq(trades.id, trade.id)).limit(1);
+        if (!current || current.status !== 'disputed' || current.resolution !== resolution || current.resolution_seller_percent !== splitPercent) {
+          return NextResponse.json({ error: 'A different dispute resolution is already being settled' }, { status: 409 });
+        }
+        tradeToFinalize = current;
       }
-
-      if (buyerShare > 0) {
-        await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${buyerShare}` }).where(eq(wallets.user_id, trade.buyer_id));
-        await tx.insert(transactions).values({
-          from_user_id: null,
-          to_user_id: trade.buyer_id,
-          amount: buyerShare,
-          type: 'escrow_refund',
-          reference_id: trade.id,
-          memo: externalFunding
-            ? `Dispute resolved: ${resolution}; external refund pending`
-            : `Sandbox dispute resolved: ${resolution}`,
-        });
+      const settlement = await settleExternallyFundedTrade(tradeToFinalize, splitPercent);
+      if (!settlement.complete) {
+        return NextResponse.json({
+          ok: true,
+          status: 'settlement_processing',
+          resolution,
+          distribution: { buyer: buyerShare, seller: sellerShare },
+          transfers: settlement.transfers.map(({ id, kind, status, tx_hash }) => ({ id, kind, status, tx_hash })),
+        }, { status: 202 });
       }
-      if (sellerShare > 0) {
-        await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${sellerShare}` }).where(eq(wallets.user_id, trade.seller_id));
-        await tx.insert(transactions).values({
-          from_user_id: trade.buyer_id,
-          to_user_id: trade.seller_id,
-          amount: sellerShare,
-          type: 'escrow_release',
-          reference_id: trade.id,
-          memo: externalFunding
-            ? `Dispute resolved: ${resolution}; external seller payout pending`
-            : `Sandbox dispute resolved: ${resolution}`,
-        });
-      }
-      await tx
-        .update(mpp_sessions)
-        .set({ status: 'closed', closed_at: new Date() })
-        .where(and(eq(mpp_sessions.session_id, trade.escrow_session_id || ''), eq(mpp_sessions.status, 'active')));
-      return claimed;
-    });
+    }
 
-    if (!updated) return NextResponse.json({ error: 'Trade already resolved' }, { status: 409 });
-
-    const buyerMsg = await encryptMessage(JSON.stringify({ type: 'trade_status_update', trade_id: trade.id, status: 'resolved', resolution }));
-    const sellerMsg = await encryptMessage(JSON.stringify({ type: 'trade_status_update', trade_id: trade.id, status: 'resolved', resolution }));
-    await Promise.allSettled([
-      db.insert(messages).values([
-        { sender_id: auth!.userId, receiver_id: trade.buyer_id, encrypted_content: buyerMsg.encrypted_content, nonce: buyerMsg.nonce },
-        { sender_id: auth!.userId, receiver_id: trade.seller_id, encrypted_content: sellerMsg.encrypted_content, nonce: sellerMsg.nonce },
-      ]),
-      deliverWebhookEvent(trade.buyer_id, 'trade.status_changed', { trade_id: trade.id, old_status: 'disputed', new_status: 'resolved', resolution }),
-      deliverWebhookEvent(trade.seller_id, 'trade.status_changed', { trade_id: trade.id, old_status: 'disputed', new_status: 'resolved', resolution }),
-    ]);
+    const finalized = await finalizeTradeDispute(tradeToFinalize, resolution as TradeResolution, splitPercent, auth!.userId);
+    if (!finalized) return NextResponse.json({ error: 'Trade already resolved' }, { status: 409 });
 
     return NextResponse.json({
       ok: true,
-      trade: updated,
-      distribution: { buyer: buyerShare, seller: sellerShare },
-      external_payout_status: externalFunding ? 'pending' : 'not_applicable',
+      trade: finalized.trade,
+      distribution: finalized.distribution,
+      external_payout_status: externalFunding ? 'complete' : 'not_applicable',
     });
   } catch (error) {
+    if (error instanceof SettlementError) {
+      return NextResponse.json({ error: error.message, code: error.code, retryable: error.retryable }, { status: error.retryable ? 503 : 409 });
+    }
     console.error('Trade resolve error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

@@ -53,10 +53,16 @@ async function ensureSchema() {
    message text,
    eta_seconds integer,
    status text NOT NULL DEFAULT 'pending',
+   counter_offer_price real,
+   counter_offer_message text,
+   counter_offer_status text NOT NULL DEFAULT 'none',
    created_at text NOT NULL DEFAULT (datetime('now'))
   )`,
   args: [],
  })
+ await client.execute('ALTER TABLE bids ADD COLUMN counter_offer_price REAL').catch(() => {})
+ await client.execute('ALTER TABLE bids ADD COLUMN counter_offer_message TEXT').catch(() => {})
+ await client.execute("ALTER TABLE bids ADD COLUMN counter_offer_status TEXT NOT NULL DEFAULT 'none'").catch(() => {})
 }
 
 async function cleanup(ids: { agentId?: string, apiKey?: string, taskId?: string }) {

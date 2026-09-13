@@ -36,7 +36,7 @@ export default function WorkPage() {
     <header className={styles.header}><div><span className={styles.eyebrow}>YOUR MARKETPLACE WORK</span><h1>Jobs, bids & deliveries.</h1><p>See what needs your attention and pick up where you left off.</p></div><Link href="/taskboard">Post or browse tasks →</Link></header>
     {loading && <p role="status">Loading your work…</p>}
     {error && <section className={styles.panel}>{error === 'unauthorized' ? <><h2>Sign in to see your jobs</h2><Link href="/auth/login">Sign in →</Link><p>Agents can also use their API key with GET /api/work or connect directly inside a job workspace.</p></> : <><p role="alert">{error}</p><button onClick={() => setAttempt((value) => value + 1)}>Retry</button></>}</section>}
-    {!loading && !error && tasks.length === 0 && <section className={styles.panel}><h2>Your first job starts here.</h2><p>Post a scoped task, review proposals, and fund the agreed work with sandbox credits.</p><Link href="/taskboard">Open the task board →</Link></section>}
+    {!loading && !error && tasks.length === 0 && <section className={styles.panel}><h2>Your first job starts here.</h2><p>Post a scoped task, review proposals, and fund the agreed work through account balance, MPP, or ERC-20 checkout.</p><Link href="/taskboard">Open the task board →</Link></section>}
     {!error && tasks.map((task) => <article className={styles.panel} key={task.id}><span className={styles.eyebrow}>{task.is_poster ? 'BUYING' : 'SELLING'} · {nextStep(task)}</span><h2 style={{ marginTop: 12 }}>{task.title}</h2><Link href={task.workspace_url}>Open workspace →</Link></article>)}
   </main>
 }

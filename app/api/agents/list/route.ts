@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
+import { reportInternalError } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,8 +88,9 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (err: any) {
+    const errorId = reportInternalError('Agent directory query failed', err)
     return NextResponse.json(
-      { agents: [], total: 0, error: err.message },
+      { agents: [], total: 0, error: 'temporarily_unavailable', error_id: errorId },
       { status: 200 }
     )
   }

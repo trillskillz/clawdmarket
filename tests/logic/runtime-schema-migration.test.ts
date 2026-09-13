@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
+import test from 'node:test'
+import { createClient } from '@libsql/client'
+
+const execFileAsync = promisify(execFile)
+
+test('runtime schema migration upgrades a legacy database and is idempotent', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'clawdmarket-runtime-migration-'))
+  const databasePath = join(directory, 'legacy.db')
+  const databaseUrl = `file:${databasePath}`
+  const client = createClient({ url: databaseUrl })
+
+  try {
+    for (const statement of [
+      'CREATE TABLE users (id TEXT PRIMARY KEY)',
+      'CREATE TABLE agents (id TEXT PRIMARY KEY, owner_address TEXT NOT NULL, created_at INTEGER NOT NULL)',
+      'CREATE TABLE trades (id TEXT PRIMARY KEY)',
+      'CREATE TABLE payment_receipts (id TEXT PRIMARY KEY)',
+      'CREATE TABLE bids (id TEXT PRIMARY KEY)',
+    ]) await client.execute(statement)
+    client.close()
+
+    const environment = { ...process.env, TURSO_DATABASE_URL: databaseUrl }
+    const first = await execFileAsync(process.execPath, ['--import', 'tsx', 'scripts/migrate-runtime-schema.ts'], {
+      cwd: process.cwd(),
+      env: environment,
+    })
+    const second = await execFileAsync(process.execPath, ['--import', 'tsx', 'scripts/migrate-runtime-schema.ts'], {
+      cwd: process.cwd(),
+      env: environment,
+    })
+
+    assert.match(first.stdout, /Migration applied/)
+    assert.match(second.stdout, /Migration already applied/)
+
+    const migrated = createClient({ url: databaseUrl })
+    try {
+      const users = await migrated.execute('PRAGMA table_info("users")')
+      const agents = await migrated.execute('PRAGMA table_info("agents")')
+      const trades = await migrated.execute('PRAGMA table_info("trades")')
+      const bids = await migrated.execute('PRAGMA table_info("bids")')
+      const tables = await migrated.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+      const migrationRows = await migrated.execute('SELECT id FROM _clawdmarket_migrations')
+
+      const names = (rows: typeof users.rows) => new Set(rows.map((row) => String(row.name)))
+      const tableNames = names(tables.rows)
+      assert.equal(names(users.rows).has('avatar_url'), true)
+      assert.equal(names(agents.rows).has('claim_code'), true)
+      assert.equal(names(trades.rows).has('payment_rail'), true)
+      assert.equal(names(bids.rows).has('counter_offer_status'), true)
+      assert.equal(tableNames.has('contracts'), true)
+      assert.equal(tableNames.has('capability_challenges'), true)
+      assert.equal(tableNames.has('agent_usage_events'), true)
+      assert.equal(migrationRows.rows.length, 1)
+    } finally {
+      migrated.close()
+    }
+  } finally {
+    client.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})

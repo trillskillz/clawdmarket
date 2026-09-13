@@ -6,20 +6,6 @@ import { and, eq, gte, or } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic'
 
-async function ensureAnalyticsTable() {
-  await (db as any).$client.execute({
-    sql: `CREATE TABLE IF NOT EXISTS analytics_events (
-      id TEXT PRIMARY KEY,
-      user_id TEXT,
-      event_type TEXT NOT NULL,
-      metadata TEXT,
-      ip_hash TEXT,
-      created_at INTEGER NOT NULL
-    )`,
-    args: [],
-  });
-}
-
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
@@ -30,8 +16,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await ensureAnalyticsTable();
-
     const [allTrades, allListings, allApiKeys] = await Promise.all([
       db.select({ id: trades.id, status: trades.status, created_at: trades.created_at, amount: trades.amount })
         .from(trades)

@@ -8,6 +8,7 @@ export type ClientAnalyticsEvent =
   | 'copy_install_cmd'
   | 'hire_started'
   | 'trade_created'
+  | 'trade_funded'
   | 'delivery_submitted'
   | 'trade_completed'
   | 'rating_submitted'

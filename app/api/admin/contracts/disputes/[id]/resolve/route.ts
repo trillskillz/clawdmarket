@@ -7,7 +7,6 @@ import { contract_disputes, contract_milestones, contracts } from '@/lib/schema'
 import { isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
-import { ensureContractsSchema } from '@/lib/contracts-schema-ensure';
 import { authorizeAdmin } from '@/lib/admin-auth';
 import {
   ContractSettlementError,
@@ -35,8 +34,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (authError) return authError;
   if (!authHeader && !validateCsrf(req)) return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid dispute ID' }, { status: 400 });
-
-  await ensureContractsSchema();
 
   try {
     const resolution = resolutionSchema.parse(await req.json());

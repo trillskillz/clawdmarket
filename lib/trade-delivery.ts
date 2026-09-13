@@ -3,7 +3,6 @@ import { and, eq } from 'drizzle-orm'
 import { db } from './db'
 import { messages, task_workspaces, trade_deliveries, trades } from './schema'
 import { encryptMessage } from './chat-crypto'
-import { ensureTaskWorkspaceSchema } from './task-workspace-schema'
 import { deliverySchema, requirementsSchema, verifyDelivery } from './delivery-validation'
 import { deliverWebhookEvent } from './webhook-delivery'
 
@@ -16,7 +15,6 @@ export async function submitTradeDelivery(tradeId: string, sellerId: string, inp
   if (!parsed.success) throw new DeliveryError('Invalid delivery', 400, parsed.error.issues)
   const serialized = JSON.stringify(parsed.data)
   if (Buffer.byteLength(serialized, 'utf8') > 50_000) throw new DeliveryError('Delivery exceeds 50 KB', 413)
-  await ensureTaskWorkspaceSchema()
   const [trade] = await db.select().from(trades).where(eq(trades.id, tradeId)).limit(1)
   if (!trade) throw new DeliveryError('Trade not found', 404)
   if (trade.seller_id !== sellerId) throw new DeliveryError('Only the seller can submit delivery', 403)

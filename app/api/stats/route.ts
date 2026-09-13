@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { agents, trades, ratings, payment_receipts, tasks } from '@/lib/schema'
 import { eq, or, sql } from 'drizzle-orm'
-import { ensurePaymentRailColumn } from '@/lib/ensure-payment-rail'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +26,6 @@ async function getVolumeByRail() {
 }
 
 export async function GET() {
-  await ensurePaymentRailColumn()
   const [{ agent_count = 1 } = { agent_count: 1 }] = await db
     .select({ agent_count: sql<number>`COALESCE(COUNT(*), 0)` })
     .from(agents)

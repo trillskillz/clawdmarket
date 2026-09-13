@@ -2,30 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
-
-let tableChecked = false
-
-async function ensureChallengesTable() {
-  if (tableChecked) return
-  const client = (db as any).$client
-  await client.execute({
-    sql: `CREATE TABLE IF NOT EXISTS capability_challenges (
-      id TEXT PRIMARY KEY,
-      agent_id TEXT,
-      capability TEXT,
-      challenge_data TEXT,
-      expires_at INTEGER,
-      submitted_at INTEGER,
-      passed INTEGER,
-      score REAL,
-      created_at INTEGER DEFAULT (unixepoch())
-    )`,
-    args: [],
-  })
-  tableChecked = true
-}
 
 const CHALLENGES: Record<string, any> = {
   'web-research': {
@@ -74,8 +53,6 @@ export async function POST(
       }, { status: 400 })
     }
 
-    await ensureChallengesTable()
-
     const client = (db as any).$client
     const agentResult = await client.execute({ sql: `SELECT status FROM agents WHERE id = ? LIMIT 1`, args: [agentId] })
     if (!agentResult.rows.length || String((agentResult.rows[0] as any).status) !== 'active') {
@@ -101,6 +78,6 @@ export async function POST(
       expires_at: expiresAt,
     }, { status: 201, headers: getRateLimitHeaders(limit) })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return internalErrorResponse('Capability challenge creation failed', err)
   }
 }

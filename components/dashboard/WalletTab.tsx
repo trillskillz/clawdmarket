@@ -1,5 +1,7 @@
 'use client';
 
+import { FormEvent, useEffect, useState } from 'react';
+
 interface Transaction {
   id: string;
   type: 'faucet' | 'transfer' | 'escrow_lock' | 'escrow_release' | 'escrow_refund' | 'fee';
@@ -22,6 +24,33 @@ interface WalletTabProps {
 }
 
 export default function WalletTab({ wallet, loading }: WalletTabProps) {
+  const [payoutAddress, setPayoutAddress] = useState('');
+  const [payoutNotice, setPayoutNotice] = useState('');
+  const [payoutBusy, setPayoutBusy] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/payments/payout-address', { credentials: 'include', cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (data?.address) setPayoutAddress(data.address); })
+      .catch(() => undefined);
+  }, []);
+
+  async function savePayoutAddress(event: FormEvent) {
+    event.preventDefault();
+    setPayoutBusy(true); setPayoutNotice('');
+    try {
+      const csrf = document.cookie.split('; ').find((part) => part.startsWith('csrf-token='))?.split('=')[1] || '';
+      const response = await fetch('/api/payments/payout-address', {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+        body: JSON.stringify({ address: payoutAddress }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Could not save payout address');
+      setPayoutAddress(data.address); setPayoutNotice('Payout wallet saved.');
+    } catch (error) { setPayoutNotice(error instanceof Error ? error.message : 'Could not save payout address'); }
+    finally { setPayoutBusy(false); }
+  }
   if (loading) {
     return (
       <div className="grid md:grid-cols-3 gap-6 mb-8 animate-pulse">
@@ -38,15 +67,25 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-2">My Wallet 💳</h2>
+      <h2 className="text-2xl font-bold mb-2">Settlement Wallet</h2>
       <p className="text-sm text-text-dim mb-3">
-        Internal USD-denominated ledger funds used for marketplace escrow and settlement.
+        Manage your ClawdMarket USD balance and the EVM address that receives marketplace payouts.
       </p>
+
+      <form onSubmit={savePayoutAddress} className="card mb-8">
+        <label htmlFor="payout-address" className="block text-sm font-semibold mb-2">Seller payout address</label>
+        <p className="text-xs text-text-dim mb-3">Verified ERC-20 and MPP settlements release to this address after buyer approval or dispute resolution.</p>
+        <div className="flex flex-col md:flex-row gap-3">
+          <input id="payout-address" value={payoutAddress} onChange={(event) => setPayoutAddress(event.target.value)} placeholder="0x…" required className="flex-1 bg-bg border border-border rounded-lg px-4 py-3 font-mono text-sm" />
+          <button disabled={payoutBusy} className="btn-primary px-5">{payoutBusy ? 'Saving…' : 'Save payout wallet'}</button>
+        </div>
+        {payoutNotice && <p className="text-xs mt-3 text-text-dim" role="status">{payoutNotice}</p>}
+      </form>
 
       {/* Balance Cards */}
       <div className="grid md:grid-cols-3 gap-6 mb-12">
         <div className="card border-l-4 border-l-accent bg-gradient-to-br from-surface to-surface/50">
-          <div className="text-sm text-text-dim uppercase tracking-wider font-semibold mb-2">Total Value</div>
+          <div className="text-sm text-text-dim uppercase tracking-wider font-semibold mb-2">Account Balance</div>
           <div className="text-4xl font-mono font-bold text-white">
             ${ledgerTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-lg text-accent">USD</span>
           </div>

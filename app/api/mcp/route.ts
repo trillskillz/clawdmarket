@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Mppx as ServerMppx, Transport, tempo } from 'mppx/server';
+import { createClient, http } from 'viem';
+import { tempo as tempoChain } from 'viem/chains';
 import { AGENT_MCP_TOOLS } from '@/lib/agent-contract';
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants';
+import { durableMppStore } from '@/lib/mpp-store';
+import { getMppRecipientAddress, getTempoRpcUrl } from '@/lib/payment-config';
+import { reportInternalError } from '@/lib/api-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,27 +20,26 @@ const CAPABILITIES = {
   tools: {},
 };
 
-const MPP_RECIPIENT_ADDRESS = process.env.MPP_RECIPIENT_ADDRESS as `0x${string}` | undefined;
-
 let _mcpPayment: any = null;
 function getMcpPayment() {
   if (_mcpPayment !== null) return _mcpPayment;
-  if (!MPP_RECIPIENT_ADDRESS) {
-    _mcpPayment = false;
-    return _mcpPayment;
-  }
-  const secretKey = process.env.MPP_SECRET_KEY || process.env.JWT_SECRET || '';
-  if (!secretKey) {
+  const recipient = getMppRecipientAddress();
+  const rpcUrl = getTempoRpcUrl();
+  const secretKey = process.env.MPP_SECRET_KEY?.trim();
+  if (!recipient || !rpcUrl || !secretKey) {
     _mcpPayment = false;
     return _mcpPayment;
   }
   try {
     _mcpPayment = ServerMppx.create({
       methods: [
-        tempo({
+        tempo.charge({
           currency: PATHUSD_ADDRESS,
           chainId: TEMPO_CHAIN_ID,
-          recipient: MPP_RECIPIENT_ADDRESS,
+          recipient,
+          store: durableMppStore,
+          waitForConfirmation: true,
+          getClient: () => createClient({ chain: tempoChain, transport: http(rpcUrl) }),
         }),
       ],
       transport: Transport.mcp(),
@@ -307,11 +311,12 @@ export async function POST(req: NextRequest) {
 
         return withCors(NextResponse.json(paymentGate.withReceipt(baseResult)));
       } catch (error: any) {
+        const errorId = reportInternalError('MCP tool execution failed', error, { tool: name });
         const errorResult = {
           jsonrpc: '2.0' as const,
           id: id ?? null,
           result: {
-            content: [{ type: 'text', text: `Error: ${error?.message || 'Tool execution failed'}` }],
+            content: [{ type: 'text', text: `Error: Tool execution failed (${errorId})` }],
             isError: true,
           },
         };
@@ -322,7 +327,8 @@ export async function POST(req: NextRequest) {
 
     return withCors(jsonRpcError(id, -32601, `Method not found: ${method}`));
   } catch (error: any) {
-    return withCors(jsonRpcError(id, -32000, error?.message || 'Internal MCP error'));
+    const errorId = reportInternalError('MCP request failed', error, { method });
+    return withCors(jsonRpcError(id, -32000, 'Internal MCP error', { error_id: errorId }));
   }
 }
 

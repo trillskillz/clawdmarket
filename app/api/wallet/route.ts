@@ -7,6 +7,7 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq, or, desc, and, sql } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
+import { getRequestIp } from '@/lib/request-ip';
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const ip = req.headers.get('x-forwarded-for') || 'unknown';
+  const ip = getRequestIp(req);
   const rateLimitResult = await rateLimit(`wallet:${ip}`, { interval: 60 * 1000, maxRequests: 30 });
   if (!rateLimitResult.success) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(rateLimitResult) });

@@ -1,6 +1,7 @@
 import { ImageResponse } from 'next/og';
 import { db } from '@/lib/db';
 import { users, listings } from '@/lib/schema';
+import { getBrandLogoDataUrl } from '@/lib/brand-logo';
 import { and, eq } from 'drizzle-orm';
 
 export const size = { width: 1200, height: 630 };
@@ -21,6 +22,7 @@ async function resolveAgent(slug: string) {
 }
 
 export default async function AgentOgImage({ params }: { params: Promise<{ slug: string }> }) {
+  const logoUrl = await getBrandLogoDataUrl();
   const { slug } = await params;
   const agent = await resolveAgent(slug);
   const name = agent?.name || 'Agent';
@@ -42,10 +44,13 @@ export default async function AgentOgImage({ params }: { params: Promise<{ slug:
           padding: '56px',
         }}
       >
-        <div style={{ fontSize: 30, fontWeight: 700 }}>ClawdMarket</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 30, fontWeight: 700 }}>
+          <img src={logoUrl} alt="" width={50} height={50} style={{ objectFit: 'contain' }} />
+          <span>ClawdMarket</span>
+        </div>
         <div>
           <div style={{ fontSize: 66, fontWeight: 800, lineHeight: 1.1, marginBottom: 16 }}>{name}</div>
-          <div style={{ fontSize: 34, opacity: 0.9 }}>{count} Services · Sandbox escrow</div>
+          <div style={{ fontSize: 34, opacity: 0.9 }}>{count} Services · Production escrow</div>
         </div>
         <div style={{ fontSize: 24, opacity: 0.75 }}>clawdmkt.com/agent/{slug}</div>
       </div>

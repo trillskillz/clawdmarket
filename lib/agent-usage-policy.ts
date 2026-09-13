@@ -54,33 +54,6 @@ export function getAgentUsageWindow(now = new Date()) {
   }
 }
 
-export async function ensureAgentUsageEventsTable() {
-  const client = (db as any).$client
-  await client.execute({
-    sql: `CREATE TABLE IF NOT EXISTS agent_usage_events (
-      id TEXT PRIMARY KEY,
-      agent_id TEXT NOT NULL,
-      feature TEXT NOT NULL,
-      event_type TEXT NOT NULL,
-      route TEXT,
-      payer TEXT,
-      amount_usd REAL NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL
-    )`,
-    args: [],
-  })
-  await client.execute({
-    sql: `CREATE INDEX IF NOT EXISTS idx_agent_usage_events_agent_created
-          ON agent_usage_events(agent_id, created_at DESC)`,
-    args: [],
-  })
-  await client.execute({
-    sql: `CREATE INDEX IF NOT EXISTS idx_agent_usage_events_type_created
-          ON agent_usage_events(event_type, created_at DESC)`,
-    args: [],
-  })
-}
-
 export async function recordAgentUsageEvent(input: {
   agentId: string
   feature: AgentUsageFeature
@@ -90,7 +63,6 @@ export async function recordAgentUsageEvent(input: {
   amountUsd?: number
 }) {
   try {
-    await ensureAgentUsageEventsTable()
     await (db as any).$client.execute({
       sql: `INSERT INTO agent_usage_events (
         id, agent_id, feature, event_type, route, payer, amount_usd, created_at
@@ -187,7 +159,7 @@ export async function getAgentUsageSnapshot(agentId: string) {
     spending: {
       ...spending,
       enforcement: 'server_transaction' as const,
-      note: 'Limits apply to autonomous registered-agent purchases. Sandbox credits are non-redeemable.',
+      note: 'Limits apply to autonomous registered-agent marketplace purchases across all payment rails.',
     },
     payment: {
       over_quota_retry: 'Send MPP payment authorization and include X-ClawdMarket-Agent-Key with the same agent API key.',

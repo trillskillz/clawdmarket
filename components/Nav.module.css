@@ -33,23 +33,11 @@
 }
 
 .brandMark {
-  width: 25px;
-  height: 25px;
-  position: relative;
-  display: inline-block;
-  transform: rotate(45deg);
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
-
-.brandMark span {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background: #ff5c35;
-}
-
-.brandMark span:nth-child(1) { inset: 0 auto auto 0; }
-.brandMark span:nth-child(2) { inset: 0 0 auto auto; opacity: 0.46; }
-.brandMark span:nth-child(3) { inset: auto 0 0 auto; }
 
 .wordmark {
   font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;

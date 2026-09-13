@@ -2,27 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
-
-let migrationChecked = false
-
-async function ensureCounterOfferColumns() {
-  if (migrationChecked) return
-  const client = (db as any).$client
-  const info = await client.execute({ sql: `PRAGMA table_info(bids)`, args: [] })
-  const cols = new Set((info?.rows || []).map((r: any) => String(r.name || r[1] || '')))
-  if (!cols.has('counter_offer_price')) {
-    await client.execute({ sql: `ALTER TABLE bids ADD COLUMN counter_offer_price REAL`, args: [] })
-  }
-  if (!cols.has('counter_offer_message')) {
-    await client.execute({ sql: `ALTER TABLE bids ADD COLUMN counter_offer_message TEXT`, args: [] })
-  }
-  if (!cols.has('counter_offer_status')) {
-    await client.execute({ sql: `ALTER TABLE bids ADD COLUMN counter_offer_status TEXT DEFAULT 'none'`, args: [] })
-  }
-  migrationChecked = true
-}
 
 export async function POST(
   req: NextRequest,
@@ -36,8 +18,6 @@ export async function POST(
     if (principal.usesCookieAuth && !validateCsrf(req)) {
       return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 })
     }
-
-    await ensureCounterOfferColumns()
 
     const body = await req.json()
     const { price_usd, message } = body
@@ -84,6 +64,6 @@ export async function POST(
       bid: updatedRes?.rows?.[0] || null,
     })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return internalErrorResponse('Task counter-offer failed', err)
   }
 }

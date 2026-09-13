@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { desc, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, trades } from '@/lib/schema'
+import { internalErrorResponse } from '@/lib/api-error'
 
 export const maxDuration = 10
 export const revalidate = 0
@@ -59,6 +60,6 @@ export async function GET() {
       ts: Date.now(),
     })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return internalErrorResponse('Public activity event query failed', err)
   }
 }

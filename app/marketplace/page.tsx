@@ -2,7 +2,10 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import { erc20Abi, parseUnits } from 'viem'
+import { useAccount, useConnect, useSwitchChain, useWriteContract } from 'wagmi'
 import { trackClientEvent } from '@/lib/client-analytics'
+import { getBrowserWalletConnectors, formatWalletConnectionError } from '@/lib/wallet-connection'
 import styles from './marketplace.module.css'
 
 type AgentService = {
@@ -27,9 +30,15 @@ type AgentService = {
 
 type HireIntent = {
   service: AgentService
-  step: 'confirm' | 'protocol' | 'machine' | 'submitted'
+  step: 'confirm' | 'protocol' | 'wallet' | 'machine' | 'submitted'
   tradeId?: string
+  paymentRail?: 'ledger' | 'mpp' | 'evm'
+  checkout?: Checkout
 }
+
+type AcceptedToken = { chain_id: number; chain_name: string; token_address: `0x${string}`; symbol: string; decimals: number; fixed_usd_price: number }
+type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; treasury?: `0x${string}`; tokens?: AcceptedToken[]; expires_at?: string }
+type PaymentConfig = { ledger_enabled: boolean; mpp_configured: boolean; erc20_configured: boolean; accepted_tokens: AcceptedToken[] }
 
 const CATEGORIES = [
   { id: 'all', label: 'All services' },
@@ -81,6 +90,10 @@ function trustColor(score: number) {
 }
 
 export default function MarketplacePage() {
+  const { address, chainId, isConnected } = useAccount()
+  const { connectors, connectAsync, isPending: walletConnecting } = useConnect()
+  const { switchChainAsync } = useSwitchChain()
+  const { writeContractAsync } = useWriteContract()
   const [category, setCategory] = useState('all')
   const [hireIntent, setHireIntent] = useState<HireIntent | null>(null)
   const [stats, setStats] = useState<Record<string, number>>({})
@@ -94,6 +107,9 @@ export default function MarketplacePage() {
   const [listingQueryHandled, setListingQueryHandled] = useState(false)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'newest' | 'recommended' | 'trust_desc' | 'price_asc' | 'price_desc'>('newest')
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
+  const [selectedToken, setSelectedToken] = useState<AcceptedToken | null>(null)
+  const browserConnectors = useMemo(() => getBrowserWalletConnectors(connectors), [connectors])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -102,6 +118,17 @@ export default function MarketplacePage() {
       .then(setStats)
       .catch(() => undefined)
     return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/payments/config', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (!data) return
+        setPaymentConfig(data)
+        setSelectedToken(data.accepted_tokens?.[0] || null)
+      })
+      .catch(() => undefined)
   }, [])
 
   useEffect(() => {
@@ -163,7 +190,7 @@ export default function MarketplacePage() {
     setHireIntent(null)
   }
 
-  const createTrade = async () => {
+  const createTrade = async (paymentRail: 'ledger' | 'mpp' | 'evm') => {
     if (!hireIntent) return
     setSubmitting(true)
     setTradeError(null)
@@ -177,23 +204,70 @@ export default function MarketplacePage() {
         body: JSON.stringify({
           listing_id: hireIntent.service.id,
           amount: 1,
-          payment_rail: 'ledger',
+          payment_rail: paymentRail,
+          client_reference: crypto.randomUUID(),
         }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
         if (typeof data?.recovery_reference === 'string') setTradeRecoveryReference(data.recovery_reference)
         if (response.status === 401) throw new Error('Sign in before hiring an agent.')
-        if (response.status === 402) throw new Error(data?.message || data?.error || 'Your sandbox account balance is insufficient.')
+        if (response.status === 402) throw new Error(data?.message || data?.error || 'Your account balance is insufficient.')
         throw new Error(data?.message || data?.error || `Trade failed (${response.status})`)
       }
       const tradeId = data.trade?.id
-      setServices((current) => current.filter((service) => service.id !== hireIntent.service.id))
-      setHireIntent({ ...hireIntent, step: 'submitted', tradeId })
-      trackClientEvent('trade_created', { listing_id: hireIntent.service.id, trade_id: tradeId || null, payment_rail: 'ledger' })
+      if (paymentRail === 'ledger') {
+        setServices((current) => current.filter((service) => service.id !== hireIntent.service.id))
+        setHireIntent({ ...hireIntent, step: 'submitted', tradeId, paymentRail })
+      } else {
+        const checkout = data.checkout as Checkout
+        setSelectedToken(checkout.tokens?.[0] || selectedToken)
+        setHireIntent({ ...hireIntent, step: paymentRail === 'evm' ? 'wallet' : 'machine', tradeId, paymentRail, checkout })
+      }
+      trackClientEvent('trade_created', { listing_id: hireIntent.service.id, trade_id: tradeId || null, payment_rail: paymentRail })
     } catch (error: any) {
       setTradeError(error?.message || 'Trade could not be created.')
       throw error
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const fundEvmTrade = async () => {
+    if (!hireIntent?.tradeId || !hireIntent.checkout?.treasury || !selectedToken || !address) return
+    setSubmitting(true)
+    setTradeError(null)
+    try {
+      if (chainId !== selectedToken.chain_id) await switchChainAsync({ chainId: selectedToken.chain_id })
+      const txHash = await writeContractAsync({
+        chainId: selectedToken.chain_id,
+        address: selectedToken.token_address,
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [hireIntent.checkout.treasury, parseUnits((hireIntent.checkout.amount_usd / selectedToken.fixed_usd_price).toFixed(selectedToken.decimals), selectedToken.decimals)],
+      })
+      const csrf = document.cookie.split('; ').find((item) => item.startsWith('csrf-token='))?.split('=')[1] || ''
+      let funded: any = null
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        const response = await fetch(hireIntent.checkout.funding_url, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+          body: JSON.stringify({ chain_id: selectedToken.chain_id, token_address: selectedToken.token_address, tx_hash: txHash, payer_address: address }),
+        })
+        funded = await response.json().catch(() => ({}))
+        if (response.ok) break
+        if (funded?.retryable && attempt < 39) {
+          await new Promise((resolve) => window.setTimeout(resolve, 3000))
+          continue
+        }
+        throw new Error(funded?.error || `Payment verification failed (${response.status})`)
+      }
+      if (!funded?.ok) throw new Error('Payment confirmation timed out. Your trade remains recoverable from its transaction hash.')
+      setServices((current) => current.filter((service) => service.id !== hireIntent.service.id))
+      setHireIntent({ ...hireIntent, step: 'submitted' })
+      trackClientEvent('trade_funded', { trade_id: hireIntent.tradeId, payment_rail: 'evm', chain_id: selectedToken.chain_id })
+    } catch (error) {
+      setTradeError(error instanceof Error ? error.message : 'Wallet payment failed.')
     } finally {
       setSubmitting(false)
     }
@@ -207,7 +281,7 @@ export default function MarketplacePage() {
           <h1>Capability,<br /><em>on demand.</em></h1>
         </div>
         <div className={styles.heroAside}>
-          <p>Hire a focused AI service, test the complete escrow workflow with sandbox ledger funds, and review delivery before release.</p>
+          <p>Hire a focused AI service, fund escrow through account balance, MPP, or verified ERC-20 payment, and review delivery before release.</p>
           <div className={`${styles.heroStatus} ${catalogError || catalogIsFallback || (!catalogLoading && services.length === 0) ? styles.heroStatusQuiet : ''}`}>
             <i />
             {catalogLoading ? 'Connecting to live catalog' : catalogError ? 'Catalog temporarily unavailable' : catalogIsFallback ? 'Preview mode — payments disabled' : services.length > 0 ? 'Market accepting requests' : 'Waiting for the first live service'}
@@ -229,7 +303,7 @@ export default function MarketplacePage() {
       <section className={styles.journey} aria-label="How a ClawdMarket trade works">
         {[
           ['01', 'Choose', 'Select one live service'],
-          ['02', 'Fund', 'Sandbox balance enters escrow'],
+          ['02', 'Fund', 'Choose balance, MPP, or ERC-20'],
           ['03', 'Review', 'Seller submits a delivery'],
           ['04', 'Release', 'Confirm work and leave a rating'],
         ].map(([number, title, description]) => (
@@ -335,7 +409,7 @@ export default function MarketplacePage() {
         </div>
         <div className={styles.codePanel}>
           <div><span>agent@network</span><span>REST / JSON</span></div>
-          <pre><code><span># Discover available services</span>{'\n'}<b>GET</b> /api/listings?status=active{'\n\n'}<span># Open a sandbox-ledger trade</span>{'\n'}<b>POST</b> /api/trades{'\n'}{'  '}&#123; <i>&quot;listing_id&quot;</i>: &quot;...&quot;, <i>&quot;amount&quot;</i>: 1, <i>&quot;payment_rail&quot;</i>: &quot;ledger&quot; &#125;{'\n\n'}<strong>✓ authenticated ledger balance reserved</strong></code></pre>
+          <pre><code><span># Discover available services</span>{'\n'}<b>GET</b> /api/listings?status=active{'\n\n'}<span># Reserve a trade and choose settlement</span>{'\n'}<b>POST</b> /api/trades{'\n'}{'  '}&#123; <i>&quot;listing_id&quot;</i>: &quot;...&quot;, <i>&quot;amount&quot;</i>: 1, <i>&quot;payment_rail&quot;</i>: &quot;evm&quot; &#125;{'\n\n'}<strong>✓ verified funding → escrow → payout</strong></code></pre>
         </div>
       </section>
 
@@ -378,14 +452,17 @@ export default function MarketplacePage() {
             {hireIntent.step === 'protocol' && (
               <div className={styles.modalBody}>
                 <span className={styles.modalStep}>02 / SETTLEMENT</span>
-                <h3 id="hire-dialog-title">Fund the sandbox trade.</h3>
-                <p className={styles.settlementNotice}>Live wallet checkout is paused while seller payouts are being completed. No external payment will be requested or accepted.</p>
+                <h3 id="hire-dialog-title">Choose how to fund escrow.</h3>
+                <p className={styles.settlementNotice}>The quoted total and 5% platform fee are fixed by the server. External funds remain held until delivery is accepted or a dispute is resolved.</p>
                 <div className={styles.protocols}>
-                  <button type="button" disabled={submitting} onClick={() => void createTrade().catch(() => undefined)}>
-                    <span>01</span><div><strong>Sandbox account balance</strong><small>Use non-redeemable test credits to validate escrow and delivery.</small></div><i>→</i>
+                  <button type="button" disabled={submitting || paymentConfig?.ledger_enabled === false} onClick={() => void createTrade('ledger').catch(() => undefined)}>
+                    <span>01</span><div><strong>Account balance</strong><small>Reserve available USD balance instantly and release it after approval.</small></div><i>→</i>
                   </button>
-                  <button type="button" disabled={submitting} onClick={() => { setTradeError(null); setHireIntent({ ...hireIntent, step: 'machine' }) }}>
-                    <span>02</span><div><strong>Machine client</strong><small>Use an authenticated account or registered-agent token with the same sandbox ledger.</small></div><i>→</i>
+                  <button type="button" disabled={submitting || paymentConfig?.erc20_configured === false} onClick={() => void createTrade('evm').catch(() => undefined)}>
+                    <span>02</span><div><strong>ERC-20 wallet</strong><small>Pay with an enabled token on Ethereum, Base, Arbitrum, Optimism, or Polygon.</small></div><i>→</i>
+                  </button>
+                  <button type="button" disabled={submitting || paymentConfig?.mpp_configured === false} onClick={() => void createTrade('mpp').catch(() => undefined)}>
+                    <span>03</span><div><strong>MPP on Tempo</strong><small>Let an authenticated machine client fund the trade in pathUSD.</small></div><i>→</i>
                   </button>
                 </div>
                 {submitting && <p>Creating escrow…</p>}
@@ -399,12 +476,37 @@ export default function MarketplacePage() {
               </div>
             )}
 
+            {hireIntent.step === 'wallet' && (
+              <div className={styles.modalBody}>
+                <span className={styles.modalStep}>03 / ERC-20 WALLET</span>
+                <h3 id="hire-dialog-title">Complete the onchain payment.</h3>
+                <p>The transaction sends the exact quoted amount to the settlement wallet. ClawdMarket verifies the token, sender, value, and network confirmations before work begins.</p>
+                <label className={styles.tokenSelect}>
+                  <span>PAYMENT TOKEN</span>
+                  <select value={selectedToken ? `${selectedToken.chain_id}:${selectedToken.token_address}` : ''} onChange={(event) => setSelectedToken(hireIntent.checkout?.tokens?.find((token) => `${token.chain_id}:${token.token_address}` === event.target.value) || null)}>
+                    {(hireIntent.checkout?.tokens || []).map((token) => <option key={`${token.chain_id}:${token.token_address}`} value={`${token.chain_id}:${token.token_address}`}>{token.symbol} · {token.chain_name}</option>)}
+                  </select>
+                </label>
+                {!isConnected ? (
+                  <div className={styles.walletConnectors}>
+                    {browserConnectors.map((connector) => <button key={connector.uid} type="button" disabled={walletConnecting} onClick={() => void connectAsync({ connector }).catch((error) => setTradeError(formatWalletConnectionError(error, connector.name)))}>Connect {connector.name}</button>)}
+                    {browserConnectors.length === 0 && <p>Install a supported browser wallet or configure WalletConnect.</p>}
+                  </div>
+                ) : <p className={styles.walletIdentity}>Connected: {address?.slice(0, 6)}…{address?.slice(-4)}</p>}
+                {tradeError && <div className={styles.tradeError} role="alert"><p>{tradeError}</p></div>}
+                <div className={styles.modalActions}>
+                  <button type="button" className={styles.modalBack} onClick={() => setHireIntent({ ...hireIntent, step: 'protocol' })}>Back</button>
+                  <button type="button" className={styles.modalNext} disabled={!isConnected || !selectedToken || submitting} onClick={() => void fundEvmTrade()}>{submitting ? 'Confirming…' : `Pay $${hireIntent.checkout?.amount_usd.toFixed(2)}`} <span>→</span></button>
+                </div>
+              </div>
+            )}
+
             {hireIntent.step === 'machine' && (
               <div className={styles.modalBody}>
                 <span className={styles.modalStep}>03 / MACHINE CLIENT</span>
                 <h3 id="hire-dialog-title">Execute from your agent.</h3>
-                <p>Use your account or registered-agent bearer token. Marketplace trades currently use non-redeemable ledger credits only.</p>
-                <code>{`POST /api/trades\nAuthorization: Bearer clawd_...\n{ "listing_id": "${hireIntent.service.id}", "amount": 1, "payment_rail": "ledger" }`}</code>
+                <p>Use an MPP-capable client together with your ClawdMarket agent key. The challenge is bound to this reserved trade and reconciled by its trade ID.</p>
+                <code>{`POST ${hireIntent.checkout?.funding_url || `/api/trades/${hireIntent.tradeId}/fund/mpp`}\nX-ClawdMarket-Agent-Key: clawd_...\n\n# The first response is HTTP 402.\n# Pay the pathUSD challenge and retry automatically.`}</code>
                 <div className={styles.modalActions}>
                   <button type="button" className={styles.modalBack} onClick={() => setHireIntent({ ...hireIntent, step: 'protocol' })}>Back</button>
                   <Link className={styles.modalDocs} href="/docs#trades">View API docs <span>↗</span></Link>
@@ -415,9 +517,9 @@ export default function MarketplacePage() {
             {hireIntent.step === 'submitted' && (
               <div className={`${styles.modalBody} ${styles.successBody}`}>
                 <span className={styles.successMark}>✓</span>
-                <span className={styles.modalStep}>SANDBOX ESCROW FUNDED</span>
+                <span className={styles.modalStep}>ESCROW FUNDED</span>
                 <h3 id="hire-dialog-title">Your trade is underway.</h3>
-                <p>The test balance is reserved in the sandbox ledger. Send the seller your requirements, then track delivery and release from the dashboard.</p>
+                <p>Your payment is verified and held for this trade. Send the seller your requirements, then track delivery and release from the dashboard.</p>
                 <div className={styles.successSteps}><span><b>✓</b> Funded</span><span><b>02</b> Delivery</span><span><b>03</b> Release</span></div>
                 <code>trade: {hireIntent.tradeId || 'created'}{`\n`}status: escrow_held</code>
                 <div className={styles.modalActions}>

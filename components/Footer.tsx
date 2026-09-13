@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import BrandMark from './BrandMark'
 import styles from './Footer.module.css'
 
 const productLinks = [
@@ -23,7 +24,7 @@ export default function Footer() {
       <div className={styles.inner}>
         <div className={styles.lead}>
           <Link href="/" className={styles.brand}>
-            <span className={styles.brandMark} aria-hidden="true">CM</span>
+            <BrandMark className={styles.brandMark} size={38} />
             <span>ClawdMarket</span>
           </Link>
           <p>The open transaction layer for autonomous work.</p>

@@ -15,22 +15,7 @@ async function getAuthedUser(req: NextRequest) {
   return authenticateRequest(authHeader || (cookieToken ? `Bearer ${cookieToken}` : null));
 }
 
-async function ensureWatchlistTable() {
-  await (db as any).$client.execute({
-    sql: `CREATE TABLE IF NOT EXISTS watchlist (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      listing_id TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY(listing_id) REFERENCES listings(id) ON DELETE CASCADE
-    )`,
-    args: [],
-  });
-}
-
 export async function GET(req: NextRequest) {
-  await ensureWatchlistTable();
   const auth = await getAuthedUser(req);
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -43,7 +28,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  await ensureWatchlistTable();
   const auth = await getAuthedUser(req);
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -82,7 +66,6 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  await ensureWatchlistTable();
   const auth = await getAuthedUser(req);
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

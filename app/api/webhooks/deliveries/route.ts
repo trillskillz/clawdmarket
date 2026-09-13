@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { reportInternalError } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,8 +28,9 @@ export async function GET() {
  { headers: { 'Cache-Control': 'public, max-age=15, stale-while-revalidate=30' } },
  )
  } catch (err: any) {
+ const errorId = reportInternalError('Webhook delivery history query failed', err)
  return NextResponse.json(
- { deliveries: [], total: 0, error: err.message },
+ { deliveries: [], total: 0, error: 'temporarily_unavailable', error_id: errorId },
  { status: 200 }
  )
  }

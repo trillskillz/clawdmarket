@@ -1,22 +1,29 @@
-export const EXTERNAL_TRADE_PAYMENT_ERROR = {
-  error_code: 'SELLER_PAYOUT_UNAVAILABLE',
-  message: 'External marketplace payments are temporarily unavailable until seller payouts are configured.',
-  state: 'no_funds_moved',
-  retryable: false,
-} as const
+import { getPaymentReadiness } from '@/lib/payment-config'
 
 export function getTradeSettlementReadiness() {
+  const readiness = getPaymentReadiness()
   return {
-    mode: 'sandbox' as const,
-    ledger: {
-      enabled: true,
-      redeemable: false,
-      description: 'Internal test balance for validating the marketplace workflow.',
+    mode: readiness.mode,
+    ledger: readiness.ledger,
+    evm: {
+      enabled: readiness.evm.enabled,
+      treasury: readiness.evm.treasury,
+      tokens: readiness.evm.tokens.map(({ chainId, chainName, address, symbol, decimals, confirmations, fixedUsdPrice }) => ({ chainId, chainName, address, symbol, decimals, confirmations, fixedUsdPrice })),
+    },
+    mpp: {
+      enabled: readiness.mpp.enabled,
+      platformEnabled: readiness.mpp.platformEnabled,
+      recipient: readiness.mpp.recipient,
+      chainId: readiness.mpp.chainId,
+      currency: readiness.mpp.currency,
+      rpcConfigured: readiness.mpp.rpcConfigured,
     },
     external: {
-      enabled: false,
-      rails: ['mpp', 'erc20-evm'] as const,
-      reason: EXTERNAL_TRADE_PAYMENT_ERROR.message,
+      enabled: readiness.evm.enabled || readiness.mpp.enabled,
+      rails: [
+        { id: 'mpp', enabled: readiness.mpp.enabled },
+        { id: 'erc20-evm', enabled: readiness.evm.enabled },
+      ],
     },
   }
 }

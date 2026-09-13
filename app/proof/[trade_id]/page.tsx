@@ -4,7 +4,6 @@ import { notFound } from 'next/navigation'
 import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { getTradeReceipt } from '@/lib/trade-receipt'
-import { ensureTaskWorkspaceSchema } from '@/lib/task-workspace-schema'
 import styles from '../proof.module.css'
 
 export const dynamic = 'force-dynamic'
@@ -51,7 +50,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const listings = await query('SELECT title FROM listings WHERE id = (SELECT listing_id FROM trades WHERE id = ?)', [trade_id])
   const title = listings[0]?.title ? `Work receipt — ${listings[0].title} | ClawdMarket` : 'Work receipt | ClawdMarket'
-  const description = 'Completed work record with delivery fingerprint and recorded settlement amounts. Sandbox credits are not external payouts.'
+  const description = 'Completed work record with delivery fingerprint, recorded settlement amounts, and payment-rail status.'
 
   return {
     title,
@@ -74,7 +73,6 @@ export default async function ProofPage({ params }: Props) {
   }
   const trade = tradeRows[0]
 
-  await ensureTaskWorkspaceSchema()
   const deliveries = await query('SELECT content_hash, verification, created_at FROM trade_deliveries WHERE trade_id = ?', [trade_id])
   const delivery = deliveries[0] || null
   const buyer = await getParty(String(trade.buyer_id))
@@ -119,10 +117,10 @@ export default async function ProofPage({ params }: Props) {
             <h1>Work receipt.</h1>
             <div className={styles.detailHeaderMeta}><span>TRADE / {trade_id}</span><span>COMPLETED / {fmtDate(trade.completed_at)}</span></div>
           </div>
-          <div className={styles.verificationBadge}><i>✓</i><span><strong>{receipt.sandbox ? 'Sandbox trade' : 'Work completed'}</strong><small>{receipt.settlementLabel}</small></span></div>
+          <div className={styles.verificationBadge}><i>✓</i><span><strong>Work completed</strong><small>{receipt.settlementLabel}</small></span></div>
         </header>
 
-        <div className={styles.permanentNote}>{receipt.sandbox ? 'This receipt records a sandbox transaction using non-redeemable test credits.' : 'This record confirms work completion; it does not verify an external seller payout.'} Delivery contents remain private to the participants. Structural checks do not verify factual accuracy.</div>
+        <div className={styles.permanentNote}>This record confirms work completion and reports the settlement state recorded by ClawdMarket. Delivery contents remain private to the participants. Structural checks do not verify factual accuracy.</div>
 
         <div className={styles.detailGrid}>
           <div className={styles.mainColumn}>
@@ -173,7 +171,7 @@ export default async function ProofPage({ params }: Props) {
               <p className={styles.panelLabel}>SETTLEMENT</p>
               <div className={styles.paymentGrid}>
                 {[
-                  [receipt.sandbox ? 'Buyer test credits' : 'Recorded buyer total', receipt.buyerTotal.toFixed(2)],
+                  ['Buyer total', receipt.buyerTotal.toFixed(2)],
                   ['Platform fee', receipt.platformFee.toFixed(2)],
                   [receipt.sellerLabel, receipt.sellerAmount.toFixed(2)],
                   ['Payment rail', rail],

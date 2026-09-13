@@ -15,6 +15,7 @@ let accept: typeof import('@/app/api/tasks/[id]/accept/[bid_id]/route').POST
 let fund: typeof import('@/app/api/tasks/[id]/fund/route').POST
 let deliver: typeof import('@/app/api/trades/[id]/delivery/route').POST
 let confirm: typeof import('@/app/api/trades/[id]/confirm/route').POST
+let dispute: typeof import('@/app/api/trades/[id]/dispute/route').POST
 let detail: typeof import('@/app/api/tasks/[id]/route').GET
 let patch: typeof import('@/app/api/tasks/[id]/route').PATCH
 let usage: typeof import('@/app/api/agents/usage/route').GET
@@ -29,6 +30,7 @@ before(async () => {
   process.env.JWT_SECRET = 'workspace-tests-only-secret'
   process.env.CHAT_ENCRYPTION_KEY = 'workspace-tests-only-chat-secret'
   process.env.WEBHOOK_SECRET_KEY = 'workspace-tests-only-webhook-secret'
+  process.env.CLAWDMARKET_LEDGER_ENABLED = 'true'
   process.env.CLAWDMARKET_AGENT_MAX_TRADE_CREDITS = '50'
   process.env.CLAWDMARKET_AGENT_DAILY_SPEND_CREDITS = '200'
   db = (await import('@/lib/db')).db
@@ -40,6 +42,7 @@ before(async () => {
   fund = (await import('@/app/api/tasks/[id]/fund/route')).POST
   deliver = (await import('@/app/api/trades/[id]/delivery/route')).POST
   confirm = (await import('@/app/api/trades/[id]/confirm/route')).POST
+  dispute = (await import('@/app/api/trades/[id]/dispute/route')).POST
   const taskRoute = await import('@/app/api/tasks/[id]/route')
   detail = taskRoute.GET
   patch = taskRoute.PATCH
@@ -50,6 +53,7 @@ before(async () => {
 })
 
 after(() => {
+  delete process.env.CLAWDMARKET_LEDGER_ENABLED
   db?.$client.close()
   if (fixtureDirectory) rmSync(fixtureDirectory, { recursive: true, force: true })
 })
@@ -133,6 +137,41 @@ test('job lifecycle links an accepted quote, one debit, validated private delive
   const completed = await (await detail(request('', f.buyer), params(f.taskId))).json()
   assert.equal(completed.status, 'completed')
   assert.equal(completed.workspace.proof_url, `/proof/${tradeId}`)
+})
+
+test('a dispute cannot race an external payout after settlement starts', async () => {
+  const f = await fixture()
+  const [listing] = await db.insert(schema.listings).values({
+    seller_id: `user_agent_${f.seller}`,
+    category: 'analysis',
+    title: 'Externally funded work',
+    description: 'A completed delivery waiting for payout.',
+    price_bankr: 25,
+    status: 'sold',
+  }).returning()
+  const tradeId = crypto.randomUUID()
+  await db.insert(schema.trades).values({
+    id: tradeId,
+    listing_id: listing.id,
+    buyer_id: f.buyer,
+    seller_id: `user_agent_${f.seller}`,
+    amount: 25,
+    fee: 1.25,
+    item_price: 25,
+    platform_fee: 1.25,
+    total_cost: 26.25,
+    seller_amount: 25,
+    dev_amount: 1.25,
+    payment_rail: 'evm',
+    payout_status: 'processing',
+    status: 'pending_release',
+  })
+
+  const response = await dispute(request('', f.buyer, { reason: 'Attempted after payout started' }), params(tradeId))
+  assert.equal(response.status, 409)
+  assert.match((await response.json()).error, /settlement has started/i)
+  const [unchanged] = await db.select().from(schema.trades).where(eq(schema.trades.id, tradeId))
+  assert.equal(unchanged.status, 'pending_release')
 })
 
 test('failed funding rolls back the private listing and job link', async () => {

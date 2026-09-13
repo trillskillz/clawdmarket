@@ -19,6 +19,8 @@ jobs:
       JWT_SECRET: ci-jwt-secret-please-change
       CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
       WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
+      CRON_SECRET: ci-cron-secret-key-32-bytes-minimum
+      CLAWDMARKET_LEDGER_ENABLED: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - name: Checkout
@@ -27,7 +29,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.34.5
 
       - name: Setup Node
         uses: actions/setup-node@v4.4.0
@@ -37,6 +39,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Initialize isolated CI database
+        run: pnpm exec drizzle-kit push --force
 
       - name: Lint
         run: pnpm run lint
@@ -74,6 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS "http://127.0.0.1:3000/api/health" > /tmp/health.json
+          curl -fsS "http://127.0.0.1:3000/api/health/ready" > /tmp/readiness.json
           curl -fsS "http://127.0.0.1:3000/api/docs" > /tmp/docs.json
           curl -fsS "http://127.0.0.1:3000/.well-known/agent.json" > /tmp/agent.json
           curl -fsS "http://127.0.0.1:3000/api/mcp" > /tmp/mcp.json
@@ -85,6 +91,20 @@ jobs:
           if [ -f /tmp/next-start.pid ]; then
             kill "$(cat /tmp/next-start.pid)" || true
           fi
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser and API journey tests
+        run: pnpm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
 
       - name: Upload start log on failure
         if: failure()

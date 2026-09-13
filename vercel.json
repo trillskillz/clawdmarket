@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/auto-confirm",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/monitor",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

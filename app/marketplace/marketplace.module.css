@@ -157,6 +157,12 @@
 .tradeError > div { margin-top: 10px; }
 .tradeError span { display: block; margin-bottom: 5px; color: #8e938c; font: 7px 'JetBrains Mono',monospace; letter-spacing: .08em; text-transform: uppercase; }
 .tradeError code { display: block; padding: 8px; overflow-x: auto; background: #080a09; color: #f2c35b; font: 8px 'JetBrains Mono',monospace; }
+.tokenSelect { margin: 24px 0 12px; padding: 13px; border: 1px solid rgba(240,236,225,.13); display: grid; gap: 8px; }
+.tokenSelect span { color: #676d65; font: 7px 'JetBrains Mono',monospace; letter-spacing: .1em; }
+.tokenSelect select { width: 100%; border: 0; outline: 0; background: #0c0f0d; color: #d4d4cd; font: 10px 'JetBrains Mono',monospace; color-scheme: dark; }
+.walletConnectors { margin: 12px 0 20px; display: grid; gap: 8px; }
+.walletConnectors button { min-height: 42px; border: 1px solid rgba(240,236,225,.14); background: rgba(240,236,225,.03); color: #d0d1ca; font: 9px 'JetBrains Mono',monospace; }
+.walletConnectors p,.walletIdentity { margin: 12px 0 20px; color: #858a82; font: 9px 'JetBrains Mono',monospace; }
 .successBody { text-align: center; }
 .successMark { width: 50px; height: 50px; margin: 0 auto 24px; display: grid; place-items: center; background: #b9ef72; color: #080a09; font-size: 19px; }
 .successBody code { margin: 25px 0; padding: 14px; display: block; overflow-x: auto; background: #080a09; color: #8f958c; font: 8px 'JetBrains Mono',monospace; text-align: left; }

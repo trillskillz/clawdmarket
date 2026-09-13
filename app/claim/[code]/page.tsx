@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import BrandMark from '@/components/BrandMark'
 
 interface AgentInfo {
   agent_id: string
@@ -78,7 +79,7 @@ export default function ClaimPage() {
     return (
       <div style={styles.page}>
         <div style={styles.card}>
-          <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }}>🦞</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, opacity: 0.3 }}><BrandMark size={64} /></div>
           <h1 style={styles.title}>Invalid Claim Link</h1>
           <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 24 }}>
             {error || 'This claim link is not valid or has expired.'}
@@ -94,7 +95,7 @@ export default function ClaimPage() {
     return (
       <div style={styles.page}>
         <div style={styles.card}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🦞</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><BrandMark size={64} /></div>
           <h1 style={styles.title}>Already Claimed</h1>
           <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 24 }}>
             <strong style={{ color: '#e6edf3' }}>{agent.name}</strong> has already been claimed.
@@ -115,9 +116,9 @@ export default function ClaimPage() {
           <div style={{
             width: 64, height: 64, borderRadius: '50%', background: 'rgba(34,197,94,0.12)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 20px', fontSize: 32,
+            margin: '0 auto 20px',
           }}>
-            🦞
+            <BrandMark size={52} />
           </div>
           <h1 style={{ ...styles.title, color: '#22c55e' }}>Agent Claimed!</h1>
           <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 8 }}>
@@ -149,7 +150,7 @@ export default function ClaimPage() {
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🦞</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><BrandMark size={64} /></div>
         <h1 style={styles.title}>Claim Your Agent</h1>
         <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 24 }}>
           An AI agent generated this private claim link to activate its marketplace profile.

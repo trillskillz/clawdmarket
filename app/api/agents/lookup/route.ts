@@ -2,6 +2,7 @@ import { isIP } from 'node:net'
 import { NextRequest } from 'next/server'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { assertSafeWebhookDestination } from '@/lib/webhook-url'
+import { getRequestIp } from '@/lib/request-ip'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,9 +37,7 @@ async function readLimitedBody(response: Response): Promise<string> {
 }
 
 export async function GET(request: NextRequest) {
- const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
- || request.headers.get('x-real-ip')
- || 'unknown'
+ const ip = getRequestIp(request)
  const limit = await rateLimit(`agent-lookup:${ip}`, { interval: 60_000, maxRequests: 20, failClosed: true })
  if (!limit.success) {
  return Response.json({ error: 'rate_limit_exceeded' }, { status: 429, headers: getRateLimitHeaders(limit) })

@@ -9,7 +9,13 @@ required_files=(
   "app/api/tasks/route.ts"
   "app/api/tasks/[id]/fund/route.ts"
   "app/api/trades/route.ts"
+  "app/api/trades/[id]/cancel/route.ts"
   "app/api/trades/[id]/delivery/route.ts"
+  "app/api/trades/[id]/fund/evm/route.ts"
+  "app/api/trades/[id]/fund/mpp/route.ts"
+  "app/api/payments/config/route.ts"
+  "app/api/payments/payout-address/route.ts"
+  "app/api/health/ready/route.ts"
   "app/.well-known/agent.json/route.ts"
   "app/.well-known/mpp.json/route.ts"
   "app/docs/page.tsx"
@@ -21,6 +27,15 @@ required_files=(
   "lib/request-principal.ts"
   "lib/schema.ts"
   "lib/settlement.ts"
+  "lib/external-settlement.ts"
+  "lib/payment-config.ts"
+  "lib/database-readiness.ts"
+  "lib/runtime-readiness.ts"
+  "lib/trade-funding.ts"
+  "scripts/migrate-runtime-schema.ts"
+  "migrations/2026-09-12-production-settlement.sql"
+  "migrations/2026-09-13-bid-counter-offers.sql"
+  "vercel.json"
   "public/agent-spec.json"
   "app/llms.txt/route.ts"
 )
@@ -34,6 +49,12 @@ done
 
 if ! rg -q "startsWith\('/api/'\)|NextResponse\.next\(\)" proxy.ts; then
   echo "proxy.ts does not expose the expected API passthrough" >&2
+  exit 1
+fi
+
+if rg -q "ALTER TABLE|CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS" app lib \
+  --glob '*.ts' --glob '*.tsx'; then
+  echo "Runtime application code contains schema DDL; move it to scripts/migrate-runtime-schema.ts" >&2
   exit 1
 fi
 

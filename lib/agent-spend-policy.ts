@@ -6,7 +6,7 @@ type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type AgentSpendSnapshot = {
   agent_id: string;
-  unit: 'sandbox_credits';
+  unit: 'usd';
   per_trade_limit: number;
   daily_limit: number;
   spent_today: number;
@@ -25,8 +25,8 @@ function round2(value: number): number {
 
 export function getAgentSpendLimits() {
   return {
-    perTrade: positiveEnv('CLAWDMARKET_AGENT_MAX_TRADE_CREDITS', 50),
-    daily: positiveEnv('CLAWDMARKET_AGENT_DAILY_SPEND_CREDITS', 200),
+    perTrade: positiveEnv('CLAWDMARKET_AGENT_MAX_TRADE_USD', positiveEnv('CLAWDMARKET_AGENT_MAX_TRADE_CREDITS', 50)),
+    daily: positiveEnv('CLAWDMARKET_AGENT_DAILY_SPEND_USD', positiveEnv('CLAWDMARKET_AGENT_DAILY_SPEND_CREDITS', 200)),
   };
 }
 
@@ -44,7 +44,11 @@ async function spentSince(tx: Transaction | typeof db, buyerId: string, since: D
       spent: sql<number>`COALESCE(SUM(CASE WHEN ${trades.total_cost} > 0 THEN ${trades.total_cost} ELSE ${trades.amount} + ${trades.fee} END), 0)`,
     })
     .from(trades)
-    .where(and(eq(trades.buyer_id, buyerId), gte(trades.created_at, since)));
+    .where(and(
+      eq(trades.buyer_id, buyerId),
+      gte(trades.created_at, since),
+      sql`${trades.status} NOT IN ('pending', 'cancelled')`,
+    ));
   return round2(Number(row?.spent || 0));
 }
 
@@ -64,7 +68,7 @@ export async function getAgentSpendSnapshot(agentId: string, buyerId = `user_age
   const spentToday = await spentSince(db, buyerId, windowStart(now));
   return {
     agent_id: agentId,
-    unit: 'sandbox_credits',
+    unit: 'usd',
     per_trade_limit: limits.perTrade,
     daily_limit: limits.daily,
     spent_today: spentToday,
@@ -82,7 +86,7 @@ export async function enforceAgentSpendPolicy(
   const spentToday = await spentSince(tx, input.buyerId, windowStart(now));
   const policy: AgentSpendSnapshot = {
     agent_id: input.agentId,
-    unit: 'sandbox_credits',
+    unit: 'usd',
     per_trade_limit: limits.perTrade,
     daily_limit: limits.daily,
     spent_today: spentToday,
@@ -93,14 +97,14 @@ export async function enforceAgentSpendPolicy(
   if (input.totalCost > limits.perTrade) {
     throw new AgentSpendPolicyError(
       'AGENT_PER_TRADE_LIMIT',
-      `Agent trade total ${round2(input.totalCost)} exceeds the ${limits.perTrade} sandbox-credit per-trade limit.`,
+      `Agent trade total $${round2(input.totalCost)} exceeds the $${limits.perTrade} per-trade limit.`,
       policy,
     );
   }
   if (round2(spentToday + input.totalCost) > limits.daily) {
     throw new AgentSpendPolicyError(
       'AGENT_DAILY_SPEND_LIMIT',
-      `Agent daily spend would exceed the ${limits.daily} sandbox-credit limit.`,
+      `Agent daily spend would exceed the $${limits.daily} limit.`,
       policy,
     );
   }

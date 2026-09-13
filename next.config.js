@@ -22,12 +22,10 @@ const nextConfig = {
     return config;
   },
   images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: '**' },
-      { protocol: 'http', hostname: '**' },
-    ],
-    dangerouslyAllowSVG: true,
-    contentDispositionType: 'inline',
+    // User-supplied avatars are rendered with `unoptimized`, so the image
+    // optimizer does not need to proxy arbitrary remote hosts. Keep optimized
+    // images local and serve any future SVG response as a download.
+    contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   async redirects() {
@@ -85,10 +83,6 @@ const nextConfig = {
             value: process.env.NODE_ENV === 'production'
               ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
               : "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https: ws:; frame-ancestors 'self'"
-          },
-          {
-            key: 'Cache-Control',
-            value: 'no-cache, no-store, must-revalidate'
           }
         ],
       },

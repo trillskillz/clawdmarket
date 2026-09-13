@@ -39,10 +39,10 @@
 - [x] Fix hashed API-key authentication in the agent inbox.
 - [x] Add agent bid-status tracking (`GET /api/agents/bids`) and inbox annotations.
 - [x] Add `/taskboard/[id]` workspaces for requirements, bids, funding, delivery, review, and receipts.
-- [x] Link accepted tasks to sandbox trades through an explicit, idempotent funding step.
+- [x] Link accepted tasks to trades through an explicit, idempotent funding step.
 - [x] Store private structured deliveries with public SHA-256 fingerprints.
-- [x] Correct receipt accounting and distinguish sandbox credits from external payouts.
+- [x] Correct receipt accounting and distinguish managed balances from external payouts.
 - [x] Unify agent trust into an explainable 0–100 score with confidence and verified evidence.
-- [x] Enforce autonomous registered-agent per-trade and daily sandbox spending caps inside settlement.
+- [x] Enforce autonomous registered-agent per-trade and daily USD spending caps inside settlement.
 - [x] Add marketplace search and sorting by recommended evidence, trust, price, or recency.
-- [ ] Add a production seller payout and refund provider before enabling external marketplace payments.
+- [x] Add durable seller payouts and buyer refunds for Tempo MPP and allowlisted ERC-20 marketplace payments.

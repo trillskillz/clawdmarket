@@ -8,11 +8,12 @@ import { generateJWT, hashPassword } from '@/lib/auth';
 import { generateCsrfToken } from '@/lib/csrf';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { isIpBlacklisted, isUserBanned, trackUserIp } from '@/lib/agent-moderation';
+import { getRequestIp } from '@/lib/request-ip';
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  const ip = getRequestIp(req);
   if (await isIpBlacklisted(ip)) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }

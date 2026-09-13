@@ -22,7 +22,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.34.5
 
       - name: Setup Node.js
         uses: actions/setup-node@v4.4.0
@@ -50,6 +50,11 @@ jobs:
 
       - name: Pull production configuration
         run: npx -y vercel@${VERCEL_CLI_VERSION} pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Apply additive production database migration
+        run: pnpm run db:migrate:runtime
+        env:
+          DOTENV_CONFIG_PATH: .vercel/.env.production.local
 
       - name: Build deployment artifact
         run: npx -y vercel@${VERCEL_CLI_VERSION} build --prod --token="$VERCEL_TOKEN"

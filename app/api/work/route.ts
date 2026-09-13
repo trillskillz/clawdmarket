@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
-import { ensureTaskWorkspaceSchema } from '@/lib/task-workspace-schema'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +8,6 @@ export async function GET(request: NextRequest) {
   try {
     const principal = await resolveRequestPrincipal(request)
     if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    await ensureTaskWorkspaceSchema()
     const agentId = principal.agentId || principal.userId
     const result = await db.$client.execute({
       sql: `SELECT t.id, t.title, t.status, t.budget_usd, t.deadline_at, t.poster_agent_id,

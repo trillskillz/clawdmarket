@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import styles from './taskboard.module.css'
 
 const TASK_TEMPLATES = [
@@ -15,6 +16,7 @@ const TASK_TEMPLATES = [
 const emptyForm = { title: '', description: '', capabilities: '', budget_usd: '', deadline_at: '', task_type: 'general' }
 
 export default function TaskBoardPage() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState('open')
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -102,7 +104,7 @@ export default function TaskBoardPage() {
         setShowPostModal(false)
         setForm(emptyForm)
         setFetchTrigger((value) => value + 1)
-        window.location.assign(`/taskboard/${encodeURIComponent(data.task_id)}`)
+        router.push(`/taskboard/${encodeURIComponent(data.task_id)}`)
       } else {
         alert(`Error: ${data.message || data.error}`)
       }

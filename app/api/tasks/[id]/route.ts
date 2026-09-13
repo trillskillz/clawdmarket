@@ -6,9 +6,9 @@ import { agents, bids, tasks, task_workspaces, trades, trade_deliveries } from '
 import { getTaskPendingActions } from '@/lib/agent-contract';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { validateCsrf } from '@/lib/csrf';
-import { ensureTaskWorkspaceSchema } from '@/lib/task-workspace-schema';
 import { requirementsSchema } from '@/lib/delivery-validation';
 import { calculateTradeFinancials } from '@/lib/settlement';
+import { checkoutForTrade } from '@/lib/trade-checkout';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,11 +25,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const callerIds = [principal?.userId, principal?.agentId].filter(Boolean);
   const isPoster = callerIds.includes(task.posterAgentId);
   const isSeller = Boolean(task.assignedAgentId && callerIds.includes(task.assignedAgentId));
-  await ensureTaskWorkspaceSchema();
   const [workspace] = await db.select().from(task_workspaces).where(eq(task_workspaces.task_id, id)).limit(1);
   const [trade] = workspace?.trade_id ? await db.select().from(trades).where(eq(trades.id, workspace.trade_id)).limit(1) : [];
-  const [delivery] = trade && (isPoster || isSeller)
-    ? await db.select().from(trade_deliveries).where(eq(trade_deliveries.trade_id, trade.id)).limit(1) : [];
+  const activeTrade = trade?.status === 'cancelled' ? null : trade;
+  const [delivery] = activeTrade && (isPoster || isSeller)
+    ? await db.select().from(trade_deliveries).where(eq(trade_deliveries.trade_id, activeTrade.id)).limit(1) : [];
   const winningBid = enrichedBids.find((bid) => bid.id === task.winningBidId);
 
   return NextResponse.json({
@@ -46,10 +46,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       required_json_keys: JSON.parse(workspace?.required_json_keys || '[]'),
       minimum_sources: workspace?.minimum_sources ?? 0,
       quote: winningBid ? calculateTradeFinancials(workspace?.agreed_price ?? winningBid.priceUsd) : null,
-      trade: (isPoster || isSeller) ? trade ?? null : null,
-      funded: Boolean(trade),
+      trade: (isPoster || isSeller) ? activeTrade : null,
+      checkout: (isPoster && activeTrade?.status === 'pending') ? checkoutForTrade(activeTrade) : null,
+      funded: Boolean(activeTrade && activeTrade.status !== 'pending'),
       delivery: delivery ? { ...delivery, artifact: delivery.artifact_json ? JSON.parse(delivery.artifact_json) : null, verification: JSON.parse(delivery.verification) } : null,
-      proof_url: trade?.status === 'completed' ? `/proof/${trade.id}` : null,
+      proof_url: activeTrade?.status === 'completed' ? `/proof/${activeTrade.id}` : null,
     },
     pendingActions: getTaskPendingActions(task, enrichedBids, callerAgentId),
   }, { headers: { 'Cache-Control': 'no-store' } });
@@ -74,7 +75,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!task) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   const callerIds = new Set([principal.userId, principal.agentId].filter(Boolean));
   if (!callerIds.has(task.posterAgentId)) return NextResponse.json({ error: 'forbidden', message: 'Only the task poster can update it' }, { status: 403 });
-  await ensureTaskWorkspaceSchema();
   if (parsed.data.action === 'requirements') {
     const requirements = parsed.data.requirements;
     const saved = await db.transaction(async (tx) => {

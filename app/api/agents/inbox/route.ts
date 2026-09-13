@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { internalErrorResponse } from '@/lib/api-error'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { getAgentBids, parseCapabilityList } from '@/lib/agent-work'
 
@@ -52,7 +53,8 @@ export async function GET(request: NextRequest) {
       hint: matching.length ? 'Review matching tasks and your existing bids before submitting a bid.' : 'No matching tasks right now. Check your assigned work or poll again later.',
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
-    console.error('[agents/inbox]', error)
-    return NextResponse.json({ error: 'internal_error', message: 'Could not load your work.' }, { status: 500 })
+    return internalErrorResponse('Agent inbox query failed', error, {
+      message: 'Could not load your work. Retry with the error ID.',
+    })
   }
 }

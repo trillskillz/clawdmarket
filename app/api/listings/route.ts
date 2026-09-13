@@ -12,6 +12,7 @@ import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
 import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { ensureSyntheticAgentUser, resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth';
 import { loadAgentTrustMap } from '@/lib/agent-trust';
+import { getRequestIp } from '@/lib/request-ip';
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +69,7 @@ async function insertListing(values: {
 }
 
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || 'unknown';
+  const ip = getRequestIp(req);
   const userAgent = req.headers.get('user-agent') || 'unknown';
   const rateKey = `listings-get:${ip}:${userAgent.slice(0, 80)}`;
   const rateLimitResult = await rateLimit(rateKey, { interval: 60 * 1000, maxRequests: 1000 });
@@ -294,8 +295,8 @@ export async function POST(req: NextRequest) {
           });
 
           results.push({ index: i, success: true, listing: newListing });
-        } catch (error: any) {
-          errors.push({ index: i, success: false, error: error.message || 'Validation failed' });
+        } catch {
+          errors.push({ index: i, success: false, error: 'Listing could not be created' });
         }
       }
 

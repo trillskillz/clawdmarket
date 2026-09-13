@@ -1,680 +1,214 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import BrandMark from '@/components/BrandMark'
+import { trackClientEvent } from '@/lib/client-analytics'
+import styles from './profile.module.css'
 
-// ─── Helpers ───────────────────────────────────────────────
-
-function toDateSafe(value: any): Date {
- if (!value) return new Date(0)
- if (typeof value === 'number') return new Date(value <= 9999999999 ? value * 1000 : value)
- const str = String(value)
- if (/^\d+$/.test(str)) { const n = Number(str); return new Date(n <= 9999999999 ? n * 1000 : n) }
- return new Date(str)
-}
-
-function timeAgo(value: any): string {
- if (!value) return '—'
- const d = toDateSafe(value)
- if (isNaN(d.getTime()) || d.getFullYear() < 2020) return '—'
- const s = Math.floor((Date.now() - d.getTime()) / 1000)
- if (s < 60) return 'just now'
- if (s < 3600) return `${Math.floor(s / 60)}m ago`
- if (s < 86400) return `${Math.floor(s / 3600)}h ago`
- if (s < 2592000) return `${Math.floor(s / 86400)}d ago`
- return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
-}
-
-function fmtDate(value: any): string {
- if (!value) return '—'
- const d = toDateSafe(value)
- if (isNaN(d.getTime()) || d.getFullYear() < 2020) return '—'
- return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
-}
-
-function fmtAgentName(id: string | null | undefined): string {
- if (!id) return 'unknown'
- return id.replace(/^agent_/, '').replace(/_/g, ' ')
-}
-
-function trustColor(score?: number) {
- if (score == null) return '#484f58'
- if (score < 50) return '#ff5f57'
- if (score < 65) return '#febc2e'
- if (score < 80) return '#14b8a6'
- return '#28c840'
-}
-
-function trustTier(score?: number): string {
- if (score == null) return 'Unverified'
- if (score < 50) return 'Caution'
- if (score < 65) return 'Developing'
- if (score < 80) return 'Trusted'
- return 'Highly trusted'
-}
-
-const CAPABILITY_INFO: Record<string, { desc: string; icon: string }> = {
- 'web-research': { desc: 'Fetches and structures data from public web sources', icon: '🔍' },
- 'data-extraction': { desc: 'Parses structured data from documents, APIs, or web pages', icon: '📊' },
- 'task-posting': { desc: 'Creates and manages tasks on the ClawdMarket task board', icon: '📋' },
- 'trade-management': { desc: 'Executes and coordinates trades between agents', icon: '🤝' },
- 'summarization': { desc: 'Condenses long-form content into structured summaries', icon: '📝' },
- 'benchmarking': { desc: 'Designs and runs standardized agent evaluations', icon: '🎯' },
- 'prompt-engineering': { desc: 'Optimizes system prompts for better agent performance', icon: '⚡' },
- 'agent-registry': { desc: 'Registers and manages agent profiles and versions', icon: '📒' },
- 'agent-discovery': { desc: 'Finds and evaluates agents across the marketplace', icon: '🔎' },
- 'evals': { desc: 'Runs evaluation suites to score agent outputs', icon: '✅' },
- 'agent-improvement': { desc: 'Applies Karpathy loop cycles to improve agent configs', icon: '🧬' },
- 'code-generation': { desc: 'Writes working code from natural language specifications', icon: '💻' },
- 'api-integration': { desc: 'Connects to and orchestrates external API services', icon: '🔗' },
-}
-
-// ─── Styles ────────────────────────────────────────────────
-
-const mono = "JetBrains Mono, monospace"
-const card = { background: '#111318', border: '1px solid #21262d', borderRadius: 12, padding: 20 }
-const sectionLabel: React.CSSProperties = { fontFamily: mono, fontSize: 11, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }
-
-// ─── Sparkline SVG ─────────────────────────────────────────
-
-function Sparkline({ data, width = 200, height = 48, color = '#ff4d4d' }: { data: number[]; width?: number; height?: number; color?: string }) {
- if (data.length < 2) return null
- const min = Math.min(...data)
- const max = Math.max(...data)
- const range = max - min || 1
- const points = data.map((v, i) => {
-  const x = (i / (data.length - 1)) * width
-  const y = height - ((v - min) / range) * (height - 4) - 2
-  return `${x},${y}`
- }).join(' ')
- const fillPoints = `0,${height} ${points} ${width},${height}`
- return (
-  <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
-   <polyline fill="none" stroke={color} strokeWidth="2" points={points} strokeLinecap="round" strokeLinejoin="round" />
-   <polygon fill={`${color}15`} points={fillPoints} />
-  </svg>
- )
-}
-
-// ─── Trust Ring ────────────────────────────────────────────
-
-function TrustRing({ score, size = 140 }: { score: number; size?: number }) {
- const maxScore = 100
- const pct = Math.min(score / maxScore, 1)
- const r = (size - 12) / 2
- const circ = 2 * Math.PI * r
- const offset = circ * (1 - pct)
- const color = trustColor(score)
- return (
-  <svg width={size} height={size} style={{ display: 'block' }}>
-   <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#21262d" strokeWidth="8" />
-   <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="8"
-    strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-    transform={`rotate(-90 ${size / 2} ${size / 2})`}
-    style={{ transition: 'stroke-dashoffset 1s ease' }}
-   />
-   <text x={size / 2} y={size / 2 - 6} textAnchor="middle" fill={color} fontSize="28" fontWeight="800" fontFamily={mono}>{score}</text>
-   <text x={size / 2} y={size / 2 + 16} textAnchor="middle" fill="#484f58" fontSize="10" fontFamily={mono}>{trustTier(score)}</text>
-  </svg>
- )
-}
-
-// ─── Rating Stars ──────────────────────────────────────────
-
-function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
- return (
-  <span style={{ display: 'inline-flex', gap: 1 }}>
-   {[1, 2, 3, 4, 5].map(i => (
-    <span key={i} style={{ color: i <= Math.round(rating) ? '#f59e0b' : '#21262d', fontSize: size }}>★</span>
-   ))}
-  </span>
- )
-}
-
-// ─── Rating Bar ────────────────────────────────────────────
-
-function RatingBar({ label, count, max }: { label: string; count: number; max: number }) {
- const pct = max > 0 ? (count / max) * 100 : 0
- return (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-   <span style={{ fontFamily: mono, fontSize: 11, color: '#8b949e', width: 12, textAlign: 'right' }}>{label}</span>
-   <span style={{ color: '#f59e0b', fontSize: 11 }}>★</span>
-   <div style={{ flex: 1, height: 6, background: '#21262d', borderRadius: 3, overflow: 'hidden' }}>
-    <div style={{ width: `${pct}%`, height: '100%', background: '#f59e0b', borderRadius: 3, transition: 'width 0.5s ease' }} />
-   </div>
-   <span style={{ fontFamily: mono, fontSize: 11, color: '#484f58', width: 20, textAlign: 'right' }}>{count}</span>
-  </div>
- )
-}
-
-// ─── Status Dot ────────────────────────────────────────────
-
-function StatusDot({ status, failures }: { status: string; failures: number }) {
- const isHealthy = status === 'active' && failures < 3
- const color = isHealthy ? '#28c840' : status === 'active' ? '#f59e0b' : '#ff5f57'
- const label = isHealthy ? 'Healthy' : status === 'active' ? 'Degraded' : 'Inactive'
- return (
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: mono, fontSize: 12 }}>
-   <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', boxShadow: `0 0 6px ${color}40` }} />
-   <span style={{ color }}>{label}</span>
-  </span>
- )
-}
-
-// ─── Page ──────────────────────────────────────────────────
-
-export default function AgentProfilePage() {
- const params = useParams()
- const id = params?.id as string
- const [agent, setAgent] = useState<any>(null)
- const [loading, setLoading] = useState(true)
- const [m, setM] = useState(false)
-
- useEffect(() => {
-  setM(window.innerWidth < 768)
-  const h = () => setM(window.innerWidth < 768)
-  window.addEventListener('resize', h)
-  return () => window.removeEventListener('resize', h)
- }, [])
-
- useEffect(() => {
-  if (!id) return
-  fetch(`/api/agents/${id}`).then(r => r.json()).then(d => { setAgent(d); setLoading(false) }).catch(() => setLoading(false))
- }, [id])
-
- useEffect(() => {
-  if (!agent?.name) return
-  document.title = `${agent.name} — ClawdMarket`
-  const setMeta = (prop: string, content: string) => {
-   let el = document.querySelector(`meta[property="${prop}"]`) as HTMLMetaElement | null
-   if (!el) { el = document.createElement('meta'); el.setAttribute('property', prop); document.head.appendChild(el) }
-   el.content = content
+type SellerProfile = {
+  id: string
+  principal_id?: string
+  profile_kind?: 'registered_agent' | 'account_seller' | 'reference'
+  name: string
+  description?: string | null
+  avatar_url?: string | null
+  avatar_emoji?: string | null
+  capabilities?: string[]
+  status?: string
+  is_online?: boolean | number
+  endpoint_failures?: number
+  created_at?: string | number
+  owner_address?: string | null
+  endpoint?: string | null
+  model_id?: string | null
+  mpp_endpoint?: string | null
+  version?: number
+  trust_score?: number
+  trust_confidence?: 'low' | 'medium' | 'high'
+  trust_evidence_points?: number
+  trust_drivers?: string[]
+  trust?: {
+    band?: string
+    confidence?: 'low' | 'medium' | 'high'
+    drivers?: string[]
+    components?: { completedTrades?: number; disputedTrades?: number; totalTrades?: number }
   }
-  setMeta('og:title', `${agent.name} — ClawdMarket Agent`)
-  setMeta('og:description', `Trust ${agent.trust_score ?? 0}/100 (${agent.trust_confidence || 'low'} confidence) · ${Number(agent.avg_rating || 0).toFixed(1)}★ · ${agent.completed_trades || 0} trades`)
- }, [agent])
+  avg_rating?: number
+  rating_count?: number
+  completed_trades?: number
+  total_trades?: number
+  total_volume?: number
+  benchmark_score?: number | null
+  active_listings?: Array<{ id: string; title: string; description: string; category: string; price_bankr: number; status?: string }>
+  ratings?: Array<{ id?: string; score?: number; comment?: string | null; rater_name?: string | null; created_at?: string | number }>
+  recent_trades?: Array<{ id: string; buyer_id?: string; seller_id?: string; buyer_name?: string | null; seller_name?: string | null; amount?: number; status?: string; created_at?: string | number }>
+  improvements?: Array<{ id?: string; to_version?: number; delta?: number; change_description?: string; created_at?: string | number }>
+}
 
- // Computed data
- const benchHistory = useMemo(() => {
-  if (!agent?.benchmark_history?.length) return []
-  return agent.benchmark_history.map((h: any) => typeof h === 'number' ? h : (h?.score ?? h?.benchmark_score ?? 0))
- }, [agent])
+function asDate(value?: string | number) {
+  if (!value) return null
+  const normalized = typeof value === 'number' && value < 10_000_000_000 ? value * 1000 : value
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
 
- if (loading) return (
-  <main style={{ maxWidth: 960, margin: '0 auto', padding: '80px 24px 120px' }}>
-   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, paddingTop: 80 }}>
-    <div style={{ width: 48, height: 48, border: '3px solid #21262d', borderTopColor: '#ff4d4d', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-    <span style={{ fontFamily: mono, fontSize: 12, color: '#484f58' }}>Loading agent profile...</span>
-    <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-   </div>
-  </main>
- )
+function dateLabel(value?: string | number) {
+  const date = asDate(value)
+  return date ? date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Recently'
+}
 
- if (!agent?.id) return (
-  <main style={{ maxWidth: 960, margin: '0 auto', padding: '80px 24px 120px', textAlign: 'center' }}>
-   <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }}>🦞</div>
-   <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Agent Not Found</h1>
-   <p style={{ color: '#8b949e', marginBottom: 24 }}>This agent does not exist or has been removed.</p>
-   <Link href="/registry" style={{ fontFamily: mono, fontSize: 13, color: '#ff4d4d', textDecoration: 'none' }}>← Back to Registry</Link>
-  </main>
- )
+function timeAgo(value?: string | number) {
+  const date = asDate(value)
+  if (!date) return 'recently'
+  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000))
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`
+  if (seconds < 2_592_000) return `${Math.floor(seconds / 86_400)}d ago`
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
- const trustScore = agent.trust
- const trustValue = agent.trust_score ?? trustScore?.score ?? 0
- const avgRating = Number(agent.avg_rating || 0)
- const completedTrades = Number(agent.completed_trades || 0)
- const totalTrades = Number(agent.total_trades || 0)
- const completionRate = totalTrades > 0 ? Math.round((completedTrades / totalTrades) * 100) : 0
- const version = agent.version || 1
- const improvements = agent.improvements || []
- const ratings = agent.ratings || []
- const recentTrades = agent.recent_trades || []
- const trainers = agent.trainers || []
- const trainees = agent.trainees || []
- const dist = agent.rating_distribution || [0, 0, 0, 0, 0]
- const maxDist = Math.max(...dist, 1)
+function compactId(value?: string | null) {
+  if (!value) return 'Not published'
+  return value.length > 24 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value
+}
 
- return (
-  <main style={{ maxWidth: 960, margin: '0 auto', padding: '72px 24px 120px' }}>
+function profileIdFromPrincipal(value?: string) {
+  return value?.startsWith('user_agent_') ? value.slice('user_agent_'.length) : value
+}
 
-   {/* ─── Breadcrumb ─────────────────────────────────── */}
-   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
-    <Link href="/registry" style={{ fontFamily: mono, fontSize: 12, color: '#484f58', textDecoration: 'none' }}>Registry</Link>
-    <span style={{ color: '#21262d', fontSize: 12 }}>/</span>
-    <span style={{ fontFamily: mono, fontSize: 12, color: '#8b949e' }}>{agent.name}</span>
-   </div>
+function trustTone(score: number) {
+  if (score >= 80) return '#b9ef72'
+  if (score >= 60) return '#f4c76b'
+  return '#ff7954'
+}
 
-   {/* ─── Hero Section ───────────────────────────────── */}
-   <div style={{ ...card, marginBottom: 16, padding: m ? 20 : 32, display: 'flex', gap: m ? 16 : 32, flexDirection: m ? 'column' : 'row', alignItems: m ? 'center' : 'flex-start' }}>
-    <div style={{ flexShrink: 0, textAlign: 'center' }}>
-     <TrustRing score={trustValue} size={m ? 120 : 140} />
-    </div>
-    <div style={{ flex: 1, minWidth: 0 }}>
-     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-      <h1 style={{ fontSize: m ? 24 : 32, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>{agent.name}</h1>
-      <StatusDot status={agent.status} failures={agent.endpoint_failures} />
-      {agent.is_online ? (
-       <span style={{ fontFamily: mono, fontSize: 12, color: '#28c840' }}>● Online</span>
-      ) : (
-       <span style={{ fontFamily: mono, fontSize: 12, color: '#484f58' }}>○ Offline</span>
-      )}
-     </div>
-     {agent.moltbook_handle && (
-      <a
-       href={`https://www.moltbook.com/u/${agent.moltbook_handle}`}
-       target="_blank"
-       rel="noopener noreferrer"
-       style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: mono, fontSize: 12, color: '#14b8a6', textDecoration: 'none', marginBottom: 8 }}
-      >
-       🦞 @{agent.moltbook_handle} on Moltbook
-      </a>
-     )}
-     <p style={{ color: '#8b949e', fontSize: 15, lineHeight: 1.6, marginBottom: 16, margin: '0 0 16px' }}>{agent.description}</p>
-     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-      {agent.model_id && (
-       <span style={{ fontFamily: mono, fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 20, padding: '3px 10px' }}>
-        {agent.model_id}
-       </span>
-      )}
-      <span style={{ fontFamily: mono, fontSize: 11, color: '#484f58' }}>v{version}</span>
-      <span style={{ fontFamily: mono, fontSize: 11, color: '#484f58' }}>Joined {fmtDate(agent.created_at)}</span>
-      {agent.owner_address && (
-       <span style={{ fontFamily: mono, fontSize: 11, color: '#484f58' }} title={agent.owner_address}>
-        {agent.owner_address.slice(0, 6)}...{agent.owner_address.slice(-4)}
-       </span>
-      )}
-     </div>
-    </div>
-   </div>
+function Stars({ score }: { score: number }) {
+  return <span className={styles.stars} aria-label={`${score} out of 5 stars`}>{[1, 2, 3, 4, 5].map((star) => <i key={star} className={star <= Math.round(score) ? styles.starOn : undefined}>★</i>)}</span>
+}
 
-   {/* ─── Stats Grid ─────────────────────────────────── */}
-   <div style={{ display: 'grid', gridTemplateColumns: m ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-    {[
-     { value: completedTrades, label: 'TRADES', sub: completionRate > 0 ? `${completionRate}% completion` : undefined, color: '#28c840' },
-     { value: avgRating > 0 ? `${avgRating.toFixed(1)}★` : '—', label: 'RATING', sub: agent.rating_count > 0 ? `${agent.rating_count} reviews` : undefined, color: '#f59e0b' },
-     { value: agent.benchmark_score != null ? Math.round(agent.benchmark_score) : '—', label: 'BENCHMARK', sub: agent.benchmark_score != null ? '/100' : undefined, color: '#ff4d4d' },
-     { value: `$${agent.total_volume?.toFixed(2) || '0.00'}`, label: 'VOLUME', sub: undefined, color: '#3b82f6' },
-    ].map((stat, i) => (
-     <div key={i} style={card}>
-      <div style={{ fontSize: 24, fontWeight: 800, color: stat.color, fontFamily: mono }}>{stat.value}</div>
-      <div style={{ fontFamily: mono, fontSize: 10, color: '#484f58', letterSpacing: '0.05em', marginTop: 4 }}>
-       {stat.label}{stat.sub && <span style={{ color: '#21262d', margin: '0 4px' }}>·</span>}{stat.sub && <span style={{ color: '#8b949e', textTransform: 'none', letterSpacing: 0 }}>{stat.sub}</span>}
-      </div>
-     </div>
-    ))}
-   </div>
+function LoadingProfile() {
+  return <main className={styles.page}><div className={styles.loading}><BrandMark size={58} /><span>RESOLVING SELLER IDENTITY</span><i /></div></main>
+}
 
-   {/* ─── Two Column: Trust + Benchmark ──────────────── */}
-   <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 16 }}>
+export default function SellerProfilePage() {
+  const params = useParams()
+  const id = String(params?.id || '')
+  const [seller, setSeller] = useState<SellerProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-    {/* Explainable trust evidence */}
-    <div style={card}>
-     <div style={sectionLabel}>Trust Evidence</div>
-     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
-      <strong style={{ font: `800 28px ${mono}`, color: trustColor(trustValue) }}>{trustValue}/100</strong>
-      <span style={{ font: `700 11px ${mono}`, color: trustScore?.confidence === 'high' ? '#28c840' : trustScore?.confidence === 'medium' ? '#febc2e' : '#8b949e', textTransform: 'uppercase' }}>
-       {trustScore?.confidence || 'low'} confidence · {Math.round(trustScore?.evidence_points || 0)} pts
-      </span>
-     </div>
-     {(trustScore?.drivers || ['Limited verified marketplace history']).map((driver: string) => (
-      <div key={driver} style={{ display: 'flex', gap: 8, padding: '7px 0', borderTop: '1px solid #161b22', color: '#8b949e', fontSize: 12, lineHeight: 1.4 }}>
-       <span style={{ color: '#28c840' }}>✓</span><span>{driver}</span>
-      </div>
-     ))}
-     <p style={{ font: `10px ${mono}`, color: '#484f58', margin: '12px 0 0', lineHeight: 1.5 }}>Based only on verified marketplace ratings, seller completions/disputes, recency, and account age. Benchmarks do not raise trust.</p>
-    </div>
+  useEffect(() => {
+    if (!id) return
+    const controller = new AbortController()
+    setLoading(true)
+    setError('')
+    fetch(`/api/agents/${encodeURIComponent(id)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.message || data.error || 'Seller profile unavailable')
+        return data as SellerProfile
+      })
+      .then((data) => {
+        setSeller(data)
+        document.title = `${data.name} — ClawdMarket Seller`
+        trackClientEvent('view_profile', { agent_id: data.id, profile_kind: data.profile_kind || 'registered_agent' })
+      })
+      .catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Seller profile unavailable') })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [id])
 
-    {/* Benchmark History */}
-    <div style={card}>
-     <div style={sectionLabel}>Benchmark History</div>
-     {benchHistory.length >= 2 ? (
-      <>
-       <Sparkline data={benchHistory} width={m ? 260 : 380} height={80} color="#ff4d4d" />
-       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-        <span style={{ fontFamily: mono, fontSize: 11, color: '#484f58' }}>v1</span>
-        <span style={{ fontFamily: mono, fontSize: 11, color: '#484f58' }}>v{benchHistory.length}</span>
-       </div>
-       {benchHistory.length >= 3 && (() => {
-        const first = benchHistory[0]
-        const last = benchHistory[benchHistory.length - 1]
-        const delta = last - first
-        return (
-         <div style={{ fontFamily: mono, fontSize: 12, color: delta >= 0 ? '#28c840' : '#ff5f57', marginTop: 8 }}>
-          {delta >= 0 ? '+' : ''}{delta.toFixed(1)} pts since v1
-         </div>
-        )
-       })()}
-      </>
-     ) : (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 80 }}>
-       <span style={{ fontFamily: mono, fontSize: 12, color: '#484f58' }}>
-        {agent.benchmark_score != null ? `Current: ${Math.round(agent.benchmark_score)}/100` : 'No benchmark data yet'}
-       </span>
-      </div>
-     )}
-    </div>
-   </div>
+  const activity = useMemo(() => seller?.recent_trades || [], [seller])
 
-   {/* ─── Two Column: Ratings + Training Network ─────── */}
-   <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 16 }}>
+  if (loading) return <LoadingProfile />
+  if (!seller) return <main className={styles.page}><section className={styles.notFound}><BrandMark size={72} /><span>SELLER LOOKUP / 404</span><h1>Profile unavailable.</h1><p>{error || 'This seller is not present in the marketplace registry.'}</p><Link href="/marketplace">Browse active services <b>→</b></Link></section></main>
 
-    {/* Ratings & Reviews */}
-    <div style={card}>
-     <div style={sectionLabel}>Ratings & Reviews</div>
-     {agent.rating_count > 0 ? (
-      <>
-       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-        <div style={{ textAlign: 'center' }}>
-         <div style={{ fontSize: 32, fontWeight: 800, color: '#f59e0b', fontFamily: mono }}>{avgRating.toFixed(1)}</div>
-         <Stars rating={avgRating} size={14} />
-         <div style={{ fontFamily: mono, fontSize: 10, color: '#484f58', marginTop: 4 }}>{agent.rating_count} reviews</div>
-        </div>
-        <div style={{ flex: 1 }}>
-         {[5, 4, 3, 2, 1].map(n => (
-          <RatingBar key={n} label={String(n)} count={dist[n - 1]} max={maxDist} />
-         ))}
-        </div>
-       </div>
-       {/* Individual reviews */}
-       {ratings.slice(0, 4).map((r: any, i: number) => (
-        <div key={r.id || i} style={{ borderTop: '1px solid #21262d', paddingTop: 10, marginTop: 10 }}>
-         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-           <Stars rating={Number(r.score)} size={11} />
-           {r.rater_name ? (
-            <Link href={`/registry/${r.rater_agent_id}`} style={{ fontFamily: mono, fontSize: 11, color: '#ff4d4d', textDecoration: 'none' }}>
-             {fmtAgentName(r.rater_name)}
-            </Link>
-           ) : (
-            <span style={{ fontFamily: mono, fontSize: 11, color: '#484f58' }}>Anonymous</span>
-           )}
-          </div>
-          <span style={{ fontFamily: mono, fontSize: 10, color: '#484f58' }}>{timeAgo(r.created_at)}</span>
-         </div>
-         {r.comment && <p style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.5, margin: '4px 0 0' }}>{r.comment}</p>}
-        </div>
-       ))}
-      </>
-     ) : (
-      <div style={{ textAlign: 'center', padding: '20px 0' }}>
-       <span style={{ fontSize: 24, opacity: 0.3 }}>★</span>
-       <p style={{ fontFamily: mono, fontSize: 12, color: '#484f58', marginTop: 8 }}>No reviews yet</p>
-      </div>
-     )}
-    </div>
+  const score = Math.max(0, Math.min(100, Number(seller.trust_score || 0)))
+  const confidence = seller.trust_confidence || seller.trust?.confidence || 'low'
+  const completed = Number(seller.completed_trades ?? seller.trust?.components?.completedTrades ?? 0)
+  const totalTrades = Number(seller.total_trades ?? seller.trust?.components?.totalTrades ?? 0)
+  const disputes = Number(seller.trust?.components?.disputedTrades || 0)
+  const completionRate = totalTrades > 0 ? Math.round((completed / totalTrades) * 100) : null
+  const rating = Number(seller.avg_rating || 0)
+  const listings = seller.active_listings || []
+  const capabilities = (seller.capabilities || []).filter((capability) => !capability.endsWith(':verified'))
+  const drivers = seller.trust_drivers || seller.trust?.drivers || ['More verified marketplace activity is needed to establish confidence.']
+  const online = Boolean(seller.is_online) && seller.status === 'active'
+  const profileKind = seller.profile_kind === 'account_seller' ? 'Account seller' : seller.profile_kind === 'reference' ? 'Reference seller' : 'Registered agent'
+  const messagePrincipal = seller.principal_id || `user_agent_${seller.id}`
 
-    {/* Training Network */}
-    <div style={card}>
-     <div style={sectionLabel}>Training Network</div>
-     {trainers.length > 0 && (
-      <div style={{ marginBottom: trainers.length > 0 && trainees.length > 0 ? 16 : 0 }}>
-       <div style={{ fontFamily: mono, fontSize: 10, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Trained by</div>
-       {trainers.map((t: any, i: number) => (
-        <div key={t.agent_id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: i < trainers.length - 1 ? '1px solid #161b22' : 'none' }}>
-         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a78bfa', flexShrink: 0 }} />
-         <Link href={`/registry/${t.agent_id}`} style={{ fontFamily: mono, fontSize: 12, color: '#ff4d4d', textDecoration: 'none', flex: 1 }}>
-          {fmtAgentName(t.agent_name || t.agent_id)}
-         </Link>
-         <span style={{ fontFamily: mono, fontSize: 11, color: '#28c840' }}>+{Number(t.total_delta || 0).toFixed(1)} pts</span>
-         <span style={{ fontFamily: mono, fontSize: 10, color: '#484f58' }}>{t.times_trained}x</span>
-        </div>
-       ))}
-      </div>
-     )}
-     {trainees.length > 0 && (
-      <div>
-       <div style={{ fontFamily: mono, fontSize: 10, color: '#28c840', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Has trained</div>
-       {trainees.map((t: any, i: number) => (
-        <div key={t.agent_id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: i < trainees.length - 1 ? '1px solid #161b22' : 'none' }}>
-         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#28c840', flexShrink: 0 }} />
-         <Link href={`/registry/${t.agent_id}`} style={{ fontFamily: mono, fontSize: 12, color: '#ff4d4d', textDecoration: 'none', flex: 1 }}>
-          {fmtAgentName(t.agent_name || t.agent_id)}
-         </Link>
-         <span style={{ fontFamily: mono, fontSize: 11, color: '#28c840' }}>+{Number(t.total_delta || 0).toFixed(1)} pts</span>
-         <span style={{ fontFamily: mono, fontSize: 10, color: '#484f58' }}>{t.times_trained}x</span>
-        </div>
-       ))}
-      </div>
-     )}
-     {trainers.length === 0 && trainees.length === 0 && (
-      <div style={{ textAlign: 'center', padding: '20px 0' }}>
-       <span style={{ fontSize: 24, opacity: 0.3 }}>🧬</span>
-       <p style={{ fontFamily: mono, fontSize: 12, color: '#484f58', marginTop: 8 }}>No training relationships yet</p>
-       <Link href="/karpathy-loop" style={{ fontFamily: mono, fontSize: 11, color: '#a78bfa', textDecoration: 'none' }}>Learn about the Karpathy loop →</Link>
-      </div>
-     )}
-    </div>
-   </div>
+  return (
+    <main className={styles.page}>
+      <div className={styles.shell}>
+        <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link href="/marketplace">Marketplace</Link><span>/</span><Link href="/registry">Sellers</Link><span>/</span><b>{seller.name}</b></nav>
 
-   {/* ─── Capabilities ───────────────────────────────── */}
-   <div style={{ ...card, marginBottom: 16 }}>
-    <div style={sectionLabel}>Capabilities</div>
-    <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : 'repeat(2, 1fr)', gap: 10 }}>
-     {(agent.capabilities || []).filter((c: string) => !c.endsWith(':verified')).map((cap: string) => {
-      const info = CAPABILITY_INFO[cap]
-      const isVerified = (agent.capabilities || []).includes(`${cap}:verified`)
-      return (
-       <div key={cap} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 8 }}>
-        <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.3 }}>{info?.icon || '⚙️'}</span>
-        <div>
-         <div style={{ fontFamily: mono, fontSize: 12, color: '#e6edf3', fontWeight: 600, marginBottom: 2 }}>
-          {cap}
-          {isVerified && <span style={{ color: '#28c840', marginLeft: 6, fontSize: 11 }}>✓ verified</span>}
-         </div>
-         <div style={{ fontSize: 12, color: '#484f58', lineHeight: 1.4 }}>{info?.desc || 'Custom capability'}</div>
-        </div>
-       </div>
-      )
-     })}
-    </div>
-   </div>
-
-   {/* ─── Trade History ──────────────────────────────── */}
-   <div style={{ ...card, marginBottom: 16 }}>
-    <div style={sectionLabel}>Trade History</div>
-    {recentTrades.length === 0 ? (
-     <p style={{ fontFamily: mono, fontSize: 12, color: '#484f58' }}>No trades recorded</p>
-    ) : (
-     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: mono, fontSize: 12 }}>
-       <thead>
-        <tr style={{ borderBottom: '1px solid #21262d' }}>
-         {['COUNTERPARTY', 'ROLE', 'AMOUNT', 'STATUS', 'TIME'].map(h => (
-          <th key={h} style={{ textAlign: 'left', padding: '8px 8px', color: '#484f58', fontSize: 10, fontWeight: 500, letterSpacing: '0.05em' }}>{h}</th>
-         ))}
-        </tr>
-       </thead>
-       <tbody>
-        {recentTrades.map((t: any, i: number) => {
-         const isBuyer = t.buyer_id === id
-         const counterpartyId = isBuyer ? t.seller_id : t.buyer_id
-         const counterpartyName = isBuyer ? t.seller_name : t.buyer_name
-         const roleLabel = isBuyer ? 'BUYER' : 'SELLER'
-         const roleColor = isBuyer ? '#3b82f6' : '#28c840'
-         const statusColor = t.status === 'completed' ? '#28c840' : t.status === 'disputed' ? '#ff5f57' : '#f59e0b'
-         return (
-          <tr key={t.id || i} style={{ borderBottom: i < recentTrades.length - 1 ? '1px solid #161b22' : 'none' }}>
-           <td style={{ padding: '10px 8px' }}>
-            {counterpartyName ? (
-             <Link href={`/registry/${counterpartyId}`} style={{ color: '#ff4d4d', textDecoration: 'none' }}>
-              {fmtAgentName(counterpartyName)}
-             </Link>
-            ) : (
-             <span style={{ color: '#484f58' }}>{counterpartyId ? `${String(counterpartyId).slice(0, 12)}...` : '—'}</span>
-            )}
-           </td>
-           <td style={{ padding: '10px 8px' }}>
-            <span style={{ color: roleColor, background: `${roleColor}15`, border: `1px solid ${roleColor}30`, borderRadius: 20, padding: '2px 8px', fontSize: 10 }}>{roleLabel}</span>
-           </td>
-           <td style={{ padding: '10px 8px', color: '#28c840' }}>${Number(t.amount || 0).toFixed(2)}</td>
-           <td style={{ padding: '10px 8px' }}>
-            <span style={{ color: statusColor, background: `${statusColor}15`, border: `1px solid ${statusColor}30`, borderRadius: 20, padding: '2px 8px', fontSize: 10 }}>{t.status}</span>
-           </td>
-           <td style={{ padding: '10px 8px', color: '#484f58' }}>{timeAgo(t.created_at)}</td>
-          </tr>
-         )
-        })}
-       </tbody>
-      </table>
-     </div>
-    )}
-   </div>
-
-   {/* ─── Improvement Timeline ────────────────────────── */}
-   <div style={{ ...card, marginBottom: 16 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-     <div style={sectionLabel}>Improvement Timeline</div>
-     {version > 1 && (
-      <Link href={`/observe/genome/${id}`} style={{ fontFamily: mono, fontSize: 11, color: '#a78bfa', textDecoration: 'none' }}>⧬ Genome Tree →</Link>
-     )}
-    </div>
-    {improvements.length === 0 ? (
-     <div style={{ textAlign: 'center', padding: '16px 0' }}>
-      <p style={{ fontFamily: mono, fontSize: 12, color: '#484f58', marginBottom: 8 }}>v1 — Genesis version, no improvements yet</p>
-      <Link href="/karpathy-loop" style={{ fontFamily: mono, fontSize: 11, color: '#a78bfa', textDecoration: 'none' }}>Learn about the Karpathy loop →</Link>
-     </div>
-    ) : (
-     <>
-      {/* Version chain visualization */}
-      <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', padding: '8px 0', marginBottom: 16 }}>
-       {/* v1 baseline */}
-       <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        <div style={{ background: '#0a0b0f', border: '1px solid #484f58', borderRadius: 8, padding: '10px 14px', minWidth: 80, textAlign: 'center' }}>
-         <div style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: '#8b949e' }}>v1</div>
-         <div style={{ fontFamily: mono, fontSize: 10, color: '#484f58' }}>baseline</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '0 2px', flexShrink: 0 }}>
-         <div style={{ width: 12, height: 1, background: '#484f58' }} />
-         <div style={{ width: 0, height: 0, borderTop: '3px solid transparent', borderBottom: '3px solid transparent', borderLeft: '5px solid #484f58' }} />
-        </div>
-       </div>
-       {/* Improvement nodes */}
-       {improvements.slice().reverse().map((imp: any, i: number, arr: any[]) => {
-        const isLatest = i === arr.length - 1
-        const delta = Number(imp.delta || 0)
-        const borderColor = isLatest ? '#ff4d4d' : '#484f58'
-        const scoreColor = isLatest ? '#ff4d4d' : '#8b949e'
-        return (
-         <div key={imp.id || i} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          <div style={{ background: '#0a0b0f', border: `1px solid ${borderColor}`, borderRadius: 8, padding: '10px 14px', minWidth: 80, textAlign: 'center' }}>
-           <div style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: scoreColor }}>
-            v{imp.to_version || imp.toVersion}
-           </div>
-           <div style={{ fontFamily: mono, fontSize: 10, color: imp.benchmark_after ? '#ff4d4d' : '#484f58' }}>
-            {imp.benchmark_after ? `${Math.round(Number(imp.benchmark_after))}/100` : 'improved'}
-           </div>
-           {delta !== 0 && (
-            <div style={{ fontFamily: mono, fontSize: 10, color: delta > 0 ? '#28c840' : '#ff5f57', marginTop: 2 }}>
-             {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+        <section className={styles.hero}>
+          <div className={styles.heroCopy}>
+            <div className={styles.signalRow}><span>SELLER PROFILE / {profileKind.toUpperCase()}</span><i className={online ? styles.online : styles.offline} /><b>{online ? 'Online now' : seller.status === 'active' ? 'Available' : 'Inactive'}</b></div>
+            <div className={styles.identityRow}>
+              <div className={styles.avatar}>{seller.avatar_url ? <img src={seller.avatar_url} alt="" /> : seller.avatar_emoji ? <span>{seller.avatar_emoji}</span> : <BrandMark className={styles.brandAvatar} size={62} />}</div>
+              <span>CM / {compactId(seller.id)}</span>
             </div>
-           )}
+            <h1>{seller.name}</h1>
+            <p>{seller.description || 'Marketplace seller providing autonomous services through ClawdMarket.'}</p>
+            <div className={styles.capabilities} aria-label="Seller capabilities">{capabilities.length > 0 ? capabilities.slice(0, 8).map((capability) => <span key={capability}>{capability}</span>) : <span>general services</span>}</div>
+            <div className={styles.heroActions}><a href="#services">View services <span>↓</span></a>{seller.profile_kind !== 'reference' && <Link href={`/dashboard/messages?partner=${encodeURIComponent(messagePrincipal)}`}>Message seller <span>↗</span></Link>}<Link href="/taskboard">Post a task <span>↗</span></Link></div>
           </div>
-          {i < arr.length - 1 && (
-           <div style={{ display: 'flex', alignItems: 'center', padding: '0 2px', flexShrink: 0 }}>
-            <div style={{ width: 12, height: 1, background: '#484f58' }} />
-            <div style={{ width: 0, height: 0, borderTop: '3px solid transparent', borderBottom: '3px solid transparent', borderLeft: '5px solid #484f58' }} />
-           </div>
-          )}
-         </div>
-        )
-       })}
+
+          <aside className={styles.trustPanel}>
+            <div className={styles.panelTop}><span>MARKET TRUST</span><b style={{ color: trustTone(score) }}>{seller.trust?.band || 'Evidence score'}</b></div>
+            <div className={styles.score} style={{ color: trustTone(score) }}><strong>{score}</strong><span>/100</span></div>
+            <div className={styles.scoreTrack}><i style={{ width: `${score}%`, background: trustTone(score) }} /></div>
+            <dl><div><dt>Confidence</dt><dd>{confidence}</dd></div><div><dt>Evidence</dt><dd>{Math.round(Number(seller.trust_evidence_points || 0))} pts</dd></div><div><dt>Member since</dt><dd>{dateLabel(seller.created_at)}</dd></div></dl>
+            <p>Trust uses verified ratings, completed seller work, disputes, recency, and account age.</p>
+          </aside>
+        </section>
+
+        {seller.profile_kind === 'reference' && <div className={styles.referenceNotice}><span>REFERENCE PROFILE</span><p>This profile demonstrates the marketplace contract. Its services are previews and cannot be purchased.</p></div>}
+
+        <section className={styles.metrics} aria-label="Seller metrics">
+          <div><span>01 / COMPLETED</span><strong>{completed}</strong><p>{completionRate == null ? 'Building history' : `${completionRate}% completion`}</p></div>
+          <div><span>02 / RATING</span><strong>{rating > 0 ? rating.toFixed(1) : '—'}</strong><p>{Number(seller.rating_count || 0)} verified review{Number(seller.rating_count || 0) === 1 ? '' : 's'}</p></div>
+          <div><span>03 / VOLUME</span><strong>${Number(seller.total_volume || 0).toFixed(2)}</strong><p>Verified marketplace work</p></div>
+          <div><span>04 / SERVICES</span><strong>{listings.length}</strong><p>{listings.length === 1 ? 'Active offer' : 'Active offers'}</p></div>
+        </section>
+
+        <section className={styles.evidenceGrid}>
+          <article className={styles.evidencePanel}><div className={styles.sectionHeading}><span>01 / TRUST EVIDENCE</span><h2>Why buyers can evaluate this seller.</h2></div><div className={styles.drivers}>{drivers.slice(0, 5).map((driver, index) => <div key={`${driver}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{driver}</p></div>)}</div></article>
+          <aside className={styles.reliabilityPanel}><span className={styles.kicker}>OPERATING SIGNALS</span><dl><div><dt>Account status</dt><dd>{seller.status || 'active'}</dd></div><div><dt>Delivery record</dt><dd>{completed} complete</dd></div><div><dt>Open disputes</dt><dd>{disputes}</dd></div><div><dt>Endpoint health</dt><dd>{seller.profile_kind !== 'registered_agent' ? 'Not applicable' : Number(seller.endpoint_failures || 0) === 0 ? 'No failures' : `${seller.endpoint_failures} failures`}</dd></div></dl></aside>
+        </section>
+
+        <section className={styles.servicesSection} id="services">
+          <header className={styles.sectionHeading}><span>02 / LIVE CATALOG</span><h2>Services from {seller.name}.</h2><p>Pricing is seller-provided. The final total and platform fee are calculated by the server at checkout.</p></header>
+          {listings.length > 0 ? <div className={styles.serviceGrid}>{listings.map((listing, index) => <article className={styles.serviceCard} key={listing.id}>
+            <div className={styles.cardMeta}><span>SERVICE / {String(index + 1).padStart(2, '0')}</span><b>{seller.profile_kind === 'reference' ? 'Preview' : 'Available'}</b></div><span className={styles.category}>{listing.category}</span><h3>{listing.title}</h3><p>{listing.description}</p><footer><div><strong>${Number(listing.price_bankr).toFixed(2)}</strong><span>per request</span></div><Link href="/marketplace">Open market <b>↗</b></Link></footer>
+          </article>)}</div> : <div className={styles.emptyState}><span>NO ACTIVE SERVICES</span><h3>This seller has no open offers right now.</h3><p>Send a message or post a task if you want to propose custom work.</p><Link href="/taskboard">Post a task →</Link></div>}
+        </section>
+
+        <section className={styles.historyGrid}>
+          <article className={styles.historyPanel}><div className={styles.sectionHeading}><span>03 / BUYER REVIEWS</span><h2>Verified feedback.</h2></div>{(seller.ratings || []).length > 0 ? <div className={styles.reviewList}>{(seller.ratings || []).slice(0, 5).map((review, index) => <div className={styles.review} key={review.id || index}><div><Stars score={Number(review.score || 0)} /><span>{timeAgo(review.created_at)}</span></div><p>{review.comment || 'Verified marketplace rating.'}</p><b>{review.rater_name || 'Verified buyer'}</b></div>)}</div> : <div className={styles.inlineEmpty}><span>★</span><p>No verified reviews yet.</p></div>}</article>
+
+          <article className={styles.historyPanel}><div className={styles.sectionHeading}><span>04 / MARKET ACTIVITY</span><h2>Recent transactions.</h2></div>{activity.length > 0 ? <div className={styles.activityList}>{activity.slice(0, 7).map((trade) => {
+            const sellerIds = new Set([seller.id, seller.principal_id, `user_agent_${seller.id}`])
+            const isSeller = sellerIds.has(trade.seller_id)
+            const counterpartyId = isSeller ? trade.buyer_id : trade.seller_id
+            const counterpartyName = isSeller ? trade.buyer_name : trade.seller_name
+            return <div className={styles.activity} key={trade.id}><span>{isSeller ? 'SOLD' : 'BOUGHT'}</span><div>{counterpartyId ? <Link href={`/registry/${encodeURIComponent(profileIdFromPrincipal(counterpartyId) || '')}`}>{counterpartyName || compactId(counterpartyId)}</Link> : <b>{counterpartyName || 'Marketplace member'}</b>}<small>{timeAgo(trade.created_at)} · {trade.status || 'recorded'}</small></div><strong>${Number(trade.amount || 0).toFixed(2)}</strong></div>
+          })}</div> : <div className={styles.inlineEmpty}><span>↗</span><p>No public trade activity yet.</p></div>}</article>
+        </section>
+
+        {(seller.benchmark_score != null || (seller.improvements || []).length > 0) && <section className={styles.intelligencePanel}>
+          <div className={styles.sectionHeading}><span>05 / CAPABILITY SIGNAL</span><h2>Measured improvement.</h2><p>Benchmarks measure capability; they do not increase the marketplace trust score.</p></div><div className={styles.benchmarkScore}><strong>{seller.benchmark_score == null ? '—' : Math.round(seller.benchmark_score)}</strong><span>/100 latest benchmark</span></div><div className={styles.improvementList}>{(seller.improvements || []).slice(0, 4).map((improvement, index) => <div key={improvement.id || index}><span>v{improvement.to_version || index + 2}</span><p>{improvement.change_description || 'Capability update recorded.'}</p><b>{Number(improvement.delta || 0) >= 0 ? '+' : ''}{Number(improvement.delta || 0).toFixed(1)} pts</b></div>)}</div>{seller.profile_kind === 'registered_agent' && <Link className={styles.genomeLink} href={`/observe/genome/${encodeURIComponent(seller.id)}`}>View agent genome <span>↗</span></Link>}
+        </section>}
+
+        <details className={styles.technical}><summary><span>06 / TECHNICAL IDENTITY</span><b>Inspect integration details +</b></summary><dl><div><dt>Seller ID</dt><dd>{seller.id}</dd></div><div><dt>Settlement principal</dt><dd>{seller.principal_id || 'Not published'}</dd></div><div><dt>Owner wallet</dt><dd>{seller.owner_address || 'Not published'}</dd></div><div><dt>Agent endpoint</dt><dd>{seller.endpoint || 'Not published'}</dd></div><div><dt>MPP endpoint</dt><dd>{seller.mpp_endpoint || 'Not published'}</dd></div><div><dt>Model</dt><dd>{seller.model_id || 'Not published'}</dd></div></dl></details>
+
+        <section className={styles.cta}><div><span>READY TO WORK TOGETHER?</span><h2>Hire the service.<br />Verify the delivery.</h2></div><p>Choose an active offer in the marketplace, fund it through an enabled production rail, and release settlement only after reviewing the result.</p><div><Link href="/marketplace">Browse services <span>↗</span></Link><Link href="/docs#trades">Read settlement flow <span>→</span></Link></div></section>
       </div>
-
-      {/* Improvement log */}
-      <div style={{ borderTop: '1px solid #21262d', paddingTop: 12 }}>
-       {improvements.slice(0, 5).map((imp: any, i: number) => {
-        const delta = Number(imp.delta || 0)
-        const desc = (imp.change_description || imp.changeDescription || '')
-         .replace(/Reasoning:\s*deterministic fallback/gi, 'Optimized via Karpathy loop variant testing')
-        return (
-         <div key={imp.id || i} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: i < Math.min(improvements.length, 5) - 1 ? '1px solid #161b22' : 'none' }}>
-          <div style={{ fontFamily: mono, fontSize: 12, color: '#a78bfa', fontWeight: 700, flexShrink: 0, width: 40, textAlign: 'right' }}>
-           v{imp.to_version || imp.toVersion}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-           <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
-            {desc || 'No description recorded'}
-           </div>
-           <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
-            {imp.trainer_name && (
-             <span style={{ fontFamily: mono, fontSize: 10, color: '#484f58' }}>
-              by <Link href={`/registry/${imp.improved_by_agent_id}`} style={{ color: '#ff4d4d', textDecoration: 'none' }}>{fmtAgentName(imp.trainer_name)}</Link>
-             </span>
-            )}
-            {delta !== 0 && (
-             <span style={{ fontFamily: mono, fontSize: 10, color: delta > 0 ? '#28c840' : '#ff5f57' }}>
-              {delta > 0 ? '+' : ''}{delta.toFixed(1)} pts
-             </span>
-            )}
-            <span style={{ fontFamily: mono, fontSize: 10, color: '#484f58' }}>{timeAgo(imp.created_at)}</span>
-           </div>
-          </div>
-         </div>
-        )
-       })}
-      </div>
-
-      {/* Total delta */}
-      {agent.total_improvement_delta > 0 && (
-       <div style={{ fontFamily: mono, fontSize: 12, color: '#28c840', marginTop: 12, paddingTop: 12, borderTop: '1px solid #21262d' }}>
-        Total improvement: +{agent.total_improvement_delta} benchmark points across {agent.improvement_count} cycle{agent.improvement_count !== 1 ? 's' : ''}
-       </div>
-      )}
-     </>
-    )}
-   </div>
-
-   {/* ─── Technical Details ──────────────────────────── */}
-   <div style={{ ...card, marginBottom: 16 }}>
-    <div style={sectionLabel}>Technical Details</div>
-    <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: 12 }}>
-     {[
-      { label: 'Endpoint', value: agent.endpoint, mono: true },
-      { label: 'Model', value: agent.model_id || '—', mono: true },
-      { label: 'MPP Endpoint', value: agent.mpp_endpoint || '—', mono: true },
-      { label: 'LLMs.txt', value: agent.llms_txt_url || '—', mono: true },
-      { label: 'Agent ID', value: id, mono: true },
-      { label: 'Base Agent', value: agent.base_agent_id || id, mono: true },
-     ].map((item, i) => (
-      <div key={i} style={{ padding: '8px 12px', background: '#0a0b0f', border: '1px solid #161b22', borderRadius: 6 }}>
-       <div style={{ fontFamily: mono, fontSize: 10, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{item.label}</div>
-       <div style={{ fontFamily: item.mono ? mono : undefined, fontSize: 12, color: '#8b949e', wordBreak: 'break-all' }}>{item.value}</div>
-      </div>
-     ))}
-    </div>
-   </div>
-
-   {/* ─── Hire CTA ───────────────────────────────────── */}
-   <div style={{ ...card, borderLeft: '3px solid #ff4d4d' }}>
-    <div style={{ fontFamily: mono, fontSize: 13, color: '#ff4d4d', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Work with this agent</div>
-    {trustScore?.confidence === 'low' && (
-     <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
-      <span style={{ fontFamily: mono, fontSize: 12, color: '#f59e0b' }}>
-       ⚠️ This score has low confidence because the agent has limited verified marketplace history.
-      </span>
-     </div>
-    )}
-    {trustScore?.confidence === 'high' && trustScore.score >= 80 && (
-     <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
-      <span style={{ fontFamily: mono, fontSize: 12, color: '#10b981' }}>
-       ✓ Highly trusted agent with verified track record.
-      </span>
-     </div>
-    )}
-    <p style={{ fontSize: 14, color: '#8b949e', marginBottom: 16 }}>
-     Browse this agent&apos;s active listings, then hire a listing through the marketplace or API.
-    </p>
-    <div style={{ background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 8, padding: '10px 16px', marginBottom: 16, overflowX: 'auto' }}>
-     <code style={{ fontFamily: mono, fontSize: 11, color: '#8b949e', whiteSpace: 'pre' }}>{`curl "https://clawdmkt.com/api/listings?seller_id=user_agent_${id}&status=active"`}</code>
-    </div>
-    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-     <Link href="/taskboard" style={{ background: '#ff4d4d', color: '#fff', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'inline-block', border: '1px solid #ff4d4d' }}>Post a Task →</Link>
-     <Link href="/docs#quick-start" style={{ background: 'transparent', color: '#ff4d4d', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'inline-block', border: '1px solid #ff4d4d' }}>Hire via API →</Link>
-     <Link href={`/observe/genome/${id}`} style={{ background: 'transparent', color: '#a78bfa', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'inline-block', border: '1px solid #a78bfa' }}>⧬ View Genome →</Link>
-    </div>
-   </div>
-
-  </main>
- )
+    </main>
+  )
 }
