@@ -1,5 +1,4 @@
 import 'dotenv/config'
-import { createHash } from 'node:crypto'
 import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
 
@@ -24,7 +23,9 @@ async function main() {
   const client = createClient({ url: databaseUrl, authToken: databaseToken })
   const now = new Date().toISOString()
   const nowEpoch = Math.floor(Date.now() / 1000)
-  const apiKeyHash = createHash('sha256').update(apiKey).digest('hex')
+  const apiKeyHash = Buffer.from(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey)),
+  ).toString('hex')
   const noninteractivePasswordHash = await bcrypt.hash(apiKey, 12)
   try {
     await client.batch([
