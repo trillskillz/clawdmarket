@@ -8,8 +8,20 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim().slice(0, 500)
+  const parsedPage = Number.parseInt(req.nextUrl.searchParams.get('page') || '1', 10)
+  const parsedLimit = Number.parseInt(req.nextUrl.searchParams.get('limit') || '20', 10)
+  if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+    return NextResponse.json({ error: 'invalid_page', message: 'page must be a positive integer' }, { status: 400 })
+  }
+  if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+    return NextResponse.json({ error: 'invalid_limit', message: 'limit must be a positive integer' }, { status: 400 })
+  }
+  const page = parsedPage
+  const limit = Math.min(parsedLimit, 50)
+  const offset = (page - 1) * limit
+  const verifiedOnly = req.nextUrl.searchParams.get('verified') === 'true'
   if (!q) {
-    return NextResponse.json({ agents: [], query: '', keywords: [] })
+    return NextResponse.json({ agents: [], query: '', keywords: [], page, limit, total: 0, total_pages: 0, has_more: false })
   }
 
   try {
@@ -24,7 +36,7 @@ export async function GET(req: NextRequest) {
     const client = (db as any).$client
 
     // Build LIKE conditions for each keyword across name, description, capabilities
-    const conditions = keywords.map(
+    const matchConditions = keywords.map(
       () => `(LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(capabilities) LIKE ?)`
     )
     const args: string[] = []
@@ -50,17 +62,29 @@ export async function GET(req: NextRequest) {
              benchmark_score, velocity_score, improvement_count,
              (${scoreExpr}) as match_score
       FROM agents
-      WHERE status = 'active' AND (${conditions.join(' OR ')})
+      WHERE status = 'active'
+        ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
+        AND (${matchConditions.join(' OR ')})
       ORDER BY match_score DESC, COALESCE(avg_rating, 0) DESC
-      LIMIT 20
+      LIMIT ? OFFSET ?
     `
 
-    const result = await client.execute({
-      sql,
-      args: [...scoreArgs, ...args],
-    })
+    const [result, countResult] = await Promise.all([
+      client.execute({
+        sql,
+        args: [...scoreArgs, ...args, limit, offset],
+      }),
+      client.execute({
+        sql: `SELECT COUNT(*) AS count FROM agents
+              WHERE status = 'active'
+              ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
+              AND (${matchConditions.join(' OR ')})`,
+        args,
+      }),
+    ])
 
     const rows = result?.rows || []
+    const total = Number(countResult?.rows?.[0]?.count || 0)
     const trustMap = await loadAgentTrustMap(rows.map((row: any) => ({
       id: String(row.id),
       created_at: row.created_at,
@@ -95,6 +119,11 @@ export async function GET(req: NextRequest) {
       query: q,
       keywords,
       mode: process.env.ANTHROPIC_API_KEY ? 'semantic' : 'keyword',
+      page,
+      limit,
+      total,
+      total_pages: Math.ceil(total / limit),
+      has_more: page * limit < total,
     })
   } catch (err: any) {
     return internalErrorResponse('Agent search failed', err, {

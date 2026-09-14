@@ -5,32 +5,62 @@ import { reportInternalError } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
+const DEFAULT_PAGE_SIZE = 50
+const MAX_PAGE_SIZE = 100
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const parsedLimit = Number.parseInt(searchParams.get('limit') || '50', 10)
+  const parsedLimit = Number.parseInt(searchParams.get('limit') || String(DEFAULT_PAGE_SIZE), 10)
+  const parsedPage = Number.parseInt(searchParams.get('page') || '1', 10)
   if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
     return NextResponse.json({ error: 'invalid_limit', message: 'limit must be a positive integer' }, { status: 400 })
   }
-  const limit = Math.min(parsedLimit, 100)
+  if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+    return NextResponse.json({ error: 'invalid_page', message: 'page must be a positive integer' }, { status: 400 })
+  }
+  const limit = Math.min(parsedLimit, MAX_PAGE_SIZE)
+  const page = parsedPage
+  const offset = (page - 1) * limit
+  const search = searchParams.get('search')?.trim().slice(0, 200) || ''
+  const verifiedOnly = searchParams.get('verified') === 'true'
 
   try {
-    const result = await (db as any).$client.execute(
+    const conditions = [
+      `status = 'active'`,
+      `name NOT LIKE '%Seed%'`,
+      `name NOT LIKE '%Seeder%'`,
+      `name NOT LIKE 'API Agent%'`,
+      `name NOT LIKE 'Test%'`,
+    ]
+    const filterArgs: string[] = []
+    if (search) {
+      conditions.push('(LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(capabilities) LIKE ?)')
+      const term = `%${search.toLowerCase()}%`
+      filterArgs.push(term, term, term)
+    }
+    if (verifiedOnly) {
+      conditions.push(`LOWER(capabilities) LIKE '%:verified%'`)
+    }
+    const whereSql = conditions.join('\n        AND ')
+    const client = (db as any).$client
+    const [result, countResult] = await Promise.all([
+      client.execute({ sql:
       `SELECT id, name, description, capabilities, endpoint,
       owner_address, status, avg_rating, rating_count,
       created_at, version, benchmark_score, velocity_score,
       improvement_count, moltbook_handle, is_online, last_seen_at
       FROM agents
-      WHERE status = 'active'
-        AND name NOT LIKE '%Seed%'
-        AND name NOT LIKE '%Seeder%'
-        AND name NOT LIKE 'API Agent%'
-        AND name NOT LIKE 'Test%'
+      WHERE ${whereSql}
       ORDER BY created_at DESC
-      LIMIT ?`,
-      [limit]
-    ).catch(() => null)
+      LIMIT ? OFFSET ?`, args: [...filterArgs, limit, offset] }),
+      client.execute({
+        sql: `SELECT COUNT(*) AS count FROM agents WHERE ${whereSql}`,
+        args: filterArgs,
+      }),
+    ])
 
     const rows = result?.rows || []
+    const total = Number(countResult?.rows?.[0]?.count || 0)
     const trustMap = await loadAgentTrustMap(rows.map((row: any) => ({
       id: String(row.id),
       created_at: row.created_at,
@@ -82,7 +112,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       agents,
-      total: agents.length,
+      page,
+      limit,
+      total,
+      total_pages: Math.ceil(total / limit),
+      has_more: page * limit < total,
     }, {
       headers: { 'Cache-Control': 'no-store' },
     })

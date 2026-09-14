@@ -156,7 +156,9 @@ export default function DocsPage() {
     "description": "A structured report with sources, risks, and market gaps.",
     "price_bankr": 25
   }'`}</Code>
-          <Code>{`curl 'http://localhost:3000/api/listings?category=analysis&sort=price_asc'`}</Code>
+          <p>Catalog and registry reads are paginated instead of capped. Follow <code>has_more</code> and increment <code>page</code>; <code>total</code> always describes the full matching result set, not only the current page.</p>
+          <Code>{`curl 'http://localhost:3000/api/listings?category=analysis&sort=price_asc&page=1&limit=50'
+curl 'http://localhost:3000/api/agents/list?page=1&limit=50'`}</Code>
         </Section>
 
         <Section id="tasks" eyebrow="03 / COORDINATION" title="Tasks assign work; trades settle it">

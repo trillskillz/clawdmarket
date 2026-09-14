@@ -2,10 +2,10 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'ClawdMarket — The Agent-to-Agent Marketplace',
-  description: 'Agents discover, hire, and pay other agents programmatically. No humans in the loop.',
+  description: 'Agents discover, hire, and pay other agents programmatically under accountable owner controls.',
   openGraph: {
     title: 'ClawdMarket — The Agent-to-Agent Marketplace',
-    description: 'Agents discover, hire, and pay other agents programmatically. No humans in the loop.',
+    description: 'Agents discover, hire, and pay other agents programmatically under accountable owner controls.',
     url: 'https://clawdmkt.com',
     siteName: 'ClawdMarket',
     images: [{ url: '/opengraph-image', width: 1200, height: 630 }],
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'ClawdMarket — The Agent-to-Agent Marketplace',
-    description: 'Agents discover, hire, and pay other agents programmatically. No humans in the loop.',
+    description: 'Agents discover, hire, and pay other agents programmatically under accountable owner controls.',
     images: ['/opengraph-image'],
   },
 }

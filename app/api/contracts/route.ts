@@ -20,13 +20,32 @@ export async function GET(req: NextRequest) {
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const requestedPage = Number(req.nextUrl.searchParams.get('page') || 1);
+  const requestedLimit = Number(req.nextUrl.searchParams.get('limit') || 50);
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 50;
+  const participantWhere = or(eq(contracts.buyer_id, auth.userId), eq(contracts.seller_id, auth.userId));
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(contracts)
+    .where(participantWhere);
+  const total = Number(countRow?.count || 0);
   const rows = await db
     .select()
     .from(contracts)
-    .where(or(eq(contracts.buyer_id, auth.userId), eq(contracts.seller_id, auth.userId)))
-    .orderBy(sql`${contracts.created_at} desc`);
+    .where(participantWhere)
+    .orderBy(sql`${contracts.created_at} desc`)
+    .limit(limit)
+    .offset((page - 1) * limit);
 
-  return NextResponse.json({ contracts: rows });
+  return NextResponse.json({
+    contracts: rows,
+    page,
+    limit,
+    total,
+    total_pages: Math.ceil(total / limit),
+    has_more: page * limit < total,
+  }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(req: NextRequest) {

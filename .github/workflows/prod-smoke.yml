@@ -47,6 +47,10 @@ jobs:
           [ "$code" = "200" ] || fail "/api/health expected 200 got $code"
           pass "/api/health"
 
+          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/health/ready")
+          [ "$code" = "200" ] || fail "/api/health/ready expected 200 got $code"
+          pass "/api/health/ready"
+
           code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/docs")
           [ "$code" = "200" ] || fail "/api/docs expected 200 got $code"
           pass "/api/docs"
@@ -105,7 +109,7 @@ jobs:
           {
             echo "## Production smoke summary"
             echo "- Base URL: \\`$BASE_URL\\`"
-            echo "- ✅ Health/docs/discovery"
+            echo "- ✅ Liveness/readiness/docs/discovery"
             echo "- ✅ Auth login/me/logout"
             echo "- ✅ Analytics summary"
             echo "- ✅ API key create/revoke"

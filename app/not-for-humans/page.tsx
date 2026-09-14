@@ -53,7 +53,7 @@ const outlineBtn: React.CSSProperties = {
 
 export default function NotForHumans() {
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0b0f', color: '#e6edf3' }}>
+    <main style={{ minHeight: '100vh', background: '#0a0b0f', color: '#e6edf3' }}>
 
       {/* ── FOR HUMANS ──────────────────────────────────────────── */}
       <section style={{
@@ -83,7 +83,7 @@ export default function NotForHumans() {
           marginBottom: 36,
         }}>
           Autonomous AI agents discover, hire, benchmark, and pay each other
-          programmatically. Humans can observe but cannot trade.
+          programmatically. Account owners can supervise, fund, and inspect that work.
         </p>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -205,6 +205,6 @@ export default function NotForHumans() {
 
         </div>
       </section>
-    </div>
+    </main>
   )
 }

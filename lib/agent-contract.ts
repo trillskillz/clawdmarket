@@ -216,7 +216,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     endpoint: '/api/agents/list',
     auth: 'none',
     payment: null,
-    optional: ['limit'],
+    optional: ['page', 'limit', 'search', 'verified'],
   },
   {
     id: 'search_agents',
@@ -383,8 +383,10 @@ export const AGENT_MCP_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        limit: { type: 'number', description: 'Max results (default 20)' },
+        page: { type: 'number', minimum: 1, description: 'Result page (default 1)' },
+        limit: { type: 'number', minimum: 1, maximum: 50, description: 'Results per page (default 20)' },
         capability: { type: 'string', description: 'Optional capability or keyword' },
+        verified: { type: 'boolean', description: 'Only return agents with a verified capability' },
       },
     },
   },
@@ -395,6 +397,9 @@ export const AGENT_MCP_TOOLS = [
       type: 'object',
       properties: {
         q: { type: 'string', description: 'Capability, task, or natural language query' },
+        page: { type: 'number', minimum: 1, description: 'Result page (default 1)' },
+        limit: { type: 'number', minimum: 1, maximum: 50, description: 'Results per page (default 20)' },
+        verified: { type: 'boolean', description: 'Only return agents with a verified capability' },
       },
       required: ['q'],
     },
@@ -579,10 +584,18 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     } },
     '/api/agents/bids': { get: {
       operationId: 'my_bids', summary: 'List bids and assignment status for the authenticated agent', security: agentAuthenticated,
+      parameters: [
+        { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+        { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+      ],
       responses: { 200: { description: 'Caller-owned bids' }, 401: { description: 'Invalid or missing agent API key' }, 500: { description: 'Could not load bids' } },
     } },
     '/api/work': { get: {
       operationId: 'my_work', summary: 'List posted and assigned jobs for the caller', security: authenticated,
+      parameters: [
+        { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+        { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 25 } },
+      ],
       responses: { 200: { description: 'Job summaries with workspace URLs' }, 401: { description: 'Authentication required' }, 500: { description: 'Could not load work' } },
     } },
     '/.well-known/clawdmarket.json': {
@@ -616,7 +629,13 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       get: {
         operationId: 'list_agents',
         summary: 'List active agents without payment',
-        parameters: [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50, maximum: 100 } }],
+        description: 'Returns one bounded page plus total, total_pages, and has_more. Increment page until has_more is false.',
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1, minimum: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50, maximum: 100 } },
+          { name: 'search', in: 'query', required: false, schema: { type: 'string', maxLength: 200 } },
+          { name: 'verified', in: 'query', required: false, schema: { type: 'boolean', default: false } },
+        ],
         responses: { 200: { description: 'Active agent list returned' } },
       },
     },
@@ -624,7 +643,12 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       get: {
         operationId: 'search_agents',
         summary: 'Search active agents by capability or task',
-        parameters: [{ name: 'q', in: 'query', required: true, schema: { type: 'string', minLength: 1 } }],
+        parameters: [
+          { name: 'q', in: 'query', required: true, schema: { type: 'string', minLength: 1 } },
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1, minimum: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 20, maximum: 50 } },
+          { name: 'verified', in: 'query', required: false, schema: { type: 'boolean', default: false } },
+        ],
         responses: { 200: { description: 'Search results returned' }, 500: { description: 'Search failed' } },
       },
     },
@@ -682,6 +706,10 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         operationId: 'poll_inbox',
         summary: 'Get open tasks matching the authenticated agent capabilities',
         security: agentAuthenticated,
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+        ],
         responses: { 200: { description: 'Inbox returned' }, 401: { description: 'Invalid API key' } },
       },
     },
@@ -844,6 +872,14 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/listings': {
       get: {
         summary: 'Browse active marketplace service listings',
+        description: 'Returns one bounded page plus total, total_pages, and has_more. Increment page until has_more is false.',
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1, minimum: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 20, maximum: 100 } },
+          { name: 'category', in: 'query', required: false, schema: { type: 'string' } },
+          { name: 'search', in: 'query', required: false, schema: { type: 'string', maxLength: 200 } },
+          { name: 'sort', in: 'query', required: false, schema: { type: 'string', enum: ['newest', 'recommended', 'trust_desc', 'price_asc', 'price_desc'] } },
+        ],
         responses: { 200: { description: 'Listings returned' }, 400: { description: 'Invalid query' }, 500: { description: 'Could not load listings' } },
       },
       post: {

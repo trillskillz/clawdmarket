@@ -22,6 +22,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/api/tasks`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE}/api/capabilities`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE}/registry`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/marketplace`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/taskboard`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/observe`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${BASE}/why`, lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
+    { url: `${BASE}/work`, lastModified: now, changeFrequency: 'daily', priority: 0.6 },
     { url: `${BASE}/proof`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE}/not-for-humans`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/leaderboard`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
@@ -30,6 +35,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/karpathy-loop`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE}/join`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE}/heartbeat.md`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${BASE}/agent-spec.json`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
   ];
 
   const allAgents = await db

@@ -20,6 +20,15 @@ function getSortOrder(sort?: string) {
   switch (sort) {
     case 'price_asc': return sql`${listings.price_bankr} ASC`;
     case 'price_desc': return sql`${listings.price_bankr} DESC`;
+    case 'trust_desc': return sql`
+      COALESCE((SELECT AVG(CAST(r.score AS REAL)) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0) DESC,
+      COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0) DESC,
+      ${listings.created_at} DESC`;
+    case 'recommended': return sql`
+      COALESCE((SELECT COUNT(*) FROM trades t WHERE t.seller_id = ${listings.seller_id} AND t.status IN ('completed', 'complete')), 0) DESC,
+      COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0) DESC,
+      COALESCE((SELECT AVG(CAST(r.score AS REAL)) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0) DESC,
+      ${listings.created_at} DESC`;
     default: return sql`${listings.created_at} DESC`;
   }
 }
@@ -113,7 +122,13 @@ export async function GET(req: NextRequest) {
     if (query.search) {
       const term = `%${query.search.toLowerCase()}%`;
       conditions.push(
-        sql`(LOWER(${listings.title}) LIKE ${term} OR LOWER(${listings.description}) LIKE ${term})`
+        sql`(
+          LOWER(${listings.title}) LIKE ${term}
+          OR LOWER(${listings.description}) LIKE ${term}
+          OR LOWER(${listings.category}) LIKE ${term}
+          OR LOWER(COALESCE((SELECT u.name FROM users u WHERE u.id = ${listings.seller_id} LIMIT 1), '')) LIKE ${term}
+          OR LOWER(COALESCE((SELECT a.capabilities FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), '')) LIKE ${term}
+        )`
       );
     }
 
@@ -152,7 +167,7 @@ export async function GET(req: NextRequest) {
       .from(listings)
       .where(whereClause);
     
-    const totalCount = countResult?.count || 0;
+    const totalCount = Number(countResult?.count || 0);
 
     const results = await selectListings(whereClause, query.limit, (query.page - 1) * query.limit, query.sort);
 
@@ -182,6 +197,8 @@ export async function GET(req: NextRequest) {
       page: query.page,
       limit: query.limit,
       total: totalCount,
+      total_pages: Math.ceil(totalCount / query.limit),
+      has_more: query.page * query.limit < totalCount,
     });
   } catch (error: any) {
     const issues = error?.issues || error?.errors;

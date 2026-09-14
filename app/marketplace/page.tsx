@@ -31,6 +31,7 @@ type AgentService = {
 type HireIntent = {
   service: AgentService
   step: 'confirm' | 'protocol' | 'wallet' | 'machine' | 'submitted'
+  clientReference: string
   tradeId?: string
   paymentRail?: 'ledger' | 'mpp' | 'evm'
   checkout?: Checkout
@@ -50,6 +51,20 @@ const CATEGORIES = [
   { id: 'bounties', label: 'Bounties' },
   { id: 'other', label: 'Other' },
 ]
+
+const CATALOG_PAGE_SIZE = 24
+
+function catalogUrl(page: number, category: string, query: string, sort: string) {
+  const params = new URLSearchParams({
+    status: 'active',
+    limit: String(CATALOG_PAGE_SIZE),
+    page: String(page),
+    sort,
+  })
+  if (category !== 'all') params.set('category', category)
+  if (query.trim()) params.set('search', query.trim())
+  return `/api/listings?${params.toString()}`
+}
 
 function listingToService(listing: any, fallback = false): AgentService {
   let capabilities: string[] = []
@@ -98,8 +113,12 @@ export default function MarketplacePage() {
   const [hireIntent, setHireIntent] = useState<HireIntent | null>(null)
   const [stats, setStats] = useState<Record<string, number>>({})
   const [services, setServices] = useState<AgentService[]>([])
+  const [catalogTotal, setCatalogTotal] = useState(0)
+  const [catalogPage, setCatalogPage] = useState(1)
   const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogLoadingMore, setCatalogLoadingMore] = useState(false)
   const [catalogError, setCatalogError] = useState<string | null>(null)
+  const [catalogLoadMoreError, setCatalogLoadMoreError] = useState<string | null>(null)
   const [tradeError, setTradeError] = useState<string | null>(null)
   const [tradeRecoveryReference, setTradeRecoveryReference] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -132,52 +151,91 @@ export default function MarketplacePage() {
   }, [])
 
   useEffect(() => {
-    if (services.length === 0 || hireIntent || listingQueryHandled) return
-    setListingQueryHandled(true)
+    if (catalogLoading || hireIntent || listingQueryHandled) return
     const listingId = new URLSearchParams(window.location.search).get('listing')
+    if (!listingId) {
+      setListingQueryHandled(true)
+      return
+    }
     const service = services.find((item) => item.id === listingId)
     if (service && !service.is_demo) {
+      setListingQueryHandled(true)
       trackClientEvent('hire_started', { listing_id: service.id, source: 'direct_link' })
-      setHireIntent({ service, step: 'confirm' })
+      setHireIntent({ service, step: 'confirm', clientReference: crypto.randomUUID() })
+      return
     }
-  }, [services, hireIntent, listingQueryHandled])
+    const controller = new AbortController()
+    fetch(`/api/listings/${encodeURIComponent(listingId)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) return
+        const requestedService = listingToService(data.listing)
+        if (requestedService.status !== 'available' || requestedService.is_demo) return
+        trackClientEvent('hire_started', { listing_id: requestedService.id, source: 'direct_link' })
+        setHireIntent({ service: requestedService, step: 'confirm', clientReference: crypto.randomUUID() })
+      })
+      .catch(() => undefined)
+      .finally(() => setListingQueryHandled(true))
+    return () => controller.abort()
+  }, [catalogLoading, services, hireIntent, listingQueryHandled])
 
   useEffect(() => {
     const controller = new AbortController()
     setCatalogLoading(true)
-    fetch('/api/listings?status=active&limit=100&sort=newest', { signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json()
-        if (!response.ok) throw new Error(data?.error || `Catalog request failed (${response.status})`)
-        const fallback = Boolean(data.fallback)
-        setServices((data.listings || []).map((listing: any) => listingToService(listing, fallback)))
-        setCatalogIsFallback(fallback)
-        setCatalogError(null)
-      })
-      .catch((error) => {
-        if (error?.name !== 'AbortError') setCatalogError(error?.message || 'Catalog unavailable')
-      })
-      .finally(() => setCatalogLoading(false))
-    return () => controller.abort()
-  }, [])
+    setCatalogError(null)
+    setCatalogLoadMoreError(null)
+    const delay = query.trim() ? 300 : 0
+    const timeout = window.setTimeout(() => {
+      fetch(catalogUrl(1, category, query, sort), { signal: controller.signal })
+        .then(async (response) => {
+          const data = await response.json()
+          if (!response.ok) throw new Error(data?.error || `Catalog request failed (${response.status})`)
+          const fallback = Boolean(data.fallback)
+          setServices((data.listings || []).map((listing: any) => listingToService(listing, fallback)))
+          setCatalogTotal(Number(data.total || 0))
+          setCatalogPage(1)
+          setCatalogIsFallback(fallback)
+          setCatalogError(null)
+        })
+        .catch((error) => {
+          if (error?.name !== 'AbortError') setCatalogError(error?.message || 'Catalog unavailable')
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setCatalogLoading(false)
+        })
+    }, delay)
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [category, query, sort])
 
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase()
-    const confidenceRank = { low: 1, medium: 2, high: 3 }
-    const matches = services.filter((service) => {
-      if (category !== 'all' && service.category !== category) return false
-      if (!term) return true
-      return [service.title, service.description, service.agent_name, service.category, ...service.capabilities]
-        .some((value) => value.toLowerCase().includes(term))
-    })
-    return matches.sort((a, b) => {
-      if (sort === 'price_asc') return a.price_usd - b.price_usd
-      if (sort === 'price_desc') return b.price_usd - a.price_usd
-      if (sort === 'trust_desc') return b.agent_trust - a.agent_trust || confidenceRank[b.agent_trust_confidence] - confidenceRank[a.agent_trust_confidence]
-      if (sort === 'recommended') return confidenceRank[b.agent_trust_confidence] - confidenceRank[a.agent_trust_confidence] || b.agent_trust - a.agent_trust || b.completed_trades - a.completed_trades
-      return (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0)
-    })
-  }, [category, query, services, sort])
+  const filtered = services
+
+  const loadMoreServices = async () => {
+    if (catalogLoadingMore || services.length >= catalogTotal) return
+    const nextPage = catalogPage + 1
+    setCatalogLoadingMore(true)
+    setCatalogLoadMoreError(null)
+    try {
+      const response = await fetch(catalogUrl(nextPage, category, query, sort))
+      const data = await response.json()
+      if (!response.ok) throw new Error(data?.error || `Catalog request failed (${response.status})`)
+      const fallback = Boolean(data.fallback)
+      const nextServices = (data.listings || []).map((listing: any) => listingToService(listing, fallback))
+      setServices((current) => {
+        const seen = new Set(current.map((service) => service.id))
+        return [...current, ...nextServices.filter((service: AgentService) => !seen.has(service.id))]
+      })
+      setCatalogTotal(Number(data.total || 0))
+      setCatalogPage(nextPage)
+      setCatalogIsFallback(fallback)
+    } catch (error: any) {
+      setCatalogLoadMoreError(error?.message || 'More services could not be loaded')
+    } finally {
+      setCatalogLoadingMore(false)
+    }
+  }
 
   const advanceHire = () => {
     if (!hireIntent) return
@@ -205,7 +263,7 @@ export default function MarketplacePage() {
           listing_id: hireIntent.service.id,
           amount: 1,
           payment_rail: paymentRail,
-          client_reference: crypto.randomUUID(),
+          client_reference: hireIntent.clientReference,
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -294,7 +352,7 @@ export default function MarketplacePage() {
           [String(stats.agent_count ?? services.length).padStart(2, '0'), 'Registered agents'],
           [String(stats.completed_trades ?? 0).padStart(2, '0'), 'Completed trades'],
           [`$${Number(stats.total_volume_usd ?? 0).toFixed(2)}`, 'Recorded volume'],
-          [`${services.filter((agent) => agent.status === 'available').length}/${services.length}`, 'Services online'],
+          [String(stats.services_online ?? catalogTotal).padStart(2, '0'), 'Live services'],
         ].map(([value, label]) => (
           <div key={label}><strong>{value}</strong><span>{label}</span></div>
         ))}
@@ -314,7 +372,7 @@ export default function MarketplacePage() {
       <section className={styles.catalogSection}>
         <div className={styles.catalogHeader}>
           <div>
-            <span className={styles.sectionKicker}>LIVE CATALOG / {String(filtered.length).padStart(2, '0')} RESULTS</span>
+            <span className={styles.sectionKicker}>LIVE CATALOG / {String(catalogTotal).padStart(2, '0')} RESULTS</span>
             <h2>Available services</h2>
           </div>
           <div className={styles.filters} aria-label="Filter services by category">
@@ -387,7 +445,7 @@ export default function MarketplacePage() {
                   disabled={service.status !== 'available' || service.is_demo}
                   onClick={() => {
                     trackClientEvent('hire_started', { listing_id: service.id, category: service.category, source: 'catalog' })
-                    setHireIntent({ service, step: 'confirm' })
+                    setHireIntent({ service, step: 'confirm', clientReference: crypto.randomUUID() })
                   }}
                 >
                   {service.is_demo ? 'Preview only' : 'Hire agent'} <span>↗</span>
@@ -396,6 +454,22 @@ export default function MarketplacePage() {
             </article>
           ))}
         </div>
+
+        {!catalogLoading && !catalogError && filtered.length > 0 && (
+          <div className={styles.catalogPagination}>
+            <span>
+              Showing {filtered.length.toLocaleString()} of {catalogTotal.toLocaleString()} services
+              {catalogLoadMoreError && <small role="alert">{catalogLoadMoreError}</small>}
+            </span>
+            {filtered.length < catalogTotal ? (
+              <button type="button" onClick={() => void loadMoreServices()} disabled={catalogLoadingMore}>
+                {catalogLoadingMore ? 'Loading more…' : 'Load more services'} <i aria-hidden="true">↓</i>
+              </button>
+            ) : (
+              <strong>Complete index loaded</strong>
+            )}
+          </div>
+        )}
 
         {!catalogLoading && !catalogError && filtered.length === 0 && <div className={styles.empty}>No services in this category yet.</div>}
       </section>
@@ -455,16 +529,18 @@ export default function MarketplacePage() {
                 <h3 id="hire-dialog-title">Choose how to fund escrow.</h3>
                 <p className={styles.settlementNotice}>The quoted total and 5% platform fee are fixed by the server. External funds remain held until delivery is accepted or a dispute is resolved.</p>
                 <div className={styles.protocols}>
-                  <button type="button" disabled={submitting || paymentConfig?.ledger_enabled === false} onClick={() => void createTrade('ledger').catch(() => undefined)}>
+                  <button type="button" disabled={submitting || !paymentConfig?.ledger_enabled} onClick={() => void createTrade('ledger').catch(() => undefined)}>
                     <span>01</span><div><strong>Account balance</strong><small>Reserve available USD balance instantly and release it after approval.</small></div><i>→</i>
                   </button>
-                  <button type="button" disabled={submitting || paymentConfig?.erc20_configured === false} onClick={() => void createTrade('evm').catch(() => undefined)}>
+                  <button type="button" disabled={submitting || !paymentConfig?.erc20_configured} onClick={() => void createTrade('evm').catch(() => undefined)}>
                     <span>02</span><div><strong>ERC-20 wallet</strong><small>Pay with an enabled token on Ethereum, Base, Arbitrum, Optimism, or Polygon.</small></div><i>→</i>
                   </button>
-                  <button type="button" disabled={submitting || paymentConfig?.mpp_configured === false} onClick={() => void createTrade('mpp').catch(() => undefined)}>
+                  <button type="button" disabled={submitting || !paymentConfig?.mpp_configured} onClick={() => void createTrade('mpp').catch(() => undefined)}>
                     <span>03</span><div><strong>MPP on Tempo</strong><small>Let an authenticated machine client fund the trade in pathUSD.</small></div><i>→</i>
                   </button>
                 </div>
+                {!paymentConfig && <p role="status">Checking available payment rails…</p>}
+                {paymentConfig && !paymentConfig.ledger_enabled && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && <p role="alert">No payment rail is currently available. Please try again later.</p>}
                 {submitting && <p>Creating escrow…</p>}
                 {tradeError && (
                   <div className={styles.tradeError} role="alert">

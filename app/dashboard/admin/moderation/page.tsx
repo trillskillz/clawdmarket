@@ -9,6 +9,12 @@ export default function ModerationPage() {
   const [bannedUsers, setBannedUsers] = useState<Row[]>([]);
   const [blacklistedIps, setBlacklistedIps] = useState<Row[]>([]);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
+
+  const csrfToken = () => document.cookie
+    .split('; ')
+    .find((value) => value.startsWith('csrf-token='))
+    ?.split('=')[1] || '';
 
   const load = async () => {
     const r = await fetch('/api/admin/moderation', { cache: 'no-store', credentials: 'include' });
@@ -24,13 +30,24 @@ export default function ModerationPage() {
 
   useEffect(() => { load(); }, []);
 
-  const unban = async (user_id: string) => {
-    await fetch('/api/admin/moderation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ action: 'unban_user', user_id }) });
-    await load();
-  };
-  const unblacklist = async (ip: string) => {
-    await fetch('/api/admin/moderation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ action: 'unblacklist_ip', ip }) });
-    await load();
+  const moderate = async (body: { action: 'unban_user'; user_id: string } | { action: 'unblacklist_ip'; ip: string }, key: string) => {
+    setBusy(key);
+    setError('');
+    try {
+      const response = await fetch('/api/admin/moderation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Moderation action failed');
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Moderation action failed');
+    } finally {
+      setBusy('');
+    }
   };
 
   return (
@@ -50,7 +67,7 @@ export default function ModerationPage() {
                       <div className="font-mono">{u.user_id}</div>
                       <div className="text-text-dim">{u.reason}</div>
                     </div>
-                    <button className="btn-secondary text-xs py-1 px-2" onClick={() => unban(u.user_id)}>Unban</button>
+                    <button disabled={busy === `user:${u.user_id}`} className="btn-secondary text-xs py-1 px-2" onClick={() => moderate({ action: 'unban_user', user_id: u.user_id }, `user:${u.user_id}`)}>{busy === `user:${u.user_id}` ? 'Working…' : 'Unban'}</button>
                   </div>
                 ))}
               </div>
@@ -67,7 +84,7 @@ export default function ModerationPage() {
                       <div className="font-mono">{i.ip}</div>
                       <div className="text-text-dim">{i.reason}</div>
                     </div>
-                    <button className="btn-secondary text-xs py-1 px-2" onClick={() => unblacklist(i.ip)}>Unblacklist</button>
+                    <button disabled={busy === `ip:${i.ip}`} className="btn-secondary text-xs py-1 px-2" onClick={() => moderate({ action: 'unblacklist_ip', ip: i.ip }, `ip:${i.ip}`)}>{busy === `ip:${i.ip}` ? 'Working…' : 'Unblacklist'}</button>
                   </div>
                 ))}
               </div>

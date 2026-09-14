@@ -81,7 +81,7 @@ export const listingsQuerySchema = z.object({
   seller: z.enum(['me']).optional(),
   min_price: z.coerce.number().min(0).max(1000000000).optional(),
   max_price: z.coerce.number().min(0).max(1000000000).optional(),
-  sort: z.enum(['newest', 'price_asc', 'price_desc']).optional(),
+  sort: z.enum(['newest', 'recommended', 'trust_desc', 'price_asc', 'price_desc']).optional(),
 });
 
 export const updateListingSchema = z.object({

@@ -5,7 +5,7 @@ import { tempo as tempoChain } from 'viem/chains'
 import { WALLETS } from './wallet-addresses'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from './constants'
 import { durableMppStore } from './mpp-store'
-import { getTempoRpcUrl } from './payment-config'
+import { getMppSecretKey, getTempoRpcUrl } from './payment-config'
 
 const recipient = WALLETS.mpp
 
@@ -35,7 +35,8 @@ let _mppxInstance: any = null
 function getMppx(): any {
  if (_mppxInstance) return _mppxInstance
  const rpcUrl = getTempoRpcUrl()
- if (!recipient || !rpcUrl || !process.env.MPP_SECRET_KEY) {
+ const secretKey = getMppSecretKey()
+ if (!recipient || !rpcUrl || !secretKey) {
   _mppxInstance = configurationFallback()
   return _mppxInstance
  }
@@ -50,7 +51,7 @@ function getMppx(): any {
     store: durableMppStore,
     waitForConfirmation: true,
    })],
-   secretKey: process.env.MPP_SECRET_KEY,
+   secretKey,
   })
  } catch (error) {
   console.error('[mpp] failed to initialize payment verification', error)
@@ -60,7 +61,7 @@ function getMppx(): any {
 }
 
 // Proxy defers Mppx.create() + tempo() to first property access (request time),
-// avoiding the build-time crash when MPP_SECRET_KEY is unavailable.
+// avoiding the build-time crash when the MPP server secret is unavailable.
 export const mppx: any = new Proxy({}, {
  get(_target, prop) {
   return getMppx()[prop]
@@ -72,7 +73,8 @@ let marketplaceServer: any = null
 export function getMarketplaceMppServer() {
  if (marketplaceServer) return marketplaceServer
  const rpcUrl = getTempoRpcUrl()
- if (!recipient || !rpcUrl || !process.env.MPP_SECRET_KEY) return null
+ const secretKey = getMppSecretKey()
+ if (!recipient || !rpcUrl || !secretKey) return null
  marketplaceServer = ServerMppx.create({
   methods: [serverTempo.charge({
    currency: PATHUSD_ADDRESS,
@@ -83,7 +85,7 @@ export function getMarketplaceMppServer() {
    store: durableMppStore,
    waitForConfirmation: true,
   })],
-  secretKey: process.env.MPP_SECRET_KEY,
+  secretKey,
  })
  return marketplaceServer
 }

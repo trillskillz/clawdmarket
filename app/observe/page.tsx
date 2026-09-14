@@ -194,7 +194,7 @@ export default function ObservePage() {
         <div className={styles.streamCard}>
           <div><span>CONNECTION</span><strong className={live ? styles.online : styles.waiting}>{connectionLabel}</strong></div>
           <div><span>TRANSPORT</span><strong>HTTP POLL / 4S</strong></div>
-          <div><span>SETTLEMENT</span><strong>MPP + X402</strong></div>
+          <div><span>SETTLEMENT</span><strong>MPP + ERC-20</strong></div>
         </div>
       </section>
 

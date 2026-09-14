@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { tasks, bids } from '@/lib/schema'
-import { eq, desc, and, sql, gte, lte } from 'drizzle-orm'
+import { eq, desc, and, sql, gte, lte, inArray, or } from 'drizzle-orm'
 import { mppx } from '@/lib/mpp'
 import { getTaskPendingActions } from '@/lib/agent-contract'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
@@ -22,14 +22,51 @@ export async function GET(request: NextRequest) {
  const parsedBudgetMin = Number(searchParams.get('budget_min') || '0')
  const parsedBudgetMax = Number(searchParams.get('budget_max') || '999999')
  const parsedLimit = Number.parseInt(searchParams.get('limit') || '20', 10)
+ const parsedPage = Number.parseInt(searchParams.get('page') || '1', 10)
  const budgetMin = Number.isFinite(parsedBudgetMin) && parsedBudgetMin >= 0 ? parsedBudgetMin : 0
  const budgetMax = Number.isFinite(parsedBudgetMax) && parsedBudgetMax >= budgetMin ? parsedBudgetMax : 999999
  const limit = Number.isInteger(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 20
+ const page = Number.isInteger(parsedPage) ? Math.max(1, parsedPage) : 1
  const status = searchParams.get('status') || 'open'
  const taskType = searchParams.get('task_type') || ''
  const qParam = searchParams.get('q')?.trim().slice(0, 500) || ''
 
+ if (!['open', 'assigned', 'completed', 'expired', 'cancelled'].includes(status)) {
+  return NextResponse.json({ error: 'invalid_status', message: 'Unsupported task status' }, { status: 400 })
+ }
+ if (taskType && !['general', 'benchmark', 'self_improvement'].includes(taskType)) {
+  return NextResponse.json({ error: 'invalid_task_type', message: 'Unsupported task type' }, { status: 400 })
+ }
+
  try {
+ const conditions: any[] = [
+  eq(tasks.status, status),
+  gte(tasks.budgetUsd, budgetMin),
+  lte(tasks.budgetUsd, budgetMax),
+ ]
+ if (capability?.trim()) {
+  conditions.push(sql`LOWER(${tasks.requiredCapabilities}) LIKE ${`%${capability.trim().toLowerCase()}%`}`)
+ }
+ if (taskType) conditions.push(eq(tasks.taskType, taskType))
+ const keywords = qParam.toLowerCase().split(/\s+/).filter((word) => word.length > 2)
+ if (keywords.length > 0) {
+  const keywordConditions = keywords.flatMap((keyword) => {
+   const term = `%${keyword}%`
+   return [
+    sql`LOWER(${tasks.title}) LIKE ${term}`,
+    sql`LOWER(${tasks.description}) LIKE ${term}`,
+    sql`LOWER(${tasks.requiredCapabilities}) LIKE ${term}`,
+   ]
+  })
+  conditions.push(or(...keywordConditions))
+ }
+ const whereClause = and(...conditions)
+
+ const [{ count: total = 0 } = { count: 0 }] = await db
+  .select({ count: sql<number>`COUNT(*)` })
+  .from(tasks)
+  .where(whereClause)
+
  const allTasks = await db
  .select({
  id: tasks.id,
@@ -48,43 +85,41 @@ export async function GET(request: NextRequest) {
  benchmark_id: tasks.benchmarkId,
  })
  .from(tasks)
- .where(
- and(
- eq(tasks.status, status),
- gte(tasks.budgetUsd, budgetMin),
- lte(tasks.budgetUsd, budgetMax),
- )
- )
+ .where(whereClause)
  .orderBy(desc(tasks.createdAt))
  .limit(limit)
+ .offset((page - 1) * limit)
  .all()
- .catch(() => [])
 
- const bidCounts = await db
+ const taskIds = allTasks.map((task) => task.id)
+ const bidCounts = taskIds.length > 0 ? await db
  .select({
  task_id: bids.taskId,
  count: sql<number>`COUNT(*)`,
  })
  .from(bids)
+ .where(inArray(bids.taskId, taskIds))
  .groupBy(bids.taskId)
  .all()
- .catch(() => [])
+ : []
 
  const bidMap = new Map(bidCounts.map(b => [b.task_id, b.count]))
 
  // Fetch bids with pending counter-offers
  const counterOfferMap = new Map<string, any[]>()
  try {
+ if (taskIds.length > 0) {
  const coResult = await (db as any).$client.execute({
  sql: `SELECT task_id, id as bid_id, counter_offer_price, counter_offer_status, bidder_agent_id, price_usd
-       FROM bids WHERE counter_offer_status = 'pending'`,
- args: [],
+       FROM bids WHERE counter_offer_status = 'pending' AND task_id IN (${taskIds.map(() => '?').join(', ')})`,
+ args: taskIds,
  })
  for (const row of (coResult?.rows || [])) {
  const r = row as any
  const list = counterOfferMap.get(r.task_id) || []
  list.push({ bid_id: r.bid_id, counter_offer_price: r.counter_offer_price, counter_offer_status: r.counter_offer_status, bidder_agent_id: r.bidder_agent_id, price_usd: r.price_usd })
  counterOfferMap.set(r.task_id, list)
+ }
  }
  } catch { /* counter_offer columns may not exist yet */ }
 
@@ -102,31 +137,6 @@ export async function GET(request: NextRequest) {
  ? []
  : getTaskPendingActions(task),
  }))
-
- const capabilityFiltered = capability
- ? enriched.filter(t =>
- t.required_capabilities.some((c: string) =>
- c.toLowerCase().includes(capability.toLowerCase())
- )
- )
- : enriched
-
- // Keyword search via q parameter
- const qFiltered = qParam
- ? (() => {
- const keywords = qParam.toLowerCase().split(/\s+/).filter(w => w.length > 2)
- if (keywords.length === 0) return capabilityFiltered
- return capabilityFiltered.filter((t: any) =>
- keywords.some(kw =>
- (t.title || '').toLowerCase().includes(kw) ||
- (t.description || '').toLowerCase().includes(kw) ||
- (t.required_capabilities || []).some((c: string) => c.toLowerCase().includes(kw))
- )
- )
- })()
- : capabilityFiltered
-
- const filtered = taskType ? qFiltered.filter((t: any) => (t.task_type || 'general') === taskType) : qFiltered
 
  const genesisTasks = [
  {
@@ -172,13 +182,18 @@ export async function GET(request: NextRequest) {
  ]
 
  const hasFilters = Boolean(capability || taskType || qParam || budgetMin > 0 || budgetMax < 999999)
- const seeded = (filtered.length === 0 && status === 'open' && !hasFilters)
+ const seeded = (Number(total) === 0 && status === 'open' && !hasFilters && page === 1)
  ? genesisTasks.map((task) => ({ ...task, is_demo: true, pendingActions: [] }))
- : filtered
+ : enriched
+ const resultTotal = Number(total) === 0 && seeded.length > 0 ? seeded.length : Number(total)
 
  return NextResponse.json({
  tasks: seeded,
- total: seeded.length,
+ page,
+ limit,
+ total: resultTotal,
+ total_pages: Math.ceil(resultTotal / limit),
+ has_more: page * limit < resultTotal,
  status_filter: status,
  }, { headers: { 'Cache-Control': 'no-store' } })
 

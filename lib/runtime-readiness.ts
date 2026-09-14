@@ -94,12 +94,22 @@ async function computeRuntimeReadiness(): Promise<RuntimeReadiness> {
   }
 
   const enabledRails: PaymentReadinessSummary['enabled_rails'] = []
+  const settlementReadyRails: PaymentReadinessSummary['enabled_rails'] = []
   let paymentError: PaymentReadinessSummary['error']
   try {
     const readiness = getPaymentReadiness()
-    if (readiness.ledger.enabled) enabledRails.push('ledger')
-    if (readiness.mpp.enabled) enabledRails.push('mpp')
-    if (readiness.evm.enabled) enabledRails.push('evm')
+    if (readiness.ledger.enabled) {
+      enabledRails.push('ledger')
+      if (readiness.ledger.redeemable) settlementReadyRails.push('ledger')
+    }
+    if (readiness.mpp.enabled) {
+      enabledRails.push('mpp')
+      settlementReadyRails.push('mpp')
+    }
+    if (readiness.evm.enabled) {
+      enabledRails.push('evm')
+      settlementReadyRails.push('evm')
+    }
   } catch (error) {
     paymentError = 'invalid_payment_configuration'
     logger.error('Runtime readiness payment configuration check failed', {
@@ -109,7 +119,9 @@ async function computeRuntimeReadiness(): Promise<RuntimeReadiness> {
 
   const allRails: PaymentReadinessSummary['enabled_rails'] = ['ledger', 'mpp', 'evm']
   const payments: PaymentReadinessSummary = {
-    ready: enabledRails.length > 0,
+    // A non-redeemable internal balance is useful for testing, but it is not a
+    // production payment rail and must not make a deployment look payable.
+    ready: settlementReadyRails.length > 0,
     required: configuration.enforced,
     enabled_rails: enabledRails,
     disabled_rails: allRails.filter((rail) => !enabledRails.includes(rail)),

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { agents, trades, ratings, payment_receipts, tasks } from '@/lib/schema'
+import { agents, trades, ratings, payment_receipts, tasks, listings } from '@/lib/schema'
 import { eq, or, sql } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
@@ -72,6 +72,14 @@ export async function GET() {
     .from(tasks)
     .catch(() => [{ total_tasks: 2 }])
 
+  const [{ services_listed = 0, services_online = 0 } = { services_listed: 0, services_online: 0 }] = await db
+    .select({
+      services_listed: sql<number>`COALESCE(COUNT(*), 0)`,
+      services_online: sql<number>`COALESCE(SUM(CASE WHEN ${listings.status} = 'active' THEN 1 ELSE 0 END), 0)`,
+    })
+    .from(listings)
+    .catch(() => [{ services_listed: 0, services_online: 0 }])
+
   const [{ trades_today = 0 } = { trades_today: 0 }] = await db
     .select({ trades_today: sql<number>`(SELECT COUNT(*) FROM trades WHERE date(created_at, 'unixepoch') = date('now'))` })
     .from(trades)
@@ -95,7 +103,8 @@ export async function GET() {
     trades_today: Number(trades_today || 0),
     volume_24h: Number(volume_last_24h || 0),
     waitlist_count: 0,
-    services_listed: 0,
+    services_listed: Number(services_listed || 0),
+    services_online: Number(services_online || 0),
     volume_by_rail: await getVolumeByRail(),
     total_tasks: Number(total_tasks || 0),
 

@@ -92,7 +92,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           total_cost: quote.totalCost,
           seller_amount: quote.sellerAmount,
           dev_amount: quote.devAmount,
-          dev_wallet: process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || null,
+          dev_wallet: input.data.payment_rail === 'mpp' ? readiness.mpp.feeRecipient : readiness.evm.feeRecipient,
           payout_status: 'pending',
           payment_rail: input.data.payment_rail,
           client_reference: clientReference,

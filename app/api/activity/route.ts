@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { desc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agents, ratings, trades } from '@/lib/schema'
+import { agents, ratings, trades, users } from '@/lib/schema'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,21 +92,21 @@ export async function GET() {
       }).from(agents).where(eq(agents.status, 'active')).orderBy(desc(agents.created_at)).limit(10),
     ])
 
-    const agentIds = new Set<string>()
+    const principalIds = new Set<string>()
     recentTrades.forEach((t) => {
-      if (t.buyer_agent_id) agentIds.add(t.buyer_agent_id)
-      if (t.seller_agent_id) agentIds.add(t.seller_agent_id)
+      if (t.buyer_agent_id) principalIds.add(t.buyer_agent_id)
+      if (t.seller_agent_id) principalIds.add(t.seller_agent_id)
     })
     recentRatings.forEach((r) => {
-      if (r.rater_agent_id) agentIds.add(r.rater_agent_id)
-      if (r.rated_agent_id) agentIds.add(r.rated_agent_id)
+      if (r.rater_agent_id) principalIds.add(r.rater_agent_id)
+      if (r.rated_agent_id) principalIds.add(r.rated_agent_id)
     })
 
-    const agentRows = agentIds.size
-      ? await db.select({ id: agents.id, name: agents.name }).from(agents).where(inArray(agents.id, Array.from(agentIds)))
+    const principalRows = principalIds.size
+      ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, Array.from(principalIds)))
       : []
 
-    const nameById = new Map(agentRows.map((a) => [a.id, a.name]))
+    const nameById = new Map(principalRows.map((principal) => [principal.id, principal.name]))
 
     const tradeEvents: Array<ActivityEvent & { createdAt: Date }> = recentTrades
       .filter((t) => safeDate(t.created_at) !== null)

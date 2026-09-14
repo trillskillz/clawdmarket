@@ -79,6 +79,15 @@
 .emptyState h3 { margin:14px 0 8px; font:500 28px 'Space Grotesk',sans-serif; letter-spacing:-.045em; }
 .emptyState p { color:#757b73; font-size:11px; }
 .emptyState button,.emptyState a { margin-top:22px; padding:11px 15px; border:1px solid rgba(240,236,225,.15); display:inline-block; background:transparent; color:#c5c6bf; font:8px 'JetBrains Mono',monospace; }
+.registryPagination { min-height:72px; padding:14px 0; border-bottom:1px solid rgba(240,236,225,.12); display:flex; align-items:center; justify-content:space-between; gap:24px; }
+.registryPagination>span,.registryPagination>strong { color:#626860; font:500 8px 'JetBrains Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+.registryPagination>span { display:flex; flex-direction:column; gap:6px; }
+.registryPagination small { color:#ff7954; font:500 8px 'JetBrains Mono',monospace; letter-spacing:0; text-transform:none; }
+.registryPagination>strong { color:#777d74; }
+.registryPagination button { min-height:42px; padding:0 15px; border:1px solid rgba(240,236,225,.16); display:flex; align-items:center; gap:28px; background:transparent; color:#d0d1ca; font:500 9px 'JetBrains Mono',monospace; text-transform:uppercase; }
+.registryPagination button:hover { border-color:#ff5c35; color:#f5f2e9; }
+.registryPagination button:disabled { opacity:.55; cursor:wait; }
+.registryPagination button i { color:#ff6a43; font-style:normal; }
 .loadingGrid > div { min-height:330px; padding:24px; display:flex; flex-direction:column; gap:16px; }
 .loadingGrid > div + div { border-left:1px solid rgba(240,236,225,.12); }
 .loadingGrid i,.loadingGrid span { display:block; background:linear-gradient(90deg,#101411,#171b18,#101411); background-size:200%; animation:shimmer 1.6s infinite; }
@@ -89,5 +98,5 @@
 @keyframes shimmer { to { background-position:-200% 0; } }
 
 @media(max-width:1000px){.hero{grid-template-columns:1fr;gap:40px}.heroAside{max-width:620px}.discoveryPanel{grid-template-columns:1fr}.lookupPanel{border-top:1px solid rgba(240,236,225,.12);border-left:0}.agentGrid,.loadingGrid{grid-template-columns:1fr 1fr}.agentCard:nth-child(odd){border-left:0}.agentCard:nth-child(n+3){border-top:1px solid rgba(240,236,225,.12)}}
-@media(max-width:680px){.hero,.discoveryPanel,.resultsSection{width:calc(100% - 36px)}.hero{min-height:auto;padding:70px 0}.hero h1{font-size:clamp(51px,15vw,72px)}.modeSwitch button{padding:0 8px}.searchField{padding:0 14px;grid-template-columns:auto 1fr}.searchField>span:last-child{display:none}.searchOptions{align-items:flex-start;flex-direction:column;padding:14px}.searchOptions>span{display:none}.resultsSection{padding:90px 0}.resultsHeader{align-items:flex-start;flex-direction:column}.agentGrid,.loadingGrid{grid-template-columns:1fr}.agentCard:nth-child(n){border-left:0}.agentCard+ .agentCard{border-top:1px solid rgba(240,236,225,.12)}.lookupPanel>p{min-height:auto}.identity{grid-template-columns:auto 1fr}.matchScore{grid-column:2;align-items:flex-start}.cardFooter{gap:12px}.loadingGrid>div+div{border-left:0;border-top:1px solid rgba(240,236,225,.12)}}
+@media(max-width:680px){.hero,.discoveryPanel,.resultsSection{width:calc(100% - 36px)}.hero{min-height:auto;padding:70px 0}.hero h1{font-size:clamp(51px,15vw,72px)}.modeSwitch button{padding:0 8px}.searchField{padding:0 14px;grid-template-columns:auto 1fr}.searchField>span:last-child{display:none}.searchOptions{align-items:flex-start;flex-direction:column;padding:14px}.searchOptions>span{display:none}.resultsSection{padding:90px 0}.resultsHeader{align-items:flex-start;flex-direction:column}.agentGrid,.loadingGrid{grid-template-columns:1fr}.agentCard:nth-child(n){border-left:0}.agentCard+ .agentCard{border-top:1px solid rgba(240,236,225,.12)}.lookupPanel>p{min-height:auto}.identity{grid-template-columns:auto 1fr}.matchScore{grid-column:2;align-items:flex-start}.cardFooter{gap:12px}.loadingGrid>div+div{border-left:0;border-top:1px solid rgba(240,236,225,.12)}.registryPagination{align-items:stretch;flex-direction:column;padding:20px 0}.registryPagination button{justify-content:space-between}}
 @media(prefers-reduced-motion:reduce){.loadingGrid i,.loadingGrid span{animation:none}}

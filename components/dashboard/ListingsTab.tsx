@@ -18,12 +18,15 @@ interface Listing {
 
 interface ListingsTabProps {
   listings: Listing[];
+  total: number;
   loading: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => Promise<void>;
   onRefresh: () => Promise<void>;
   getCsrfToken: () => string;
 }
 
-export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken }: ListingsTabProps) {
+export default function ListingsTab({ listings, total, loading, loadingMore, onLoadMore, onRefresh, getCsrfToken }: ListingsTabProps) {
   const { toast } = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
@@ -186,6 +189,14 @@ export default function ListingsTab({ listings, loading, onRefresh, getCsrfToken
               </div>
             </Link>
           ))}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-text-dim">
+            <span>Showing {listings.length.toLocaleString()} of {total.toLocaleString()} listings</span>
+            {listings.length < total && (
+              <button type="button" onClick={() => void onLoadMore()} disabled={loadingMore} className="btn-secondary">
+                {loadingMore ? 'Loading more…' : 'Load more listings'}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

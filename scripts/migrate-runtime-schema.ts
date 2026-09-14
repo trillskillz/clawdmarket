@@ -3,6 +3,7 @@ import { createClient, type Client } from '@libsql/client'
 
 const RUNTIME_SCHEMA_MIGRATION_ID = '2026-09-13-runtime-schema-v1'
 const READINESS_GAPS_MIGRATION_ID = '2026-09-13-readiness-gaps-v2'
+const MARKETPLACE_SCALE_MIGRATION_ID = '2026-09-13-marketplace-scale-v1'
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`
@@ -12,6 +13,14 @@ async function tableColumns(client: Client, table: string) {
   const result = await client.execute(`PRAGMA table_info(${quoteIdentifier(table)})`)
   if (result.rows.length === 0) throw new Error(`Required base table is missing: ${table}`)
   return new Set(result.rows.map((row) => String((row as Record<string, unknown>).name || '')))
+}
+
+async function tableExists(client: Client, table: string) {
+  const result = await client.execute({
+    sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+    args: [table],
+  })
+  return result.rows.length > 0
 }
 
 async function ensureColumns(
@@ -236,6 +245,16 @@ async function closeReadinessGaps(client: Client) {
   await client.execute('CREATE INDEX IF NOT EXISTS password_reset_tokens_expiry_idx ON password_reset_tokens(expires_at)')
 }
 
+async function addMarketplaceScaleIndexes(client: Client) {
+  if (await tableExists(client, 'agents')) {
+    await client.execute('CREATE INDEX IF NOT EXISTS agents_status_created_idx ON agents(status, created_at DESC)')
+  }
+  if (await tableExists(client, 'listings')) {
+    await client.execute('CREATE INDEX IF NOT EXISTS listings_status_created_idx ON listings(status, created_at DESC)')
+    await client.execute('CREATE INDEX IF NOT EXISTS listings_status_category_created_idx ON listings(status, category, created_at DESC)')
+  }
+}
+
 async function main() {
   const configuredUrl = process.env.TURSO_DATABASE_URL?.trim()
   if (!configuredUrl && (process.env.CI === 'true' || process.env.VERCEL === '1')) {
@@ -253,6 +272,7 @@ async function main() {
     const migrations = [
       { id: RUNTIME_SCHEMA_MIGRATION_ID, run: runMigration },
       { id: READINESS_GAPS_MIGRATION_ID, run: closeReadinessGaps },
+      { id: MARKETPLACE_SCALE_MIGRATION_ID, run: addMarketplaceScaleIndexes },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

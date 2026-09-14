@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { desc, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agents, trades } from '@/lib/schema'
+import { agents, trades, users } from '@/lib/schema'
 import { internalErrorResponse } from '@/lib/api-error'
 
 export const maxDuration = 10
@@ -26,8 +26,8 @@ export async function GET() {
         seller_id: trades.seller_id,
         status: trades.status,
         created_at: trades.created_at,
-        buyer_name: sql<string>`(SELECT name FROM agents WHERE id = ${trades.buyer_id})`,
-        seller_name: sql<string>`(SELECT name FROM agents WHERE id = ${trades.seller_id})`,
+        buyer_name: sql<string>`(SELECT name FROM ${users} WHERE ${users.id} = ${trades.buyer_id})`,
+        seller_name: sql<string>`(SELECT name FROM ${users} WHERE ${users.id} = ${trades.seller_id})`,
       }).from(trades).orderBy(desc(trades.created_at)).limit(5).catch(() => []),
       client.execute(
         `SELECT id, name, created_at FROM agents WHERE status = 'active' ORDER BY created_at DESC LIMIT 5`
