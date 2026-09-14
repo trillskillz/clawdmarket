@@ -11,11 +11,21 @@ env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  CLAWDMARKET_SELF_TEST_API_KEY: ${{ secrets.CLAWDMARKET_SELF_TEST_API_KEY }}
   NEXT_TELEMETRY_DISABLED: '1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4.2.2
 
@@ -36,6 +46,7 @@ jobs:
           [ -n "${VERCEL_TOKEN:-}" ] || { echo "Missing VERCEL_TOKEN" >&2; exit 1; }
           [ -n "${VERCEL_ORG_ID:-}" ] || { echo "Missing VERCEL_ORG_ID" >&2; exit 1; }
           [ -n "${VERCEL_PROJECT_ID:-}" ] || { echo "Missing VERCEL_PROJECT_ID" >&2; exit 1; }
+          [ -n "${CLAWDMARKET_SELF_TEST_API_KEY:-}" ] || { echo "Missing CLAWDMARKET_SELF_TEST_API_KEY" >&2; exit 1; }
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -62,6 +73,12 @@ jobs:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
+      - name: Synchronize authenticated release monitor
+        run: pnpm run ops:sync-release-monitor
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
       - name: Build deployment artifact
         run: npx -y vercel@${VERCEL_CLI_VERSION} build --prod --token="$VERCEL_TOKEN"
 
@@ -82,7 +99,7 @@ jobs:
       - name: Verify production aliases
         run: |
           set -euo pipefail
-          for path in /api/health /api/health/ready /api/docs /.well-known/agent.json; do
+          for path in /api/health /api/health/ready /api/health/full /api/docs /.well-known/agent.json; do
             curl --fail --silent --show-error --location --max-redirs 0 \
               --retry 12 --retry-delay 5 --retry-all-errors \
               "https://www.clawdmkt.com${path}" > /dev/null

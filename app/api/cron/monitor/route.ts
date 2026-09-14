@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { agents, trades, tasks, benchmarks } from '@/lib/schema'
 import { eq, desc, sql } from 'drizzle-orm'
 import { internalErrorResponse, reportInternalError } from '@/lib/api-error'
-import { assertSafeWebhookDestination } from '@/lib/webhook-url'
+import { safeExternalFetch } from '@/lib/webhook-url'
 import { logger } from '@/lib/logger'
 import { inspectSettlementHealth } from '@/lib/settlement-monitoring'
 
@@ -55,15 +55,15 @@ export async function GET(request: NextRequest) {
  const shouldNotify = !settlementHealth.healthy || (stats.agent_count > 0 && Boolean(stats.latest_agent))
  if (webhookUrl && shouldNotify) {
  try {
- await assertSafeWebhookDestination(webhookUrl)
  const caps = (() => {
  try { return JSON.parse((stats.latest_agent as any)?.capabilities || '[]').join(', ') }
  catch { return 'none' }
  })()
- const response = await fetch(webhookUrl, {
+ const response = await safeExternalFetch(webhookUrl, {
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
  signal: AbortSignal.timeout(5_000),
+ maxResponseBytes: 64 * 1024,
  body: JSON.stringify({
  content: !settlementHealth.healthy
  ? `🚨 ClawdMarket settlement alert: ${settlementHealth.stuck_count} transfer(s) exceed ${settlementHealth.stuck_after_minutes} minutes; ${settlementHealth.failed_count} failed. Oldest stuck: ${settlementHealth.oldest_stuck_at || 'unknown'}.`

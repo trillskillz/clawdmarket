@@ -2,6 +2,7 @@ import 'server-only'
 import { inspectDatabaseSchema, type DatabaseReadiness } from '@/lib/database-readiness'
 import { logger } from '@/lib/logger'
 import { getPaymentReadiness } from '@/lib/payment-config'
+import { isPasswordResetEmailConfigured } from '@/lib/password-reset-email'
 
 type RuntimeEnvironment = Record<string, string | undefined>
 
@@ -127,16 +128,12 @@ async function computeRuntimeReadiness(): Promise<RuntimeReadiness> {
     disabled_rails: allRails.filter((rail) => !enabledRails.includes(rail)),
     ...(paymentError ? { error: paymentError } : {}),
   }
-  const passwordResetEmailConfigured = Boolean(
-    process.env.RESEND_API_KEY?.trim() && process.env.PASSWORD_RESET_FROM_EMAIL?.trim(),
-  )
-
   return {
     ready: configuration.ready && database.ready && (!payments.required || payments.ready),
     configuration,
     database,
     payments,
-    password_reset_email: { configured: passwordResetEmailConfigured },
+    password_reset_email: { configured: isPasswordResetEmailConfigured() },
   }
 }
 

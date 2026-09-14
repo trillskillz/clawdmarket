@@ -13,6 +13,9 @@ env:
   CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
   WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
 
+permissions:
+  contents: read
+
 jobs:
   verify-security-and-build:
     runs-on: ubuntu-latest

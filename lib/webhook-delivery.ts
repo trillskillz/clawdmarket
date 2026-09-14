@@ -2,7 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { webhook_deliveries, webhooks } from '@/lib/schema';
-import { assertSafeWebhookDestination } from '@/lib/webhook-url';
+import { safeExternalFetch } from '@/lib/webhook-url';
 
 export const ALLOWED_WEBHOOK_EVENTS = [
   'task.assigned',
@@ -104,10 +104,9 @@ export async function deliverWebhookEvent(
 
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      await assertSafeWebhookDestination(webhook.url);
       const controller = new AbortController();
       timeout = setTimeout(() => controller.abort(), 10_000);
-      const res = await fetch(webhook.url, {
+      const res = await safeExternalFetch(webhook.url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,7 +117,7 @@ export async function deliverWebhookEvent(
         },
         body,
         signal: controller.signal,
-        redirect: 'error',
+        maxResponseBytes: 64 * 1024,
       });
       await db.insert(webhook_deliveries).values({
         id: randomUUID(),

@@ -14,6 +14,10 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   smoke:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
@@ -50,6 +54,12 @@ jobs:
           code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/health/ready")
           [ "$code" = "200" ] || fail "/api/health/ready expected 200 got $code"
           pass "/api/health/ready"
+
+          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/health/full")
+          [ "$code" = "200" ] || fail "/api/health/full expected 200 got $code"
+          node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); if(data.status !== 'ok') process.exit(1)" "$OUT" \
+            || fail "/api/health/full did not report status=ok"
+          pass "/api/health/full"
 
           code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/docs")
           [ "$code" = "200" ] || fail "/api/docs expected 200 got $code"
@@ -109,7 +119,7 @@ jobs:
           {
             echo "## Production smoke summary"
             echo "- Base URL: \\`$BASE_URL\\`"
-            echo "- ✅ Liveness/readiness/docs/discovery"
+            echo "- ✅ Liveness/readiness/full diagnostics/docs/discovery"
             echo "- ✅ Auth login/me/logout"
             echo "- ✅ Analytics summary"
             echo "- ✅ API key create/revoke"

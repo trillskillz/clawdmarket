@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
@@ -26,6 +26,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [passwordResetAvailable, setPasswordResetAvailable] = useState(false)
+
+  useEffect(() => {
+    if (window.location.hash === '#wallet') setMode('wallet')
+    fetch('/api/auth/forgot-password', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setPasswordResetAvailable(data?.configured === true))
+      .catch(() => setPasswordResetAvailable(false))
+  }, [])
 
   const walletConnectors = useMemo(() => {
     const seen = new Set<string>()
@@ -168,7 +177,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className={styles.field}>
-                  <label htmlFor="login-password"><span>02 / PASSWORD</span><Link href="/auth/forgot-password">Recover access ↗</Link></label>
+                  <label htmlFor="login-password"><span>02 / PASSWORD</span>{passwordResetAvailable && <Link href="/auth/forgot-password">Recover access ↗</Link>}</label>
                   <div className={styles.passwordField}>
                     <input
                       id="login-password"

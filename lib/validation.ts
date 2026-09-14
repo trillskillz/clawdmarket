@@ -68,7 +68,13 @@ export const watchlistItemSchema = z.object({
 });
 
 export const waitlistSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: z.string().max(254).email('Invalid email address'),
+});
+
+export const claimAgentSchema = z.object({
+  code: z.string().trim().min(1, 'Claim code is required').max(128, 'Claim code is too long'),
+  email: z.string().trim().max(254, 'Email is too long').email('Valid email is required')
+    .transform((email) => email.toLowerCase()),
 });
 
 export const listingsQuerySchema = z.object({

@@ -4,6 +4,7 @@ import { createClient, type Client } from '@libsql/client'
 const RUNTIME_SCHEMA_MIGRATION_ID = '2026-09-13-runtime-schema-v1'
 const READINESS_GAPS_MIGRATION_ID = '2026-09-13-readiness-gaps-v2'
 const MARKETPLACE_SCALE_MIGRATION_ID = '2026-09-13-marketplace-scale-v1'
+const SCHEMA_RECONCILIATION_MIGRATION_ID = '2026-09-14-schema-reconciliation-v1'
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`
@@ -273,6 +274,10 @@ async function main() {
       { id: RUNTIME_SCHEMA_MIGRATION_ID, run: runMigration },
       { id: READINESS_GAPS_MIGRATION_ID, run: closeReadinessGaps },
       { id: MARKETPLACE_SCALE_MIGRATION_ID, run: addMarketplaceScaleIndexes },
+      // Re-run the idempotent reconciler under a new immutable ID. Production
+      // databases may have recorded an earlier migration before all agent
+      // registration columns were part of its implementation.
+      { id: SCHEMA_RECONCILIATION_MIGRATION_ID, run: runMigration },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({
