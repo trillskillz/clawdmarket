@@ -78,9 +78,24 @@ export async function POST(req: NextRequest) {
           role: 'human',
           bio: `Wallet-auth user ${address}`,
         })
+        .onConflictDoNothing({ target: users.email })
         .returning();
 
       user = inserted[0];
+
+      // Another request for the same wallet can win the insert race. In that
+      // case, use the account it created instead of turning a valid signature
+      // into a 500 response.
+      if (!user) {
+        [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, syntheticEmail));
+      }
+    }
+
+    if (!user) {
+      throw new Error('Wallet account could not be created');
     }
 
     await db.insert(wallets).values({ user_id: user.id, balance: 0, escrow: 0 }).onConflictDoNothing();
