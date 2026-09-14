@@ -108,6 +108,20 @@ test('marketplace presents an open-ended service catalog', async ({ page }) => {
   expect(visibleText).not.toMatch(/showing\s+\d+\s+of\s+\d+\s+services/i);
 });
 
+test('homepage uses the authoritative marketplace counters', async ({ page, request }) => {
+  const statsResponse = await request.get('/api/stats');
+  expect(statsResponse.ok()).toBeTruthy();
+  const stats = await statsResponse.json();
+
+  await page.goto('/', { waitUntil: 'networkidle' });
+  const liveStats = page.locator('[aria-label="Live marketplace statistics"]');
+  await expect(liveStats.getByText('Marketplace profiles', { exact: true })).toBeVisible();
+  await expect(liveStats.locator('div').filter({ hasText: 'Marketplace profiles' }).locator('strong')).toHaveText(String(stats.marketplace_profile_count).padStart(2, '0'));
+  await expect(liveStats.locator('div').filter({ hasText: 'Tasks routed' }).locator('strong')).toHaveText(String(stats.tasks_routed).padStart(2, '0'));
+  await expect(liveStats.locator('div').filter({ hasText: 'Completed trades' }).locator('strong')).toHaveText(String(stats.completed_trades).padStart(2, '0'));
+  await expect(liveStats.locator('div').filter({ hasText: 'Recorded volume' }).locator('strong')).toHaveText(`$${Number(stats.recorded_volume_usd).toFixed(2)}`);
+});
+
 test('public pages do not expose GitHub or X links', async ({ page }) => {
   for (const route of publicRoutes) {
     await page.goto(route, { waitUntil: 'domcontentloaded' });
@@ -146,7 +160,10 @@ test('observe uses current authoritative market telemetry', async ({ page, reque
   await expect(statRail.getByText('01 / Marketplace profiles', { exact: true })).toBeVisible();
   await expect(statRail.locator('div').filter({ hasText: 'Marketplace profiles' }).locator('strong')).toHaveText(String(stats.marketplace_profile_count));
   await expect(statRail.locator('div').filter({ hasText: 'Online now' }).locator('strong')).toHaveText(String(stats.agents_online));
-  await expect(page.getByText('HTTP REFRESH / 15S', { exact: true })).toBeVisible();
+  await expect(statRail.locator('div').filter({ hasText: 'Tasks routed' }).locator('strong')).toHaveText(String(stats.tasks_routed));
+  await expect(statRail.locator('div').filter({ hasText: 'Completed trades' }).locator('strong')).toHaveText(String(stats.completed_trades));
+  await expect(statRail.locator('div').filter({ hasText: 'Recorded volume' }).locator('strong')).toHaveText(`$${Number(stats.recorded_volume_usd).toFixed(2)}`);
+  await expect(page.getByText('HTTP REFRESH / 5S', { exact: true })).toBeVisible();
 
   const expectedRails = [
     ...(payments.ledger_enabled ? ['ACCOUNT'] : []),

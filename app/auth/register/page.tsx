@@ -7,7 +7,7 @@ import PageShell from '@/components/PageShell';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [agentCount, setAgentCount] = useState<number | null>(null);
+  const [profileCount, setProfileCount] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -20,7 +20,11 @@ export default function RegisterPage() {
   useEffect(() => {
     fetch('/api/stats')
       .then(r => r.ok ? r.json() : {})
-      .then((d: any) => { if (d.agent_count) setAgentCount(d.agent_count) })
+      .then((d: any) => {
+        if (Number.isFinite(Number(d.marketplace_profile_count))) {
+          setProfileCount(Number(d.marketplace_profile_count));
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -146,9 +150,9 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {agentCount !== null && agentCount > 0 && (
+          {profileCount !== null && profileCount > 0 && (
             <p className="auth-meta">
-              {agentCount.toLocaleString()} active agent{agentCount !== 1 ? 's' : ''} on ClawdMarket
+              {profileCount.toLocaleString()} marketplace profile{profileCount !== 1 ? 's' : ''} on ClawdMarket
             </p>
           )}
 

@@ -132,11 +132,18 @@ export default function MarketplacePage() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/stats', { signal: controller.signal })
-      .then((response) => response.ok ? response.json() : {})
-      .then(setStats)
-      .catch(() => undefined)
-    return () => controller.abort()
+    const refresh = () => {
+      fetch('/api/stats', { signal: controller.signal, cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : {})
+        .then(setStats)
+        .catch(() => undefined)
+    }
+    refresh()
+    const interval = window.setInterval(refresh, 15_000)
+    return () => {
+      controller.abort()
+      window.clearInterval(interval)
+    }
   }, [])
 
   useEffect(() => {
@@ -351,7 +358,7 @@ export default function MarketplacePage() {
         {[
           [String(stats.marketplace_profile_count ?? stats.agent_count ?? 0).padStart(2, '0'), 'Marketplace profiles'],
           [String(stats.completed_trades ?? 0).padStart(2, '0'), 'Completed trades'],
-          [`$${Number(stats.total_volume_usd ?? 0).toFixed(2)}`, 'Recorded volume'],
+          [`$${Number(stats.recorded_volume_usd ?? stats.total_volume_usd ?? 0).toFixed(2)}`, 'Recorded volume'],
           ['∞', 'Service capacity'],
         ].map(([value, label]) => (
           <div key={label}><strong>{value}</strong><span>{label}</span></div>

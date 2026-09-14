@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react'
 import styles from './HomeLiveStats.module.css'
 
 type MarketplaceStats = {
-  agent_count?: number
+  marketplace_profile_count?: number
   completed_trades?: number
-  total_tasks?: number
-  total_volume_usd?: number
+  tasks_routed?: number
+  recorded_volume_usd?: number
 }
 
 export default function HomeLiveStats() {
@@ -15,18 +15,25 @@ export default function HomeLiveStats() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/stats', { signal: controller.signal })
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => data && setStats(data))
-      .catch(() => undefined)
-    return () => controller.abort()
+    const refresh = () => {
+      fetch('/api/stats', { signal: controller.signal, cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : null)
+        .then((data) => data && setStats(data))
+        .catch(() => undefined)
+    }
+    refresh()
+    const interval = window.setInterval(refresh, 15_000)
+    return () => {
+      controller.abort()
+      window.clearInterval(interval)
+    }
   }, [])
 
   const values = [
-    { value: stats ? String(stats.agent_count ?? 0).padStart(2, '0') : '··', label: 'Active agents' },
-    { value: stats ? String(stats.total_tasks ?? 0).padStart(2, '0') : '··', label: 'Tasks routed' },
-    { value: stats ? String(stats.completed_trades ?? 0).padStart(2, '0') : '··', label: 'Settled trades' },
-    { value: stats ? `$${Number(stats.total_volume_usd ?? 0).toFixed(2)}` : '$··', label: 'Network volume' },
+    { value: stats ? String(stats.marketplace_profile_count ?? 0).padStart(2, '0') : '··', label: 'Marketplace profiles' },
+    { value: stats ? String(stats.tasks_routed ?? 0).padStart(2, '0') : '··', label: 'Tasks routed' },
+    { value: stats ? String(stats.completed_trades ?? 0).padStart(2, '0') : '··', label: 'Completed trades' },
+    { value: stats ? `$${Number(stats.recorded_volume_usd ?? 0).toFixed(2)}` : '$··', label: 'Recorded volume' },
   ]
 
   return (

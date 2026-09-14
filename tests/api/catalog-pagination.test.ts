@@ -13,6 +13,7 @@ let searchAgents: typeof import('@/app/api/agents/search/route').GET
 let listServices: typeof import('@/app/api/listings/route').GET
 let listTasks: typeof import('@/app/api/tasks/route').GET
 let getStats: typeof import('@/app/api/stats/route').GET
+let getActivity: typeof import('@/app/api/activity/route').GET
 let fixtureDirectory: string
 
 before(async () => {
@@ -27,6 +28,7 @@ before(async () => {
   listServices = (await import('@/app/api/listings/route')).GET
   listTasks = (await import('@/app/api/tasks/route')).GET
   getStats = (await import('@/app/api/stats/route')).GET
+  getActivity = (await import('@/app/api/activity/route')).GET
 
   const agents = Array.from({ length: 125 }, (_, index) => {
     const suffix = String(index).padStart(3, '0')
@@ -146,6 +148,12 @@ test('market statistics report full service totals instead of the current page s
   assert.equal(stats.services_listed, 126)
   assert.equal(stats.services_online, 126)
   assert.equal(stats.agents_online, 0)
+  assert.equal(stats.tasks_total, 125)
+  assert.equal(stats.tasks_routed, 0)
+  assert.equal(stats.tasks_completed, 0)
+  assert.equal(stats.tasks_open, 125)
+  assert.equal(stats.completed_trades, 0)
+  assert.equal(stats.recorded_volume_usd, 0)
 
   await db.$client.execute({
     sql: `UPDATE agents SET is_online = 1, last_seen_at = unixepoch() WHERE id = ?`,
@@ -172,4 +180,69 @@ test('task board filters and pages through more than 100 tasks', async () => {
   const filtered = await (await listTasks(new NextRequest('http://localhost/api/tasks?status=open&capability=batch-3&page=1&limit=50'))).json()
   assert.equal(filtered.total, 25)
   assert.equal(filtered.tasks.length, 25)
+})
+
+test('market statistics count routed tasks, completed trades, and recorded volume from stored records', async () => {
+  await db.$client.execute({
+    sql: `UPDATE tasks SET status = 'assigned', assigned_agent_id = ? WHERE id = ?`,
+    args: ['scale-agent-001', 'scale-task-001'],
+  })
+  await db.$client.execute({
+    sql: `UPDATE tasks SET status = 'completed', assigned_agent_id = ? WHERE id = ?`,
+    args: ['scale-agent-002', 'scale-task-002'],
+  })
+  await db.insert(schema.trades).values({
+    id: 'scale-completed-trade',
+    listing_id: 'scale-listing-000',
+    buyer_id: 'user_agent_scale-agent-001',
+    seller_id: 'user_agent_scale-agent-000',
+    amount: 10,
+    fee: 0.5,
+    item_price: 10,
+    platform_fee: 0.5,
+    total_cost: 10.5,
+    seller_amount: 10,
+    status: 'completed',
+  })
+
+  const stats = await (await getStats()).json()
+  assert.equal(stats.tasks_total, 125)
+  assert.equal(stats.tasks_routed, 2)
+  assert.equal(stats.tasks_completed, 1)
+  assert.equal(stats.tasks_open, 123)
+  assert.equal(stats.total_trades, 1)
+  assert.equal(stats.trade_count, 1)
+  assert.equal(stats.completed_trades, 1)
+  assert.equal(stats.recorded_volume_usd, 10)
+  assert.equal(stats.total_volume_usd, 10)
+  assert.equal(stats.platform_fees_usd, 0.5)
+  assert.equal(stats.trades_today, 1)
+  assert.equal(stats.volume_last_24h, 10)
+  assert.equal(stats.volume_by_rail.ledger, 10)
+})
+
+test('activity includes mixed-format timestamps and disables response caching', async () => {
+  const createdAt = new Date(Date.now() + 5_000).toISOString()
+  await db.$client.execute({
+    sql: `INSERT INTO agents
+      (id, name, description, capabilities, endpoint, owner_address, api_key, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+    args: [
+      'mixed-timestamp-agent',
+      'Mixed Timestamp Agent',
+      'Verifies activity timestamps stored as ISO text.',
+      '[]',
+      'https://mixed-timestamp.invalid',
+      'mixed-timestamp-owner',
+      'mixed-timestamp-key',
+      createdAt,
+    ],
+  })
+
+  const response = await getActivity()
+  const activity = await response.json()
+  const registration = activity.find((event: any) => event.id === 'registration_mixed-timestamp-agent')
+  assert.equal(response.headers.get('cache-control'), 'no-store, max-age=0')
+  assert.equal(registration.description, 'New agent "Mixed Timestamp Agent" registered')
+  assert.equal(registration.timestamp, createdAt)
 })

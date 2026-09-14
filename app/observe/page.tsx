@@ -98,8 +98,11 @@ export default function ObservePage() {
 
   useEffect(() => {
     let cancelled = false
+    let marketRefreshPending = false
 
     const refreshMarket = async () => {
+      if (marketRefreshPending) return
+      marketRefreshPending = true
       try {
         const [events, currentStats, payments] = await Promise.all([
           fetchJson('/api/activity'),
@@ -119,6 +122,8 @@ export default function ObservePage() {
         setConnState('live')
       } catch {
         if (!cancelled) setConnState('reconnecting')
+      } finally {
+        marketRefreshPending = false
       }
     }
 
@@ -140,7 +145,7 @@ export default function ObservePage() {
 
     void refreshMarket()
     void refreshPanels()
-    const marketInterval = setInterval(refreshMarket, 15_000)
+    const marketInterval = setInterval(refreshMarket, 5_000)
     const panelInterval = setInterval(refreshPanels, 60_000)
     return () => {
       cancelled = true
@@ -151,7 +156,7 @@ export default function ObservePage() {
 
   const live = connState === 'live'
   const connectionLabel = live ? 'data current' : connState === 'reconnecting' ? 'refresh delayed' : 'loading data'
-  const totalVolume = Number(stats.total_volume_usd || stats.trade_volume_usd || 0)
+  const totalVolume = Number(stats.recorded_volume_usd ?? stats.total_volume_usd ?? stats.trade_volume_usd ?? 0)
   const completedTrades = Number(stats.completed_trades ?? 0)
   const totalTrades = Number(stats.total_trades ?? stats.trade_count ?? 0)
   const completionRate = totalTrades > 0 ? Math.min(100, Math.round((completedTrades / totalTrades) * 100)) : 0
@@ -170,9 +175,9 @@ export default function ObservePage() {
   const headlineStats = [
     ['Marketplace profiles', stats.marketplace_profile_count ?? 0],
     ['Online now', stats.agents_online ?? 0],
-    ['Trades today', stats.trades_today ?? 0],
-    ['Completed all time', completedTrades],
-    ['Network volume', `$${totalVolume.toFixed(2)}`],
+    ['Tasks routed', stats.tasks_routed ?? 0],
+    ['Completed trades', completedTrades],
+    ['Recorded volume', `$${totalVolume.toFixed(2)}`],
   ]
 
   return (
@@ -185,7 +190,7 @@ export default function ObservePage() {
         </div>
         <div className={styles.streamCard}>
           <div><span>CONNECTION</span><strong className={live ? styles.online : styles.waiting}>{connectionLabel}</strong></div>
-          <div><span>TRANSPORT</span><strong>HTTP REFRESH / 15S</strong></div>
+          <div><span>TRANSPORT</span><strong>HTTP REFRESH / 5S</strong></div>
           <div><span>SETTLEMENT</span><strong>{settlementLabel}</strong></div>
         </div>
       </section>

@@ -4,19 +4,35 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 export default function GenesisTradesPage() {
-  const [stats, setStats] = useState<{ agent_count?: number; total_trades?: number; completed_trades?: number } | null>(null)
+  const [stats, setStats] = useState<{
+    marketplace_profile_count?: number
+    tasks_routed?: number
+    total_trades?: number
+    completed_trades?: number
+    recorded_volume_usd?: number
+  } | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/stats', { signal: controller.signal })
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => data && setStats(data))
-      .catch(() => undefined)
-    return () => controller.abort()
+    const refresh = () => {
+      fetch('/api/stats', { signal: controller.signal, cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : null)
+        .then((data) => data && setStats(data))
+        .catch(() => undefined)
+    }
+    refresh()
+    const interval = window.setInterval(refresh, 15_000)
+    return () => {
+      controller.abort()
+      window.clearInterval(interval)
+    }
   }, [])
 
   const tradeCount = Number(stats?.total_trades || 0)
   const completedCount = Number(stats?.completed_trades || 0)
+  const profileCount = Number(stats?.marketplace_profile_count || 0)
+  const routedTaskCount = Number(stats?.tasks_routed || 0)
+  const recordedVolume = Number(stats?.recorded_volume_usd || 0)
   const hasTrades = tradeCount > 0
 
   return (
@@ -69,8 +85,8 @@ export default function GenesisTradesPage() {
         <div style={{ fontSize: 64, marginBottom: 16 }}>{hasTrades ? '✓' : '⏳'}</div>
         <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, color: '#484f58' }}>
           {stats
-            ? `agent_count: ${Number(stats.agent_count || 0)} · trades: ${tradeCount} · completed: ${completedCount}`
-            : 'agent_count: … · trades: … · syncing...'}
+            ? `profiles: ${profileCount} · tasks routed: ${routedTaskCount} · completed trades: ${completedCount} · recorded volume: $${recordedVolume.toFixed(2)}`
+            : 'profiles: … · tasks routed: … · completed trades: … · recorded volume: …'}
         </p>
       </div>
       <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#484f58' }}>

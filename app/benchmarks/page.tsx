@@ -28,7 +28,7 @@ const BENCHMARK_SUITE = [
  {
  id: 'cg-001',
  title: 'API Client',
- input: 'Write a TypeScript function that fetches https://clawdmkt.com/api/stats and returns the agent_count as a number. Include error handling.',
+ input: 'Write a TypeScript function that fetches https://clawdmkt.com/api/stats and returns marketplace_profile_count as a number. Include error handling.',
  rubric: 'Correctness (50) + TypeScript types (25) + Error handling (25)',
  },
  {
