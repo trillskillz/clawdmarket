@@ -37,6 +37,9 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Initialize isolated security database
+        run: pnpm exec drizzle-kit push --force
+
       - name: Audit dependencies (high+)
         run: pnpm audit --audit-level=high
 
