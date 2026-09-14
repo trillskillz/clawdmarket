@@ -116,4 +116,93 @@ test.describe('Wallet auth flow', () => {
     expect(me.authenticated).toBe(true);
     expect(me.user.wallet).toBe(account.address.toLowerCase());
   });
+
+  test('MetaMask prefers its EIP-6963 provider over a conflicting legacy provider', async ({ page, context }) => {
+    const account = privateKeyToAccount(walletPrivateKey);
+    const nonce = 'abcdef0123456789abcdef0123456789';
+    const message = `Sign in to ClawdMarket\nNonce: ${nonce}`;
+    const signature = await account.signMessage({ message });
+
+    await context.addCookies([{
+      name: 'wallet-nonce',
+      value: nonce,
+      url: 'http://localhost:3000',
+      httpOnly: true,
+      sameSite: 'Strict',
+    }]);
+
+    await page.addInitScript(({ address, signature: walletSignature }) => {
+      const legacyProvider = {
+        isMetaMask: true,
+        _events: {},
+        _state: {},
+        request: async ({ method }: { method: string }) => {
+          if (method === 'eth_accounts') return [];
+          if (method === 'eth_chainId') return '0x1';
+          throw new Error('Wrong legacy MetaMask provider selected');
+        },
+        on() {},
+        removeListener() {},
+      };
+      Object.defineProperty(window, 'ethereum', { value: legacyProvider, configurable: true });
+
+      let connected = false;
+      const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+      const discoveredProvider = {
+        request: async ({ method }: { method: string }) => {
+          if (method === 'wallet_requestPermissions') {
+            connected = true;
+            return [{ caveats: [{ value: [address] }] }];
+          }
+          if (method === 'eth_requestAccounts') {
+            connected = true;
+            return [address];
+          }
+          if (method === 'eth_accounts') return connected ? [address] : [];
+          if (method === 'eth_chainId') return '0x1';
+          if (method === 'personal_sign') return walletSignature;
+          if (method === 'wallet_revokePermissions') {
+            connected = false;
+            return null;
+          }
+          throw new Error(`Unsupported MetaMask test method: ${method}`);
+        },
+        on(event: string, handler: (...args: unknown[]) => void) {
+          const handlers = listeners.get(event) || new Set();
+          handlers.add(handler);
+          listeners.set(event, handlers);
+        },
+        removeListener(event: string, handler: (...args: unknown[]) => void) {
+          listeners.get(event)?.delete(handler);
+        },
+      };
+      const detail = {
+        info: {
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>',
+          name: 'MetaMask',
+          rdns: 'io.metamask',
+          uuid: '73b80911-cb39-4d68-818c-17cc6ff93d6b',
+        },
+        provider: discoveredProvider,
+      };
+      window.addEventListener('eip6963:requestProvider', () => {
+        window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail }));
+      });
+    }, { address: account.address, signature });
+
+    await page.route('**/api/auth/wallet/nonce', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ nonce, message }),
+      });
+    });
+
+    await page.goto('/auth/login#wallet');
+    await expect(page.getByRole('button', { name: 'Connect MetaMask' })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Connect MetaMask' }).click();
+    await expect(page.getByRole('heading', { name: 'Wallet connected.' })).toBeVisible();
+    await page.getByRole('button', { name: /Sign message & enter/i }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
 });

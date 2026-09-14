@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   formatWalletConnectionError,
   getBrowserWalletConnectors,
+  getPreferredWalletConnectors,
   isGenericInjectedConnector,
   type WalletConnectorLike,
 } from '@/lib/wallet-connection';
@@ -17,8 +18,12 @@ test('wallet connector filtering removes targetless injected connector', () => {
 
   assert.equal(isGenericInjectedConnector(connectors[0]!), true);
   assert.deepEqual(
-    getBrowserWalletConnectors(connectors).map((connector) => connector.name),
-    ['MetaMask'],
+    getBrowserWalletConnectors(connectors).map((connector) => connector.id),
+    ['io.metamask'],
+  );
+  assert.deepEqual(
+    getPreferredWalletConnectors(connectors).map((connector) => connector.id),
+    ['io.metamask', 'coinbaseWalletSDK'],
   );
 });
 
