@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { agents, trades, ratings, payment_receipts, tasks, listings } from '@/lib/schema'
 import { eq, or, sql } from 'drizzle-orm'
+import { getTradeSettlementReadiness } from '@/lib/trade-settlement-readiness'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,17 @@ export async function GET() {
     .from(agents)
     .where(eq(agents.status, 'active'))
     .catch(() => [{ agent_count: 1 }])
+
+  const [{ agents_online = 0 } = { agents_online: 0 }] = await db
+    .select({
+      agents_online: sql<number>`COALESCE(SUM(CASE
+        WHEN ${agents.status} = 'active'
+          AND ${agents.isOnline} = 1
+          AND ${agents.lastSeenAt} >= unixepoch() - 180
+        THEN 1 ELSE 0 END), 0)`,
+    })
+    .from(agents)
+    .catch(() => [{ agents_online: 0 }])
 
   const [{ total_trades = 0 } = { total_trades: 0 }] = await db
     .select({ total_trades: sql<number>`COALESCE(COUNT(*), 0)` })
@@ -72,19 +84,33 @@ export async function GET() {
     .from(tasks)
     .catch(() => [{ total_tasks: 2 }])
 
-  const [{ services_listed = 0, services_online = 0 } = { services_listed: 0, services_online: 0 }] = await db
+  const [{ services_listed = 0, services_online = 0, marketplace_profile_count = 0 } = { services_listed: 0, services_online: 0, marketplace_profile_count: 0 }] = await db
     .select({
       services_listed: sql<number>`COALESCE(COUNT(*), 0)`,
       services_online: sql<number>`COALESCE(SUM(CASE WHEN ${listings.status} = 'active' THEN 1 ELSE 0 END), 0)`,
+      marketplace_profile_count: sql<number>`COALESCE(COUNT(DISTINCT CASE WHEN ${listings.status} = 'active' THEN ${listings.seller_id} END), 0)`,
     })
     .from(listings)
-    .catch(() => [{ services_listed: 0, services_online: 0 }])
+    .catch(() => [{ services_listed: 0, services_online: 0, marketplace_profile_count: 0 }])
 
   const [{ trades_today = 0 } = { trades_today: 0 }] = await db
-    .select({ trades_today: sql<number>`(SELECT COUNT(*) FROM trades WHERE date(created_at, 'unixepoch') = date('now'))` })
+    .select({ trades_today: sql<number>`(SELECT COUNT(*) FROM trades WHERE date(
+      CASE
+        WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999 THEN datetime(created_at / 1000, 'unixepoch')
+        WHEN typeof(created_at) IN ('integer', 'real') THEN datetime(created_at, 'unixepoch')
+        ELSE datetime(created_at)
+      END
+    ) = date('now'))` })
     .from(trades)
     .limit(1)
     .catch(() => [{ trades_today: 0 }])
+
+  const settlement = getTradeSettlementReadiness()
+  const paymentMethods = [
+    ...(settlement.ledger.enabled ? ['ledger'] : []),
+    ...(settlement.mpp.enabled ? ['mpp'] : []),
+    ...(settlement.evm.enabled ? ['evm'] : []),
+  ]
 
   return NextResponse.json({
     agent_count: Number(agent_count || 0),
@@ -99,10 +125,11 @@ export async function GET() {
     agents_registered: Number(agent_count || 0),
     trade_count: Number(completed_trades || 0),
     transactions_settled: Number(completed_trades || 0),
-    agents_online: Number(agent_count || 0),
+    agents_online: Number(agents_online || 0),
     trades_today: Number(trades_today || 0),
     volume_24h: Number(volume_last_24h || 0),
     waitlist_count: 0,
+    marketplace_profile_count: Number(marketplace_profile_count || 0),
     services_listed: Number(services_listed || 0),
     services_online: Number(services_online || 0),
     volume_by_rail: await getVolumeByRail(),
@@ -117,9 +144,10 @@ export async function GET() {
       wallets: 'https://clawdmkt.com/api/wallets',
       spec: 'https://clawdmkt.com/agent-spec.json',
     },
-    payment_methods: ['ledger', 'mpp', 'evm'],
+    payment_methods: paymentMethods,
     platform_fee_pct: 5,
     self_improvement_supported: true,
     versioning_supported: true,
+    updated_at: new Date().toISOString(),
   })
 }

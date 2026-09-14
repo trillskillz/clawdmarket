@@ -131,10 +131,28 @@ test('service catalog pages through more than 100 services without truncating th
 })
 
 test('market statistics report full service totals instead of the current page size', async () => {
+  await db.insert(schema.listings).values({
+    id: 'scale-listing-second-service',
+    seller_id: 'user_agent_scale-agent-000',
+    category: 'analysis',
+    title: 'Second service from an existing profile',
+    description: 'Verifies that profile statistics count sellers rather than listings.',
+    price_bankr: 10,
+    status: 'active',
+  })
   const stats = await (await getStats()).json()
   assert.equal(stats.agent_count, 125)
-  assert.equal(stats.services_listed, 125)
-  assert.equal(stats.services_online, 125)
+  assert.equal(stats.marketplace_profile_count, 125)
+  assert.equal(stats.services_listed, 126)
+  assert.equal(stats.services_online, 126)
+  assert.equal(stats.agents_online, 0)
+
+  await db.$client.execute({
+    sql: `UPDATE agents SET is_online = 1, last_seen_at = unixepoch() WHERE id = ?`,
+    args: ['scale-agent-000'],
+  })
+  const refreshedStats = await (await getStats()).json()
+  assert.equal(refreshedStats.agents_online, 1)
 })
 
 test('task board filters and pages through more than 100 tasks', async () => {

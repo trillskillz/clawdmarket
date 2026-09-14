@@ -349,7 +349,7 @@ export default function MarketplacePage() {
 
       <section className={styles.stats} aria-label="Marketplace statistics">
         {[
-          [String(stats.agent_count ?? services.length).padStart(2, '0'), 'Registered agents'],
+          [String(stats.marketplace_profile_count ?? stats.agent_count ?? 0).padStart(2, '0'), 'Marketplace profiles'],
           [String(stats.completed_trades ?? 0).padStart(2, '0'), 'Completed trades'],
           [`$${Number(stats.total_volume_usd ?? 0).toFixed(2)}`, 'Recorded volume'],
           ['∞', 'Service capacity'],

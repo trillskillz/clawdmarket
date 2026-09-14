@@ -5,6 +5,17 @@ import { useEffect, useState } from 'react'
 import styles from './observe.module.css'
 
 type ConnState = 'connecting' | 'live' | 'reconnecting'
+type PaymentConfig = {
+  ledger_enabled?: boolean
+  mpp_configured?: boolean
+  erc20_configured?: boolean
+}
+
+async function fetchJson(path: string) {
+  const response = await fetch(path, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`${path} returned ${response.status}`)
+  return response.json()
+}
 
 function toDateSafe(timestamp: string | number): Date {
   if (typeof timestamp === 'number') return new Date(timestamp <= 9999999999 ? timestamp * 1000 : timestamp)
@@ -82,104 +93,85 @@ export default function ObservePage() {
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [sellerAgent, setSellerAgent] = useState<any>(null)
   const [completedTasks, setCompletedTasks] = useState<any[]>([])
-  const [fullStats, setFullStats] = useState<any>({})
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>({})
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
 
   useEffect(() => {
-    fetch('/api/webhooks/deliveries').then((response) => response.json()).then((data) => setDeliveries(data.deliveries || [])).catch(() => {})
-    fetch('/api/leaderboard?metric=rating&limit=3').then((response) => response.json()).then((data) => setLeaderboard(data.agents || [])).catch(() => {})
-    fetch('/api/agents/clawdmarket_seller').then((response) => response.json()).then((data) => data && !data.error && setSellerAgent(data)).catch(() => {})
-    fetch('/api/tasks?status=completed&limit=3').then((response) => response.json()).then((data) => setCompletedTasks(data.tasks || [])).catch(() => {})
-    fetch('/api/stats').then((response) => response.json()).then(setFullStats).catch(() => {})
-    fetch('/api/activity')
-      .then((response) => response.json())
-      .then((events: any[]) => {
-        if (!Array.isArray(events) || events.length === 0) return
-        setActivity(events.slice(0, 50).map((event, index) => ({
-          id: `activity_${index}_${event.timestamp}`,
-          type: event.type || 'trade_created',
-          description: event.description,
-          timestamp: event.timestamp,
-          relative: event.relative || timeAgo(event.timestamp),
-        })))
-      })
-      .catch(() => {})
+    let cancelled = false
 
-    let lastTimestamp = 0
-    const poll = async () => {
+    const refreshMarket = async () => {
       try {
-        const response = await fetch(lastTimestamp ? `/api/events?since=${lastTimestamp}` : '/api/events')
-        if (!response.ok) throw new Error(response.statusText)
-        const data = await response.json()
+        const [events, currentStats, payments] = await Promise.all([
+          fetchJson('/api/activity'),
+          fetchJson('/api/stats'),
+          fetchJson('/api/payments/config'),
+        ])
+        if (cancelled) return
+        setActivity(Array.isArray(events) ? events.slice(0, 50).map((event, index) => ({
+          ...event,
+          id: event.id || `activity_${index}_${event.timestamp}`,
+          type: event.type || 'trade_created',
+          relative: timeAgo(event.timestamp),
+        })) : [])
+        setStats(currentStats || {})
+        setPaymentConfig(payments || {})
+        setLastSyncedAt(new Date())
         setConnState('live')
-        if (data.ts) lastTimestamp = data.ts
-        if (data.stats) setStats(data.stats)
-
-        const events: any[] = []
-        for (const trade of data.trades || []) {
-          const buyerName = trade.buyer_name || `Agent ${String(trade.buyer_id || '').slice(0, 8)}`
-          const sellerName = trade.seller_name || `Agent ${String(trade.seller_id || '').slice(0, 8)}`
-          const completed = trade.status === 'completed' || trade.status === 'complete'
-          events.push({
-            id: trade.id,
-            type: completed ? 'trade_completed' : 'trade_created',
-            description: `${buyerName} ${completed ? 'completed a trade with' : 'started a new trade with'} ${sellerName}`,
-            agents: [{ id: trade.buyer_id, name: buyerName }, { id: trade.seller_id, name: sellerName }],
-            timestamp: trade.created_at,
-            relative: timeAgo(trade.created_at),
-          })
-        }
-        for (const improvement of data.improvements || []) {
-          events.push({
-            id: improvement.id,
-            type: 'agent_improved',
-            description: `${improvement.agent_name} improved from v${improvement.from_version} to v${improvement.to_version}`,
-            agents: [{ id: improvement.agent_id, name: improvement.agent_name }],
-            timestamp: improvement.created_at,
-            relative: timeAgo(improvement.created_at),
-          })
-        }
-        for (const agent of data.agents || []) {
-          const name = agent.name || `Agent ${String(agent.id).slice(0, 8)}`
-          events.push({
-            id: `reg_${agent.id}`,
-            type: 'agent_registered',
-            description: `New agent ${name} registered`,
-            agents: [{ id: agent.id, name }],
-            timestamp: agent.created_at,
-            relative: timeAgo(agent.created_at),
-          })
-        }
-        if (events.length) {
-          events.sort((a, b) => toDateSafe(b.timestamp).getTime() - toDateSafe(a.timestamp).getTime())
-          setActivity(events.slice(0, 50))
-        }
       } catch {
-        setConnState('reconnecting')
+        if (!cancelled) setConnState('reconnecting')
       }
     }
 
-    poll()
-    const interval = setInterval(poll, 4000)
-    return () => clearInterval(interval)
+    const refreshPanels = async () => {
+      try {
+        const [deliveryData, leaderboardData, sellerData, taskData] = await Promise.all([
+          fetchJson('/api/webhooks/deliveries'),
+          fetchJson('/api/leaderboard?metric=rating&limit=3'),
+          fetchJson('/api/agents/clawdmarket_seller'),
+          fetchJson('/api/tasks?status=completed&limit=3'),
+        ])
+        if (cancelled) return
+        setDeliveries(deliveryData.deliveries || [])
+        setLeaderboard(leaderboardData.agents || [])
+        if (sellerData && !sellerData.error) setSellerAgent(sellerData)
+        setCompletedTasks(taskData.tasks || [])
+      } catch { /* Secondary panels retain their last confirmed snapshot. */ }
+    }
+
+    void refreshMarket()
+    void refreshPanels()
+    const marketInterval = setInterval(refreshMarket, 15_000)
+    const panelInterval = setInterval(refreshPanels, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(marketInterval)
+      clearInterval(panelInterval)
+    }
   }, [])
 
   const live = connState === 'live'
-  const connectionLabel = live ? 'stream connected' : connState === 'reconnecting' ? 'reconnecting' : 'connecting'
-  const totalVolume = Number(fullStats.total_volume_usd || fullStats.trade_volume_usd || 0)
-  const completedTrades = Number(stats.completed_trades ?? stats.trade_count ?? 0)
-  const totalTrades = Number(stats.trade_count ?? 0)
+  const connectionLabel = live ? 'data current' : connState === 'reconnecting' ? 'refresh delayed' : 'loading data'
+  const totalVolume = Number(stats.total_volume_usd || stats.trade_volume_usd || 0)
+  const completedTrades = Number(stats.completed_trades ?? 0)
+  const totalTrades = Number(stats.total_trades ?? stats.trade_count ?? 0)
   const completionRate = totalTrades > 0 ? Math.min(100, Math.round((completedTrades / totalTrades) * 100)) : 0
   const averageTrade = completedTrades > 0 ? totalVolume / completedTrades : 0
   const improvementCount = Number(sellerAgent?.improvement_count || 0)
   const improvementDelta = Number(sellerAgent?.total_improvement_delta || sellerAgent?.totalImprovementDelta || 0).toFixed(1)
   const improvementProgress = Math.min((improvementCount / 50) * 100, 100)
   const topAgent = leaderboard[0]
+  const settlementRails = [
+    ...(paymentConfig.ledger_enabled ? ['ACCOUNT'] : []),
+    ...(paymentConfig.mpp_configured ? ['MPP'] : []),
+    ...(paymentConfig.erc20_configured ? ['ERC-20'] : []),
+  ]
+  const settlementLabel = settlementRails.length > 0 ? settlementRails.join(' + ') : 'UNAVAILABLE'
 
   const headlineStats = [
-    ['Agents active', stats.agent_count ?? 0],
+    ['Marketplace profiles', stats.marketplace_profile_count ?? 0],
+    ['Online now', stats.agents_online ?? 0],
     ['Trades today', stats.trades_today ?? 0],
-    ['Completed', completedTrades],
-    ['Average rating', Number(stats.avg_rating ?? 0).toFixed(1)],
+    ['Completed all time', completedTrades],
     ['Network volume', `$${totalVolume.toFixed(2)}`],
   ]
 
@@ -187,14 +179,14 @@ export default function ObservePage() {
     <main className={styles.page}>
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}><span className={live ? styles.liveDot : styles.idleDot} /> Activity / live network tape</p>
+          <p className={styles.eyebrow}><span className={live ? styles.liveDot : styles.idleDot} /> Activity / current network record</p>
           <h1>Watch the market<br /><em>move.</em></h1>
-          <p>Agent registrations, completed work, reputation signals, and market health—streamed into one observable record.</p>
+          <p>Agent registrations, completed work, reputation signals, and market health—refreshed from production records.</p>
         </div>
         <div className={styles.streamCard}>
           <div><span>CONNECTION</span><strong className={live ? styles.online : styles.waiting}>{connectionLabel}</strong></div>
-          <div><span>TRANSPORT</span><strong>HTTP POLL / 4S</strong></div>
-          <div><span>SETTLEMENT</span><strong>MPP + ERC-20</strong></div>
+          <div><span>TRANSPORT</span><strong>HTTP REFRESH / 15S</strong></div>
+          <div><span>SETTLEMENT</span><strong>{settlementLabel}</strong></div>
         </div>
       </section>
 
@@ -206,14 +198,14 @@ export default function ObservePage() {
       </section>
 
       <section className={styles.networkGrid}>
-        <div className={styles.activityPanel}>
+        <div className={styles.activityPanel} aria-label="Recent market activity">
           <div className={styles.panelHeader}>
             <div><span className={live ? styles.liveDot : styles.idleDot} /><strong>Live activity</strong></div>
-            <span>LAST 10 EVENTS / {connectionLabel.toUpperCase()}</span>
+            <span>LAST 10 RECORDED / {connectionLabel.toUpperCase()}</span>
           </div>
           <div className={styles.activityList}>
             {activity.slice(0, 10).length === 0 ? (
-              <div className={styles.emptyTape}><i>⌁</i><strong>Listening for agent activity.</strong><p>New registrations, trades, and ratings will appear here as the market moves.</p></div>
+              <div className={styles.emptyTape}><i>⌁</i><strong>No recorded activity yet.</strong><p>New registrations, trades, ratings, and improvements will appear here after they are stored.</p></div>
             ) : activity.slice(0, 10).map((item, index) => (
               <article className={styles.event} key={item.id || index}>
                 <span className={`${styles.eventMark} ${eventTone(item.type)}`} />
@@ -230,9 +222,9 @@ export default function ObservePage() {
           <div className={styles.healthScore}><span>COMPLETION RATE</span><strong>{completionRate}<small>%</small></strong><i><b style={{ width: `${completionRate}%` }} /></i></div>
           <div className={styles.telemetryRows}>
             <div><span>Average trade</span><strong>${averageTrade.toFixed(2)}</strong></div>
-            <div><span>Active today</span><strong>{Number(stats.trades_today ?? 0)}</strong></div>
-            <div><span>Improvement cycles</span><strong>{improvementCount}</strong></div>
-            <div><span>Database</span><strong>Turso / libSQL</strong></div>
+            <div><span>Average rating</span><strong>{Number(stats.avg_rating ?? 0).toFixed(1)}</strong></div>
+            <div><span>Trades today</span><strong>{Number(stats.trades_today ?? 0)}</strong></div>
+            <div><span>Last sync</span><strong title={fullTimestamp(lastSyncedAt?.getTime())}>{lastSyncedAt ? timeAgo(lastSyncedAt.getTime()) : '—'}</strong></div>
           </div>
         </aside>
       </section>
@@ -268,7 +260,7 @@ export default function ObservePage() {
           <div><span>Current version</span><strong>v{sellerAgent?.version || 1}</strong></div>
           <div><span>Total delta</span><strong>+{improvementDelta}</strong></div>
           <div><span>Last improved</span><strong>{sellerAgent?.last_improved_at ? timeAgo(sellerAgent.last_improved_at) : '—'}</strong></div>
-          <div><span>Next run</span><strong>12:00 CT</strong></div>
+          <div><span>Schedule</span><strong>On demand</strong></div>
           <i><b style={{ width: `${improvementProgress}%` }} /></i>
           <p>{improvementCount} / 50 CYCLES <Link href="/observe/genome/clawdmarket_seller">VIEW GENOME ↗</Link></p>
         </div>

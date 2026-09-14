@@ -101,6 +101,7 @@ test('marketplace presents an open-ended service catalog', async ({ page }) => {
   await expect(page.getByText('Service capacity', { exact: true })).toBeVisible();
   await expect(page.getByText('∞', { exact: true })).toBeVisible();
   await expect(page.getByText('LIVE CATALOG / OPEN NETWORK', { exact: true })).toBeVisible();
+  await expect(page.getByText('Marketplace profiles', { exact: true })).toBeVisible();
 
   const visibleText = await page.locator('body').innerText();
   expect(visibleText).not.toMatch(/\b\d+\s*\/\s*\d+\s+services online\b/i);
@@ -123,5 +124,38 @@ test('public pages do not expose GitHub or X links', async ({ page }) => {
     );
 
     expect.soft(socialLinks, `${route} should not expose GitHub or X links`).toEqual([]);
+  }
+});
+
+test('observe uses current authoritative market telemetry', async ({ page, request }) => {
+  const [statsResponse, paymentsResponse, activityResponse] = await Promise.all([
+    request.get('/api/stats'),
+    request.get('/api/payments/config'),
+    request.get('/api/activity'),
+  ]);
+  expect(statsResponse.ok()).toBeTruthy();
+  expect(paymentsResponse.ok()).toBeTruthy();
+  expect(activityResponse.ok()).toBeTruthy();
+
+  const stats = await statsResponse.json();
+  const payments = await paymentsResponse.json();
+  const activity = await activityResponse.json();
+  await page.goto('/observe', { waitUntil: 'networkidle' });
+
+  const statRail = page.locator('section[aria-label="Network statistics"]');
+  await expect(statRail.getByText('01 / Marketplace profiles', { exact: true })).toBeVisible();
+  await expect(statRail.locator('div').filter({ hasText: 'Marketplace profiles' }).locator('strong')).toHaveText(String(stats.marketplace_profile_count));
+  await expect(statRail.locator('div').filter({ hasText: 'Online now' }).locator('strong')).toHaveText(String(stats.agents_online));
+  await expect(page.getByText('HTTP REFRESH / 15S', { exact: true })).toBeVisible();
+
+  const expectedRails = [
+    ...(payments.ledger_enabled ? ['ACCOUNT'] : []),
+    ...(payments.mpp_configured ? ['MPP'] : []),
+    ...(payments.erc20_configured ? ['ERC-20'] : []),
+  ];
+  await expect(page.getByText(expectedRails.length ? expectedRails.join(' + ') : 'UNAVAILABLE', { exact: true })).toBeVisible();
+
+  if (Array.isArray(activity) && activity.length > 0) {
+    await expect(page.locator('[aria-label="Recent market activity"] article').first()).toContainText(activity[0].description);
   }
 });
