@@ -17,7 +17,7 @@ export const FALLBACK_LISTINGS: MarketplaceListing[] = [
     id: 'demo-benchmark-eval',
     title: 'Agent Benchmark Evaluation',
     description:
-      'Submit your agent for evaluation across 10 standardized benchmarks covering reasoning, code generation, and structured data extraction. Receive a scored report with per-task breakdowns, percentile rankings against the registry, and concrete improvement recommendations. Results feed into the Karpathy Loop for continuous self-improvement.',
+      'Submit your agent for evaluation across 10 standardized benchmarks covering reasoning, code generation, and structured data extraction. Receive a scored report with per-task breakdowns, percentile rankings against the registry, and concrete improvement recommendations.',
     category: 'Analysis',
     price_bankr: 5.0,
   },

@@ -34,9 +34,18 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<DashboardTab>('listings');
   const [focusedTradeId, setFocusedTradeId] = useState<string | undefined>();
   const [listings, setListings] = useState<any[]>([]);
-  const [trades, setTrades] = useState([]);
+  const [listingTotal, setListingTotal] = useState(0);
+  const [listingPage, setListingPage] = useState(1);
+  const [listingLoadingMore, setListingLoadingMore] = useState(false);
+  const [trades, setTrades] = useState<any[]>([]);
+  const [tradeTotal, setTradeTotal] = useState(0);
+  const [tradePage, setTradePage] = useState(1);
+  const [tradeLoadingMore, setTradeLoadingMore] = useState(false);
   const [apiKeys, setApiKeys] = useState([]);
-  const [contracts, setContracts] = useState([]);
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [contractTotal, setContractTotal] = useState(0);
+  const [contractPage, setContractPage] = useState(1);
+  const [contractLoadingMore, setContractLoadingMore] = useState(false);
   const [webhooksData, setWebhooksData] = useState([]);
   const [wallet, setWallet] = useState(null);
   const [analytics, setAnalytics] = useState(null);
@@ -51,18 +60,33 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const [listingsRes, tradesRes, contractsRes, apiKeysRes, webhooksRes, walletRes, analyticsRes] = await Promise.all([
-        fetch('/api/listings?seller=me', { credentials: 'include' }),
-        fetch('/api/trades', { credentials: 'include' }),
-        fetch('/api/contracts', { credentials: 'include' }),
+        fetch('/api/listings?seller=me&page=1&limit=50', { credentials: 'include' }),
+        fetch('/api/trades?page=1&limit=50', { credentials: 'include' }),
+        fetch('/api/contracts?page=1&limit=50', { credentials: 'include' }),
         fetch('/api/auth/api-keys', { credentials: 'include' }),
         fetch('/api/webhooks', { credentials: 'include' }),
         fetch('/api/wallet', { credentials: 'include' }),
         fetch(`/api/analytics/summary?range=${analyticsRange}`, { credentials: 'include' }),
       ]);
 
-      if (listingsRes.ok) { const d = await listingsRes.json(); setListings(d.listings || []); }
-      if (tradesRes.ok) { const d = await tradesRes.json(); setTrades(d.trades || []); }
-      if (contractsRes.ok) { const d = await contractsRes.json(); setContracts(d.contracts || []); }
+      if (listingsRes.ok) {
+        const d = await listingsRes.json();
+        setListings(d.listings || []);
+        setListingTotal(Number(d.total || 0));
+        setListingPage(1);
+      }
+      if (tradesRes.ok) {
+        const d = await tradesRes.json();
+        setTrades(d.trades || []);
+        setTradeTotal(Number(d.total || 0));
+        setTradePage(1);
+      }
+      if (contractsRes.ok) {
+        const d = await contractsRes.json();
+        setContracts(d.contracts || []);
+        setContractTotal(Number(d.total || 0));
+        setContractPage(1);
+      }
       if (apiKeysRes.ok) { const d = await apiKeysRes.json(); setApiKeys(d.keys || []); }
       if (webhooksRes.ok) { const d = await webhooksRes.json(); setWebhooksData(d.webhooks || []); }
       if (walletRes.ok) { const d = await walletRes.json(); setWallet(d); }
@@ -83,6 +107,69 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, [analyticsRange]);
+
+  const loadMoreListings = async () => {
+    if (listingLoadingMore || listings.length >= listingTotal) return;
+    const nextPage = listingPage + 1;
+    setListingLoadingMore(true);
+    try {
+      const response = await fetch(`/api/listings?seller=me&page=${nextPage}&limit=50`, { credentials: 'include' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'More listings could not be loaded');
+      setListings((current) => {
+        const seen = new Set(current.map((listing) => listing.id));
+        return [...current, ...(data.listings || []).filter((listing: any) => !seen.has(listing.id))];
+      });
+      setListingTotal(Number(data.total || 0));
+      setListingPage(nextPage);
+    } catch {
+      setDataError('More listings could not be loaded. Try again.');
+    } finally {
+      setListingLoadingMore(false);
+    }
+  };
+
+  const loadMoreTrades = async () => {
+    if (tradeLoadingMore || trades.length >= tradeTotal) return;
+    const nextPage = tradePage + 1;
+    setTradeLoadingMore(true);
+    try {
+      const response = await fetch(`/api/trades?page=${nextPage}&limit=50`, { credentials: 'include' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'More trades could not be loaded');
+      setTrades((current) => {
+        const seen = new Set(current.map((trade) => trade.id));
+        return [...current, ...(data.trades || []).filter((trade: any) => !seen.has(trade.id))];
+      });
+      setTradeTotal(Number(data.total || 0));
+      setTradePage(nextPage);
+    } catch {
+      setDataError('More trade history could not be loaded. Try again.');
+    } finally {
+      setTradeLoadingMore(false);
+    }
+  };
+
+  const loadMoreContracts = async () => {
+    if (contractLoadingMore || contracts.length >= contractTotal) return;
+    const nextPage = contractPage + 1;
+    setContractLoadingMore(true);
+    try {
+      const response = await fetch(`/api/contracts?page=${nextPage}&limit=50`, { credentials: 'include' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'More contracts could not be loaded');
+      setContracts((current) => {
+        const seen = new Set(current.map((contract) => contract.id));
+        return [...current, ...(data.contracts || []).filter((contract: any) => !seen.has(contract.id))];
+      });
+      setContractTotal(Number(data.total || 0));
+      setContractPage(nextPage);
+    } catch {
+      setDataError('More contracts could not be loaded. Try again.');
+    } finally {
+      setContractLoadingMore(false);
+    }
+  };
 
   const checkAuthAndFetch = useCallback(async () => {
     try {
@@ -238,13 +325,21 @@ export default function DashboardPage() {
         </div>
 
         {activeTab === 'listings' && (
-          <ListingsTab listings={listings} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
+          <ListingsTab
+            listings={listings}
+            total={listingTotal}
+            loading={loading}
+            loadingMore={listingLoadingMore}
+            onLoadMore={loadMoreListings}
+            onRefresh={fetchData}
+            getCsrfToken={getCsrfToken}
+          />
         )}
         {activeTab === 'trades' && (
-          <TradesTab trades={trades} loading={loading} currentUserId={user?.id} focusedTradeId={focusedTradeId} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
+          <TradesTab trades={trades} total={tradeTotal} loading={loading} loadingMore={tradeLoadingMore} onLoadMore={loadMoreTrades} currentUserId={user?.id} focusedTradeId={focusedTradeId} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'contracts' && (
-          <ContractsTab contracts={contracts as any[]} loading={loading} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
+          <ContractsTab contracts={contracts} total={contractTotal} loading={loading} loadingMore={contractLoadingMore} onLoadMore={loadMoreContracts} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'wallet' && (
           <WalletTab wallet={wallet} loading={loading} />

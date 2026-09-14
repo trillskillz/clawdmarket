@@ -10,6 +10,8 @@ import { join } from 'node:path'
 let db: typeof import('@/lib/db').db
 let schema: typeof import('@/lib/schema')
 let inbox: typeof import('@/app/api/agents/inbox/route').GET
+let agentBids: typeof import('@/app/api/agents/bids/route').GET
+let work: typeof import('@/app/api/work/route').GET
 let selfTest: typeof import('@/app/api/agent/self-test/route').GET
 let accept: typeof import('@/app/api/tasks/[id]/accept/[bid_id]/route').POST
 let fund: typeof import('@/app/api/tasks/[id]/fund/route').POST
@@ -37,6 +39,8 @@ before(async () => {
   schema = await import('@/lib/schema')
   await createLocalTestSchema(db.$client, schema)
   inbox = (await import('@/app/api/agents/inbox/route')).GET
+  agentBids = (await import('@/app/api/agents/bids/route')).GET
+  work = (await import('@/app/api/work/route')).GET
   selfTest = (await import('@/app/api/agent/self-test/route')).GET
   accept = (await import('@/app/api/tasks/[id]/accept/[bid_id]/route')).POST
   fund = (await import('@/app/api/tasks/[id]/fund/route')).POST
@@ -98,6 +102,55 @@ test('hashed keys work through inbox and self-test; inactive agents and expired 
   assert.equal(diagnostics.checks.find((check: any) => check.name === 'inbox').status, 'ok')
   await db.update(schema.agents).set({ status: 'inactive' }).where(eq(schema.agents.id, f.seller))
   assert.equal((await inbox(request('/api/agents/inbox', undefined, undefined, f.key))).status, 401)
+})
+
+test('agent inbox, bid history, and account work page beyond 100 records', async () => {
+  const f = await fixture()
+  const capability = `scale-${crypto.randomUUID()}`
+  await db.update(schema.agents)
+    .set({ capabilities: JSON.stringify([capability]) })
+    .where(eq(schema.agents.id, f.seller))
+
+  const taskRows = Array.from({ length: 125 }, (_, index) => ({
+    id: `scale_${index}_${f.taskId}`,
+    posterAgentId: f.buyer,
+    title: `Scale task ${index}`,
+    description: 'A task used to verify paginated agent and account work feeds.',
+    budgetUsd: index + 1,
+    requiredCapabilities: JSON.stringify([capability]),
+    expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+  }))
+  await db.insert(schema.tasks).values(taskRows)
+  await db.insert(schema.bids).values(taskRows.map((task, index) => ({
+    id: `scale_bid_${index}_${f.bidId}`,
+    taskId: task.id,
+    bidderAgentId: f.seller,
+    priceUsd: index + 1,
+  })))
+
+  const inboxFirst = await (await inbox(request('/api/agents/inbox?page=1&limit=50', undefined, undefined, f.key))).json()
+  const inboxLast = await (await inbox(request('/api/agents/inbox?page=3&limit=50', undefined, undefined, f.key))).json()
+  assert.equal(inboxFirst.matching_tasks.length, 50)
+  assert.equal(inboxFirst.matching_total, 125)
+  assert.equal(inboxFirst.matching_has_more, true)
+  assert.equal(inboxLast.matching_tasks.length, 25)
+  assert.equal(inboxLast.matching_has_more, false)
+
+  const bidsFirst = await (await agentBids(request('/api/agents/bids?page=1&limit=50', undefined, undefined, f.key))).json()
+  const bidsLast = await (await agentBids(request('/api/agents/bids?page=3&limit=50', undefined, undefined, f.key))).json()
+  assert.equal(bidsFirst.bids.length, 50)
+  assert.equal(bidsFirst.total, 125)
+  assert.equal(bidsFirst.has_more, true)
+  assert.equal(bidsLast.bids.length, 25)
+  assert.equal(bidsLast.has_more, false)
+
+  const workFirst = await (await work(request('/api/work?page=1&limit=50', f.buyer))).json()
+  const workLast = await (await work(request('/api/work?page=3&limit=50', f.buyer))).json()
+  assert.equal(workFirst.tasks.length, 50)
+  assert.equal(workFirst.total, 126)
+  assert.equal(workFirst.has_more, true)
+  assert.equal(workLast.tasks.length, 26)
+  assert.equal(workLast.has_more, false)
 })
 
 test('job lifecycle links an accepted quote, one debit, validated private delivery, completion and receipt', async () => {

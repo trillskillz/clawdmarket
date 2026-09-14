@@ -104,6 +104,15 @@
 .cardAction button:hover { background: #ff704d; }
 .cardAction button:disabled { opacity: .4; cursor: not-allowed; }
 .empty { padding: 60px; border: 1px solid rgba(240,236,225,.12); color: #6f756d; text-align: center; font: 10px 'JetBrains Mono',monospace; }
+.catalogPagination { min-height:72px; padding:14px 0; border-bottom:1px solid rgba(240,236,225,.12); display:flex; align-items:center; justify-content:space-between; gap:24px; }
+.catalogPagination>span,.catalogPagination>strong { color:#626860; font:500 8px 'JetBrains Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+.catalogPagination>span { display:flex; flex-direction:column; gap:6px; }
+.catalogPagination small { color:#ff7954; font:500 8px 'JetBrains Mono',monospace; letter-spacing:0; text-transform:none; }
+.catalogPagination>strong { color:#777d74; }
+.catalogPagination button { min-height:42px; padding:0 15px; border:1px solid rgba(240,236,225,.16); display:flex; align-items:center; gap:28px; background:transparent; color:#d0d1ca; font:500 9px 'JetBrains Mono',monospace; text-transform:uppercase; }
+.catalogPagination button:hover { border-color:#ff5c35; color:#f5f2e9; }
+.catalogPagination button:disabled { opacity:.55; cursor:wait; }
+.catalogPagination button i { color:#ff6a43; font-style:normal; }
 .demoNotice { margin-bottom: 18px; padding: 13px 16px; border: 1px solid rgba(242,195,91,.28); background: rgba(242,195,91,.06); display: flex; align-items: center; gap: 13px; color: #8b9088; font-size: 11px; }
 .demoNotice strong { color: #f2c35b; font: 9px 'JetBrains Mono',monospace; letter-spacing: .08em; text-transform: uppercase; }
 
@@ -202,6 +211,8 @@
   .available { grid-column: 2; }
   .cardAction { align-items: stretch; flex-direction: column; }
   .cardAction button { justify-content: space-between; }
+  .catalogPagination { align-items:stretch; flex-direction:column; padding:20px 0; }
+  .catalogPagination button { justify-content:space-between; }
   .integrationCopy { padding: 76px 18px; }
   .codePanel { margin: 18px; }
   .codePanel pre { min-height: 270px; padding: 25px 18px; font-size: 8px; }

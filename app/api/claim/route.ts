@@ -5,6 +5,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { agents, listings } from '@/lib/schema'
 import { getRequestIp } from '@/lib/request-ip'
 import { internalErrorResponse } from '@/lib/api-error'
+import { claimAgentSchema } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,22 +27,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json()
-    const { code, email } = body
-
-    if (!code || typeof code !== 'string') {
+    const parsed = claimAgentSchema.safeParse(await request.json())
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'invalid_body', message: 'Claim code is required' },
-        { status: 400 }
+        { error: 'invalid_body', message: parsed.error.issues[0]?.message || 'Valid claim code and email are required' },
+        { status: 400, headers: getRateLimitHeaders(rl) }
       )
     }
-
-    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json(
-        { error: 'invalid_body', message: 'Valid email is required' },
-        { status: 400 }
-      )
-    }
+    const { code, email } = parsed.data
 
     const client = (db as any).$client
 
@@ -68,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // Atomic claim — WHERE claimed_at IS NULL prevents race condition
     const nowIso = new Date().toISOString()
-    const normalizedEmail = email.trim().toLowerCase()
+    const normalizedEmail = email
     const claimed = await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(agents)
@@ -113,12 +106,25 @@ export async function POST(request: NextRequest) {
  * Look up agent info by claim code (used by the claim page).
  */
 export async function GET(request: NextRequest) {
+  const ip = getRequestIp(request)
+  const rl = await rateLimit(`agent-claim-lookup:${ip}`, {
+    interval: 300_000,
+    maxRequests: 30,
+    failClosed: true,
+  })
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'rate_limited', message: 'Too many claim lookups. Try again in a few minutes.' },
+      { status: 429, headers: getRateLimitHeaders(rl) },
+    )
+  }
+
   const code = request.nextUrl.searchParams.get('code')
 
-  if (!code) {
+  if (!code || code.length > 128) {
     return NextResponse.json(
-      { error: 'missing_code', message: 'Provide ?code=claim_xxx' },
-      { status: 400 }
+      { error: 'missing_code', message: 'Provide a valid ?code=claim_xxx' },
+      { status: 400, headers: getRateLimitHeaders(rl) }
     )
   }
 

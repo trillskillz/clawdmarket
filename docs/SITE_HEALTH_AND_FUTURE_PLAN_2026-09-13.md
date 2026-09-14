@@ -68,7 +68,7 @@ Acceptance gates:
 
 ### Phase 2 — migration discipline
 
-- [ ] Apply every migration to staging, verify readiness, then apply to production.
+- [x] Apply the runtime migrations to production and verify strict readiness. A distinct staging database remains future infrastructure work.
 - [x] Replace compatibility DDL with a single explicit, idempotent migration workflow.
 - [x] Remove request-time schema writes from auth, agents, analytics, moderation, challenges, watchlists, tasks, contracts, and payment settlement.
 - [x] Test both a clean schema push and an upgrade from a deliberately legacy-shaped database.
@@ -114,3 +114,4 @@ A release is deployable only when type checking, lint, unit/integration tests, p
 - Live readiness check: HTTP 200 with a complete local schema and the enabled rail reported safely.
 - Live CORS checks: HTML has no permissive origin header; machine endpoints and preflights expose the documented authentication, idempotency, and agent-session headers.
 - Live settlement monitoring check: healthy status with zero stuck or failed transfers, the 15-minute SLA threshold, and no secret-bearing fields.
+- Production deployment: migrations applied successfully, custom domains public, strict readiness HTTP 200, and the authenticated production smoke journey passed.

@@ -1,7 +1,7 @@
 import { isIP } from 'node:net'
 import { NextRequest } from 'next/server'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
-import { assertSafeWebhookDestination } from '@/lib/webhook-url'
+import { safeExternalFetch } from '@/lib/webhook-url'
 import { getRequestIp } from '@/lib/request-ip'
 
 export const dynamic = 'force-dynamic'
@@ -62,11 +62,10 @@ export async function GET(request: NextRequest) {
 
  for (const url of urls) {
  try {
- await assertSafeWebhookDestination(url)
- const res = await fetch(url, {
+ const res = await safeExternalFetch(url, {
  headers: { 'User-Agent': 'ClawdMarket/1.0 agent-lookup' },
  signal: AbortSignal.timeout(5000),
- redirect: 'error',
+ maxResponseBytes: MAX_DISCOVERY_BYTES,
  })
  if (res.ok) {
  const body = await readLimitedBody(res)

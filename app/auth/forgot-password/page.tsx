@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PageShell from '@/components/PageShell';
 
@@ -10,6 +10,14 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [resetToken, setResetToken] = useState('');
+  const [available, setAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/forgot-password', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setAvailable(data?.configured === true))
+      .catch(() => setAvailable(false));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +55,20 @@ export default function ForgotPasswordPage() {
             <h1 className="auth-title">Forgot Password</h1>
             <p className="auth-subtitle">Enter your email to receive a password reset link</p>
 
-            {!success ? (
+            {available === null ? (
+              <div className="auth-message auth-message-info" role="status">
+                Checking recovery availability…
+              </div>
+            ) : !available ? (
+              <div className="auth-form">
+                <div className="auth-message auth-message-info" role="status">
+                  Email recovery is temporarily unavailable. You can still enter with a wallet you control.
+                </div>
+                <Link href="/auth/login#wallet" className="btn-primary auth-submit">
+                  Use signed wallet
+                </Link>
+              </div>
+            ) : !success ? (
               <form onSubmit={handleSubmit} className="auth-form">
                 <div className="auth-field">
                   <label className="auth-label">Email</label>

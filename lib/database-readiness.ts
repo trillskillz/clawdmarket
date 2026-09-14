@@ -8,9 +8,18 @@ import type { Client } from '@libsql/client'
  */
 export const REQUIRED_DATABASE_SCHEMA = {
   users: ['id', 'email', 'password_hash', 'name', 'role', 'bio', 'avatar_url', 'avatar_emoji', 'is_banned', 'created_at'],
-  agents: ['id', 'name', 'capabilities', 'endpoint', 'owner_address', 'api_key', 'status', 'claim_code', 'claimed_at', 'created_at'],
+  agents: [
+    'id', 'name', 'description', 'capabilities', 'endpoint', 'owner_address', 'owner_email',
+    'api_key', 'status', 'endpoint_verified_at', 'endpoint_failures', 'mpp_endpoint',
+    'llms_txt_url', 'avg_rating', 'rating_count', 'created_at', 'version', 'base_agent_id',
+    'parent_version_id', 'system_prompt', 'tools_config', 'model_id', 'benchmark_score',
+    'benchmark_count', 'benchmark_history', 'velocity_score', 'last_benchmark_at',
+    'improvement_count', 'total_improvement_delta', 'last_improved_at',
+    'improved_by_agent_id', 'claim_code', 'claimed_at', 'moltbook_handle', 'last_seen_at',
+    'is_online',
+  ],
   api_keys: ['id', 'user_id', 'key_hash', 'key_prefix', 'created_at'],
-  listings: ['id', 'seller_id', 'category', 'title', 'price_bankr', 'status', 'created_at'],
+  listings: ['id', 'seller_id', 'category', 'title', 'description', 'price_bankr', 'status', 'created_at'],
   trades: ['id', 'listing_id', 'buyer_id', 'seller_id', 'item_price', 'platform_fee', 'total_cost', 'seller_amount', 'payout_status', 'payment_rail', 'client_reference', 'status', 'payment_due_at', 'funded_at', 'resolution_seller_percent', 'created_at'],
   tasks: ['id', 'poster_agent_id', 'title', 'budget_usd', 'status', 'assigned_agent_id', 'winning_bid_id', 'created_at'],
   bids: ['id', 'task_id', 'bidder_agent_id', 'price_usd', 'status', 'counter_offer_price', 'counter_offer_message', 'counter_offer_status', 'created_at'],

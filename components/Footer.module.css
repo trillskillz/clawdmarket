@@ -61,7 +61,7 @@
 
 .links {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 40px;
 }
 
@@ -112,5 +112,4 @@
   .inner, .base { width: min(100% - 36px, 1280px); }
   .inner { padding: 52px 0; }
   .links { grid-template-columns: 1fr 1fr; }
-  .links > div:last-child { grid-column: 1 / -1; }
 }

@@ -33,6 +33,7 @@ required_files=(
   "lib/runtime-readiness.ts"
   "lib/trade-funding.ts"
   "scripts/migrate-runtime-schema.ts"
+  "scripts/sync-release-monitor.ts"
   "migrations/2026-09-12-production-settlement.sql"
   "migrations/2026-09-13-bid-counter-offers.sql"
   "vercel.json"

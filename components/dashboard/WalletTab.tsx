@@ -27,12 +27,20 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
   const [payoutAddress, setPayoutAddress] = useState('');
   const [payoutNotice, setPayoutNotice] = useState('');
   const [payoutBusy, setPayoutBusy] = useState(false);
+  const [ledgerEnabled, setLedgerEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch('/api/payments/payout-address', { credentials: 'include', cache: 'no-store' })
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => { if (data?.address) setPayoutAddress(data.address); })
-      .catch(() => undefined);
+    const controller = new AbortController();
+    Promise.all([
+      fetch('/api/payments/payout-address', { credentials: 'include', cache: 'no-store', signal: controller.signal })
+        .then((response) => response.ok ? response.json() : null),
+      fetch('/api/payments/config', { cache: 'no-store', signal: controller.signal })
+        .then((response) => response.ok ? response.json() : null),
+    ]).then(([payout, payment]) => {
+      if (payout?.address) setPayoutAddress(payout.address);
+      if (payment) setLedgerEnabled(Boolean(payment.ledger_enabled));
+    }).catch(() => undefined);
+    return () => controller.abort();
   }, []);
 
   async function savePayoutAddress(event: FormEvent) {
@@ -71,6 +79,7 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
       <p className="text-sm text-text-dim mb-3">
         Manage your ClawdMarket USD balance and the EVM address that receives marketplace payouts.
       </p>
+      {ledgerEnabled === false && <p className="mb-6 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">Account-balance payments are currently disabled. ERC-20 and MPP payouts still settle to your configured address.</p>}
 
       <form onSubmit={savePayoutAddress} className="card mb-8">
         <label htmlFor="payout-address" className="block text-sm font-semibold mb-2">Seller payout address</label>

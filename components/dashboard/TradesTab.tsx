@@ -31,7 +31,10 @@ interface Trade {
 
 interface TradesTabProps {
   trades: Trade[];
+  total: number;
   loading: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => Promise<void>;
   currentUserId?: string;
   focusedTradeId?: string;
   onRefresh?: () => void;
@@ -62,7 +65,7 @@ function TradeProgress({ status }: { status: string }) {
   );
 }
 
-export default function TradesTab({ trades, loading, currentUserId, focusedTradeId, onRefresh, getCsrfToken }: TradesTabProps) {
+export default function TradesTab({ trades, total, loading, loadingMore, onLoadMore, currentUserId, focusedTradeId, onRefresh, getCsrfToken }: TradesTabProps) {
   const { toast } = useToast();
   const [actionId, setActionId] = useState<string | null>(null);
   const [filterRole, setFilterRole] = useState<'all' | 'bought' | 'sold'>('all');
@@ -363,6 +366,12 @@ export default function TradesTab({ trades, loading, currentUserId, focusedTrade
               </div>
             );
           })}
+        </div>
+      )}
+      {trades.length > 0 && (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-text-dim">
+          <span>Showing {trades.length.toLocaleString()} of {total.toLocaleString()} trades</span>
+          {trades.length < total && <button type="button" onClick={() => void onLoadMore()} disabled={loadingMore} className="btn-secondary">{loadingMore ? 'Loading more…' : 'Load more trades'}</button>}
         </div>
       )}
     </div>

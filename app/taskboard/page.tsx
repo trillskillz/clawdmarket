@@ -14,12 +14,17 @@ const TASK_TEMPLATES = [
 ]
 
 const emptyForm = { title: '', description: '', capabilities: '', budget_usd: '', deadline_at: '', task_type: 'general' }
+const TASK_PAGE_SIZE = 24
 
 export default function TaskBoardPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('open')
   const [tasks, setTasks] = useState<any[]>([])
+  const [taskTotal, setTaskTotal] = useState(0)
+  const [taskPage, setTaskPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [taskType, setTaskType] = useState('')
@@ -46,7 +51,7 @@ export default function TaskBoardPage() {
   useEffect(() => {
     setLoading(true)
     setFetchError(null)
-    const params = new URLSearchParams({ status: activeTab, limit: '50' })
+    const params = new URLSearchParams({ status: activeTab, limit: String(TASK_PAGE_SIZE), page: '1' })
     if (filter) params.set('capability', filter)
     if (taskType) params.set('task_type', taskType)
     if (debouncedQ) params.set('q', debouncedQ)
@@ -54,14 +59,40 @@ export default function TaskBoardPage() {
     const timeout = setTimeout(() => controller.abort(), 10000)
     fetch(`/api/tasks?${params}`, { signal: controller.signal })
       .then((response) => { clearTimeout(timeout); if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json() })
-      .then((data) => { setTasks(data.tasks ?? []); setLoading(false) })
-      .catch(() => { clearTimeout(timeout); setFetchError('The task network could not be reached.'); setTasks([]); setLoading(false) })
+      .then((data) => { setTasks(data.tasks ?? []); setTaskTotal(Number(data.total || 0)); setTaskPage(1); setLoadMoreError(null); setLoading(false) })
+      .catch(() => { if (controller.signal.aborted) return; clearTimeout(timeout); setFetchError('The task network could not be reached.'); setTasks([]); setTaskTotal(0); setLoading(false) })
     return () => { clearTimeout(timeout); controller.abort() }
   }, [activeTab, filter, taskType, debouncedQ, fetchTrigger])
 
   const filtered = tasks.filter((task) => !filter ||
     task.title?.toLowerCase().includes(filter.toLowerCase()) ||
     task.required_capabilities?.some((capability: string) => capability.toLowerCase().includes(filter.toLowerCase())))
+
+  const loadMoreTasks = async () => {
+    if (loadingMore || tasks.length >= taskTotal) return
+    const nextPage = taskPage + 1
+    const params = new URLSearchParams({ status: activeTab, limit: String(TASK_PAGE_SIZE), page: String(nextPage) })
+    if (filter) params.set('capability', filter)
+    if (taskType) params.set('task_type', taskType)
+    if (debouncedQ) params.set('q', debouncedQ)
+    setLoadingMore(true)
+    setLoadMoreError(null)
+    try {
+      const response = await fetch(`/api/tasks?${params}`)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data?.message || `Task request failed (${response.status})`)
+      setTasks((current) => {
+        const seen = new Set(current.map((task) => task.id))
+        return [...current, ...(data.tasks || []).filter((task: any) => !seen.has(task.id))]
+      })
+      setTaskTotal(Number(data.total || 0))
+      setTaskPage(nextPage)
+    } catch (cause) {
+      setLoadMoreError(cause instanceof Error ? cause.message : 'More tasks could not be loaded')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const applyTemplate = (template: typeof TASK_TEMPLATES[number]) => {
     setForm({
@@ -151,7 +182,7 @@ export default function TaskBoardPage() {
         <div className={styles.tabs} role="tablist" aria-label="Task status">
           {[['open', 'Open'], ['assigned', 'In progress'], ['completed', 'Completed']].map(([key, label]) => (
             <button type="button" role="tab" aria-selected={activeTab === key} key={key} className={activeTab === key ? styles.tabActive : ''} onClick={() => setActiveTab(key)}>
-              {label}<span>{activeTab === key ? String(filtered.length).padStart(2, '0') : '—'}</span>
+              {label}<span>{activeTab === key ? String(taskTotal).padStart(2, '0') : '—'}</span>
             </button>
           ))}
         </div>
@@ -163,7 +194,7 @@ export default function TaskBoardPage() {
             <option value="">All task types</option><option value="general">General</option><option value="benchmark">Benchmark</option><option value="self_improvement">Self improvement</option>
           </select>
           {(filter || searchQuery || taskType) && <button type="button" className={styles.clearButton} onClick={() => { setFilter(''); setSearchQuery(''); setTaskType('') }}>Clear ×</button>}
-          <span className={styles.resultCount}>{loading ? 'SYNCING' : `${String(filtered.length).padStart(2, '0')} TASKS`}</span>
+          <span className={styles.resultCount}>{loading ? 'SYNCING' : `${taskTotal.toLocaleString()} TASKS`}</span>
         </div>
 
         {loading && <div className={styles.loadingList}>{[0,1,2].map((item) => <div key={item}><i /><span /><span /></div>)}</div>}
@@ -177,7 +208,7 @@ export default function TaskBoardPage() {
         )}
 
         {!loading && !fetchError && filtered.length > 0 && (
-          <div className={styles.taskList}>
+          <><div className={styles.taskList}>
             {filtered.map((task, index) => (
               <article className={styles.taskCard} key={task.id}>
                 <div className={styles.taskRail}>
@@ -203,6 +234,17 @@ export default function TaskBoardPage() {
               </article>
             ))}
           </div>
+          <div className={styles.taskPagination}>
+            <span>
+              Showing {filtered.length.toLocaleString()} of {taskTotal.toLocaleString()} tasks
+              {loadMoreError && <small role="alert">{loadMoreError}</small>}
+            </span>
+            {filtered.length < taskTotal ? (
+              <button type="button" onClick={() => void loadMoreTasks()} disabled={loadingMore}>
+                {loadingMore ? 'Loading more…' : 'Load more tasks'} <i aria-hidden="true">↓</i>
+              </button>
+            ) : <strong>Complete index loaded</strong>}
+          </div></>
         )}
       </section>
 

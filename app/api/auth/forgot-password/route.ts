@@ -6,8 +6,16 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { storeResetToken } from '@/lib/password-reset';
 import { eq } from 'drizzle-orm';
 import { getRequestIp } from '@/lib/request-ip';
+import { isPasswordResetEmailConfigured } from '@/lib/password-reset-email';
 
 export const dynamic = 'force-dynamic'
+
+export function GET() {
+  return NextResponse.json(
+    { configured: isPasswordResetEmailConfigured() },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
+}
 
 export async function POST(request: NextRequest) {
   const ip = getRequestIp(request);
@@ -21,6 +29,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: 'Too many requests. Please try again later.' },
       { status: 429, headers: getRateLimitHeaders(rateLimitResult) }
+    );
+  }
+
+  if (!isPasswordResetEmailConfigured()) {
+    return NextResponse.json(
+      {
+        error: 'password_reset_unavailable',
+        message: 'Email password recovery is temporarily unavailable. Use signed-wallet access or contact support.',
+      },
+      {
+        status: 503,
+        headers: {
+          ...getRateLimitHeaders(rateLimitResult),
+          'Cache-Control': 'no-store',
+          'Retry-After': '3600',
+        },
+      },
     );
   }
 
@@ -42,23 +67,21 @@ export async function POST(request: NextRequest) {
       resetToken = crypto.randomBytes(32).toString('hex');
       await storeResetToken(resetToken, user.id);
 
-      const resendKey = process.env.RESEND_API_KEY?.trim();
-      const from = process.env.PASSWORD_RESET_FROM_EMAIL?.trim();
-      if (resendKey && from) {
-        const origin = process.env.NEXT_PUBLIC_BASE_URL?.trim() || new URL(request.url).origin;
-        const resetUrl = `${origin}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
-        const sent = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from,
-            to: [user.email],
-            subject: 'Reset your ClawdMarket password',
-            text: `Reset your ClawdMarket password within 15 minutes: ${resetUrl}`,
-          }),
-        });
-        if (!sent.ok) throw new Error('Password reset email delivery failed');
-      }
+      const resendKey = process.env.RESEND_API_KEY!.trim();
+      const from = process.env.PASSWORD_RESET_FROM_EMAIL!.trim();
+      const origin = process.env.NEXT_PUBLIC_BASE_URL?.trim() || 'https://www.clawdmkt.com';
+      const resetUrl = `${new URL(origin).origin}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
+      const sent = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from,
+          to: [user.email],
+          subject: 'Reset your ClawdMarket password',
+          text: `Reset your ClawdMarket password within 15 minutes: ${resetUrl}`,
+        }),
+      });
+      if (!sent.ok) throw new Error('Password reset email delivery failed');
     }
 
     return NextResponse.json(

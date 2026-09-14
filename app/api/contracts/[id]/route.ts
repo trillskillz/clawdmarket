@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { contract_milestones, contracts } from '@/lib/schema';
+import { contract_milestones, contracts, listings } from '@/lib/schema';
 import { contractActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionMilestone } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
@@ -13,6 +13,7 @@ import {
   refundContractFunds,
 } from '@/lib/contract-settlement';
 import { ensureAdminFeeRecipient } from '@/lib/settlement';
+import { getPaymentReadiness } from '@/lib/payment-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,6 +79,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     let feeRecipientId: string | null = null;
     if (validated.action === 'fund') {
+      if (!getPaymentReadiness().ledger.enabled) {
+        return NextResponse.json({ error: 'Account-balance contract funding is not enabled on this deployment' }, { status: 503 });
+      }
       await ensureContractWallets(contract.buyer_id, contract.seller_id);
       feeRecipientId = await ensureAdminFeeRecipient();
     }
@@ -86,6 +90,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const now = new Date();
 
       if (validated.action === 'fund') {
+        if (contract.listing_id) {
+          const listingClaim = await tx
+            .update(listings)
+            .set({ status: 'sold' })
+            .where(and(eq(listings.id, contract.listing_id), eq(listings.status, 'active')))
+            .returning({ id: listings.id });
+          if (listingClaim.length === 0) throw new ContractActionError('The linked listing is no longer available', 409);
+        }
         const claimed = await tx
           .update(contracts)
           .set({ state: 'FUNDED', updated_at: now })
@@ -140,6 +152,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             buyerId: contract.buyer_id,
             amount: contract.total_amount,
           });
+          if (contract.listing_id) {
+            await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, contract.listing_id), eq(listings.status, 'sold')));
+          }
         }
       }
 
@@ -161,6 +176,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           buyerId: contract.buyer_id,
           amount: contract.total_amount,
         });
+        if (contract.listing_id) {
+          await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, contract.listing_id), eq(listings.status, 'sold')));
+        }
       }
     });
 

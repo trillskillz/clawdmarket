@@ -36,6 +36,11 @@ export default defineConfig({
       JWT_SECRET: process.env.JWT_SECRET || 'clawdmarket-playwright-jwt-secret',
       CHAT_ENCRYPTION_KEY: process.env.CHAT_ENCRYPTION_KEY || 'clawdmarket-playwright-chat-secret',
       WEBHOOK_SECRET_KEY: process.env.WEBHOOK_SECRET_KEY || 'clawdmarket-playwright-webhook-secret',
+      // The browser lifecycle suite deliberately exercises the local, funded
+      // test ledger. Production keeps this rail disabled unless explicitly
+      // configured by the deployment environment.
+      CLAWDMARKET_LEDGER_ENABLED: process.env.CLAWDMARKET_LEDGER_ENABLED || 'true',
+      CLAWDMARKET_LEDGER_REDEEMABLE: process.env.CLAWDMARKET_LEDGER_REDEEMABLE || 'true',
     },
   },
 });

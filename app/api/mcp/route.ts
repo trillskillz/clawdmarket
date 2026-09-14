@@ -5,7 +5,7 @@ import { tempo as tempoChain } from 'viem/chains';
 import { AGENT_MCP_TOOLS } from '@/lib/agent-contract';
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants';
 import { durableMppStore } from '@/lib/mpp-store';
-import { getMppRecipientAddress, getTempoRpcUrl } from '@/lib/payment-config';
+import { getMppRecipientAddress, getMppSecretKey, getTempoRpcUrl } from '@/lib/payment-config';
 import { reportInternalError } from '@/lib/api-error';
 
 export const runtime = 'nodejs';
@@ -25,7 +25,7 @@ function getMcpPayment() {
   if (_mcpPayment !== null) return _mcpPayment;
   const recipient = getMppRecipientAddress();
   const rpcUrl = getTempoRpcUrl();
-  const secretKey = process.env.MPP_SECRET_KEY?.trim();
+  const secretKey = getMppSecretKey();
   if (!recipient || !rpcUrl || !secretKey) {
     _mcpPayment = false;
     return _mcpPayment;
@@ -172,10 +172,12 @@ async function executeTool(req: NextRequest, name: string, args: any) {
     case 'list_agents': {
       const capability = typeof args?.capability === 'string' ? args.capability : undefined;
       const limit = typeof args?.limit === 'number' ? args.limit : 20;
+      const page = typeof args?.page === 'number' ? args.page : 1;
+      const verified = typeof args?.verified === 'boolean' ? args.verified : undefined;
 
       const result = capability
-        ? await callApi('GET', '/api/agents/search', { query: { q: capability } })
-        : await callApi('GET', '/api/agents/list', { query: { limit } });
+        ? await callApi('GET', '/api/agents/search', { query: { q: capability, page, limit, verified } })
+        : await callApi('GET', '/api/agents/list', { query: { page, limit, verified } });
 
       if (!result.ok) throw new Error(getErrorMessage(result.data, `list_agents failed (${result.status})`));
       return result.data;
@@ -186,7 +188,10 @@ async function executeTool(req: NextRequest, name: string, args: any) {
         throw new Error('q is required');
       }
 
-      const result = await callApi('GET', '/api/agents/search', { query: { q: args.q } });
+      const page = typeof args?.page === 'number' ? args.page : 1;
+      const limit = typeof args?.limit === 'number' ? args.limit : 20;
+      const verified = typeof args?.verified === 'boolean' ? args.verified : undefined;
+      const result = await callApi('GET', '/api/agents/search', { query: { q: args.q, page, limit, verified } });
       if (!result.ok) throw new Error(getErrorMessage(result.data, `search_agents failed (${result.status})`));
       return result.data;
     }

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import styles from './registry.module.css'
 
+const AGENT_PAGE_SIZE = 24
+
 function trustTone(score?: number) {
   if (score == null) return '#6c726a'
   if (score < 50) return '#ff7d52'
@@ -17,7 +19,12 @@ function initials(name?: string) {
 
 export default function RegistryPage() {
   const [agents, setAgents] = useState<any[]>([])
+  const [agentTotal, setAgentTotal] = useState(0)
+  const [directoryTotal, setDirectoryTotal] = useState(0)
+  const [agentPage, setAgentPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [verifiedOnly, setVerifiedOnly] = useState(false)
@@ -28,35 +35,67 @@ export default function RegistryPage() {
   const [semanticMode, setSemanticMode] = useState(false)
   const [semanticQuery, setSemanticQuery] = useState('')
   const [semanticResults, setSemanticResults] = useState<any[]>([])
+  const [semanticTotal, setSemanticTotal] = useState(0)
+  const [semanticPage, setSemanticPage] = useState(1)
   const [semanticLoading, setSemanticLoading] = useState(false)
   const [semanticKeywords, setSemanticKeywords] = useState<string[]>([])
   const [semanticSearchMode, setSemanticSearchMode] = useState('')
   const [fetchKey, setFetchKey] = useState(0)
 
   useEffect(() => {
+    if (semanticMode) return
     setLoading(true)
     setError(null)
+    setLoadMoreError(null)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 10000)
-    fetch('/api/agents/list?limit=50', { signal: controller.signal })
-      .then((response) => { clearTimeout(timeout); return response.json() })
-      .then((data) => { setAgents(data.agents ?? []); setLoading(false) })
-      .catch(() => { clearTimeout(timeout); setError('The registry could not be reached.'); setLoading(false) })
-    return () => { clearTimeout(timeout); controller.abort() }
-  }, [fetchKey])
+    const delay = filter.trim() ? 300 : 0
+    const debounce = setTimeout(() => {
+      const params = new URLSearchParams({ page: '1', limit: String(AGENT_PAGE_SIZE) })
+      if (filter.trim()) params.set('search', filter.trim())
+      if (verifiedOnly) params.set('verified', 'true')
+      fetch(`/api/agents/list?${params.toString()}`, { signal: controller.signal })
+        .then(async (response) => {
+          clearTimeout(timeout)
+          const data = await response.json()
+          if (!response.ok) throw new Error(data?.message || 'Registry request failed')
+          setAgents(data.agents ?? [])
+          setAgentTotal(Number(data.total || 0))
+          setAgentPage(1)
+          if (!filter.trim() && !verifiedOnly) setDirectoryTotal(Number(data.total || 0))
+          setLoading(false)
+        })
+        .catch((failure) => {
+          if (failure?.name === 'AbortError') return
+          clearTimeout(timeout)
+          setError('The registry could not be reached.')
+          setLoading(false)
+        })
+    }, delay)
+    return () => { clearTimeout(debounce); clearTimeout(timeout); controller.abort() }
+  }, [fetchKey, filter, verifiedOnly, semanticMode])
 
   useEffect(() => {
     if (!semanticMode || !semanticQuery.trim()) {
       setSemanticResults([])
+      setSemanticTotal(0)
       setSemanticKeywords([])
       return
     }
     const timer = setTimeout(() => {
       setSemanticLoading(true)
-      fetch(`/api/agents/search?q=${encodeURIComponent(semanticQuery.trim())}`)
-        .then((response) => response.json())
+      const params = new URLSearchParams({ q: semanticQuery.trim(), page: '1', limit: String(AGENT_PAGE_SIZE) })
+      if (verifiedOnly) params.set('verified', 'true')
+      fetch(`/api/agents/search?${params.toString()}`)
+        .then(async (response) => {
+          const data = await response.json()
+          if (!response.ok) throw new Error(data?.message || 'Search request failed')
+          return data
+        })
         .then((data) => {
           setSemanticResults(data.agents ?? [])
+          setSemanticTotal(Number(data.total || 0))
+          setSemanticPage(1)
           setSemanticKeywords(data.keywords ?? [])
           setSemanticSearchMode(data.mode || 'keyword')
           setSemanticLoading(false)
@@ -64,18 +103,47 @@ export default function RegistryPage() {
         .catch(() => { setSemanticResults([]); setSemanticLoading(false) })
     }, 500)
     return () => clearTimeout(timer)
-  }, [semanticMode, semanticQuery])
+  }, [semanticMode, semanticQuery, verifiedOnly])
 
-  const filtered = agents.filter((agent) => {
-    const matchesFilter = !filter ||
-      agent.name?.toLowerCase().includes(filter.toLowerCase()) ||
-      (agent.capabilities || []).some((capability: string) => capability.toLowerCase().includes(filter.toLowerCase()))
-    const matchesVerified = !verifiedOnly || (agent.capabilities || []).some((capability: string) => capability.includes(':verified'))
-    return matchesFilter && matchesVerified
-  })
+  const displayedAgents = semanticMode ? semanticResults : agents
+  const resultCount = semanticMode ? semanticTotal : agentTotal
 
-  const displayedAgents = semanticMode ? semanticResults : filtered
-  const resultCount = displayedAgents.length
+  const loadMoreAgents = async () => {
+    if (loadingMore || displayedAgents.length >= resultCount) return
+    const nextPage = (semanticMode ? semanticPage : agentPage) + 1
+    const params = new URLSearchParams({ page: String(nextPage), limit: String(AGENT_PAGE_SIZE) })
+    if (verifiedOnly) params.set('verified', 'true')
+    if (semanticMode) params.set('q', semanticQuery.trim())
+    else if (filter.trim()) params.set('search', filter.trim())
+    setLoadingMore(true)
+    setLoadMoreError(null)
+    try {
+      const endpoint = semanticMode ? '/api/agents/search' : '/api/agents/list'
+      const response = await fetch(`${endpoint}?${params.toString()}`)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data?.message || 'More agents could not be loaded')
+      const nextAgents = data.agents ?? []
+      if (semanticMode) {
+        setSemanticResults((current) => {
+          const seen = new Set(current.map((agent) => agent.id))
+          return [...current, ...nextAgents.filter((agent: any) => !seen.has(agent.id))]
+        })
+        setSemanticTotal(Number(data.total || 0))
+        setSemanticPage(nextPage)
+      } else {
+        setAgents((current) => {
+          const seen = new Set(current.map((agent) => agent.id))
+          return [...current, ...nextAgents.filter((agent: any) => !seen.has(agent.id))]
+        })
+        setAgentTotal(Number(data.total || 0))
+        setAgentPage(nextPage)
+      }
+    } catch {
+      setLoadMoreError('More agents could not be loaded. Try again.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const handleLookup = async () => {
     if (!lookupDomain.trim()) return
@@ -112,7 +180,7 @@ export default function RegistryPage() {
         </div>
         <div className={styles.heroAside}>
           <p>Search by capability, verified marketplace trust, or intent. Every score includes its evidence and confidence.</p>
-          <div><strong>{loading ? '··' : String(agents.length).padStart(2, '0')}</strong><span>agents indexed</span></div>
+          <div><strong>{loading && directoryTotal === 0 ? '··' : String(directoryTotal).padStart(2, '0')}</strong><span>agents indexed</span></div>
         </div>
       </header>
 
@@ -194,17 +262,18 @@ export default function RegistryPage() {
           </div>
         )}
 
-        {!loading && !error && agents.length === 0 && (
+        {!loading && !error && directoryTotal === 0 && !filter && !verifiedOnly && (
           <div className={styles.emptyState}><span>EMPTY NETWORK</span><h3>Be the first agent listed.</h3><p>The registry is ready for its first capability provider.</p><Link href="/docs">Read the docs →</Link></div>
         )}
 
-        {!loading && !error && agents.length > 0 && displayedAgents.length === 0 && (
+        {!loading && !error && (directoryTotal > 0 || filter || verifiedOnly || semanticMode) && displayedAgents.length === 0 && (
           <div className={styles.emptyState}><span>NO MATCH</span><h3>Try a broader capability.</h3><p>No active agents match the current search.</p></div>
         )}
 
         {!loading && !error && displayedAgents.length > 0 && (
-          <div className={styles.agentGrid}>
-            {displayedAgents.map((agent, index) => (
+          <>
+            <div className={styles.agentGrid}>
+              {displayedAgents.map((agent, index) => (
               <Link key={agent.id} href={`/registry/${agent.id}`} className={styles.agentCard}>
                 <div className={styles.cardHeader}>
                   <span>AGENT / {String(index + 1).padStart(2, '0')}</span>
@@ -229,8 +298,22 @@ export default function RegistryPage() {
                   <strong>View profile →</strong>
                 </div>
               </Link>
-            ))}
-          </div>
+              ))}
+            </div>
+            <div className={styles.registryPagination}>
+              <span>
+                Showing {displayedAgents.length.toLocaleString()} of {resultCount.toLocaleString()} agents
+                {loadMoreError && <small role="alert">{loadMoreError}</small>}
+              </span>
+              {displayedAgents.length < resultCount ? (
+                <button type="button" onClick={() => void loadMoreAgents()} disabled={loadingMore}>
+                  {loadingMore ? 'Loading more…' : 'Load more agents'} <i aria-hidden="true">↓</i>
+                </button>
+              ) : (
+                <strong>Complete index loaded</strong>
+              )}
+            </div>
+          </>
         )}
       </section>
     </main>

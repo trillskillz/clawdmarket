@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
@@ -26,6 +26,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [passwordResetAvailable, setPasswordResetAvailable] = useState(false)
+
+  useEffect(() => {
+    if (window.location.hash === '#wallet') setMode('wallet')
+    fetch('/api/auth/forgot-password', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setPasswordResetAvailable(data?.configured === true))
+      .catch(() => setPasswordResetAvailable(false))
+  }, [])
 
   const walletConnectors = useMemo(() => {
     const seen = new Set<string>()
@@ -130,7 +139,7 @@ export default function LoginPage() {
 
           <div className={styles.introFooter}>
             <span>NEW TO THE NETWORK?</span>
-            <Link href="/auth/register">Establish an identity <b>↗</b></Link>
+            <button type="button" onClick={() => selectMode('wallet')}>Use a signed wallet <b>→</b></button>
           </div>
         </section>
 
@@ -148,12 +157,12 @@ export default function LoginPage() {
             </div>
 
             <div className={styles.modeTabs} role="tablist" aria-label="Sign-in method">
-              <button type="button" role="tab" aria-selected={mode === 'account'} className={mode === 'account' ? styles.activeMode : undefined} onClick={() => selectMode('account')}><span>01</span>Email account</button>
-              <button type="button" role="tab" aria-selected={mode === 'wallet'} className={mode === 'wallet' ? styles.activeMode : undefined} onClick={() => selectMode('wallet')}><span>02</span>Signed wallet</button>
+              <button type="button" role="tab" aria-selected={mode === 'account'} aria-controls="account-sign-in" className={mode === 'account' ? styles.activeMode : undefined} onClick={() => selectMode('account')}><span>01</span>Email account</button>
+              <button type="button" role="tab" aria-selected={mode === 'wallet'} aria-controls="wallet-sign-in" className={mode === 'wallet' ? styles.activeMode : undefined} onClick={() => selectMode('wallet')}><span>02</span>Signed wallet</button>
             </div>
 
             {mode === 'account' ? (
-              <form onSubmit={handleSubmit} className={styles.form}>
+              <form id="account-sign-in" onSubmit={handleSubmit} className={styles.form}>
                 <div className={styles.field}>
                   <label htmlFor="login-email"><span>01 / EMAIL</span><small>Required</small></label>
                   <input
@@ -168,7 +177,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className={styles.field}>
-                  <label htmlFor="login-password"><span>02 / PASSWORD</span><Link href="/auth/forgot-password">Recover access ↗</Link></label>
+                  <label htmlFor="login-password"><span>02 / PASSWORD</span>{passwordResetAvailable && <Link href="/auth/forgot-password">Recover access ↗</Link>}</label>
                   <div className={styles.passwordField}>
                     <input
                       id="login-password"
@@ -190,7 +199,7 @@ export default function LoginPage() {
                 </button>
               </form>
             ) : (
-              <div className={styles.walletPanel} role="tabpanel">
+              <div id="wallet-sign-in" className={styles.walletPanel} role="tabpanel">
                 <div className={styles.walletVisual}><BrandMark size={68} /><i /><i /><span>0x</span></div>
                 <h3>{isConnected ? 'Wallet connected.' : 'Prove wallet control.'}</h3>
                 <p>{isConnected ? 'Sign the one-time message below. This does not create a transaction or move funds.' : 'Connect a supported wallet, then sign a one-time ClawdMarket authentication message.'}</p>

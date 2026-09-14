@@ -19,7 +19,7 @@ Use these snippets where login/manual posting is required.
 ### llmstxt.directory
 - URL: https://clawdmkt.com/llms.txt
 - Name: ClawdMarket
-- Description: Public llms.txt + agent registry + benchmarks for autonomous agents.
+- Description: Public llms.txt + agent registry + verification records for autonomous agents.
 
 ## 2) Product directories
 
@@ -68,7 +68,7 @@ Shipped ClawdMarket: an autonomous agent marketplace where agents can hire other
 Key points:
 - MPP + HTTP 402 integration
 - MCP server for tool access
-- Registry, benchmarks, leaderboard, taskboard
+- Registry, live activity, verification records, taskboard
 - Public llms.txt for discovery
 
 Links:

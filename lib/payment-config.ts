@@ -16,7 +16,7 @@ export type AcceptedToken = {
 
 const DEFAULT_TOKENS: AcceptedToken[] = [
   { chainId: 1, chainName: 'Ethereum', address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 3 },
-  { chainId: 10, chainName: 'Optimism', address: '0x7F5c764cBc14f9669B88837ca1490cCa17c31607', symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 3 },
+  { chainId: 10, chainName: 'Optimism', address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 3 },
   { chainId: 137, chainName: 'Polygon', address: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 64 },
   { chainId: 8453, chainName: 'Base', address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 3 },
   { chainId: 42161, chainName: 'Arbitrum One', address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 3 },
@@ -64,7 +64,8 @@ export function getAcceptedTokens() {
 function explicitRpcUrl(token: AcceptedToken) {
   const specific = process.env[`EVM_RPC_URL_${token.chainId}`]?.trim()
   const generic = getAcceptedTokens().length === 1 ? process.env.EVM_RPC_URL?.trim() : ''
-  return token.rpcUrl?.trim() || specific || generic || null
+  const value = token.rpcUrl?.trim() || specific || generic || ''
+  return validHttpUrl(value) ? value : null
 }
 
 export function getReadyAcceptedTokens() {
@@ -91,8 +92,35 @@ export function getMppRecipientAddress(): Address | null {
   return isAddress(raw) ? raw as Address : null
 }
 
+function validHttpUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
 export function getTempoRpcUrl() {
-  return process.env.TEMPO_RPC_URL?.trim() || process.env.EVM_RPC_URL_4217?.trim() || null
+  const value = process.env.TEMPO_RPC_URL?.trim() || process.env.EVM_RPC_URL_4217?.trim() || ''
+  return validHttpUrl(value) ? value : null
+}
+
+export function getMppSecretKey() {
+  const value = process.env.MPP_SECRET_KEY_CURRENT?.trim() || process.env.MPP_SECRET_KEY?.trim() || ''
+  return new TextEncoder().encode(value).length >= 32 ? value : null
+}
+
+function configuredPlatformFeeAddress() {
+  const raw = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || '').trim()
+  return {
+    configured: Boolean(raw),
+    address: isAddress(raw) ? raw as Address : null,
+  }
+}
+
+export function getConfiguredPlatformFeeAddress() {
+  return configuredPlatformFeeAddress().address
 }
 
 export function settlementSignerAddress(): Address | null {
@@ -104,12 +132,18 @@ export function getPaymentReadiness() {
   const treasury = getTreasuryAddress()
   const mppRecipient = getMppRecipientAddress()
   const signer = settlementSignerAddress()
-  const secretConfigured = Boolean(process.env.MPP_SECRET_KEY?.trim())
+  const secretConfigured = Boolean(getMppSecretKey())
+  const configuredFee = configuredPlatformFeeAddress()
+  const feeAddressValid = !configuredFee.configured || Boolean(configuredFee.address)
+  const evmFeeRecipient = configuredFee.address || treasury
+  const mppFeeRecipient = configuredFee.address || mppRecipient
+  const evmFeeMatchesRecipient = Boolean(treasury && evmFeeRecipient && treasury.toLowerCase() === evmFeeRecipient.toLowerCase())
+  const mppFeeMatchesRecipient = Boolean(mppRecipient && mppFeeRecipient && mppRecipient.toLowerCase() === mppFeeRecipient.toLowerCase())
   const readyTokens = getReadyAcceptedTokens()
-  const evmReady = Boolean(treasury && signer && readyTokens.length > 0 && treasury.toLowerCase() === signer.toLowerCase())
+  const evmReady = Boolean(treasury && signer && readyTokens.length > 0 && feeAddressValid && evmFeeMatchesRecipient && treasury.toLowerCase() === signer.toLowerCase())
   const tempoRpcConfigured = Boolean(getTempoRpcUrl())
-  const platformMppReady = Boolean(mppRecipient && secretConfigured && tempoRpcConfigured)
-  const mppReady = Boolean(mppRecipient && signer && secretConfigured && tempoRpcConfigured && mppRecipient.toLowerCase() === signer.toLowerCase())
+  const platformMppReady = Boolean(mppRecipient && secretConfigured && tempoRpcConfigured && feeAddressValid && mppFeeMatchesRecipient)
+  const mppReady = Boolean(mppRecipient && signer && secretConfigured && tempoRpcConfigured && feeAddressValid && mppFeeMatchesRecipient && mppRecipient.toLowerCase() === signer.toLowerCase())
   return {
     mode: 'production' as const,
     ledger: {
@@ -120,6 +154,9 @@ export function getPaymentReadiness() {
     evm: {
       enabled: evmReady,
       treasury,
+      feeRecipient: evmFeeRecipient,
+      feeRecipientMatchesTreasury: evmFeeMatchesRecipient,
+      signerConfigured: Boolean(signer),
       signerMatchesTreasury: Boolean(treasury && signer && treasury.toLowerCase() === signer.toLowerCase()),
       tokens: readyTokens,
     },
@@ -127,10 +164,13 @@ export function getPaymentReadiness() {
       enabled: mppReady,
       platformEnabled: platformMppReady,
       recipient: mppRecipient,
+      feeRecipient: mppFeeRecipient,
+      feeRecipientMatchesPaymentRecipient: mppFeeMatchesRecipient,
       chainId: TEMPO_CHAIN_ID,
       currency: PATHUSD_ADDRESS,
       secretConfigured,
       rpcConfigured: tempoRpcConfigured,
+      signerConfigured: Boolean(signer),
       signerMatchesRecipient: Boolean(mppRecipient && signer && mppRecipient.toLowerCase() === signer.toLowerCase()),
     },
   }

@@ -54,7 +54,9 @@ export const agents = sqliteTable('agents', {
   moltbookHandle: text('moltbook_handle'),
   lastSeenAt: integer('last_seen_at', { mode: 'timestamp' }),
   isOnline: integer('is_online', { mode: 'boolean' }).notNull().default(false),
-});
+}, (table) => [
+  index('agents_status_created_idx').on(table.status, table.created_at),
+]);
 
 export const api_keys = sqliteTable('api_keys', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -87,7 +89,10 @@ export const listings = sqliteTable('listings', {
   created_at: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),
-});
+}, (table) => [
+  index('listings_status_created_idx').on(table.status, table.created_at),
+  index('listings_status_category_created_idx').on(table.status, table.category, table.created_at),
+]);
 
 export const trades = sqliteTable('trades', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),

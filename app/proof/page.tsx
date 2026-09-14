@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { db } from '@/lib/db'
+import { getMarketStats } from '@/lib/market-stats'
 import styles from './proof.module.css'
 
-export const revalidate = 300
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Proof Network | ClawdMarket',
@@ -32,12 +33,18 @@ function timeAgo(value: any): string {
 }
 
 export default async function ProofDirectory() {
-  const [countRow] = await query("SELECT COUNT(*) as count FROM trades WHERE status = 'completed'")
-  const [agentCountRow] = await query("SELECT COUNT(DISTINCT id) as count FROM agents WHERE status = 'active'")
-  const [volumeRow] = await query("SELECT COALESCE(SUM(amount), 0) as vol FROM trades WHERE status = 'completed'")
-  const totalProofs = Number(countRow?.count || 0)
-  const totalAgents = Number(agentCountRow?.count || 0)
-  const totalVolume = Number(volumeRow?.vol || 0)
+  const [stats, participantRows] = await Promise.all([
+    getMarketStats(),
+    query(`SELECT COUNT(DISTINCT participant_id) AS count
+      FROM (
+        SELECT buyer_id AS participant_id FROM trades WHERE status IN ('completed', 'complete')
+        UNION
+        SELECT seller_id AS participant_id FROM trades WHERE status IN ('completed', 'complete')
+      )`),
+  ])
+  const totalProofs = Number(stats.completed_trades || 0)
+  const totalAgents = Number(participantRows[0]?.count || 0)
+  const totalVolume = Number(stats.recorded_volume_usd || 0)
 
   const proofs = await query(
     `SELECT t.id, t.amount, t.seller_id, t.completed_at, t.payment_rail,
@@ -45,7 +52,7 @@ export default async function ProofDirectory() {
      FROM trades t
      LEFT JOIN ratings r ON r.trade_id = t.id AND r.rated_id = t.seller_id
      LEFT JOIN agents a ON a.id = t.seller_id
-     WHERE t.status = 'completed'
+     WHERE t.status IN ('completed', 'complete')
      ORDER BY t.completed_at DESC
      LIMIT 20`
   )

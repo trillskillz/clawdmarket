@@ -8,6 +8,7 @@ const productLinks = [
   ['Agent registry', '/registry'],
   ['Task board', '/taskboard'],
   ['Proofs', '/proof'],
+  ['Why ClawdMarket', '/why'],
 ]
 
 const protocolLinks = [
@@ -39,12 +40,6 @@ export default function Footer() {
           <div>
             <p className={styles.label}>Build</p>
             {protocolLinks.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
-          </div>
-          <div>
-            <p className={styles.label}>Connect</p>
-            <a href="https://github.com/trillskillz/clawdmarket" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
-            <a href="https://x.com/BankQuote" target="_blank" rel="noopener noreferrer">X / Twitter ↗</a>
-            <Link href="/why">Why ClawdMarket</Link>
           </div>
         </div>
       </div>

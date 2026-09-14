@@ -24,6 +24,7 @@ type TaskDetail = {
 
 type AcceptedToken = { chain_id: number; chain_name: string; token_address: `0x${string}`; symbol: string; decimals: number; fixed_usd_price: number }
 type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; treasury?: `0x${string}`; tokens?: AcceptedToken[]; expires_at?: string }
+type PaymentConfig = { ledger_enabled: boolean; mpp_configured: boolean; erc20_configured: boolean }
 
 export default function TaskWorkspace({ taskId }: { taskId: string }) {
   const { address, chainId, isConnected } = useAccount()
@@ -47,9 +48,25 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
   const [jsonKeys, setJsonKeys] = useState('')
   const [sourceCount, setSourceCount] = useState(0)
   const [paymentRail, setPaymentRail] = useState<'ledger' | 'mpp' | 'evm'>('evm')
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
   const [checkout, setCheckout] = useState<Checkout | null>(null)
   const [selectedToken, setSelectedToken] = useState<AcceptedToken | null>(null)
   const base = `/api/tasks/${encodeURIComponent(taskId)}`
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/payments/config', { cache: 'no-store', signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((config: PaymentConfig | null) => {
+        if (!config) return
+        setPaymentConfig(config)
+        if (config.erc20_configured) setPaymentRail('evm')
+        else if (config.mpp_configured) setPaymentRail('mpp')
+        else if (config.ledger_enabled) setPaymentRail('ledger')
+      })
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [])
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const data = await requestJson<TaskDetail>(base, { apiKey, signal })
@@ -242,8 +259,10 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
             <p>Choose account balance, MPP on Tempo, or an enabled ERC-20 token. External settlement includes verified seller payouts and dispute refunds.</p>
             {workspace.quote && <dl><dt>Seller amount</dt><dd>${workspace.quote.sellerAmount.toFixed(2)}</dd><dt>Platform fee · 5%</dt><dd>${workspace.quote.platformFee.toFixed(2)}</dd><dt>Total</dt><dd>${workspace.quote.totalCost.toFixed(2)}</dd></dl>}
             {task.viewer.is_poster && task.status === 'assigned' && !trade && workspace.quote && <form onSubmit={(event) => { event.preventDefault(); void fundTask() }}>
-              <label htmlFor="task-payment-rail">Payment method</label><select id="task-payment-rail" value={paymentRail} onChange={(event) => setPaymentRail(event.target.value as typeof paymentRail)}><option value="evm">ERC-20 wallet</option><option value="mpp">MPP on Tempo</option><option value="ledger">Account balance</option></select>
-              <label className={styles.check}><input type="checkbox" required />I confirm the server-calculated total and authorize this payment.</label><button disabled={busy}>Continue with ${workspace.quote.totalCost.toFixed(2)}</button>
+              <label htmlFor="task-payment-rail">Payment method</label><select id="task-payment-rail" value={paymentRail} onChange={(event) => setPaymentRail(event.target.value as typeof paymentRail)}><option value="evm" disabled={!paymentConfig?.erc20_configured}>ERC-20 wallet</option><option value="mpp" disabled={!paymentConfig?.mpp_configured}>MPP on Tempo</option><option value="ledger" disabled={!paymentConfig?.ledger_enabled}>Account balance</option></select>
+              <label className={styles.check}><input type="checkbox" required />I confirm the server-calculated total and authorize this payment.</label><button disabled={busy || !paymentConfig || (paymentRail === 'evm' ? !paymentConfig.erc20_configured : paymentRail === 'mpp' ? !paymentConfig.mpp_configured : !paymentConfig.ledger_enabled)}>Continue with ${workspace.quote.totalCost.toFixed(2)}</button>
+              {!paymentConfig && <p role="status">Checking available payment rails…</p>}
+              {paymentConfig && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && !paymentConfig.ledger_enabled && <p role="alert">No payment rail is currently available.</p>}
             </form>}
             {trade?.status === 'pending' && checkout?.rail === 'evm' && <div className={styles.checkout}>
               <label htmlFor="task-token">Payment token</label><select id="task-token" value={selectedToken ? `${selectedToken.chain_id}:${selectedToken.token_address}` : ''} onChange={(event) => setSelectedToken(checkout.tokens?.find((token) => `${token.chain_id}:${token.token_address}` === event.target.value) || null)}>{(checkout.tokens || []).map((token) => <option key={`${token.chain_id}:${token.token_address}`} value={`${token.chain_id}:${token.token_address}`}>{token.symbol} · {token.chain_name}</option>)}</select>

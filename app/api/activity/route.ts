@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
-import { desc, eq, inArray } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agents, ratings, trades } from '@/lib/schema'
+import { users } from '@/lib/schema'
 
 export const dynamic = 'force-dynamic'
 
 type ActivityEvent = {
+  id: string
   type: 'trade_created' | 'trade_completed' | 'trade_disputed' | 'trade_confirmed' | 'rating_received' | 'agent_registered' | 'agent_improved'
   description: string
   buyer_name?: string | null
@@ -13,6 +14,29 @@ type ActivityEvent = {
   agent_name?: string | null
   timestamp: string
   relative: string
+}
+
+type TradeActivityRow = {
+  id: string
+  status: string
+  created_at: unknown
+  completed_at: unknown
+  buyer_agent_id: string
+  seller_agent_id: string
+}
+
+type RatingActivityRow = {
+  id: string
+  score: number
+  created_at: unknown
+  rater_agent_id: string
+  rated_agent_id: string
+}
+
+type RegistrationActivityRow = {
+  id: string
+  name: string | null
+  created_at: unknown
 }
 
 function shortId(id?: string | null) {
@@ -70,47 +94,67 @@ export async function GET() {
     const client = (db as any).$client
 
     const [recentTrades, recentRatings, recentRegistrations] = await Promise.all([
-      db.select({
-        id: trades.id,
-        status: trades.status,
-        created_at: trades.created_at,
-        buyer_agent_id: trades.buyer_id,
-        seller_agent_id: trades.seller_id,
-      }).from(trades).orderBy(desc(trades.created_at)).limit(20),
-      db.select({
-        id: ratings.id,
-        score: ratings.score,
-        created_at: ratings.created_at,
-        rater_agent_id: ratings.rater_id,
-        rated_agent_id: ratings.rated_id,
-      }).from(ratings).orderBy(desc(ratings.created_at)).limit(20),
-      db.select({
-        id: agents.id,
-        name: agents.name,
-        created_at: agents.created_at,
-        owner_address: agents.owner_address,
-      }).from(agents).where(eq(agents.status, 'active')).orderBy(desc(agents.created_at)).limit(10),
+      client.execute(
+        `SELECT id, status, created_at, completed_at,
+                buyer_id AS buyer_agent_id, seller_id AS seller_agent_id
+         FROM trades
+         ORDER BY CASE
+           WHEN typeof(COALESCE(completed_at, created_at)) IN ('integer', 'real')
+             AND COALESCE(completed_at, created_at) > 9999999999
+             THEN datetime(COALESCE(completed_at, created_at) / 1000, 'unixepoch')
+           WHEN typeof(COALESCE(completed_at, created_at)) IN ('integer', 'real')
+             THEN datetime(COALESCE(completed_at, created_at), 'unixepoch')
+           ELSE datetime(COALESCE(completed_at, created_at))
+         END DESC
+         LIMIT 20`,
+      ).then((result: any) => (result?.rows || []) as TradeActivityRow[]).catch(() => [] as TradeActivityRow[]),
+      client.execute(
+        `SELECT id, score, created_at,
+                rater_id AS rater_agent_id, rated_id AS rated_agent_id
+         FROM ratings
+         ORDER BY CASE
+           WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
+             THEN datetime(created_at / 1000, 'unixepoch')
+           WHEN typeof(created_at) IN ('integer', 'real') THEN datetime(created_at, 'unixepoch')
+           ELSE datetime(created_at)
+         END DESC
+         LIMIT 20`,
+      ).then((result: any) => (result?.rows || []) as RatingActivityRow[]).catch(() => [] as RatingActivityRow[]),
+      client.execute(
+        `SELECT id, name, created_at, owner_address
+         FROM agents
+         WHERE status = 'active'
+         ORDER BY CASE
+           WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
+             THEN datetime(created_at / 1000, 'unixepoch')
+           WHEN typeof(created_at) IN ('integer', 'real') THEN datetime(created_at, 'unixepoch')
+           ELSE datetime(created_at)
+         END DESC
+         LIMIT 10`,
+      ).then((result: any) => (result?.rows || []) as RegistrationActivityRow[]).catch(() => [] as RegistrationActivityRow[]),
     ])
 
-    const agentIds = new Set<string>()
-    recentTrades.forEach((t) => {
-      if (t.buyer_agent_id) agentIds.add(t.buyer_agent_id)
-      if (t.seller_agent_id) agentIds.add(t.seller_agent_id)
+    const principalIds = new Set<string>()
+    recentTrades.forEach((t: TradeActivityRow) => {
+      if (t.buyer_agent_id) principalIds.add(t.buyer_agent_id)
+      if (t.seller_agent_id) principalIds.add(t.seller_agent_id)
     })
-    recentRatings.forEach((r) => {
-      if (r.rater_agent_id) agentIds.add(r.rater_agent_id)
-      if (r.rated_agent_id) agentIds.add(r.rated_agent_id)
+    recentRatings.forEach((r: RatingActivityRow) => {
+      if (r.rater_agent_id) principalIds.add(r.rater_agent_id)
+      if (r.rated_agent_id) principalIds.add(r.rated_agent_id)
     })
 
-    const agentRows = agentIds.size
-      ? await db.select({ id: agents.id, name: agents.name }).from(agents).where(inArray(agents.id, Array.from(agentIds)))
+    const principalRows = principalIds.size
+      ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, Array.from(principalIds)))
       : []
 
-    const nameById = new Map(agentRows.map((a) => [a.id, a.name]))
+    const nameById = new Map(principalRows.map((principal) => [principal.id, principal.name]))
 
     const tradeEvents: Array<ActivityEvent & { createdAt: Date }> = recentTrades
-      .filter((t) => safeDate(t.created_at) !== null)
-      .map((t) => {
+      .filter((t: TradeActivityRow) => safeDate(
+        ['completed', 'complete', 'resolved'].includes(t.status) ? t.completed_at ?? t.created_at : t.created_at,
+      ) !== null)
+      .map((t: TradeActivityRow) => {
         const buyer = nameById.get(t.buyer_agent_id) || `Agent ${shortId(t.buyer_agent_id)}`
         const seller = nameById.get(t.seller_agent_id) || `Agent ${shortId(t.seller_agent_id)}`
         let type: ActivityEvent['type'] = 'trade_created'
@@ -126,9 +170,13 @@ export async function GET() {
           description = `Trade confirmed and settled between "${buyer}" and "${seller}"`
         }
 
-        const createdAt = safeDate(t.created_at) as Date
+        const eventTimestamp = ['completed', 'complete', 'resolved'].includes(t.status)
+          ? t.completed_at ?? t.created_at
+          : t.created_at
+        const createdAt = safeDate(eventTimestamp) as Date
         const ts = createdAt.toISOString()
         return {
+          id: `trade_${t.id}_${type}`,
           type,
           description,
           buyer_name: buyer,
@@ -140,13 +188,14 @@ export async function GET() {
       })
 
     const ratingEvents: Array<ActivityEvent & { createdAt: Date }> = recentRatings
-      .filter((r) => safeDate(r.created_at) !== null)
-      .map((r) => {
+      .filter((r: RatingActivityRow) => safeDate(r.created_at) !== null)
+      .map((r: RatingActivityRow) => {
         const agent = nameById.get(r.rated_agent_id) || `Agent ${shortId(r.rated_agent_id)}`
         const stars = '★'.repeat(Math.max(1, Math.min(5, Number(r.score) || 0)))
         const createdAt = safeDate(r.created_at) as Date
         const ts = createdAt.toISOString()
         return {
+          id: `rating_${r.id}`,
           type: 'rating_received' as const,
           description: `Agent "${agent}" received a ${stars.padEnd(5, '☆')} rating`,
           agent_name: agent,
@@ -157,11 +206,12 @@ export async function GET() {
       })
 
     const registrationEvents: Array<ActivityEvent & { createdAt: Date }> = recentRegistrations
-      .filter((a) => safeDate(a.created_at) !== null)
-      .map((a) => {
+      .filter((a: RegistrationActivityRow) => safeDate(a.created_at) !== null)
+      .map((a: RegistrationActivityRow) => {
         const createdAt = safeDate(a.created_at) as Date
         const ts = createdAt.toISOString()
         return {
+          id: `registration_${a.id}`,
           type: 'agent_registered' as const,
           description: `New agent "${a.name || `Agent ${shortId(a.id)}`}" registered`,
           agent_name: a.name || `Agent ${shortId(a.id)}`,
@@ -177,7 +227,13 @@ export async function GET() {
               a.name as agent_name
        FROM agent_improvements ai
        LEFT JOIN agents a ON a.id = ai.base_agent_id
-       ORDER BY ai.created_at DESC LIMIT 10`
+       ORDER BY CASE
+         WHEN typeof(ai.created_at) IN ('integer', 'real') AND ai.created_at > 9999999999
+           THEN datetime(ai.created_at / 1000, 'unixepoch')
+         WHEN typeof(ai.created_at) IN ('integer', 'real') THEN datetime(ai.created_at, 'unixepoch')
+         ELSE datetime(ai.created_at)
+       END DESC
+       LIMIT 10`
     ).catch(() => null)
 
     const improvementEvents: Array<ActivityEvent & { createdAt: Date }> = (improvementsResult?.rows || [])
@@ -187,6 +243,7 @@ export async function GET() {
         const ts = createdAt.toISOString()
         const name = row.agent_name || 'Unknown Agent'
         return {
+          id: `improvement_${row.id}`,
           type: 'agent_improved' as const,
           description: `${name} improved from v${row.from_version} to v${row.to_version}`,
           agent_name: name,
@@ -203,7 +260,7 @@ export async function GET() {
 
     return NextResponse.json(events, {
       headers: {
-        'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30',
+        'Cache-Control': 'no-store, max-age=0',
       },
     })
   } catch (error) {

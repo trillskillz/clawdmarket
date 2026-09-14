@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/components/Toast';
 
 type ContractState = 'DRAFT' | 'FUNDED' | 'IN_PROGRESS' | 'AWAITING_REVIEW' | 'DISPUTED' | 'COMPLETED' | 'CANCELED' | 'EXPIRED' | 'REFUNDED';
@@ -32,7 +32,10 @@ interface Milestone {
 
 interface ContractsTabProps {
   contracts: Contract[];
+  total: number;
   loading: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => Promise<void>;
   currentUserId?: string;
   getCsrfToken: () => string;
   onRefresh: () => Promise<void>;
@@ -45,10 +48,24 @@ function badgeClass(state: string) {
   return 'bg-bg2 border-border text-text-dim';
 }
 
-export default function ContractsTab({ contracts, loading, currentUserId, getCsrfToken, onRefresh }: ContractsTabProps) {
+export default function ContractsTab({ contracts, total, loading, loadingMore, onLoadMore, currentUserId, getCsrfToken, onRefresh }: ContractsTabProps) {
   const { toast } = useToast();
   const [milestonesByContract, setMilestonesByContract] = useState<Record<string, Milestone[]>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [ledgerEnabled, setLedgerEnabled] = useState<boolean | null>(null);
+  const [submissionTarget, setSubmissionTarget] = useState('');
+  const [submissionSummary, setSubmissionSummary] = useState('');
+  const [disputeTarget, setDisputeTarget] = useState('');
+  const [disputeReason, setDisputeReason] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/payments/config', { cache: 'no-store', signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((config) => config && setLedgerEnabled(Boolean(config.ledger_enabled)))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
 
   const sortedContracts = useMemo(
     () => [...contracts].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at)),
@@ -94,19 +111,20 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
     contractId: string,
     milestoneId: string,
     action: 'submit' | 'approve' | 'request_changes' | 'mark_paid' | 'open_dispute',
+    details = '',
   ) => {
     setBusy((b) => ({ ...b, [milestoneId]: true }));
     try {
       const payload: any = { action };
       if (action === 'submit') {
         payload.artifact_bundle = {
-          delivery_summary: 'Delivered. Please review artifacts and approve if acceptable.',
+          delivery_summary: details,
           submitted_at: new Date().toISOString(),
         };
       }
       if (action === 'open_dispute') {
         payload.reason_code = 'buyer_dispute';
-        payload.evidence = { note: 'Dispute opened from dashboard.' };
+        payload.evidence = { note: details };
       }
 
       const res = await fetch(`/api/contracts/${contractId}/milestones/${milestoneId}`, {
@@ -123,6 +141,8 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
 
       setMilestonesByContract((prev) => ({ ...prev, [contractId]: data.milestones || prev[contractId] || [] }));
       await onRefresh();
+      if (action === 'submit') { setSubmissionTarget(''); setSubmissionSummary(''); }
+      if (action === 'open_dispute') { setDisputeTarget(''); setDisputeReason(''); }
       toast(`Milestone updated: ${action}`, 'success');
     } catch (e: any) {
       toast(e?.message || 'Milestone action failed', 'error');
@@ -162,10 +182,13 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
                 {milestones.length ? 'Refresh Milestones' : 'Load Milestones'}
               </button>
               {isBuyer && c.state === 'DRAFT' && (
-                <button onClick={() => runContractAction(c.id, 'fund')} className="btn-primary text-xs py-1.5" disabled={busy[c.id]}>Fund</button>
+                <button title={ledgerEnabled === false ? 'Account-balance contract funding is disabled' : undefined} onClick={() => runContractAction(c.id, 'fund')} className="btn-primary text-xs py-1.5" disabled={busy[c.id] || ledgerEnabled !== true}>Fund</button>
               )}
               {isSeller && c.state === 'FUNDED' && (
                 <button onClick={() => runContractAction(c.id, 'start')} className="btn-primary text-xs py-1.5" disabled={busy[c.id]}>Start</button>
+              )}
+              {isBuyer && (c.state === 'DRAFT' || c.state === 'FUNDED') && (
+                <button onClick={() => { if (window.confirm(c.state === 'FUNDED' ? 'Cancel this contract and refund the held work amount?' : 'Cancel this draft contract?')) void runContractAction(c.id, 'cancel'); }} className="btn-secondary text-xs py-1.5" disabled={busy[c.id]}>Cancel contract</button>
               )}
             </div>
 
@@ -183,7 +206,7 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
 
                     <div className="flex flex-wrap gap-2 mt-3">
                       {isSeller && (m.state === 'ACTIVE' || m.state === 'CHANGES_REQUESTED') && (
-                        <button className="btn-primary text-xs py-1.5" disabled={busy[m.id]} onClick={() => runMilestoneAction(c.id, m.id, 'submit')}>
+                        <button className="btn-primary text-xs py-1.5" disabled={busy[m.id]} onClick={() => { setSubmissionTarget(m.id); setSubmissionSummary(''); }}>
                           Submit
                         </button>
                       )}
@@ -196,7 +219,7 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
                           <button className="btn-secondary text-xs py-1.5" disabled={busy[m.id]} onClick={() => runMilestoneAction(c.id, m.id, 'request_changes')}>
                             Request Changes
                           </button>
-                          <button className="btn-secondary text-xs py-1.5" disabled={busy[m.id]} onClick={() => runMilestoneAction(c.id, m.id, 'open_dispute')}>
+                          <button className="btn-secondary text-xs py-1.5" disabled={busy[m.id]} onClick={() => { setDisputeTarget(m.id); setDisputeReason(''); }}>
                             Dispute
                           </button>
                         </>
@@ -208,6 +231,16 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
                         </button>
                       )}
                     </div>
+                    {submissionTarget === m.id && <form className="mt-3 space-y-2 border-t border-border pt-3" onSubmit={(event) => { event.preventDefault(); void runMilestoneAction(c.id, m.id, 'submit', submissionSummary.trim()); }}>
+                      <label htmlFor={`submission-${m.id}`} className="block text-xs text-text-dim">Delivery summary</label>
+                      <textarea id={`submission-${m.id}`} className="input-field" minLength={10} maxLength={10_000} required value={submissionSummary} onChange={(event) => setSubmissionSummary(event.target.value)} placeholder="Describe what was delivered and how the buyer can verify it." />
+                      <div className="flex gap-2"><button className="btn-primary text-xs py-1.5" disabled={busy[m.id]}>Submit for review</button><button type="button" className="btn-secondary text-xs py-1.5" onClick={() => setSubmissionTarget('')}>Cancel</button></div>
+                    </form>}
+                    {disputeTarget === m.id && <form className="mt-3 space-y-2 border-t border-border pt-3" onSubmit={(event) => { event.preventDefault(); void runMilestoneAction(c.id, m.id, 'open_dispute', disputeReason.trim()); }}>
+                      <label htmlFor={`dispute-${m.id}`} className="block text-xs text-text-dim">Dispute reason and evidence</label>
+                      <textarea id={`dispute-${m.id}`} className="input-field" minLength={10} maxLength={10_000} required value={disputeReason} onChange={(event) => setDisputeReason(event.target.value)} placeholder="Explain what failed the agreed acceptance criteria." />
+                      <div className="flex gap-2"><button className="btn-primary text-xs py-1.5" disabled={busy[m.id]}>Open dispute</button><button type="button" className="btn-secondary text-xs py-1.5" onClick={() => setDisputeTarget('')}>Cancel</button></div>
+                    </form>}
                   </div>
                 ))}
               </div>
@@ -215,6 +248,10 @@ export default function ContractsTab({ contracts, loading, currentUserId, getCsr
           </div>
         );
       })}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-text-dim">
+        <span>Showing {contracts.length.toLocaleString()} of {total.toLocaleString()} contracts</span>
+        {contracts.length < total && <button type="button" onClick={() => void onLoadMore()} disabled={loadingMore} className="btn-secondary">{loadingMore ? 'Loading more…' : 'Load more contracts'}</button>}
+      </div>
     </div>
   );
 }

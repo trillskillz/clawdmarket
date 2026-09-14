@@ -21,7 +21,9 @@ export function WalletProviders({ children }: { children: ReactNode }) {
         coinbaseWallet({ appName: 'ClawdMarket' }),
         ...(wcProjectId ? [walletConnect({ projectId: wcProjectId })] : []),
       ],
-      multiInjectedProviderDiscovery: false,
+      // Discover EIP-6963 wallets (Rabby, Phantom, browser extensions, etc.)
+      // while keeping the targeted MetaMask connector as a legacy fallback.
+      multiInjectedProviderDiscovery: true,
       transports: {
         [mainnet.id]: http(),
         [polygon.id]: http(),

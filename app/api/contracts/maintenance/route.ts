@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { and, asc, eq, or, sql } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { contract_milestones, contracts } from '@/lib/schema';
+import { contract_milestones, contracts, listings } from '@/lib/schema';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { ensureContractWallets, refundContractFunds } from '@/lib/contract-settlement';
 
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   let autoApprovedMilestones = 0;
 
   const expirable = await db
-      .select({ id: contracts.id, buyer_id: contracts.buyer_id, seller_id: contracts.seller_id, total_amount: contracts.total_amount })
+      .select({ id: contracts.id, buyer_id: contracts.buyer_id, seller_id: contracts.seller_id, total_amount: contracts.total_amount, listing_id: contracts.listing_id })
       .from(contracts)
       .where(
         and(
@@ -58,6 +58,9 @@ export async function POST(req: NextRequest) {
           buyerId: contract.buyer_id,
           amount: contract.total_amount,
         });
+        if (contract.listing_id) {
+          await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, contract.listing_id), eq(listings.status, 'sold')));
+        }
         expiredContracts += 1;
       }
     }

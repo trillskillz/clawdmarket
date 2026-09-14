@@ -178,7 +178,7 @@ async function createTradePost(req: NextRequest) {
           total_cost: totalCost,
           seller_amount: sellerAmount,
           dev_amount: devAmount,
-          dev_wallet: process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || null,
+          dev_wallet: validated.payment_rail === 'mpp' ? readiness.mpp.feeRecipient : readiness.evm.feeRecipient,
           payout_status: 'pending',
           payment_rail: validated.payment_rail,
           client_reference: clientReference,
@@ -362,6 +362,22 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const requestedPage = Number(req.nextUrl.searchParams.get('page') || 1);
+    const requestedLimit = Number(req.nextUrl.searchParams.get('limit') || 50);
+    const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 100)
+      : 50;
+    const requestedTradeId = req.nextUrl.searchParams.get('trade_id')?.trim();
+    const participantWhere = or(eq(trades.buyer_id, auth.userId), eq(trades.seller_id, auth.userId));
+    const whereClause = requestedTradeId
+      ? and(participantWhere, eq(trades.id, requestedTradeId))
+      : participantWhere;
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(trades)
+      .where(whereClause);
+    const total = Number(countRow?.count || 0);
     const userTrades = await db
         .select({
           id: trades.id,
@@ -396,8 +412,10 @@ export async function GET(req: NextRequest) {
         .from(trades)
         .leftJoin(listings, eq(trades.listing_id, listings.id))
         .leftJoin(users, eq(trades.buyer_id, users.id))
-        .where(or(eq(trades.buyer_id, auth.userId), eq(trades.seller_id, auth.userId)))
-        .orderBy(desc(trades.created_at));
+        .where(whereClause)
+        .orderBy(desc(trades.created_at))
+        .limit(limit)
+        .offset((page - 1) * limit);
 
     return NextResponse.json({
       trades: userTrades.map((trade) => ({
@@ -406,8 +424,13 @@ export async function GET(req: NextRequest) {
           ? checkoutForTrade(trade)
           : null,
       })),
+      page,
+      limit,
+      total,
+      total_pages: Math.ceil(total / limit),
+      has_more: page * limit < total,
       ...envMeta('clawdmarket/api/trades'),
-    });
+    }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {
     logger.error('Trades fetch error', { err: error?.message });
     return NextResponse.json(

@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.34.5",
   "engines": {
-    "node": ">=24 <27"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -22,6 +22,7 @@
     "db:seed": "node --conditions=react-server --import tsx scripts/seed.ts",
     "db:migrate:agent-env": "node --conditions=react-server --import tsx scripts/migrate-agent-env.ts",
     "db:migrate:runtime": "node --import tsx scripts/migrate-runtime-schema.ts",
+    "ops:sync-release-monitor": "node --import tsx scripts/sync-release-monitor.ts",
     "db:baseline": "node --conditions=react-server --import tsx scripts/db-baseline-drizzle.ts",
     "predeploy": "bash scripts/predeploy-check.sh",
     "deploy": "bash scripts/predeploy-check.sh && pnpm build && npx vercel --prod"
@@ -72,9 +73,14 @@
       "@hono/node-server": "1.19.17",
       "baseline-browser-mapping": "2.11.23",
       "body-parser": "2.3.0",
+      "@humanfs/node": "0.16.8",
       "browserslist": "4.28.9",
+      "brace-expansion@<2": "1.1.18",
+      "brace-expansion@>=5 <5.0.9": "5.0.9",
+      "esbuild@<=0.24.2": "0.25.12",
       "fast-uri": "3.1.7",
       "ip-address": "10.7.0",
+      "js-yaml": "4.3.2",
       "qs": "6.16.0"
     }
   }

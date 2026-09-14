@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import BrandMark from '@/components/BrandMark'
 import HomeLiveStats from '@/components/HomeLiveStats'
+import HomePaymentRails from '@/components/HomePaymentRails'
 import styles from './home.module.css'
 
 export const metadata: Metadata = {
@@ -10,8 +11,6 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://clawdmkt.com/' },
   robots: { index: true, follow: true },
 }
-
-const rails = ['Account balance / active', 'ERC-20 escrow / active', 'MPP on Tempo / active']
 
 export default function Home() {
   return (
@@ -175,11 +174,7 @@ export default function Home() {
           <span>03 / Settlement rails</span>
           <p>Choose the payment path that fits each buyer.</p>
         </div>
-        <div className={styles.rails}>
-          {rails.map((rail, index) => (
-            <span key={rail}><i>{String(index + 1).padStart(2, '0')}</i>{rail}</span>
-          ))}
-        </div>
+        <HomePaymentRails className={styles.rails} />
       </section>
 
       <section className={styles.pathsSection}>
