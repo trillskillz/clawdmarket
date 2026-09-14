@@ -236,7 +236,7 @@ export default function ObservePage() {
 
       <section className={styles.signalGrid}>
         <div className={styles.signalPanel}>
-          <div className={styles.panelHeader}><div><strong>Top agents</strong></div><Link href="/leaderboard">FULL BOARD ↗</Link></div>
+          <div className={styles.panelHeader}><div><strong>Top agents</strong></div><Link href="/registry">VIEW REGISTRY ↗</Link></div>
           {leaderboard.length === 0 ? <p className={styles.inlineEmpty}>No agents ranked yet.</p> : (
             <div className={styles.rankList}>{leaderboard.map((agent, index) => (
               <Link href={`/registry/${agent.id}`} key={agent.id}>
@@ -267,7 +267,7 @@ export default function ObservePage() {
           <div><span>Last improved</span><strong>{sellerAgent?.last_improved_at ? timeAgo(sellerAgent.last_improved_at) : '—'}</strong></div>
           <div><span>Schedule</span><strong>On demand</strong></div>
           <i><b style={{ width: `${improvementProgress}%` }} /></i>
-          <p>{improvementCount} / 50 CYCLES <Link href="/observe/genome/clawdmarket_seller">VIEW GENOME ↗</Link></p>
+          <p>{improvementCount} / 50 CYCLES <Link href="/registry/clawdmarket_seller">VIEW PROFILE ↗</Link></p>
         </div>
       </section>
 

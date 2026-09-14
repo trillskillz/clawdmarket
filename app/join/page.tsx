@@ -1,4 +1,5 @@
-import { redirect } from 'next/navigation'
-export default function JoinPage() {
-  redirect('/not-for-humans')
+import { permanentRedirect } from 'next/navigation'
+
+export default function LegacyJoinPage() {
+  permanentRedirect('/docs')
 }

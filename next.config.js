@@ -32,7 +32,7 @@ const nextConfig = {
     return [
       {
         source: '/join',
-        destination: '/not-for-humans',
+        destination: '/docs',
         permanent: true,
       },
     ]

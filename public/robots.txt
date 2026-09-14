@@ -25,7 +25,6 @@ Allow: /api/wallets
 Allow: /api/mcp
 Allow: /proof/
 Allow: /registry/
-Allow: /karpathy-loop
 Allow: /observe
 Allow: /docs
 Disallow: /api/cron/

@@ -8,18 +8,28 @@ const publicRoutes = [
   '/taskboard',
   '/work',
   '/observe',
-  '/leaderboard',
-  '/benchmarks',
   '/docs',
-  '/not-for-humans',
-  '/genesis-trade',
-  '/karpathy-loop',
   '/proof',
-  '/join',
   '/auth/login',
   '/auth/register',
   '/auth/forgot-password',
 ];
+
+const legacyRoutes = new Map([
+  ['/leaderboard', '/registry'],
+  ['/benchmarks', '/registry'],
+  ['/karpathy-loop', '/observe'],
+  ['/genesis-trade', '/proof'],
+  ['/not-for-humans', '/docs'],
+  ['/join', '/docs'],
+  ['/observe/genome/clawdmarket_seller', '/registry/clawdmarket_seller'],
+]);
+
+const retiredTopLevelRoutes = [...legacyRoutes.keys()].filter((route) => !route.startsWith('/observe/genome/'));
+
+function isLegacyRoute(pathname: string) {
+  return legacyRoutes.has(pathname) || pathname.startsWith('/observe/genome/');
+}
 
 for (const viewport of [
   { name: 'desktop', width: 1440, height: 1000 },
@@ -84,6 +94,7 @@ test('public internal links resolve', async ({ page, request, baseURL }) => {
     for (const href of hrefs) {
       const url = new URL(href);
       if (url.origin === baseURL && !url.pathname.startsWith('/dashboard')) {
+        expect.soft(isLegacyRoute(url.pathname), `${route} should not link to retired route ${url.pathname}`).toBeFalsy();
         links.add(`${url.pathname}${url.search}`);
       }
     }
@@ -92,6 +103,26 @@ test('public internal links resolve', async ({ page, request, baseURL }) => {
   for (const href of links) {
     const response = await request.get(href);
     expect.soft(response.status(), `${href} should resolve from a public link`).toBeLessThan(400);
+  }
+});
+
+test('legacy website routes permanently redirect to current surfaces', async ({ request, baseURL }) => {
+  for (const [legacyPath, currentPath] of legacyRoutes) {
+    const response = await request.get(legacyPath, { maxRedirects: 0 });
+    expect.soft(response.status(), `${legacyPath} should be retired permanently`).toBe(308);
+    const location = response.headers().location;
+    expect.soft(location, `${legacyPath} should provide a replacement route`).toBeTruthy();
+    expect.soft(new URL(location || '/', baseURL || 'http://localhost:3000').pathname, `${legacyPath} redirect target`).toBe(currentPath);
+  }
+});
+
+test('sitemap excludes retired website routes', async ({ request }) => {
+  const response = await request.get('/sitemap.xml');
+  expect(response.ok()).toBeTruthy();
+  const sitemap = await response.text();
+
+  for (const legacyPath of retiredTopLevelRoutes) {
+    expect.soft(sitemap, `${legacyPath} should not be advertised in the sitemap`).not.toContain(`<loc>https://clawdmkt.com${legacyPath}</loc>`);
   }
 });
 
