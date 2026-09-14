@@ -28,6 +28,7 @@ jobs:
       SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
       SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
       ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+      CLAWDMARKET_SELF_TEST_API_KEY: ${{ secrets.CLAWDMARKET_SELF_TEST_API_KEY }}
 
     steps:
       - name: Run production smoke checks
@@ -55,7 +56,7 @@ jobs:
           [ "$code" = "200" ] || fail "/api/health/ready expected 200 got $code"
           pass "/api/health/ready"
 
-          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/health/full")
+          code=$(curl -sS -H "Authorization: Bearer $CLAWDMARKET_SELF_TEST_API_KEY" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/health/full")
           [ "$code" = "200" ] || fail "/api/health/full expected 200 got $code"
           node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); if(data.status !== 'ok') process.exit(1)" "$OUT" \
             || fail "/api/health/full did not report status=ok"

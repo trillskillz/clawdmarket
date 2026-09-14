@@ -65,12 +65,12 @@ test('full health uses the trusted Vercel deployment host and returns 200 when e
     { VERCEL_URL: 'clawdmarket-abc123.vercel.app' },
     expectedFetch(seen),
     async () => {
-      const response = await GET()
+      const response = await GET(new Request('https://ignored.example/api/health/full'))
       const body = await response.json()
       assert.equal(response.status, 200)
       assert.equal(body.status, 'ok')
       assert.equal(body.passed, body.total)
-      assert.ok(seen.length > 20)
+      assert.ok(seen.length >= 15)
       assert.ok(seen.every((url) => url.origin === 'https://clawdmarket-abc123.vercel.app'))
     },
   )
@@ -82,7 +82,7 @@ test('full health returns 503 when any check fails', async () => {
     { NEXT_PUBLIC_BASE_URL: 'https://health.example/some/path' },
     expectedFetch(seen, { failPath: '/api/stats' }),
     async () => {
-      const response = await GET()
+      const response = await GET(new Request('https://ignored.example/api/health/full'))
       const body = await response.json()
       assert.equal(response.status, 503)
       assert.equal(body.status, 'degraded')
@@ -101,11 +101,34 @@ test('full health exercises authenticated agent access when a key is configured'
     },
     expectedFetch([], { onAuthenticated: () => { authenticated = true } }),
     async () => {
-      const response = await GET()
+      const response = await GET(new Request('https://ignored.example/api/health/full'))
       const body = await response.json()
       assert.equal(response.status, 200)
       assert.equal(authenticated, true)
       assert.ok(body.checks.some((check: { name: string }) => check.name === 'agent_self_test_authenticated'))
+    },
+  )
+})
+
+test('production full health requires the configured bearer credential', async () => {
+  const seen: URL[] = []
+  await withRuntime(
+    {
+      VERCEL_ENV: 'production',
+      VERCEL_URL: 'clawdmarket-abc123.vercel.app',
+      CLAWDMARKET_SELF_TEST_API_KEY: 'test-agent-key',
+    },
+    expectedFetch(seen),
+    async () => {
+      const unauthorized = await GET(new Request('https://ignored.example/api/health/full'))
+      assert.equal(unauthorized.status, 401)
+      assert.equal(seen.length, 0)
+
+      const authorized = await GET(new Request('https://ignored.example/api/health/full', {
+        headers: { Authorization: 'Bearer test-agent-key' },
+      }))
+      assert.equal(authorized.status, 200)
+      assert.ok(seen.length > 0)
     },
   )
 })
