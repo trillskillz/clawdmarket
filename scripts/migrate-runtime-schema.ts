@@ -5,6 +5,7 @@ const RUNTIME_SCHEMA_MIGRATION_ID = '2026-09-13-runtime-schema-v1'
 const READINESS_GAPS_MIGRATION_ID = '2026-09-13-readiness-gaps-v2'
 const MARKETPLACE_SCALE_MIGRATION_ID = '2026-09-13-marketplace-scale-v1'
 const SCHEMA_RECONCILIATION_MIGRATION_ID = '2026-09-14-schema-reconciliation-v1'
+const AGENT_DISCOVERY_COLUMNS_MIGRATION_ID = '2026-09-14-agent-discovery-columns-v1'
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`
@@ -51,6 +52,8 @@ async function runMigration(client: Client) {
     status: "TEXT NOT NULL DEFAULT 'active'",
     endpoint_verified_at: 'INTEGER',
     endpoint_failures: 'INTEGER NOT NULL DEFAULT 0',
+    mpp_endpoint: 'TEXT',
+    llms_txt_url: 'TEXT',
     avg_rating: 'REAL',
     rating_count: 'INTEGER NOT NULL DEFAULT 0',
     version: 'INTEGER NOT NULL DEFAULT 1',
@@ -278,6 +281,7 @@ async function main() {
       // databases may have recorded an earlier migration before all agent
       // registration columns were part of its implementation.
       { id: SCHEMA_RECONCILIATION_MIGRATION_ID, run: runMigration },
+      { id: AGENT_DISCOVERY_COLUMNS_MIGRATION_ID, run: runMigration },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

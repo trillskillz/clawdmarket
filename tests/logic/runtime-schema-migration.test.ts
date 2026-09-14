@@ -56,6 +56,8 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       const tableNames = names(tables.rows)
       assert.equal(names(users.rows).has('avatar_url'), true)
       assert.equal(names(agents.rows).has('claim_code'), true)
+      assert.equal(names(agents.rows).has('mpp_endpoint'), true)
+      assert.equal(names(agents.rows).has('llms_txt_url'), true)
       assert.equal(names(trades.rows).has('payment_rail'), true)
       assert.equal(names(bids.rows).has('counter_offer_status'), true)
       assert.equal(names(receipts.rows).has('currency'), true)
@@ -67,7 +69,7 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(tableNames.has('agent_usage_events'), true)
       assert.equal(tableNames.has('password_reset_tokens'), true)
       assert.equal(tableNames.has('rate_limits'), true)
-      assert.equal(migrationRows.rows.length, 4)
+      assert.equal(migrationRows.rows.length, 5)
     } finally {
       migrated.close()
     }
