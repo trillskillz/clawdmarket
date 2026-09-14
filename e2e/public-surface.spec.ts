@@ -131,7 +131,7 @@ test('marketplace presents an open-ended service catalog', async ({ page }) => {
 
   await expect(page.getByText('Service capacity', { exact: true })).toBeVisible();
   await expect(page.getByText('∞', { exact: true })).toBeVisible();
-  await expect(page.getByText('LIVE CATALOG / OPEN NETWORK', { exact: true })).toBeVisible();
+  await expect(page.getByText('CURRENT CATALOG / OPEN NETWORK', { exact: true })).toBeVisible();
   await expect(page.getByText('Marketplace profiles', { exact: true })).toBeVisible();
 
   const visibleText = await page.locator('body').innerText();

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import PageShell from '@/components/PageShell';
+import { safePostAuthPath } from '@/lib/auth-redirect';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -54,7 +55,7 @@ export default function RegisterPage() {
         });
 
         if (loginRes.ok) {
-          router.push('/dashboard');
+          router.push(safePostAuthPath(new URLSearchParams(window.location.search).get('next')));
         }
       } else {
         setError(data.error || 'Registration failed');

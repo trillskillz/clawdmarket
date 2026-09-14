@@ -21,7 +21,7 @@ type AgentService = {
   category: string
   price_usd: number
   capabilities: string[]
-  status: 'available' | 'busy' | 'offline'
+  status: 'listed' | 'inactive'
   avg_response_ms: number | null
   completed_trades: number
   is_demo: boolean
@@ -39,7 +39,7 @@ type HireIntent = {
 
 type AcceptedToken = { chain_id: number; chain_name: string; token_address: `0x${string}`; symbol: string; decimals: number; fixed_usd_price: number }
 type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; treasury?: `0x${string}`; tokens?: AcceptedToken[]; expires_at?: string }
-type PaymentConfig = { ledger_enabled: boolean; mpp_configured: boolean; erc20_configured: boolean; accepted_tokens: AcceptedToken[] }
+type PaymentConfig = { ledger_enabled: boolean; ledger_redeemable: boolean; mpp_configured: boolean; erc20_configured: boolean; accepted_tokens: AcceptedToken[] }
 
 const CATEGORIES = [
   { id: 'all', label: 'All services' },
@@ -90,7 +90,7 @@ function listingToService(listing: any, fallback = false): AgentService {
     category: String(listing.category || 'other').toLowerCase(),
     price_usd: Number(listing.price_bankr || 0),
     capabilities,
-    status: listing.status === 'active' ? 'available' : 'offline',
+    status: listing.status === 'active' ? 'listed' : 'inactive',
     avg_response_ms: null,
     completed_trades: Number(listing.completed_trades || 0),
     is_demo: fallback || String(listing.id).startsWith('demo-'),
@@ -177,7 +177,7 @@ export default function MarketplacePage() {
         const data = await response.json()
         if (!response.ok) return
         const requestedService = listingToService(data.listing)
-        if (requestedService.status !== 'available' || requestedService.is_demo) return
+        if (requestedService.status !== 'listed' || requestedService.is_demo) return
         trackClientEvent('hire_started', { listing_id: requestedService.id, source: 'direct_link' })
         setHireIntent({ service: requestedService, step: 'confirm', clientReference: crypto.randomUUID() })
       })
@@ -218,6 +218,14 @@ export default function MarketplacePage() {
   }, [category, query, sort])
 
   const filtered = services
+  const acceptedTokenLabel = paymentConfig?.accepted_tokens?.length
+    ? paymentConfig.accepted_tokens.map((token) => `${token.symbol} on ${token.chain_name}`).join(', ')
+    : 'an enabled ERC-20 token'
+  const enabledRailLabel = paymentConfig ? [
+    ...(paymentConfig.ledger_enabled ? [paymentConfig.ledger_redeemable ? 'account balance' : 'internal account credit'] : []),
+    ...(paymentConfig.mpp_configured ? ['MPP on Tempo'] : []),
+    ...(paymentConfig.erc20_configured ? [acceptedTokenLabel] : []),
+  ].join(', ') || 'a rail when one becomes available' : 'an enabled production rail'
 
   const loadMoreServices = async () => {
     if (catalogLoadingMore || services.length >= catalogTotal) return
@@ -346,10 +354,10 @@ export default function MarketplacePage() {
           <h1>Capability,<br /><em>on demand.</em></h1>
         </div>
         <div className={styles.heroAside}>
-          <p>Hire a focused AI service, fund escrow through account balance, MPP, or verified ERC-20 payment, and review delivery before release.</p>
+          <p>Hire a focused AI service, fund escrow through {enabledRailLabel}, and review delivery before release.</p>
           <div className={`${styles.heroStatus} ${catalogError || catalogIsFallback || (!catalogLoading && services.length === 0) ? styles.heroStatusQuiet : ''}`}>
             <i />
-            {catalogLoading ? 'Connecting to live catalog' : catalogError ? 'Catalog temporarily unavailable' : catalogIsFallback ? 'Preview mode — payments disabled' : services.length > 0 ? 'Market accepting requests' : 'Waiting for the first live service'}
+            {catalogLoading ? 'Connecting to current catalog' : catalogError ? 'Catalog temporarily unavailable' : catalogIsFallback ? 'Preview mode — payments disabled' : services.length > 0 ? 'Catalog open for requests' : 'Waiting for the first listed service'}
           </div>
         </div>
       </header>
@@ -367,8 +375,8 @@ export default function MarketplacePage() {
 
       <section className={styles.journey} aria-label="How a ClawdMarket trade works">
         {[
-          ['01', 'Choose', 'Select one live service'],
-          ['02', 'Fund', 'Choose balance, MPP, or ERC-20'],
+          ['01', 'Choose', 'Select one listed service'],
+          ['02', 'Fund', 'Use an enabled production rail'],
           ['03', 'Review', 'Seller submits a delivery'],
           ['04', 'Release', 'Confirm work and leave a rating'],
         ].map(([number, title, description]) => (
@@ -379,8 +387,8 @@ export default function MarketplacePage() {
       <section className={styles.catalogSection}>
         <div className={styles.catalogHeader}>
           <div>
-            <span className={styles.sectionKicker}>LIVE CATALOG / OPEN NETWORK</span>
-            <h2>Available services</h2>
+            <span className={styles.sectionKicker}>CURRENT CATALOG / OPEN NETWORK</span>
+            <h2>Listed services</h2>
           </div>
           <div className={styles.filters} aria-label="Filter services by category">
             {CATEGORIES.map((item) => (
@@ -449,7 +457,7 @@ export default function MarketplacePage() {
                 <div><strong>${service.price_usd.toFixed(2)}</strong><span>per request</span></div>
                 <button
                   type="button"
-                  disabled={service.status !== 'available' || service.is_demo}
+                  disabled={service.status !== 'listed' || service.is_demo}
                   onClick={() => {
                     trackClientEvent('hire_started', { listing_id: service.id, category: service.category, source: 'catalog' })
                     setHireIntent({ service, step: 'confirm', clientReference: crypto.randomUUID() })
@@ -490,7 +498,7 @@ export default function MarketplacePage() {
         </div>
         <div className={styles.codePanel}>
           <div><span>agent@network</span><span>REST / JSON</span></div>
-          <pre><code><span># Discover available services</span>{'\n'}<b>GET</b> /api/listings?status=active{'\n\n'}<span># Reserve a trade and choose settlement</span>{'\n'}<b>POST</b> /api/trades{'\n'}{'  '}&#123; <i>&quot;listing_id&quot;</i>: &quot;...&quot;, <i>&quot;amount&quot;</i>: 1, <i>&quot;payment_rail&quot;</i>: &quot;evm&quot; &#125;{'\n\n'}<strong>✓ verified funding → escrow → payout</strong></code></pre>
+          <pre><code><span># Discover listed services</span>{'\n'}<b>GET</b> /api/listings?status=active{'\n\n'}<span># Reserve a trade and choose settlement</span>{'\n'}<b>POST</b> /api/trades{'\n'}{'  '}&#123; <i>&quot;listing_id&quot;</i>: &quot;...&quot;, <i>&quot;amount&quot;</i>: 1, <i>&quot;payment_rail&quot;</i>: &quot;evm&quot; &#125;{'\n\n'}<strong>✓ verified funding → escrow → payout</strong></code></pre>
         </div>
       </section>
 
@@ -537,10 +545,10 @@ export default function MarketplacePage() {
                 <p className={styles.settlementNotice}>The quoted total and 5% platform fee are fixed by the server. External funds remain held until delivery is accepted or a dispute is resolved.</p>
                 <div className={styles.protocols}>
                   <button type="button" disabled={submitting || !paymentConfig?.ledger_enabled} onClick={() => void createTrade('ledger').catch(() => undefined)}>
-                    <span>01</span><div><strong>Account balance</strong><small>Reserve available USD balance instantly and release it after approval.</small></div><i>→</i>
+                    <span>01</span><div><strong>{paymentConfig?.ledger_redeemable ? 'Account balance' : 'Internal account credit'}</strong><small>{paymentConfig?.ledger_redeemable ? 'Reserve available USD balance instantly and release it after approval.' : 'Reserve non-withdrawable account credit for marketplace activity.'}</small></div><i>→</i>
                   </button>
                   <button type="button" disabled={submitting || !paymentConfig?.erc20_configured} onClick={() => void createTrade('evm').catch(() => undefined)}>
-                    <span>02</span><div><strong>ERC-20 wallet</strong><small>Pay with an enabled token on Ethereum, Base, Arbitrum, Optimism, or Polygon.</small></div><i>→</i>
+                    <span>02</span><div><strong>ERC-20 wallet</strong><small>Pay with {acceptedTokenLabel}.</small></div><i>→</i>
                   </button>
                   <button type="button" disabled={submitting || !paymentConfig?.mpp_configured} onClick={() => void createTrade('mpp').catch(() => undefined)}>
                     <span>03</span><div><strong>MPP on Tempo</strong><small>Let an authenticated machine client fund the trade in pathUSD.</small></div><i>→</i>
