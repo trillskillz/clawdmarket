@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
 import BrandMark from '@/components/BrandMark'
 import { safePostAuthPath } from '@/lib/auth-redirect'
-import { formatWalletConnectionError, isGenericInjectedConnector } from '@/lib/wallet-connection'
+import { formatWalletConnectionError, getPreferredWalletConnectors } from '@/lib/wallet-connection'
 import styles from './login.module.css'
 
 type AccessMode = 'account' | 'wallet'
@@ -42,16 +42,7 @@ export default function LoginPage() {
       .catch(() => setPasswordResetAvailable(false))
   }, [])
 
-  const walletConnectors = useMemo(() => {
-    const seen = new Set<string>()
-    return connectors.filter((connector) => {
-      if (isGenericInjectedConnector(connector)) return false
-      const key = connector.name.toLowerCase()
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }, [connectors])
+  const walletConnectors = useMemo(() => getPreferredWalletConnectors(connectors), [connectors])
 
   function selectMode(nextMode: AccessMode) {
     setMode(nextMode)

@@ -29,13 +29,45 @@ export function isGenericInjectedConnector(connector: WalletConnectorLike): bool
   return normalized(connector.id) === 'injected' || normalized(connector.name) === 'injected';
 }
 
-export function getBrowserWalletConnectors<T extends WalletConnectorLike>(connectors: readonly T[]): T[] {
-  const seen = new Set<string>();
-  const browserConnectors: T[] = [];
+function connectorPriority(connector: WalletConnectorLike): number {
+  const id = normalized(connector.id);
+  const type = normalized(connector.type);
+
+  // wagmi uses an EIP-6963 wallet's reverse-DNS identifier as its connector
+  // ID. Prefer that exact provider over legacy flag-based fallbacks such as
+  // `metaMask`, which can bind the wrong window.ethereum provider when more
+  // than one extension is installed.
+  if (type === 'injected' && id.includes('.')) return 2;
+  return 1;
+}
+
+export function getPreferredWalletConnectors<T extends WalletConnectorLike>(connectors: readonly T[]): T[] {
+  const preferred: T[] = [];
+  const indexByName = new Map<string, number>();
 
   for (const connector of connectors) {
     if (isGenericInjectedConnector(connector)) continue;
 
+    const key = normalized(connector.name) || normalized(connector.id);
+    const existingIndex = indexByName.get(key);
+    if (existingIndex === undefined) {
+      indexByName.set(key, preferred.length);
+      preferred.push(connector);
+      continue;
+    }
+
+    if (connectorPriority(connector) > connectorPriority(preferred[existingIndex]!)) {
+      preferred[existingIndex] = connector;
+    }
+  }
+
+  return preferred;
+}
+
+export function getBrowserWalletConnectors<T extends WalletConnectorLike>(connectors: readonly T[]): T[] {
+  const browserConnectors: T[] = [];
+
+  for (const connector of getPreferredWalletConnectors(connectors)) {
     const id = normalized(connector.id);
     const name = normalized(connector.name);
     const type = normalized(connector.type);
@@ -47,10 +79,6 @@ export function getBrowserWalletConnectors<T extends WalletConnectorLike>(connec
       name.includes('rabby');
 
     if (!isBrowserWallet) continue;
-
-    const key = name || id;
-    if (seen.has(key)) continue;
-    seen.add(key);
     browserConnectors.push(connector);
   }
 
