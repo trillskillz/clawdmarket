@@ -100,16 +100,16 @@ test.describe('Wallet auth flow', () => {
       });
     });
 
-    await page.goto('/auth/login');
+    await page.goto('/auth/login?next=%2Fdocs#wallet');
     await expect(page.getByRole('link', { name: /Establish an identity/i })).toHaveCount(0);
     await page.getByRole('button', { name: /Use a signed wallet/i }).click();
-    await expect(page).toHaveURL(/\/auth\/login$/);
+    await expect(page).toHaveURL(/\/auth\/login\?next=%2Fdocs#wallet$/);
 
     await page.getByRole('button', { name: 'Connect Rabby' }).click();
     await expect(page.getByRole('heading', { name: 'Wallet connected.' })).toBeVisible();
     await page.getByRole('button', { name: /Sign message & enter/i }).click();
 
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(/\/docs$/);
     const meResponse = await page.request.get('/api/auth/me');
     expect(meResponse.ok()).toBeTruthy();
     const me = await meResponse.json();

@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 
 type PaymentConfig = {
   ledger_enabled?: boolean
+  ledger_redeemable?: boolean
   erc20_configured?: boolean
   mpp_configured?: boolean
+  accepted_tokens?: Array<{ chain_name?: string; symbol?: string }>
 }
 
 export default function HomePaymentRails({ className }: { className?: string }) {
@@ -21,10 +23,15 @@ export default function HomePaymentRails({ className }: { className?: string }) 
   }, [])
 
   const status = (enabled: boolean | undefined) => config ? (enabled ? 'online' : 'unavailable') : 'checking'
+  const tokenLabel = config?.accepted_tokens?.length
+    ? config.accepted_tokens.map((token) => `${token.symbol || 'Token'} on ${token.chain_name || 'EVM'}`).join(', ')
+    : 'ERC-20 escrow'
   const rails = [
-    `Account balance / ${status(config?.ledger_enabled)}`,
-    `ERC-20 escrow / ${status(config?.erc20_configured)}`,
-    `MPP on Tempo / ${status(config?.mpp_configured)}`,
+    config?.ledger_enabled && !config.ledger_redeemable
+      ? 'Internal account credit / non-redeemable'
+      : `Account balance / ${status(config?.ledger_enabled)}`,
+    `${tokenLabel} / ${status(config?.erc20_configured)}`,
+    `MPP pathUSD on Tempo / ${status(config?.mpp_configured)}`,
   ]
 
   return (

@@ -31,8 +31,38 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: '/leaderboard',
+        destination: '/registry',
+        permanent: true,
+      },
+      {
+        source: '/benchmarks',
+        destination: '/registry',
+        permanent: true,
+      },
+      {
+        source: '/karpathy-loop',
+        destination: '/observe',
+        permanent: true,
+      },
+      {
+        source: '/genesis-trade',
+        destination: '/proof',
+        permanent: true,
+      },
+      {
+        source: '/not-for-humans',
+        destination: '/docs',
+        permanent: true,
+      },
+      {
         source: '/join',
         destination: '/docs',
+        permanent: true,
+      },
+      {
+        source: '/observe/genome/:agentId',
+        destination: '/registry/:agentId',
         permanent: true,
       },
     ]

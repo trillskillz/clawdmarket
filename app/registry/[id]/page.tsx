@@ -148,7 +148,7 @@ export default function SellerProfilePage() {
 
         <section className={styles.hero}>
           <div className={styles.heroCopy}>
-            <div className={styles.signalRow}><span>SELLER PROFILE / {profileKind.toUpperCase()}</span><i className={online ? styles.online : styles.offline} /><b>{online ? 'Online now' : seller.status === 'active' ? 'Available' : 'Inactive'}</b></div>
+            <div className={styles.signalRow}><span>SELLER PROFILE / {profileKind.toUpperCase()}</span><i className={online ? styles.online : styles.offline} /><b>{online ? 'Online now' : seller.status === 'active' ? 'Listed' : 'Inactive'}</b></div>
             <div className={styles.identityRow}>
               <div className={styles.avatar}>{seller.avatar_url ? <img src={seller.avatar_url} alt="" /> : seller.avatar_emoji ? <span>{seller.avatar_emoji}</span> : <BrandMark className={styles.brandAvatar} size={62} />}</div>
               <span>CM / {compactId(seller.id)}</span>
@@ -183,9 +183,9 @@ export default function SellerProfilePage() {
         </section>
 
         <section className={styles.servicesSection} id="services">
-          <header className={styles.sectionHeading}><span>02 / LIVE CATALOG</span><h2>Services from {seller.name}.</h2><p>Pricing is seller-provided. The final total and platform fee are calculated by the server at checkout.</p></header>
+          <header className={styles.sectionHeading}><span>02 / CURRENT CATALOG</span><h2>Services from {seller.name}.</h2><p>Pricing is seller-provided. The final total and platform fee are calculated by the server at checkout.</p></header>
           {listings.length > 0 ? <div className={styles.serviceGrid}>{listings.map((listing, index) => <article className={styles.serviceCard} key={listing.id}>
-            <div className={styles.cardMeta}><span>SERVICE / {String(index + 1).padStart(2, '0')}</span><b>{seller.profile_kind === 'reference' ? 'Preview' : 'Available'}</b></div><span className={styles.category}>{listing.category}</span><h3>{listing.title}</h3><p>{listing.description}</p><footer><div><strong>${Number(listing.price_bankr).toFixed(2)}</strong><span>per request</span></div><Link href="/marketplace">Open market <b>↗</b></Link></footer>
+            <div className={styles.cardMeta}><span>SERVICE / {String(index + 1).padStart(2, '0')}</span><b>{seller.profile_kind === 'reference' ? 'Preview' : 'Listed'}</b></div><span className={styles.category}>{listing.category}</span><h3>{listing.title}</h3><p>{listing.description}</p><footer><div><strong>${Number(listing.price_bankr).toFixed(2)}</strong><span>per request</span></div><Link href={`/marketplace?listing=${encodeURIComponent(listing.id)}`}>Open service <b>↗</b></Link></footer>
           </article>)}</div> : <div className={styles.emptyState}><span>NO ACTIVE SERVICES</span><h3>This seller has no open offers right now.</h3><p>Send a message or post a task if you want to propose custom work.</p><Link href="/taskboard">Post a task →</Link></div>}
         </section>
 

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
 import BrandMark from '@/components/BrandMark'
+import { safePostAuthPath } from '@/lib/auth-redirect'
 import { formatWalletConnectionError, isGenericInjectedConnector } from '@/lib/wallet-connection'
 import styles from './login.module.css'
 
@@ -13,6 +14,11 @@ type AccessMode = 'account' | 'wallet'
 function compactAddress(address?: string) {
   if (!address) return 'No wallet connected'
   return `${address.slice(0, 8)}…${address.slice(-6)}`
+}
+
+function destinationAfterLogin() {
+  if (typeof window === 'undefined') return '/dashboard'
+  return safePostAuthPath(new URLSearchParams(window.location.search).get('next'))
 }
 
 export default function LoginPage() {
@@ -66,7 +72,7 @@ export default function LoginPage() {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || 'Access could not be verified')
-      router.push('/dashboard')
+      router.push(destinationAfterLogin())
       router.refresh()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Network error. Please try again.')
@@ -109,7 +115,7 @@ export default function LoginPage() {
       const result = await verifyResponse.json().catch(() => ({}))
       if (!verifyResponse.ok) throw new Error(result.error || 'Wallet signature could not be verified')
 
-      router.push('/dashboard')
+      router.push(destinationAfterLogin())
       router.refresh()
     } catch (cause) {
       setError(formatWalletConnectionError(cause))
