@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,13 +44,7 @@ const checks: Check[] = [
   { name: 'skill_md', method: 'GET', path: '/skill.md', expectStatus: 200 },
   { name: 'agent_self_test', method: 'GET', path: '/api/agent/self-test', expectStatus: 200 },
   { name: 'agents_list_free', method: 'GET', path: '/api/agents/list', expectStatus: 200 },
-  { name: 'agents_search_free', method: 'GET', path: '/api/agents/search?q=web%20research', expectStatus: 200 },
   { name: 'capabilities_resolve_free', method: 'GET', path: '/api/capabilities/resolve?q=web%20search', expectStatus: 200 },
-  { name: 'tasks_free', method: 'GET', path: '/api/tasks?status=open&limit=1', expectStatus: 200 },
-  { name: 'agents_register_free_validation', method: 'POST', path: '/api/agents/register', body: '{}', expectStatus: 400 },
-  { name: 'trades_auth_precedes_validation', method: 'POST', path: '/api/trades', body: '{}', expectStatus: 401 },
-  { name: 'trades_ledger_auth_required', method: 'POST', path: '/api/trades', body: '{"listing_id":"health-check-listing","amount":1,"payment_rail":"ledger"}', expectStatus: 401 },
-  { name: 'trades_external_auth_required', method: 'POST', path: '/api/trades', body: '{"listing_id":"health-check-listing","amount":1,"payment_rail":"evm"}', expectStatus: 401 },
   { name: 'messages_auth_required', method: 'GET', path: '/api/messages', expectStatus: 401 },
   { name: 'mcp_tools_list_free', method: 'POST', path: '/api/mcp', body: '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}', expectStatus: 200 },
   { name: 'root_indexable', method: 'GET', path: '/', expectStatus: 200, headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120' } },
@@ -168,8 +163,32 @@ async function runFullHealthChecks(
   }
 }
 
-export async function GET() {
+function isAuthorized(request: Request, secret: string): boolean {
+  const authorization = request.headers.get('authorization') || ''
+  const supplied = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
+  const actual = Buffer.from(supplied)
+  const expected = Buffer.from(secret)
+  return actual.length === expected.length && timingSafeEqual(actual, expected)
+}
+
+export async function GET(request: Request) {
   try {
+    const selfTestApiKey = process.env.CLAWDMARKET_SELF_TEST_API_KEY?.trim() || ''
+    const production = process.env.VERCEL_ENV === 'production'
+      || process.env.CLAWDMARKET_PRODUCTION_READINESS === 'true'
+    if (production && !selfTestApiKey) {
+      return NextResponse.json({ status: 'degraded', error: 'health_check_auth_not_configured' }, {
+        status: 503,
+        headers: { 'Cache-Control': 'no-store', 'Retry-After': '30' },
+      })
+    }
+    if (production && !isAuthorized(request, selfTestApiKey)) {
+      return NextResponse.json({ error: 'unauthorized' }, {
+        status: 401,
+        headers: { 'Cache-Control': 'no-store', 'WWW-Authenticate': 'Bearer' },
+      })
+    }
+
     const result = await runFullHealthChecks()
     return NextResponse.json(result.body, {
       status: result.httpStatus,

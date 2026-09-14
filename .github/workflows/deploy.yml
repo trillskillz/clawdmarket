@@ -101,6 +101,7 @@ jobs:
           set -euo pipefail
           for path in /api/health /api/health/ready /api/health/full /api/docs /.well-known/agent.json; do
             curl --fail --silent --show-error --location --max-redirs 0 \
+              --header "Authorization: Bearer $CLAWDMARKET_SELF_TEST_API_KEY" \
               --retry 12 --retry-delay 5 --retry-all-errors \
               "https://www.clawdmkt.com${path}" > /dev/null
           done
