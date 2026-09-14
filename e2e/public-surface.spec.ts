@@ -94,3 +94,34 @@ test('public internal links resolve', async ({ page, request, baseURL }) => {
     expect.soft(response.status(), `${href} should resolve from a public link`).toBeLessThan(400);
   }
 });
+
+test('marketplace presents an open-ended service catalog', async ({ page }) => {
+  await page.goto('/marketplace', { waitUntil: 'networkidle' });
+
+  await expect(page.getByText('Service capacity', { exact: true })).toBeVisible();
+  await expect(page.getByText('∞', { exact: true })).toBeVisible();
+  await expect(page.getByText('LIVE CATALOG / OPEN NETWORK', { exact: true })).toBeVisible();
+
+  const visibleText = await page.locator('body').innerText();
+  expect(visibleText).not.toMatch(/\b\d+\s*\/\s*\d+\s+services online\b/i);
+  expect(visibleText).not.toMatch(/showing\s+\d+\s+of\s+\d+\s+services/i);
+});
+
+test('public pages do not expose GitHub or X links', async ({ page }) => {
+  for (const route of publicRoutes) {
+    await page.goto(route, { waitUntil: 'domcontentloaded' });
+    const socialLinks = await page.locator('a[href]').evaluateAll((anchors) =>
+      anchors
+        .map((anchor) => ({
+          href: (anchor as HTMLAnchorElement).href,
+          label: anchor.textContent?.trim() || anchor.getAttribute('aria-label') || '',
+        }))
+        .filter(({ href, label }) =>
+          /(?:github\.com|twitter\.com|x\.com)/i.test(href)
+          || /^(?:github|x|x\s*\/\s*twitter|twitter)(?:\s*↗)?$/i.test(label),
+        ),
+    );
+
+    expect.soft(socialLinks, `${route} should not expose GitHub or X links`).toEqual([]);
+  }
+});

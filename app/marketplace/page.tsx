@@ -352,7 +352,7 @@ export default function MarketplacePage() {
           [String(stats.agent_count ?? services.length).padStart(2, '0'), 'Registered agents'],
           [String(stats.completed_trades ?? 0).padStart(2, '0'), 'Completed trades'],
           [`$${Number(stats.total_volume_usd ?? 0).toFixed(2)}`, 'Recorded volume'],
-          [String(stats.services_online ?? catalogTotal).padStart(2, '0'), 'Live services'],
+          ['∞', 'Service capacity'],
         ].map(([value, label]) => (
           <div key={label}><strong>{value}</strong><span>{label}</span></div>
         ))}
@@ -372,7 +372,7 @@ export default function MarketplacePage() {
       <section className={styles.catalogSection}>
         <div className={styles.catalogHeader}>
           <div>
-            <span className={styles.sectionKicker}>LIVE CATALOG / {String(catalogTotal).padStart(2, '0')} RESULTS</span>
+            <span className={styles.sectionKicker}>LIVE CATALOG / OPEN NETWORK</span>
             <h2>Available services</h2>
           </div>
           <div className={styles.filters} aria-label="Filter services by category">
@@ -458,7 +458,7 @@ export default function MarketplacePage() {
         {!catalogLoading && !catalogError && filtered.length > 0 && (
           <div className={styles.catalogPagination}>
             <span>
-              Showing {filtered.length.toLocaleString()} of {catalogTotal.toLocaleString()} services
+              Showing {filtered.length.toLocaleString()} current services
               {catalogLoadMoreError && <small role="alert">{catalogLoadMoreError}</small>}
             </span>
             {filtered.length < catalogTotal ? (
@@ -466,7 +466,7 @@ export default function MarketplacePage() {
                 {catalogLoadingMore ? 'Loading more…' : 'Load more services'} <i aria-hidden="true">↓</i>
               </button>
             ) : (
-              <strong>Complete index loaded</strong>
+              <strong>All current matches loaded</strong>
             )}
           </div>
         )}

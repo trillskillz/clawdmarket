@@ -72,7 +72,7 @@ test.describe('Social features: profiles and messaging', () => {
     expect(login.ok()).toBeTruthy();
 
     await page.goto('/dashboard/profile');
-    await expect(page.getByRole('heading', { name: 'Edit Profile' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Edit Profile', level: 1 })).toBeVisible();
   });
 
   test('agent registry shows registered agents', async ({ page }) => {
