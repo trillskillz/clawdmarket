@@ -1,0 +1,55 @@
+name: Production Payment Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Preflight balances or execute the guarded $0.01 Base USDC payment/refund'
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - run-low-value-payment
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-payment-canary
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      BASE_URL: ${{ (secrets.PROD_BASE_URL != '' && secrets.PROD_BASE_URL) || 'https://www.clawdmkt.com' }}
+      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+      WALLET_SMOKE_PRIVATE_KEY: ${{ secrets.WALLET_SMOKE_PRIVATE_KEY }}
+      CONFIRM_REAL_PAYMENT_CANARY: ${{ inputs.mode == 'run-low-value-payment' && 'RUN_LOW_VALUE_REAL_PAYMENT' || 'PREFLIGHT_ONLY' }}
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install runtime dependencies
+        run: pnpm install --frozen-lockfile --prod
+
+      - name: Run production payment canary
+        run: node scripts/prod-payment-canary.mjs
