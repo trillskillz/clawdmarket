@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
 
-  const rl = await rateLimit(`admin:${auth!.userId}`, { interval: 60_000, maxRequests: 30 });
+  const rl = await rateLimit(`admin:${auth!.userId}`, { interval: 60_000, maxRequests: 30, failClosed: true });
   if (!rl.success) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: getRateLimitHeaders(rl) });
   }

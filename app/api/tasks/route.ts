@@ -252,6 +252,7 @@ export async function POST(request: NextRequest) {
   const accountRateLimit = await rateLimit(`create-task-account:${principal.userId}`, {
    interval: 60 * 1000,
    maxRequests: 10,
+   failClosed: true,
   })
   if (!accountRateLimit.success) {
    return NextResponse.json(
@@ -269,6 +270,7 @@ export async function POST(request: NextRequest) {
  const rateLimitResult = await rateLimit(`create-task:${agentAuth.agentId}`, {
  interval: 60 * 1000,
  maxRequests: 10,
+ failClosed: true,
  })
 
  if (!rateLimitResult.success) {

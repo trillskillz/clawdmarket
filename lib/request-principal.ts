@@ -38,14 +38,19 @@ export async function resolveRequestPrincipal(req: NextRequest): Promise<Request
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('auth-token')?.value;
   const accountFromHeader = authHeader ? await authenticateRequest(authHeader) : null;
-  const account = accountFromHeader || (cookieToken ? await authenticateRequest(`Bearer ${cookieToken}`) : null);
+  const accountFromCookie = !accountFromHeader && cookieToken
+    ? await authenticateRequest(`Bearer ${cookieToken}`)
+    : null;
+  const account = accountFromHeader || accountFromCookie;
 
   if (account) {
     return {
       userId: account.userId,
       agentId: account.userId.startsWith('user_agent_') ? account.userId.slice('user_agent_'.length) : null,
       kind: 'account',
-      usesCookieAuth: !authHeader && Boolean(cookieToken),
+      // A syntactically present but invalid Authorization header must not turn
+      // a cookie-authenticated request into a CSRF-exempt bearer request.
+      usesCookieAuth: Boolean(accountFromCookie),
     };
   }
 

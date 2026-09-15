@@ -29,8 +29,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const validated = registerSchema.parse(body);
+    const body = await req.json().catch(() => null);
+    const parsed = registerSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.issues },
+        { status: 400, headers: getRateLimitHeaders(rateLimitResult) },
+      );
+    }
+    const validated = parsed.data;
 
     // Validate password strength
     const passwordCheck = validatePasswordStrength(validated.password);
@@ -90,13 +97,6 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error: any) {
-    const issues = error?.issues || error?.errors;
-    if (issues) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: issues },
-        { status: 400 }
-      );
-    }
     if (/unique constraint failed:\s*users\.email/i.test(String(error?.message || ''))) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
     }

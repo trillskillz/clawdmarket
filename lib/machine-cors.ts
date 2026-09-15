@@ -30,6 +30,16 @@ export function isMachineEndpoint(pathname: string) {
     || pathname === '/skill.md'
 }
 
+export function isBrowserCorsEnabled(pathname: string) {
+  if (!isMachineEndpoint(pathname)) return false
+  if (pathname === '/api/contracts/maintenance') return false
+  return ![
+    '/api/admin',
+    '/api/auth',
+    '/api/cron',
+  ].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
 export function applyMachineCorsHeaders(headers: Headers) {
   headers.set('Access-Control-Allow-Origin', '*')
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS')

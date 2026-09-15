@@ -38,6 +38,12 @@ test.describe('Wallet auth flow', () => {
     const laterReplay = await page.request.post('/api/auth/wallet/verify', verification);
     expect(laterReplay.status()).toBe(401);
 
+    const csrfBypassAttempt = await page.request.post('/api/messages', {
+      headers: { Authorization: 'Bearer intentionally-invalid' },
+      data: {},
+    });
+    expect(csrfBypassAttempt.status()).toBe(403);
+
     await page.goto('/dashboard');
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });

@@ -36,12 +36,12 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export function generateJWT(payload: JWTPayload): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: '1h' });
+  return jwt.sign(payload, getJwtSecret(), { algorithm: 'HS256', expiresIn: '1h' });
 }
 
 export function verifyJWT(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, getJwtSecret()) as JWTPayload;
+    return jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as JWTPayload;
   } catch {
     return null;
   }

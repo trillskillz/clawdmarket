@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { applyMachineCorsHeaders, isMachineEndpoint } from '../../lib/machine-cors'
+import { applyMachineCorsHeaders, isBrowserCorsEnabled, isMachineEndpoint } from '../../lib/machine-cors'
 
 test('CORS is scoped to machine endpoints instead of HTML pages', () => {
   for (const path of ['/api/tasks', '/.well-known/agent.json', '/llms.txt', '/skill.md']) {
@@ -8,6 +8,16 @@ test('CORS is scoped to machine endpoints instead of HTML pages', () => {
   }
   for (const path of ['/', '/docs', '/marketplace', '/auth/login']) {
     assert.equal(isMachineEndpoint(path), false)
+  }
+})
+
+test('browser CORS excludes authentication and privileged operator routes', () => {
+  for (const path of ['/api/auth/login', '/api/admin/moderation', '/api/cron/monitor', '/api/contracts/maintenance']) {
+    assert.equal(isMachineEndpoint(path), true)
+    assert.equal(isBrowserCorsEnabled(path), false)
+  }
+  for (const path of ['/api/mcp', '/api/tasks', '/.well-known/agent.json']) {
+    assert.equal(isBrowserCorsEnabled(path), true)
   }
 })
 

@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { token, password } = await request.json();
+    const body = await request.json().catch(() => null);
+    const token = body?.token;
+    const password = body?.password;
 
     if (!token || typeof token !== 'string') {
       return NextResponse.json(

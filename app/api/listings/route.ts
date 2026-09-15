@@ -262,7 +262,8 @@ export async function POST(req: NextRequest) {
 
   const rateLimitResult = await rateLimit(`create-listing:${sellerId}`, {
     interval: 60 * 1000, 
-    maxRequests: 10 
+    maxRequests: 10,
+    failClosed: true,
   });
 
   if (!rateLimitResult.success) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
-import { applyMachineCorsHeaders, isMachineEndpoint } from '@/lib/machine-cors'
+import { applyMachineCorsHeaders, isBrowserCorsEnabled } from '@/lib/machine-cors'
+import { shouldDisableSharedCaching } from '@/lib/response-cache-policy'
 
 function jwtSecret() {
   const configured = process.env.JWT_SECRET?.trim()
@@ -9,20 +10,24 @@ function jwtSecret() {
   return new TextEncoder().encode('clawdmarket-local-development-secret')
 }
 
-function withDiscoveryHeaders(response: NextResponse, pathname: string) {
+function withDiscoveryHeaders(response: NextResponse, request: NextRequest) {
+  const pathname = request.nextUrl.pathname
   response.headers.set('X-Agent-Discovery', 'https://clawdmkt.com/llms.txt')
   response.headers.set('X-MPP-Descriptor', 'https://clawdmkt.com/.well-known/mpp.json')
   response.headers.set('X-Agent-Card', 'https://clawdmkt.com/.well-known/agent.json')
   response.headers.set('X-Agent-Manifest', 'https://clawdmkt.com/.well-known/clawdmarket.json')
   response.headers.set('X-MCP-Server', 'https://clawdmkt.com/api/mcp')
-  if (isMachineEndpoint(pathname)) applyMachineCorsHeaders(response.headers)
+  if (isBrowserCorsEnabled(pathname)) applyMachineCorsHeaders(response.headers)
+  if (shouldDisableSharedCaching(pathname, request.headers, request.cookies.has('auth-token'))) {
+    response.headers.set('Cache-Control', 'private, no-store, max-age=0')
+  }
   return response
 }
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
-  if (request.method === 'OPTIONS' && isMachineEndpoint(path)) {
-    return withDiscoveryHeaders(new NextResponse(null, { status: 204 }), path)
+  if (request.method === 'OPTIONS' && isBrowserCorsEnabled(path)) {
+    return withDiscoveryHeaders(new NextResponse(null, { status: 204 }), request)
   }
   if (path.startsWith('/dashboard')) {
     const token = request.cookies.get('auth-token')?.value
@@ -33,7 +38,7 @@ export async function proxy(request: NextRequest) {
     try {
       const secret = jwtSecret()
       if (!secret) throw new Error('JWT_SECRET is not configured')
-      const { payload } = await jwtVerify(token, secret)
+      const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] })
 
       if (path.startsWith('/dashboard/admin')) {
         const adminIds = (process.env.ADMIN_USER_IDS || '').split(',').map(x => x.trim()).filter(Boolean)
@@ -49,7 +54,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  return withDiscoveryHeaders(NextResponse.next(), path)
+  return withDiscoveryHeaders(NextResponse.next(), request)
 }
 
 export const config = {

@@ -25,8 +25,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(rl) });
   }
 
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: getRateLimitHeaders(rl) });
+  }
+
   try {
-    const body = await req.json();
     const address = String(body?.address ?? '').toLowerCase();
     const signature = String(body?.signature ?? '');
     const nonce = String(body?.nonce ?? '');

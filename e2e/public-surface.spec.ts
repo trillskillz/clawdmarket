@@ -61,7 +61,7 @@ for (const viewport of [
       page.on('pageerror', onPageError);
       page.on('response', onResponse);
 
-      const response = await page.goto(route, { waitUntil: 'networkidle' });
+      const response = await page.goto(route, { waitUntil: 'load' });
       expect.soft(response?.status(), `${route} should return a successful document`).toBeLessThan(400);
       await expect.soft(page.locator('main'), `${route} should expose its primary content`).toBeVisible();
 
@@ -127,7 +127,7 @@ test('sitemap excludes retired website routes', async ({ request }) => {
 });
 
 test('marketplace presents an open-ended service catalog', async ({ page }) => {
-  await page.goto('/marketplace', { waitUntil: 'networkidle' });
+  await page.goto('/marketplace', { waitUntil: 'load' });
 
   await expect(page.getByText('Service capacity', { exact: true })).toBeVisible();
   await expect(page.getByText('∞', { exact: true })).toBeVisible();
@@ -144,7 +144,7 @@ test('homepage uses the authoritative marketplace counters', async ({ page, requ
   expect(statsResponse.ok()).toBeTruthy();
   const stats = await statsResponse.json();
 
-  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.goto('/', { waitUntil: 'load' });
   const liveStats = page.locator('[aria-label="Live marketplace statistics"]');
   await expect(liveStats.getByText('Marketplace profiles', { exact: true })).toBeVisible();
   await expect(liveStats.locator('div').filter({ hasText: 'Marketplace profiles' }).locator('strong')).toHaveText(String(stats.marketplace_profile_count).padStart(2, '0'));
@@ -185,7 +185,7 @@ test('observe uses current authoritative market telemetry', async ({ page, reque
   const stats = await statsResponse.json();
   const payments = await paymentsResponse.json();
   const activity = await activityResponse.json();
-  await page.goto('/observe', { waitUntil: 'networkidle' });
+  await page.goto('/observe', { waitUntil: 'load' });
 
   const statRail = page.locator('section[aria-label="Network statistics"]');
   await expect(statRail.getByText('01 / Marketplace profiles', { exact: true })).toBeVisible();
