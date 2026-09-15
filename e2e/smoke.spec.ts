@@ -1,6 +1,31 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Core smoke matrix', () => {
+  test('security boundaries reject malformed auth input and privileged browser CORS', async ({ request }) => {
+    const malformedLogin = await request.post('/api/auth/login', {
+      headers: { 'Content-Type': 'application/json' },
+      data: '{malformed',
+    });
+    expect(malformedLogin.status()).toBe(400);
+    expect(malformedLogin.headers()['cache-control']).toContain('no-store');
+
+    const authPreflight = await request.fetch('/api/auth/login', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://attacker.example',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type',
+      },
+    });
+    expect(authPreflight.headers()['access-control-allow-origin']).toBeUndefined();
+
+    const mcpPreflight = await request.fetch('/api/mcp', {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://agent.example', 'Access-Control-Request-Method': 'POST' },
+    });
+    expect(mcpPreflight.headers()['access-control-allow-origin']).toBe('*');
+  });
+
   test('public routes and agent discovery are available', async ({ page, request }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/ClawdMarket/i);

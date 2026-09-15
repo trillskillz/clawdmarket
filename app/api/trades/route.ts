@@ -49,7 +49,8 @@ async function createTradePost(req: NextRequest) {
 
   const rateLimitResult = await rateLimit(`trade:${auth.userId}`, { 
     interval: 60 * 1000, 
-    maxRequests: 20 
+    maxRequests: 20,
+    failClosed: true,
   });
 
   if (!rateLimitResult.success) {

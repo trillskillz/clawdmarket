@@ -30,8 +30,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const validated = loginSchema.parse(body);
+    const body = await req.json().catch(() => null);
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.issues },
+        { status: 400, headers: getRateLimitHeaders(rateLimitResult) },
+      );
+    }
+    const validated = parsed.data;
 
     // Find user
     const [user] = await db
@@ -109,13 +116,6 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: any) {
-    const issues = error?.issues || error?.errors;
-    if (issues) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: issues },
-        { status: 400 }
-      );
-    }
     console.error('Login error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

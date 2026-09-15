@@ -110,6 +110,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
    const rateLimitResult = await rateLimit(`bid-task:${bearerBidder.agentId}`, {
     interval: 60 * 1000,
     maxRequests: 30,
+    failClosed: true,
    })
 
    if (!rateLimitResult.success) {

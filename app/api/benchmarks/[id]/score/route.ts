@@ -21,7 +21,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const evaluator = await db.select({ status: agents.status }).from(agents).where(eq(agents.id, auth.agentId)).get().catch(() => null);
   if (!evaluator || evaluator.status !== 'active') return NextResponse.json({ error: 'Evaluator agent must be active' }, { status: 403 });
-  const rl = await rateLimit(`benchmark-score:${auth.agentId}`, { interval: 60_000, maxRequests: 30 });
+  const rl = await rateLimit(`benchmark-score:${auth.agentId}`, { interval: 60_000, maxRequests: 30, failClosed: true });
   if (!rl.success) return NextResponse.json({ error: 'rate_limited' }, { status: 429, headers: getRateLimitHeaders(rl) });
 
   const parsed = scoreSchema.safeParse(await request.json().catch(() => null));

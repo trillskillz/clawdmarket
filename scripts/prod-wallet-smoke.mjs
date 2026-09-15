@@ -34,6 +34,9 @@ const verifyResponse = await fetch(`${baseUrl}/api/auth/wallet/verify`, {
   body: JSON.stringify({ address: account.address, signature, nonce: challenge.nonce }),
 })
 if (!verifyResponse.ok) throw new Error(`Wallet verification returned HTTP ${verifyResponse.status}`)
+if (!/\bno-store\b/i.test(verifyResponse.headers.get('cache-control') || '')) {
+  throw new Error('Wallet verification response is not protected by Cache-Control: no-store')
+}
 
 const authCookies = verifyResponse.headers.getSetCookie()
   .map((cookie) => cookie.split(';', 1)[0])
@@ -47,6 +50,19 @@ if (me?.user?.wallet?.toLowerCase() !== account.address.toLowerCase()) {
   throw new Error('Authenticated session wallet does not match the signing account')
 }
 
+const csrfBypassResponse = await fetch(`${baseUrl}/api/messages`, {
+  method: 'POST',
+  headers: {
+    Authorization: 'Bearer intentionally-invalid',
+    'Content-Type': 'application/json',
+    Cookie: authCookies,
+  },
+  body: '{}',
+})
+if (csrfBypassResponse.status !== 403) {
+  throw new Error(`Cookie auth with an invalid bearer header bypassed CSRF: HTTP ${csrfBypassResponse.status}`)
+}
+
 const replayResponse = await fetch(`${baseUrl}/api/auth/wallet/verify`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -54,4 +70,4 @@ const replayResponse = await fetch(`${baseUrl}/api/auth/wallet/verify`, {
 })
 if (replayResponse.status !== 401) throw new Error(`Consumed wallet challenge replay returned HTTP ${replayResponse.status}`)
 
-console.log('Wallet SIWE challenge, authenticated session, and replay rejection passed')
+console.log('Wallet SIWE challenge, authenticated session, CSRF enforcement, cache policy, and replay rejection passed')

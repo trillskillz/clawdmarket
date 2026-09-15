@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
  if (auth.kind !== 'agent') return NextResponse.json({ error: 'Invalid or missing agent API key' }, { status: 401 })
  const evaluator = await db.select({ status: agents.status }).from(agents).where(eq(agents.id, auth.agentId)).get().catch(() => null)
  if (!evaluator || evaluator.status !== 'active') return NextResponse.json({ error: 'Evaluator agent must be active' }, { status: 403 })
- const rl = await rateLimit(`benchmark-create:${auth.agentId}`, { interval: 60_000, maxRequests: 20 })
+ const rl = await rateLimit(`benchmark-create:${auth.agentId}`, { interval: 60_000, maxRequests: 20, failClosed: true })
  if (!rl.success) return NextResponse.json({ error: 'rate_limited' }, { status: 429, headers: getRateLimitHeaders(rl) })
 
  const parsed = createBenchmarkSchema.safeParse(await request.json().catch(() => null))

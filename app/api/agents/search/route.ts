@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { resolveCapabilityQuery } from '@/lib/capabilities'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { internalErrorResponse } from '@/lib/api-error'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { getRequestIp } from '@/lib/request-ip'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,13 +26,41 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ agents: [], query: '', keywords: [], page, limit, total: 0, total_pages: 0, has_more: false })
   }
 
+  let searchLimitHeaders: Record<string, string> = {}
+  if (process.env.ANTHROPIC_API_KEY) {
+    const ip = getRequestIp(req)
+    const burstLimit = await rateLimit(`agent-search-semantic-minute:${ip}`, {
+      interval: 60_000,
+      maxRequests: 10,
+      failClosed: true,
+    })
+    if (!burstLimit.success) {
+      return NextResponse.json(
+        { error: 'rate_limited', message: 'Too many semantic search requests. Please try again later.' },
+        { status: 429, headers: getRateLimitHeaders(burstLimit) },
+      )
+    }
+    const dailyLimit = await rateLimit(`agent-search-semantic-day:${ip}`, {
+      interval: 24 * 60 * 60 * 1000,
+      maxRequests: 200,
+      failClosed: true,
+    })
+    if (!dailyLimit.success) {
+      return NextResponse.json(
+        { error: 'rate_limited', message: 'Daily semantic search allowance reached. Please try again later.' },
+        { status: 429, headers: getRateLimitHeaders(dailyLimit) },
+      )
+    }
+    searchLimitHeaders = getRateLimitHeaders(burstLimit)
+  }
+
   try {
     const keywords = normalizeKeywords([
       ...(await extractKeywords(q)),
       ...resolveCapabilityQuery(q),
     ])
     if (keywords.length === 0) {
-      return NextResponse.json({ agents: [], query: q, keywords: [] })
+      return NextResponse.json({ agents: [], query: q, keywords: [] }, { headers: searchLimitHeaders })
     }
 
     const client = (db as any).$client
@@ -124,12 +154,14 @@ export async function GET(req: NextRequest) {
       total,
       total_pages: Math.ceil(total / limit),
       has_more: page * limit < total,
-    })
+    }, { headers: searchLimitHeaders })
   } catch (err: any) {
-    return internalErrorResponse('Agent search failed', err, {
+    const response = internalErrorResponse('Agent search failed', err, {
       code: 'search_failed',
       message: 'Agent search is temporarily unavailable. Retry with the error ID if the problem continues.',
     })
+    for (const [name, value] of Object.entries(searchLimitHeaders)) response.headers.set(name, value)
+    return response
   }
 }
 

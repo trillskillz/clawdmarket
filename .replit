@@ -10,8 +10,6 @@ channel = "stable-25_05"
 
 [userenv.shared]
 TURSO_DATABASE_URL = "file:local.db"
-NEXT_PUBLIC_API_URL = "https://8a3b151e-2423-442b-85a7-064715e95f07-00-1uwpdlt1zm7g0.kirk.replit.dev"
-JWT_SECRET = "2BjrMGN3NjfSVAIqtT+8Bh9coIYte8Y1ERnnJKtZSrk="
 
 [workflows]
 runButton = "Project"
