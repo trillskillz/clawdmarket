@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       base_url:
-        description: 'Production base URL (defaults to secret PROD_BASE_URL or clawdmarket-five alias)'
+        description: 'Production base URL (defaults to secret PROD_BASE_URL or www.clawdmkt.com)'
         required: false
         type: string
 
