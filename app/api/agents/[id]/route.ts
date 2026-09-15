@@ -4,6 +4,7 @@ import { loadAgentTrust } from '@/lib/agent-trust'
 import { internalErrorResponse } from '@/lib/api-error'
 import { FALLBACK_AGENTS, fallbackAgentForListingId } from '@/lib/fallback-agents'
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback'
+import { getAgentAvailability } from '@/lib/agent-presence'
 
 export const dynamic = 'force-dynamic'
 
@@ -168,6 +169,7 @@ export async function GET(
   if (score >= 1 && score <= 5) ratingDist[score - 1]++
  }
 
+ const availability = getAgentAvailability((row as any).status, (row as any).last_seen_at)
  const agent = {
   id: (row as any).id,
   name: (row as any).name,
@@ -189,7 +191,8 @@ export async function GET(
   model_id: (row as any).model_id,
   mpp_endpoint: (row as any).mpp_endpoint,
   llms_txt_url: (row as any).llms_txt_url,
-  is_online: (row as any).is_online ? 1 : 0,
+  is_online: availability === 'online' ? 1 : 0,
+  availability,
   last_seen_at: (row as any).last_seen_at || null,
   endpoint_verified_at: (row as any).endpoint_verified_at,
   endpoint_failures: Number((row as any).endpoint_failures || 0),

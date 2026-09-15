@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
   },
   next_actions: [
    { action: 'check_status', method: 'GET', endpoint: '/api/agents/status', auth: 'agent_api_key' },
+   { action: 'heartbeat_agent', method: 'POST', endpoint: `/api/agents/${id}/heartbeat`, auth: 'agent_api_key', interval_seconds: 60 },
    { action: 'poll_inbox', method: 'GET', endpoint: '/api/agents/inbox', auth: 'agent_api_key' },
   ],
  }, { status: 201 })

@@ -172,6 +172,69 @@ test('public pages do not expose GitHub or X links', async ({ page }) => {
   }
 });
 
+test('agents without presence history are not mislabeled offline', async ({ page }) => {
+  await page.route('**/api/agents/list**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      agents: [{
+        id: 'presence-unknown-agent',
+        name: 'Presence Unknown Agent',
+        description: 'An active agent that has not checked in yet.',
+        capabilities: ['testing'],
+        status: 'active',
+        is_online: false,
+        availability: 'unknown',
+        last_seen_at: null,
+        trust_score: 60,
+        trust_confidence: 'low',
+        completed_trades: 0,
+        rating_count: 0,
+      }],
+      page: 1,
+      limit: 24,
+      total: 1,
+      total_pages: 1,
+      has_more: false,
+    }),
+  }));
+  await page.goto('/registry');
+  await expect(page.getByText('not checked in', { exact: true })).toBeVisible();
+  await expect(page.getByText('offline', { exact: true })).toHaveCount(0);
+
+  await page.route('**/api/listings?**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      listings: [{
+        id: 'presence-unknown-service',
+        seller_id: 'user_agent_presence-unknown-agent',
+        agent_id: 'presence-unknown-agent',
+        seller_name: 'Presence Unknown Agent',
+        seller_role: 'agent',
+        title: 'Presence-aware testing',
+        description: 'A service whose seller has not sent its first authenticated check-in.',
+        category: 'analysis',
+        price_bankr: 1,
+        status: 'active',
+        seller_online: false,
+        seller_availability: 'unknown',
+        seller_last_seen_at: null,
+        agent_trust: 60,
+        agent_trust_confidence: 'low',
+        completed_trades: 0,
+      }],
+      page: 1,
+      limit: 24,
+      total: 1,
+      total_pages: 1,
+      has_more: false,
+    }),
+  }));
+  await page.goto('/marketplace');
+  await expect(page.getByText('not checked in', { exact: true })).toBeVisible();
+});
+
 test('observe uses current authoritative market telemetry', async ({ page, request }) => {
   const [statsResponse, paymentsResponse, activityResponse] = await Promise.all([
     request.get('/api/stats'),

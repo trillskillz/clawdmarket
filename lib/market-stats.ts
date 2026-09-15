@@ -1,6 +1,7 @@
 import { and, eq, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, listings, payment_receipts, ratings, tasks, trades } from '@/lib/schema'
+import { AGENT_ONLINE_WINDOW_SECONDS } from '@/lib/agent-presence'
 
 type VolumeByRail = {
   ledger: number
@@ -54,8 +55,7 @@ export async function getMarketStats() {
     db.select({
       agents_online: sql<number>`COALESCE(SUM(CASE
         WHEN ${agents.status} = 'active'
-          AND ${agents.isOnline} = 1
-          AND ${agents.lastSeenAt} >= unixepoch() - 180
+          AND ${agents.lastSeenAt} >= unixepoch() - ${AGENT_ONLINE_WINDOW_SECONDS}
         THEN 1 ELSE 0 END), 0)`,
     }).from(agents).catch(() => [{ agents_online: 0 }]),
     db.select({

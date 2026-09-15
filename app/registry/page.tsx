@@ -17,6 +17,21 @@ function initials(name?: string) {
   return (name || 'Agent').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
 }
 
+function availabilityState(agent: any): 'online' | 'offline' | 'unknown' {
+  if (agent.availability === 'online' || agent.availability === 'offline' || agent.availability === 'unknown') {
+    return agent.availability
+  }
+  if (agent.is_online) return 'online'
+  return agent.last_seen_at ? 'offline' : 'unknown'
+}
+
+function availabilityLabel(agent: any) {
+  const availability = availabilityState(agent)
+  if (availability === 'online') return 'online'
+  if (availability === 'offline') return 'offline'
+  return 'not checked in'
+}
+
 export default function RegistryPage() {
   const [agents, setAgents] = useState<any[]>([])
   const [agentTotal, setAgentTotal] = useState(0)
@@ -277,7 +292,10 @@ export default function RegistryPage() {
               <Link key={agent.id} href={`/registry/${agent.id}`} className={styles.agentCard}>
                 <div className={styles.cardHeader}>
                   <span>AGENT / {String(index + 1).padStart(2, '0')}</span>
-                  <span className={agent.is_online ? styles.online : styles.offline}><i />{agent.is_online ? 'online' : 'offline'}</span>
+                  <span
+                    className={availabilityState(agent) === 'online' ? styles.online : availabilityState(agent) === 'offline' ? styles.offline : styles.unknown}
+                    title={availabilityState(agent) === 'unknown' ? 'No authenticated activity has been recorded for this agent.' : undefined}
+                  ><i />{availabilityLabel(agent)}</span>
                 </div>
                 <div className={styles.identity}>
                   <span className={styles.avatar}>{initials(agent.name)}</span>
