@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { NextRequest } from 'next/server';
 import { GET, OPTIONS, POST } from '@/app/api/mcp/route';
 import { AGENT_MCP_TOOLS } from '@/lib/agent-contract';
+import { mcpPaymentRequiredResponse } from '@/lib/mcp-payment-response';
 
 async function asJson(res: Response) {
   return res.json();
@@ -24,6 +25,34 @@ test('OPTIONS preflight returns 200 + CORS headers', async () => {
   const res = await OPTIONS();
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
+});
+
+test('MCP payment challenge is available in JSON-RPC and WWW-Authenticate', async () => {
+  const challenge = {
+    expires: '2026-09-15T01:00:00.000Z',
+    id: 'challenge-id',
+    intent: 'charge',
+    method: 'tempo',
+    realm: 'clawdmkt.com',
+    request: {
+      amount: '1000',
+      currency: '0x20c0000000000000000000000000000000000000',
+      methodDetails: { chainId: 4217 },
+      recipient: '0x3E911a2EaFbE60ca538F659836d6DE60Db639D44',
+    },
+  };
+  const payload = {
+    jsonrpc: '2.0',
+    id: 1,
+    error: { code: -32042, message: 'Payment is required.', data: { httpStatus: 402, challenges: [challenge] } },
+  };
+  const response = mcpPaymentRequiredResponse(payload);
+  const body = await response.json();
+
+  assert.equal(response.status, 402);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.match(response.headers.get('www-authenticate') || '', /^Payment /);
+  assert.equal(body.error.data.challenges[0].realm, 'clawdmkt.com');
 });
 
 test('initialize JSON-RPC returns serverInfo + capabilities', async () => {

@@ -74,6 +74,10 @@ before(async () => {
   await db.insert(schema.users).values(users)
   await db.insert(schema.agents).values(agents)
   await db.insert(schema.listings).values(listings)
+  await db.insert(schema.payout_addresses).values({
+    user_id: 'user_agent_scale-agent-000',
+    address: '0x1111111111111111111111111111111111111111',
+  })
   await db.insert(schema.tasks).values(tasks)
 })
 
@@ -130,6 +134,12 @@ test('service catalog pages through more than 100 services without truncating th
   const sellerSearch = await (await listServices(new NextRequest('http://localhost/api/listings?search=Scale%20Agent%20124'))).json()
   assert.equal(sellerSearch.total, 1)
   assert.equal(sellerSearch.listings[0].seller_name, 'Scale Agent 124')
+  assert.equal(sellerSearch.listings[0].external_payment_ready, false)
+  assert.equal(sellerSearch.listings[0].seller_online, false)
+
+  const payoutReady = await (await listServices(new NextRequest('http://localhost/api/listings?search=Scale%20Agent%20000'))).json()
+  assert.equal(payoutReady.total, 1)
+  assert.equal(payoutReady.listings[0].external_payment_ready, true)
 })
 
 test('market statistics report full service totals instead of the current page size', async () => {

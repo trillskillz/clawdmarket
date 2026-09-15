@@ -8,11 +8,11 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { eq, and, sql } from 'drizzle-orm';
 import { users } from '@/lib/schema';
-import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
-import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { ensureSyntheticAgentUser, resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth';
 import { loadAgentTrustMap } from '@/lib/agent-trust';
 import { getRequestIp } from '@/lib/request-ip';
+import { internalErrorResponse } from '@/lib/api-error';
+import { isAddress } from 'viem';
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +47,12 @@ async function selectListings(whereClause: any, limit: number, offset: number, s
       agent_id: sql<string>`COALESCE((SELECT a.id FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), ${listings.seller_id})`,
       agent_created_at: sql<string | number | null>`COALESCE((SELECT a.created_at FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), ${users.created_at})`,
       agent_capabilities: sql<string>`COALESCE((SELECT a.capabilities FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), '[]')`,
+      seller_is_online: sql<number | null>`(SELECT a.is_online FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)`,
+      seller_payout_address: sql<string | null>`COALESCE(
+        (SELECT p.address FROM payout_addresses p WHERE p.user_id = ${listings.seller_id} LIMIT 1),
+        CASE WHEN ${users.email} LIKE 'wallet_0x%@wallet.local' THEN SUBSTR(${users.email}, 8, 42) ELSE NULL END,
+        (SELECT a.owner_address FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)
+      )`,
       completed_trades: sql<number>`COALESCE((SELECT COUNT(*) FROM trades t WHERE t.seller_id = ${listings.seller_id} AND t.status IN ('completed', 'complete')), 0)`,
       category: listings.category,
       title: listings.title,
@@ -179,7 +185,12 @@ export async function GET(req: NextRequest) {
     }])).values()];
     const trustMap = await loadAgentTrustMap(trustInputs);
     const normalizedResults = results.map((listing: any) => {
-      const { agent_created_at: _agentCreatedAt, ...publicListing } = listing;
+      const {
+        agent_created_at: _agentCreatedAt,
+        seller_is_online: sellerIsOnline,
+        seller_payout_address: sellerPayoutAddress,
+        ...publicListing
+      } = listing;
       const trust = trustMap.get(String(listing.agent_id));
       return {
         ...publicListing,
@@ -189,6 +200,8 @@ export async function GET(req: NextRequest) {
         agent_trust: trust?.trustScore ?? 0,
         agent_trust_confidence: trust?.confidence ?? 'low',
         agent_trust_drivers: trust?.drivers ?? ['No verified marketplace activity'],
+        external_payment_ready: Boolean(sellerPayoutAddress && isAddress(sellerPayoutAddress)),
+        seller_online: listing.seller_role === 'agent' ? Boolean(sellerIsOnline) : null,
       };
     });
 
@@ -208,36 +221,13 @@ export async function GET(req: NextRequest) {
         { status: 400 }
       );
     }
-    logger.error('Listings fetch error', { err: String(error) });
-
-    const fallbackRows = FALLBACK_LISTINGS.slice(0, 50).map((l) => {
-      const agent = fallbackAgentForListingId(l.id);
-      return {
-        ...l,
-        seller_id: agent.id,
-        seller_name: agent.name,
-        seller_role: 'agent',
-        seller_avatar_url: agent.avatar_url,
-        seller_avatar_emoji: null,
-        seller_bio: agent.bio,
-        agent_id: agent.id,
-        agent_capabilities: JSON.stringify([l.category.toLowerCase()]),
-        agent_trust: agent.trust_score,
-        agent_trust_confidence: 'low',
-        agent_trust_drivers: ['Fallback profile; live marketplace evidence unavailable'],
-        completed_trades: 0,
-        status: 'active',
-        created_at: new Date().toISOString(),
-      };
+    const response = internalErrorResponse('Listings fetch failed', error, {
+      code: 'catalog_temporarily_unavailable',
+      message: 'The live service catalog is temporarily unavailable. Please retry shortly.',
+      status: 503,
     });
-
-    return NextResponse.json({
-      listings: fallbackRows,
-      page: 1,
-      limit: 50,
-      total: fallbackRows.length,
-      fallback: true,
-    });
+    response.headers.set('Cache-Control', 'no-store');
+    return response;
   }
 }
 

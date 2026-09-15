@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { verifyMessage, isAddress } from 'viem';
+import { verifyMessage, isAddress, isHex } from 'viem';
 import { db } from '@/lib/db';
-import { users, wallets } from '@/lib/schema';
-import { eq } from 'drizzle-orm';
+import { users, wallet_auth_nonces, wallets } from '@/lib/schema';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import { generateJWT, hashPassword } from '@/lib/auth';
 import { generateCsrfToken } from '@/lib/csrf';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { isIpBlacklisted, isUserBanned, trackUserIp } from '@/lib/agent-moderation';
 import { getRequestIp } from '@/lib/request-ip';
+import { createWalletAuthChallenge, hashWalletAuthNonce } from '@/lib/wallet-auth';
 
 export const dynamic = 'force-dynamic'
 
@@ -42,20 +43,53 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid nonce' }, { status: 400, headers: getRateLimitHeaders(rl) });
     }
 
-    const cookieNonce = req.cookies.get('wallet-nonce')?.value;
-    if (!cookieNonce || cookieNonce !== nonce) {
+    if (!isHex(signature)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 400, headers: getRateLimitHeaders(rl) });
+    }
+
+    const now = Date.now();
+    const nonceHash = hashWalletAuthNonce(nonce);
+    const [challenge] = await db.select().from(wallet_auth_nonces)
+      .where(and(
+        eq(wallet_auth_nonces.nonce_hash, nonceHash),
+        eq(wallet_auth_nonces.address, address),
+        isNull(wallet_auth_nonces.consumed_at),
+        gt(wallet_auth_nonces.expires_at, now),
+      ))
+      .limit(1);
+    if (!challenge) {
       return NextResponse.json({ error: 'Invalid or expired nonce' }, { status: 401 });
     }
 
-    const message = `Sign in to ClawdMarket\nNonce: ${nonce}`;
+    const { message } = createWalletAuthChallenge({
+      address: challenge.address,
+      chainId: challenge.chain_id,
+      origin: `${new URL(challenge.uri).protocol}//${challenge.domain}`,
+      nonce,
+      issuedAt: new Date(challenge.issued_at),
+      expiresAt: new Date(challenge.expires_at),
+    });
     const isValid = await verifyMessage({
       address: address as `0x${string}`,
       message,
       signature: signature as `0x${string}`,
-    });
+    }).catch(() => false);
 
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+
+    const consumed = await db.update(wallet_auth_nonces)
+      .set({ consumed_at: now })
+      .where(and(
+        eq(wallet_auth_nonces.nonce_hash, nonceHash),
+        eq(wallet_auth_nonces.address, address),
+        isNull(wallet_auth_nonces.consumed_at),
+        gt(wallet_auth_nonces.expires_at, now),
+      ))
+      .returning({ nonceHash: wallet_auth_nonces.nonce_hash });
+    if (consumed.length !== 1) {
+      return NextResponse.json({ error: 'Invalid or expired nonce' }, { status: 401 });
     }
 
     const syntheticEmail = `wallet_${address}@wallet.local`;
@@ -139,14 +173,6 @@ export async function POST(req: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 3600,
-      path: '/',
-    });
-
-    response.cookies.set('wallet-nonce', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 0,
       path: '/',
     });
 

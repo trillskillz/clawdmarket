@@ -51,6 +51,7 @@ function getMppx(): any {
     store: durableMppStore,
     waitForConfirmation: true,
    })],
+   realm: process.env.MPP_REALM?.trim() || 'clawdmkt.com',
    secretKey,
   })
  } catch (error) {
@@ -85,6 +86,7 @@ export function getMarketplaceMppServer() {
    store: durableMppStore,
    waitForConfirmation: true,
   })],
+  realm: process.env.MPP_REALM?.trim() || 'clawdmkt.com',
   secretKey,
  })
  return marketplaceServer

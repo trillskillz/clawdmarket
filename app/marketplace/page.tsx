@@ -24,6 +24,8 @@ type AgentService = {
   status: 'listed' | 'inactive'
   avg_response_ms: number | null
   completed_trades: number
+  external_payment_ready: boolean
+  seller_online: boolean | null
   is_demo: boolean
   created_at: string
 }
@@ -93,6 +95,8 @@ function listingToService(listing: any, fallback = false): AgentService {
     status: listing.status === 'active' ? 'listed' : 'inactive',
     avg_response_ms: null,
     completed_trades: Number(listing.completed_trades || 0),
+    external_payment_ready: listing.external_payment_ready === true,
+    seller_online: typeof listing.seller_online === 'boolean' ? listing.seller_online : null,
     is_demo: fallback || String(listing.id).startsWith('demo-'),
     created_at: String(listing.created_at || ''),
   }
@@ -435,7 +439,7 @@ export default function MarketplacePage() {
                   <Link href={`/registry/${service.agent_id}`}>{service.agent_name}</Link>
                   <span>trust {service.agent_trust}/100 · {service.agent_trust_confidence} confidence<i style={{ background: trustColor(service.agent_trust) }} /></span>
                 </div>
-                <span className={styles.available}><i />{service.status}</span>
+                <span className={service.seller_online === false ? styles.unavailable : styles.available}><i />{service.seller_online === false ? 'offline' : service.status}</span>
               </div>
 
               <div className={styles.serviceBody}>
@@ -547,14 +551,15 @@ export default function MarketplacePage() {
                   <button type="button" disabled={submitting || !paymentConfig?.ledger_enabled} onClick={() => void createTrade('ledger').catch(() => undefined)}>
                     <span>01</span><div><strong>{paymentConfig?.ledger_redeemable ? 'Account balance' : 'Internal account credit'}</strong><small>{paymentConfig?.ledger_redeemable ? 'Reserve available USD balance instantly and release it after approval.' : 'Reserve non-withdrawable account credit for marketplace activity.'}</small></div><i>→</i>
                   </button>
-                  <button type="button" disabled={submitting || !paymentConfig?.erc20_configured} onClick={() => void createTrade('evm').catch(() => undefined)}>
+                  <button type="button" disabled={submitting || !paymentConfig?.erc20_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('evm').catch(() => undefined)}>
                     <span>02</span><div><strong>ERC-20 wallet</strong><small>Pay with {acceptedTokenLabel}.</small></div><i>→</i>
                   </button>
-                  <button type="button" disabled={submitting || !paymentConfig?.mpp_configured} onClick={() => void createTrade('mpp').catch(() => undefined)}>
+                  <button type="button" disabled={submitting || !paymentConfig?.mpp_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('mpp').catch(() => undefined)}>
                     <span>03</span><div><strong>MPP on Tempo</strong><small>Let an authenticated machine client fund the trade in pathUSD.</small></div><i>→</i>
                   </button>
                 </div>
                 {!paymentConfig && <p role="status">Checking available payment rails…</p>}
+                {!hireIntent.service.external_payment_ready && <p className={styles.settlementNotice}>This seller has not configured an external payout wallet. ERC-20 and MPP funding are unavailable for this service.</p>}
                 {paymentConfig && !paymentConfig.ledger_enabled && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && <p role="alert">No payment rail is currently available. Please try again later.</p>}
                 {submitting && <p>Creating escrow…</p>}
                 {tradeError && (

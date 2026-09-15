@@ -29,8 +29,25 @@ jobs:
       SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
       ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
       CLAWDMARKET_SELF_TEST_API_KEY: ${{ secrets.CLAWDMARKET_SELF_TEST_API_KEY }}
+      WALLET_SMOKE_PRIVATE_KEY: ${{ secrets.WALLET_SMOKE_PRIVATE_KEY }}
 
     steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install runtime dependencies
+        run: pnpm install --frozen-lockfile --prod
+
       - name: Run production smoke checks
         shell: bash
         run: |
@@ -40,13 +57,13 @@ jobs:
             echo "❌ Missing required secrets: SMOKE_EMAIL and/or SMOKE_PASSWORD"
             exit 1
           fi
-
           TMP_DIR="$(mktemp -d)"
           COOKIES="$TMP_DIR/cookies.txt"
           OUT="$TMP_DIR/out.json"
 
           pass() { echo "✅ $1"; }
           fail() { echo "❌ $1"; exit 1; }
+          [ -n "${WALLET_SMOKE_PRIVATE_KEY:-}" ] || fail "Missing required secret: WALLET_SMOKE_PRIVATE_KEY"
 
           code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/health")
           [ "$code" = "200" ] || fail "/api/health expected 200 got $code"
@@ -69,6 +86,23 @@ jobs:
           code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/.well-known/agent.json")
           [ "$code" = "200" ] || fail "/.well-known/agent.json expected 200 got $code"
           pass "agent discovery"
+
+          MCP_HEADERS="$TMP_DIR/mcp-headers.txt"
+          code=$(curl -sS -D "$MCP_HEADERS" -o "$OUT" -w "%{http_code}" -X POST "$BASE_URL/api/mcp" \
+            -H 'Content-Type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_agents","arguments":{"limit":1}}}')
+          [ "$code" = "402" ] || fail "MCP payment challenge expected 402 got $code"
+          grep -Eiq '^www-authenticate:[[:space:]]*Payment ' "$MCP_HEADERS" || fail "MCP payment challenge header missing"
+          node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const challenge=data?.error?.data?.challenges?.[0]; if(!challenge || challenge.realm !== 'clawdmkt.com') process.exit(1)" "$OUT" \
+            || fail "MCP JSON-RPC challenge or canonical realm missing"
+          pass "MCP payment challenge"
+
+          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/listings/demo-code-review")
+          [ "$code" = "404" ] || fail "legacy demo listing expected 404 got $code"
+          pass "legacy demo inventory absent"
+
+          node scripts/prod-wallet-smoke.mjs || fail "signed wallet authentication"
+          pass "signed wallet authentication"
 
           login_payload=$(printf '{"email":"%s","password":"%s"}' "$SMOKE_EMAIL" "$SMOKE_PASSWORD")
           code=$(curl -sS -c "$COOKIES" -b "$COOKIES" -H 'Content-Type: application/json' -d "$login_payload" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/auth/login")
@@ -122,6 +156,9 @@ jobs:
             echo "- Base URL: \\`$BASE_URL\\`"
             echo "- ✅ Liveness/readiness/full diagnostics/docs/discovery"
             echo "- ✅ Auth login/me/logout"
+            echo "- ✅ SIWE wallet login/replay rejection"
+            echo "- ✅ MCP machine-readable + HTTP payment challenge"
+            echo "- ✅ Legacy demo inventory absent"
             echo "- ✅ Analytics summary"
             echo "- ✅ API key create/revoke"
             echo "- ✅ Listing create/delete"

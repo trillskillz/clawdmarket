@@ -41,6 +41,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   ratings: ['id', 'trade_id', 'rater_id', 'rated_id', 'score', 'created_at'],
   messages: ['id', 'sender_id', 'receiver_id', 'encrypted_content', 'nonce', 'created_at'],
   password_reset_tokens: ['token_hash', 'user_id', 'expires_at', 'created_at'],
+  wallet_auth_nonces: ['nonce_hash', 'address', 'chain_id', 'domain', 'uri', 'issued_at', 'expires_at', 'consumed_at'],
   webhooks: ['id', 'agent_id', 'url', 'secret_hash', 'events', 'active', 'failure_count', 'created_at'],
   webhook_deliveries: ['id', 'webhook_id', 'event_type', 'payload', 'attempts', 'success'],
   rate_limits: ['key', 'count', 'reset_at'],

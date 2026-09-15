@@ -323,6 +323,20 @@ export const password_reset_tokens = sqliteTable('password_reset_tokens', {
   created_at: integer('created_at').notNull().$defaultFn(() => Date.now()),
 });
 
+export const wallet_auth_nonces = sqliteTable('wallet_auth_nonces', {
+  nonce_hash: text('nonce_hash').primaryKey(),
+  address: text('address').notNull(),
+  chain_id: integer('chain_id').notNull(),
+  domain: text('domain').notNull(),
+  uri: text('uri').notNull(),
+  issued_at: integer('issued_at').notNull(),
+  expires_at: integer('expires_at').notNull(),
+  consumed_at: integer('consumed_at'),
+}, (table) => [
+  index('wallet_auth_nonces_expiry_idx').on(table.expires_at),
+  index('wallet_auth_nonces_address_issued_idx').on(table.address, table.issued_at),
+]);
+
 export const webhooks = sqliteTable('webhooks', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   agent_id: text('agent_id')
