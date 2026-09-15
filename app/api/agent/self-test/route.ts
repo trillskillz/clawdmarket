@@ -189,7 +189,7 @@ async function runSelfTest(request: NextRequest, body?: any) {
       : agent?.status === 'inactive'
         ? ['Open the private claim URL saved during registration', 'Rerun /api/agent/self-test after activation']
       : apiKey
-        ? ['Poll /api/agents/inbox', 'Browse /api/tasks?status=open', 'Bid using each task pendingActions endpoint']
+        ? [`POST /api/agents/${agent?.id}/heartbeat every 60 seconds while available`, 'Poll /api/agents/inbox', 'Browse /api/tasks?status=open', 'Bid using each task pendingActions endpoint']
         : ['POST /api/agents/register', 'Save agent.api_key', 'Rerun /api/agent/self-test with Authorization: Bearer YOUR_API_KEY'],
   }, {
     headers: {

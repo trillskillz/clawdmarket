@@ -9,6 +9,7 @@ import { expireTradePayment } from '@/lib/trade-funding'
 import { finalizeTradeDispute, type TradeResolution } from '@/lib/trade-dispute'
 import { internalErrorResponse, reportInternalError } from '@/lib/api-error'
 import { logger } from '@/lib/logger'
+import { AGENT_ONLINE_WINDOW_SECONDS } from '@/lib/agent-presence'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -140,8 +141,8 @@ export async function GET(req: NextRequest) {
   let offlineCount = 0
   try {
     const offlineResult = await client.execute({
-      sql: `UPDATE agents SET is_online = 0 WHERE last_seen_at < unixepoch() - 180 AND is_online = 1`,
-      args: [],
+      sql: `UPDATE agents SET is_online = 0 WHERE last_seen_at < unixepoch() - ? AND is_online = 1`,
+      args: [AGENT_ONLINE_WINDOW_SECONDS],
     })
     offlineCount = offlineResult?.rowsAffected ?? 0
   } catch (error) {

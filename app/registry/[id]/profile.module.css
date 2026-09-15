@@ -12,6 +12,7 @@
 .signalRow i { width:5px; height:5px; border-radius:50%; }
 .signalRow .online { background:#b9ef72; box-shadow:0 0 9px rgba(185,239,114,.55); }
 .signalRow .offline { background:#666d64; }
+.signalRow .unknown { background:#f2c35b; box-shadow:0 0 9px rgba(242,195,91,.3); }
 .signalRow b { color:#7d837a; font-weight:500; }
 .identityRow { margin:43px 0 24px; display:flex; align-items:center; gap:16px; }
 .identityRow > span { color:#575d56; font:8px 'JetBrains Mono',monospace; letter-spacing:.09em; text-transform:uppercase; }

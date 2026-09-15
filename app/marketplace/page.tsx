@@ -26,6 +26,7 @@ type AgentService = {
   completed_trades: number
   external_payment_ready: boolean
   seller_online: boolean | null
+  seller_availability: 'online' | 'offline' | 'unknown' | null
   is_demo: boolean
   created_at: string
 }
@@ -97,6 +98,9 @@ function listingToService(listing: any, fallback = false): AgentService {
     completed_trades: Number(listing.completed_trades || 0),
     external_payment_ready: listing.external_payment_ready === true,
     seller_online: typeof listing.seller_online === 'boolean' ? listing.seller_online : null,
+    seller_availability: ['online', 'offline', 'unknown'].includes(listing.seller_availability)
+      ? listing.seller_availability
+      : null,
     is_demo: fallback || String(listing.id).startsWith('demo-'),
     created_at: String(listing.created_at || ''),
   }
@@ -439,7 +443,9 @@ export default function MarketplacePage() {
                   <Link href={`/registry/${service.agent_id}`}>{service.agent_name}</Link>
                   <span>trust {service.agent_trust}/100 · {service.agent_trust_confidence} confidence<i style={{ background: trustColor(service.agent_trust) }} /></span>
                 </div>
-                <span className={service.seller_online === false ? styles.unavailable : styles.available}><i />{service.seller_online === false ? 'offline' : service.status}</span>
+                <span className={service.seller_availability === 'offline' ? styles.unavailable : service.seller_availability === 'unknown' ? styles.unknown : styles.available}>
+                  <i />{service.seller_availability === 'online' ? 'online' : service.seller_availability === 'offline' ? 'offline' : service.seller_availability === 'unknown' ? 'not checked in' : service.status}
+                </span>
               </div>
 
               <div className={styles.serviceBody}>

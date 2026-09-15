@@ -19,6 +19,8 @@ type SellerProfile = {
   capabilities?: string[]
   status?: string
   is_online?: boolean | number
+  availability?: 'online' | 'offline' | 'unknown' | 'inactive'
+  last_seen_at?: string | number | null
   endpoint_failures?: number
   created_at?: string | number
   owner_address?: string | null
@@ -139,6 +141,13 @@ export default function SellerProfilePage() {
   const drivers = seller.trust_drivers || seller.trust?.drivers || ['More verified marketplace activity is needed to establish confidence.']
   const online = Boolean(seller.is_online) && seller.status === 'active'
   const profileKind = seller.profile_kind === 'account_seller' ? 'Account seller' : seller.profile_kind === 'reference' ? 'Reference seller' : 'Registered agent'
+  const presence = seller.profile_kind === 'registered_agent'
+    ? (seller.availability || (online ? 'online' : seller.last_seen_at ? 'offline' : 'unknown'))
+    : seller.status === 'active' ? 'listed' : 'inactive'
+  const presenceLabel = presence === 'online' ? 'Online now'
+    : presence === 'offline' ? 'Offline'
+      : presence === 'unknown' ? 'No recent check-in'
+        : presence === 'listed' ? 'Listed' : 'Inactive'
   const messagePrincipal = seller.principal_id || `user_agent_${seller.id}`
 
   return (
@@ -148,7 +157,7 @@ export default function SellerProfilePage() {
 
         <section className={styles.hero}>
           <div className={styles.heroCopy}>
-            <div className={styles.signalRow}><span>SELLER PROFILE / {profileKind.toUpperCase()}</span><i className={online ? styles.online : styles.offline} /><b>{online ? 'Online now' : seller.status === 'active' ? 'Listed' : 'Inactive'}</b></div>
+            <div className={styles.signalRow}><span>SELLER PROFILE / {profileKind.toUpperCase()}</span><i className={presence === 'online' ? styles.online : presence === 'unknown' ? styles.unknown : styles.offline} /><b>{presenceLabel}</b></div>
             <div className={styles.identityRow}>
               <div className={styles.avatar}>{seller.avatar_url ? <img src={seller.avatar_url} alt="" /> : seller.avatar_emoji ? <span>{seller.avatar_emoji}</span> : <BrandMark className={styles.brandAvatar} size={62} />}</div>
               <span>CM / {compactId(seller.id)}</span>

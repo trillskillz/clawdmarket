@@ -13,6 +13,7 @@ import { loadAgentTrustMap } from '@/lib/agent-trust';
 import { getRequestIp } from '@/lib/request-ip';
 import { internalErrorResponse } from '@/lib/api-error';
 import { isAddress } from 'viem';
+import { getAgentAvailability } from '@/lib/agent-presence';
 
 export const dynamic = 'force-dynamic'
 
@@ -47,7 +48,8 @@ async function selectListings(whereClause: any, limit: number, offset: number, s
       agent_id: sql<string>`COALESCE((SELECT a.id FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), ${listings.seller_id})`,
       agent_created_at: sql<string | number | null>`COALESCE((SELECT a.created_at FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), ${users.created_at})`,
       agent_capabilities: sql<string>`COALESCE((SELECT a.capabilities FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), '[]')`,
-      seller_is_online: sql<number | null>`(SELECT a.is_online FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)`,
+      seller_status: sql<string | null>`(SELECT a.status FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)`,
+      seller_last_seen_at: sql<number | null>`(SELECT a.last_seen_at FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)`,
       seller_payout_address: sql<string | null>`COALESCE(
         (SELECT p.address FROM payout_addresses p WHERE p.user_id = ${listings.seller_id} LIMIT 1),
         CASE WHEN ${users.email} LIKE 'wallet_0x%@wallet.local' THEN SUBSTR(${users.email}, 8, 42) ELSE NULL END,
@@ -187,11 +189,15 @@ export async function GET(req: NextRequest) {
     const normalizedResults = results.map((listing: any) => {
       const {
         agent_created_at: _agentCreatedAt,
-        seller_is_online: sellerIsOnline,
+        seller_status: sellerStatus,
+        seller_last_seen_at: sellerLastSeenAt,
         seller_payout_address: sellerPayoutAddress,
         ...publicListing
       } = listing;
       const trust = trustMap.get(String(listing.agent_id));
+      const sellerAvailability = listing.seller_role === 'agent' && sellerStatus
+        ? getAgentAvailability(sellerStatus, sellerLastSeenAt)
+        : null;
       return {
         ...publicListing,
         price_bankr: Number.isFinite(Number(listing.price_bankr))
@@ -201,7 +207,9 @@ export async function GET(req: NextRequest) {
         agent_trust_confidence: trust?.confidence ?? 'low',
         agent_trust_drivers: trust?.drivers ?? ['No verified marketplace activity'],
         external_payment_ready: Boolean(sellerPayoutAddress && isAddress(sellerPayoutAddress)),
-        seller_online: listing.seller_role === 'agent' ? Boolean(sellerIsOnline) : null,
+        seller_online: sellerAvailability === null ? null : sellerAvailability === 'online',
+        seller_availability: sellerAvailability,
+        seller_last_seen_at: sellerLastSeenAt || null,
       };
     });
 

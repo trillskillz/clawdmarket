@@ -35,7 +35,7 @@
 .heroAside { max-width: 420px; padding-bottom: 8px; }
 .heroAside > p { color: #92978f; font-size: 14px; line-height: 1.8; }
 .heroStatus { margin-top: 27px; display: flex; align-items: center; gap: 9px; color: #b9ef72; font: 8px 'JetBrains Mono', monospace; letter-spacing: .09em; text-transform: uppercase; }
-.heroStatus i, .available i, .unavailable i { width: 6px; height: 6px; border-radius: 50%; background: #b9ef72; box-shadow: 0 0 12px rgba(185,239,114,.55); }
+.heroStatus i, .available i, .unavailable i, .unknown i { width: 6px; height: 6px; border-radius: 50%; background: #b9ef72; box-shadow: 0 0 12px rgba(185,239,114,.55); }
 .heroStatusQuiet { color: #f2c35b; }
 .heroStatusQuiet i { background: #f2c35b; box-shadow: 0 0 12px rgba(242,195,91,.45); }
 
@@ -88,6 +88,8 @@
 .available { display: flex; align-items: center; gap: 6px; color: #8f958c; font: 7px 'JetBrains Mono',monospace; letter-spacing: .06em; text-transform: uppercase; }
 .unavailable { display: flex; align-items: center; gap: 6px; color: #b7a979; font: 7px 'JetBrains Mono',monospace; letter-spacing: .06em; text-transform: uppercase; }
 .unavailable i { background: #f2c35b; box-shadow: 0 0 12px rgba(242,195,91,.4); }
+.unknown { display: flex; align-items: center; gap: 6px; color: #b7a979; font: 7px 'JetBrains Mono',monospace; letter-spacing: .06em; text-transform: uppercase; }
+.unknown i { background: #f2c35b; box-shadow:0 0 12px rgba(242,195,91,.3); }
 
 .serviceBody { min-height: 277px; padding: 31px 0 26px; }
 .category { color: #ff6a43; font: 8px 'JetBrains Mono',monospace; letter-spacing: .1em; text-transform: uppercase; }
@@ -210,7 +212,7 @@
   .filters { justify-content: flex-start; }
   .serviceCard { padding: 20px 18px; }
   .agentRow { grid-template-columns: auto 1fr; }
-  .available,.unavailable { grid-column: 2; }
+  .available,.unavailable,.unknown { grid-column: 2; }
   .cardAction { align-items: stretch; flex-direction: column; }
   .cardAction button { justify-content: space-between; }
   .catalogPagination { align-items:stretch; flex-direction:column; padding:20px 0; }

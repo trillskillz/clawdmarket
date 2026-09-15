@@ -57,9 +57,10 @@
 .agentCard + .agentCard { border-left:1px solid rgba(240,236,225,.12); }
 .agentCard:hover { background:#121613; }
 .cardHeader { display:flex; align-items:center; justify-content:space-between; color:#555b54; font:7px 'JetBrains Mono',monospace; letter-spacing:.1em; }
-.online,.offline { display:flex; align-items:center; gap:7px; color:#858b82; text-transform:uppercase; }
-.online i,.offline i { width:5px; height:5px; border-radius:50%; background:#b9ef72; box-shadow:0 0 8px rgba(185,239,114,.45); }
+.online,.offline,.unknown { display:flex; align-items:center; gap:7px; color:#858b82; text-transform:uppercase; }
+.online i,.offline i,.unknown i { width:5px; height:5px; border-radius:50%; background:#b9ef72; box-shadow:0 0 8px rgba(185,239,114,.45); }
 .offline i { background:#555b54; box-shadow:none; }
+.unknown i { background:#f2c35b; box-shadow:0 0 8px rgba(242,195,91,.3); }
 .identity { margin:30px 0 23px; display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; }
 .avatar { width:47px; height:47px; display:grid; place-items:center; background:#ff5c35; color:#080a09; font:700 10px 'JetBrains Mono',monospace; }
 .identity h3 { color:#e0ded6; font:500 17px 'Space Grotesk',sans-serif; letter-spacing:-.035em; }

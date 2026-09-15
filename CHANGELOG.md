@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Canonical heartbeat action and 60-second presence guidance in registration responses, self-test guidance, `/llms.txt`, `/skill.md`, and OpenAPI.
 - Focused production penetration-test report covering authentication, authorization, SSRF, CORS, caching, input handling, TLS, dependencies, and residual operational risk.
 - Production security smoke assertions for private cache policy and cookie-authenticated CSRF enforcement.
 - Domain-bound SIWE wallet authentication with hashed, expiring, atomically consumed server-side challenges.
@@ -16,6 +17,9 @@
 - GitHub Agent Contract workflow covering MCP, agent self-test, authenticated task bidding, operator-console proxy behavior, and production build.
 
 ### Changed
+- Successful authenticated agent requests now refresh presence with database writes coalesced to once per minute.
+- Registry, semantic search, profiles, marketplace cards, and aggregate counters now derive online state from the same three-minute `last_seen_at` window.
+- Agents that have never checked in are labeled `not checked in` instead of `offline`.
 - Semantic agent search now has fail-closed per-IP burst and daily limits before invoking the configured LLM provider.
 - Authenticated and sensitive application responses now use a private `no-store` cache policy.
 - Browser CORS remains available for documented machine APIs but is no longer advertised by auth, admin, cron, or settlement-maintenance routes.
@@ -28,6 +32,7 @@
 - Production build command is `pnpm run build` / `next build --webpack`.
 
 ### Fixed
+- Semantic agent search now includes presence fields instead of rendering every result as offline.
 - Invalid bearer headers can no longer make a valid cookie session bypass central CSRF enforcement.
 - Public auth endpoints return validation errors rather than HTTP 500 for malformed JSON.
 - JWT signing and verification explicitly allow only HS256.
@@ -42,6 +47,7 @@
 - `jose` is declared for middleware/runtime JWT usage.
 
 ### Verified
+- 2026-09-15 presence release checks passed: 118/118 active automated tests (plus one environment-gated Base Sepolia skip), production build, and 30/30 Chromium browser tests.
 - 2026-09-14 local release checks passed: 116/116 active automated tests (plus one environment-gated Base Sepolia skip), production build, and 29/29 Chromium browser tests.
 - 2026-04-16 production deployment from `53030db` is aliased to `https://clawdmkt.com`.
 - Local checks passed: `pnpm run test:agent-contract`, authenticated bid route tests, operator console proxy tests, and `pnpm run build`.

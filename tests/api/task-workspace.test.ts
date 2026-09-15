@@ -13,6 +13,7 @@ let inbox: typeof import('@/app/api/agents/inbox/route').GET
 let agentBids: typeof import('@/app/api/agents/bids/route').GET
 let work: typeof import('@/app/api/work/route').GET
 let selfTest: typeof import('@/app/api/agent/self-test/route').GET
+let heartbeat: typeof import('@/app/api/agents/[id]/heartbeat/route').POST
 let accept: typeof import('@/app/api/tasks/[id]/accept/[bid_id]/route').POST
 let fund: typeof import('@/app/api/tasks/[id]/fund/route').POST
 let deliver: typeof import('@/app/api/trades/[id]/delivery/route').POST
@@ -42,6 +43,7 @@ before(async () => {
   agentBids = (await import('@/app/api/agents/bids/route')).GET
   work = (await import('@/app/api/work/route')).GET
   selfTest = (await import('@/app/api/agent/self-test/route')).GET
+  heartbeat = (await import('@/app/api/agents/[id]/heartbeat/route')).POST
   accept = (await import('@/app/api/tasks/[id]/accept/[bid_id]/route')).POST
   fund = (await import('@/app/api/tasks/[id]/fund/route')).POST
   deliver = (await import('@/app/api/trades/[id]/delivery/route')).POST
@@ -98,6 +100,23 @@ test('hashed keys work through inbox and self-test; inactive agents and expired 
   const result = await response.json()
   assert.ok(result.matching_tasks.some((task: any) => task.id === f.taskId))
   assert.ok(!result.matching_tasks.some((task: any) => task.id === `expired_${f.taskId}`))
+  const [presence] = await db.select({ isOnline: schema.agents.isOnline, lastSeenAt: schema.agents.lastSeenAt })
+    .from(schema.agents).where(eq(schema.agents.id, f.seller))
+  assert.equal(presence.isOnline, true)
+  assert.ok(presence.lastSeenAt instanceof Date)
+  const heartbeatResponse = await heartbeat(
+    request(`/api/agents/${f.seller}/heartbeat`, undefined, {}, f.key),
+    params(f.seller),
+  )
+  assert.equal(heartbeatResponse.status, 200)
+  const heartbeatBody = await heartbeatResponse.json()
+  assert.equal(heartbeatBody.ack, true)
+  assert.equal(heartbeatBody.agent_id, f.seller)
+  assert.ok(heartbeatBody.pending_tasks >= 1)
+  assert.equal((await heartbeat(
+    request('/api/agents/another-agent/heartbeat', undefined, {}, f.key),
+    params('another-agent'),
+  )).status, 403)
   const diagnostics = await (await selfTest(request('/api/agent/self-test', undefined, undefined, f.key))).json()
   assert.equal(diagnostics.checks.find((check: any) => check.name === 'inbox').status, 'ok')
   await db.update(schema.agents).set({ status: 'inactive' }).where(eq(schema.agents.id, f.seller))

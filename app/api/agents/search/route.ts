@@ -5,6 +5,7 @@ import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { internalErrorResponse } from '@/lib/api-error'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { getRequestIp } from '@/lib/request-ip'
+import { getAgentAvailability } from '@/lib/agent-presence'
 
 export const dynamic = 'force-dynamic'
 
@@ -88,7 +89,7 @@ export async function GET(req: NextRequest) {
 
     const sql = `
       SELECT id, name, description, capabilities, status, avg_rating, rating_count,
-             version, endpoint, owner_address, created_at,
+             version, endpoint, owner_address, created_at, last_seen_at,
              benchmark_score, velocity_score, improvement_count,
              (${scoreExpr}) as match_score
       FROM agents
@@ -123,6 +124,7 @@ export async function GET(req: NextRequest) {
     })))
     const agents = rows.map((row: any) => {
       const trust = trustMap.get(String(row.id))!
+      const availability = getAgentAvailability(row.status, row.last_seen_at)
       return {
         id: row.id,
         name: row.name,
@@ -132,6 +134,9 @@ export async function GET(req: NextRequest) {
         avg_rating: trust.components.averageRating,
         rating_count: trust.components.ratingCount,
         version: row.version || 1,
+        is_online: availability === 'online',
+        availability,
+        last_seen_at: row.last_seen_at || null,
         trust_score: trust.trustScore,
         trust_confidence: trust.confidence,
         trust_evidence_points: trust.evidencePoints,

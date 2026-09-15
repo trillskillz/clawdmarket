@@ -94,6 +94,8 @@ test('agent registry pages through more than 100 agents without truncating the t
   assert.equal(first.total, 125)
   assert.equal(first.total_pages, 3)
   assert.equal(first.has_more, true)
+  assert.equal(first.agents[0].is_online, false)
+  assert.equal(first.agents[0].availability, 'unknown')
 
   const last = await (await listAgents(new NextRequest('http://localhost/api/agents/list?page=3&limit=50'))).json()
   assert.equal(last.agents.length, 25)
@@ -110,6 +112,7 @@ test('agent capability search can page through the full matching set', async () 
   assert.equal(first.agents.length, 50)
   assert.equal(first.total, 125)
   assert.equal(first.has_more, true)
+  assert.equal(first.agents[0].availability, 'unknown')
 
   const last = await (await searchAgents(new NextRequest('http://localhost/api/agents/search?q=capability&page=3&limit=50'))).json()
   assert.equal(last.agents.length, 25)
@@ -136,6 +139,7 @@ test('service catalog pages through more than 100 services without truncating th
   assert.equal(sellerSearch.listings[0].seller_name, 'Scale Agent 124')
   assert.equal(sellerSearch.listings[0].external_payment_ready, false)
   assert.equal(sellerSearch.listings[0].seller_online, false)
+  assert.equal(sellerSearch.listings[0].seller_availability, 'unknown')
 
   const payoutReady = await (await listServices(new NextRequest('http://localhost/api/listings?search=Scale%20Agent%20000'))).json()
   assert.equal(payoutReady.total, 1)
@@ -166,11 +170,28 @@ test('market statistics report full service totals instead of the current page s
   assert.equal(stats.recorded_volume_usd, 0)
 
   await db.$client.execute({
-    sql: `UPDATE agents SET is_online = 1, last_seen_at = unixepoch() WHERE id = ?`,
+    sql: `UPDATE agents SET is_online = 0, last_seen_at = unixepoch() WHERE id = ?`,
     args: ['scale-agent-000'],
   })
   const refreshedStats = await (await getStats()).json()
   assert.equal(refreshedStats.agents_online, 1)
+
+  const onlineDirectory = await (await listAgents(new NextRequest('http://localhost/api/agents/list?search=Scale%20Agent%20000'))).json()
+  assert.equal(onlineDirectory.agents[0].is_online, true)
+  assert.equal(onlineDirectory.agents[0].availability, 'online')
+  const onlineCatalog = await (await listServices(new NextRequest('http://localhost/api/listings?search=Scale%20Agent%20000'))).json()
+  assert.equal(onlineCatalog.listings[0].seller_online, true)
+  assert.equal(onlineCatalog.listings[0].seller_availability, 'online')
+
+  await db.$client.execute({
+    sql: `UPDATE agents SET is_online = 1, last_seen_at = unixepoch() - 181 WHERE id = ?`,
+    args: ['scale-agent-000'],
+  })
+  const staleStats = await (await getStats()).json()
+  assert.equal(staleStats.agents_online, 0)
+  const staleDirectory = await (await listAgents(new NextRequest('http://localhost/api/agents/list?search=Scale%20Agent%20000'))).json()
+  assert.equal(staleDirectory.agents[0].is_online, false)
+  assert.equal(staleDirectory.agents[0].availability, 'offline')
 })
 
 test('task board filters and pages through more than 100 tasks', async () => {

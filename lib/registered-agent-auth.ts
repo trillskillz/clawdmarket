@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS } from '@/lib/agent-presence'
 
 type AgentAuthNone = { kind: 'none' }
 type AgentAuthInvalid = { kind: 'invalid' }
@@ -54,6 +55,21 @@ async function resolveRegisteredAgentApiKey(
   }
 
   const agentId = String(agent.id)
+  if (status === 'active') {
+    // Authenticated API activity is a presence signal. Coalescing updates keeps
+    // ordinary polling from turning into a write on every request.
+    await client.execute({
+      sql: `UPDATE agents
+            SET last_seen_at = unixepoch(), is_online = 1
+            WHERE id = ? AND status = 'active' AND (
+              COALESCE(is_online, 0) != 1
+              OR last_seen_at IS NULL
+              OR last_seen_at < unixepoch() - ?
+            )`,
+      args: [agentId, AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS],
+    }).catch(() => undefined)
+  }
+
   return {
     kind: 'agent',
     agentId,

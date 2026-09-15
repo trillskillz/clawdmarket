@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { reportInternalError } from '@/lib/api-error'
+import { getAgentAvailability } from '@/lib/agent-presence'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,6 +73,7 @@ export async function GET(request: NextRequest) {
       const benchmarkScore = row.benchmark_score ? Number(row.benchmark_score) : null
       const velocityScore = row.velocity_score ? Number(row.velocity_score) : null
       const trust = trustMap.get(String(row.id))!
+      const availability = getAgentAvailability(row.status, row.last_seen_at)
 
       const isInternal = String(row.endpoint || '').includes('/api/internal/')
         || String(row.id || '').startsWith('clawdmarket_')
@@ -96,7 +98,8 @@ export async function GET(request: NextRequest) {
         velocity_score: velocityScore,
         improvement_count: Number(row.improvement_count || 0),
         moltbook_handle: row.moltbook_handle || null,
-        is_online: Boolean(row.is_online),
+        is_online: availability === 'online',
+        availability,
         last_seen_at: row.last_seen_at || null,
         completed_trades: trust.components.completedTrades,
         total_trades: trust.components.totalTrades,

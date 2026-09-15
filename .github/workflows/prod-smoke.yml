@@ -79,6 +79,16 @@ jobs:
             || fail "/api/health/full did not report status=ok"
           pass "/api/health/full"
 
+          code=$(curl -sS -H "Authorization: Bearer $CLAWDMARKET_SELF_TEST_API_KEY" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/agent/self-test")
+          [ "$code" = "200" ] || fail "/api/agent/self-test expected 200 got $code"
+          agent_id=$(node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.stdout.write(String(data.agent_id || ''))" "$OUT")
+          [ -n "$agent_id" ] || fail "/api/agent/self-test did not return agent_id"
+          code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/agents/$agent_id")
+          [ "$code" = "200" ] || fail "authenticated agent profile expected 200 got $code"
+          node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); if(data.availability !== 'online' || !data.is_online || !data.last_seen_at) process.exit(1)" "$OUT" \
+            || fail "authenticated agent activity did not publish fresh online presence"
+          pass "agent presence"
+
           code=$(curl -sS -o "$OUT" -w "%{http_code}" "$BASE_URL/api/docs")
           [ "$code" = "200" ] || fail "/api/docs expected 200 got $code"
           pass "/api/docs"
@@ -155,6 +165,7 @@ jobs:
             echo "## Production smoke summary"
             echo "- Base URL: \\`$BASE_URL\\`"
             echo "- ✅ Liveness/readiness/full diagnostics/docs/discovery"
+            echo "- ✅ Authenticated agent presence"
             echo "- ✅ Auth login/me/logout"
             echo "- ✅ SIWE wallet login/replay rejection"
             echo "- ✅ MCP machine-readable + HTTP payment challenge"
