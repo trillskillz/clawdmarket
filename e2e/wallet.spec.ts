@@ -7,43 +7,50 @@ test.describe('Wallet auth flow', () => {
   test('nonce + signature verify logs user in', async ({ page }) => {
     const account = privateKeyToAccount(walletPrivateKey);
 
-    const nonceRes = await page.request.post('/api/auth/wallet/nonce');
+    const nonceRes = await page.request.post('/api/auth/wallet/nonce', {
+      data: { address: account.address, chainId: 1 },
+    });
     expect(nonceRes.ok()).toBeTruthy();
     const nonceBody = await nonceRes.json();
 
     const message = String(nonceBody.message);
     const nonce = String(nonceBody.nonce);
-    expect(message).toContain('Sign in to ClawdMarket');
+    expect(message).toContain('http://localhost:3000 wants you to sign in with your Ethereum account:');
+    expect(message).toContain('URI: http://localhost:3000/auth/login');
+    expect(message).toContain('Chain ID: 1');
+    expect(message).toContain('Expiration Time:');
     expect(nonce.length).toBeGreaterThan(7);
 
     const signature = await account.signMessage({ message });
-
-    const verifyRes = await page.request.post('/api/auth/wallet/verify', {
+    const verification = {
       data: {
         address: account.address,
         signature,
         nonce,
       },
-    });
-    expect(verifyRes.ok()).toBeTruthy();
+    };
+    const [firstVerify, concurrentReplay] = await Promise.all([
+      page.request.post('/api/auth/wallet/verify', verification),
+      page.request.post('/api/auth/wallet/verify', verification),
+    ]);
+    expect([firstVerify.status(), concurrentReplay.status()].sort()).toEqual([200, 401]);
+
+    const laterReplay = await page.request.post('/api/auth/wallet/verify', verification);
+    expect(laterReplay.status()).toBe(401);
 
     await page.goto('/dashboard');
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });
 
-  test('discovered browser wallet signs in through the login page', async ({ page, context }) => {
+  test('discovered browser wallet signs in through the login page', async ({ page }) => {
     const account = privateKeyToAccount(walletPrivateKey);
-    const nonce = '0123456789abcdef0123456789abcdef';
-    const message = `Sign in to ClawdMarket\nNonce: ${nonce}`;
+    const challengeResponse = await page.request.post('/api/auth/wallet/nonce', {
+      data: { address: account.address, chainId: 1 },
+    });
+    expect(challengeResponse.ok()).toBeTruthy();
+    const challenge = await challengeResponse.json();
+    const message = String(challenge.message);
     const signature = await account.signMessage({ message });
-
-    await context.addCookies([{
-      name: 'wallet-nonce',
-      value: nonce,
-      url: 'http://localhost:3000',
-      httpOnly: true,
-      sameSite: 'Strict',
-    }]);
 
     await page.addInitScript(({ address, signature: walletSignature }) => {
       let connected = false;
@@ -96,7 +103,7 @@ test.describe('Wallet auth flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ nonce, message }),
+        body: JSON.stringify(challenge),
       });
     });
 
@@ -117,19 +124,15 @@ test.describe('Wallet auth flow', () => {
     expect(me.user.wallet).toBe(account.address.toLowerCase());
   });
 
-  test('MetaMask prefers its EIP-6963 provider over a conflicting legacy provider', async ({ page, context }) => {
+  test('MetaMask prefers its EIP-6963 provider over a conflicting legacy provider', async ({ page }) => {
     const account = privateKeyToAccount(walletPrivateKey);
-    const nonce = 'abcdef0123456789abcdef0123456789';
-    const message = `Sign in to ClawdMarket\nNonce: ${nonce}`;
+    const challengeResponse = await page.request.post('/api/auth/wallet/nonce', {
+      data: { address: account.address, chainId: 1 },
+    });
+    expect(challengeResponse.ok()).toBeTruthy();
+    const challenge = await challengeResponse.json();
+    const message = String(challenge.message);
     const signature = await account.signMessage({ message });
-
-    await context.addCookies([{
-      name: 'wallet-nonce',
-      value: nonce,
-      url: 'http://localhost:3000',
-      httpOnly: true,
-      sameSite: 'Strict',
-    }]);
 
     await page.addInitScript(({ address, signature: walletSignature }) => {
       const legacyProvider = {
@@ -194,7 +197,7 @@ test.describe('Wallet auth flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ nonce, message }),
+        body: JSON.stringify(challenge),
       });
     });
 

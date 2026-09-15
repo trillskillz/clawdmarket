@@ -7,6 +7,7 @@ import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants';
 import { durableMppStore } from '@/lib/mpp-store';
 import { getMppRecipientAddress, getMppSecretKey, getTempoRpcUrl } from '@/lib/payment-config';
 import { reportInternalError } from '@/lib/api-error';
+import { mcpPaymentRequiredResponse } from '@/lib/mcp-payment-response';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,6 +44,7 @@ function getMcpPayment() {
         }),
       ],
       transport: Transport.mcp(),
+      realm: process.env.MPP_REALM?.trim() || 'clawdmkt.com',
       secretKey,
     });
   } catch {
@@ -296,9 +298,12 @@ export async function POST(req: NextRequest) {
       const paymentGate: any = await paidMcpToolCall(body as any);
       if (paymentGate.status === 402) {
         if (paymentGate.challenge) {
-          return withCors(NextResponse.json(paymentGate.challenge, { status: 402 }));
+          return withCors(mcpPaymentRequiredResponse(paymentGate.challenge));
         }
-        return withCors(NextResponse.json({ error: 'payment_required', message: 'MPP payment required for tools/call' }, { status: 402 }));
+        return withCors(NextResponse.json(
+          { error: 'payment_required', message: 'MPP payment required for tools/call' },
+          { status: 402, headers: { 'Cache-Control': 'no-store' } },
+        ));
       }
       if (paymentGate.status !== 200 || typeof paymentGate.withReceipt !== 'function') {
         return withCors(NextResponse.json({ error: 'payment_service_unavailable', message: 'MPP payment verification is not configured' }, { status: 503 }));

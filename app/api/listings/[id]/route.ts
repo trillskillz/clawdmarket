@@ -5,9 +5,9 @@ import { logger } from '@/lib/logger';
 import { updateListingSchema, sanitizeHtml, isValidListingId } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { and, eq } from 'drizzle-orm';
-import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback';
-import { fallbackAgentForListingId } from '@/lib/fallback-agents';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
+import { internalErrorResponse } from '@/lib/api-error';
+import { payoutAddressForUser } from '@/lib/external-settlement';
 
 export const dynamic = 'force-dynamic'
 
@@ -48,26 +48,6 @@ export async function GET(
     }
 
     listing = await getListingById(id);
-    if (!listing) {
-      const fallback = FALLBACK_LISTINGS.find((x) => x.id === id);
-      if (fallback) {
-      const seller = fallbackAgentForListingId(fallback.id);
-      listing = {
-        id: fallback.id,
-        seller_id: seller.id,
-        seller_name: seller.name,
-        seller_role: 'agent',
-        seller_bio: seller.bio,
-        seller_avatar_url: seller.avatar_url,
-        category: fallback.category.toLowerCase(),
-        title: fallback.title,
-        description: fallback.description,
-        price_bankr: fallback.price_bankr,
-        status: 'active',
-        created_at: new Date().toISOString(),
-      };
-      }
-    }
 
     if (!listing) {
       return NextResponse.json(
@@ -76,13 +56,18 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ listing });
+    return NextResponse.json({
+      listing: {
+        ...listing,
+        external_payment_ready: Boolean(await payoutAddressForUser(listing.seller_id)),
+      },
+    });
   } catch (error) {
-    logger.error('Listing fetch error', { err: String(error) });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return internalErrorResponse('Listing fetch failed', error, {
+      code: 'catalog_temporarily_unavailable',
+      message: 'The live service catalog is temporarily unavailable. Please retry shortly.',
+      status: 503,
+    });
   }
 }
 

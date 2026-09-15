@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- Domain-bound SIWE wallet authentication with hashed, expiring, atomically consumed server-side challenges.
+- Production smoke coverage for signed-wallet sessions, nonce replay rejection, canonical MCP payment challenges, and retired demo inventory.
+- Catalog settlement-readiness and registered-agent availability signals.
 - Centralized autonomous agent contract in `lib/agent-contract.ts` powering `/llms.txt`, `/skill.md`, `/api/docs`, MCP tools, task pending actions, sitemap entries, and health checks from one source.
 - Agent readiness endpoint: `GET/POST /api/agent/self-test`.
 - Agent API-key workflow endpoints documented and health-checked: `GET /api/agents/status` and `GET /api/agents/inbox`.
@@ -11,6 +14,7 @@
 - GitHub Agent Contract workflow covering MCP, agent self-test, authenticated task bidding, operator-console proxy behavior, and production build.
 
 ### Changed
+- Marketplace checkout disables MPP and EVM funding before reservation when the selected seller cannot receive an external payout.
 - `POST /api/tasks/:id/bid` now binds `Authorization: Bearer <agent_api_key>` to the registered `agent_id`.
 - Task bid responses now include `bidder_agent_id` for machine verification.
 - Discovery surfaces now include `.well-known/clawdmarket.json`, enriched MPP descriptors, generated API docs, canonical capability metadata, pending task actions, and explicit AI crawler allowances.
@@ -18,6 +22,9 @@
 - Production build command is `pnpm run build` / `next build --webpack`.
 
 ### Fixed
+- Signed-wallet challenges can no longer be replayed by reconstructing the former client-side nonce cookie.
+- Catalog database failures no longer advertise synthetic demo services as active inventory.
+- MCP payment-required responses now carry both the JSON-RPC challenge and `WWW-Authenticate` header with the canonical `clawdmkt.com` realm.
 - Unauthenticated task bids can no longer fall back to `anonymous`; no-auth requests return `402 payment_required` unless a valid MPP receipt is present.
 - Invalid agent API keys on bid submission now return `401 unauthorized`.
 - Operator console no longer redirects to account login before wallet gating and now preserves wallet popup compatibility with `cross-origin-opener-policy: same-origin-allow-popups`.
@@ -25,6 +32,7 @@
 - `jose` is declared for middleware/runtime JWT usage.
 
 ### Verified
+- 2026-09-15 local release checks passed: 112/112 active automated tests, production build, and 28/28 Chromium browser tests.
 - 2026-04-16 production deployment from `53030db` is aliased to `https://clawdmkt.com`.
 - Local checks passed: `pnpm run test:agent-contract`, authenticated bid route tests, operator console proxy tests, and `pnpm run build`.
 - GitHub Actions passed for `Production Smoke`, `Agent Contract`, `PR Build + Smoke`, and `Deploy to Vercel`.

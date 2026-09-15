@@ -6,6 +6,7 @@ const READINESS_GAPS_MIGRATION_ID = '2026-09-13-readiness-gaps-v2'
 const MARKETPLACE_SCALE_MIGRATION_ID = '2026-09-13-marketplace-scale-v1'
 const SCHEMA_RECONCILIATION_MIGRATION_ID = '2026-09-14-schema-reconciliation-v1'
 const AGENT_DISCOVERY_COLUMNS_MIGRATION_ID = '2026-09-14-agent-discovery-columns-v1'
+const WALLET_AUTH_NONCES_MIGRATION_ID = '2026-09-15-wallet-auth-nonces-v1'
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`
@@ -259,6 +260,21 @@ async function addMarketplaceScaleIndexes(client: Client) {
   }
 }
 
+async function addWalletAuthNonces(client: Client) {
+  await client.execute(`CREATE TABLE IF NOT EXISTS wallet_auth_nonces (
+    nonce_hash TEXT PRIMARY KEY NOT NULL,
+    address TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    domain TEXT NOT NULL,
+    uri TEXT NOT NULL,
+    issued_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    consumed_at INTEGER
+  )`)
+  await client.execute('CREATE INDEX IF NOT EXISTS wallet_auth_nonces_expiry_idx ON wallet_auth_nonces(expires_at)')
+  await client.execute('CREATE INDEX IF NOT EXISTS wallet_auth_nonces_address_issued_idx ON wallet_auth_nonces(address, issued_at)')
+}
+
 async function main() {
   const configuredUrl = process.env.TURSO_DATABASE_URL?.trim()
   if (!configuredUrl && (process.env.CI === 'true' || process.env.VERCEL === '1')) {
@@ -282,6 +298,7 @@ async function main() {
       // registration columns were part of its implementation.
       { id: SCHEMA_RECONCILIATION_MIGRATION_ID, run: runMigration },
       { id: AGENT_DISCOVERY_COLUMNS_MIGRATION_ID, run: runMigration },
+      { id: WALLET_AUTH_NONCES_MIGRATION_ID, run: addWalletAuthNonces },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

@@ -23,7 +23,7 @@ function destinationAfterLogin() {
 
 export default function LoginPage() {
   const router = useRouter()
-  const { address, isConnected } = useAccount()
+  const { address, chainId, isConnected } = useAccount()
   const { connectors, connectAsync, isPending: walletConnecting } = useConnect()
   const { disconnect } = useDisconnect()
   const { signMessageAsync } = useSignMessage()
@@ -82,7 +82,7 @@ export default function LoginPage() {
   }
 
   async function handleWalletSignIn() {
-    if (!address) return
+    if (!address || !chainId) return
     setLoading(true)
     setError('')
 
@@ -90,6 +90,8 @@ export default function LoginPage() {
       const nonceResponse = await fetch('/api/auth/wallet/nonce', {
         method: 'POST',
         credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, chainId }),
       })
       const challenge = await nonceResponse.json().catch(() => ({}))
       if (!nonceResponse.ok || !challenge.nonce || !challenge.message) {

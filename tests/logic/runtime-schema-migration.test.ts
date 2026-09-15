@@ -69,7 +69,8 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(tableNames.has('agent_usage_events'), true)
       assert.equal(tableNames.has('password_reset_tokens'), true)
       assert.equal(tableNames.has('rate_limits'), true)
-      assert.equal(migrationRows.rows.length, 5)
+      assert.equal(tableNames.has('wallet_auth_nonces'), true)
+      assert.equal(migrationRows.rows.length, 6)
     } finally {
       migrated.close()
     }
