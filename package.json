@@ -23,6 +23,7 @@
     "db:migrate:agent-env": "node --conditions=react-server --import tsx scripts/migrate-agent-env.ts",
     "db:migrate:runtime": "node --import tsx scripts/migrate-runtime-schema.ts",
     "ops:sync-release-monitor": "node --import tsx scripts/sync-release-monitor.ts",
+    "ops:payment-canary": "node scripts/prod-payment-canary.mjs",
     "db:baseline": "node --conditions=react-server --import tsx scripts/db-baseline-drizzle.ts",
     "predeploy": "bash scripts/predeploy-check.sh",
     "deploy": "bash scripts/predeploy-check.sh && pnpm build && npx vercel --prod"
