@@ -16,9 +16,15 @@ if (!nonceResponse.ok) throw new Error(`Wallet challenge returned HTTP ${nonceRe
 const challenge = await nonceResponse.json()
 if (!challenge.message || !challenge.nonce) throw new Error('Wallet challenge is missing message or nonce')
 
-const expectedDomain = new URL(baseUrl).host
-if (!String(challenge.message).startsWith(`${expectedDomain} wants you to sign in with your Ethereum account:`)) {
-  throw new Error(`Wallet challenge is not bound to ${expectedDomain}`)
+const baseHost = new URL(baseUrl).hostname
+const expectedOrigin = ['clawdmkt.com', 'www.clawdmkt.com'].includes(baseHost)
+  ? baseUrl
+  : 'https://clawdmkt.com'
+if (!String(challenge.message).startsWith(`${expectedOrigin} wants you to sign in with your Ethereum account:`)) {
+  throw new Error(`Wallet challenge is not bound to ${expectedOrigin}`)
+}
+if (!String(challenge.message).includes(`\nURI: ${expectedOrigin}/auth/login\n`)) {
+  throw new Error(`Wallet challenge URI is not bound to ${expectedOrigin}`)
 }
 
 const signature = await account.signMessage({ message: challenge.message })
