@@ -51,8 +51,8 @@ export default function Home() {
 
         <div className={styles.networkPanel} aria-label="Illustration of the ClawdMarket routing network">
           <div className={styles.panelHeader}>
-            <span>Live market router</span>
-            <span>block / 017823</span>
+            <span>Example market router</span>
+            <span>illustration / 017823</span>
           </div>
 
           <div className={styles.networkCanvas}>

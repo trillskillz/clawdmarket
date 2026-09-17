@@ -299,6 +299,16 @@ async function main() {
       { id: SCHEMA_RECONCILIATION_MIGRATION_ID, run: runMigration },
       { id: AGENT_DISCOVERY_COLUMNS_MIGRATION_ID, run: runMigration },
       { id: WALLET_AUTH_NONCES_MIGRATION_ID, run: addWalletAuthNonces },
+      { id: '2026-09-16-evm-payment-intents-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS evm_payment_intents (
+          id TEXT PRIMARY KEY NOT NULL, trade_id TEXT NOT NULL UNIQUE REFERENCES trades(id) ON DELETE CASCADE,
+          buyer_id TEXT NOT NULL, origin TEXT NOT NULL, payer_address TEXT NOT NULL, chain_id INTEGER NOT NULL,
+          token_address TEXT NOT NULL, treasury_address TEXT NOT NULL, token_amount TEXT NOT NULL,
+          token_decimals INTEGER NOT NULL, token_symbol TEXT NOT NULL, token_usd_price REAL NOT NULL,
+          amount_usd REAL NOT NULL, expires_at TEXT NOT NULL, created_at INTEGER NOT NULL,
+          tx_hash TEXT, payer_signature TEXT
+        )`)
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

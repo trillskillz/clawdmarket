@@ -1,11 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import { erc20Abi, parseUnits } from 'viem'
-import { useAccount, useConnect, useSwitchChain, useWriteContract } from 'wagmi'
+import { useEffect, useState } from 'react'
 import { trackClientEvent } from '@/lib/client-analytics'
-import { getBrowserWalletConnectors, formatWalletConnectionError } from '@/lib/wallet-connection'
+import ExternalTradeCheckout from '@/components/ExternalTradeCheckout'
+import { fundingOutcome } from '@/lib/evm-payment-proof'
+import { useModalFocus } from '@/lib/use-modal-focus'
 import styles from './marketplace.module.css'
 
 type AgentService = {
@@ -113,10 +113,6 @@ function trustColor(score: number) {
 }
 
 export default function MarketplacePage() {
-  const { address, chainId, isConnected } = useAccount()
-  const { connectors, connectAsync, isPending: walletConnecting } = useConnect()
-  const { switchChainAsync } = useSwitchChain()
-  const { writeContractAsync } = useWriteContract()
   const [category, setCategory] = useState('all')
   const [hireIntent, setHireIntent] = useState<HireIntent | null>(null)
   const [stats, setStats] = useState<Record<string, number>>({})
@@ -135,8 +131,6 @@ export default function MarketplacePage() {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'newest' | 'recommended' | 'trust_desc' | 'price_asc' | 'price_desc'>('newest')
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
-  const [selectedToken, setSelectedToken] = useState<AcceptedToken | null>(null)
-  const browserConnectors = useMemo(() => getBrowserWalletConnectors(connectors), [connectors])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -160,7 +154,6 @@ export default function MarketplacePage() {
       .then((data) => {
         if (!data) return
         setPaymentConfig(data)
-        setSelectedToken(data.accepted_tokens?.[0] || null)
       })
       .catch(() => undefined)
   }, [])
@@ -270,6 +263,7 @@ export default function MarketplacePage() {
     setTradeRecoveryReference(null)
     setHireIntent(null)
   }
+  const hireDialogRef = useModalFocus(Boolean(hireIntent), closeHire)
 
   const createTrade = async (paymentRail: 'ledger' | 'mpp' | 'evm') => {
     if (!hireIntent) return
@@ -297,58 +291,21 @@ export default function MarketplacePage() {
         throw new Error(data?.message || data?.error || `Trade failed (${response.status})`)
       }
       const tradeId = data.trade?.id
-      if (paymentRail === 'ledger') {
+      const actualRail = data.trade?.payment_rail
+      if (!['ledger', 'mpp', 'evm'].includes(actualRail)) throw new Error('The server returned an unknown payment method.')
+      if (['escrow_held', 'pending_release', 'completed', 'complete'].includes(data.trade?.status)) {
         setServices((current) => current.filter((service) => service.id !== hireIntent.service.id))
-        setHireIntent({ ...hireIntent, step: 'submitted', tradeId, paymentRail })
+        setHireIntent({ ...hireIntent, step: 'submitted', tradeId, paymentRail: actualRail })
+      } else if (actualRail === 'ledger') {
+        throw new Error('This trade is not funded. Open the dashboard to check its status.')
       } else {
         const checkout = data.checkout as Checkout
-        setSelectedToken(checkout.tokens?.[0] || selectedToken)
-        setHireIntent({ ...hireIntent, step: paymentRail === 'evm' ? 'wallet' : 'machine', tradeId, paymentRail, checkout })
+        setHireIntent({ ...hireIntent, step: actualRail === 'evm' ? 'wallet' : 'machine', tradeId, paymentRail: actualRail, checkout })
       }
       trackClientEvent('trade_created', { listing_id: hireIntent.service.id, trade_id: tradeId || null, payment_rail: paymentRail })
     } catch (error: any) {
       setTradeError(error?.message || 'Trade could not be created.')
       throw error
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const fundEvmTrade = async () => {
-    if (!hireIntent?.tradeId || !hireIntent.checkout?.treasury || !selectedToken || !address) return
-    setSubmitting(true)
-    setTradeError(null)
-    try {
-      if (chainId !== selectedToken.chain_id) await switchChainAsync({ chainId: selectedToken.chain_id })
-      const txHash = await writeContractAsync({
-        chainId: selectedToken.chain_id,
-        address: selectedToken.token_address,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [hireIntent.checkout.treasury, parseUnits((hireIntent.checkout.amount_usd / selectedToken.fixed_usd_price).toFixed(selectedToken.decimals), selectedToken.decimals)],
-      })
-      const csrf = document.cookie.split('; ').find((item) => item.startsWith('csrf-token='))?.split('=')[1] || ''
-      let funded: any = null
-      for (let attempt = 0; attempt < 40; attempt += 1) {
-        const response = await fetch(hireIntent.checkout.funding_url, {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-          body: JSON.stringify({ chain_id: selectedToken.chain_id, token_address: selectedToken.token_address, tx_hash: txHash, payer_address: address }),
-        })
-        funded = await response.json().catch(() => ({}))
-        if (response.ok) break
-        if (funded?.retryable && attempt < 39) {
-          await new Promise((resolve) => window.setTimeout(resolve, 3000))
-          continue
-        }
-        throw new Error(funded?.error || `Payment verification failed (${response.status})`)
-      }
-      if (!funded?.ok) throw new Error('Payment confirmation timed out. Your trade remains recoverable from its transaction hash.')
-      setServices((current) => current.filter((service) => service.id !== hireIntent.service.id))
-      setHireIntent({ ...hireIntent, step: 'submitted' })
-      trackClientEvent('trade_funded', { trade_id: hireIntent.tradeId, payment_rail: 'evm', chain_id: selectedToken.chain_id })
-    } catch (error) {
-      setTradeError(error instanceof Error ? error.message : 'Wallet payment failed.')
     } finally {
       setSubmitting(false)
     }
@@ -521,15 +478,17 @@ export default function MarketplacePage() {
       {hireIntent && (
         <div className={styles.modalBackdrop} onClick={closeHire}>
           <section
+            ref={hireDialogRef}
             className={styles.modal}
             role="dialog"
             aria-modal="true"
             aria-labelledby="hire-dialog-title"
+            tabIndex={-1}
             onClick={(event) => event.stopPropagation()}
           >
             <div className={styles.modalHeader}>
               <span>TRADE ROUTER / {hireIntent.step.toUpperCase()}</span>
-              <button type="button" onClick={closeHire} aria-label="Close hire dialog">×</button>
+              <button type="button" data-dialog-close onClick={closeHire} aria-label="Close hire dialog">×</button>
             </div>
 
             {hireIntent.step === 'confirm' && (
@@ -541,6 +500,7 @@ export default function MarketplacePage() {
                   <span>{hireIntent.service.title}</span>
                   <strong>${hireIntent.service.price_usd.toFixed(2)}<small>/ request</small></strong>
                 </div>
+                <p>Estimated platform fee: ${(Math.round(hireIntent.service.price_usd * 5) / 100).toFixed(2)} · Estimated total: ${((Math.round(hireIntent.service.price_usd * 100) + Math.round(hireIntent.service.price_usd * 5)) / 100).toFixed(2)}. The server confirms the exact total before wallet payment.</p>
                 <div className={styles.modalActions}>
                   <button type="button" className={styles.modalBack} onClick={closeHire}>Cancel</button>
                   <button type="button" className={styles.modalNext} onClick={advanceHire}>Choose payment <span>→</span></button>
@@ -578,41 +538,20 @@ export default function MarketplacePage() {
               </div>
             )}
 
-            {hireIntent.step === 'wallet' && (
+            {(hireIntent.step === 'wallet' || hireIntent.step === 'machine') && hireIntent.tradeId && hireIntent.checkout && (
               <div className={styles.modalBody}>
-                <span className={styles.modalStep}>03 / ERC-20 WALLET</span>
-                <h3 id="hire-dialog-title">Complete the onchain payment.</h3>
-                <p>The transaction sends the exact quoted amount to the settlement wallet. ClawdMarket verifies the token, sender, value, and network confirmations before work begins.</p>
-                <label className={styles.tokenSelect}>
-                  <span>PAYMENT TOKEN</span>
-                  <select value={selectedToken ? `${selectedToken.chain_id}:${selectedToken.token_address}` : ''} onChange={(event) => setSelectedToken(hireIntent.checkout?.tokens?.find((token) => `${token.chain_id}:${token.token_address}` === event.target.value) || null)}>
-                    {(hireIntent.checkout?.tokens || []).map((token) => <option key={`${token.chain_id}:${token.token_address}`} value={`${token.chain_id}:${token.token_address}`}>{token.symbol} · {token.chain_name}</option>)}
-                  </select>
-                </label>
-                {!isConnected ? (
-                  <div className={styles.walletConnectors}>
-                    {browserConnectors.map((connector) => <button key={connector.uid} type="button" disabled={walletConnecting} onClick={() => void connectAsync({ connector }).catch((error) => setTradeError(formatWalletConnectionError(error, connector.name)))}>Connect {connector.name}</button>)}
-                    {browserConnectors.length === 0 && <p>Install a supported browser wallet or configure WalletConnect.</p>}
-                  </div>
-                ) : <p className={styles.walletIdentity}>Connected: {address?.slice(0, 6)}…{address?.slice(-4)}</p>}
-                {tradeError && <div className={styles.tradeError} role="alert"><p>{tradeError}</p></div>}
-                <div className={styles.modalActions}>
-                  <button type="button" className={styles.modalBack} onClick={() => setHireIntent({ ...hireIntent, step: 'protocol' })}>Back</button>
-                  <button type="button" className={styles.modalNext} disabled={!isConnected || !selectedToken || submitting} onClick={() => void fundEvmTrade()}>{submitting ? 'Confirming…' : `Pay $${hireIntent.checkout?.amount_usd.toFixed(2)}`} <span>→</span></button>
-                </div>
-              </div>
-            )}
-
-            {hireIntent.step === 'machine' && (
-              <div className={styles.modalBody}>
-                <span className={styles.modalStep}>03 / MACHINE CLIENT</span>
-                <h3 id="hire-dialog-title">Execute from your agent.</h3>
-                <p>Use an MPP-capable client together with your ClawdMarket agent key. The challenge is bound to this reserved trade and reconciled by its trade ID.</p>
-                <code>{`POST ${hireIntent.checkout?.funding_url || `/api/trades/${hireIntent.tradeId}/fund/mpp`}\nX-ClawdMarket-Agent-Key: clawd_...\n\n# The first response is HTTP 402.\n# Pay the pathUSD challenge and retry automatically.`}</code>
-                <div className={styles.modalActions}>
-                  <button type="button" className={styles.modalBack} onClick={() => setHireIntent({ ...hireIntent, step: 'protocol' })}>Back</button>
-                  <Link className={styles.modalDocs} href="/docs#trades">View API docs <span>↗</span></Link>
-                </div>
+                <span className={styles.modalStep}>03 / RESERVED PAYMENT</span>
+                <h3 id="hire-dialog-title">Complete or recover payment.</h3>
+                <p>Your payment method is locked to this reservation. Resume the same transaction after a disconnect; do not pay again.</p>
+                <ExternalTradeCheckout key={hireIntent.tradeId} tradeId={hireIntent.tradeId} checkout={hireIntent.checkout}
+                  onUpdated={(result) => {
+                    if (result && fundingOutcome(result) === 'funded') {
+                      setServices((current) => current.filter((service) => service.id !== hireIntent.service.id))
+                      setHireIntent({ ...hireIntent, step: 'submitted' })
+                      trackClientEvent('trade_funded', { trade_id: hireIntent.tradeId || null, payment_rail: hireIntent.paymentRail || null })
+                    }
+                  }} />
+                <Link className={styles.modalDocs} href={`/dashboard?tab=trades&trade=${encodeURIComponent(hireIntent.tradeId)}`}>Track this reservation →</Link>
               </div>
             )}
 

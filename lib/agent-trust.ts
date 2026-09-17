@@ -67,13 +67,12 @@ export function computeAgentTrust(
   ratings: RatingAggregate,
   trades: TradeAggregate,
 ): AgentTrustSnapshot {
-  const fallbackRatingCount = Math.max(0, asFiniteNumber(agent.rating_count));
-  const ratingCount = ratings.ratingCount || fallbackRatingCount;
+  // Cached profile aggregates can include imported/historical ratings. Only
+  // ratings joined to an evidence-backed trade contribute to trust.
+  const ratingCount = ratings.ratingCount;
   const averageRating = ratings.ratingCount > 0
     ? ratings.ratingTotal / ratings.ratingCount
-    : fallbackRatingCount > 0 && agent.avg_rating != null
-      ? asFiniteNumber(agent.avg_rating)
-      : null;
+    : null;
   const age = accountAgeDays(agent.created_at);
   const trust = computeTrustScore({
     averageRating,
@@ -108,28 +107,36 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
   const principals = agents.flatMap((agent) => [agent.id, `user_agent_${agent.id}`]);
   const placeholders = principals.map(() => '?').join(', ');
   const client = (db as any).$client;
+  const backedWork = `t.status IN ('completed', 'complete')
+    AND EXISTS (SELECT 1 FROM trade_deliveries d WHERE d.trade_id = t.id AND d.content_hash IS NOT NULL)
+    AND (
+      (t.payment_rail = 'ledger' AND EXISTS (SELECT 1 FROM transactions x WHERE x.reference_id = t.id AND x.type = 'escrow_lock'))
+      OR (t.payment_rail IN ('mpp', 'evm')
+        AND EXISTS (SELECT 1 FROM payment_receipts p WHERE p.trade_id = t.id AND p.payment_rail = t.payment_rail)
+        AND EXISTS (SELECT 1 FROM settlement_transfers s WHERE s.trade_id = t.id AND s.kind = 'seller_payout' AND s.status = 'confirmed' AND s.tx_hash IS NOT NULL))
+    )`;
 
   const [ratingResult, tradeResult] = await Promise.all([
     client.execute({
-      sql: `SELECT rated_id,
+      sql: `SELECT r.rated_id,
                    COUNT(*) AS rating_count,
-                   SUM(CAST(score AS REAL)) AS rating_total,
-                   SUM(CASE WHEN score >= 4 THEN 1 ELSE 0 END) AS positive_ratings,
-                   SUM(CASE WHEN score <= 2 THEN 1 ELSE 0 END) AS negative_ratings,
-                   SUM(CASE WHEN datetime(created_at) >= datetime('now', '-90 days') THEN 1 ELSE 0 END) AS recent_ratings
-            FROM ratings
-            WHERE rated_id IN (${placeholders})
-            GROUP BY rated_id`,
+                   SUM(CAST(r.score AS REAL)) AS rating_total,
+                   SUM(CASE WHEN r.score >= 4 THEN 1 ELSE 0 END) AS positive_ratings,
+                   SUM(CASE WHEN r.score <= 2 THEN 1 ELSE 0 END) AS negative_ratings,
+                   SUM(CASE WHEN datetime(r.created_at) >= datetime('now', '-90 days') THEN 1 ELSE 0 END) AS recent_ratings
+            FROM ratings r JOIN trades t ON t.id = r.trade_id
+            WHERE r.rated_id IN (${placeholders}) AND ${backedWork}
+            GROUP BY r.rated_id`,
       args: principals,
     }),
     client.execute({
-      sql: `SELECT seller_id,
+      sql: `SELECT t.seller_id,
                    COUNT(*) AS total_trades,
-                   SUM(CASE WHEN status IN ('completed', 'complete') THEN 1 ELSE 0 END) AS completed_trades,
-                   SUM(CASE WHEN status = 'disputed' OR resolution IS NOT NULL THEN 1 ELSE 0 END) AS disputed_trades
-            FROM trades
-            WHERE seller_id IN (${placeholders})
-            GROUP BY seller_id`,
+                   SUM(CASE WHEN ${backedWork} THEN 1 ELSE 0 END) AS completed_trades,
+                   SUM(CASE WHEN t.status = 'disputed' OR t.resolution IS NOT NULL THEN 1 ELSE 0 END) AS disputed_trades
+            FROM trades t
+            WHERE t.seller_id IN (${placeholders})
+            GROUP BY t.seller_id`,
       args: principals,
     }),
   ]);

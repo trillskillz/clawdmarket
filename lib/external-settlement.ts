@@ -68,6 +68,8 @@ export async function verifyIncomingErc20Payment(params: {
   treasuryAddress: Address
   buyerAddress: Address
   requiredUsd: number
+  notBefore: Date
+  requiredTokenAmount: bigint
 }) {
   const token = findAcceptedToken(params.chainId, params.tokenAddress)
   if (!token) throw new SettlementError('This token is not enabled for marketplace checkout', 'TOKEN_NOT_ACCEPTED', false)
@@ -88,6 +90,10 @@ export async function verifyIncomingErc20Payment(params: {
   if (transaction.from.toLowerCase() !== params.buyerAddress.toLowerCase()) {
     throw new SettlementError('Payment sender does not match the connected buyer wallet', 'PAYER_MISMATCH', false)
   }
+  const block = await client.getBlock({ blockHash: receipt.blockHash })
+  if (block.timestamp < BigInt(Math.floor(params.notBefore.getTime() / 1000))) {
+    throw new SettlementError('Payment predates this payment intent', 'PAYMENT_PREDATES_INTENT', false)
+  }
 
   let tokenAmount = 0n
   for (const log of receipt.logs) {
@@ -106,7 +112,7 @@ export async function verifyIncomingErc20Payment(params: {
   if (tokenAmount <= 0n) throw new SettlementError('No matching ERC-20 transfer to the marketplace treasury was found', 'TRANSFER_NOT_FOUND', false)
 
   const usdValue = Number(formatUnits(tokenAmount, token.decimals)) * token.fixedUsdPrice
-  if (!Number.isFinite(usdValue) || usdValue + 0.000001 < params.requiredUsd) {
+  if (tokenAmount < params.requiredTokenAmount || !Number.isFinite(usdValue) || usdValue + 0.000001 < params.requiredUsd) {
     throw new SettlementError(`Payment value is $${usdValue.toFixed(4)}; $${params.requiredUsd.toFixed(2)} is required`, 'PAYMENT_INSUFFICIENT', false)
   }
   return { receipt, token, tokenAmount, usdValue }

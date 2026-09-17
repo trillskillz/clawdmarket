@@ -555,6 +555,28 @@ export const payment_receipts = sqliteTable('payment_receipts', {
   uniqueIndex('payment_receipts_external_unique').on(table.payment_rail, table.external_id),
 ]);
 
+// A single durable send reservation per trade. Never recreate it after a
+// broadcast/unknown wallet outcome: recover the transaction instead.
+export const evm_payment_intents = sqliteTable('evm_payment_intents', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'cascade' }),
+  buyer_id: text('buyer_id').notNull(),
+  origin: text('origin').notNull(),
+  payer_address: text('payer_address').notNull(),
+  chain_id: integer('chain_id').notNull(),
+  token_address: text('token_address').notNull(),
+  treasury_address: text('treasury_address').notNull(),
+  token_amount: text('token_amount').notNull(),
+  token_decimals: integer('token_decimals').notNull(),
+  token_symbol: text('token_symbol').notNull(),
+  token_usd_price: real('token_usd_price').notNull(),
+  amount_usd: real('amount_usd').notNull(),
+  expires_at: text('expires_at').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  tx_hash: text('tx_hash'),
+  payer_signature: text('payer_signature'),
+});
+
 export const payout_addresses = sqliteTable('payout_addresses', {
   user_id: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
   address: text('address').notNull(),

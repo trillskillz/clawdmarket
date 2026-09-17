@@ -70,7 +70,10 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(tableNames.has('password_reset_tokens'), true)
       assert.equal(tableNames.has('rate_limits'), true)
       assert.equal(tableNames.has('wallet_auth_nonces'), true)
-      assert.equal(migrationRows.rows.length, 6)
+      assert.equal(tableNames.has('evm_payment_intents'), true)
+      const intents = await migrated.execute('PRAGMA table_info("evm_payment_intents")')
+      assert.equal(names(intents.rows).has('payer_signature'), true)
+      assert.equal(migrationRows.rows.length, 7)
     } finally {
       migrated.close()
     }

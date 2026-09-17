@@ -143,7 +143,7 @@
 .modalBackdrop { position: fixed; inset: 0; z-index: 1000; padding: 24px; display: grid; place-items: center; background: rgba(3,5,4,.82); backdrop-filter: blur(12px); }
 .modal { width: min(540px,100%); max-height: calc(100vh - 48px); overflow-y: auto; border: 1px solid rgba(240,236,225,.17); background: #0c0f0d; box-shadow: 0 35px 120px rgba(0,0,0,.6); }
 .modalHeader { min-height: 50px; padding: 0 17px; border-bottom: 1px solid rgba(240,236,225,.11); display: flex; align-items: center; justify-content: space-between; color: #626860; font: 8px 'JetBrains Mono',monospace; letter-spacing: .1em; }
-.modalHeader button { width: 28px; height: 28px; border: 1px solid rgba(240,236,225,.13); background: transparent; color: #a8aca5; font-size: 18px; line-height: 1; }
+.modalHeader button { width: 44px; height: 44px; border: 1px solid rgba(240,236,225,.22); background: transparent; color: #d1d5cb; font-size: 22px; line-height: 1; }
 .modalBody { padding: 34px; }
 .modalStep { color: #ff6a43; }
 .modalBody h3 { margin: 16px 0 10px; font: 500 31px 'Space Grotesk',sans-serif; letter-spacing: -.05em; }

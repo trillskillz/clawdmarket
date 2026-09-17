@@ -112,7 +112,10 @@ export async function getMarketStats() {
         WHEN ${tasks.assignedAgentId} IS NOT NULL OR ${tasks.status} IN ('assigned', 'completed', 'complete')
         THEN 1 ELSE 0 END), 0)`,
       tasks_completed: sql<number>`COALESCE(SUM(CASE WHEN ${tasks.status} IN ('completed', 'complete') THEN 1 ELSE 0 END), 0)`,
-      tasks_open: sql<number>`COALESCE(SUM(CASE WHEN ${tasks.status} = 'open' THEN 1 ELSE 0 END), 0)`,
+      tasks_open: sql<number>`COALESCE(SUM(CASE WHEN ${tasks.status} = 'open'
+        AND datetime(${tasks.expiresAt}) > datetime('now')
+        AND (${tasks.deadlineAt} IS NULL OR datetime(${tasks.deadlineAt}) > datetime('now'))
+        THEN 1 ELSE 0 END), 0)`,
     }).from(tasks).catch(() => [{ tasks_total: 0, tasks_routed: 0, tasks_completed: 0, tasks_open: 0 }]),
     db.select({
       services_listed: sql<number>`COALESCE(COUNT(*), 0)`,

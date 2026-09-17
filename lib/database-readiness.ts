@@ -32,6 +32,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   payout_addresses: ['user_id', 'address', 'updated_at'],
   settlement_transfers: ['id', 'business_key', 'trade_id', 'kind', 'chain_id', 'token_address', 'from_address', 'to_address', 'token_amount', 'usd_amount', 'raw_transaction', 'tx_hash', 'status', 'attempts', 'last_error', 'created_at', 'updated_at'],
   settlement_nonces: ['key', 'chain_id', 'wallet_address', 'next_nonce', 'updated_at'],
+  evm_payment_intents: ['id', 'trade_id', 'buyer_id', 'origin', 'payer_address', 'chain_id', 'token_address', 'treasury_address', 'token_amount', 'token_decimals', 'token_symbol', 'token_usd_price', 'amount_usd', 'expires_at', 'created_at', 'tx_hash', 'payer_signature'],
   mpp_store: ['key', 'value', 'updated_at'],
   mpp_sessions: ['session_id', 'agent_id', 'reserved_amount', 'spent_amount', 'status', 'created_at'],
   contracts: ['id', 'buyer_id', 'seller_id', 'total_amount', 'fee_amount', 'escrow_amount', 'state', 'created_at', 'updated_at'],

@@ -130,11 +130,8 @@ let listingId = null
 let tradeId = null
 
 try {
-  assertOk(await api('/api/payments/payout-address', {
-    method: 'PUT',
-    headers: sellerHeaders,
-    body: JSON.stringify({ address: account.address }),
-  }), 'Canary seller payout setup')
+  const sellerPayout = assertOk(await api('/api/payments/payout-address', { headers: sellerHeaders }), 'Canary seller payout check')
+  if (!sellerPayout.address) throw new Error('Configure the dedicated canary seller payout wallet before running. This script never changes seller payout settings.')
 
   const suffix = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
   const listing = assertOk(await api('/api/listings', {
@@ -171,6 +168,13 @@ try {
   if (checkout.amount_usd !== canaryPrice) throw new Error(`Canary spend guard rejected quoted total ${checkout.amount_usd}`)
   if (checkout.treasury?.toLowerCase() !== treasury.toLowerCase()) throw new Error('Checkout treasury does not match payment configuration')
 
+  const intentResult = assertOk(await api(checkout.intent_url, {
+    method: 'POST', headers: buyerHeaders,
+    body: JSON.stringify({ chain_id: base.id, token_address: tokenAddress, payer_address: account.address }),
+  }, buyerCookies), 'Canary payment intent', [201])
+  const intent = intentResult.intent
+  if (!intentResult.created || intent.treasury_address.toLowerCase() !== treasury.toLowerCase()) throw new Error('Canary did not receive a new matching payment intent')
+
   assertOk(await api(`/api/trades/${encodeURIComponent(tradeId)}/cancel`, {
     method: 'POST', headers: buyerHeaders,
   }, buyerCookies), 'Canary reservation cancellation')
@@ -186,6 +190,11 @@ try {
   })
   const paymentHash = await walletClient.writeContract(request)
   console.log(`Payment transaction: ${paymentHash}`)
+  const proofBody = { intent_id: intent.id, chain_id: base.id, token_address: tokenAddress, tx_hash: paymentHash, payer_address: account.address }
+  const proofChallenge = assertOk(await api(checkout.funding_url, {
+    method: 'POST', headers: buyerHeaders, body: JSON.stringify(proofBody),
+  }, buyerCookies), 'Canary payer authorization', [428])
+  const payerSignature = await account.signMessage({ message: proofChallenge.message })
   await publicClient.waitForTransactionReceipt({ hash: paymentHash, confirmations: token.confirmations || 3, timeout: 120_000 })
 
   let funded = null
@@ -194,10 +203,8 @@ try {
       method: 'POST',
       headers: buyerHeaders,
       body: JSON.stringify({
-        chain_id: base.id,
-        token_address: tokenAddress,
-        tx_hash: paymentHash,
-        payer_address: account.address,
+        ...proofBody,
+        payer_signature: payerSignature,
       }),
     }, buyerCookies)
     funded = assertOk(result, 'Canary payment verification', [200, 202])

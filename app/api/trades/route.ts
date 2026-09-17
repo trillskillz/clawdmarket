@@ -76,7 +76,8 @@ async function createTradePost(req: NextRequest) {
 
     const [existingTrade] = await db.select().from(trades).where(eq(trades.client_reference, clientReference)).limit(1);
     if (existingTrade) {
-      if (existingTrade.buyer_id !== auth.userId || existingTrade.listing_id !== validated.listing_id) {
+      if (existingTrade.buyer_id !== auth.userId || existingTrade.listing_id !== validated.listing_id
+        || existingTrade.payment_rail !== validated.payment_rail || validated.amount !== 1 || validated.allow_partial_fill) {
         return NextResponse.json({ error: 'Idempotency key already belongs to another trade', code: 'IDEMPOTENCY_CONFLICT' }, { status: 409 });
       }
       return NextResponse.json({ message: 'Existing trade returned.', trade: existingTrade, code: 'TRADE_EXISTS', checkout: checkoutForTrade(existingTrade) });
@@ -421,7 +422,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       trades: userTrades.map((trade) => ({
         ...trade,
-        checkout: trade.buyer_id === auth.userId && trade.status === 'pending' && ['mpp', 'evm'].includes(trade.payment_rail)
+        checkout: trade.buyer_id === auth.userId && (
+          (trade.status === 'pending' && ['mpp', 'evm'].includes(trade.payment_rail))
+          || (trade.status === 'cancelled' && trade.payment_rail === 'evm' && trade.payout_status !== 'refunded')
+        )
           ? checkoutForTrade(trade)
           : null,
       })),

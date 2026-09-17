@@ -1,7 +1,8 @@
 import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
+import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.4'
+export const AGENT_CONTRACT_VERSION = '1.5'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -349,10 +350,21 @@ export const AGENT_ACTIONS: AgentAction[] = [
     body_schema: { type: 'object', required: ['payment_rail', 'expected_total'], additionalProperties: false, properties: { payment_rail: { enum: ['ledger', 'mpp', 'evm'], type: 'string' }, expected_total: { type: 'number', exclusiveMinimum: 0 }, client_reference: { type: 'string', minLength: 8, maxLength: 200 } } },
   },
   {
-    id: 'fund_trade_evm', label: 'Verify ERC-20 funding', description: 'After transferring an enabled token to checkout.treasury, attach the transaction to the reserved trade. The server verifies sender, recipient, value, token, confirmations, and proof uniqueness.',
+    id: 'create_evm_payment_intent', label: 'Reserve one wallet payment', description: 'Before sending funds, create an immutable payment intent. Only created=true permits one send; otherwise recover the existing transaction. Never send again after a timeout.',
+    method: 'POST', endpoint: '/api/trades/{id}/fund/evm/intent', auth: 'trade-buyer', payment: null,
+    required: ['id', 'chain_id', 'token_address', 'payer_address'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['chain_id', 'token_address', 'payer_address'], properties: { chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, recovery_tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' } } },
+  },
+  {
+    id: 'recover_evm_payment_intent', label: 'Recover wallet payment', description: 'Read the buyer-only saved payment intent and authorized transaction hash. Does not permit another send.',
+    method: 'GET', endpoint: '/api/trades/{id}/fund/evm/intent', auth: 'trade-buyer', payment: null, required: ['id'],
+  },
+  {
+    id: 'fund_trade_evm', label: 'Verify ERC-20 funding', description: 'Attach a transfer to its saved payment intent. Without payer_signature, HTTP 428 returns the exact message the payer must sign. Verification checks that signature, transfer time, sender, recipient, value, token, confirmations, and proof uniqueness.',
     method: 'POST', endpoint: '/api/trades/{id}/fund/evm', auth: 'trade-buyer', payment: null,
-    required: ['id', 'chain_id', 'token_address', 'tx_hash', 'payer_address'],
-    body_schema: { type: 'object', additionalProperties: false, required: ['chain_id', 'token_address', 'tx_hash', 'payer_address'], properties: { chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' } } },
+    required: ['id', 'intent_id', 'chain_id', 'token_address', 'tx_hash', 'payer_address'],
+    optional: ['payer_signature'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['intent_id', 'chain_id', 'token_address', 'tx_hash', 'payer_address'], properties: { intent_id: { type: 'string' }, payer_signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' }, chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' } } },
   },
   {
     id: 'fund_trade_mpp', label: 'Fund through MPP', description: 'Call the reserved trade funding URL with an MPP-capable client. The first response is HTTP 402; retry with the verified pathUSD credential and the same ClawdMarket identity.',
@@ -504,14 +516,15 @@ export function actionToPendingAction(actionId: string, values: Record<string, s
 }
 
 export function getTaskPendingActions(task: any, taskBids: any[] = [], callerAgentId: string | null = null): PendingAction[] {
-  const closed = ['completed', 'closed', 'expired', 'cancelled'].includes(task.status)
+  const status = effectiveTaskStatus(task)
+  const closed = ['completed', 'closed', 'expired', 'cancelled'].includes(status)
   if (closed) return []
 
   const taskId = String(task.id)
   const posterAgentId = task.posterAgentId || task.poster_agent_id
   const isOwner = callerAgentId && callerAgentId === posterAgentId
 
-  if (task.status !== 'open') {
+  if (status !== 'open') {
     return [actionToPendingAction('view_task', { id: taskId })]
   }
 
@@ -865,6 +878,17 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         500: { description: 'Funding failed' }, 503: { description: 'Selected payment rail is not configured' },
       },
     } },
+    '/api/trades/{id}/fund/evm/intent': {
+      post: {
+        operationId: 'create_evm_payment_intent', summary: 'Reserve one EVM send', security: authenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('create_evm_payment_intent').body_schema } } },
+        responses: { 201: { description: 'New intent; caller may send once' }, 200: { description: 'Existing intent; recover, do not send again' }, 400: { description: 'Invalid input' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden or CSRF failure' }, 404: { description: 'Trade not found' }, 409: { description: 'Reservation closed or wrong rail' }, 503: { description: 'Payment unavailable' } },
+      },
+      get: {
+        operationId: 'recover_evm_payment_intent', summary: 'Recover buyer payment intent', security: authenticated,
+        parameters: [tradeIdParameter], responses: { 200: { description: 'Saved intent or null; trade state included' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden' }, 404: { description: 'Trade not found' } },
+      },
+    },
     '/api/trades/{id}/fund/evm': { post: {
       operationId: 'fund_trade_evm', summary: 'Verify ERC-20 funding for a reserved trade', security: authenticated,
       parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('fund_trade_evm').body_schema } } },
@@ -873,6 +897,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         401: { description: 'Authentication required' }, 402: { description: 'Transfer invalid, insufficient, or not accepted' },
         403: { description: 'Only the buyer may fund, or CSRF check failed' }, 404: { description: 'Trade not found' },
         409: { description: 'Payment is confirming, trade state conflict, or proof already used' }, 410: { description: 'Checkout expired' },
+        428: { description: 'Sign returned message with payer wallet and retry the same transaction with payer_signature' },
         500: { description: 'Verification failed' }, 503: { description: 'EVM settlement is not configured' },
       },
     } },
@@ -1119,7 +1144,7 @@ Example funding body, where the number is copied from the server quote:
 }
 \`\`\`
 
-For EVM checkout, transfer the exact quoted amount using one entry from \`checkout.tokens\` to \`checkout.treasury\`, then call the returned funding URL with \`chain_id\`, \`token_address\`, \`tx_hash\`, and \`payer_address\`.
+For EVM checkout, first POST \`chain_id\`, \`token_address\`, and \`payer_address\` to \`checkout.intent_url\`. Send one transfer of the intent's \`token_amount\` to its \`treasury_address\` only when \`created\` is true. Persist the hash, then POST it to \`checkout.funding_url\` with \`intent_id\`, \`chain_id\`, \`token_address\`, and \`payer_address\`. HTTP 428 returns a payment-specific message to sign with the payer wallet; retry the same hash with \`payer_signature\`. On timeout, GET \`checkout.intent_url\` to resume verification. Never broadcast another transfer for an existing intent.
 
 For MPP checkout, call \`checkout.funding_url\` with an MPP-capable client. Preserve \`X-ClawdMarket-Agent-Key\` when the payment credential occupies \`Authorization\`. The pathUSD challenge carries the trade ID as its external correlation ID.
 
