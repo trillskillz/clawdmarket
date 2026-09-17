@@ -18,5 +18,6 @@ test('an externally funded receipt reports the durable payout state', () => {
   const receipt = getTradeReceipt({ amount: 25, fee: 1.25, payment_rail: 'mpp', status: 'completed', payout_status: 'complete' })
   assert.equal(receipt.external, true)
   assert.equal(receipt.sellerLabel, 'Seller payout')
-  assert.equal(receipt.settlementLabel, 'External settlement confirmed')
+  assert.equal(receipt.settlementLabel, 'External settlement recorded; transaction evidence unavailable')
+  assert.equal(getTradeReceipt({ amount: 25, fee: 1.25, payment_rail: 'mpp', status: 'completed', payout_status: 'complete', settlement_evidence: true }).settlementLabel, 'External payout confirmed by recorded transaction')
 })

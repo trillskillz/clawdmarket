@@ -61,7 +61,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const [workspace] = await tx.select().from(task_workspaces).where(eq(task_workspaces.task_id, id)).limit(1)
       if (workspace.trade_id) {
         const [existing] = await tx.select().from(trades).where(eq(trades.id, workspace.trade_id)).limit(1)
-        if (existing && existing.status !== 'cancelled') return { trade: existing, created: false }
+        if (existing && existing.status !== 'cancelled') {
+          if (existing.payment_rail !== input.data.payment_rail || existing.total_cost !== input.data.expected_total) {
+            throw new FundingError('A reservation already exists with a different payment method or total. Resume or cancel that reservation first.', 409)
+          }
+          return { trade: existing, created: false }
+        }
         if (existing) {
           await tx.update(listings).set({ status: 'expired' })
             .where(and(eq(listings.id, existing.listing_id), eq(listings.status, 'active')))

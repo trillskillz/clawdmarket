@@ -12,6 +12,7 @@ required_files=(
   "app/api/trades/[id]/cancel/route.ts"
   "app/api/trades/[id]/delivery/route.ts"
   "app/api/trades/[id]/fund/evm/route.ts"
+  "app/api/trades/[id]/fund/evm/intent/route.ts"
   "app/api/trades/[id]/fund/mpp/route.ts"
   "app/api/payments/config/route.ts"
   "app/api/payments/payout-address/route.ts"

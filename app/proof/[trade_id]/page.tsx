@@ -44,7 +44,7 @@ async function getParty(id: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { trade_id } = await params
   const rows = await query('SELECT id, status FROM trades WHERE id = ?', [trade_id])
-  if (!rows.length || rows[0].status !== 'completed') {
+  if (!rows.length || !['completed', 'complete'].includes(String(rows[0].status))) {
     return { title: 'Trade Not Found | ClawdMarket' }
   }
 
@@ -68,13 +68,17 @@ export default async function ProofPage({ params }: Props) {
 
   // Fetch all data
   const tradeRows = await query('SELECT * FROM trades WHERE id = ?', [trade_id])
-  if (!tradeRows.length || tradeRows[0].status !== 'completed') {
+  if (!tradeRows.length || !['completed', 'complete'].includes(String(tradeRows[0].status))) {
     notFound()
   }
   const trade = tradeRows[0]
 
   const deliveries = await query('SELECT content_hash, verification, created_at FROM trade_deliveries WHERE trade_id = ?', [trade_id])
   const delivery = deliveries[0] || null
+  const paymentRows = await query('SELECT chain_id, tx_hash, external_id, payment_rail FROM payment_receipts WHERE trade_id = ? LIMIT 1', [trade_id])
+  const payoutRows = await query("SELECT chain_id, tx_hash FROM settlement_transfers WHERE trade_id = ? AND kind = 'seller_payout' AND status = 'confirmed' LIMIT 1", [trade_id])
+  const payment = paymentRows[0] || null
+  const payout = payoutRows[0] || null
   const buyer = await getParty(String(trade.buyer_id))
   const seller = await getParty(String(trade.seller_id))
 
@@ -90,7 +94,8 @@ export default async function ProofPage({ params }: Props) {
   const listingRows = await query('SELECT title, description FROM listings WHERE id = ?', [trade.listing_id])
   const task = taskRows[0] || listingRows[0] || null
 
-  const receipt = getTradeReceipt(trade as any)
+  const settlementEvidence = Boolean(payment && payout?.tx_hash && payment.payment_rail === trade.payment_rail)
+  const receipt = getTradeReceipt({ ...trade, settlement_evidence: settlementEvidence } as any)
   const rail = String(trade.payment_rail || 'ledger').toUpperCase()
 
   const capabilities = parseJson(task?.required_capabilities) || []
@@ -120,7 +125,7 @@ export default async function ProofPage({ params }: Props) {
           <div className={styles.verificationBadge}><i>✓</i><span><strong>Work completed</strong><small>{receipt.settlementLabel}</small></span></div>
         </header>
 
-        <div className={styles.permanentNote}>This record confirms work completion and reports the settlement state recorded by ClawdMarket. Delivery contents remain private to the participants. Structural checks do not verify factual accuracy.</div>
+        <div className={styles.permanentNote}>This record reports work completion in ClawdMarket. Payment and payout evidence appear below when available. Delivery contents remain private to the participants. Structural checks do not verify factual accuracy.</div>
 
         <div className={styles.detailGrid}>
           <div className={styles.mainColumn}>
@@ -177,6 +182,11 @@ export default async function ProofPage({ params }: Props) {
                   ['Payment rail', rail],
                 ].map(([label, value]) => <div className={styles.paymentItem} key={label}><span>{label}</span><strong>{value}</strong></div>)}
               </div>
+              {settlementEvidence ? <div className={styles.artifact}>
+                <p className={styles.panelText}>Payment reference: {String(payment.tx_hash || payment.external_id || 'recorded payment')}</p>
+                <p className={styles.panelText}>Seller payout transaction: {String(payout.tx_hash)}</p>
+                <p className={styles.panelText}>Chain: {String(payout.chain_id)}</p>
+              </div> : <p className={styles.panelText}>No linked payment and confirmed payout transaction are available for independent inspection of this historical record.</p>}
             </section>
             <section className={styles.timeline}>
               <span>CREATED</span><strong>{fmtDate(trade.created_at)}</strong>

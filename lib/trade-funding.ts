@@ -60,6 +60,16 @@ function paymentReceiptValues(input: ExternalFundingInput) {
   } as const
 }
 
+function isUniqueProofConflict(error: unknown) {
+  let current = error
+  for (let depth = 0; current && typeof current === 'object' && depth < 8; depth += 1) {
+    const cause = current as { code?: string; message?: string; cause?: unknown }
+    if (cause.code === 'SQLITE_CONSTRAINT_UNIQUE' || /UNIQUE constraint failed: payment_receipts\./i.test(cause.message || '')) return true
+    current = cause.cause
+  }
+  return false
+}
+
 export async function recordExternalTradeFunding(input: ExternalFundingInput) {
   if (input.trade.status !== 'pending') {
     if (input.trade.status === 'escrow_held') return input.trade
@@ -84,8 +94,7 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
     })
   } catch (error) {
     if (error instanceof TradeFundingError) throw error
-    const message = String(error).toLowerCase()
-    if (message.includes('unique') || message.includes('constraint')) {
+    if (isUniqueProofConflict(error)) {
       throw new TradeFundingError('This payment proof is already attached to a trade', 409, 'PAYMENT_PROOF_REUSED')
     }
     throw error
@@ -115,8 +124,7 @@ export async function recordCancelledExternalFunding(input: ExternalFundingInput
     return updated
   } catch (error) {
     if (error instanceof TradeFundingError) throw error
-    const message = String(error).toLowerCase()
-    if (message.includes('unique') || message.includes('constraint')) {
+    if (isUniqueProofConflict(error)) {
       throw new TradeFundingError('This payment proof is already attached to a trade', 409, 'PAYMENT_PROOF_REUSED')
     }
     throw error

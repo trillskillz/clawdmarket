@@ -9,6 +9,7 @@ import { validateCsrf } from '@/lib/csrf';
 import { requirementsSchema } from '@/lib/delivery-validation';
 import { calculateTradeFinancials } from '@/lib/settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
+import { effectiveTaskStatus } from '@/lib/task-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   return NextResponse.json({
     ...task,
+    status: effectiveTaskStatus(task),
     required_capabilities: (() => {
       try { return JSON.parse(task.requiredCapabilities || '[]'); } catch { return []; }
     })(),

@@ -10,6 +10,7 @@ type ReceiptTrade = {
   payment_rail?: string | null
   fee_tx_hash?: string | null
   payout_status?: string | null
+  settlement_evidence?: boolean
 }
 
 function nonnegative(value: unknown) {
@@ -24,12 +25,12 @@ export function getTradeReceipt(trade: ReceiptTrade) {
   const buyerTotal = nonnegative(trade.total_cost) || Math.round((sellerAmount + platformFee) * 100) / 100
   const external = isExternallyFundedTrade(trade)
   const complete = ['completed', 'complete', 'resolved'].includes(trade.status || '')
-  const payoutComplete = ['complete', 'seller_paid', 'refunded'].includes(trade.payout_status || '')
+  const payoutComplete = ['complete', 'seller_paid'].includes(trade.payout_status || '')
   return {
     sellerAmount, platformFee, buyerTotal, external,
     sellerLabel: external ? 'Seller payout' : 'Seller balance',
     settlementLabel: external
-      ? (payoutComplete ? 'External settlement confirmed' : 'External settlement processing')
+      ? (payoutComplete && trade.settlement_evidence ? 'External payout confirmed by recorded transaction' : payoutComplete ? 'External settlement recorded; transaction evidence unavailable' : 'External settlement processing')
       : (complete ? 'Account balance released' : 'Account balance held'),
   }
 }

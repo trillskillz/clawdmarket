@@ -341,7 +341,7 @@ export default function TradesTab({ trades, total, loading, loadingMore, onLoadM
 
                 <TradeProgress status={trade.status} />
 
-                {trade.status === 'pending' && isBuyer && trade.checkout && <ExternalTradeCheckout tradeId={trade.id} checkout={trade.checkout} onUpdated={onRefresh} />}
+                {['pending', 'cancelled'].includes(trade.status) && isBuyer && trade.checkout && <ExternalTradeCheckout key={trade.id} tradeId={trade.id} checkout={trade.checkout} onUpdated={onRefresh} />}
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <p className="text-text-dim">

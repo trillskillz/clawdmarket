@@ -20,6 +20,7 @@ let deliver: typeof import('@/app/api/trades/[id]/delivery/route').POST
 let confirm: typeof import('@/app/api/trades/[id]/confirm/route').POST
 let dispute: typeof import('@/app/api/trades/[id]/dispute/route').POST
 let detail: typeof import('@/app/api/tasks/[id]/route').GET
+let directory: typeof import('@/app/api/tasks/route').GET
 let patch: typeof import('@/app/api/tasks/[id]/route').PATCH
 let usage: typeof import('@/app/api/agents/usage/route').GET
 let hashKey: typeof import('@/lib/registered-agent-auth').hashAgentApiKey
@@ -51,6 +52,7 @@ before(async () => {
   dispute = (await import('@/app/api/trades/[id]/dispute/route')).POST
   const taskRoute = await import('@/app/api/tasks/[id]/route')
   detail = taskRoute.GET
+  directory = (await import('@/app/api/tasks/route')).GET
   patch = taskRoute.PATCH
   usage = (await import('@/app/api/agents/usage/route')).GET
   hashKey = (await import('@/lib/registered-agent-auth')).hashAgentApiKey
@@ -121,6 +123,34 @@ test('hashed keys work through inbox and self-test; inactive agents and expired 
   assert.equal(diagnostics.checks.find((check: any) => check.name === 'inbox').status, 'ok')
   await db.update(schema.agents).set({ status: 'inactive' }).where(eq(schema.agents.id, f.seller))
   assert.equal((await inbox(request('/api/agents/inbox', undefined, undefined, f.key))).status, 401)
+})
+
+test('expired open tasks leave public opportunities and counts but remain visible as expired history', async () => {
+  const f = await fixture()
+  const expired = `expired_public_${f.taskId}`
+  await db.insert(schema.tasks).values({
+    id: expired, posterAgentId: f.buyer, title: 'Past opportunity', description: 'This bid window has closed.',
+    budgetUsd: 1, status: 'open', expiresAt: '2000-01-01T00:00:00Z',
+  })
+  const openResponse = await directory(request('/api/tasks?status=open&limit=100'))
+  assert.equal(openResponse.status, 200)
+  const open = await openResponse.json()
+  assert.equal(open.tasks.some((task: { id: string }) => task.id === expired), false)
+  const expiredResponse = await directory(request('/api/tasks?status=expired&limit=100'))
+  assert.equal(expiredResponse.status, 200)
+  const history = await expiredResponse.json()
+  const task = history.tasks.find((entry: { id: string }) => entry.id === expired)
+  assert.equal(task?.status, 'expired')
+  assert.deepEqual(task?.pendingActions, [])
+  const detailResponse = await detail(request(`/api/tasks/${expired}`), params(expired))
+  assert.equal(detailResponse.status, 200)
+  const page = await detailResponse.json()
+  assert.equal(page.status, 'expired')
+  assert.deepEqual(page.pendingActions, [])
+  const { getMarketStats } = await import('@/lib/market-stats')
+  const stats = await getMarketStats()
+  assert.ok(stats.tasks_open >= 1)
+  assert.equal(stats.tasks_open, open.total)
 })
 
 test('agent inbox, bid history, and account work page beyond 100 records', async () => {

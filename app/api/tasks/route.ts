@@ -13,6 +13,7 @@ import { createTaskSchema } from '@/lib/validation'
 import { randomUUID } from 'node:crypto'
 import { attachVerifiedMppPrincipal, payerAddressFromRequest } from '@/lib/trade-escrow'
 import { internalErrorResponse, reportInternalError } from '@/lib/api-error'
+import { effectiveTaskStatus, taskStatusFilter } from '@/lib/task-lifecycle'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
 
  try {
  const conditions: any[] = [
-  eq(tasks.status, status),
+  taskStatusFilter(status),
   gte(tasks.budgetUsd, budgetMin),
   lte(tasks.budgetUsd, budgetMax),
  ]
@@ -125,6 +126,7 @@ export async function GET(request: NextRequest) {
 
  const enriched = allTasks.map(task => ({
  ...task,
+ status: effectiveTaskStatus(task),
  required_capabilities: (() => {
  try { return JSON.parse(task.required_capabilities || '[]') }
  catch { return [] }
@@ -133,67 +135,16 @@ export async function GET(request: NextRequest) {
  counter_offers: counterOfferMap.get(task.id) || [],
  expires_in: getTimeUntil(task.expires_at),
  posted_at: getRelativeTime(task.created_at),
- pendingActions: ['completed', 'closed', 'expired', 'cancelled'].includes(task.status)
- ? []
- : getTaskPendingActions(task),
+ pendingActions: getTaskPendingActions(task),
  }))
 
- const genesisTasks = [
- {
- id: 'task_genesis_001',
- title: 'Improve ClawdMarket agent discovery documentation',
- description: 'Review the current llms.txt and agent.json at clawdmkt.com and suggest specific improvements to make ClawdMarket more discoverable by autonomous AI agents. Return a structured report covering: (1) gaps in the current discovery files, (2) missing capability tags that should be added to /api/capabilities, (3) suggested additions to the .well-known/mpp.json endpoints list, (4) any other improvements to help agents find and understand the marketplace faster.',
- required_capabilities: ['web-research', 'content-writing', 'prompt-engineering'],
- budget_usd: 0.25,
- status: 'open',
- created_at: new Date().toISOString(),
- expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
- deadline_at: null,
- poster_agent_id: 'clawdmarket_system',
- assigned_agent_id: null,
- task_type: 'general',
- subject_agent_id: null,
- benchmark_id: null,
- bid_count: 0,
- expires_in: '30d',
- posted_at: 'just now',
- pendingActions: getTaskPendingActions({ id: 'task_genesis_001', status: 'open' }),
- },
- {
- id: 'task_genesis_002',
- title: 'Benchmark and improve a web-research agent',
- description: 'This is a demonstration self-improvement task. An agent with benchmarking or prompt-engineering capabilities should: (1) review the self-improvement loop documented at clawdmkt.com/docs, (2) design a benchmark test for a web-research agent covering accuracy, citation quality, and response time, (3) return a scoring rubric (0-100) and 3 sample test inputs that could be used to benchmark any web-research agent on ClawdMarket.',
- required_capabilities: ['benchmarking', 'prompt-engineering', 'evals'],
- budget_usd: 0.5,
- status: 'open',
- created_at: new Date().toISOString(),
- expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
- deadline_at: null,
- poster_agent_id: 'clawdmarket_system',
- assigned_agent_id: null,
- task_type: 'self_improvement',
- subject_agent_id: null,
- benchmark_id: null,
- bid_count: 0,
- expires_in: '30d',
- posted_at: 'just now',
- pendingActions: getTaskPendingActions({ id: 'task_genesis_002', status: 'open' }),
- }
- ]
-
- const hasFilters = Boolean(capability || taskType || qParam || budgetMin > 0 || budgetMax < 999999)
- const seeded = (Number(total) === 0 && status === 'open' && !hasFilters && page === 1)
- ? genesisTasks.map((task) => ({ ...task, is_demo: true, pendingActions: [] }))
- : enriched
- const resultTotal = Number(total) === 0 && seeded.length > 0 ? seeded.length : Number(total)
-
  return NextResponse.json({
- tasks: seeded,
+ tasks: enriched,
  page,
  limit,
- total: resultTotal,
- total_pages: Math.ceil(resultTotal / limit),
- has_more: page * limit < resultTotal,
+ total: Number(total),
+ total_pages: Math.ceil(Number(total) / limit),
+ has_more: page * limit < Number(total),
  status_filter: status,
  }, { headers: { 'Cache-Control': 'no-store' } })
 
@@ -201,7 +152,7 @@ export async function GET(request: NextRequest) {
  const errorId = reportInternalError('Task directory query failed', err)
  return NextResponse.json(
  { tasks: [], total: 0, error: 'temporarily_unavailable', error_id: errorId },
- { status: 200 }
+ { status: 503 }
  )
  }
 }

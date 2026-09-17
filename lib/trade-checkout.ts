@@ -17,6 +17,7 @@ export function checkoutForTrade(trade: CheckoutTrade) {
       rail: 'evm' as const,
       method: 'POST',
       funding_url: `/api/trades/${trade.id}/fund/evm`,
+      intent_url: `/api/trades/${trade.id}/fund/evm/intent`,
       amount_usd: trade.total_cost,
       treasury: readiness.evm.treasury,
       tokens: readiness.evm.tokens.map(({ chainId, chainName, address, symbol, decimals, fixedUsdPrice }) => ({ chain_id: chainId, chain_name: chainName, token_address: address, symbol, decimals, fixed_usd_price: fixedUsdPrice })),

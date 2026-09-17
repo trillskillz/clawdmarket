@@ -2,10 +2,9 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import { erc20Abi, parseUnits } from 'viem'
-import { useAccount, useConnect, useSwitchChain, useWriteContract } from 'wagmi'
 import { requestJson } from '@/lib/client-request'
-import { getBrowserWalletConnectors, formatWalletConnectionError } from '@/lib/wallet-connection'
+import ExternalTradeCheckout from '@/components/ExternalTradeCheckout'
+import { fundingNotice } from '@/lib/evm-payment-proof'
 import styles from './workspace.module.css'
 
 type TaskDetail = {
@@ -27,10 +26,6 @@ type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; 
 type PaymentConfig = { ledger_enabled: boolean; mpp_configured: boolean; erc20_configured: boolean }
 
 export default function TaskWorkspace({ taskId }: { taskId: string }) {
-  const { address, chainId, isConnected } = useAccount()
-  const { connectors, connectAsync, isPending: walletConnecting } = useConnect()
-  const { switchChainAsync } = useSwitchChain()
-  const { writeContractAsync } = useWriteContract()
   const [task, setTask] = useState<TaskDetail | null>(null)
   const [apiKey, setApiKey] = useState('')
   const [keyDraft, setKeyDraft] = useState('')
@@ -50,7 +45,6 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
   const [paymentRail, setPaymentRail] = useState<'ledger' | 'mpp' | 'evm'>('evm')
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
   const [checkout, setCheckout] = useState<Checkout | null>(null)
-  const [selectedToken, setSelectedToken] = useState<AcceptedToken | null>(null)
   const base = `/api/tasks/${encodeURIComponent(taskId)}`
 
   useEffect(() => {
@@ -77,7 +71,6 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
     setSourceCount(data.workspace.minimum_sources)
     if (data.workspace.checkout) {
       setCheckout(data.workspace.checkout)
-      setSelectedToken((current) => current || data.workspace.checkout?.tokens?.[0] || null)
     }
   }, [base, apiKey])
 
@@ -112,39 +105,14 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
         method: 'POST', apiKey,
         body: { payment_rail: paymentRail, expected_total: workspace.quote.totalCost, client_reference: crypto.randomUUID() },
       })
-      if (paymentRail === 'ledger') setNotice('Account balance held. The seller can now deliver the work.')
+      if (result.checkout.rail === 'ledger') setNotice('Account balance held. The seller can now deliver the work.')
       else {
         const next = result.checkout as Checkout
-        setCheckout(next); setSelectedToken(next.tokens?.[0] || null)
+        setCheckout(next)
         setNotice('Trade reserved. Complete payment before the checkout deadline.')
       }
       await refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create the funded trade.') }
-    finally { setBusy(false) }
-  }
-
-  async function fundTaskEvm() {
-    if (!checkout?.treasury || !selectedToken || !address) return
-    setBusy(true); setError(''); setNotice('')
-    try {
-      if (chainId !== selectedToken.chain_id) await switchChainAsync({ chainId: selectedToken.chain_id })
-      const txHash = await writeContractAsync({ chainId: selectedToken.chain_id, address: selectedToken.token_address, abi: erc20Abi, functionName: 'transfer', args: [checkout.treasury, parseUnits((checkout.amount_usd / selectedToken.fixed_usd_price).toFixed(selectedToken.decimals), selectedToken.decimals)] })
-      const csrf = document.cookie.split('; ').find((item) => item.startsWith('csrf-token='))?.split('=')[1] || ''
-      let funded = false
-      for (let attempt = 0; attempt < 40; attempt += 1) {
-        const response = await fetch(checkout.funding_url, {
-          method: 'POST', credentials: apiKey ? 'omit' : 'include',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf, ...(apiKey ? { 'X-Agent-API-Key': apiKey } : {}) },
-          body: JSON.stringify({ chain_id: selectedToken.chain_id, token_address: selectedToken.token_address, tx_hash: txHash, payer_address: address }),
-        })
-        const data = await response.json().catch(() => ({}))
-        if (response.ok) { funded = true; break }
-        if (data?.retryable && attempt < 39) { await new Promise((resolve) => window.setTimeout(resolve, 3000)); continue }
-        throw new Error(data?.error || `Payment verification failed (${response.status})`)
-      }
-      if (!funded) throw new Error('Payment confirmation timed out. The transaction remains recoverable.')
-      setCheckout(null); setNotice('ERC-20 payment verified. The seller can now deliver the work.'); await refresh()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Wallet payment failed.') }
     finally { setBusy(false) }
   }
 
@@ -163,7 +131,7 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
 
   const workspace = task?.workspace
   const trade = workspace?.trade
-  const stage = task?.status === 'completed' ? 'Completed' : trade?.payout_status === 'processing' ? 'Settlement processing' : trade?.status === 'pending' ? 'Awaiting payment' : trade?.status === 'pending_release' ? 'Buyer review' : trade?.status === 'disputed' ? 'Disputed' : workspace?.funded ? 'Work in progress' : task?.status === 'assigned' ? 'Awaiting funding' : task?.status === 'cancelled' ? 'Cancelled' : 'Collecting bids'
+  const stage = task?.status === 'completed' ? 'Completed' : task?.status === 'expired' ? 'Expired' : trade?.payout_status === 'processing' ? 'Settlement processing' : trade?.status === 'pending' ? 'Awaiting payment' : trade?.status === 'pending_release' ? 'Buyer review' : trade?.status === 'disputed' ? 'Disputed' : workspace?.funded ? 'Work in progress' : task?.status === 'assigned' ? 'Awaiting funding' : task?.status === 'cancelled' ? 'Cancelled' : 'Collecting bids'
 
   return <main className={styles.page}>
     <div className={styles.breadcrumb}><Link href="/taskboard">Task board</Link><span>/</span><Link href="/work">My work</Link></div>
@@ -264,13 +232,11 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
               {!paymentConfig && <p role="status">Checking available payment rails…</p>}
               {paymentConfig && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && !paymentConfig.ledger_enabled && <p role="alert">No payment rail is currently available.</p>}
             </form>}
-            {trade?.status === 'pending' && checkout?.rail === 'evm' && <div className={styles.checkout}>
-              <label htmlFor="task-token">Payment token</label><select id="task-token" value={selectedToken ? `${selectedToken.chain_id}:${selectedToken.token_address}` : ''} onChange={(event) => setSelectedToken(checkout.tokens?.find((token) => `${token.chain_id}:${token.token_address}` === event.target.value) || null)}>{(checkout.tokens || []).map((token) => <option key={`${token.chain_id}:${token.token_address}`} value={`${token.chain_id}:${token.token_address}`}>{token.symbol} · {token.chain_name}</option>)}</select>
-              {!isConnected ? <div className={styles.connectors}>{getBrowserWalletConnectors(connectors).map((connector) => <button key={connector.uid} disabled={walletConnecting} onClick={() => void connectAsync({ connector }).catch((cause) => setError(formatWalletConnectionError(cause, connector.name)))}>Connect {connector.name}</button>)}</div> : <p>Connected: {address?.slice(0, 6)}…{address?.slice(-4)}</p>}
-              <button disabled={busy || !isConnected || !selectedToken} onClick={() => void fundTaskEvm()}>{busy ? 'Confirming…' : `Pay $${checkout.amount_usd.toFixed(2)}`}</button>
-              <button disabled={busy} onClick={() => { if (window.confirm('Cancel this unpaid reservation? Do not cancel after broadcasting a wallet transfer.')) void act(`/api/trades/${trade.id}/cancel`, {}, 'Reservation cancelled. You can choose another payment method.') }}>Cancel reservation</button>
-            </div>}
-            {trade?.status === 'pending' && checkout?.rail === 'mpp' && <div className={styles.checkout}><p>Use an MPP-aware client with your agent key:</p><code>POST {checkout.funding_url}</code><p>The HTTP 402 challenge is bound to trade {trade.id}.</p><button disabled={busy} onClick={() => void act(`/api/trades/${trade.id}/cancel`, {}, 'Reservation cancelled. You can choose another payment method.')}>Cancel reservation</button></div>}
+            {trade && ['pending', 'cancelled'].includes(trade.status) && checkout && task.viewer.is_poster &&
+              <ExternalTradeCheckout key={trade.id} tradeId={trade.id} checkout={checkout} apiKey={apiKey} onUpdated={async (result) => {
+                if (result) setNotice(fundingNotice(result))
+                await refresh()
+              }} />}
             {trade?.status === 'pending_release' && trade.payout_status === 'processing' && <p>The payout transaction is processing. The trade will complete after network confirmation.</p>}
             {trade?.status === 'pending_release' && trade.payout_status !== 'processing' && trade.auto_confirm_at && <p>Review by {new Date(trade.auto_confirm_at).toLocaleString()}. Payment releases automatically if no dispute is raised.</p>}
             {trade && <Link href={`/dashboard?tab=trades&trade=${trade.id}`}>Manage trade or raise a dispute →</Link>}
