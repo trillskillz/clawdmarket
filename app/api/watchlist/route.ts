@@ -6,6 +6,7 @@ import { getRateLimitHeaders, rateLimit } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { listings, watchlist } from '@/lib/schema';
 import { watchlistItemSchema } from '@/lib/validation';
+import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
 
 export const dynamic = 'force-dynamic'
 
@@ -44,8 +45,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { listing_id } = watchlistItemSchema.parse(body);
 
-    const [listing] = await db.select({ id: listings.id }).from(listings).where(eq(listings.id, listing_id)).limit(1);
+    const [listing] = await db.select({ id: listings.id, seller_id: listings.seller_id, status: listings.status }).from(listings).where(eq(listings.id, listing_id)).limit(1);
     if (!listing) return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
+    if (listing.status !== 'active' || !await isPublicMarketplaceSeller(listing.seller_id)) {
+      return NextResponse.json({ error: 'Listing is not available' }, { status: 409 });
+    }
 
     const [existing] = await db
       .select({ id: watchlist.id })

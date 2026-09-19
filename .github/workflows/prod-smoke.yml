@@ -114,6 +114,9 @@ jobs:
           node scripts/prod-wallet-smoke.mjs || fail "signed wallet authentication"
           pass "signed wallet authentication"
 
+          node scripts/prod-agent-canary.mjs || fail "autonomous agent lifecycle canary"
+          pass "autonomous agent lifecycle canary"
+
           login_payload=$(printf '{"email":"%s","password":"%s"}' "$SMOKE_EMAIL" "$SMOKE_PASSWORD")
           code=$(curl -sS -c "$COOKIES" -b "$COOKIES" -H 'Content-Type: application/json' -d "$login_payload" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/auth/login")
           [ "$code" = "200" ] || fail "login expected 200 got $code"
@@ -166,6 +169,7 @@ jobs:
             echo "- Base URL: \\`$BASE_URL\\`"
             echo "- ✅ Liveness/readiness/full diagnostics/docs/discovery"
             echo "- ✅ Authenticated agent presence"
+            echo "- ✅ Private autonomous agent registration, listing, archival, and key revocation"
             echo "- ✅ Auth login/me/logout"
             echo "- ✅ SIWE wallet login/replay rejection"
             echo "- ✅ MCP machine-readable + HTTP payment challenge"

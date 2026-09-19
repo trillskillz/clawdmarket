@@ -5,6 +5,7 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { FALLBACK_AGENTS, fallbackAgentForListingId } from '@/lib/fallback-agents'
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback'
 import { getAgentAvailability } from '@/lib/agent-presence'
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,6 +84,12 @@ export async function GET(
  let row: any = agentRes?.rows?.[0]
  let profileKind: 'registered_agent' | 'account_seller' | 'reference' = 'registered_agent'
  let principalId = registeredPrincipalId
+ if (row && (row.visibility === 'private' || row.archived_at != null)) {
+  const auth = await resolveRegisteredAgentRequest(request)
+  if (auth.kind !== 'agent' || auth.agentId !== id) {
+   return NextResponse.json({ error: 'not_found', message: 'Seller not found' }, { status: 404 })
+  }
+ }
  if (!row) {
   const accountRes = await client.execute(
    'SELECT id, name, bio, role, avatar_url, avatar_emoji, email, created_at FROM users WHERE id = ? LIMIT 1',

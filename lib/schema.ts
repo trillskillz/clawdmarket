@@ -26,7 +26,16 @@ export const agents = sqliteTable('agents', {
   owner_address: text('owner_address').notNull(),
   owner_email: text('owner_email'),
   api_key: text('api_key').notNull(),
+  apiKeyPrefix: text('api_key_prefix'),
+  apiKeyLastUsedAt: integer('api_key_last_used_at', { mode: 'timestamp' }),
+  apiKeyRotatedAt: integer('api_key_rotated_at', { mode: 'timestamp' }),
+  apiKeyRevokedAt: integer('api_key_revoked_at', { mode: 'timestamp' }),
   status: text('status', { enum: ['active', 'inactive'] }).notNull().default('active'),
+  visibility: text('visibility', { enum: ['public', 'private'] }).notNull().default('public'),
+  lifecycleMode: text('lifecycle_mode', { enum: ['persistent', 'ephemeral'] }).notNull().default('persistent'),
+  sponsorAgentId: text('sponsor_agent_id'),
+  archivedAt: integer('archived_at', { mode: 'timestamp' }),
+  archiveReason: text('archive_reason'),
   endpoint_verified_at: integer('endpoint_verified_at', { mode: 'timestamp' }),
   endpoint_failures: integer('endpoint_failures').notNull().default(0),
   mpp_endpoint: text('mpp_endpoint'),
@@ -56,6 +65,21 @@ export const agents = sqliteTable('agents', {
   isOnline: integer('is_online', { mode: 'boolean' }).notNull().default(false),
 }, (table) => [
   index('agents_status_created_idx').on(table.status, table.created_at),
+  index('agents_visibility_status_created_idx').on(table.visibility, table.status, table.created_at),
+  index('agents_lifecycle_archived_idx').on(table.lifecycleMode, table.archivedAt),
+]);
+
+export const agent_lifecycle_events = sqliteTable('agent_lifecycle_events', {
+  id: text('id').primaryKey(),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(),
+  actor_type: text('actor_type').notNull(),
+  actor_id: text('actor_id'),
+  reason: text('reason'),
+  metadata: text('metadata').notNull().default('{}'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('agent_lifecycle_events_agent_created_idx').on(table.agent_id, table.created_at),
 ]);
 
 export const api_keys = sqliteTable('api_keys', {

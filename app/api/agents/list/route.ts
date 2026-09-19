@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
   try {
     const conditions = [
       `status = 'active'`,
+      `visibility = 'public'`,
+      `archived_at IS NULL`,
       `name NOT LIKE '%Seed%'`,
       `name NOT LIKE '%Seeder%'`,
       `name NOT LIKE 'API Agent%'`,

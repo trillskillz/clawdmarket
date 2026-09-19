@@ -19,6 +19,20 @@ export function hashAgentApiKey(apiKey: string): string {
   return crypto.createHash('sha256').update(apiKey).digest('hex')
 }
 
+export function agentApiKeyPrefix(apiKey: string): string {
+  return apiKey.slice(0, 12)
+}
+
+export function registeredAgentApiKeyFromRequest(request: NextRequest): string {
+  const headerKey =
+    request.headers.get('x-clawdmarket-agent-key') ||
+    request.headers.get('x-agent-api-key') ||
+    ''
+  if (headerKey.trim()) return headerKey.trim()
+  const authHeader = request.headers.get('authorization')
+  return authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : ''
+}
+
 export async function lookupRegisteredAgentApiKey(
   apiKey: string,
   options: { allowInactive?: boolean } = {},
@@ -37,11 +51,13 @@ async function resolveRegisteredAgentApiKey(
   const client = (db as any).$client
   const hashed = hashAgentApiKey(apiKey)
   const result = await client.execute({
-    sql: `SELECT id, name, status, api_key FROM agents WHERE api_key IN (?, ?) LIMIT 1`,
+    sql: `SELECT id, name, status, api_key, api_key_prefix, api_key_revoked_at, archived_at
+          FROM agents WHERE api_key IN (?, ?) LIMIT 1`,
     args: [hashed, apiKey],
   })
   const agent = result?.rows?.[0]
   if (!agent?.id) return { kind: 'invalid' }
+  if (agent.api_key_revoked_at != null || agent.archived_at != null) return { kind: 'invalid' }
 
   const status = agent.status === 'active' ? 'active' : 'inactive'
   if (!options.allowInactive && status !== 'active') return { kind: 'invalid' }
@@ -49,12 +65,18 @@ async function resolveRegisteredAgentApiKey(
   // Transparently upgrade API keys created by older releases from plaintext.
   if (agent.api_key === apiKey) {
     await client.execute({
-      sql: `UPDATE agents SET api_key = ? WHERE id = ? AND api_key = ?`,
-      args: [hashed, String(agent.id), apiKey],
+      sql: `UPDATE agents SET api_key = ?, api_key_prefix = COALESCE(api_key_prefix, ?)
+            WHERE id = ? AND api_key = ?`,
+      args: [hashed, agentApiKeyPrefix(apiKey), String(agent.id), apiKey],
     })
   }
 
   const agentId = String(agent.id)
+  await client.execute({
+    sql: `UPDATE agents SET api_key_last_used_at = unixepoch()
+          WHERE id = ? AND (api_key_last_used_at IS NULL OR api_key_last_used_at < unixepoch() - ?)`,
+    args: [agentId, AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS],
+  }).catch(() => undefined)
   if (status === 'active') {
     // Authenticated API activity is a presence signal. Coalescing updates keeps
     // ordinary polling from turning into a write on every request.
@@ -88,18 +110,13 @@ export async function resolveRegisteredAgentRequest(
   request: NextRequest,
   options: { allowInactive?: boolean } = {},
 ): Promise<RegisteredAgentAuth> {
-  const headerKey =
+  const apiKey = registeredAgentApiKeyFromRequest(request)
+  const hasCredential = Boolean(
     request.headers.get('x-clawdmarket-agent-key') ||
     request.headers.get('x-agent-api-key') ||
-    ''
-
-  if (headerKey.trim()) {
-    return resolveRegisteredAgentApiKey(headerKey.trim(), true, options)
-  }
-
-  const authHeader = request.headers.get('authorization')
-  const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : ''
-  return resolveRegisteredAgentApiKey(apiKey, Boolean(authHeader?.startsWith('Bearer ')), options)
+    request.headers.get('authorization')?.startsWith('Bearer '),
+  )
+  return resolveRegisteredAgentApiKey(apiKey, hasCredential, options)
 }
 
 export async function ensureSyntheticAgentUser(agent: {

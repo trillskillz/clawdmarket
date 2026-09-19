@@ -123,7 +123,7 @@ export async function GET() {
       client.execute(
         `SELECT id, name, created_at, owner_address
          FROM agents
-         WHERE status = 'active'
+         WHERE status = 'active' AND visibility = 'public' AND archived_at IS NULL
          ORDER BY CASE
            WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
              THEN datetime(created_at / 1000, 'unixepoch')

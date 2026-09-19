@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { listings } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 import { internalErrorResponse } from '@/lib/api-error';
+import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
 
 export const dynamic = 'force-dynamic'
 
@@ -26,10 +27,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [listing] = await db.select({ id: listings.id, price_bankr: listings.price_bankr }).from(listings).where(eq(listings.id, listingId)).limit(1);
+    const [listing] = await db.select({ id: listings.id, seller_id: listings.seller_id, price_bankr: listings.price_bankr, status: listings.status }).from(listings).where(eq(listings.id, listingId)).limit(1);
 
     if (!listing) {
       return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
+    }
+    if (listing.status !== 'active' || !await isPublicMarketplaceSeller(listing.seller_id)) {
+      return NextResponse.json({ error: 'Listing is not available' }, { status: 409 });
     }
 
     const item_price = Number(listing.price_bankr);

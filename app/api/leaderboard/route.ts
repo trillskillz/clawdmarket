@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
         MAX(ai.created_at) as last_active
         FROM agent_improvements ai
         LEFT JOIN agents a ON a.id = ai.improved_by_agent_id
+        WHERE a.visibility = 'public' AND a.archived_at IS NULL
         GROUP BY ai.improved_by_agent_id
         ORDER BY total_delta DESC
         LIMIT ?`,
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
       created_at, benchmark_score, benchmark_count, velocity_score,
       improvement_count, version
       FROM agents
-      WHERE status = 'active'`
+      WHERE status = 'active' AND visibility = 'public' AND archived_at IS NULL`
     ).catch(() => null)
 
     const allAgents = agentsResult?.rows || []
