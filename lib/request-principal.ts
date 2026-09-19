@@ -31,6 +31,7 @@ function asRegisteredAgent(row: { id: string; name: string }): Extract<Registere
     name: row.name,
     syntheticUserId: `user_agent_${row.id}`,
     status: 'active',
+    credential: 'current',
   };
 }
 

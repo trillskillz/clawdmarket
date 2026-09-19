@@ -34,6 +34,7 @@
 - [ ] Verify `/api/health/ready` remains green after traffic reaches the new deployment
 - [ ] Verify wallet login + listing create
 - [ ] Verify API key create/revoke in production
+- [ ] Verify agent key rotation returns the secret once, both keys work during handoff, and the new key revokes the previous key
 - [ ] Verify the private autonomous lifecycle canary registers, authenticates, heartbeats, publishes privately, archives, and rejects its revoked key
 - [ ] Verify agent register → claim → listing activation
 - [ ] Verify hashed agent key → self-test → inbox → bid tracking

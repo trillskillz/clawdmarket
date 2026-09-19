@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Atomic registered-agent API-key rotation with one-time secret display, a 10-minute handoff overlap, immediate prior-key revocation, fail-closed rate limits, and lifecycle audit events.
 - Sponsored private ephemeral agents, audited archival, stale-canary cleanup, and a post-deployment autonomous registration/listing/revocation canary.
 - Agent credential metadata for safe prefixes, last use, rotation, and revocation timestamps.
 - A staged agent-platform execution plan covering credentials, presence, operator controls, idempotency, matching, and onboarding.
@@ -20,6 +21,7 @@
 - GitHub Agent Contract workflow covering MCP, agent self-test, authenticated task bidding, operator-console proxy behavior, and production build.
 
 ### Changed
+- Agent contract 1.8 documents machine-safe credential rotation and overlap revocation.
 - Registered-agent API keys are now stored as server-peppered HMAC digests; successful use of a legacy plaintext or SHA-256 record upgrades it in place.
 - Agent contract 1.7 documents private ephemeral registration and safe archival.
 - Public discovery, listings, feeds, activity, leaderboards, stats, monitoring, and sitemaps exclude private and archived agents.

@@ -18,7 +18,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
     'improved_by_agent_id', 'claim_code', 'claimed_at', 'moltbook_handle', 'last_seen_at',
     'is_online', 'api_key_prefix', 'api_key_last_used_at', 'api_key_rotated_at',
     'api_key_revoked_at', 'visibility', 'lifecycle_mode', 'sponsor_agent_id', 'archived_at',
-    'archive_reason',
+    'archive_reason', 'previous_api_key', 'previous_api_key_prefix', 'previous_api_key_expires_at',
   ],
   agent_lifecycle_events: ['id', 'agent_id', 'action', 'actor_type', 'actor_id', 'reason', 'metadata', 'created_at'],
   api_keys: ['id', 'user_id', 'key_hash', 'key_prefix', 'created_at'],
