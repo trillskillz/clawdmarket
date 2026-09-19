@@ -8,6 +8,7 @@ import { validateCsrf } from '@/lib/csrf'
 import { findAcceptedToken, getPaymentReadiness } from '@/lib/payment-config'
 import { walletAuthOrigin } from '@/lib/wallet-auth'
 import { PAYMENT_TX_HASH } from '@/lib/evm-payment-proof'
+import { getNewPaymentControl, NEW_PAYMENTS_PAUSED_MESSAGE } from '@/lib/payment-control'
 
 export const dynamic = 'force-dynamic'
 type Context = { params: Promise<{ id: string }> }
@@ -45,6 +46,10 @@ export async function POST(request: NextRequest, context: Context) {
   if (existing) return json({ intent: existing, created: false })
   const recoveryHash = typeof body?.recovery_tx_hash === 'string' ? body.recovery_tx_hash.toLowerCase() : null
   if (recoveryHash && !PAYMENT_TX_HASH.test(recoveryHash)) return json({ error: 'A valid recovery transaction hash is required' }, 400)
+  if (!recoveryHash) {
+    const control = await getNewPaymentControl()
+    if (control.paused) return json({ error: NEW_PAYMENTS_PAUSED_MESSAGE, code: 'NEW_PAYMENTS_PAUSED' }, 503)
+  }
   const readiness = getPaymentReadiness()
   const token = findAcceptedToken(chainId, body.token_address)
   if (!readiness.evm.enabled || !readiness.evm.treasury || !token) return json({ error: 'Payment rail/token unavailable' }, 503)

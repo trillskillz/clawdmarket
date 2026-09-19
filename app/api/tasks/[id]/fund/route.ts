@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { agents, bids, listings, tasks, task_workspaces, trades } from '@/lib/schema'
+import { agents, bids, listings, payment_controls, tasks, task_workspaces, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { ensureSyntheticAgentUser } from '@/lib/registered-agent-auth'
 import { validateCsrf } from '@/lib/csrf'
@@ -13,6 +13,7 @@ import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy'
 import { getPaymentReadiness } from '@/lib/payment-config'
 import { payoutAddressForUser } from '@/lib/external-settlement'
 import { checkoutForTrade } from '@/lib/trade-checkout'
+import { NEW_PAYMENTS_CONTROL_KEY, NewPaymentsPausedError } from '@/lib/payment-control'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,6 +73,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .where(and(eq(listings.id, existing.listing_id), eq(listings.status, 'active')))
         }
       }
+      const [pause] = await tx.select({ paused: payment_controls.paused })
+        .from(payment_controls).where(eq(payment_controls.key, NEW_PAYMENTS_CONTROL_KEY)).limit(1)
+      if (process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED === 'true' || pause?.paused === 1) {
+        throw new NewPaymentsPausedError()
+      }
       const price = workspace.agreed_price ?? bid.priceUsd
       const quote = calculateTradeFinancials(price)
       if (input.data.expected_total !== quote.totalCost) throw new FundingError('The confirmed total does not match the accepted quote', 409)
@@ -114,6 +120,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     ])
     return NextResponse.json({ ok: true, trade: result.trade, checkout: checkoutForTrade(result.trade), workspace_url: `/taskboard/${id}` }, { status: result.created ? 201 : 200 })
   } catch (error) {
+    if (error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     if (error instanceof FundingError) return NextResponse.json({ error: error.message }, { status: error.status })
     if (error instanceof AgentSpendPolicyError) return NextResponse.json({ error: error.message, code: error.code, spending_policy: error.policy }, { status: 409 })
     if (error instanceof TradeRaceError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })

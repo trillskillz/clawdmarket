@@ -84,17 +84,22 @@ export async function resolveRegisteredAgentBearer(authHeader: string | null): P
   return resolveRegisteredAgentApiKey(apiKey, !!authHeader?.startsWith('Bearer '))
 }
 
-export async function resolveRegisteredAgentRequest(request: NextRequest): Promise<RegisteredAgentAuth> {
+export async function resolveRegisteredAgentRequest(
+  request: NextRequest,
+  options: { allowInactive?: boolean } = {},
+): Promise<RegisteredAgentAuth> {
   const headerKey =
     request.headers.get('x-clawdmarket-agent-key') ||
     request.headers.get('x-agent-api-key') ||
     ''
 
   if (headerKey.trim()) {
-    return resolveRegisteredAgentApiKey(headerKey.trim(), true)
+    return resolveRegisteredAgentApiKey(headerKey.trim(), true, options)
   }
 
-  return resolveRegisteredAgentBearer(request.headers.get('authorization'))
+  const authHeader = request.headers.get('authorization')
+  const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : ''
+  return resolveRegisteredAgentApiKey(apiKey, Boolean(authHeader?.startsWith('Bearer ')), options)
 }
 
 export async function ensureSyntheticAgentUser(agent: {

@@ -89,7 +89,6 @@ export default function ObservePage() {
   const [connState, setConnState] = useState<ConnState>('connecting')
   const [stats, setStats] = useState<any>({})
   const [activity, setActivity] = useState<any[]>([])
-  const [deliveries, setDeliveries] = useState<any[]>([])
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [sellerAgent, setSellerAgent] = useState<any>(null)
   const [completedTasks, setCompletedTasks] = useState<any[]>([])
@@ -129,14 +128,12 @@ export default function ObservePage() {
 
     const refreshPanels = async () => {
       try {
-        const [deliveryData, leaderboardData, sellerData, taskData] = await Promise.all([
-          fetchJson('/api/webhooks/deliveries'),
+        const [leaderboardData, sellerData, taskData] = await Promise.all([
           fetchJson('/api/leaderboard?metric=rating&limit=3'),
           fetchJson('/api/agents/clawdmarket_seller'),
           fetchJson('/api/tasks?status=completed&limit=3'),
         ])
         if (cancelled) return
-        setDeliveries(deliveryData.deliveries || [])
         setLeaderboard(leaderboardData.agents || [])
         if (sellerData && !sellerData.error) setSellerAgent(sellerData)
         setCompletedTasks(taskData.tasks || [])
@@ -270,17 +267,6 @@ export default function ObservePage() {
           <p>{improvementCount} / 50 CYCLES <Link href="/registry/clawdmarket_seller">VIEW PROFILE ↗</Link></p>
         </div>
       </section>
-
-      {deliveries.length > 0 && (
-        <section className={styles.deliveryPanel}>
-          <div className={styles.panelHeader}><div><strong>Webhook delivery log</strong></div><span>{deliveries.length} RECORDS</span></div>
-          {deliveries.map((delivery) => (
-            <div className={styles.delivery} key={delivery.id}>
-              <strong>{delivery.event_type}</strong><span>delivery event</span><i className={delivery.response_status >= 200 && delivery.response_status < 300 ? styles.deliveryOk : styles.deliveryError}>{delivery.response_status || delivery.status}</i><time>{delivery.created_at ? toDateSafe(delivery.created_at).toLocaleTimeString() : '—'}</time>
-            </div>
-          ))}
-        </section>
-      )}
 
       <section className={styles.discovery}>
         <div><span>AGENT DISCOVERY</span><h2>Read the market<br />like a machine.</h2></div>

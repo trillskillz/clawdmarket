@@ -25,6 +25,7 @@ const agentRegistrationSchema = z.object({
  change_description: z.string().max(2000).optional(),
  improvement_task_id: z.string().max(200).optional(),
  moltbook_handle: z.string().trim().max(100).optional(),
+ activation_mode: z.enum(['autonomous', 'owner_claim']).optional().default('owner_claim'),
 })
 /**
  * POST /api/agents/register
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
  change_description,
  improvement_task_id,
  moltbook_handle,
+ activation_mode,
  } = body
 
  if (owner_address && !isAddress(owner_address as `0x${string}`)) {
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
 
  if (!parent_version_id) {
  const apiKey = `clawd_${crypto.randomBytes(16).toString('hex')}`
- const claimCode = `claim_${crypto.randomBytes(16).toString('hex')}`
+ const claimCode = activation_mode === 'owner_claim' ? `claim_${crypto.randomBytes(16).toString('hex')}` : null
  const nowIso = new Date().toISOString()
  const syntheticUserId = `user_agent_${id}`
  const capabilitiesJson = caps || '[]'
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
    endpoint: endpoint || '',
    owner_address: owner_address || '',
    api_key: hashAgentApiKey(apiKey),
-   status: 'inactive',
+   status: activation_mode === 'autonomous' ? 'active' : 'inactive',
    version: 1,
    baseAgentId: id,
    systemPrompt: system_prompt || null,
@@ -97,16 +99,6 @@ export async function POST(request: NextRequest) {
    created_at: new Date(nowIso),
   })
   await tx.insert(wallets).values({ user_id: syntheticUserId, balance: 0, escrow: 0 })
-  await tx.insert(listings).values({
-   id: `listing_${id}`,
-   seller_id: syntheticUserId,
-   category: deriveCategory(parseCapabilities(capabilitiesJson)),
-   title: name,
-   description: description || `Services offered by ${name}`,
-   price_bankr: 0.01,
-   status: 'inactive',
-   created_at: new Date(nowIso),
-  })
  })
 
  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
@@ -119,13 +111,21 @@ export async function POST(request: NextRequest) {
    id,
    name,
    api_key: apiKey,
-   claim_url: `${baseUrl}/claim/${claimCode}`,
+   status: activation_mode === 'autonomous' ? 'active' : 'pending_claim',
+   activation_mode,
+   human_approval_required: activation_mode === 'owner_claim',
+   claim_url: claimCode ? `${baseUrl}/claim/${claimCode}` : null,
    profile_url: `${baseUrl}/registry/${id}`,
   },
   next_actions: [
    { action: 'check_status', method: 'GET', endpoint: '/api/agents/status', auth: 'agent_api_key' },
-   { action: 'heartbeat_agent', method: 'POST', endpoint: `/api/agents/${id}/heartbeat`, auth: 'agent_api_key', interval_seconds: 60 },
-   { action: 'poll_inbox', method: 'GET', endpoint: '/api/agents/inbox', auth: 'agent_api_key' },
+   ...(activation_mode === 'owner_claim'
+    ? [{ action: 'request_owner_claim', method: 'GET', endpoint: `${baseUrl}/claim/${claimCode}`, auth: 'claim_link' }]
+    : [
+      { action: 'publish_service', method: 'POST', endpoint: '/api/listings', auth: 'agent_api_key' },
+      { action: 'heartbeat_agent', method: 'POST', endpoint: `/api/agents/${id}/heartbeat`, auth: 'agent_api_key', interval_seconds: 60 },
+      { action: 'poll_inbox', method: 'GET', endpoint: '/api/agents/inbox', auth: 'agent_api_key' },
+    ]),
   ],
  }, { status: 201 })
  }

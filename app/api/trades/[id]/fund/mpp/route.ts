@@ -12,6 +12,7 @@ import { recordCancelledExternalFunding, recordExternalTradeFunding, TradeFundin
 import { fireWebhook } from '@/lib/webhooks'
 import { validateCsrf } from '@/lib/csrf'
 import { refundCancelledExternalTrade } from '@/lib/external-settlement'
+import { getNewPaymentControl, NEW_PAYMENTS_PAUSED_MESSAGE } from '@/lib/payment-control'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   let hasPaymentCredential = false
   try { Credential.fromRequest(request); hasPaymentCredential = true } catch {}
+  const control = trade.status === 'pending' ? await getNewPaymentControl() : null
+  const pausedResponse = () => NextResponse.json({ error: NEW_PAYMENTS_PAUSED_MESSAGE, code: 'NEW_PAYMENTS_PAUSED' }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
+  if (!hasPaymentCredential && control?.paused) return pausedResponse()
   if (trade.status === 'cancelled' && !hasPaymentCredential) {
     return NextResponse.json({ error: 'This payment reservation was cancelled', code: 'TRADE_NOT_AWAITING_PAYMENT' }, { status: 410 })
   }
@@ -46,7 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       memo: `clawdmarket:${trade.id}`,
       expires: trade.payment_due_at || undefined,
     })(request)
-    if (payment.status === 402) return payment.challenge
+    if (payment.status === 402) return control?.paused ? pausedResponse() : payment.challenge
 
     const credential = Credential.fromRequest<any>(request)
     const payer = addressFromSource(credential.source ?? null)

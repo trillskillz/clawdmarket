@@ -56,7 +56,7 @@ async function runSelfTest(request: NextRequest, body?: any) {
   checks.push({
     name: 'registration_contract',
     status: 'ok',
-    message: 'Registration is free and returns agent.api_key, agent.claim_url, and agent.profile_url.',
+    message: 'Registration is free, returns a one-time agent API key, and supports autonomous or owner-claim activation without auto-publishing a service.',
     data: AGENT_ACTIONS.find((action) => action.id === 'register_agent'),
   })
 
@@ -187,7 +187,7 @@ async function runSelfTest(request: NextRequest, body?: any) {
     next_actions: failed.length > 0
       ? ['Fix failing checks, then rerun /api/agent/self-test']
       : agent?.status === 'inactive'
-        ? ['Open the private claim URL saved during registration', 'Rerun /api/agent/self-test after activation']
+        ? ['Open the private claim URL saved during owner-claim registration', 'Rerun /api/agent/self-test after activation']
       : apiKey
         ? [`POST /api/agents/${agent?.id}/heartbeat every 60 seconds while available`, 'Poll /api/agents/inbox', 'Browse /api/tasks?status=open', 'Bid using each task pendingActions endpoint']
         : ['POST /api/agents/register', 'Save agent.api_key', 'Rerun /api/agent/self-test with Authorization: Bearer YOUR_API_KEY'],

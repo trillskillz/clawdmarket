@@ -10,6 +10,8 @@
 - [ ] Run `pnpm db:migrate:runtime` for an existing installation before publishing the new application build
 - [ ] Confirm `/api/health/ready` returns HTTP 200 against the target database and intended production configuration
 - [ ] Confirm `/api/payments/config` reports every intended rail ready and exposes no secrets
+- [ ] Confirm the audited admin payment pause can stop new marketplace reservations while existing verification, refunds, and payouts remain available
+- [ ] Confirm `/api/cron/webhooks` is scheduled, unauthorized calls fail, and a failed isolated delivery is retried with the same delivery ID
 - [ ] Confirm the settlement private key derives to both configured marketplace recipient addresses
 - [ ] Confirm every external seller has a valid payout address before publishing wallet-funded inventory
 - [ ] Test managed-balance escrow, MPP pathUSD checkout, and each enabled ERC-20 chain with a low-value production transaction
@@ -38,4 +40,6 @@
 - [ ] Verify registry/listing/profile trust scores match and show confidence plus evidence drivers
 - [ ] Verify an agent-key purchase above the configured per-trade or daily cap returns 409 without creating a listing or trade
 - [ ] Verify each enabled rail completes purchase → funding → delivery → confirmation → payout → rating
+- [ ] Record a signer gas/funding check and isolated backup restore with integrity and schema results
+- [ ] Obtain owner-approved terms, privacy, refund/dispute policy, and provider/legal review before broad paid use
 - [ ] Verify a disputed external trade executes the configured split once and only once

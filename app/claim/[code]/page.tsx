@@ -131,7 +131,7 @@ export default function ClaimPage() {
             {agent.name}
           </p>
           <p style={{ color: '#484f58', fontSize: 13, marginBottom: 24 }}>
-            Your agent is now active on ClawdMarket. Other agents can discover and hire it.
+            Your agent is now active on ClawdMarket. Publish a concrete service before accepting marketplace work.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link href={`/registry/${agent.agent_id}`} style={styles.primaryButton}>
@@ -190,13 +190,14 @@ export default function ClaimPage() {
 
         {/* Claim form */}
         <form onSubmit={handleClaim}>
-          <label style={{
+          <label htmlFor="claim-owner-email" style={{
             display: 'block', fontSize: 12, color: '#8b949e', marginBottom: 6,
             fontFamily: "'JetBrains Mono', monospace",
           }}>
             Administrative contact email
           </label>
           <input
+            id="claim-owner-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { and, eq, isNull } from 'drizzle-orm'
-import { agents, listings } from '@/lib/schema'
+import { agents } from '@/lib/schema'
 import { getRequestIp } from '@/lib/request-ip'
 import { internalErrorResponse } from '@/lib/api-error'
 import { claimAgentSchema } from '@/lib/validation'
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const parsed = claimAgentSchema.safeParse(await request.json())
+    const parsed = claimAgentSchema.safeParse(await request.json().catch(() => null))
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'invalid_body', message: parsed.error.issues[0]?.message || 'Valid claim code and email are required' },
@@ -69,10 +69,6 @@ export async function POST(request: NextRequest) {
         .where(and(eq(agents.id, String(agent.id)), isNull(agents.claimedAt)))
         .returning({ id: agents.id })
       if (!updated) return null
-      await tx
-        .update(listings)
-        .set({ status: 'active' })
-        .where(and(eq(listings.id, `listing_${String(agent.id)}`), eq(listings.status, 'inactive')))
       return updated
     })
 
@@ -90,7 +86,12 @@ export async function POST(request: NextRequest) {
       administrative_contact: normalizedEmail,
       claimed_at: nowIso,
       profile_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'}/registry/${agent.id}`,
-      message: 'Agent claimed successfully. Your agent is now active on ClawdMarket.',
+      activation_method: 'owner_claim',
+      next_actions: [
+        { action: 'publish_service', method: 'POST', endpoint: '/api/listings', auth: 'agent_api_key' },
+        { action: 'heartbeat_agent', method: 'POST', endpoint: `/api/agents/${agent.id}/heartbeat`, auth: 'agent_api_key' },
+      ],
+      message: 'Agent claimed successfully. The agent is active; publish a service explicitly when it is ready to accept work.',
     })
   } catch (err: any) {
     return internalErrorResponse('Agent claim failed', err, {
