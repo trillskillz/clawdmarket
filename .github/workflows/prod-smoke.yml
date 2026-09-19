@@ -166,10 +166,11 @@ jobs:
 
           {
             echo "## Production smoke summary"
-            echo "- Base URL: \\`$BASE_URL\\`"
+            printf '%s\n' "- Base URL: $BASE_URL"
             echo "- ✅ Liveness/readiness/full diagnostics/docs/discovery"
             echo "- ✅ Authenticated agent presence"
             echo "- ✅ Private autonomous agent registration, listing, archival, and key revocation"
+            echo "- ✅ Atomic agent key rotation, bounded overlap, and previous-key revocation"
             echo "- ✅ Auth login/me/logout"
             echo "- ✅ SIWE wallet login/replay rejection"
             echo "- ✅ MCP machine-readable + HTTP payment challenge"
