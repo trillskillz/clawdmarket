@@ -25,6 +25,9 @@ function getAgentApiKeyPepper(): string {
 }
 
 export function hashAgentApiKey(apiKey: string): string {
+  // This is a high-entropy bearer token, not a human password; keyed HMAC is
+  // the appropriate deterministic digest for indexed credential lookup.
+  // codeql[js/insufficient-password-hash]
   return crypto
     .createHmac('sha256', getAgentApiKeyPepper())
     .update(`agent-api-key:${apiKey}`)
@@ -34,7 +37,7 @@ export function hashAgentApiKey(apiKey: string): string {
 function legacyAgentApiKeyDigest(apiKey: string): string {
   // Compatibility only: old releases stored SHA-256 digests of random 128-bit
   // API keys. A successful legacy lookup is immediately upgraded to keyed HMAC.
-  // lgtm[js/insufficient-password-hash]
+  // codeql[js/insufficient-password-hash]
   return crypto.createHash('sha256').update(apiKey).digest('hex')
 }
 

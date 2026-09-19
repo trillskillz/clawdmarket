@@ -28,6 +28,9 @@ async function main() {
   const client = createClient({ url: databaseUrl, authToken: databaseToken })
   const now = new Date().toISOString()
   const nowEpoch = Math.floor(Date.now() / 1000)
+  // This is a high-entropy bearer token, not a human password; keyed HMAC is
+  // required to match the indexed runtime credential digest.
+  // codeql[js/insufficient-password-hash]
   const apiKeyHash = createHmac('sha256', apiKeyPepper)
     .update(`agent-api-key:${apiKey}`)
     .digest('hex')

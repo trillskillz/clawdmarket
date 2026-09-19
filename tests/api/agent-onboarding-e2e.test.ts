@@ -107,6 +107,8 @@ test('an autonomous agent can activate, authenticate with either key header, and
   assert.equal(buyer.agent.human_approval_required, false)
 
   const seller = await registerAgent('Autonomous Seller', 'autonomous')
+  // Test fixture for the deliberately supported pre-HMAC storage format.
+  // codeql[js/insufficient-password-hash]
   const legacyDigest = createHash('sha256').update(buyer.agent.api_key).digest('hex')
   await db.update(schema.agents).set({ api_key: legacyDigest }).where(eq(schema.agents.id, buyer.agent.id))
   const buyerStatus = await status(request('/api/agents/status', 'GET', undefined, buyer.agent.api_key))
