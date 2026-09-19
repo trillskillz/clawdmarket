@@ -22,6 +22,7 @@ import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy';
 import { getPaymentReadiness } from '@/lib/payment-config';
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
+import { NewPaymentsPausedError, requireNewPaymentsOpen } from '@/lib/payment-control';
 
 export const dynamic = 'force-dynamic'
 
@@ -82,6 +83,8 @@ async function createTradePost(req: NextRequest) {
       }
       return NextResponse.json({ message: 'Existing trade returned.', trade: existingTrade, code: 'TRADE_EXISTS', checkout: checkoutForTrade(existingTrade) });
     }
+
+    await requireNewPaymentsOpen();
 
     const [listing]: any = await db
       .select()
@@ -190,10 +193,10 @@ async function createTradePost(req: NextRequest) {
         }).returning();
       });
       const checkout = checkoutForTrade(newTrade);
-      Promise.all([
+      await Promise.allSettled([
         fireWebhook(auth.userId, 'trade.created', { trade: newTrade, checkout }),
         fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade, checkout }),
-      ]).catch(err => logger.error('Webhook error', { err: String(err) }));
+      ]);
       return NextResponse.json({
         message: 'Trade reserved. Complete payment before the checkout deadline.',
         trade: newTrade,
@@ -249,13 +252,13 @@ async function createTradePost(req: NextRequest) {
     const newTrade = await db.transaction((tx) => createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { agentId: auth.agentId, clientReference }));
     // ─── ESCROW LOGIC END ───
 
-    // Fire webhooks (fire-and-forget, don't block response)
-    Promise.all([
+    // Queue webhook records durably before returning the trade response.
+    await Promise.allSettled([
       fireWebhook(auth.userId, 'trade.created', { trade: newTrade }),
       fireWebhook(listing.seller_id, 'trade.created', { trade: newTrade }),
       fireWebhook(listing.seller_id, 'listing.sold', { listing_id: validated.listing_id, trade: newTrade }),
       fireWebhook(auth.userId, 'balance.changed', { reason: 'escrow_lock', trade_id: newTrade.id }),
-    ]).catch(err => logger.error('Webhook error', { err: String(err) }));
+    ]);
 
     return NextResponse.json(
       {
@@ -279,6 +282,9 @@ async function createTradePost(req: NextRequest) {
       }
     );
   } catch (error: any) {
+    if (error instanceof NewPaymentsPausedError) {
+      return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });
+    }
     if (error?.message === 'DEV_FEE_MISMATCH') {
       await db.insert(fee_errors).values({
         trade_id: null,

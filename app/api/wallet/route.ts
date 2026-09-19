@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { transactions, trades } from '@/lib/schema';
+import { transactions } from '@/lib/schema';
 import { logger } from '@/lib/logger';
 import { getBalance } from '@/lib/wallet';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { eq, or, desc, and, sql } from 'drizzle-orm';
+import { eq, or, desc } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { getRequestIp } from '@/lib/request-ip';
@@ -30,11 +30,6 @@ export async function GET(req: NextRequest) {
   try {
     const balance = await getBalance(auth.userId);
 
-    const [pending] = await db
-      .select({ pending_escrow: sql<number>`coalesce(sum(${trades.amount}), 0)` })
-      .from(trades)
-      .where(and(eq(trades.buyer_id, auth.userId), sql`${trades.status} IN ('pending', 'escrow_held', 'pending_release')`));
-
     const recentTx = await db
       .select()
       .from(transactions)
@@ -47,14 +42,11 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(transactions.created_at))
       .limit(25);
 
-    const pendingEscrow = Number(pending?.pending_escrow || 0);
-    const escrow = Math.max(balance.escrow, pendingEscrow);
-
     return NextResponse.json({
-      ticker: '$USDC',
+      ticker: 'USD_CREDIT',
       ...balance,
-      escrow,
-      // balance already excludes ledger funds moved into escrow.
+      // This endpoint reports internal ledger credit only. Externally funded
+      // trades are accounted for in trade receipts, not in this balance.
       available: Math.max(0, balance.balance),
       transactions: recentTx,
       ...envMeta('clawdmarket/api/wallet'),

@@ -309,6 +309,32 @@ async function main() {
           tx_hash TEXT, payer_signature TEXT
         )`)
       } },
+      { id: '2026-09-17-payment-controls-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS payment_controls (
+          key TEXT PRIMARY KEY NOT NULL, paused INTEGER NOT NULL DEFAULT 0,
+          reason TEXT, updated_by TEXT, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute(`CREATE TABLE IF NOT EXISTS payment_control_events (
+          id TEXT PRIMARY KEY NOT NULL, control_key TEXT NOT NULL, paused INTEGER NOT NULL,
+          reason TEXT NOT NULL, actor_user_id TEXT NOT NULL, created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS payment_control_events_key_created_idx ON payment_control_events(control_key, created_at)')
+      } },
+      { id: '2026-09-19-webhook-outbox-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS webhook_deliveries (
+          id TEXT PRIMARY KEY NOT NULL, webhook_id TEXT NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+          event_type TEXT NOT NULL, payload TEXT NOT NULL, response_status INTEGER,
+          delivered_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, success INTEGER NOT NULL DEFAULT 0
+        )`)
+        await ensureColumns(database, 'webhook_deliveries', {
+          created_at: 'INTEGER',
+          next_attempt_at: 'INTEGER',
+          locked_at: 'INTEGER',
+          last_error: 'TEXT',
+        })
+        await database.execute('UPDATE webhook_deliveries SET created_at = unixepoch() WHERE created_at IS NULL')
+        await database.execute('CREATE INDEX IF NOT EXISTS webhook_deliveries_retry_idx ON webhook_deliveries(success, next_attempt_at)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

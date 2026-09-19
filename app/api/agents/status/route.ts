@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { lookupRegisteredAgentApiKey } from '@/lib/registered-agent-auth'
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
@@ -12,20 +12,10 @@ export const dynamic = 'force-dynamic'
  * Returns claimed/pending_claim/inactive status.
  */
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get('authorization')
-  if (!auth?.startsWith('Bearer ')) {
-    return NextResponse.json(
-      { error: 'unauthorized', message: 'Provide your API key as: Authorization: Bearer YOUR_API_KEY' },
-      { status: 401 }
-    )
-  }
-
-  const apiKey = auth.substring(7).trim()
-
   try {
     const client = (db as any).$client
 
-    const auth = await lookupRegisteredAgentApiKey(apiKey, { allowInactive: true })
+    const auth = await resolveRegisteredAgentRequest(request, { allowInactive: true })
     if (auth.kind !== 'agent') {
       return NextResponse.json(
         { error: 'unauthorized', message: 'Invalid API key' },
@@ -68,6 +58,8 @@ export async function GET(request: NextRequest) {
       agent_id: agent.id,
       name: agent.name,
       status,
+      activation_method: isClaimed ? 'owner_claim' : agentStatus === 'active' ? 'autonomous' : 'owner_claim',
+      human_approval_required: isPendingClaim,
       claimed_at: claimedAt || null,
       owner_address: agent.owner_address || null,
       owner_email: agent.owner_email || null,

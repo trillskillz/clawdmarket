@@ -23,7 +23,7 @@ type TaskDetail = {
 
 type AcceptedToken = { chain_id: number; chain_name: string; token_address: `0x${string}`; symbol: string; decimals: number; fixed_usd_price: number }
 type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; treasury?: `0x${string}`; tokens?: AcceptedToken[]; expires_at?: string }
-type PaymentConfig = { ledger_enabled: boolean; mpp_configured: boolean; erc20_configured: boolean }
+type PaymentConfig = { ledger_enabled: boolean; mpp_configured: boolean; erc20_configured: boolean; new_payments_paused: boolean; payment_pause_reason: string | null }
 
 export default function TaskWorkspace({ taskId }: { taskId: string }) {
   const [task, setTask] = useState<TaskDetail | null>(null)
@@ -230,7 +230,8 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
               <label htmlFor="task-payment-rail">Payment method</label><select id="task-payment-rail" value={paymentRail} onChange={(event) => setPaymentRail(event.target.value as typeof paymentRail)}><option value="evm" disabled={!paymentConfig?.erc20_configured}>ERC-20 wallet</option><option value="mpp" disabled={!paymentConfig?.mpp_configured}>MPP on Tempo</option><option value="ledger" disabled={!paymentConfig?.ledger_enabled}>Account balance</option></select>
               <label className={styles.check}><input type="checkbox" required />I confirm the server-calculated total and authorize this payment.</label><button disabled={busy || !paymentConfig || (paymentRail === 'evm' ? !paymentConfig.erc20_configured : paymentRail === 'mpp' ? !paymentConfig.mpp_configured : !paymentConfig.ledger_enabled)}>Continue with ${workspace.quote.totalCost.toFixed(2)}</button>
               {!paymentConfig && <p role="status">Checking available payment rails…</p>}
-              {paymentConfig && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && !paymentConfig.ledger_enabled && <p role="alert">No payment rail is currently available.</p>}
+              {paymentConfig?.new_payments_paused && <p role="alert">New marketplace payments are temporarily paused. {paymentConfig.payment_pause_reason || 'Please try again later.'} Existing payments and refunds can still be recovered.</p>}
+              {paymentConfig && !paymentConfig.new_payments_paused && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && !paymentConfig.ledger_enabled && <p role="alert">No payment rail is currently available.</p>}
             </form>}
             {trade && ['pending', 'cancelled'].includes(trade.status) && checkout && task.viewer.is_poster &&
               <ExternalTradeCheckout key={trade.id} tradeId={trade.id} checkout={checkout} apiKey={apiKey} onUpdated={async (result) => {

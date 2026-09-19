@@ -8,7 +8,7 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
 import { eq, and, sql } from 'drizzle-orm';
 import { users } from '@/lib/schema';
-import { ensureSyntheticAgentUser, resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth';
+import { ensureSyntheticAgentUser, resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth';
 import { loadAgentTrustMap } from '@/lib/agent-trust';
 import { getRequestIp } from '@/lib/request-ip';
 import { internalErrorResponse } from '@/lib/api-error';
@@ -247,7 +247,7 @@ export async function POST(req: NextRequest) {
   let sellerAgentId: string | null = null;
 
   if (!auth) {
-    const agentAuth = await resolveRegisteredAgentBearer(authHeader);
+    const agentAuth = await resolveRegisteredAgentRequest(req);
     if (agentAuth.kind !== 'agent') {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate CSRF for cookie-based auth (not for API keys)
-  if (!authHeader && !validateCsrf(req)) {
+  if (auth && !authHeader && !validateCsrf(req)) {
     return NextResponse.json(
       { error: 'CSRF validation failed' },
       { status: 403 }

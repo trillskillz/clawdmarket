@@ -364,7 +364,13 @@ export const webhook_deliveries = sqliteTable('webhook_deliveries', {
   delivered_at: text('delivered_at'),
   attempts: integer('attempts').notNull().default(0),
   success: integer('success').notNull().default(0),
-});
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  next_attempt_at: integer('next_attempt_at', { mode: 'timestamp' }),
+  locked_at: integer('locked_at', { mode: 'timestamp' }),
+  last_error: text('last_error'),
+}, (table) => [
+  index('webhook_deliveries_retry_idx').on(table.success, table.next_attempt_at),
+]);
 
 export const watchlist = sqliteTable('watchlist', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -576,6 +582,25 @@ export const evm_payment_intents = sqliteTable('evm_payment_intents', {
   tx_hash: text('tx_hash'),
   payer_signature: text('payer_signature'),
 });
+
+export const payment_controls = sqliteTable('payment_controls', {
+  key: text('key').primaryKey(),
+  paused: integer('paused').notNull().default(0),
+  reason: text('reason'),
+  updated_by: text('updated_by'),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const payment_control_events = sqliteTable('payment_control_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  control_key: text('control_key').notNull(),
+  paused: integer('paused').notNull(),
+  reason: text('reason').notNull(),
+  actor_user_id: text('actor_user_id').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('payment_control_events_key_created_idx').on(table.control_key, table.created_at),
+]);
 
 export const payout_addresses = sqliteTable('payout_addresses', {
   user_id: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),

@@ -42,7 +42,7 @@ type HireIntent = {
 
 type AcceptedToken = { chain_id: number; chain_name: string; token_address: `0x${string}`; symbol: string; decimals: number; fixed_usd_price: number }
 type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; treasury?: `0x${string}`; tokens?: AcceptedToken[]; expires_at?: string }
-type PaymentConfig = { ledger_enabled: boolean; ledger_redeemable: boolean; mpp_configured: boolean; erc20_configured: boolean; accepted_tokens: AcceptedToken[] }
+type PaymentConfig = { ledger_enabled: boolean; ledger_redeemable: boolean; mpp_configured: boolean; erc20_configured: boolean; new_payments_paused: boolean; payment_pause_reason: string | null; accepted_tokens: AcceptedToken[] }
 
 const CATEGORIES = [
   { id: 'all', label: 'All services' },
@@ -526,7 +526,8 @@ export default function MarketplacePage() {
                 </div>
                 {!paymentConfig && <p role="status">Checking available payment rails…</p>}
                 {!hireIntent.service.external_payment_ready && <p className={styles.settlementNotice}>This seller has not configured an external payout wallet. ERC-20 and MPP funding are unavailable for this service.</p>}
-                {paymentConfig && !paymentConfig.ledger_enabled && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && <p role="alert">No payment rail is currently available. Please try again later.</p>}
+                {paymentConfig?.new_payments_paused && <p role="alert">New marketplace payments are temporarily paused. {paymentConfig.payment_pause_reason || 'Please try again later.'} Existing payments and refunds can still be recovered from your trade.</p>}
+                {paymentConfig && !paymentConfig.new_payments_paused && !paymentConfig.ledger_enabled && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && <p role="alert">No payment rail is currently available. Please try again later.</p>}
                 {submitting && <p>Creating escrow…</p>}
                 {tradeError && (
                   <div className={styles.tradeError} role="alert">
