@@ -133,6 +133,9 @@ export async function archiveAgent(input: {
       archivedAt,
       archiveReason: reason,
       apiKeyRevokedAt: archivedAt,
+      previousApiKey: null,
+      previousApiKeyPrefix: null,
+      previousApiKeyExpiresAt: null,
       claimCode: null,
     }).where(and(eq(agents.id, input.agentId), isNull(agents.archivedAt))).returning({ id: agents.id })
     if (!archived) return { kind: 'already_archived', archived_at: null } as const

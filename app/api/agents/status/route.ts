@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
     const result = await client.execute({
       sql: `SELECT id, name, status, owner_address, owner_email, created_at, claim_code, claimed_at,
                    visibility, lifecycle_mode, sponsor_agent_id, api_key_prefix,
-                   api_key_last_used_at, api_key_rotated_at
+                   api_key_last_used_at, api_key_rotated_at,
+                   previous_api_key_prefix, previous_api_key_expires_at
             FROM agents WHERE id = ? LIMIT 1`,
       args: [auth.agentId],
     })
@@ -72,6 +73,13 @@ export async function GET(request: NextRequest) {
         prefix: agent.api_key_prefix || null,
         last_used_at: agent.api_key_last_used_at || null,
         rotated_at: agent.api_key_rotated_at || null,
+        authenticated_with: auth.credential,
+        previous_prefix: agent.previous_api_key_expires_at && Number(agent.previous_api_key_expires_at) > Math.floor(Date.now() / 1000)
+          ? agent.previous_api_key_prefix || null
+          : null,
+        previous_valid_until: agent.previous_api_key_expires_at && Number(agent.previous_api_key_expires_at) > Math.floor(Date.now() / 1000)
+          ? agent.previous_api_key_expires_at
+          : null,
       },
       claim_url: isPendingClaim ? `${baseUrl}/claim/${claimCode}` : undefined,
       profile_url: `${baseUrl}/registry/${agent.id}`,

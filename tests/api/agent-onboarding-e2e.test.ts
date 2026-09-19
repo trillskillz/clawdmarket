@@ -13,6 +13,8 @@ let db: typeof import('@/lib/db').db
 let schema: typeof import('@/lib/schema')
 let register: typeof import('@/app/api/agents/register/route').POST
 let status: typeof import('@/app/api/agents/status/route').GET
+let rotateCredential: typeof import('@/app/api/agents/credentials/rotate/route').POST
+let revokePreviousCredential: typeof import('@/app/api/agents/credentials/previous/route').DELETE
 let heartbeat: typeof import('@/app/api/agents/[id]/heartbeat/route').POST
 let claim: typeof import('@/app/api/claim/route')
 let listing: typeof import('@/app/api/listings/route').POST
@@ -48,6 +50,8 @@ before(async () => {
   await createLocalTestSchema(db.$client, schema)
   register = (await import('@/app/api/agents/register/route')).POST
   status = (await import('@/app/api/agents/status/route')).GET
+  rotateCredential = (await import('@/app/api/agents/credentials/rotate/route')).POST
+  revokePreviousCredential = (await import('@/app/api/agents/credentials/previous/route')).DELETE
   heartbeat = (await import('@/app/api/agents/[id]/heartbeat/route')).POST
   claim = await import('@/app/api/claim/route')
   listing = (await import('@/app/api/listings/route')).POST
@@ -199,6 +203,63 @@ test('owner-claim registration blocks marketplace actions until the private clai
   assert.equal((await heartbeat(request(`/api/agents/${assisted.agent.id}/heartbeat`, 'POST', {}, assisted.agent.api_key), { params: Promise.resolve({ id: assisted.agent.id }) })).status, 200)
   const generated = await db.select().from(schema.listings).where(eq(schema.listings.seller_id, `user_agent_${assisted.agent.id}`))
   assert.equal(generated.length, 0)
+})
+
+test('agent credential rotation is atomic, overlapping, and auditable', async () => {
+  const agent = await registerAgent('Credential Rotation Agent', 'autonomous')
+  const oldKey = agent.agent.api_key
+
+  const attempts = await Promise.all([
+    rotateCredential(request('/api/agents/credentials/rotate', 'POST', undefined, oldKey)),
+    rotateCredential(request('/api/agents/credentials/rotate', 'POST', undefined, oldKey)),
+  ])
+  assert.equal(attempts.filter((response) => response.status === 200).length, 1)
+  assert.equal(attempts.filter((response) => response.status !== 200).length, 1)
+  assert.ok([403, 409].includes(attempts.find((response) => response.status !== 200)!.status))
+
+  const rotatedResponse = attempts.find((response) => response.status === 200)!
+  const rotated = await rotatedResponse.json()
+  const newKey = rotated.credential.api_key
+  assert.match(newKey, /^clawd_[a-f0-9]{48}$/)
+  assert.equal(rotated.credential.prefix, newKey.slice(0, 12))
+  assert.ok(rotated.credential.previous_key_valid_until)
+  assert.equal(JSON.stringify(rotated).includes(oldKey), false)
+
+  const oldStatus = await status(request('/api/agents/status', 'GET', undefined, oldKey))
+  assert.equal(oldStatus.status, 200)
+  assert.equal((await oldStatus.json()).credential.authenticated_with, 'previous')
+  const newStatus = await status(request('/api/agents/status', 'GET', undefined, newKey))
+  assert.equal(newStatus.status, 200)
+  const newStatusBody = await newStatus.json()
+  assert.equal(newStatusBody.credential.authenticated_with, 'current')
+  assert.equal(newStatusBody.credential.prefix, newKey.slice(0, 12))
+  assert.equal(newStatusBody.credential.previous_prefix, oldKey.slice(0, 12))
+
+  const oldCannotRotate = await rotateCredential(request('/api/agents/credentials/rotate', 'POST', undefined, oldKey))
+  assert.equal(oldCannotRotate.status, 403)
+  assert.equal((await oldCannotRotate.json()).error, 'current_credential_required')
+  const overlapBlocksAnotherRotation = await rotateCredential(request('/api/agents/credentials/rotate', 'POST', undefined, newKey))
+  assert.equal(overlapBlocksAnotherRotation.status, 409)
+  assert.equal((await overlapBlocksAnotherRotation.json()).error, 'rotation_overlap_active')
+
+  const oldCannotRevoke = await revokePreviousCredential(request('/api/agents/credentials/previous', 'DELETE', undefined, oldKey))
+  assert.equal(oldCannotRevoke.status, 403)
+  const revoked = await revokePreviousCredential(request('/api/agents/credentials/previous', 'DELETE', undefined, newKey))
+  assert.equal(revoked.status, 200)
+  assert.equal((await revoked.json()).revoked, true)
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, oldKey))).status, 401)
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, newKey))).status, 200)
+
+  const idempotent = await revokePreviousCredential(request('/api/agents/credentials/previous', 'DELETE', undefined, newKey))
+  assert.equal(idempotent.status, 200)
+  assert.equal((await idempotent.json()).revoked, false)
+
+  const events = await db.select().from(schema.agent_lifecycle_events)
+    .where(eq(schema.agent_lifecycle_events.agent_id, agent.agent.id))
+  assert.deepEqual(
+    events.map((event) => event.action).filter((action) => action.startsWith('credential_')).sort(),
+    ['credential_previous_revoked', 'credential_rotated'],
+  )
 })
 
 test('a sponsored ephemeral canary stays private and archives without stranding work', async () => {

@@ -356,6 +356,14 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS agents_lifecycle_archived_idx ON agents(lifecycle_mode, archived_at)')
         await database.execute('CREATE INDEX IF NOT EXISTS agent_lifecycle_events_agent_created_idx ON agent_lifecycle_events(agent_id, created_at DESC)')
       } },
+      { id: '2026-09-19-agent-credential-rotation-v1', run: async (database: Client) => {
+        await ensureColumns(database, 'agents', {
+          previous_api_key: 'TEXT',
+          previous_api_key_prefix: 'TEXT',
+          previous_api_key_expires_at: 'INTEGER',
+        })
+        await database.execute('CREATE INDEX IF NOT EXISTS agents_previous_api_key_expiry_idx ON agents(previous_api_key_expires_at)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

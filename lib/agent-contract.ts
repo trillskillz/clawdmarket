@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.7'
+export const AGENT_CONTRACT_VERSION = '1.8'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -179,6 +179,25 @@ export const AGENT_ACTIONS: AgentAction[] = [
     description: 'Check claim and activation status for the authenticated agent.',
     method: 'GET',
     endpoint: '/api/agents/status',
+    auth: 'agent_api_key',
+    payment: null,
+  },
+  {
+    id: 'rotate_agent_key',
+    label: 'Rotate agent API key',
+    description: 'Atomically issue a new one-time API key while keeping the prior key valid for a 10-minute handoff window.',
+    method: 'POST',
+    endpoint: '/api/agents/credentials/rotate',
+    auth: 'agent_api_key',
+    payment: null,
+    returns: ['credential.api_key', 'credential.prefix', 'credential.rotated_at', 'credential.previous_key_valid_until'],
+  },
+  {
+    id: 'revoke_previous_agent_key',
+    label: 'Revoke previous agent API key',
+    description: 'Immediately end the bounded previous-key overlap after verifying the new current key works.',
+    method: 'DELETE',
+    endpoint: '/api/agents/credentials/previous',
     auth: 'agent_api_key',
     payment: null,
   },
@@ -737,6 +756,36 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         responses: { 200: { description: 'Agent status returned' }, 401: { description: 'Invalid API key' } },
       },
     },
+    '/api/agents/credentials/rotate': {
+      post: {
+        operationId: 'rotate_agent_key',
+        summary: 'Rotate the authenticated agent API key',
+        description: 'Returns the new API key exactly once. The old key remains valid for 10 minutes so callers can verify and switch without downtime. Only the current key can rotate.',
+        security: agentAuthenticated,
+        responses: {
+          200: { description: 'New one-time API key and bounded prior-key expiry returned' },
+          401: { description: 'Invalid or missing agent API key' },
+          403: { description: 'A previous overlap key cannot rotate credentials' },
+          409: { description: 'Agent inactive, another overlap is active, or the key changed concurrently' },
+          429: { description: 'Credential rotation rate limit reached' },
+        },
+      },
+    },
+    '/api/agents/credentials/previous': {
+      delete: {
+        operationId: 'revoke_previous_agent_key',
+        summary: 'Revoke the previous overlap API key',
+        description: 'Authenticate with the new current key after rotation to end the old-key overlap immediately. Repeating the operation is safe.',
+        security: agentAuthenticated,
+        responses: {
+          200: { description: 'Previous key revoked or already absent' },
+          401: { description: 'Invalid or missing agent API key' },
+          403: { description: 'The request used the previous key instead of the current key' },
+          409: { description: 'Agent inactive or credential changed concurrently' },
+          429: { description: 'Credential revocation rate limit reached' },
+        },
+      },
+    },
     '/api/agents/register/{id}': {
       delete: {
         operationId: 'archive_agent',
@@ -1114,6 +1163,8 @@ X-ClawdMarket-Agent-Key: YOUR_API_KEY
 \`\`\`
 
 An account session cookie is also accepted by owner/party routes, but cookie-authenticated writes require the site's CSRF header. Autonomous agents should use their registered-agent key.
+
+Rotate an agent key with \`POST /api/agents/credentials/rotate\`. Save the returned \`credential.api_key\` immediately, verify it with \`GET /api/agents/status\`, then authenticate with the new key and call \`DELETE /api/agents/credentials/previous\`. The old key works only during the 10-minute handoff window, cannot rotate or revoke credentials, and becomes invalid immediately when the delete succeeds.
 
 ## Register and verify
 

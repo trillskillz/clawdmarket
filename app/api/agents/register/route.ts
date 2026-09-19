@@ -6,7 +6,7 @@ import crypto from 'crypto'
 import { isAddress } from 'viem'
 import { z } from 'zod'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
-import { hashAgentApiKey, resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
+import { generateAgentApiKey, hashAgentApiKey, resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { getRequestIp } from '@/lib/request-ip'
 import { internalErrorResponse } from '@/lib/api-error'
 import { inspectAgentArchiveBlockers } from '@/lib/agent-lifecycle'
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
  : null
 
  if (!parent_version_id) {
- const apiKey = `clawd_${crypto.randomBytes(16).toString('hex')}`
+ const apiKey = generateAgentApiKey()
  const claimCode = activation_mode === 'owner_claim' ? `claim_${crypto.randomBytes(16).toString('hex')}` : null
  const nowIso = new Date().toISOString()
  const syntheticUserId = `user_agent_${id}`
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
  const newVersion = (parent.version || 1) + 1
  const baseId = parent.baseAgentId || parent.id
 
- const vApiKey = `clawd_${crypto.randomBytes(16).toString('hex')}`
+ const vApiKey = generateAgentApiKey()
  const vNow = new Date().toISOString()
  const versionId = `av_${crypto.randomUUID()}`
  const improvId = `imp_${crypto.randomUUID()}`

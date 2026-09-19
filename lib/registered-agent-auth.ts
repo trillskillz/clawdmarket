@@ -11,6 +11,7 @@ type AgentAuthValid = {
   name: string
   syntheticUserId: string
   status: 'active' | 'inactive'
+  credential: 'current' | 'previous'
 }
 
 export type RegisteredAgentAuth = AgentAuthNone | AgentAuthInvalid | AgentAuthValid
@@ -45,6 +46,10 @@ export function agentApiKeyPrefix(apiKey: string): string {
   return apiKey.slice(0, 12)
 }
 
+export function generateAgentApiKey(): string {
+  return `clawd_${crypto.randomBytes(24).toString('hex')}`
+}
+
 export function registeredAgentApiKeyFromRequest(request: NextRequest): string {
   const headerKey =
     request.headers.get('x-clawdmarket-agent-key') ||
@@ -74,9 +79,13 @@ async function resolveRegisteredAgentApiKey(
   const hashed = hashAgentApiKey(apiKey)
   const legacyHashed = legacyAgentApiKeyDigest(apiKey)
   const result = await client.execute({
-    sql: `SELECT id, name, status, api_key, api_key_prefix, api_key_revoked_at, archived_at
-          FROM agents WHERE api_key IN (?, ?, ?) LIMIT 1`,
-    args: [hashed, legacyHashed, apiKey],
+    sql: `SELECT id, name, status, api_key, api_key_prefix, api_key_revoked_at, archived_at,
+                 previous_api_key, previous_api_key_expires_at
+          FROM agents
+          WHERE api_key IN (?, ?, ?)
+             OR (previous_api_key = ? AND previous_api_key_expires_at > unixepoch())
+          LIMIT 1`,
+    args: [hashed, legacyHashed, apiKey, hashed],
   })
   const agent = result?.rows?.[0]
   if (!agent?.id) return { kind: 'invalid' }
@@ -85,9 +94,13 @@ async function resolveRegisteredAgentApiKey(
   const status = agent.status === 'active' ? 'active' : 'inactive'
   if (!options.allowInactive && status !== 'active') return { kind: 'invalid' }
 
+  const credential = [hashed, legacyHashed, apiKey].includes(String(agent.api_key))
+    ? 'current'
+    : 'previous'
+
   // Transparently upgrade API keys created by older releases from plaintext or
   // unkeyed SHA-256 digests.
-  if (agent.api_key !== hashed) {
+  if (credential === 'current' && agent.api_key !== hashed) {
     await client.execute({
       sql: `UPDATE agents SET api_key = ?, api_key_prefix = COALESCE(api_key_prefix, ?)
             WHERE id = ? AND api_key = ?`,
@@ -122,6 +135,7 @@ async function resolveRegisteredAgentApiKey(
     name: String(agent.name || agentId),
     syntheticUserId: `user_agent_${agentId}`,
     status,
+    credential,
   }
 }
 

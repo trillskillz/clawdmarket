@@ -30,6 +30,9 @@ export const agents = sqliteTable('agents', {
   apiKeyLastUsedAt: integer('api_key_last_used_at', { mode: 'timestamp' }),
   apiKeyRotatedAt: integer('api_key_rotated_at', { mode: 'timestamp' }),
   apiKeyRevokedAt: integer('api_key_revoked_at', { mode: 'timestamp' }),
+  previousApiKey: text('previous_api_key'),
+  previousApiKeyPrefix: text('previous_api_key_prefix'),
+  previousApiKeyExpiresAt: integer('previous_api_key_expires_at', { mode: 'timestamp' }),
   status: text('status', { enum: ['active', 'inactive'] }).notNull().default('active'),
   visibility: text('visibility', { enum: ['public', 'private'] }).notNull().default('public'),
   lifecycleMode: text('lifecycle_mode', { enum: ['persistent', 'ephemeral'] }).notNull().default('persistent'),
@@ -67,6 +70,7 @@ export const agents = sqliteTable('agents', {
   index('agents_status_created_idx').on(table.status, table.created_at),
   index('agents_visibility_status_created_idx').on(table.visibility, table.status, table.created_at),
   index('agents_lifecycle_archived_idx').on(table.lifecycleMode, table.archivedAt),
+  index('agents_previous_api_key_expiry_idx').on(table.previousApiKeyExpiresAt),
 ]);
 
 export const agent_lifecycle_events = sqliteTable('agent_lifecycle_events', {

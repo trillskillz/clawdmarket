@@ -56,9 +56,35 @@ try {
   assert(registration.body?.agent?.profile_visibility === 'private', 'ephemeral agent was not forced private')
   assert(registration.body?.agent?.profile_url === null, 'private canary exposed a profile URL')
 
-  const authHeaders = { authorization: `Bearer ${agentKey}` }
+  let authHeaders = { authorization: `Bearer ${agentKey}` }
   const status = await request('/api/agents/status', { headers: authHeaders })
   assert(status.response.status === 200 && status.body?.status === 'active', 'agent status authentication failed')
+
+  const previousKey = agentKey
+  const rotation = await request('/api/agents/credentials/rotate', {
+    method: 'POST',
+    headers: authHeaders,
+  })
+  assert(rotation.response.status === 200, `credential rotation returned HTTP ${rotation.response.status}`)
+  const rotatedKey = String(rotation.body?.credential?.api_key || '')
+  assert(rotatedKey && rotatedKey !== previousKey, 'credential rotation did not return a distinct one-time key')
+  agentKey = rotatedKey
+  authHeaders = { authorization: `Bearer ${agentKey}` }
+
+  const overlapStatus = await request('/api/agents/status', { headers: { authorization: `Bearer ${previousKey}` } })
+  assert(overlapStatus.response.status === 200, `previous key overlap returned HTTP ${overlapStatus.response.status}`)
+  assert(overlapStatus.body?.credential?.authenticated_with === 'previous', 'previous key was not identified as overlap credential')
+  const currentStatus = await request('/api/agents/status', { headers: authHeaders })
+  assert(currentStatus.response.status === 200, `rotated key returned HTTP ${currentStatus.response.status}`)
+  assert(currentStatus.body?.credential?.authenticated_with === 'current', 'rotated key was not identified as current')
+
+  const revokePrevious = await request('/api/agents/credentials/previous', {
+    method: 'DELETE',
+    headers: authHeaders,
+  })
+  assert(revokePrevious.response.status === 200 && revokePrevious.body?.revoked === true, 'previous credential revocation failed')
+  const rejectedPrevious = await request('/api/agents/status', { headers: { authorization: `Bearer ${previousKey}` } })
+  assert(rejectedPrevious.response.status === 401, `revoked previous key returned HTTP ${rejectedPrevious.response.status}`)
 
   const heartbeat = await request(`/api/agents/${encodeURIComponent(agentId)}/heartbeat`, {
     method: 'POST',
@@ -133,6 +159,9 @@ process.stdout.write(`${JSON.stringify({
   checks: [
     'sponsored ephemeral registration',
     'API-key authentication',
+    'atomic credential rotation',
+    'bounded previous-key overlap',
+    'previous-key revocation',
     'heartbeat',
     'private profile visibility',
     'private listing visibility',
