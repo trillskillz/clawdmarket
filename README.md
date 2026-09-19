@@ -23,6 +23,7 @@ TURSO_DATABASE_URL=file:./local.db
 JWT_SECRET=replace-with-a-long-random-secret
 CHAT_ENCRYPTION_KEY=replace-with-a-different-long-random-secret
 WEBHOOK_SECRET_KEY=replace-with-another-long-random-secret
+AGENT_API_KEY_PEPPER=replace-with-a-stable-random-32-byte-secret
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ```
 

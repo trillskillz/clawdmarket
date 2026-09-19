@@ -15,7 +15,26 @@ type AgentAuthValid = {
 
 export type RegisteredAgentAuth = AgentAuthNone | AgentAuthInvalid | AgentAuthValid
 
+function getAgentApiKeyPepper(): string {
+  const pepper = process.env.AGENT_API_KEY_PEPPER?.trim() || process.env.JWT_SECRET?.trim()
+  if (pepper) return pepper
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('AGENT_API_KEY_PEPPER or JWT_SECRET is required in production')
+  }
+  return 'clawdmarket-local-agent-api-key-pepper'
+}
+
 export function hashAgentApiKey(apiKey: string): string {
+  return crypto
+    .createHmac('sha256', getAgentApiKeyPepper())
+    .update(`agent-api-key:${apiKey}`)
+    .digest('hex')
+}
+
+function legacyAgentApiKeyDigest(apiKey: string): string {
+  // Compatibility only: old releases stored SHA-256 digests of random 128-bit
+  // API keys. A successful legacy lookup is immediately upgraded to keyed HMAC.
+  // lgtm[js/insufficient-password-hash]
   return crypto.createHash('sha256').update(apiKey).digest('hex')
 }
 
@@ -50,10 +69,11 @@ async function resolveRegisteredAgentApiKey(
 
   const client = (db as any).$client
   const hashed = hashAgentApiKey(apiKey)
+  const legacyHashed = legacyAgentApiKeyDigest(apiKey)
   const result = await client.execute({
     sql: `SELECT id, name, status, api_key, api_key_prefix, api_key_revoked_at, archived_at
-          FROM agents WHERE api_key IN (?, ?) LIMIT 1`,
-    args: [hashed, apiKey],
+          FROM agents WHERE api_key IN (?, ?, ?) LIMIT 1`,
+    args: [hashed, legacyHashed, apiKey],
   })
   const agent = result?.rows?.[0]
   if (!agent?.id) return { kind: 'invalid' }
@@ -62,12 +82,13 @@ async function resolveRegisteredAgentApiKey(
   const status = agent.status === 'active' ? 'active' : 'inactive'
   if (!options.allowInactive && status !== 'active') return { kind: 'invalid' }
 
-  // Transparently upgrade API keys created by older releases from plaintext.
-  if (agent.api_key === apiKey) {
+  // Transparently upgrade API keys created by older releases from plaintext or
+  // unkeyed SHA-256 digests.
+  if (agent.api_key !== hashed) {
     await client.execute({
       sql: `UPDATE agents SET api_key = ?, api_key_prefix = COALESCE(api_key_prefix, ?)
             WHERE id = ? AND api_key = ?`,
-      args: [hashed, agentApiKeyPrefix(apiKey), String(agent.id), apiKey],
+      args: [hashed, agentApiKeyPrefix(apiKey), String(agent.id), String(agent.api_key)],
     })
   }
 

@@ -41,11 +41,21 @@ test('milestones cannot skip review and contract completion requires settlement'
 
 test('registered-agent API keys are stored as deterministic one-way digests', () => {
   const key = 'clawd_example_secret'
-  const digest = hashAgentApiKey(key)
-  assert.notEqual(digest, key)
-  assert.equal(digest.length, 64)
-  assert.equal(digest, hashAgentApiKey(key))
-  assert.notEqual(digest, hashAgentApiKey(`${key}_other`))
+  const originalPepper = process.env.AGENT_API_KEY_PEPPER
+  try {
+    process.env.AGENT_API_KEY_PEPPER = 'test-agent-api-key-pepper-a'
+    const digest = hashAgentApiKey(key)
+    assert.notEqual(digest, key)
+    assert.equal(digest.length, 64)
+    assert.equal(digest, hashAgentApiKey(key))
+    assert.notEqual(digest, hashAgentApiKey(`${key}_other`))
+
+    process.env.AGENT_API_KEY_PEPPER = 'test-agent-api-key-pepper-b'
+    assert.notEqual(digest, hashAgentApiKey(key))
+  } finally {
+    if (originalPepper === undefined) delete process.env.AGENT_API_KEY_PEPPER
+    else process.env.AGENT_API_KEY_PEPPER = originalPepper
+  }
 })
 
 test('marketplace settlement exposes the production rail model', () => {

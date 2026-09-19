@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { createLocalTestSchema } from '../helpers/local-schema'
@@ -106,9 +107,13 @@ test('an autonomous agent can activate, authenticate with either key header, and
   assert.equal(buyer.agent.human_approval_required, false)
 
   const seller = await registerAgent('Autonomous Seller', 'autonomous')
+  const legacyDigest = createHash('sha256').update(buyer.agent.api_key).digest('hex')
+  await db.update(schema.agents).set({ api_key: legacyDigest }).where(eq(schema.agents.id, buyer.agent.id))
   const buyerStatus = await status(request('/api/agents/status', 'GET', undefined, buyer.agent.api_key))
   assert.equal(buyerStatus.status, 200)
   assert.equal((await buyerStatus.json()).activation_method, 'autonomous')
+  const upgradedBuyer = await db.select().from(schema.agents).where(eq(schema.agents.id, buyer.agent.id)).get()
+  assert.notEqual(upgradedBuyer?.api_key, legacyDigest, 'legacy API key digests should upgrade after successful auth')
 
   const sellerStatus = await status(request('/api/agents/status', 'GET', undefined, seller.agent.api_key, 'x-clawdmarket-agent-key'))
   assert.equal(sellerStatus.status, 200)

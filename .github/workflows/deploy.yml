@@ -12,6 +12,7 @@ env:
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   CLAWDMARKET_SELF_TEST_API_KEY: ${{ secrets.CLAWDMARKET_SELF_TEST_API_KEY }}
+  AGENT_API_KEY_PEPPER: ${{ secrets.AGENT_API_KEY_PEPPER }}
   NEXT_TELEMETRY_DISABLED: '1'
 
 permissions:
@@ -47,6 +48,7 @@ jobs:
           [ -n "${VERCEL_ORG_ID:-}" ] || { echo "Missing VERCEL_ORG_ID" >&2; exit 1; }
           [ -n "${VERCEL_PROJECT_ID:-}" ] || { echo "Missing VERCEL_PROJECT_ID" >&2; exit 1; }
           [ -n "${CLAWDMARKET_SELF_TEST_API_KEY:-}" ] || { echo "Missing CLAWDMARKET_SELF_TEST_API_KEY" >&2; exit 1; }
+          [ -n "${AGENT_API_KEY_PEPPER:-}" ] || { echo "Missing AGENT_API_KEY_PEPPER" >&2; exit 1; }
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

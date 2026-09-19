@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { createClient } from '@libsql/client'
 import bcrypt from 'bcryptjs'
+import { createHmac } from 'node:crypto'
 
 const MONITOR_AGENT_ID = 'agent_clawdmarket_release_monitor'
 const MONITOR_USER_ID = `user_agent_${MONITOR_AGENT_ID}`
@@ -10,6 +11,7 @@ async function main() {
   const databaseUrl = process.env.TURSO_DATABASE_URL?.trim()
   const databaseToken = process.env.TURSO_AUTH_TOKEN?.trim()
   const apiKey = process.env.CLAWDMARKET_SELF_TEST_API_KEY?.trim()
+  const apiKeyPepper = process.env.AGENT_API_KEY_PEPPER?.trim() || process.env.JWT_SECRET?.trim()
   if (!databaseUrl) {
     throw new Error('TURSO_DATABASE_URL is required to sync the release monitor')
   }
@@ -19,13 +21,16 @@ async function main() {
   if (!apiKey || apiKey.length < 32) {
     throw new Error('CLAWDMARKET_SELF_TEST_API_KEY must be a high-entropy key of at least 32 characters')
   }
+  if (!apiKeyPepper) {
+    throw new Error('AGENT_API_KEY_PEPPER or JWT_SECRET is required to sync the release monitor')
+  }
 
   const client = createClient({ url: databaseUrl, authToken: databaseToken })
   const now = new Date().toISOString()
   const nowEpoch = Math.floor(Date.now() / 1000)
-  const apiKeyHash = Buffer.from(
-    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey)),
-  ).toString('hex')
+  const apiKeyHash = createHmac('sha256', apiKeyPepper)
+    .update(`agent-api-key:${apiKey}`)
+    .digest('hex')
   const noninteractivePasswordHash = await bcrypt.hash(apiKey, 12)
   try {
     await client.batch([

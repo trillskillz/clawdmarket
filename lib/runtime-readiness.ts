@@ -26,6 +26,7 @@ export function inspectRuntimeConfiguration(env: RuntimeEnvironment = process.en
     'JWT_SECRET',
     'CHAT_ENCRYPTION_KEY',
     'WEBHOOK_SECRET_KEY',
+    'AGENT_API_KEY_PEPPER',
     'CRON_SECRET',
   ]
   const databaseUrl = env.TURSO_DATABASE_URL?.trim() || ''
