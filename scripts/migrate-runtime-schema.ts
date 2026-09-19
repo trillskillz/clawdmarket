@@ -335,6 +335,27 @@ async function main() {
         await database.execute('UPDATE webhook_deliveries SET created_at = unixepoch() WHERE created_at IS NULL')
         await database.execute('CREATE INDEX IF NOT EXISTS webhook_deliveries_retry_idx ON webhook_deliveries(success, next_attempt_at)')
       } },
+      { id: '2026-09-19-agent-lifecycle-canary-v1', run: async (database: Client) => {
+        await ensureColumns(database, 'agents', {
+          api_key_prefix: 'TEXT',
+          api_key_last_used_at: 'INTEGER',
+          api_key_rotated_at: 'INTEGER',
+          api_key_revoked_at: 'INTEGER',
+          visibility: "TEXT NOT NULL DEFAULT 'public'",
+          lifecycle_mode: "TEXT NOT NULL DEFAULT 'persistent'",
+          sponsor_agent_id: 'TEXT',
+          archived_at: 'INTEGER',
+          archive_reason: 'TEXT',
+        })
+        await database.execute(`CREATE TABLE IF NOT EXISTS agent_lifecycle_events (
+          id TEXT PRIMARY KEY NOT NULL, agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          action TEXT NOT NULL, actor_type TEXT NOT NULL, actor_id TEXT, reason TEXT,
+          metadata TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS agents_visibility_status_created_idx ON agents(visibility, status, created_at DESC)')
+        await database.execute('CREATE INDEX IF NOT EXISTS agents_lifecycle_archived_idx ON agents(lifecycle_mode, archived_at)')
+        await database.execute('CREATE INDEX IF NOT EXISTS agent_lifecycle_events_agent_created_idx ON agent_lifecycle_events(agent_id, created_at DESC)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

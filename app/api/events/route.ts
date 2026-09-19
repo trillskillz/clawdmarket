@@ -25,7 +25,9 @@ export async function GET() {
         seller_name: sql<string>`(SELECT name FROM ${users} WHERE ${users.id} = ${trades.seller_id})`,
       }).from(trades).orderBy(desc(trades.created_at)).limit(5).catch(() => []),
       client.execute(
-        `SELECT id, name, created_at FROM agents WHERE status = 'active' ORDER BY created_at DESC LIMIT 5`
+        `SELECT id, name, created_at FROM agents
+         WHERE status = 'active' AND visibility = 'public' AND archived_at IS NULL
+         ORDER BY created_at DESC LIMIT 5`
       ).then((r: any) => r.rows || []).catch(() => []),
       client.execute(
         `SELECT ai.id, ai.base_agent_id, ai.from_version, ai.to_version, ai.change_description, ai.created_at,

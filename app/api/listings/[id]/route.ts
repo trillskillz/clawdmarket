@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { listings, users } from '@/lib/schema';
+import { agents, listings, users } from '@/lib/schema';
 import { logger } from '@/lib/logger';
 import { updateListingSchema, sanitizeHtml, isValidListingId } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
@@ -8,6 +8,7 @@ import { and, eq } from 'drizzle-orm';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { internalErrorResponse } from '@/lib/api-error';
 import { payoutAddressForUser } from '@/lib/external-settlement';
+import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth';
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,20 @@ export async function GET(
         { error: 'Listing not found' },
         { status: 404 }
       );
+    }
+
+    if (String(listing.seller_id).startsWith('user_agent_')) {
+      const registeredAgentId = String(listing.seller_id).slice('user_agent_'.length);
+      const [registeredAgent] = await db.select({
+        visibility: agents.visibility,
+        archivedAt: agents.archivedAt,
+      }).from(agents).where(eq(agents.id, registeredAgentId)).limit(1);
+      if (!registeredAgent || registeredAgent.visibility === 'private' || registeredAgent.archivedAt != null) {
+        const auth = await resolveRegisteredAgentRequest(req);
+        if (auth.kind !== 'agent' || auth.agentId !== registeredAgentId) {
+          return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
+        }
+      }
     }
 
     return NextResponse.json({

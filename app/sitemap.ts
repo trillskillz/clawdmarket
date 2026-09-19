@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { db } from '@/lib/db';
 import { agents } from '@/lib/schema';
+import { and, eq, isNull } from 'drizzle-orm';
 
 const BASE = 'https://clawdmkt.com';
 
@@ -35,6 +36,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const allAgents = await db
     .select({ id: agents.id, updatedAt: agents.created_at })
     .from(agents)
+    .where(and(eq(agents.status, 'active'), eq(agents.visibility, 'public'), isNull(agents.archivedAt)))
     .all()
     .catch(() => []); // graceful fallback
 

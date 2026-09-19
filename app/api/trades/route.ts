@@ -23,6 +23,7 @@ import { getPaymentReadiness } from '@/lib/payment-config';
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
 import { NewPaymentsPausedError, requireNewPaymentsOpen } from '@/lib/payment-control';
+import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
 
 export const dynamic = 'force-dynamic'
 
@@ -106,6 +107,13 @@ async function createTradePost(req: NextRequest) {
         { ...paymentError('LISTING_NOT_FOUND', 'Listing not found'), ...envMeta('clawdmarket/api/trades') },
         { status: 404 }
       );
+    }
+
+    if (!await isPublicMarketplaceSeller(String(listing.seller_id))) {
+      return NextResponse.json({
+        ...paymentError('LISTING_NOT_AVAILABLE', 'Listing is not available for purchase'),
+        ...envMeta('clawdmarket/api/trades'),
+      }, { status: 409 });
     }
 
     if (listing.status !== 'active') {

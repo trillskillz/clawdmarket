@@ -6,6 +6,7 @@ import { createContractSchema } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { DEV_FEE_PERCENT } from '@/lib/settlement';
+import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
 
 export const dynamic = 'force-dynamic'
 
@@ -71,11 +72,15 @@ export async function POST(req: NextRequest) {
         .limit(1);
       if (!listing) return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
       if (listing.status !== 'active') return NextResponse.json({ error: 'Listing is not active' }, { status: 409 });
+      if (!await isPublicMarketplaceSeller(listing.seller_id)) return NextResponse.json({ error: 'Listing is not available' }, { status: 409 });
       sellerId = listing.seller_id;
     }
 
     if (!sellerId) {
       return NextResponse.json({ error: 'seller_id or listing_id is required' }, { status: 400 });
+    }
+    if (!await isPublicMarketplaceSeller(sellerId)) {
+      return NextResponse.json({ error: 'Seller is not available' }, { status: 409 });
     }
 
     if (sellerId === auth.userId) {

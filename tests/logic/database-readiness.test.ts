@@ -75,6 +75,7 @@ test('production readiness requires the core runtime configuration', () => {
     'JWT_SECRET',
     'CHAT_ENCRYPTION_KEY',
     'WEBHOOK_SECRET_KEY',
+    'AGENT_API_KEY_PEPPER',
     'CRON_SECRET',
   ])
 })

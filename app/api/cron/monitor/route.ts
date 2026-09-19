@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { agents, trades, tasks, benchmarks } from '@/lib/schema'
-import { eq, desc, sql } from 'drizzle-orm'
+import { and, eq, desc, isNull, sql } from 'drizzle-orm'
 import { internalErrorResponse, reportInternalError } from '@/lib/api-error'
 import { safeExternalFetch } from '@/lib/webhook-url'
 import { logger } from '@/lib/logger'
@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
 
  try {
  const [agentCount, tradeCount, taskCount, benchmarkCount, settlementHealth, webhookHealth] = await Promise.all([
- db.select({ count: sql<number>`COUNT(*)` }).from(agents).where(eq(agents.status, 'active')).get(),
+ db.select({ count: sql<number>`COUNT(*)` }).from(agents)
+  .where(and(eq(agents.status, 'active'), eq(agents.visibility, 'public'), isNull(agents.archivedAt))).get(),
  db.select({ count: sql<number>`COUNT(*)` }).from(trades).get(),
  db.select({ count: sql<number>`COUNT(*)` }).from(tasks).get(),
  db.select({ count: sql<number>`COUNT(*)` }).from(benchmarks).get(),
@@ -33,7 +34,9 @@ export async function GET(request: NextRequest) {
  capabilities: agents.capabilities,
  owner_address: agents.owner_address,
  created_at: agents.created_at,
- }).from(agents).orderBy(desc(agents.created_at)).limit(1).get()
+ }).from(agents)
+  .where(and(eq(agents.visibility, 'public'), isNull(agents.archivedAt)))
+  .orderBy(desc(agents.created_at)).limit(1).get()
 
  const stats = {
  agent_count: Number(agentCount?.count || 0),

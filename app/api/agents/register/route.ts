@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agents, agentVersions, agentImprovements, listings, users, wallets } from '@/lib/schema'
+import { agents, agentVersions, agentImprovements, agent_lifecycle_events, listings, users, wallets } from '@/lib/schema'
 import crypto from 'crypto'
 import { isAddress } from 'viem'
 import { z } from 'zod'
@@ -9,6 +9,7 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { hashAgentApiKey, resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { getRequestIp } from '@/lib/request-ip'
 import { internalErrorResponse } from '@/lib/api-error'
+import { inspectAgentArchiveBlockers } from '@/lib/agent-lifecycle'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,8 @@ const agentRegistrationSchema = z.object({
  improvement_task_id: z.string().max(200).optional(),
  moltbook_handle: z.string().trim().max(100).optional(),
  activation_mode: z.enum(['autonomous', 'owner_claim']).optional().default('owner_claim'),
+ lifecycle_mode: z.enum(['persistent', 'ephemeral']).optional().default('persistent'),
+ profile_visibility: z.enum(['public', 'private']).optional().default('public'),
 })
 /**
  * POST /api/agents/register
@@ -36,7 +39,12 @@ const agentRegistrationSchema = z.object({
 export async function POST(request: NextRequest) {
  try {
  const ip = getRequestIp(request)
- const rl = await rateLimit(`agent-register:${ip}`, { interval: 60 * 60 * 1000, maxRequests: 5, failClosed: true })
+ const sponsor = await resolveRegisteredAgentRequest(request)
+ const sponsored = sponsor.kind === 'agent'
+ const rl = await rateLimit(
+  `agent-register:${sponsored ? `sponsor:${sponsor.agentId}` : `ip:${ip}`}`,
+  { interval: 60 * 60 * 1000, maxRequests: sponsored ? 20 : 5, failClosed: true },
+ )
  if (!rl.success) return NextResponse.json({ error: 'rate_limited', message: 'Too many registration attempts' }, { status: 429, headers: getRateLimitHeaders(rl) })
 
  const parsed = agentRegistrationSchema.safeParse(await request.json().catch(() => null))
@@ -52,7 +60,22 @@ export async function POST(request: NextRequest) {
  improvement_task_id,
  moltbook_handle,
  activation_mode,
+ lifecycle_mode,
+ profile_visibility,
  } = body
+
+ if (lifecycle_mode === 'ephemeral' && !sponsored) {
+  return NextResponse.json({
+   error: 'sponsor_required',
+   message: 'Ephemeral registrations require an active sponsoring agent API key.',
+  }, { status: 403, headers: getRateLimitHeaders(rl) })
+ }
+ if (lifecycle_mode === 'ephemeral' && activation_mode !== 'autonomous') {
+  return NextResponse.json({
+   error: 'invalid_body',
+   message: 'Ephemeral registrations must use autonomous activation.',
+  }, { status: 400, headers: getRateLimitHeaders(rl) })
+ }
 
  if (owner_address && !isAddress(owner_address as `0x${string}`)) {
   return NextResponse.json({ error: 'invalid_body', message: 'owner_address must be a valid EVM address' }, { status: 400 })
@@ -69,6 +92,7 @@ export async function POST(request: NextRequest) {
  const nowIso = new Date().toISOString()
  const syntheticUserId = `user_agent_${id}`
  const capabilitiesJson = caps || '[]'
+ const visibility = lifecycle_mode === 'ephemeral' ? 'private' : profile_visibility
 
  await db.transaction(async (tx) => {
   await tx.insert(agents).values({
@@ -79,7 +103,11 @@ export async function POST(request: NextRequest) {
    endpoint: endpoint || '',
    owner_address: owner_address || '',
    api_key: hashAgentApiKey(apiKey),
+   apiKeyPrefix: apiKey.slice(0, 12),
    status: activation_mode === 'autonomous' ? 'active' : 'inactive',
+   visibility,
+   lifecycleMode: lifecycle_mode,
+   sponsorAgentId: sponsored ? sponsor.agentId : null,
    version: 1,
    baseAgentId: id,
    systemPrompt: system_prompt || null,
@@ -99,6 +127,16 @@ export async function POST(request: NextRequest) {
    created_at: new Date(nowIso),
   })
   await tx.insert(wallets).values({ user_id: syntheticUserId, balance: 0, escrow: 0 })
+  await tx.insert(agent_lifecycle_events).values({
+   id: `ale_${crypto.randomUUID()}`,
+   agent_id: id,
+   action: 'registered',
+   actor_type: sponsored ? 'sponsor_agent' : 'self',
+   actor_id: sponsored ? sponsor.agentId : id,
+   reason: lifecycle_mode === 'ephemeral' ? 'Sponsored production canary registration' : null,
+   metadata: JSON.stringify({ activation_mode, lifecycle_mode, visibility }),
+   created_at: new Date(nowIso),
+  })
  })
 
  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
@@ -114,8 +152,11 @@ export async function POST(request: NextRequest) {
    status: activation_mode === 'autonomous' ? 'active' : 'pending_claim',
    activation_mode,
    human_approval_required: activation_mode === 'owner_claim',
+   lifecycle_mode,
+   profile_visibility: visibility,
+   sponsor_agent_id: sponsored ? sponsor.agentId : null,
    claim_url: claimCode ? `${baseUrl}/claim/${claimCode}` : null,
-   profile_url: `${baseUrl}/registry/${id}`,
+   profile_url: visibility === 'public' ? `${baseUrl}/registry/${id}` : null,
   },
   next_actions: [
    { action: 'check_status', method: 'GET', endpoint: '/api/agents/status', auth: 'agent_api_key' },
@@ -125,6 +166,9 @@ export async function POST(request: NextRequest) {
       { action: 'publish_service', method: 'POST', endpoint: '/api/listings', auth: 'agent_api_key' },
       { action: 'heartbeat_agent', method: 'POST', endpoint: `/api/agents/${id}/heartbeat`, auth: 'agent_api_key', interval_seconds: 60 },
       { action: 'poll_inbox', method: 'GET', endpoint: '/api/agents/inbox', auth: 'agent_api_key' },
+      ...(lifecycle_mode === 'ephemeral'
+       ? [{ action: 'archive_agent', method: 'DELETE', endpoint: `/api/agents/register/${id}`, auth: 'agent_api_key' }]
+       : []),
     ]),
   ],
  }, { status: 201 })
@@ -144,6 +188,14 @@ export async function POST(request: NextRequest) {
  )
  }
  if (parent.status !== 'active') return NextResponse.json({ error: 'conflict', message: 'Only the active agent version can be superseded' }, { status: 409 })
+ const versionBlockers = await inspectAgentArchiveBlockers(parent.id)
+ if (Object.values(versionBlockers).some((count) => count > 0)) {
+  return NextResponse.json({
+   error: 'active_obligations',
+   message: 'Complete or cancel active work and clear the agent wallet before publishing a replacement version.',
+   blockers: versionBlockers,
+  }, { status: 409 })
+ }
 
  const newVersion = (parent.version || 1) + 1
  const baseId = parent.baseAgentId || parent.id
@@ -169,7 +221,11 @@ export async function POST(request: NextRequest) {
    owner_address: parent.owner_address,
    owner_email: parent.owner_email,
    api_key: hashAgentApiKey(vApiKey),
+   apiKeyPrefix: vApiKey.slice(0, 12),
    status: 'active',
+   visibility: parent.visibility,
+   lifecycleMode: parent.lifecycleMode,
+   sponsorAgentId: parent.sponsorAgentId,
    version: newVersion,
    baseAgentId: baseId,
    parentVersionId: parent_version_id,
@@ -221,8 +277,6 @@ export async function POST(request: NextRequest) {
 
   const parentSellerId = `user_agent_${parent.id}`
   const newSellerId = `user_agent_${id}`
-  const [parentListing] = await tx.select().from(listings)
-   .where(eq(listings.seller_id, parentSellerId)).limit(1)
   await tx.update(listings).set({ status: 'expired' })
    .where(eq(listings.seller_id, parentSellerId))
 
@@ -235,14 +289,14 @@ export async function POST(request: NextRequest) {
    created_at: new Date(vNow),
   }).onConflictDoNothing()
   await tx.insert(wallets).values({ user_id: newSellerId, balance: 0, escrow: 0 }).onConflictDoNothing()
-  await tx.insert(listings).values({
-   id: `listing_${id}`,
-   seller_id: newSellerId,
-   category: parentListing?.category || deriveCategory(parseCapabilities(caps ?? parent.capabilities)),
-   title: parentListing?.title || name || parent.name,
-   description: description || parentListing?.description || parent.description,
-   price_bankr: parentListing?.price_bankr || 0.01,
-   status: 'active',
+  await tx.insert(agent_lifecycle_events).values({
+   id: `ale_${crypto.randomUUID()}`,
+   agent_id: id,
+   action: 'version_registered',
+   actor_type: 'agent',
+   actor_id: parent.id,
+   reason: change_description || null,
+   metadata: JSON.stringify({ base_agent_id: baseId, from_version: parent.version || 1, to_version: newVersion }),
    created_at: new Date(vNow),
   })
  })
@@ -259,9 +313,15 @@ export async function POST(request: NextRequest) {
   id,
   name: name || parent.name,
   api_key: vApiKey,
+  lifecycle_mode: parent.lifecycleMode,
+  profile_visibility: parent.visibility,
   claim_url: null,
-  profile_url: `${baseUrl}/registry/${id}`,
+  profile_url: parent.visibility === 'public' ? `${baseUrl}/registry/${id}` : null,
  },
+ next_actions: [
+  { action: 'publish_service', method: 'POST', endpoint: '/api/listings', auth: 'agent_api_key' },
+  { action: 'heartbeat_agent', method: 'POST', endpoint: `/api/agents/${id}/heartbeat`, auth: 'agent_api_key', interval_seconds: 60 },
+ ],
  })
 
  } catch (err: any) {
@@ -273,26 +333,4 @@ export async function POST(request: NextRequest) {
   message: 'Registration could not be completed. Retry or contact support with the error ID.',
  })
  }
-}
-
-function parseCapabilities(raw: unknown): string[] {
- if (Array.isArray(raw)) return raw.filter((item): item is string => typeof item === 'string')
- if (typeof raw !== 'string') return []
- try {
-  const parsed = JSON.parse(raw)
-  return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
- } catch {
-  return []
- }
-}
-
-function deriveCategory(caps: string[]): 'compute' | 'skills' | 'data' | 'code' | 'analysis' | 'bounties' | 'other' {
- const joined = caps.join(' ').toLowerCase()
- if (/code|debug|review|smart.?contract|api.?integration/.test(joined)) return 'code'
- if (/data|extract|scraping|pipeline/.test(joined)) return 'data'
- if (/analysis|research|financial|legal|benchmark|eval/.test(joined)) return 'analysis'
- if (/compute|gpu|inference|hosting/.test(joined)) return 'compute'
- if (/bounty|task|improvement/.test(joined)) return 'bounties'
- if (caps.length > 0) return 'skills'
- return 'other'
 }

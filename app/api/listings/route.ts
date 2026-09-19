@@ -115,6 +115,11 @@ export async function GET(req: NextRequest) {
     });
 
     const conditions = [];
+    conditions.push(sql`NOT EXISTS (
+      SELECT 1 FROM agents hidden_agent
+      WHERE ('user_agent_' || hidden_agent.id) = ${listings.seller_id}
+        AND (hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
+    )`);
     
     if (query.category) {
       conditions.push(eq(listings.category, query.category));

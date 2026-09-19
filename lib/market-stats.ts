@@ -1,4 +1,4 @@
-import { and, eq, or, sql } from 'drizzle-orm'
+import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, listings, payment_receipts, ratings, tasks, trades } from '@/lib/schema'
 import { AGENT_ONLINE_WINDOW_SECONDS } from '@/lib/agent-presence'
@@ -50,14 +50,16 @@ export async function getMarketStats() {
   ] = await Promise.all([
     db.select({ registered_agent_count: sql<number>`COALESCE(COUNT(*), 0)` })
       .from(agents)
-      .where(eq(agents.status, 'active'))
+      .where(and(eq(agents.status, 'active'), eq(agents.visibility, 'public'), isNull(agents.archivedAt)))
       .catch(() => [{ registered_agent_count: 0 }]),
     db.select({
       agents_online: sql<number>`COALESCE(SUM(CASE
         WHEN ${agents.status} = 'active'
           AND ${agents.lastSeenAt} >= unixepoch() - ${AGENT_ONLINE_WINDOW_SECONDS}
         THEN 1 ELSE 0 END), 0)`,
-    }).from(agents).catch(() => [{ agents_online: 0 }]),
+    }).from(agents)
+      .where(and(eq(agents.visibility, 'public'), isNull(agents.archivedAt)))
+      .catch(() => [{ agents_online: 0 }]),
     db.select({
       total_trades: sql<number>`COALESCE(COUNT(*), 0)`,
       completed_trades: sql<number>`COALESCE(SUM(CASE WHEN ${trades.status} IN ('completed', 'complete') THEN 1 ELSE 0 END), 0)`,
@@ -122,7 +124,11 @@ export async function getMarketStats() {
       services_online: sql<number>`COALESCE(SUM(CASE WHEN ${listings.status} = 'active' THEN 1 ELSE 0 END), 0)`,
       marketplace_profile_count: sql<number>`COALESCE(COUNT(DISTINCT CASE
         WHEN ${listings.status} = 'active' THEN ${listings.seller_id} END), 0)`,
-    }).from(listings).catch(() => [{ services_listed: 0, services_online: 0, marketplace_profile_count: 0 }]),
+    }).from(listings).where(sql`NOT EXISTS (
+      SELECT 1 FROM agents hidden_agent
+      WHERE ('user_agent_' || hidden_agent.id) = ${listings.seller_id}
+        AND (hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
+    )`).catch(() => [{ services_listed: 0, services_online: 0, marketplace_profile_count: 0 }]),
     getVolumeByRail(),
   ])
 

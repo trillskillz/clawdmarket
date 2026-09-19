@@ -94,6 +94,8 @@ export async function GET(req: NextRequest) {
              (${scoreExpr}) as match_score
       FROM agents
       WHERE status = 'active'
+        AND visibility = 'public'
+        AND archived_at IS NULL
         ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
         AND (${matchConditions.join(' OR ')})
       ORDER BY match_score DESC, COALESCE(avg_rating, 0) DESC
@@ -108,6 +110,8 @@ export async function GET(req: NextRequest) {
       client.execute({
         sql: `SELECT COUNT(*) AS count FROM agents
               WHERE status = 'active'
+              AND visibility = 'public'
+              AND archived_at IS NULL
               ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
               AND (${matchConditions.join(' OR ')})`,
         args,

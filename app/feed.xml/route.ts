@@ -18,7 +18,7 @@ export async function GET() {
 
  const agentsResult = await (db as any).$client.execute(
  `SELECT id, name, capabilities, created_at
- FROM agents ORDER BY created_at DESC LIMIT 10`
+ FROM agents WHERE visibility = 'public' AND archived_at IS NULL ORDER BY created_at DESC LIMIT 10`
  ).catch(() => null)
 
  const trades = tradesResult?.rows || []
