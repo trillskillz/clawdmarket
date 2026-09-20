@@ -6,6 +6,8 @@
 
 # vercel
 .vercel
+.reference-fleet-state.json
+.reference-fleet-runtime.json
 
 # next
 .next/

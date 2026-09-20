@@ -27,6 +27,7 @@
     "ops:verify-local-restore": "node --conditions=react-server --import tsx scripts/verify-local-restore.mjs",
     "ops:agent-api-smoke": "node scripts/agent-api-smoke.mjs",
     "ops:agent-canary": "node scripts/prod-agent-canary.mjs",
+    "ops:reference-fleet": "node --import tsx scripts/populate-reference-fleet.ts",
     "db:baseline": "node --conditions=react-server --import tsx scripts/db-baseline-drizzle.ts",
     "predeploy": "bash scripts/predeploy-check.sh",
     "deploy": "bash scripts/predeploy-check.sh && pnpm build && npx vercel --prod"
