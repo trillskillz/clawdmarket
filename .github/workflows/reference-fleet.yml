@@ -1,0 +1,94 @@
+name: Populate Reference Fleet
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Production origin to reconcile'
+        required: false
+        default: 'https://www.clawdmkt.com'
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  VERCEL_CLI_VERSION: 51.5.1
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  BASE_URL: ${{ inputs.base_url }}
+  CLAWDMARKET_SELF_TEST_API_KEY: ${{ secrets.CLAWDMARKET_SELF_TEST_API_KEY }}
+  FLEET_OWNER_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+  FLEET_OWNER_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+  CONFIRM_REFERENCE_FLEET: POPULATE_CLAWDMARKET_REFERENCE_FLEET
+  NEXT_TELEMETRY_DISABLED: '1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-reference-fleet
+  cancel-in-progress: false
+
+jobs:
+  populate:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Validate protected configuration
+        run: |
+          set -euo pipefail
+          [ -n "${VERCEL_TOKEN:-}" ] || { echo "Missing VERCEL_TOKEN" >&2; exit 1; }
+          [ -n "${VERCEL_ORG_ID:-}" ] || { echo "Missing VERCEL_ORG_ID" >&2; exit 1; }
+          [ -n "${VERCEL_PROJECT_ID:-}" ] || { echo "Missing VERCEL_PROJECT_ID" >&2; exit 1; }
+          [ -n "${CLAWDMARKET_SELF_TEST_API_KEY:-}" ] || { echo "Missing CLAWDMARKET_SELF_TEST_API_KEY" >&2; exit 1; }
+          [ -n "${FLEET_OWNER_EMAIL:-}" ] || { echo "Missing FLEET_OWNER_EMAIL" >&2; exit 1; }
+          [ -n "${FLEET_OWNER_PASSWORD:-}" ] || { echo "Missing FLEET_OWNER_PASSWORD" >&2; exit 1; }
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Preview fleet invariants
+        run: pnpm ops:reference-fleet -- --plan > "$RUNNER_TEMP/reference-fleet-plan.json"
+
+      - name: Populate and verify production fleet
+        env:
+          REFERENCE_FLEET_STATE_PATH: ${{ runner.temp }}/reference-fleet-state.json
+          REFERENCE_FLEET_RUNTIME_PATH: ${{ runner.temp }}/reference-fleet-runtime.json
+        run: pnpm ops:reference-fleet -- --apply
+
+      - name: Link Vercel project
+        run: npx -y vercel@${VERCEL_CLI_VERSION} pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Install presence-only runtime secret
+        env:
+          REFERENCE_FLEET_RUNTIME_PATH: ${{ runner.temp }}/reference-fleet-runtime.json
+        run: |
+          set -euo pipefail
+          [ -s "$REFERENCE_FLEET_RUNTIME_PATH" ] || { echo "Missing reference fleet runtime secret" >&2; exit 1; }
+          npx -y vercel@${VERCEL_CLI_VERSION} env add REFERENCE_FLEET_KEYS_JSON production \
+            --force --sensitive --yes --token="$VERCEL_TOKEN" < "$REFERENCE_FLEET_RUNTIME_PATH"
+
+      - name: Summarize next action
+        run: |
+          {
+            echo '## Reference fleet populated'
+            echo ''
+            echo '- 15 disclosed, owner-recoverable agents reconciled'
+            echo '- Scoped presence secret installed in Vercel production'
+            echo '- Dispatch **Deploy to Vercel** so the new secret is included in the deployment'
+          } >> "$GITHUB_STEP_SUMMARY"
+

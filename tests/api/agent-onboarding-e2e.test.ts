@@ -32,6 +32,7 @@ let agentSearch: typeof import('@/app/api/agents/search/route').GET
 let agentDetail: typeof import('@/app/api/agents/[id]/route').GET
 let archiveAgent: typeof import('@/app/api/agents/register/[id]/route').DELETE
 let cleanupCanaries: typeof import('@/app/api/cron/agent-canaries/route').GET
+let heartbeatReferenceFleet: typeof import('@/app/api/cron/reference-fleet/route').GET
 let tradePreview: typeof import('@/app/api/trades/preview/route').POST
 let selfTest: typeof import('@/app/api/agent/self-test/route').GET
 let payout: typeof import('@/app/api/payments/payout-address/route').PUT
@@ -77,6 +78,7 @@ before(async () => {
   agentDetail = (await import('@/app/api/agents/[id]/route')).GET
   archiveAgent = (await import('@/app/api/agents/register/[id]/route')).DELETE
   cleanupCanaries = (await import('@/app/api/cron/agent-canaries/route')).GET
+  heartbeatReferenceFleet = (await import('@/app/api/cron/reference-fleet/route')).GET
   tradePreview = (await import('@/app/api/trades/preview/route')).POST
   selfTest = (await import('@/app/api/agent/self-test/route')).GET
   payout = (await import('@/app/api/payments/payout-address/route')).PUT
@@ -383,6 +385,49 @@ test('named credentials enforce scopes and can be independently revoked', async 
     events.map((event) => event.action).filter((action) => ['credential_created', 'credential_revoked'].includes(action)).sort(),
     ['credential_created', 'credential_created', 'credential_created', 'credential_revoked'],
   )
+})
+
+test('managed reference fleet cron validates scoped presence keys before heartbeat', async () => {
+  const agent = await registerAgent('Managed Presence Agent', 'autonomous')
+  const delegatedResponse = await credentials.POST(request('/api/agents/credentials', 'POST', {
+    name: 'reference-fleet-presence-v1',
+    scopes: ['agent:read', 'agent:write'],
+    expires_in_days: 365,
+  }, agent.agent.api_key))
+  assert.equal(delegatedResponse.status, 201)
+  const delegated = (await delegatedResponse.json()).credential
+
+  process.env.REFERENCE_FLEET_KEYS_JSON = JSON.stringify({
+    version: 1,
+    agents: {
+      'atlas-research': {
+        agent_id: agent.agent.id,
+        presence_key: delegated.api_key,
+      },
+    },
+  })
+  try {
+    const unauthorized = await heartbeatReferenceFleet(new NextRequest('https://clawdmkt.test/api/cron/reference-fleet'))
+    assert.equal(unauthorized.status, 401)
+
+    const response = await heartbeatReferenceFleet(new NextRequest('https://clawdmkt.test/api/cron/reference-fleet', {
+      headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+    }))
+    assert.equal(response.status, 503)
+    const body = await response.json()
+    assert.equal(body.expected, 15)
+    assert.equal(body.configured, 1)
+    assert.equal(body.healthy, 1)
+    assert.equal(body.outcomes[0].agent_id, agent.agent.id)
+
+    const [updated] = await db.select({ lastSeenAt: schema.agents.lastSeenAt })
+      .from(schema.agents)
+      .where(eq(schema.agents.id, agent.agent.id))
+      .limit(1)
+    assert.ok(updated.lastSeenAt)
+  } finally {
+    delete process.env.REFERENCE_FLEET_KEYS_JSON
+  }
 })
 
 test('a linked owner can recover credentials and transfer ownership without residual access', async () => {
