@@ -364,6 +364,51 @@ async function main() {
         })
         await database.execute('CREATE INDEX IF NOT EXISTS agents_previous_api_key_expiry_idx ON agents(previous_api_key_expires_at)')
       } },
+      { id: '2026-09-19-agent-scoped-credentials-ownership-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS agent_credentials (
+          id TEXT PRIMARY KEY NOT NULL,
+          agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          key_hash TEXT NOT NULL,
+          key_prefix TEXT NOT NULL,
+          scopes TEXT NOT NULL DEFAULT '[]',
+          created_by_type TEXT NOT NULL,
+          created_by_id TEXT,
+          created_at INTEGER NOT NULL,
+          last_used_at INTEGER,
+          expires_at INTEGER,
+          revoked_at INTEGER,
+          revoked_by_type TEXT,
+          revoked_by_id TEXT,
+          revocation_reason TEXT
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS agent_credentials_key_hash_idx ON agent_credentials(key_hash)')
+        await database.execute('CREATE INDEX IF NOT EXISTS agent_credentials_agent_active_idx ON agent_credentials(agent_id, revoked_at, expires_at)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS agent_owners (
+          agent_id TEXT PRIMARY KEY NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          established_by TEXT NOT NULL,
+          established_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS agent_owners_user_idx ON agent_owners(user_id)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS agent_ownership_transfers (
+          id TEXT PRIMARY KEY NOT NULL,
+          agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          from_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          target_type TEXT NOT NULL,
+          target_value TEXT NOT NULL,
+          token_hash TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          accepted_at INTEGER,
+          accepted_by_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+          cancelled_at INTEGER,
+          created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS agent_ownership_transfers_token_hash_idx ON agent_ownership_transfers(token_hash)')
+        await database.execute('CREATE INDEX IF NOT EXISTS agent_ownership_transfers_agent_created_idx ON agent_ownership_transfers(agent_id, created_at)')
+        await database.execute('CREATE INDEX IF NOT EXISTS agent_ownership_transfers_expiry_idx ON agent_ownership_transfers(expires_at)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

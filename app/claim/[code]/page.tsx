@@ -23,6 +23,9 @@ export default function ClaimPage() {
   const [claiming, setClaiming] = useState(false)
   const [claimed, setClaimed] = useState(false)
   const [claimError, setClaimError] = useState<string | null>(null)
+  const [accountEmail, setAccountEmail] = useState<string | null>(null)
+  const [accountChecked, setAccountChecked] = useState(false)
+  const [ownerRecoveryEnabled, setOwnerRecoveryEnabled] = useState(false)
 
   useEffect(() => {
     if (!code) return
@@ -39,6 +42,17 @@ export default function ClaimPage() {
       .catch(e => { setError(e.message); setLoading(false) })
   }, [code])
 
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((body) => {
+        const signedInEmail = body?.user?.email ? String(body.user.email) : null
+        setAccountEmail(signedInEmail)
+        if (signedInEmail) setEmail(signedInEmail)
+      })
+      .finally(() => setAccountChecked(true))
+  }, [])
+
   async function handleClaim(e: React.FormEvent) {
     e.preventDefault()
     if (!email.includes('@') || claiming) return
@@ -48,11 +62,16 @@ export default function ClaimPage() {
     try {
       const res = await fetch('/api/claim', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': document.cookie.split('; ').find((item) => item.startsWith('csrf-token='))?.split('=')[1] || '',
+        },
         body: JSON.stringify({ code, email }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Claim failed')
+      setOwnerRecoveryEnabled(data.owner_recovery_enabled === true)
       setClaimed(true)
     } catch (err: any) {
       setClaimError(err.message)
@@ -131,7 +150,9 @@ export default function ClaimPage() {
             {agent.name}
           </p>
           <p style={{ color: '#484f58', fontSize: 13, marginBottom: 24 }}>
-            Your agent is now active on ClawdMarket. Publish a concrete service before accepting marketplace work.
+            Your agent is now active on ClawdMarket. {ownerRecoveryEnabled
+              ? 'This account is also linked for credential recovery and guarded ownership transfer.'
+              : 'Publish a concrete service before accepting marketplace work.'}
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link href={`/registry/${agent.agent_id}`} style={styles.primaryButton}>
@@ -188,8 +209,18 @@ export default function ClaimPage() {
           )}
         </div>
 
-        {/* Claim form */}
-        <form onSubmit={handleClaim}>
+        {!accountChecked ? (
+          <p style={{ color: '#8b949e', fontSize: 13 }}>Checking your account…</p>
+        ) : !accountEmail ? (
+          <div>
+            <p style={{ color: '#8b949e', fontSize: 13, lineHeight: 1.6, marginBottom: 18 }}>
+              Sign in first so this private claim binds the agent to an authenticated account for recovery and future ownership transfer.
+            </p>
+            <Link href={`/auth/login?next=${encodeURIComponent(`/claim/${code}`)}`} style={styles.primaryButton}>
+              Sign in to claim
+            </Link>
+          </div>
+        ) : <form onSubmit={handleClaim}>
           <label htmlFor="claim-owner-email" style={{
             display: 'block', fontSize: 12, color: '#8b949e', marginBottom: 6,
             fontFamily: "'JetBrains Mono', monospace",
@@ -203,6 +234,7 @@ export default function ClaimPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             required
+            readOnly={!accountEmail.startsWith('wallet_')}
             style={{
               width: '100%', padding: '12px 16px', borderRadius: 8,
               border: '1px solid #21262d', background: '#0a0b0f',
@@ -230,11 +262,12 @@ export default function ClaimPage() {
           >
             {claiming ? 'Claiming...' : 'Claim This Agent'}
           </button>
-        </form>
+        </form>}
 
         <p style={{ color: '#484f58', fontSize: 11, marginTop: 16, lineHeight: 1.5 }}>
-          Possession of this private link authorizes activation. The email is stored as the
-          administrative contact and is not used as a wallet address.
+          The private link authorizes activation; the signed-in account establishes the durable
+          recovery owner. Email accounts must use their signed-in email. A declared owner wallet
+          must sign the wallet challenge before claiming.
         </p>
       </div>
     </div>

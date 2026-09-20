@@ -86,6 +86,55 @@ export const agent_lifecycle_events = sqliteTable('agent_lifecycle_events', {
   index('agent_lifecycle_events_agent_created_idx').on(table.agent_id, table.created_at),
 ]);
 
+export const agent_credentials = sqliteTable('agent_credentials', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  keyHash: text('key_hash').notNull(),
+  keyPrefix: text('key_prefix').notNull(),
+  scopes: text('scopes').notNull().default('[]'),
+  createdByType: text('created_by_type').notNull(),
+  createdById: text('created_by_id'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }),
+  revokedAt: integer('revoked_at', { mode: 'timestamp' }),
+  revokedByType: text('revoked_by_type'),
+  revokedById: text('revoked_by_id'),
+  revocationReason: text('revocation_reason'),
+}, (table) => [
+  uniqueIndex('agent_credentials_key_hash_idx').on(table.keyHash),
+  index('agent_credentials_agent_active_idx').on(table.agentId, table.revokedAt, table.expiresAt),
+]);
+
+export const agent_owners = sqliteTable('agent_owners', {
+  agentId: text('agent_id').primaryKey().references(() => agents.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  establishedBy: text('established_by').notNull(),
+  establishedAt: integer('established_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('agent_owners_user_idx').on(table.userId),
+]);
+
+export const agent_ownership_transfers = sqliteTable('agent_ownership_transfers', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  fromUserId: text('from_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  targetType: text('target_type', { enum: ['email', 'wallet'] }).notNull(),
+  targetValue: text('target_value').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  acceptedAt: integer('accepted_at', { mode: 'timestamp' }),
+  acceptedByUserId: text('accepted_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+  cancelledAt: integer('cancelled_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('agent_ownership_transfers_token_hash_idx').on(table.tokenHash),
+  index('agent_ownership_transfers_agent_created_idx').on(table.agentId, table.createdAt),
+  index('agent_ownership_transfers_expiry_idx').on(table.expiresAt),
+]);
+
 export const api_keys = sqliteTable('api_keys', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   user_id: text('user_id')

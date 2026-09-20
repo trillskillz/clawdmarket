@@ -70,8 +70,11 @@ export async function GET(request: NextRequest) {
       profile_visibility: agent.visibility || 'public',
       sponsor_agent_id: agent.sponsor_agent_id || null,
       credential: {
-        prefix: agent.api_key_prefix || null,
-        last_used_at: agent.api_key_last_used_at || null,
+        id: auth.credentialId || 'primary',
+        name: auth.credentialName,
+        prefix: auth.credentialPrefix || agent.api_key_prefix || null,
+        scopes: auth.scopes,
+        last_used_at: auth.credential === 'named' ? auth.credentialLastUsedAt : agent.api_key_last_used_at || null,
         rotated_at: agent.api_key_rotated_at || null,
         authenticated_with: auth.credential,
         previous_prefix: agent.previous_api_key_expires_at && Number(agent.previous_api_key_expires_at) > Math.floor(Date.now() / 1000)

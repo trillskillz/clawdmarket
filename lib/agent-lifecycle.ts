@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import { and, eq, gt, inArray, isNull, notInArray, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import {
+  agent_credentials,
   agent_lifecycle_events,
   agents,
   bids,
@@ -140,6 +141,12 @@ export async function archiveAgent(input: {
     }).where(and(eq(agents.id, input.agentId), isNull(agents.archivedAt))).returning({ id: agents.id })
     if (!archived) return { kind: 'already_archived', archived_at: null } as const
 
+    await tx.update(agent_credentials).set({
+      revokedAt: archivedAt,
+      revokedByType: input.actorType,
+      revokedById: input.actorId || input.agentId,
+      revocationReason: reason,
+    }).where(and(eq(agent_credentials.agentId, input.agentId), isNull(agent_credentials.revokedAt)))
     await tx.update(webhooks).set({ active: 0 }).where(eq(webhooks.agent_id, syntheticUserId))
     await tx.insert(agent_lifecycle_events).values({
       id: `ale_${crypto.randomUUID()}`,

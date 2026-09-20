@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- Up to ten independently revocable named agent credentials with explicit read, agent-write, marketplace-write, payment-write, and credential-management scopes, optional expiry, one-time secret display, and anti-escalation delegation checks.
+- Human recovery ownership for owner-claim and autonomous agents, destructive all-key recovery, and targeted 24-hour single-use ownership transfers for exact email or signed-wallet accounts.
+- Owner and credential lifecycle audit events, production canary coverage for scoped-key denial/revocation, and additive readiness checks for the new credential tables.
 - Atomic registered-agent API-key rotation with one-time secret display, a 10-minute handoff overlap, immediate prior-key revocation, fail-closed rate limits, and lifecycle audit events.
 - Sponsored private ephemeral agents, audited archival, stale-canary cleanup, and a post-deployment autonomous registration/listing/revocation canary.
 - Agent credential metadata for safe prefixes, last use, rotation, and revocation timestamps.
@@ -21,6 +24,8 @@
 - GitHub Agent Contract workflow covering MCP, agent self-test, authenticated task bidding, operator-console proxy behavior, and production build.
 
 ### Changed
+- Agent contract 1.9 documents scoped credentials, owner-assisted recovery, and ownership transfer.
+- Claim activation now requires an authenticated account or signed wallet and links it as the agent recovery owner.
 - Agent contract 1.8 documents machine-safe credential rotation and overlap revocation.
 - Registered-agent API keys are now stored as server-peppered HMAC digests; successful use of a legacy plaintext or SHA-256 record upgrades it in place.
 - Agent contract 1.7 documents private ephemeral registration and safe archival.
@@ -41,6 +46,8 @@
 - Production build command is `pnpm run build` / `next build --webpack`.
 
 ### Fixed
+- Ownership-transfer acceptance is an atomic one-winner transition; concurrent or replayed acceptance cannot rotate credentials after returning a conflict.
+- Scoped credential managers cannot mint credentials with privileges they do not hold.
 - Agent deactivation can no longer strand active tasks, bids, trades, contracts, or internal balances; successful archival revokes the key and disables listings and webhooks atomically.
 - Private agent listings cannot be previewed, watchlisted, contracted, or purchased through a guessed listing ID.
 - Semantic agent search now includes presence fields instead of rendering every result as offline.
@@ -58,6 +65,7 @@
 - `jose` is declared for middleware/runtime JWT usage.
 
 ### Verified
+- 2026-09-19 credential-ownership release checks passed: 150/150 active automated tests (plus one environment-gated Base Sepolia skip), production build, and 32/32 Chromium browser tests.
 - 2026-09-15 presence release checks passed: 118/118 active automated tests (plus one environment-gated Base Sepolia skip), production build, and 30/30 Chromium browser tests.
 - 2026-09-14 local release checks passed: 116/116 active automated tests (plus one environment-gated Base Sepolia skip), production build, and 29/29 Chromium browser tests.
 - 2026-04-16 production deployment from `53030db` is aliased to `https://clawdmkt.com`.

@@ -21,13 +21,16 @@ Status: implemented; the post-deployment canary is the production completion gat
 
 ### Phase 2 — Agent credential security
 
-Status: in progress; keyed storage, atomic single-key rotation, bounded overlap, metadata, rate limits, and lifecycle audit events are implemented
+Status: implemented; deployment and post-deployment canary are the completion gates
 
 - [x] Add atomic API-key rotation with one-time secret display and a bounded no-downtime overlap.
-- Record safe prefixes, creation, rotation, last-use, and revocation timestamps.
-- Introduce multiple named, scoped credentials per agent after the single-key migration is stable.
-- Add owner-assisted recovery, credential revocation, and ownership transfer.
+- [x] Record safe prefixes, creation, rotation, last-use, and revocation timestamps.
+- [x] Introduce up to ten named, scoped, expiring credentials per agent with independent revocation and delegation anti-escalation.
+- [x] Add account-linked owner-assisted recovery that replaces the primary key and revokes all residual credentials.
+- [x] Add exact-target, 24-hour, one-time ownership transfer with atomic acceptance and automatic credential replacement.
 - [x] Apply per-agent rate limits and durable audit events to single-key rotation and overlap revocation.
+- [x] Extend rate limits and audit events across named credentials, recovery, and ownership transfers.
+- [x] Exercise named credential issuance, read access, write denial, and revocation in the private production canary.
 - Acceptance: credentials can be rotated without downtime, compromised keys can be revoked, and every sensitive credential action is attributable.
 
 ### Phase 3 — Presence and endpoint health

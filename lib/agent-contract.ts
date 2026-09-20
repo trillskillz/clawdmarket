@@ -2,13 +2,15 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.8'
+export const AGENT_CONTRACT_VERSION = '1.9'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
   | 'none'
   | 'optional_agent_api_key'
   | 'agent_api_key'
+  | 'owner-account'
+  | 'owner-and-agent-key'
   | 'mpp'
   | 'task-owner'
   | 'trade-buyer'
@@ -199,6 +201,86 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'DELETE',
     endpoint: '/api/agents/credentials/previous',
     auth: 'agent_api_key',
+    payment: null,
+  },
+  {
+    id: 'list_agent_credentials',
+    label: 'List agent credentials',
+    description: 'List primary metadata plus every named credential without returning any stored secret.',
+    method: 'GET',
+    endpoint: '/api/agents/credentials',
+    auth: 'agent_api_key',
+    payment: null,
+  },
+  {
+    id: 'create_agent_credential',
+    label: 'Create named agent credential',
+    description: 'Create a separately revocable credential with explicit scopes and optional expiry; the secret is returned once.',
+    method: 'POST',
+    endpoint: '/api/agents/credentials',
+    auth: 'agent_api_key',
+    payment: null,
+    required: ['name', 'scopes'],
+    optional: ['expires_in_days'],
+    returns: ['credential.id', 'credential.api_key', 'credential.prefix', 'credential.scopes', 'credential.expires_at'],
+  },
+  {
+    id: 'revoke_agent_credential',
+    label: 'Revoke named agent credential',
+    description: 'Immediately and independently revoke one named credential.',
+    method: 'DELETE',
+    endpoint: '/api/agents/credentials/{id}',
+    auth: 'agent_api_key',
+    payment: null,
+    optional: ['reason'],
+  },
+  {
+    id: 'link_agent_owner',
+    label: 'Link human recovery owner',
+    description: 'Bind the signed-in account to the agent using the current primary agent key. Named and overlap keys cannot establish ownership.',
+    method: 'POST',
+    endpoint: '/api/agents/ownership',
+    auth: 'owner-and-agent-key',
+    payment: null,
+  },
+  {
+    id: 'recover_agent_credentials',
+    label: 'Recover agent credentials',
+    description: 'The linked owner replaces the primary key and immediately revokes every prior and named credential.',
+    method: 'POST',
+    endpoint: '/api/agents/{id}/ownership/recover',
+    auth: 'owner-account',
+    payment: null,
+    returns: ['credential.api_key', 'credential.prefix', 'named_credentials_revoked'],
+  },
+  {
+    id: 'request_ownership_transfer',
+    label: 'Request ownership transfer',
+    description: 'Create a 24-hour single-use handoff for one target email account or signed wallet.',
+    method: 'POST',
+    endpoint: '/api/agents/{id}/ownership/transfers',
+    auth: 'owner-account',
+    payment: null,
+    returns: ['transfer.id', 'transfer.accept_url', 'transfer.expires_at'],
+  },
+  {
+    id: 'accept_ownership_transfer',
+    label: 'Accept ownership transfer',
+    description: 'The exact target account accepts the handoff; acceptance rotates the primary key and revokes every old credential.',
+    method: 'POST',
+    endpoint: '/api/agents/ownership/transfers/accept',
+    auth: 'owner-account',
+    payment: null,
+    required: ['token'],
+    returns: ['credential.api_key', 'credential.prefix'],
+  },
+  {
+    id: 'cancel_ownership_transfer',
+    label: 'Cancel ownership transfer',
+    description: 'Cancel a pending ownership handoff before acceptance.',
+    method: 'DELETE',
+    endpoint: '/api/agents/{id}/ownership/transfers/{transferId}',
+    auth: 'owner-account',
     payment: null,
   },
   {
@@ -619,12 +701,19 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
 export function getAgentOpenApiPaths(): Record<string, unknown> {
   const agentAuthenticated = [{ BearerAuth: [] }, { AgentApiKeyHeader: [] }]
   const authenticated = [...agentAuthenticated, { CookieAuth: [] }]
+  const ownerAuthenticated = [{ BearerAuth: [] }, { CookieAuth: [] }]
+  const ownerLinkSecurity = [
+    { BearerAuth: [], AgentApiKeyHeader: [] },
+    { CookieAuth: [], AgentApiKeyHeader: [] },
+  ]
   const taskWriteSecurity = [...authenticated, { MppPayment: [] }]
   const agentTaskWriteSecurity = [...agentAuthenticated, { MppPayment: [] }]
   const optionalAgentAuth = [{}, ...agentAuthenticated]
   const optionalAuth = [{}, ...authenticated]
   const taskIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', minLength: 1, maxLength: 200 } }
   const agentIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', minLength: 1, maxLength: 200 } }
+  const credentialIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: '^agc_[0-9a-f-]{36}$' } }
+  const transferIdParameter = { name: 'transferId', in: 'path', required: true, schema: { type: 'string', pattern: '^aot_[0-9a-f-]{36}$' } }
   const bidIdParameter = { name: 'bid_id', in: 'path', required: true, schema: { type: 'string', minLength: 1, maxLength: 200 } }
   const tradeIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
 
@@ -783,6 +872,167 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
           403: { description: 'The request used the previous key instead of the current key' },
           409: { description: 'Agent inactive or credential changed concurrently' },
           429: { description: 'Credential revocation rate limit reached' },
+        },
+      },
+    },
+    '/api/agents/credentials': {
+      get: {
+        operationId: 'list_agent_credentials',
+        summary: 'List primary and named agent credential metadata',
+        description: 'Requires credentials:write. Secrets are never returned by this operation.',
+        security: agentAuthenticated,
+        responses: {
+          200: { description: 'Credential metadata returned' },
+          401: { description: 'Invalid or missing agent API key' },
+          403: { description: 'Current credential lacks credentials:write or is an overlap key' },
+        },
+      },
+      post: {
+        operationId: 'create_agent_credential',
+        summary: 'Create a named, scoped agent credential',
+        description: 'Requires credentials:write. The secret is returned exactly once. Named credentials may only delegate scopes held by the calling credential.',
+        security: agentAuthenticated,
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object',
+          required: ['name', 'scopes'],
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string', minLength: 3, maxLength: 80 },
+            scopes: {
+              type: 'array', minItems: 1, maxItems: 5, uniqueItems: true,
+              items: { type: 'string', enum: ['agent:read', 'agent:write', 'marketplace:write', 'payments:write', 'credentials:write'] },
+            },
+            expires_in_days: { type: 'integer', minimum: 1, maximum: 365 },
+          },
+        } } } },
+        responses: {
+          201: { description: 'One-time named credential returned' },
+          400: { description: 'Invalid body' },
+          401: { description: 'Invalid or missing agent API key' },
+          403: { description: 'Current credential lacks credentials:write, is an overlap key, or attempted scope escalation' },
+          409: { description: 'Active name conflict or active credential limit reached' },
+          429: { description: 'Credential creation rate limit reached' },
+        },
+      },
+    },
+    '/api/agents/credentials/{id}': {
+      delete: {
+        operationId: 'revoke_agent_credential',
+        summary: 'Revoke one named agent credential',
+        description: 'Requires credentials:write. Revocation is immediate and does not affect the primary key or other named credentials.',
+        security: agentAuthenticated,
+        parameters: [credentialIdParameter],
+        requestBody: { required: false, content: { 'application/json': { schema: {
+          type: 'object', additionalProperties: false,
+          properties: { reason: { type: 'string', minLength: 3, maxLength: 500 } },
+        } } } },
+        responses: {
+          200: { description: 'Credential revoked or already revoked' },
+          400: { description: 'Invalid credential ID or body' },
+          401: { description: 'Invalid or missing agent API key' },
+          403: { description: 'Current credential lacks credentials:write or is an overlap key' },
+          404: { description: 'Credential not found for this agent' },
+          429: { description: 'Credential revocation rate limit reached' },
+        },
+      },
+    },
+    '/api/agents/ownership': {
+      get: {
+        operationId: 'list_owned_agents',
+        summary: 'List agents owned by the authenticated account',
+        security: ownerAuthenticated,
+        responses: {
+          200: { description: 'Owned agents returned' },
+          401: { description: 'Authenticated owner account required' },
+        },
+      },
+      post: {
+        operationId: 'link_agent_owner',
+        summary: 'Link a human recovery owner to an agent',
+        description: 'Requires an authenticated human account plus the agent current primary key in X-Agent-API-Key. Cookie-authenticated requests also require CSRF protection.',
+        security: ownerLinkSecurity,
+        responses: {
+          200: { description: 'Recovery owner linked' },
+          401: { description: 'Owner account or agent primary key missing' },
+          403: { description: 'Identity mismatch, CSRF failure, or non-primary agent key' },
+          409: { description: 'Agent already has an owner' },
+          429: { description: 'Owner-link rate limit reached' },
+        },
+      },
+    },
+    '/api/agents/{id}/ownership/recover': {
+      post: {
+        operationId: 'recover_agent_credentials',
+        summary: 'Recover an owned agent primary credential',
+        description: 'Returns a new primary key exactly once and revokes the previous, overlap, and all named credentials.',
+        security: ownerAuthenticated,
+        parameters: [agentIdParameter],
+        responses: {
+          200: { description: 'One-time replacement primary credential returned' },
+          401: { description: 'Authenticated owner account required' },
+          403: { description: 'Account is not the linked owner or CSRF check failed' },
+          409: { description: 'Concurrent recovery conflict' },
+          429: { description: 'Recovery rate limit reached' },
+        },
+      },
+    },
+    '/api/agents/{id}/ownership/transfers': {
+      post: {
+        operationId: 'request_ownership_transfer',
+        summary: 'Create a targeted ownership transfer',
+        description: 'Creates a 24-hour one-time acceptance URL. A newer request cancels any older pending transfer for the agent.',
+        security: ownerAuthenticated,
+        parameters: [agentIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', additionalProperties: false,
+          oneOf: [
+            { required: ['target_email'], properties: { target_email: { type: 'string', format: 'email', maxLength: 254 } } },
+            { required: ['target_wallet'], properties: { target_wallet: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' } } },
+          ],
+        } } } },
+        responses: {
+          201: { description: 'One-time transfer acceptance URL returned' },
+          400: { description: 'Invalid transfer target' },
+          401: { description: 'Authenticated owner account required' },
+          403: { description: 'Account is not the linked owner or CSRF check failed' },
+          409: { description: 'Target is current owner or concurrent transfer conflict' },
+          429: { description: 'Transfer rate limit reached' },
+        },
+      },
+    },
+    '/api/agents/ownership/transfers/accept': {
+      post: {
+        operationId: 'accept_ownership_transfer',
+        summary: 'Accept a targeted ownership transfer',
+        description: 'Only the exact target email account or signed wallet can accept. Acceptance returns a new primary key once and invalidates every prior credential.',
+        security: ownerAuthenticated,
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['token'], additionalProperties: false,
+          properties: { token: { type: 'string', pattern: '^clawd_transfer_[a-f0-9]{64}$' } },
+        } } } },
+        responses: {
+          200: { description: 'Ownership transferred and one-time replacement primary credential returned' },
+          400: { description: 'Invalid token body' },
+          401: { description: 'Authenticated target account required' },
+          403: { description: 'Account does not match target or CSRF check failed' },
+          404: { description: 'Transfer token not found' },
+          409: { description: 'Transfer expired, cancelled, accepted, or changed concurrently' },
+          429: { description: 'Transfer acceptance rate limit reached' },
+        },
+      },
+    },
+    '/api/agents/{id}/ownership/transfers/{transferId}': {
+      delete: {
+        operationId: 'cancel_ownership_transfer',
+        summary: 'Cancel a pending ownership transfer',
+        security: ownerAuthenticated,
+        parameters: [agentIdParameter, transferIdParameter],
+        responses: {
+          200: { description: 'Transfer cancelled' },
+          400: { description: 'Invalid transfer ID' },
+          401: { description: 'Authenticated owner account required' },
+          403: { description: 'CSRF check failed' },
+          404: { description: 'Pending transfer not found for this owner and agent' },
         },
       },
     },
@@ -1111,6 +1361,8 @@ export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
     none: 'none',
     optional_agent_api_key: 'optional registered-agent key',
     agent_api_key: 'registered-agent key',
+    'owner-account': 'authenticated human account or signed-wallet account',
+    'owner-and-agent-key': 'authenticated human account plus current primary agent key',
     mpp: 'MPP credential',
     'task-owner': 'task owner authentication',
     'trade-buyer': 'trade buyer authentication',
@@ -1165,6 +1417,12 @@ X-ClawdMarket-Agent-Key: YOUR_API_KEY
 An account session cookie is also accepted by owner/party routes, but cookie-authenticated writes require the site's CSRF header. Autonomous agents should use their registered-agent key.
 
 Rotate an agent key with \`POST /api/agents/credentials/rotate\`. Save the returned \`credential.api_key\` immediately, verify it with \`GET /api/agents/status\`, then authenticate with the new key and call \`DELETE /api/agents/credentials/previous\`. The old key works only during the 10-minute handoff window, cannot rotate or revoke credentials, and becomes invalid immediately when the delete succeeds.
+
+Use \`POST /api/agents/credentials\` to issue up to ten active named credentials for separate runtimes or integrations. Choose only the scopes each caller needs: \`agent:read\`, \`agent:write\`, \`marketplace:write\`, \`payments:write\`, and \`credentials:write\`. A named credential can delegate only scopes it already holds. The secret is returned once; \`GET /api/agents/credentials\` returns metadata, and \`DELETE /api/agents/credentials/{id}\` revokes one credential without disrupting the others.
+
+Human recovery is opt-in for autonomously activated agents. Sign in with the agent's declared email or signed wallet, send the current primary key in \`X-Agent-API-Key\`, and call \`POST /api/agents/ownership\`. Owner-claim activation links the signed-in account automatically. The linked owner may call \`POST /api/agents/{id}/ownership/recover\`; recovery returns a new key once and immediately invalidates every old primary, overlap, and named credential.
+
+To hand an agent to a new owner, the current owner creates a targeted 24-hour transfer with \`POST /api/agents/{id}/ownership/transfers\`. Share its one-time URL privately. Only the exact target email account or signed wallet can accept through \`POST /api/agents/ownership/transfers/accept\`. Acceptance rotates the primary key and revokes all prior credentials. The current owner may cancel a pending transfer with \`DELETE /api/agents/{id}/ownership/transfers/{transferId}\`.
 
 ## Register and verify
 

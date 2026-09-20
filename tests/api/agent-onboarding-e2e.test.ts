@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { createLocalTestSchema } from '../helpers/local-schema'
@@ -15,6 +15,12 @@ let register: typeof import('@/app/api/agents/register/route').POST
 let status: typeof import('@/app/api/agents/status/route').GET
 let rotateCredential: typeof import('@/app/api/agents/credentials/rotate/route').POST
 let revokePreviousCredential: typeof import('@/app/api/agents/credentials/previous/route').DELETE
+let credentials: typeof import('@/app/api/agents/credentials/route')
+let revokeNamedCredential: typeof import('@/app/api/agents/credentials/[id]/route').DELETE
+let ownership: typeof import('@/app/api/agents/ownership/route')
+let recoverCredentials: typeof import('@/app/api/agents/[id]/ownership/recover/route').POST
+let createOwnershipTransfer: typeof import('@/app/api/agents/[id]/ownership/transfers/route').POST
+let acceptOwnershipTransfer: typeof import('@/app/api/agents/ownership/transfers/accept/route').POST
 let heartbeat: typeof import('@/app/api/agents/[id]/heartbeat/route').POST
 let claim: typeof import('@/app/api/claim/route')
 let listing: typeof import('@/app/api/listings/route').POST
@@ -36,6 +42,7 @@ let accept: typeof import('@/app/api/tasks/[id]/accept/[bid_id]/route').POST
 let bids: typeof import('@/app/api/agents/bids/route').GET
 let work: typeof import('@/app/api/work/route').GET
 let webhookDeliveries: typeof import('@/app/api/webhooks/deliveries/route').GET
+let generateJWT: typeof import('@/lib/auth').generateJWT
 let ipSequence = 10
 
 before(async () => {
@@ -52,6 +59,12 @@ before(async () => {
   status = (await import('@/app/api/agents/status/route')).GET
   rotateCredential = (await import('@/app/api/agents/credentials/rotate/route')).POST
   revokePreviousCredential = (await import('@/app/api/agents/credentials/previous/route')).DELETE
+  credentials = await import('@/app/api/agents/credentials/route')
+  revokeNamedCredential = (await import('@/app/api/agents/credentials/[id]/route')).DELETE
+  ownership = await import('@/app/api/agents/ownership/route')
+  recoverCredentials = (await import('@/app/api/agents/[id]/ownership/recover/route')).POST
+  createOwnershipTransfer = (await import('@/app/api/agents/[id]/ownership/transfers/route')).POST
+  acceptOwnershipTransfer = (await import('@/app/api/agents/ownership/transfers/accept/route')).POST
   heartbeat = (await import('@/app/api/agents/[id]/heartbeat/route')).POST
   claim = await import('@/app/api/claim/route')
   listing = (await import('@/app/api/listings/route')).POST
@@ -73,6 +86,7 @@ before(async () => {
   bids = (await import('@/app/api/agents/bids/route')).GET
   work = (await import('@/app/api/work/route')).GET
   webhookDeliveries = (await import('@/app/api/webhooks/deliveries/route')).GET
+  generateJWT = (await import('@/lib/auth')).generateJWT
 })
 
 after(() => {
@@ -91,6 +105,36 @@ function request(path: string, method = 'GET', body?: unknown, key?: string, key
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
+}
+
+function accountRequest(path: string, token: string, method = 'GET', body?: unknown, agentKey?: string) {
+  ipSequence += 1
+  return new NextRequest(`https://clawdmkt.test${path}`, {
+    method,
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+      'x-forwarded-for': `198.51.100.${ipSequence}`,
+      ...(agentKey ? { 'x-agent-api-key': agentKey } : {}),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
+}
+
+async function createAccount(email: string) {
+  const id = `user_${randomUUID()}`
+  await db.insert(schema.users).values({
+    id,
+    email,
+    password_hash: 'isolated-owner-account-hash',
+    name: email.split('@')[0],
+    role: 'human',
+  })
+  return {
+    id,
+    email,
+    token: generateJWT({ userId: id, email, role: 'human' }),
+  }
 }
 
 async function registerAgent(name: string, activationMode?: 'autonomous' | 'owner_claim') {
@@ -173,8 +217,11 @@ test('an autonomous agent can activate, authenticate with either key header, and
 })
 
 test('owner-claim registration blocks marketplace actions until the private claim is completed', async () => {
+  const owner = await createAccount('owner@example.test')
   const malformed = await claim.POST(new NextRequest('https://clawdmkt.test/api/claim', {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '198.51.100.240' }, body: '{',
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${owner.token}`, 'x-forwarded-for': '198.51.100.240' },
+    body: '{',
   }))
   assert.equal(malformed.status, 400)
   const assisted = await registerAgent('Owner Assisted Agent')
@@ -192,9 +239,12 @@ test('owner-claim registration blocks marketplace actions until the private clai
 
   const code = new URL(assisted.agent.claim_url).pathname.split('/').pop()!
   assert.equal((await claim.GET(request(`/api/claim?code=${encodeURIComponent(code)}`))).status, 200)
-  const claimed = await claim.POST(request('/api/claim', 'POST', { code, email: 'owner@example.test' }))
+  const claimed = await claim.POST(accountRequest('/api/claim', owner.token, 'POST', { code, email: owner.email }))
   assert.equal(claimed.status, 200)
-  assert.equal((await claimed.json()).activation_method, 'owner_claim')
+  const claimedBody = await claimed.json()
+  assert.equal(claimedBody.activation_method, 'owner_claim')
+  assert.equal(claimedBody.owner_recovery_enabled, true)
+  assert.equal(claimedBody.owner_user_id, owner.id)
 
   const active = await status(request('/api/agents/status', 'GET', undefined, assisted.agent.api_key))
   const activeBody = await active.json()
@@ -260,6 +310,159 @@ test('agent credential rotation is atomic, overlapping, and auditable', async ()
     events.map((event) => event.action).filter((action) => action.startsWith('credential_')).sort(),
     ['credential_previous_revoked', 'credential_rotated'],
   )
+})
+
+test('named credentials enforce scopes and can be independently revoked', async () => {
+  const agent = await registerAgent('Scoped Credential Agent', 'autonomous')
+  const primaryKey = agent.agent.api_key
+
+  const readerResponse = await credentials.POST(request('/api/agents/credentials', 'POST', {
+    name: 'read-only-monitor',
+    scopes: ['agent:read'],
+    expires_in_days: 30,
+  }, primaryKey))
+  assert.equal(readerResponse.status, 201)
+  const reader = (await readerResponse.json()).credential
+  assert.match(reader.api_key, /^clawd_[a-f0-9]{48}$/)
+  assert.deepEqual(reader.scopes, ['agent:read'])
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, reader.api_key))).status, 200)
+  assert.equal((await inbox(request('/api/agents/inbox', 'GET', undefined, reader.api_key))).status, 200)
+  assert.equal((await heartbeat(
+    request(`/api/agents/${agent.agent.id}/heartbeat`, 'POST', {}, reader.api_key),
+    { params: Promise.resolve({ id: agent.agent.id }) },
+  )).status, 401)
+  assert.equal((await listing(request('/api/listings', 'POST', {
+    category: 'analysis',
+    title: 'Scope bypass attempt',
+    description: 'A read-only credential must never be able to publish this service.',
+    price_bankr: 1,
+  }, reader.api_key))).status, 401)
+  assert.equal((await credentials.GET(request('/api/agents/credentials', 'GET', undefined, reader.api_key))).status, 403)
+
+  const managerResponse = await credentials.POST(request('/api/agents/credentials', 'POST', {
+    name: 'credential-manager',
+    scopes: ['agent:read', 'credentials:write'],
+  }, primaryKey))
+  assert.equal(managerResponse.status, 201)
+  const manager = (await managerResponse.json()).credential
+  const escalated = await credentials.POST(request('/api/agents/credentials', 'POST', {
+    name: 'escalated-payment-key',
+    scopes: ['payments:write'],
+  }, manager.api_key))
+  assert.equal(escalated.status, 403)
+  assert.equal((await escalated.json()).error, 'scope_escalation_forbidden')
+
+  const delegatedResponse = await credentials.POST(request('/api/agents/credentials', 'POST', {
+    name: 'delegated-reader',
+    scopes: ['agent:read'],
+  }, manager.api_key))
+  assert.equal(delegatedResponse.status, 201)
+  const delegated = (await delegatedResponse.json()).credential
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, delegated.api_key))).status, 200)
+
+  const listed = await credentials.GET(request('/api/agents/credentials', 'GET', undefined, manager.api_key))
+  assert.equal(listed.status, 200)
+  const listedBody = await listed.json()
+  assert.equal(listedBody.credentials.primary.id, 'primary')
+  assert.equal(listedBody.credentials.named.some((item: any) => item.id === reader.id), true)
+
+  const revoked = await revokeNamedCredential(
+    request(`/api/agents/credentials/${reader.id}`, 'DELETE', { reason: 'Monitor retired' }, manager.api_key),
+    { params: Promise.resolve({ id: reader.id }) },
+  )
+  assert.equal(revoked.status, 200)
+  assert.equal((await revoked.json()).revoked, true)
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, reader.api_key))).status, 401)
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, manager.api_key))).status, 200)
+
+  const events = await db.select().from(schema.agent_lifecycle_events)
+    .where(eq(schema.agent_lifecycle_events.agent_id, agent.agent.id))
+  assert.deepEqual(
+    events.map((event) => event.action).filter((action) => ['credential_created', 'credential_revoked'].includes(action)).sort(),
+    ['credential_created', 'credential_created', 'credential_created', 'credential_revoked'],
+  )
+})
+
+test('a linked owner can recover credentials and transfer ownership without residual access', async () => {
+  const owner = await createAccount('first-owner@example.test')
+  const nextOwner = await createAccount('next-owner@example.test')
+  const stranger = await createAccount('stranger@example.test')
+  const agent = await registerAgent('Owner Recovery Agent', 'autonomous')
+  const originalKey = agent.agent.api_key
+
+  const linked = await ownership.POST(accountRequest('/api/agents/ownership', owner.token, 'POST', undefined, originalKey))
+  assert.equal(linked.status, 200)
+  assert.equal((await linked.json()).recovery_enabled, true)
+  const owned = await ownership.GET(accountRequest('/api/agents/ownership', owner.token))
+  assert.equal((await owned.json()).owned_agents.some((item: any) => item.agent_id === agent.agent.id), true)
+
+  const delegatedResponse = await credentials.POST(request('/api/agents/credentials', 'POST', {
+    name: 'automation-worker',
+    scopes: ['agent:read', 'marketplace:write'],
+  }, originalKey))
+  const delegatedKey = (await delegatedResponse.json()).credential.api_key
+
+  const recoveredResponse = await recoverCredentials(
+    accountRequest(`/api/agents/${agent.agent.id}/ownership/recover`, owner.token, 'POST'),
+    { params: Promise.resolve({ id: agent.agent.id }) },
+  )
+  assert.equal(recoveredResponse.status, 200)
+  const recoveredKey = (await recoveredResponse.json()).credential.api_key
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, originalKey))).status, 401)
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, delegatedKey))).status, 401)
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, recoveredKey))).status, 200)
+
+  const transferResponse = await createOwnershipTransfer(
+    accountRequest(`/api/agents/${agent.agent.id}/ownership/transfers`, owner.token, 'POST', {
+      target_email: nextOwner.email,
+    }),
+    { params: Promise.resolve({ id: agent.agent.id }) },
+  )
+  assert.equal(transferResponse.status, 201)
+  const transfer = (await transferResponse.json()).transfer
+  assert.match(transfer.accept_token, /^clawd_transfer_[a-f0-9]{64}$/)
+
+  const wrongRecipient = await acceptOwnershipTransfer(accountRequest(
+    '/api/agents/ownership/transfers/accept',
+    stranger.token,
+    'POST',
+    { token: transfer.accept_token },
+  ))
+  assert.equal(wrongRecipient.status, 403)
+
+  const acceptedResponse = await acceptOwnershipTransfer(accountRequest(
+    '/api/agents/ownership/transfers/accept',
+    nextOwner.token,
+    'POST',
+    { token: transfer.accept_token },
+  ))
+  assert.equal(acceptedResponse.status, 200)
+  const transferredKey = (await acceptedResponse.json()).credential.api_key
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, recoveredKey))).status, 401)
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, transferredKey))).status, 200)
+
+  const oldOwnerRecovery = await recoverCredentials(
+    accountRequest(`/api/agents/${agent.agent.id}/ownership/recover`, owner.token, 'POST'),
+    { params: Promise.resolve({ id: agent.agent.id }) },
+  )
+  assert.equal(oldOwnerRecovery.status, 403)
+  const replay = await acceptOwnershipTransfer(accountRequest(
+    '/api/agents/ownership/transfers/accept',
+    nextOwner.token,
+    'POST',
+    { token: transfer.accept_token },
+  ))
+  assert.equal(replay.status, 409)
+
+  const stored = await db.select().from(schema.agents).where(eq(schema.agents.id, agent.agent.id)).get()
+  assert.equal(stored?.owner_email, nextOwner.email)
+  const events = await db.select().from(schema.agent_lifecycle_events)
+    .where(eq(schema.agent_lifecycle_events.agent_id, agent.agent.id))
+  const actions = events.map((event) => event.action)
+  assert.equal(actions.includes('ownership_linked'), true)
+  assert.equal(actions.includes('credential_recovered'), true)
+  assert.equal(actions.includes('ownership_transfer_requested'), true)
+  assert.equal(actions.includes('ownership_transferred'), true)
 })
 
 test('a sponsored ephemeral canary stays private and archives without stranding work', async () => {

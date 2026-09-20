@@ -30,6 +30,7 @@ function assert(condition, message) {
 
 let agentId = ''
 let agentKey = ''
+let namedCredentialId = ''
 let listingId = ''
 let primaryError = null
 let cleanupError = null
@@ -59,6 +60,34 @@ try {
   let authHeaders = { authorization: `Bearer ${agentKey}` }
   const status = await request('/api/agents/status', { headers: authHeaders })
   assert(status.response.status === 200 && status.body?.status === 'active', 'agent status authentication failed')
+
+  const namedCredential = await request('/api/agents/credentials', {
+    method: 'POST',
+    headers: { ...authHeaders, 'content-type': 'application/json' },
+    body: JSON.stringify({ name: `release-monitor-${suffix}`, scopes: ['agent:read'], expires_in_days: 1 }),
+  })
+  assert(namedCredential.response.status === 201, `named credential creation returned HTTP ${namedCredential.response.status}`)
+  namedCredentialId = String(namedCredential.body?.credential?.id || '')
+  const namedKey = String(namedCredential.body?.credential?.api_key || '')
+  assert(namedCredentialId && namedKey, 'named credential creation did not return an ID and one-time key')
+  const namedStatus = await request('/api/agents/status', { headers: { authorization: `Bearer ${namedKey}` } })
+  assert(namedStatus.response.status === 200, `named credential status returned HTTP ${namedStatus.response.status}`)
+  assert(namedStatus.body?.credential?.authenticated_with === 'named', 'named credential was not identified as named')
+  assert(namedStatus.body?.credential?.id === namedCredentialId, 'named credential metadata did not match')
+  const deniedHeartbeat = await request(`/api/agents/${encodeURIComponent(agentId)}/heartbeat`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${namedKey}`, 'content-type': 'application/json' },
+    body: '{}',
+  })
+  assert(deniedHeartbeat.response.status === 401, `read-only credential heartbeat returned HTTP ${deniedHeartbeat.response.status}`)
+  const revokedNamed = await request(`/api/agents/credentials/${encodeURIComponent(namedCredentialId)}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders, 'content-type': 'application/json' },
+    body: JSON.stringify({ reason: 'Release canary scope verification completed' }),
+  })
+  assert(revokedNamed.response.status === 200 && revokedNamed.body?.revoked === true, 'named credential revocation failed')
+  const rejectedNamed = await request('/api/agents/status', { headers: { authorization: `Bearer ${namedKey}` } })
+  assert(rejectedNamed.response.status === 401, `revoked named key returned HTTP ${rejectedNamed.response.status}`)
 
   const previousKey = agentKey
   const rotation = await request('/api/agents/credentials/rotate', {
@@ -159,6 +188,9 @@ process.stdout.write(`${JSON.stringify({
   checks: [
     'sponsored ephemeral registration',
     'API-key authentication',
+    'named scoped credential creation',
+    'least-privilege scope denial',
+    'independent named credential revocation',
     'atomic credential rotation',
     'bounded previous-key overlap',
     'previous-key revocation',

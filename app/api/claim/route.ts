@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { and, eq, isNull } from 'drizzle-orm'
-import { agents } from '@/lib/schema'
+import crypto from 'node:crypto'
+import { agent_lifecycle_events, agent_owners, agents } from '@/lib/schema'
 import { getRequestIp } from '@/lib/request-ip'
 import { internalErrorResponse } from '@/lib/api-error'
 import { claimAgentSchema } from '@/lib/validation'
+import { resolveAuthenticatedOwnerAccount } from '@/lib/agent-owner-auth'
+import { validateCsrf } from '@/lib/csrf'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +20,17 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: NextRequest) {
   try {
+    const account = await resolveAuthenticatedOwnerAccount(request)
+    if (!account) {
+      return NextResponse.json({
+        error: 'account_auth_required',
+        message: 'Sign in with an account or signed wallet before claiming an agent.',
+      }, { status: 401 })
+    }
+    if (account.usesCookieAuth && !validateCsrf(request)) {
+      return NextResponse.json({ error: 'csrf_validation_failed' }, { status: 403 })
+    }
+
     // Rate limit: max 10 claim attempts per IP per 5 minutes
     const ip = getRequestIp(request)
     const rl = await rateLimit(`agent-claim:${ip}`, { interval: 300_000, maxRequests: 10, failClosed: true })
@@ -40,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // Find agent by claim code
     const result = await client.execute({
-      sql: `SELECT id, name, status, claimed_at FROM agents WHERE claim_code = ? LIMIT 1`,
+      sql: `SELECT id, name, status, claimed_at, owner_address FROM agents WHERE claim_code = ? LIMIT 1`,
       args: [code],
     })
 
@@ -59,6 +73,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const declaredWallet = String(agent.owner_address || '').trim().toLowerCase()
+    if (declaredWallet) {
+      if (account.walletAddress !== declaredWallet) {
+        return NextResponse.json({
+          error: 'owner_identity_mismatch',
+          message: 'Sign in with the wallet declared during agent registration.',
+        }, { status: 403 })
+      }
+    } else if (account.email !== email) {
+      return NextResponse.json({
+        error: 'owner_identity_mismatch',
+        message: 'The administrative email must match the signed-in account.',
+      }, { status: 403 })
+    }
+
     // Atomic claim — WHERE claimed_at IS NULL prevents race condition
     const nowIso = new Date().toISOString()
     const normalizedEmail = email
@@ -69,6 +98,23 @@ export async function POST(request: NextRequest) {
         .where(and(eq(agents.id, String(agent.id)), isNull(agents.claimedAt)))
         .returning({ id: agents.id })
       if (!updated) return null
+      await tx.insert(agent_owners).values({
+        agentId: String(agent.id),
+        userId: account.userId,
+        establishedBy: 'owner_claim',
+        establishedAt: new Date(nowIso),
+        updatedAt: new Date(nowIso),
+      }).onConflictDoNothing()
+      await tx.insert(agent_lifecycle_events).values({
+        id: `ale_${crypto.randomUUID()}`,
+        agent_id: String(agent.id),
+        action: 'ownership_linked',
+        actor_type: 'owner',
+        actor_id: account.userId,
+        reason: 'Owner linked during claim activation',
+        metadata: JSON.stringify({ established_by: 'owner_claim' }),
+        created_at: new Date(nowIso),
+      })
       return updated
     })
 
@@ -84,6 +130,8 @@ export async function POST(request: NextRequest) {
       agent_id: agent.id,
       agent_name: agent.name,
       administrative_contact: normalizedEmail,
+      owner_user_id: account.userId,
+      owner_recovery_enabled: true,
       claimed_at: nowIso,
       profile_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'}/registry/${agent.id}`,
       activation_method: 'owner_claim',
