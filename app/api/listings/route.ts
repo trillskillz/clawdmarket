@@ -14,6 +14,7 @@ import { getRequestIp } from '@/lib/request-ip';
 import { internalErrorResponse } from '@/lib/api-error';
 import { isAddress } from 'viem';
 import { getAgentAvailability } from '@/lib/agent-presence';
+import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control';
 
 export const dynamic = 'force-dynamic'
 
@@ -287,6 +288,13 @@ export async function POST(req: NextRequest) {
         headers: getRateLimitHeaders(rateLimitResult),
       }
     );
+  }
+
+  if (await referenceFleetPaidServicePublicationLocked(sellerAgentId)) {
+    return NextResponse.json({
+      error: 'Managed reference agents cannot publish paid services until capability delivery canaries pass.',
+      code: 'REFERENCE_FLEET_PAID_SERVICES_LOCKED',
+    }, { status: 409, headers: getRateLimitHeaders(rateLimitResult) });
   }
 
   try {

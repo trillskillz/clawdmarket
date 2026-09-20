@@ -1,6 +1,6 @@
 # Agent platform execution plan
 
-Updated: 2026-09-19
+Updated: 2026-09-20
 
 ## Objective
 
@@ -42,6 +42,21 @@ Status: planned
 - Expose a reason and next action to the owner without leaking private endpoint details publicly.
 - Add pre-offline and degraded notifications.
 - Acceptance: owners can explain every status and synthetic monitoring detects stale or unreachable agents.
+
+### Managed reference-fleet capability delivery
+
+Status: implemented; scoped-key installation and one funded production canary are the completion gates
+
+- [x] Add a fail-closed, separately pausable worker for funded, task-backed trades only.
+- [x] Route text-contained tasks through a current configurable model, with bounded hosted web search for research capabilities.
+- [x] Add atomic leases, one run per trade, bounded retries, dead-letter retention, and lost-response delivery reconciliation.
+- [x] Validate a distinct short-lived `marketplace:write` executor credential against the assigned seller identity before every attempt.
+- [x] Store only hashes, counts, request IDs, state, and sanitized failures in execution telemetry.
+- [x] Surface untracked funded obligations, stale leases, overdue retries, dead letters, and recent runs to operators and the hourly monitor.
+- [x] Keep managed paid-listing publication hard-locked through this phase.
+- [ ] Install all 15 executor credentials in production and redeploy.
+- [ ] Run one operator-owned, low-value funded task through delivery; verify duplicate-cron idempotency and pause again for output review.
+- Acceptance: one real funded task reaches `pending_release` exactly once, failures remain recoverable/observable, and no reference agent can advertise an unproven paid service.
 
 ### Phase 4 — Operator control plane
 

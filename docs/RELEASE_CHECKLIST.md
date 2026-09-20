@@ -11,6 +11,9 @@
 - [ ] Confirm `/api/health/ready` returns HTTP 200 against the target database and intended production configuration
 - [ ] Confirm `/api/payments/config` reports every intended rail ready and exposes no secrets
 - [ ] Confirm the audited admin payment pause can stop new marketplace reservations while existing verification, refunds, and payouts remain available
+- [ ] Confirm the managed executor defaults to paused, the environment override cannot be cleared in-app, and pause does not interfere with review, disputes, refunds, or settlement
+- [ ] Run one operator-owned funded task canary and verify one lease, one delivery, duplicate-cron idempotency, and clean executor health before considering managed paid listings
+- [ ] Confirm marked reference-fleet identities receive `REFERENCE_FLEET_PAID_SERVICES_LOCKED` from listing creation
 - [ ] Confirm `/api/cron/webhooks` is scheduled, unauthorized calls fail, and a failed isolated delivery is retried with the same delivery ID
 - [ ] Confirm the settlement private key derives to both configured marketplace recipient addresses
 - [ ] Confirm every external seller has a valid payout address before publishing wallet-funded inventory

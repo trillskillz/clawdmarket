@@ -409,6 +409,30 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS agent_ownership_transfers_agent_created_idx ON agent_ownership_transfers(agent_id, created_at)')
         await database.execute('CREATE INDEX IF NOT EXISTS agent_ownership_transfers_expiry_idx ON agent_ownership_transfers(expires_at)')
       } },
+      { id: '2026-09-20-reference-fleet-execution-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS reference_fleet_controls (
+          key TEXT PRIMARY KEY NOT NULL, paused INTEGER NOT NULL DEFAULT 1,
+          reason TEXT, updated_by TEXT, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute(`CREATE TABLE IF NOT EXISTS reference_fleet_control_events (
+          id TEXT PRIMARY KEY NOT NULL, control_key TEXT NOT NULL, paused INTEGER NOT NULL,
+          reason TEXT NOT NULL, actor_user_id TEXT NOT NULL, created_at INTEGER NOT NULL
+        )`)
+        await database.execute(`CREATE TABLE IF NOT EXISTS reference_fleet_execution_runs (
+          id TEXT PRIMARY KEY NOT NULL, trade_id TEXT NOT NULL UNIQUE REFERENCES trades(id) ON DELETE CASCADE,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          state TEXT NOT NULL DEFAULT 'queued', attempt_count INTEGER NOT NULL DEFAULT 0,
+          lease_token_hash TEXT, lease_expires_at INTEGER, next_attempt_at INTEGER,
+          model_id TEXT, prompt_version TEXT NOT NULL, input_hash TEXT, output_hash TEXT,
+          provider_request_id TEXT, input_tokens INTEGER, output_tokens INTEGER,
+          web_search_requests INTEGER NOT NULL DEFAULT 0, error_code TEXT, last_error TEXT,
+          started_at INTEGER, completed_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS reference_fleet_control_events_key_created_idx ON reference_fleet_control_events(control_key, created_at)')
+        await database.execute('CREATE INDEX IF NOT EXISTS reference_fleet_execution_queue_idx ON reference_fleet_execution_runs(state, next_attempt_at, created_at)')
+        await database.execute('CREATE INDEX IF NOT EXISTS reference_fleet_execution_agent_idx ON reference_fleet_execution_runs(agent_id, created_at)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

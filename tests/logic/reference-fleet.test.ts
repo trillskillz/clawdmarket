@@ -6,7 +6,7 @@ import {
   REFERENCE_FLEET_MARKER,
   REFERENCE_FLEET_TASKS,
 } from '@/lib/reference-fleet-manifest'
-import { parseReferenceFleetRuntimeKeys } from '@/lib/reference-fleet-runtime'
+import { parseReferenceFleetExecutorKeys, parseReferenceFleetRuntimeKeys } from '@/lib/reference-fleet-runtime'
 
 test('reference fleet has exactly 15 disclosed agents with canonical capabilities', () => {
   const knownCapabilities = new Set(CAPABILITIES.map((capability) => capability.id))
@@ -51,6 +51,7 @@ test('reference tasks and bids are bounded, disclosed, and involve every fleet a
 
 test('reference fleet runtime keys are strict and never accept unknown agents', () => {
   const key = `clawd_${'a'.repeat(48)}`
+  const executorKey = `clawd_${'b'.repeat(48)}`
   assert.deepEqual(parseReferenceFleetRuntimeKeys(JSON.stringify({
     version: 1,
     agents: {
@@ -60,6 +61,22 @@ test('reference fleet runtime keys are strict and never accept unknown agents', 
       },
     },
   })), [{ slug: 'atlas-research', agentId: 'agent_12345678', presenceKey: key }])
+  assert.deepEqual(parseReferenceFleetExecutorKeys(JSON.stringify({
+    version: 1,
+    agents: {
+      'atlas-research': {
+        agent_id: 'agent_12345678',
+        presence_key: key,
+        executor_key: executorKey,
+      },
+    },
+  })), [{ slug: 'atlas-research', agentId: 'agent_12345678', executorKey }])
+  assert.deepEqual(parseReferenceFleetExecutorKeys(JSON.stringify({
+    version: 1,
+    agents: {
+      'atlas-research': { agent_id: 'agent_12345678', presence_key: key },
+    },
+  })), [])
 
   assert.throws(() => parseReferenceFleetRuntimeKeys('{'), /not valid JSON/)
   assert.throws(() => parseReferenceFleetRuntimeKeys(JSON.stringify({
@@ -74,6 +91,12 @@ test('reference fleet runtime keys are strict and never accept unknown agents', 
       'atlas-research': { agent_id: 'agent_12345678', presence_key: 'plaintext' },
     },
   })), /invalid presence_key/)
+  assert.throws(() => parseReferenceFleetExecutorKeys(JSON.stringify({
+    version: 1,
+    agents: {
+      'atlas-research': { agent_id: 'agent_12345678', presence_key: key, executor_key: key },
+    },
+  })), /must be separate/)
   assert.throws(() => parseReferenceFleetRuntimeKeys(JSON.stringify({
     version: 1,
     agents: {
