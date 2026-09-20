@@ -21,6 +21,7 @@ let ownership: typeof import('@/app/api/agents/ownership/route')
 let recoverCredentials: typeof import('@/app/api/agents/[id]/ownership/recover/route').POST
 let createOwnershipTransfer: typeof import('@/app/api/agents/[id]/ownership/transfers/route').POST
 let acceptOwnershipTransfer: typeof import('@/app/api/agents/ownership/transfers/accept/route').POST
+let cancelOwnershipTransfer: typeof import('@/app/api/agents/[id]/ownership/transfers/[transferId]/route').DELETE
 let heartbeat: typeof import('@/app/api/agents/[id]/heartbeat/route').POST
 let claim: typeof import('@/app/api/claim/route')
 let listing: typeof import('@/app/api/listings/route').POST
@@ -65,6 +66,7 @@ before(async () => {
   recoverCredentials = (await import('@/app/api/agents/[id]/ownership/recover/route')).POST
   createOwnershipTransfer = (await import('@/app/api/agents/[id]/ownership/transfers/route')).POST
   acceptOwnershipTransfer = (await import('@/app/api/agents/ownership/transfers/accept/route')).POST
+  cancelOwnershipTransfer = (await import('@/app/api/agents/[id]/ownership/transfers/[transferId]/route')).DELETE
   heartbeat = (await import('@/app/api/agents/[id]/heartbeat/route')).POST
   claim = await import('@/app/api/claim/route')
   listing = (await import('@/app/api/listings/route')).POST
@@ -412,6 +414,31 @@ test('a linked owner can recover credentials and transfer ownership without resi
   assert.equal((await status(request('/api/agents/status', 'GET', undefined, delegatedKey))).status, 401)
   assert.equal((await status(request('/api/agents/status', 'GET', undefined, recoveredKey))).status, 200)
 
+  const cancelledTransferResponse = await createOwnershipTransfer(
+    accountRequest(`/api/agents/${agent.agent.id}/ownership/transfers`, owner.token, 'POST', {
+      target_email: stranger.email,
+    }),
+    { params: Promise.resolve({ id: agent.agent.id }) },
+  )
+  assert.equal(cancelledTransferResponse.status, 201)
+  const cancelledTransfer = (await cancelledTransferResponse.json()).transfer
+  const cancelled = await cancelOwnershipTransfer(
+    accountRequest(
+      `/api/agents/${agent.agent.id}/ownership/transfers/${cancelledTransfer.id}`,
+      owner.token,
+      'DELETE',
+    ),
+    { params: Promise.resolve({ id: agent.agent.id, transferId: cancelledTransfer.id }) },
+  )
+  assert.equal(cancelled.status, 200)
+  const rejectedCancelledTransfer = await acceptOwnershipTransfer(accountRequest(
+    '/api/agents/ownership/transfers/accept',
+    stranger.token,
+    'POST',
+    { token: cancelledTransfer.accept_token },
+  ))
+  assert.equal(rejectedCancelledTransfer.status, 409)
+
   const transferResponse = await createOwnershipTransfer(
     accountRequest(`/api/agents/${agent.agent.id}/ownership/transfers`, owner.token, 'POST', {
       target_email: nextOwner.email,
@@ -462,6 +489,7 @@ test('a linked owner can recover credentials and transfer ownership without resi
   assert.equal(actions.includes('ownership_linked'), true)
   assert.equal(actions.includes('credential_recovered'), true)
   assert.equal(actions.includes('ownership_transfer_requested'), true)
+  assert.equal(actions.includes('ownership_transfer_cancelled'), true)
   assert.equal(actions.includes('ownership_transferred'), true)
 })
 

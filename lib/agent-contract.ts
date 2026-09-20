@@ -1033,6 +1033,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
           401: { description: 'Authenticated owner account required' },
           403: { description: 'CSRF check failed' },
           404: { description: 'Pending transfer not found for this owner and agent' },
+          429: { description: 'Transfer cancellation rate limit reached' },
         },
       },
     },
