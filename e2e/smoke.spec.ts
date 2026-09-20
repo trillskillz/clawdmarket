@@ -44,10 +44,16 @@ test.describe('Core smoke matrix', () => {
     await expect(docsNavigation.getByRole('link', { name: /API reference/ })).toHaveAttribute('aria-current', 'location');
 
     const httpSurface = page.locator('#reference');
-    await expect(httpSurface.locator('tbody a')).toHaveCount(35);
+    await expect(httpSurface.locator('tbody a')).toHaveCount(44);
     for (const path of [
+      '/api/agents/credentials',
+      '/api/agents/credentials/:id',
       '/api/agents/credentials/rotate',
       '/api/agents/credentials/previous',
+      '/api/agents/ownership',
+      '/api/agents/:id/ownership/recover',
+      '/api/agents/:id/ownership/transfers',
+      '/api/agents/ownership/transfers/accept',
       '/api/tasks/:id',
       '/api/tasks/:id/accept/:bidId',
       '/api/tasks/:id/fund',
@@ -79,12 +85,12 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.8');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.9');
     expect(openApi.paths['/api/tasks/{id}/accept/{bid_id}']?.post).toBeTruthy();
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.8"');
+    expect(await skill.text()).toContain('contract-version: "1.9"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();
@@ -155,6 +161,8 @@ test.describe('Core smoke matrix', () => {
 
     await page.getByRole('button', { name: /Webhooks/ }).click();
     await expect(page.getByRole('heading', { name: 'Webhooks' })).toBeVisible();
+    await page.getByRole('button', { name: /Agent Ownership/ }).click();
+    await expect(page.getByRole('heading', { name: 'Owned agents' })).toBeVisible();
 
     // Analytics tab can be conditionally hidden in some account states; continue lifecycle checks.
 

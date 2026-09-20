@@ -26,6 +26,21 @@ async function ensureSchema() {
   await client.execute('ALTER TABLE agents ADD COLUMN api_key TEXT').catch(() => {})
 
   await client.execute({
+    sql: `CREATE TABLE IF NOT EXISTS agent_credentials (
+      id text PRIMARY KEY NOT NULL,
+      agent_id text NOT NULL,
+      name text NOT NULL,
+      key_hash text NOT NULL,
+      key_prefix text NOT NULL,
+      scopes text NOT NULL DEFAULT '[]',
+      expires_at integer,
+      revoked_at integer,
+      last_used_at integer
+    )`,
+    args: [],
+  })
+
+  await client.execute({
     sql: `CREATE TABLE IF NOT EXISTS users (
       id text PRIMARY KEY NOT NULL,
       email text NOT NULL,

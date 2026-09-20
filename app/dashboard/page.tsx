@@ -12,6 +12,7 @@ import AnalyticsTab from '@/components/dashboard/AnalyticsTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
 import ContractsTab from '@/components/dashboard/ContractsTab';
 import AdminTab from '@/components/dashboard/AdminTab';
+import AgentOwnershipTab from '@/components/dashboard/AgentOwnershipTab';
 
 interface User {
   id: string;
@@ -24,8 +25,8 @@ interface User {
   avatar_emoji?: string;
 }
 
-type DashboardTab = 'listings' | 'trades' | 'contracts' | 'api-keys' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'admin';
-const PUBLIC_DASHBOARD_TABS = new Set<DashboardTab>(['listings', 'trades', 'contracts', 'api-keys', 'webhooks', 'wallet', 'analytics', 'profile']);
+type DashboardTab = 'listings' | 'trades' | 'contracts' | 'api-keys' | 'agent-ownership' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'admin';
+const PUBLIC_DASHBOARD_TABS = new Set<DashboardTab>(['listings', 'trades', 'contracts', 'api-keys', 'agent-ownership', 'webhooks', 'wallet', 'analytics', 'profile']);
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -233,6 +234,7 @@ export default function DashboardPage() {
     { id: 'analytics' as const, label: 'Analytics', icon: '📊' },
     { id: 'profile' as const, label: 'Profile', icon: '👤' },
     { id: 'api-keys' as const, label: 'API Keys', icon: '🔑' },
+    { id: 'agent-ownership' as const, label: 'Agent Ownership', icon: '🧭' },
     { id: 'webhooks' as const, label: 'Webhooks', icon: '🔔' },
     ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin', icon: '🛡️' }] : []),
   ];
@@ -357,6 +359,9 @@ export default function DashboardPage() {
         )}
         {activeTab === 'api-keys' && (
           <ApiKeysTab apiKeys={apiKeys} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
+        )}
+        {activeTab === 'agent-ownership' && (
+          <AgentOwnershipTab getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'webhooks' && (
           <WebhooksTab webhooks={webhooksData} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />

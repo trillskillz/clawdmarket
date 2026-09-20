@@ -2,19 +2,36 @@ import crypto from 'crypto'
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS } from '@/lib/agent-presence'
+import {
+  AGENT_CREDENTIAL_SCOPES,
+  hasAgentCredentialScope,
+  parseAgentCredentialScopes,
+  requiredAgentCredentialScope,
+  type AgentCredentialScope,
+} from '@/lib/agent-credential-scopes'
 
 type AgentAuthNone = { kind: 'none' }
 type AgentAuthInvalid = { kind: 'invalid' }
+type AgentAuthForbidden = {
+  kind: 'forbidden'
+  agentId: string
+  requiredScope: AgentCredentialScope
+}
 type AgentAuthValid = {
   kind: 'agent'
   agentId: string
   name: string
   syntheticUserId: string
   status: 'active' | 'inactive'
-  credential: 'current' | 'previous'
+  credential: 'current' | 'previous' | 'named'
+  credentialId: string | null
+  credentialName: string
+  credentialPrefix: string | null
+  credentialLastUsedAt: number | null
+  scopes: AgentCredentialScope[]
 }
 
-export type RegisteredAgentAuth = AgentAuthNone | AgentAuthInvalid | AgentAuthValid
+export type RegisteredAgentAuth = AgentAuthNone | AgentAuthInvalid | AgentAuthForbidden | AgentAuthValid
 
 function getAgentApiKeyPepper(): string {
   const pepper = process.env.AGENT_API_KEY_PEPPER?.trim() || process.env.JWT_SECRET?.trim()
@@ -62,7 +79,7 @@ export function registeredAgentApiKeyFromRequest(request: NextRequest): string {
 
 export async function lookupRegisteredAgentApiKey(
   apiKey: string,
-  options: { allowInactive?: boolean } = {},
+  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope } = {},
 ): Promise<RegisteredAgentAuth> {
   return resolveRegisteredAgentApiKey(apiKey, Boolean(apiKey), options)
 }
@@ -70,7 +87,7 @@ export async function lookupRegisteredAgentApiKey(
 async function resolveRegisteredAgentApiKey(
   apiKey: string,
   hasCredential: boolean,
-  options: { allowInactive?: boolean } = {},
+  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope } = {},
 ): Promise<RegisteredAgentAuth> {
   if (!hasCredential) return { kind: 'none' }
   if (!apiKey) return { kind: 'invalid' }
@@ -78,25 +95,51 @@ async function resolveRegisteredAgentApiKey(
   const client = (db as any).$client
   const hashed = hashAgentApiKey(apiKey)
   const legacyHashed = legacyAgentApiKeyDigest(apiKey)
-  const result = await client.execute({
+  const primaryResult = await client.execute({
     sql: `SELECT id, name, status, api_key, api_key_prefix, api_key_revoked_at, archived_at,
-                 previous_api_key, previous_api_key_expires_at
+                 previous_api_key, previous_api_key_prefix, previous_api_key_expires_at
           FROM agents
           WHERE api_key IN (?, ?, ?)
              OR (previous_api_key = ? AND previous_api_key_expires_at > unixepoch())
           LIMIT 1`,
     args: [hashed, legacyHashed, apiKey, hashed],
   })
-  const agent = result?.rows?.[0]
+  let agent = primaryResult?.rows?.[0]
+  let namedCredential: Record<string, unknown> | null = null
+  if (!agent) {
+    const namedResult = await client.execute({
+      sql: `SELECT a.id, a.name, a.status, a.api_key_revoked_at, a.archived_at,
+                   c.id AS credential_id, c.name AS credential_name, c.key_prefix AS credential_prefix, c.scopes,
+                   c.expires_at, c.revoked_at
+            FROM agent_credentials c
+            JOIN agents a ON a.id = c.agent_id
+            WHERE c.key_hash = ?
+              AND c.revoked_at IS NULL
+              AND (c.expires_at IS NULL OR c.expires_at > unixepoch())
+            LIMIT 1`,
+      args: [hashed],
+    })
+    agent = namedResult?.rows?.[0]
+    namedCredential = agent || null
+  }
   if (!agent?.id) return { kind: 'invalid' }
   if (agent.api_key_revoked_at != null || agent.archived_at != null) return { kind: 'invalid' }
 
   const status = agent.status === 'active' ? 'active' : 'inactive'
   if (!options.allowInactive && status !== 'active') return { kind: 'invalid' }
 
-  const credential = [hashed, legacyHashed, apiKey].includes(String(agent.api_key))
-    ? 'current'
-    : 'previous'
+  const credential = namedCredential
+    ? 'named'
+    : [hashed, legacyHashed, apiKey].includes(String(agent.api_key))
+      ? 'current'
+      : 'previous'
+  const scopes = namedCredential
+    ? parseAgentCredentialScopes(namedCredential.scopes)
+    : [...AGENT_CREDENTIAL_SCOPES]
+  const agentId = String(agent.id)
+  if (options.requiredScope && !hasAgentCredentialScope(scopes, options.requiredScope)) {
+    return { kind: 'forbidden', agentId, requiredScope: options.requiredScope }
+  }
 
   // Transparently upgrade API keys created by older releases from plaintext or
   // unkeyed SHA-256 digests.
@@ -108,12 +151,19 @@ async function resolveRegisteredAgentApiKey(
     })
   }
 
-  const agentId = String(agent.id)
-  await client.execute({
-    sql: `UPDATE agents SET api_key_last_used_at = unixepoch()
-          WHERE id = ? AND (api_key_last_used_at IS NULL OR api_key_last_used_at < unixepoch() - ?)`,
-    args: [agentId, AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS],
-  }).catch(() => undefined)
+  if (credential === 'named') {
+    await client.execute({
+      sql: `UPDATE agent_credentials SET last_used_at = unixepoch()
+            WHERE id = ? AND (last_used_at IS NULL OR last_used_at < unixepoch() - ?)`,
+      args: [String(namedCredential?.credential_id), AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS],
+    }).catch(() => undefined)
+  } else {
+    await client.execute({
+      sql: `UPDATE agents SET api_key_last_used_at = unixepoch()
+            WHERE id = ? AND (api_key_last_used_at IS NULL OR api_key_last_used_at < unixepoch() - ?)`,
+      args: [agentId, AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS],
+    }).catch(() => undefined)
+  }
   if (status === 'active') {
     // Authenticated API activity is a presence signal. Coalescing updates keeps
     // ordinary polling from turning into a write on every request.
@@ -136,6 +186,15 @@ async function resolveRegisteredAgentApiKey(
     syntheticUserId: `user_agent_${agentId}`,
     status,
     credential,
+    credentialId: credential === 'named' ? String(namedCredential?.credential_id) : null,
+    credentialName: credential === 'named' ? String(namedCredential?.credential_name || 'Named credential') : 'Primary',
+    credentialPrefix: credential === 'named'
+      ? String(namedCredential?.credential_prefix || '') || null
+      : credential === 'previous'
+        ? String(agent.previous_api_key_prefix || '') || null
+        : String(agent.api_key_prefix || '') || null,
+    credentialLastUsedAt: credential === 'named' ? Math.floor(Date.now() / 1000) : null,
+    scopes,
   }
 }
 
@@ -146,7 +205,7 @@ export async function resolveRegisteredAgentBearer(authHeader: string | null): P
 
 export async function resolveRegisteredAgentRequest(
   request: NextRequest,
-  options: { allowInactive?: boolean } = {},
+  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope | null } = {},
 ): Promise<RegisteredAgentAuth> {
   const apiKey = registeredAgentApiKeyFromRequest(request)
   const hasCredential = Boolean(
@@ -154,7 +213,12 @@ export async function resolveRegisteredAgentRequest(
     request.headers.get('x-agent-api-key') ||
     request.headers.get('authorization')?.startsWith('Bearer '),
   )
-  return resolveRegisteredAgentApiKey(apiKey, hasCredential, options)
+  return resolveRegisteredAgentApiKey(apiKey, hasCredential, {
+    allowInactive: options.allowInactive,
+    requiredScope: options.requiredScope === null
+      ? undefined
+      : options.requiredScope || requiredAgentCredentialScope(request),
+  })
 }
 
 export async function ensureSyntheticAgentUser(agent: {

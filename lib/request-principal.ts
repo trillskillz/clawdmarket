@@ -8,6 +8,7 @@ import {
   resolveRegisteredAgentRequest,
   type RegisteredAgentAuth,
 } from '@/lib/registered-agent-auth';
+import { AGENT_CREDENTIAL_SCOPES } from '@/lib/agent-credential-scopes';
 
 function verifiedMppPayer(req: NextRequest): string | null {
   const receipt = (req as any).mppReceipt;
@@ -32,6 +33,11 @@ function asRegisteredAgent(row: { id: string; name: string }): Extract<Registere
     syntheticUserId: `user_agent_${row.id}`,
     status: 'active',
     credential: 'current',
+    credentialId: null,
+    credentialName: 'Primary',
+    credentialPrefix: null,
+    credentialLastUsedAt: null,
+    scopes: [...AGENT_CREDENTIAL_SCOPES],
   };
 }
 

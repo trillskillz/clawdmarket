@@ -74,7 +74,7 @@ async function runSelfTest(request: NextRequest, body?: any) {
     try {
       const { db } = await import('@/lib/db')
       client = (db as any).$client
-      const auth = await lookupRegisteredAgentApiKey(apiKey, { allowInactive: true })
+      const auth = await lookupRegisteredAgentApiKey(apiKey, { allowInactive: true, requiredScope: 'agent:read' })
       if (auth.kind !== 'agent') {
         checks.push({ name: 'auth', status: 'fail', message: 'API key was supplied but no matching agent was found.' })
       } else {

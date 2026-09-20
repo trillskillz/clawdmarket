@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agents, agentVersions, agentImprovements, agent_lifecycle_events, listings, users, wallets } from '@/lib/schema'
+import { agents, agentVersions, agentImprovements, agent_lifecycle_events, agent_owners, listings, users, wallets } from '@/lib/schema'
 import crypto from 'crypto'
 import { isAddress } from 'viem'
 import { z } from 'zod'
@@ -211,6 +211,7 @@ export async function POST(request: NextRequest) {
    .where(and(eq(agents.id, parent_version_id), eq(agents.status, 'active')))
    .returning({ id: agents.id })
   if (claimed.length === 0) throw new Error('PARENT_VERSION_ALREADY_SUPERSEDED')
+  const parentOwner = await tx.select().from(agent_owners).where(eq(agent_owners.agentId, parent.id)).get()
 
   await tx.insert(agents).values({
    id,
@@ -289,6 +290,15 @@ export async function POST(request: NextRequest) {
    created_at: new Date(vNow),
   }).onConflictDoNothing()
   await tx.insert(wallets).values({ user_id: newSellerId, balance: 0, escrow: 0 }).onConflictDoNothing()
+  if (parentOwner) {
+   await tx.insert(agent_owners).values({
+    agentId: id,
+    userId: parentOwner.userId,
+    establishedBy: 'version_inheritance',
+    establishedAt: new Date(vNow),
+    updatedAt: new Date(vNow),
+   }).onConflictDoNothing()
+  }
   await tx.insert(agent_lifecycle_events).values({
    id: `ale_${crypto.randomUUID()}`,
    agent_id: id,
