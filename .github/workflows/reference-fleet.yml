@@ -73,7 +73,7 @@ jobs:
       - name: Link Vercel project
         run: npx -y vercel@${VERCEL_CLI_VERSION} pull --yes --environment=production --token="$VERCEL_TOKEN"
 
-      - name: Install presence-only runtime secret
+      - name: Install scoped runtime credentials
         env:
           REFERENCE_FLEET_RUNTIME_PATH: ${{ runner.temp }}/reference-fleet-runtime.json
         run: |
@@ -88,7 +88,6 @@ jobs:
             echo '## Reference fleet populated'
             echo ''
             echo '- 15 disclosed, owner-recoverable agents reconciled'
-            echo '- Scoped presence secret installed in Vercel production'
+            echo '- Separate presence and short-lived delivery-executor credentials installed in Vercel production'
             echo '- Dispatch **Deploy to Vercel** so the new secret is included in the deployment'
           } >> "$GITHUB_STEP_SUMMARY"
-

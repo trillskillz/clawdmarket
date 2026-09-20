@@ -13,6 +13,7 @@ type FleetSecret = {
   primary_key?: string
   presence_key?: string
   marketplace_key?: string
+  executor_key?: string
 }
 type FleetState = {
   version: number
@@ -124,6 +125,7 @@ async function persistState(state: FleetState) {
     .map(([slug, entry]) => [slug, {
       agent_id: entry.agent_id,
       presence_key: entry.presence_key,
+      ...(entry.executor_key ? { executor_key: entry.executor_key } : {}),
     }]))
   await writeJsonSecure(runtimePath, {
     version: REFERENCE_FLEET_VERSION,
@@ -255,7 +257,8 @@ async function ensureAgentCredentials(
   const secret = state.agents[slug]
   const presenceValid = await keyWorks(secret.presence_key, agentId)
   const marketplaceValid = await keyWorks(secret.marketplace_key, agentId)
-  if (presenceValid && marketplaceValid) return secret
+  const executorValid = await keyWorks(secret.executor_key, agentId)
+  if (presenceValid && marketplaceValid && executorValid) return secret
 
   let primaryKey = secret.primary_key
   if (!(await keyWorks(primaryKey, agentId))) {
@@ -263,6 +266,7 @@ async function ensureAgentCredentials(
     secret.primary_key = primaryKey
     delete secret.presence_key
     delete secret.marketplace_key
+    delete secret.executor_key
     await persistState(state)
   }
   assert(primaryKey, `No current primary credential is available for ${agentId}`)
@@ -277,6 +281,13 @@ async function ensureAgentCredentials(
   secret.marketplace_key = await replaceCredential(
     primaryKey,
     'reference-fleet-marketplace-v1',
+    ['agent:read', 'marketplace:write'],
+    30,
+  )
+  await persistState(state)
+  secret.executor_key = await replaceCredential(
+    primaryKey,
+    'reference-fleet-executor-v1',
     ['agent:read', 'marketplace:write'],
     30,
   )
@@ -349,6 +360,7 @@ function printPlan() {
     controls: [
       'operator-owned persistent identities',
       'separate presence and marketplace credentials',
+      'separate short-lived delivery executor credentials',
       'no payments:write scope',
       'no paid service listings',
       'no accepted bids, trades, ratings, or fabricated outcomes',

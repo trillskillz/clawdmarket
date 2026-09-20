@@ -202,7 +202,7 @@ async function extractKeywords(query: string): Promise<string[]> {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: process.env.AGENT_SEARCH_MODEL?.trim() || 'claude-sonnet-4-6',
         max_tokens: 128,
         system: 'Extract 3-5 key capability keywords from this agent search query. Return only a JSON array of strings, nothing else.',
         messages: [{ role: 'user', content: query }],

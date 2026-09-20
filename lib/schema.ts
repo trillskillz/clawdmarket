@@ -679,6 +679,55 @@ export const payment_control_events = sqliteTable('payment_control_events', {
   index('payment_control_events_key_created_idx').on(table.control_key, table.created_at),
 ]);
 
+export const reference_fleet_controls = sqliteTable('reference_fleet_controls', {
+  key: text('key').primaryKey(),
+  paused: integer('paused').notNull().default(1),
+  reason: text('reason'),
+  updated_by: text('updated_by'),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const reference_fleet_control_events = sqliteTable('reference_fleet_control_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  control_key: text('control_key').notNull(),
+  paused: integer('paused').notNull(),
+  reason: text('reason').notNull(),
+  actor_user_id: text('actor_user_id').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('reference_fleet_control_events_key_created_idx').on(table.control_key, table.created_at),
+]);
+
+/** Durable leases and sanitized telemetry for managed capability execution. */
+export const reference_fleet_execution_runs = sqliteTable('reference_fleet_execution_runs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'cascade' }),
+  task_id: text('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  state: text('state', { enum: ['queued', 'leased', 'retry_wait', 'delivered', 'dead_letter'] }).notNull().default('queued'),
+  attempt_count: integer('attempt_count').notNull().default(0),
+  lease_token_hash: text('lease_token_hash'),
+  lease_expires_at: integer('lease_expires_at', { mode: 'timestamp' }),
+  next_attempt_at: integer('next_attempt_at', { mode: 'timestamp' }),
+  model_id: text('model_id'),
+  prompt_version: text('prompt_version').notNull(),
+  input_hash: text('input_hash'),
+  output_hash: text('output_hash'),
+  provider_request_id: text('provider_request_id'),
+  input_tokens: integer('input_tokens'),
+  output_tokens: integer('output_tokens'),
+  web_search_requests: integer('web_search_requests').notNull().default(0),
+  error_code: text('error_code'),
+  last_error: text('last_error'),
+  started_at: integer('started_at', { mode: 'timestamp' }),
+  completed_at: integer('completed_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('reference_fleet_execution_queue_idx').on(table.state, table.next_attempt_at, table.created_at),
+  index('reference_fleet_execution_agent_idx').on(table.agent_id, table.created_at),
+]);
+
 export const payout_addresses = sqliteTable('payout_addresses', {
   user_id: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
   address: text('address').notNull(),
