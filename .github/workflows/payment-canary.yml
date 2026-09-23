@@ -13,6 +13,7 @@ on:
           - run-low-value-payment
           - run-low-value-mpp
           - configure-seller-payout
+          - recover-base-payment
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -56,10 +57,11 @@ jobs:
         run: pnpm install --frozen-lockfile --prod
 
       - name: Check production settlement gas reserves
+        if: inputs.mode != 'recover-base-payment'
         run: node scripts/prod-payment-rails-preflight.mjs
 
       - name: Run production payment canary
-        if: inputs.mode != 'run-low-value-mpp' && inputs.mode != 'configure-seller-payout'
+        if: inputs.mode != 'run-low-value-mpp' && inputs.mode != 'configure-seller-payout' && inputs.mode != 'recover-base-payment'
         run: node scripts/prod-payment-canary.mjs
 
       - name: Run production Tempo MPP canary
@@ -69,3 +71,7 @@ jobs:
       - name: Configure the dedicated smoke seller payout address
         if: inputs.mode == 'configure-seller-payout'
         run: node scripts/set-smoke-seller-payout.mjs
+
+      - name: Recover and refund the existing Base canary payment
+        if: inputs.mode == 'recover-base-payment'
+        run: node scripts/recover-base-canary.mjs
