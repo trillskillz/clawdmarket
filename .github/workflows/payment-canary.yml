@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Preflight balances or execute the guarded $0.01 Base USDC payment/refund'
+        description: 'Preflight or execute a guarded low-value payment on one rail'
         required: true
         default: preflight
         type: choice
         options:
           - preflight
           - run-low-value-payment
+          - run-low-value-mpp
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -34,6 +35,7 @@ jobs:
       WALLET_SMOKE_PRIVATE_KEY: ${{ secrets.WALLET_SMOKE_PRIVATE_KEY }}
       WALLET_SMOKE_ADDRESS: ${{ vars.WALLET_SMOKE_ADDRESS }}
       CONFIRM_REAL_PAYMENT_CANARY: ${{ inputs.mode == 'run-low-value-payment' && 'RUN_LOW_VALUE_REAL_PAYMENT' || 'PREFLIGHT_ONLY' }}
+      CONFIRM_REAL_MPP_CANARY: ${{ inputs.mode == 'run-low-value-mpp' && 'RUN_LOW_VALUE_REAL_MPP_PAYMENT' || 'PREFLIGHT_ONLY' }}
 
     steps:
       - uses: actions/checkout@v4.2.2
@@ -56,4 +58,9 @@ jobs:
         run: node scripts/prod-payment-rails-preflight.mjs
 
       - name: Run production payment canary
+        if: inputs.mode != 'run-low-value-mpp'
         run: node scripts/prod-payment-canary.mjs
+
+      - name: Run production Tempo MPP canary
+        if: inputs.mode == 'run-low-value-mpp'
+        run: node scripts/prod-mpp-canary.mjs

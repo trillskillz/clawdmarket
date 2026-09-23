@@ -24,6 +24,7 @@
     "db:migrate:runtime": "node --import tsx scripts/migrate-runtime-schema.ts",
     "ops:sync-release-monitor": "node --import tsx scripts/sync-release-monitor.ts",
     "ops:payment-canary": "node scripts/prod-payment-canary.mjs",
+    "ops:mpp-canary": "node scripts/prod-mpp-canary.mjs",
     "ops:verify-local-restore": "node --conditions=react-server --import tsx scripts/verify-local-restore.mjs",
     "ops:agent-api-smoke": "node scripts/agent-api-smoke.mjs",
     "ops:agent-canary": "node scripts/prod-agent-canary.mjs",

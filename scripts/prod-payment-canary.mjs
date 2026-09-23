@@ -105,6 +105,8 @@ if (!paymentConfig.erc20_configured || !token || !paymentConfig.treasury_wallet)
 
 const tokenAddress = token.token_address
 const treasury = paymentConfig.treasury_wallet
+const maximumSpend = parseUnits('0.01', token.decimals)
+const minimumBuyerGasReserve = 50_000_000_000_000n
 const [nativeBalance, startingUsdc] = await Promise.all([
   publicClient.getBalance({ address: account.address }),
   publicClient.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] }),
@@ -115,30 +117,63 @@ console.log(`Buyer Base ETH: ${formatEther(nativeBalance)}`)
 console.log(`Buyer Base USDC: ${formatUnits(startingUsdc, token.decimals)}`)
 console.log(`Settlement wallet: ${treasury}`)
 
-if (process.env.CONFIRM_REAL_PAYMENT_CANARY !== REQUIRED_CONFIRMATION) {
-  console.log(`Preflight only. Set CONFIRM_REAL_PAYMENT_CANARY=${REQUIRED_CONFIRMATION} to run the $0.01 payment and refund.`)
-  process.exit(0)
-}
-
-const canaryPrice = 0.01
-const maximumSpend = parseUnits('0.01', token.decimals)
 if (startingUsdc < maximumSpend) {
   throw new Error(`Canary buyer needs at least 0.01 USDC on Base: ${account.address}`)
 }
-if (nativeBalance === 0n) throw new Error(`Canary buyer needs Base ETH for gas: ${account.address}`)
+if (nativeBalance < minimumBuyerGasReserve) {
+  throw new Error(`Canary buyer needs at least 0.00005 ETH on Base for gas: ${account.address}`)
+}
+
+if (!paymentConfig.mpp_configured || !paymentConfig.mpp_recipient) {
+  throw new Error('Tempo pathUSD payment challenges are not enabled in production')
+}
+const expectedTempoCurrency = '0x20c0000000000000000000000000000000000000'
+const expectedTempoChainId = 4217
+if (paymentConfig.trade_settlement?.mpp?.currency?.toLowerCase() !== expectedTempoCurrency
+  || paymentConfig.trade_settlement?.mpp?.chainId !== expectedTempoChainId) {
+  throw new Error('Production MPP configuration is not Tempo mainnet pathUSD')
+}
+const mppChallenge = await api('/api/mcp', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0', id: 'payment-canary-preflight', method: 'tools/call',
+    params: { name: 'list_agents', arguments: { limit: 1 } },
+  }),
+})
+const challenges = mppChallenge.body?.error?.data?.challenges
+const challenge = Array.isArray(challenges)
+  ? challenges.find((item) => item.method === 'tempo' && item.intent === 'charge')
+  : null
+if (mppChallenge.response.status !== 402 || !challenge
+  || challenge.request?.currency?.toLowerCase() !== expectedTempoCurrency
+  || challenge.request?.recipient?.toLowerCase() !== paymentConfig.mpp_recipient.toLowerCase()
+  || challenge.request?.methodDetails?.chainId !== expectedTempoChainId
+  || challenge.request?.amount !== '1000') {
+  throw new Error('Tempo MPP challenge does not match the production payment configuration')
+}
+console.log('Tempo MPP 0.001 pathUSD payment challenge matches production configuration')
 
 const sellerToken = await sellerLogin()
 const sellerHeaders = {
   Authorization: `Bearer ${sellerToken}`,
   'Content-Type': 'application/json',
 }
+const sellerPayout = assertOk(await api('/api/payments/payout-address', { headers: sellerHeaders }), 'Canary seller payout check')
+if (!sellerPayout.address) throw new Error('Configure the dedicated canary seller payout wallet before running. This script never changes seller payout settings.')
+getAddress(sellerPayout.address)
+console.log('Dedicated canary seller payout wallet is configured')
+
+if (process.env.CONFIRM_REAL_PAYMENT_CANARY !== REQUIRED_CONFIRMATION) {
+  console.log(`Preflight passed. Set CONFIRM_REAL_PAYMENT_CANARY=${REQUIRED_CONFIRMATION} to run the $0.01 payment and refund.`)
+  process.exit(0)
+}
+
+const canaryPrice = 0.01
 let listingId = null
 let tradeId = null
 
 try {
-  const sellerPayout = assertOk(await api('/api/payments/payout-address', { headers: sellerHeaders }), 'Canary seller payout check')
-  if (!sellerPayout.address) throw new Error('Configure the dedicated canary seller payout wallet before running. This script never changes seller payout settings.')
-
   const suffix = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
   const listing = assertOk(await api('/api/listings', {
     method: 'POST',
