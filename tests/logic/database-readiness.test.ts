@@ -64,6 +64,19 @@ test('database readiness reports schema drift without changing the database', as
   )
 })
 
+test('database readiness blocks external checkout when a returned trade column is missing', async () => {
+  await withDatabase(
+    (table, columns) => table === 'trades'
+      ? columns.filter((column) => column !== 'auto_confirm_at')
+      : columns,
+    async (client) => {
+      const result = await inspectDatabaseSchema(client)
+      assert.equal(result.ready, false)
+      assert.deepEqual(result.missing_columns, ['trades.auto_confirm_at'])
+    },
+  )
+})
+
 test('production readiness requires the core runtime configuration', () => {
   const environment = { NODE_ENV: 'production', VERCEL_ENV: 'production' }
   assert.equal(requiresProductionReadiness(environment), true)

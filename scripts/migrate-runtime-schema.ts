@@ -7,6 +7,7 @@ const MARKETPLACE_SCALE_MIGRATION_ID = '2026-09-13-marketplace-scale-v1'
 const SCHEMA_RECONCILIATION_MIGRATION_ID = '2026-09-14-schema-reconciliation-v1'
 const AGENT_DISCOVERY_COLUMNS_MIGRATION_ID = '2026-09-14-agent-discovery-columns-v1'
 const WALLET_AUTH_NONCES_MIGRATION_ID = '2026-09-15-wallet-auth-nonces-v1'
+const TRADE_CHECKOUT_COLUMNS_MIGRATION_ID = '2026-09-23-trade-checkout-columns-v1'
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`
@@ -275,6 +276,25 @@ async function addWalletAuthNonces(client: Client) {
   await client.execute('CREATE INDEX IF NOT EXISTS wallet_auth_nonces_address_issued_idx ON wallet_auth_nonces(address, issued_at)')
 }
 
+async function reconcileTradeCheckoutColumns(client: Client) {
+  // Older installations passed the former readiness check but lacked columns
+  // selected by Drizzle's trade INSERT ... RETURNING during external checkout.
+  const definitions = {
+    dev_amount: 'REAL NOT NULL DEFAULT 0',
+    dev_wallet: 'TEXT',
+    fee_tx_hash: 'TEXT',
+    escrow_session_id: 'TEXT',
+    auto_confirm_at: 'TEXT',
+    dispute_reason: 'TEXT',
+    resolution: 'TEXT',
+    completed_at: 'INTEGER',
+    rating_window_expires_at: 'TEXT',
+  }
+  const before = await tableColumns(client, 'trades')
+  console.log('Trade checkout columns missing before reconciliation:', Object.keys(definitions).filter((name) => !before.has(name)).join(', ') || 'none')
+  await ensureColumns(client, 'trades', definitions)
+}
+
 async function main() {
   const configuredUrl = process.env.TURSO_DATABASE_URL?.trim()
   if (!configuredUrl && (process.env.CI === 'true' || process.env.VERCEL === '1')) {
@@ -433,6 +453,7 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS reference_fleet_execution_queue_idx ON reference_fleet_execution_runs(state, next_attempt_at, created_at)')
         await database.execute('CREATE INDEX IF NOT EXISTS reference_fleet_execution_agent_idx ON reference_fleet_execution_runs(agent_id, created_at)')
       } },
+      { id: TRADE_CHECKOUT_COLUMNS_MIGRATION_ID, run: reconcileTradeCheckoutColumns },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({
