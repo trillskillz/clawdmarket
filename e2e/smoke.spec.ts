@@ -192,7 +192,7 @@ test.describe('Core smoke matrix', () => {
       ['/dashboard/messages', 'Messages'],
     ]) {
       await page.goto(route);
-      await expect(page.getByRole('heading', { name: new RegExp(`^${heading}\\.?$`, 'i') })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: new RegExp(`^${heading}\\.?$`, 'i') })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
     }
   });
