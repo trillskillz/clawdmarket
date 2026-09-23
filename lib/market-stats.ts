@@ -69,7 +69,7 @@ export async function getMarketStats() {
     ratingRows,
     taskRows,
     listingRows,
-    publicProfileCount,
+    queriedProfileCount,
     volumeByRail,
   ] = await Promise.all([
     db.select({ registered_agent_count: sql<number>`COALESCE(COUNT(*), 0)` })
@@ -153,12 +153,13 @@ export async function getMarketStats() {
       WHERE ('user_agent_' || hidden_agent.id) = ${listings.seller_id}
         AND (hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
     )`).catch(() => [{ services_listed: 0, services_online: 0, marketplace_profile_count: 0 }]),
-    getPublicProfileCount(),
+    getPublicProfileCount().catch(() => null),
     getVolumeByRail(),
   ])
 
   const registeredAgentCount = Number(registeredRows[0]?.registered_agent_count || 0)
   const marketplaceProfileCount = Number(listingRows[0]?.marketplace_profile_count || 0)
+  const publicProfileCount = queriedProfileCount ?? Math.max(registeredAgentCount, marketplaceProfileCount)
   const tradeVolume = roundCurrency(tradeRows[0]?.trade_volume_usd)
   const receiptVolume = roundCurrency(receiptRows[0]?.receipt_volume_usd)
   const recordedVolume = tradeVolume > 0 ? tradeVolume : receiptVolume
