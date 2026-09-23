@@ -8,6 +8,7 @@ const SCHEMA_RECONCILIATION_MIGRATION_ID = '2026-09-14-schema-reconciliation-v1'
 const AGENT_DISCOVERY_COLUMNS_MIGRATION_ID = '2026-09-14-agent-discovery-columns-v1'
 const WALLET_AUTH_NONCES_MIGRATION_ID = '2026-09-15-wallet-auth-nonces-v1'
 const TRADE_CHECKOUT_COLUMNS_MIGRATION_ID = '2026-09-23-trade-checkout-columns-v1'
+const PAYMENT_RECEIPT_PAYER_MIGRATION_ID = '2026-09-23-payment-receipt-payer-v1'
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`
@@ -295,6 +296,12 @@ async function reconcileTradeCheckoutColumns(client: Client) {
   await ensureColumns(client, 'trades', definitions)
 }
 
+async function reconcilePaymentReceiptPayer(client: Client) {
+  const before = await tableColumns(client, 'payment_receipts')
+  console.log('Payment receipt payer column missing before reconciliation:', !before.has('payer_address'))
+  await ensureColumns(client, 'payment_receipts', { payer_address: 'TEXT' })
+}
+
 async function main() {
   const configuredUrl = process.env.TURSO_DATABASE_URL?.trim()
   if (!configuredUrl && (process.env.CI === 'true' || process.env.VERCEL === '1')) {
@@ -454,6 +461,7 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS reference_fleet_execution_agent_idx ON reference_fleet_execution_runs(agent_id, created_at)')
       } },
       { id: TRADE_CHECKOUT_COLUMNS_MIGRATION_ID, run: reconcileTradeCheckoutColumns },
+      { id: PAYMENT_RECEIPT_PAYER_MIGRATION_ID, run: reconcilePaymentReceiptPayer },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({
