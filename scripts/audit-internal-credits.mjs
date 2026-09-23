@@ -61,6 +61,35 @@ try {
     console.log('Balance group:', JSON.stringify(group))
   }
   console.log('Non-admin funded wallets:', funded.rows.filter((row) => row.user_id !== admin.rows[0].id).length)
+
+  const nonAdmin = funded.rows.filter((row) => row.user_id !== admin.rows[0].id)
+  if (nonAdmin.length > 0) {
+    const ids = nonAdmin.map((row) => row.user_id)
+    const placeholders = ids.map(() => '?').join(',')
+    const history = await client.execute({
+      sql: `SELECT from_user_id, to_user_id, amount, type FROM transactions WHERE from_user_id IN (${placeholders}) OR to_user_id IN (${placeholders})`,
+      args: [...ids, ...ids],
+    })
+    for (const [index, wallet] of nonAdmin.entries()) {
+      const incoming = history.rows.filter((tx) => tx.to_user_id === wallet.user_id)
+      const outgoing = history.rows.filter((tx) => tx.from_user_id === wallet.user_id)
+      const amountsByType = (items) => Object.fromEntries(
+        [...new Set(items.map((tx) => tx.type))].map((type) => [type, {
+          count: items.filter((tx) => tx.type === type).length,
+          amount: Math.round(items.filter((tx) => tx.type === type).reduce((sum, tx) => sum + Number(tx.amount), 0) * 100) / 100,
+        }]),
+      )
+      console.log('Anonymous wallet history:', JSON.stringify({
+        ordinal: index + 1,
+        role: wallet.role,
+        balance: wallet.balance,
+        escrow: wallet.escrow,
+        active_ledger_trades: wallet.active_ledger_trades,
+        incoming: amountsByType(incoming),
+        outgoing: amountsByType(outgoing),
+      }))
+    }
+  }
 } finally {
   client.close()
 }
