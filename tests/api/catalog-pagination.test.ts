@@ -173,12 +173,14 @@ test('market statistics report full service totals instead of the current page s
     status: 'active',
   })
   const stats = await (await getStats()).json()
-  assert.equal(stats.agent_count, 125)
+  assert.equal(stats.agent_count, 126)
   assert.equal(stats.registered_agent_count, 125)
   assert.equal(stats.marketplace_profile_count, 126)
+  assert.equal(stats.network_profile_count, 126)
+  assert.equal(stats.active_seller_count, 126)
   assert.equal(stats.services_listed, 127)
   assert.equal(stats.services_online, 127)
-  assert.equal(stats.agent_count, (await (await listAgents(new NextRequest('http://localhost/api/agents/list?limit=1'))).json()).total)
+  assert.equal(stats.registered_agent_count, (await (await listAgents(new NextRequest('http://localhost/api/agents/list?limit=1'))).json()).total)
   assert.equal(stats.agents_online, 0)
   assert.equal(stats.tasks_total, 125)
   assert.equal(stats.tasks_routed, 0)
@@ -210,6 +212,53 @@ test('market statistics report full service totals instead of the current page s
   const staleDirectory = await (await listAgents(new NextRequest('http://localhost/api/agents/list?search=Scale%20Agent%20000'))).json()
   assert.equal(staleDirectory.agents[0].is_online, false)
   assert.equal(staleDirectory.agents[0].availability, 'offline')
+
+  await db.insert(schema.users).values({
+    id: 'new-account-without-listing',
+    email: 'new-account@test.invalid',
+    password_hash: 'unused',
+    name: 'New account',
+    role: 'human',
+  })
+  const afterAccount = await (await getStats()).json()
+  assert.equal(afterAccount.agent_count, 127)
+  assert.equal(afterAccount.marketplace_profile_count, 127)
+
+  await db.insert(schema.agents).values({
+    id: 'new-public-agent-without-account',
+    name: 'New public agent',
+    description: 'Public agent without a service listing or synthetic account.',
+    capabilities: '[]',
+    endpoint: 'https://new-public-agent.invalid',
+    owner_address: 'new-public-agent-owner',
+    api_key: 'new-public-agent-key',
+    status: 'active',
+  })
+  const afterAgent = await (await getStats()).json()
+  assert.equal(afterAgent.agent_count, 128)
+  assert.equal(afterAgent.marketplace_profile_count, 128)
+
+  await db.insert(schema.agents).values({
+    id: 'private-test-agent',
+    name: 'Private test agent',
+    description: 'A private agent must not enter the public profile total.',
+    capabilities: '[]',
+    endpoint: 'https://private-test-agent.invalid',
+    owner_address: 'private-test-agent-owner',
+    api_key: 'private-test-agent-key',
+    status: 'active',
+    visibility: 'private',
+  })
+  await db.insert(schema.users).values({
+    id: 'user_agent_private-test-agent',
+    email: 'private-test-agent@test.invalid',
+    password_hash: 'unused',
+    name: 'Private test agent',
+    role: 'agent',
+  })
+  const afterPrivateAgent = await (await getStats()).json()
+  assert.equal(afterPrivateAgent.agent_count, 128)
+  assert.equal(afterPrivateAgent.marketplace_profile_count, 128)
 })
 
 test('task board filters and pages through more than 100 tasks', async () => {

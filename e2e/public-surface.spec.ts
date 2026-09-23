@@ -133,8 +133,8 @@ test('marketplace presents an open-ended service catalog', async ({ page, reques
   await expect(page.getByText('Service capacity', { exact: true })).toBeVisible();
   await expect(page.getByText('∞', { exact: true })).toBeVisible();
   await expect(page.getByText('CURRENT CATALOG / OPEN NETWORK', { exact: true })).toBeVisible();
-  await expect(page.getByText('Registered agents', { exact: true })).toBeVisible();
-  await expect(page.locator('section[aria-label="Marketplace statistics"] div').filter({ hasText: 'Registered agents' }).locator('strong')).toHaveText(String(stats.registered_agent_count).padStart(2, '0'));
+  await expect(page.getByText('Network profiles', { exact: true })).toBeVisible();
+  await expect(page.locator('section[aria-label="Marketplace statistics"] div').filter({ hasText: 'Network profiles' }).locator('strong')).toHaveText(String(stats.network_profile_count).padStart(2, '0'));
 
   const visibleText = await page.locator('body').innerText();
   expect(visibleText).not.toMatch(/\b\d+\s*\/\s*\d+\s+services online\b/i);
@@ -145,14 +145,23 @@ test('homepage uses the authoritative marketplace counters', async ({ page, requ
   const statsResponse = await request.get('/api/stats');
   expect(statsResponse.ok()).toBeTruthy();
   const stats = await statsResponse.json();
+  expect(stats.agent_count).toBe(stats.marketplace_profile_count);
+  expect(stats.agent_count).toBe(stats.network_profile_count);
 
   await page.goto('/', { waitUntil: 'load' });
   const liveStats = page.locator('[aria-label="Live marketplace statistics"]');
-  await expect(liveStats.getByText('Registered agents', { exact: true })).toBeVisible();
-  await expect(liveStats.locator('div').filter({ hasText: 'Registered agents' }).locator('strong')).toHaveText(String(stats.registered_agent_count).padStart(2, '0'));
+  await expect(liveStats.getByText('Network profiles', { exact: true })).toBeVisible();
+  await expect(liveStats.locator('div').filter({ hasText: 'Network profiles' }).locator('strong')).toHaveText(String(stats.network_profile_count).padStart(2, '0'));
   await expect(liveStats.locator('div').filter({ hasText: 'Tasks routed' }).locator('strong')).toHaveText(String(stats.tasks_routed).padStart(2, '0'));
   await expect(liveStats.locator('div').filter({ hasText: 'Completed trades' }).locator('strong')).toHaveText(String(stats.completed_trades).padStart(2, '0'));
   await expect(liveStats.locator('div').filter({ hasText: 'Recorded volume' }).locator('strong')).toHaveText(`$${Number(stats.recorded_volume_usd).toFixed(2)}`);
+});
+
+test('registry headline uses the network profile total', async ({ page, request }) => {
+  const stats = await (await request.get('/api/stats')).json();
+  await page.goto('/registry', { waitUntil: 'load' });
+  await expect(page.getByText('network profiles', { exact: true })).toBeVisible();
+  await expect(page.locator('main > header strong')).toHaveText(String(stats.network_profile_count).padStart(2, '0'));
 });
 
 test('public pages do not expose GitHub or X links', async ({ page }) => {
@@ -253,8 +262,8 @@ test('observe uses current authoritative market telemetry', async ({ page, reque
   await page.goto('/observe', { waitUntil: 'load' });
 
   const statRail = page.locator('section[aria-label="Network statistics"]');
-  await expect(statRail.getByText('01 / Registered agents', { exact: true })).toBeVisible();
-  await expect(statRail.locator('div').filter({ hasText: 'Registered agents' }).locator('strong')).toHaveText(String(stats.registered_agent_count));
+  await expect(statRail.getByText('01 / Network profiles', { exact: true })).toBeVisible();
+  await expect(statRail.locator('div').filter({ hasText: 'Network profiles' }).locator('strong')).toHaveText(String(stats.network_profile_count));
   await expect(statRail.locator('div').filter({ hasText: 'Online now' }).locator('strong')).toHaveText(String(stats.agents_online));
   await expect(statRail.locator('div').filter({ hasText: 'Tasks routed' }).locator('strong')).toHaveText(String(stats.tasks_routed));
   await expect(statRail.locator('div').filter({ hasText: 'Completed trades' }).locator('strong')).toHaveText(String(stats.completed_trades));

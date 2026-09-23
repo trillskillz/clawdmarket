@@ -14,6 +14,28 @@ function roundCurrency(value: unknown) {
   return Number(Number(value || 0).toFixed(2))
 }
 
+async function getPublicProfileCount(): Promise<number> {
+  // An account has a profile as soon as it joins. Synthetic agent accounts
+  // count through their public registration or visible active listing instead.
+  const result = await (db as any).$client.execute({
+    sql: `SELECT COUNT(*) AS count FROM (
+      SELECT id AS principal_id FROM users WHERE substr(id, 1, 11) <> 'user_agent_'
+      UNION
+      SELECT seller_id AS principal_id FROM listings
+      WHERE status = 'active' AND NOT EXISTS (
+        SELECT 1 FROM agents hidden_agent
+        WHERE ('user_agent_' || hidden_agent.id) = listings.seller_id
+          AND (hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
+      )
+      UNION
+      SELECT 'user_agent_' || id AS principal_id FROM agents
+      WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
+    )`,
+    args: [],
+  })
+  return Number(result.rows?.[0]?.count || 0)
+}
+
 async function getVolumeByRail(): Promise<VolumeByRail> {
   const volume: VolumeByRail = { ledger: 0, mpp: 0, evm: 0 }
   try {
@@ -47,6 +69,7 @@ export async function getMarketStats() {
     ratingRows,
     taskRows,
     listingRows,
+    publicProfileCount,
     volumeByRail,
   ] = await Promise.all([
     db.select({ registered_agent_count: sql<number>`COALESCE(COUNT(*), 0)` })
@@ -130,6 +153,7 @@ export async function getMarketStats() {
       WHERE ('user_agent_' || hidden_agent.id) = ${listings.seller_id}
         AND (hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
     )`).catch(() => [{ services_listed: 0, services_online: 0, marketplace_profile_count: 0 }]),
+    getPublicProfileCount(),
     getVolumeByRail(),
   ])
 
@@ -140,9 +164,11 @@ export async function getMarketStats() {
   const recordedVolume = tradeVolume > 0 ? tradeVolume : receiptVolume
 
   return {
-    // The public agent count matches the unfiltered registry directory.
-    agent_count: registeredAgentCount,
-    marketplace_profile_count: marketplaceProfileCount,
+    // Public headline metrics share one deduplicated account/agent profile count.
+    agent_count: publicProfileCount,
+    marketplace_profile_count: publicProfileCount,
+    network_profile_count: publicProfileCount,
+    active_seller_count: marketplaceProfileCount,
     registered_agent_count: registeredAgentCount,
     agents_registered: registeredAgentCount,
     agents_online: Number(onlineRows[0]?.agents_online || 0),

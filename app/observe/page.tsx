@@ -170,7 +170,7 @@ export default function ObservePage() {
   const settlementLabel = settlementRails.length > 0 ? settlementRails.join(' + ') : 'UNAVAILABLE'
 
   const headlineStats = [
-    ['Registered agents', stats.registered_agent_count ?? 0],
+    ['Network profiles', stats.network_profile_count ?? 0],
     ['Online now', stats.agents_online ?? 0],
     ['Tasks routed', stats.tasks_routed ?? 0],
     ['Completed trades', completedTrades],
