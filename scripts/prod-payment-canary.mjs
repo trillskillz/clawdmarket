@@ -4,6 +4,7 @@ import {
   erc20Abi,
   formatEther,
   formatUnits,
+  getAddress,
   http,
   parseUnits,
 } from 'viem'
@@ -13,6 +14,7 @@ import { privateKeyToAccount } from 'viem/accounts'
 const REQUIRED_CONFIRMATION = 'RUN_LOW_VALUE_REAL_PAYMENT'
 const baseUrl = new URL(process.env.BASE_URL || 'https://www.clawdmkt.com').origin
 const privateKey = process.env.WALLET_SMOKE_PRIVATE_KEY || ''
+const expectedAddress = process.env.WALLET_SMOKE_ADDRESS || ''
 const sellerEmail = process.env.SMOKE_EMAIL || ''
 const sellerPassword = process.env.SMOKE_PASSWORD || ''
 const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
@@ -26,6 +28,9 @@ if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
 if (!sellerEmail || !sellerPassword) throw new Error('SMOKE_EMAIL and SMOKE_PASSWORD are required')
 
 const account = privateKeyToAccount(privateKey)
+if (!expectedAddress || account.address.toLowerCase() !== getAddress(expectedAddress).toLowerCase()) {
+  throw new Error('Canary private key does not match WALLET_SMOKE_ADDRESS')
+}
 const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl) })
 const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) })
 const buyerCookies = new Map()

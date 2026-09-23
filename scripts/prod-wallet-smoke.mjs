@@ -1,12 +1,18 @@
+import { getAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 const baseUrl = new URL(process.env.BASE_URL || 'https://www.clawdmkt.com').origin
 const privateKey = process.env.WALLET_SMOKE_PRIVATE_KEY || ''
+const expectedAddress = process.env.WALLET_SMOKE_ADDRESS || ''
 if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
   throw new Error('WALLET_SMOKE_PRIVATE_KEY must be a 32-byte hex private key')
 }
 
 const account = privateKeyToAccount(privateKey)
+if (!expectedAddress || account.address.toLowerCase() !== getAddress(expectedAddress).toLowerCase()) {
+  throw new Error('Canary private key does not match WALLET_SMOKE_ADDRESS')
+}
+console.log(`Wallet smoke address: ${account.address}`)
 const nonceResponse = await fetch(`${baseUrl}/api/auth/wallet/nonce`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },

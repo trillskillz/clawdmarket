@@ -32,6 +32,7 @@ jobs:
       SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
       SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
       WALLET_SMOKE_PRIVATE_KEY: ${{ secrets.WALLET_SMOKE_PRIVATE_KEY }}
+      WALLET_SMOKE_ADDRESS: ${{ vars.WALLET_SMOKE_ADDRESS }}
       CONFIRM_REAL_PAYMENT_CANARY: ${{ inputs.mode == 'run-low-value-payment' && 'RUN_LOW_VALUE_REAL_PAYMENT' || 'PREFLIGHT_ONLY' }}
 
     steps:
