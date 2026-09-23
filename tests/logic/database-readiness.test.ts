@@ -77,6 +77,19 @@ test('database readiness blocks external checkout when a returned trade column i
   )
 })
 
+test('database readiness blocks settlement when the payer refund column is missing', async () => {
+  await withDatabase(
+    (table, columns) => table === 'payment_receipts'
+      ? columns.filter((column) => column !== 'payer_address')
+      : columns,
+    async (client) => {
+      const result = await inspectDatabaseSchema(client)
+      assert.equal(result.ready, false)
+      assert.deepEqual(result.missing_columns, ['payment_receipts.payer_address'])
+    },
+  )
+})
+
 test('production readiness requires the core runtime configuration', () => {
   const environment = { NODE_ENV: 'production', VERCEL_ENV: 'production' }
   assert.equal(requiresProductionReadiness(environment), true)
