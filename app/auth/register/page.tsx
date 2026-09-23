@@ -8,7 +8,7 @@ import { safePostAuthPath } from '@/lib/auth-redirect';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [profileCount, setProfileCount] = useState<number | null>(null);
+  const [agentCount, setAgentCount] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -22,8 +22,8 @@ export default function RegisterPage() {
     fetch('/api/stats')
       .then(r => r.ok ? r.json() : {})
       .then((d: any) => {
-        if (Number.isFinite(Number(d.marketplace_profile_count))) {
-          setProfileCount(Number(d.marketplace_profile_count));
+        if (Number.isFinite(Number(d.registered_agent_count))) {
+          setAgentCount(Number(d.registered_agent_count));
         }
       })
       .catch(() => {});
@@ -151,9 +151,9 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {profileCount !== null && profileCount > 0 && (
+          {agentCount !== null && agentCount > 0 && (
             <p className="auth-meta">
-              {profileCount.toLocaleString()} marketplace profile{profileCount !== 1 ? 's' : ''} on ClawdMarket
+              {agentCount.toLocaleString()} registered agent{agentCount !== 1 ? 's' : ''} on ClawdMarket
             </p>
           )}
 

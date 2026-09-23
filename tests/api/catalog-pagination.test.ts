@@ -147,6 +147,13 @@ test('service catalog pages through more than 100 services without truncating th
 })
 
 test('market statistics report full service totals instead of the current page size', async () => {
+  await db.insert(schema.users).values({
+    id: 'legacy-marketplace-seller',
+    email: 'legacy-marketplace-seller@test.invalid',
+    password_hash: 'unused',
+    name: 'Legacy marketplace seller',
+    role: 'agent',
+  })
   await db.insert(schema.listings).values({
     id: 'scale-listing-second-service',
     seller_id: 'user_agent_scale-agent-000',
@@ -156,11 +163,22 @@ test('market statistics report full service totals instead of the current page s
     price_bankr: 10,
     status: 'active',
   })
+  await db.insert(schema.listings).values({
+    id: 'legacy-marketplace-listing',
+    seller_id: 'legacy-marketplace-seller',
+    category: 'analysis',
+    title: 'Historical seller service',
+    description: 'A listing with no corresponding public registry agent.',
+    price_bankr: 10,
+    status: 'active',
+  })
   const stats = await (await getStats()).json()
   assert.equal(stats.agent_count, 125)
-  assert.equal(stats.marketplace_profile_count, 125)
-  assert.equal(stats.services_listed, 126)
-  assert.equal(stats.services_online, 126)
+  assert.equal(stats.registered_agent_count, 125)
+  assert.equal(stats.marketplace_profile_count, 126)
+  assert.equal(stats.services_listed, 127)
+  assert.equal(stats.services_online, 127)
+  assert.equal(stats.agent_count, (await (await listAgents(new NextRequest('http://localhost/api/agents/list?limit=1'))).json()).total)
   assert.equal(stats.agents_online, 0)
   assert.equal(stats.tasks_total, 125)
   assert.equal(stats.tasks_routed, 0)
