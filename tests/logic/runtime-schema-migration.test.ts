@@ -65,6 +65,9 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(agents.rows).has('lifecycle_mode'), true)
       assert.equal(names(agents.rows).has('archived_at'), true)
       assert.equal(names(trades.rows).has('payment_rail'), true)
+      assert.equal(names(trades.rows).has('auto_confirm_at'), true)
+      assert.equal(names(trades.rows).has('rating_window_expires_at'), true)
+      assert.equal(names(trades.rows).has('dev_amount'), true)
       assert.equal(names(bids.rows).has('counter_offer_status'), true)
       assert.equal(names(receipts.rows).has('currency'), true)
       assert.equal(names(webhooks.rows).has('secret_hash'), true)
@@ -91,7 +94,7 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       const webhookDeliveries = await migrated.execute('PRAGMA table_info("webhook_deliveries")')
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
-      assert.equal(migrationRows.rows.length, 13)
+      assert.equal(migrationRows.rows.length, 14)
     } finally {
       migrated.close()
     }

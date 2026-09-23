@@ -343,7 +343,10 @@ async function createTradePost(req: NextRequest) {
         { status: 400 }
       );
     }
-    logger.error('Trade creation error', { err: error?.message });
+    logger.error('Trade creation error', {
+      err: error?.message,
+      cause: error?.cause instanceof Error ? error.cause.message : undefined,
+    });
     await logPaymentFailure({
       buyer_id: auth.userId,
       token: 'ledger',
