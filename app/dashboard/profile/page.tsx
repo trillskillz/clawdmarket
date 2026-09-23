@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import PageShell from '@/components/PageShell';
+import Link from 'next/link';
 import ProfileTab from '@/components/dashboard/ProfileTab';
+import styles from '../dashboard.module.css';
 
 interface User {
   id: string;
@@ -44,19 +45,22 @@ export default function EditProfilePage() {
   }, [fetchUser]);
 
   return (
-    <PageShell>
-      <div className="max-w-3xl mx-auto py-8 px-4">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">Edit Profile</h1>
-          <p className="text-sm text-text-dim mt-1">Update your bio, avatar, and display settings.</p>
-        </div>
-        <ProfileTab
-          user={user}
-          loading={loading}
-          onRefresh={fetchUser}
-          getCsrfToken={getCsrfToken}
-        />
+    <main className={styles.page}>
+      <div className={`${styles.shell} ${styles.subpageShell}`}>
+        <header className={styles.subpageHeader}>
+          <div>
+            <span className={styles.eyebrow}><i>05</i> / ACCOUNT</span>
+            <h1>Edit profile</h1>
+            <p>Update your bio, avatar, and display settings.</p>
+          </div>
+          <Link href="/dashboard?tab=profile" className={styles.secondaryAction}>Back to dashboard <span aria-hidden="true">↗</span></Link>
+        </header>
+        <section className={styles.panel} aria-label="Profile settings">
+          <div className={styles.panelBody}>
+            <ProfileTab user={user} loading={loading} onRefresh={fetchUser} getCsrfToken={getCsrfToken} />
+          </div>
+        </section>
       </div>
-    </PageShell>
+    </main>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import PageShell from '@/components/PageShell';
+import Link from 'next/link';
 import ListingsTab from '@/components/dashboard/ListingsTab';
 import TradesTab from '@/components/dashboard/TradesTab';
 import ApiKeysTab from '@/components/dashboard/ApiKeysTab';
@@ -13,6 +13,7 @@ import ProfileTab from '@/components/dashboard/ProfileTab';
 import ContractsTab from '@/components/dashboard/ContractsTab';
 import AdminTab from '@/components/dashboard/AdminTab';
 import AgentOwnershipTab from '@/components/dashboard/AgentOwnershipTab';
+import styles from './dashboard.module.css';
 
 interface User {
   id: string;
@@ -27,6 +28,18 @@ interface User {
 
 type DashboardTab = 'listings' | 'trades' | 'contracts' | 'api-keys' | 'agent-ownership' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'admin';
 const PUBLIC_DASHBOARD_TABS = new Set<DashboardTab>(['listings', 'trades', 'contracts', 'api-keys', 'agent-ownership', 'webhooks', 'wallet', 'analytics', 'profile']);
+const TAB_DETAILS: Record<DashboardTab, { title: string; description: string }> = {
+  listings: { title: 'Your services', description: 'Publish and manage the capabilities available to buyers.' },
+  trades: { title: 'Trade history', description: 'Track funded work, delivery, and settlement in one place.' },
+  contracts: { title: 'Contracts', description: 'Review the terms and status of your active agreements.' },
+  wallet: { title: 'Credits & payouts', description: 'See internal credit activity and configure your payout address.' },
+  analytics: { title: 'Analytics', description: 'Follow how your marketplace activity changes over time.' },
+  profile: { title: 'Profile', description: 'Keep your public identity and account details up to date.' },
+  'api-keys': { title: 'API access', description: 'Manage credentials for your integrations and agents.' },
+  'agent-ownership': { title: 'Agent ownership', description: 'Recover and transfer the agents linked to your account.' },
+  webhooks: { title: 'Webhooks', description: 'Deliver marketplace events to your own systems.' },
+  admin: { title: 'Administration', description: 'Review operational controls and moderation tools.' },
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -53,6 +66,7 @@ export default function DashboardPage() {
   const [analyticsRange, setAnalyticsRange] = useState<7 | 30>(7);
   const [loading, setLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [shareStatus, setShareStatus] = useState('Share profile');
 
   const getCsrfToken = () =>
     document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] || '';
@@ -226,105 +240,106 @@ export default function DashboardPage() {
     router.push('/');
   };
 
+  const shareProfile = async () => {
+    if (!user) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/registry/${encodeURIComponent(user.id)}`);
+      setShareStatus('Link copied');
+      window.setTimeout(() => setShareStatus('Share profile'), 2500);
+    } catch {
+      setShareStatus('Copy failed');
+      window.setTimeout(() => setShareStatus('Share profile'), 2500);
+    }
+  };
+
   const tabs = [
-    { id: 'listings' as const, label: 'My Listings', icon: '📋' },
-    { id: 'trades' as const, label: 'Trade History', icon: '🤝' },
-    { id: 'contracts' as const, label: 'Contracts', icon: '📑' },
-    { id: 'wallet' as const, label: 'Wallet', icon: '💳' },
-    { id: 'analytics' as const, label: 'Analytics', icon: '📊' },
-    { id: 'profile' as const, label: 'Profile', icon: '👤' },
-    { id: 'api-keys' as const, label: 'API Keys', icon: '🔑' },
-    { id: 'agent-ownership' as const, label: 'Agent Ownership', icon: '🧭' },
-    { id: 'webhooks' as const, label: 'Webhooks', icon: '🔔' },
-    ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin', icon: '🛡️' }] : []),
+    { id: 'listings' as const, label: 'My Listings', group: 'Marketplace' },
+    { id: 'trades' as const, label: 'Trade History', group: 'Marketplace' },
+    { id: 'contracts' as const, label: 'Contracts', group: 'Marketplace' },
+    { id: 'wallet' as const, label: 'Wallet', group: 'Account' },
+    { id: 'analytics' as const, label: 'Analytics', group: 'Account' },
+    { id: 'profile' as const, label: 'Profile', group: 'Account' },
+    { id: 'api-keys' as const, label: 'API Keys', group: 'Integrations' },
+    { id: 'agent-ownership' as const, label: 'Agent Ownership', group: 'Integrations' },
+    { id: 'webhooks' as const, label: 'Webhooks', group: 'Integrations' },
+    ...(isAdmin ? [{ id: 'admin' as const, label: 'Admin', group: 'Operations' }] : []),
   ];
 
   return (
-    <PageShell>
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
-            <p className="text-text-dim">
-              Welcome back, <span className="text-text font-medium">{user?.name}</span>
-              {user?.role === 'agent' && ' 🤖'}
-            </p>
-            {user?.wallet && (
-              <p className="text-xs font-mono text-green-400 mt-1">
-                Wallet Connected: {user.wallet.slice(0, 6)}...{user.wallet.slice(-4)}
-              </p>
-            )}
+    <main className={styles.page}>
+      <div className={styles.shell}>
+        <header className={styles.hero}>
+          <div className={styles.heroCopy}>
+            <span className={styles.eyebrow}><i>05</i> / YOUR WORKSPACE</span>
+            <h1>Dashboard</h1>
+            <p>Your marketplace work, account tools, and agent connections in one place.</p>
+            <div className={styles.heroActions}>
+              <button type="button" onClick={shareProfile} disabled={!user} className={styles.primaryAction}>{shareStatus} <span aria-hidden="true">↗</span></button>
+              <button type="button" onClick={handleLogout} className={styles.secondaryAction}>Sign out <span aria-hidden="true">→</span></button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={async () => {
-                const walletSlug = user?.wallet || user?.name?.toLowerCase().replace(/[^a-z0-9\s_-]/g, '').trim().replace(/\s+/g, '-');
-                if (!walletSlug) return;
-                const url = `${window.location.origin}/agent/${walletSlug}`;
-                await navigator.clipboard.writeText(url);
-              }}
-              className="btn-secondary"
-            >
-              Share Profile
-            </button>
-            <button onClick={handleLogout} className="btn-secondary">Logout</button>
+          <div className={styles.accountPanel}>
+            <div className={styles.accountPanelTop}><span>ACCOUNT / ACTIVE</span><i /></div>
+            <div className={styles.accountIdentity}>
+              <span className={styles.avatar} aria-hidden="true">{(user?.name || 'CM').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
+              <div><strong>{user?.name || 'Loading account'}</strong><small>{user?.role === 'agent' ? 'Agent account' : 'Member account'}</small></div>
+            </div>
+            <div className={styles.accountDetails}>
+              <div><span>ACCOUNT ID</span><code title={user?.id}>{user?.id || '—'}</code></div>
+              <div><span>WALLET</span><strong>{user?.wallet ? `${user.wallet.slice(0, 6)}…${user.wallet.slice(-4)}` : 'Not connected'}</strong></div>
+            </div>
+            {user && <Link href={`/registry/${encodeURIComponent(user.id)}`}>View public profile <span aria-hidden="true">↗</span></Link>}
           </div>
-        </div>
+        </header>
 
-        {/* Agent integration */}
+        <section className={styles.stats} aria-label="Account overview">
+          {[
+            { value: loading ? '··' : listingTotal.toLocaleString(), label: 'Services listed', index: '01' },
+            { value: loading ? '··' : tradeTotal.toLocaleString(), label: 'Trades', index: '02' },
+            { value: loading ? '··' : contractTotal.toLocaleString(), label: 'Contracts', index: '03' },
+            { value: loading ? '··' : wallet ? `$${Number((wallet as { available?: number }).available || 0).toFixed(2)}` : '—', label: 'Available credit', index: '04' },
+          ].map((stat) => <div key={stat.index}><span>{stat.index} / {stat.label}</span><strong>{stat.value}</strong></div>)}
+        </section>
+
         {dataError && (
-          <div role="alert" className="mb-6 flex flex-col justify-between gap-3 rounded-xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100 sm:flex-row sm:items-center">
+          <div role="alert" className={styles.errorBanner}>
             <span>{dataError}</span>
-            <button type="button" onClick={() => void fetchData()} className="btn-secondary shrink-0 py-1.5 text-xs">Retry loading</button>
+            <button type="button" onClick={() => void fetchData()}>Retry loading <span aria-hidden="true">↗</span></button>
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div className="card">
-            <h3 className="text-lg font-bold mb-2">Agent Quick Start 🔌</h3>
-            <p className="text-sm text-text-dim mb-4">Read the live REST and MCP integration contract.</p>
-            <div className="bg-bg p-3 rounded-lg border border-border flex items-center justify-between">
-              <code className="text-xs font-mono text-green-400">curl https://clawdmkt.com/skill.md</code>
-              <button 
-                onClick={() => navigator.clipboard.writeText('curl https://clawdmkt.com/skill.md')}
-                className="text-xs text-accent hover:text-accent2"
-              >
-                Copy
-              </button>
+        <div className={styles.workspace}>
+          <aside className={styles.sidebar}>
+            <nav aria-label="Dashboard sections">
+              {['Marketplace', 'Account', 'Integrations', 'Operations'].map((group) => {
+                const groupTabs = tabs.filter((tab) => tab.group === group);
+                if (groupTabs.length === 0) return null;
+                return <div className={styles.navGroup} key={group}>
+                  <span className={styles.navGroupTitle}>{group}</span>
+                  {groupTabs.map((tab) => <button
+                    type="button"
+                    key={tab.id}
+                    onClick={() => selectTab(tab.id)}
+                    aria-pressed={activeTab === tab.id}
+                    className={activeTab === tab.id ? styles.navActive : styles.navItem}
+                  ><span>{String(tabs.indexOf(tab) + 1).padStart(2, '0')}</span>{tab.label}<i aria-hidden="true">↗</i></button>)}
+                </div>;
+              })}
+            </nav>
+            <div className={styles.sidebarResource}>
+              <span>AGENT QUICK START</span>
+              <strong>Connect a capability.</strong>
+              <p>Use the live REST and MCP contract to bring your agent into the market.</p>
+              <Link href="/skill.md">Read skill.md <span aria-hidden="true">↗</span></Link>
             </div>
-          </div>
-          <div className="card">
-            <h3 className="text-lg font-bold mb-2">API Access 🔑</h3>
-            <p className="text-sm text-text-dim mb-4">Your active agent identity.</p>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => selectTab('api-keys')}
-                className="btn-primary py-2 text-xs"
-              >
-                Manage API Keys
-              </button>
-              <div className="bg-bg px-3 py-2 rounded-lg border border-border text-xs font-mono text-text-dim flex-1 truncate">
-                {user?.id}
-              </div>
-            </div>
-          </div>
-        </div>
+          </aside>
 
-        <div className="flex gap-2 border-b border-border mb-8 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => selectTab(tab.id)}
-              className={`px-6 py-3 font-medium transition-colors border-b-2 whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-accent text-text'
-                  : 'border-transparent text-text-dim hover:text-text'
-              }`}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          ))}
-        </div>
+          <section className={styles.panel} aria-label={`${TAB_DETAILS[activeTab].title} workspace`}>
+            <div className={styles.panelHeader}>
+              <div><span>WORKSPACE / {String(tabs.findIndex((tab) => tab.id === activeTab) + 1).padStart(2, '0')}</span><strong>{TAB_DETAILS[activeTab].title}</strong><p>{TAB_DETAILS[activeTab].description}</p></div>
+              <span className={styles.panelStatus}><i /> ACCOUNT TOOLS</span>
+            </div>
+            <div className={styles.panelBody}>
 
         {activeTab === 'listings' && (
           <ListingsTab
@@ -369,7 +384,10 @@ export default function DashboardPage() {
         {activeTab === 'admin' && isAdmin && (
           <AdminTab getCsrfToken={getCsrfToken} />
         )}
+            </div>
+          </section>
+        </div>
       </div>
-    </PageShell>
+    </main>
   );
 }

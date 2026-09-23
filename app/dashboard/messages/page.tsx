@@ -6,7 +6,7 @@ import { Suspense, useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import PageShell from '@/components/PageShell';
+import styles from '../dashboard.module.css';
 
 import { useAuth } from '@/hooks/useAuth';
 
@@ -172,23 +172,31 @@ function MessagesPageContent() {
   };
 
   return (
-    <PageShell>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 h-[calc(100vh-100px)]">
-        <div className="flex h-full bg-surface border border-border rounded-2xl overflow-hidden shadow-xl">
+    <main className={styles.page}>
+      <div className={`${styles.shell} ${styles.subpageShell}`}>
+        <header className={styles.subpageHeader}>
+          <div>
+            <span className={styles.eyebrow}><i>05</i> / ACCOUNT</span>
+            <h1>Messages</h1>
+            <p>Private conversations around your marketplace work.</p>
+          </div>
+          <Link href="/dashboard?tab=trades" className={styles.secondaryAction}>Back to dashboard <span aria-hidden="true">↗</span></Link>
+        </header>
+        <div className={styles.messageLayout}>
           {/* Sidebar */}
-          <div className="w-1/3 border-r border-border flex flex-col bg-surface/50">
-            <div className="p-4 border-b border-border">
-              <h2 className="text-xl font-bold text-text">Messages</h2>
-              {tradeIdParam && <p className="mt-1 font-mono text-[10px] text-text-dim">TRADE {tradeIdParam.slice(0, 8)}</p>}
+          <div className={styles.conversationList}>
+            <div className={styles.messageSectionHeader}>
+              <h2>Conversations</h2>
+              {tradeIdParam && <p>TRADE {tradeIdParam.slice(0, 8)}</p>}
             </div>
-            <div className="flex-grow overflow-y-auto">
+            <div className={styles.conversationScroll}>
               {partners.map((partner) => (
-                <div
+                <button
+                  type="button"
                   key={partner.id}
                   onClick={() => setSelectedPartnerId(partner.id)}
-                  className={`p-4 flex items-center gap-3 cursor-pointer hover:bg-bg transition-colors ${
-                    selectedPartnerId === partner.id ? 'bg-accent/10 border-l-4 border-accent' : ''
-                  }`}
+                  aria-pressed={selectedPartnerId === partner.id}
+                  className={`${styles.conversationRow} ${selectedPartnerId === partner.id ? styles.conversationSelected : ''}`}
                 >
                   <div className="relative">
                     {partner.avatar_url ? (
@@ -212,11 +220,9 @@ function MessagesPageContent() {
                   </div>
                   <div className="flex-grow min-w-0">
                     <div className="font-semibold text-text truncate">{partner.name}</div>
-                    <div className="text-xs text-text-dim truncate">
-                      {partner.role === 'agent' ? '🤖 Agent' : '👤 Human'}
-                    </div>
+                    <div className="text-xs text-text-dim truncate">{partner.role === 'agent' ? 'Agent' : 'Member'}</div>
                   </div>
-                </div>
+                </button>
               ))}
               {partners.length === 0 && !loading && (
                 <div className="p-8 text-center text-text-dim text-sm">
@@ -227,22 +233,20 @@ function MessagesPageContent() {
           </div>
 
           {/* Chat Area */}
-          <div className="flex-grow flex flex-col bg-bg/50">
+          <div className={styles.chatPane}>
             {selectedPartnerId ? (
               <>
                 {/* Header */}
-                <div className="p-4 border-b border-border bg-surface/50 flex items-center justify-between">
+                <div className={styles.chatHeader}>
                   <div>
-                    <div className="font-bold text-text">{partners.find((p) => p.id === selectedPartnerId)?.name || 'Trade conversation'}</div>
+                    <div className={styles.chatTitle}>{partners.find((p) => p.id === selectedPartnerId)?.name || 'Trade conversation'}</div>
                     {tradeIdParam && <Link href={`/dashboard?tab=trades&trade=${encodeURIComponent(tradeIdParam)}`} className="text-xs text-accent hover:underline">View trade progress →</Link>}
                   </div>
-                  <div className="text-xs text-accent2 flex items-center gap-1">
-                     🔒 Encrypted chat storage active
-                  </div>
+                  <span className={styles.chatSecurity}>Encrypted chat</span>
                 </div>
 
                 {/* Messages */}
-                <div className="flex-grow overflow-y-auto p-4 space-y-4">
+                <div className={styles.messageScroll}>
                   {messages.map((msg) => {
                     const isMe = msg.sender_id === user?.id;
                     const tradeMessage = parseTradeMessage(msg.content);
@@ -253,11 +257,7 @@ function MessagesPageContent() {
                         className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`max-w-[70%] p-3 rounded-2xl ${
-                            isMe
-                              ? 'bg-accent text-white rounded-br-none'
-                              : 'bg-surface border border-border text-text rounded-bl-none'
-                          }`}
+                          className={`${styles.messageBubble} ${isMe ? styles.messageOwn : styles.messageOther}`}
                         >
                           {tradeMessage?.type === 'task_complete' ? (
                             <div className="min-w-48 text-sm">
@@ -285,39 +285,39 @@ function MessagesPageContent() {
                 </div>
 
                 {/* Input */}
-                <form onSubmit={handleSendMessage} className="p-4 border-t border-border bg-surface/50 flex gap-2">
+                <form onSubmit={handleSendMessage} className={styles.messageComposer}>
                   <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type a secured message..."
-                    className="flex-grow bg-bg border border-border rounded-xl px-4 py-2 focus:ring-2 focus:ring-accent focus:border-transparent outline-none"
+                    className={styles.messageInput}
                     disabled={sending}
                   />
                   <button
                     type="submit"
                     disabled={sending || !newMessage.trim()}
-                    className="btn-primary px-4 py-2 rounded-xl disabled:opacity-50"
+                    className={styles.primaryAction}
                   >
                     Send
                   </button>
                 </form>
               </>
             ) : (
-              <div className="flex-grow flex items-center justify-center text-text-dim">
+              <div className={styles.chatEmpty}>
                 Select a conversation to start messaging.
               </div>
             )}
           </div>
         </div>
       </div>
-    </PageShell>
+    </main>
   );
 }
 
 export default function MessagesPage() {
   return (
-    <Suspense fallback={<PageShell><div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">Loading messages…</div></PageShell>}>
+    <Suspense fallback={<main className={styles.page}><div className={`${styles.shell} ${styles.subpageShell}`}>Loading messages…</div></main>}>
       <MessagesPageContent />
     </Suspense>
   );
