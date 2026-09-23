@@ -206,6 +206,7 @@ try {
   tradeId = trade?.trade?.id
   const checkout = trade?.checkout
   if (!tradeId || checkout?.rail !== 'evm') throw new Error('Canary trade did not return an EVM checkout')
+  console.log(`Canary trade: ${tradeId}`)
   if (checkout.amount_usd !== canaryPrice) throw new Error(`Canary spend guard rejected quoted total ${checkout.amount_usd}`)
   if (checkout.treasury?.toLowerCase() !== treasury.toLowerCase()) throw new Error('Checkout treasury does not match payment configuration')
 
@@ -248,6 +249,11 @@ try {
         payer_signature: payerSignature,
       }),
     }, buyerCookies)
+    if (result.response.status === 409 && result.body?.code === 'PAYMENT_CONFIRMING' && result.body?.retryable === true) {
+      if (attempt === 11) throw new Error(`Payment ${paymentHash} is confirmed on Base but the site RPC did not verify it within the retry window; resume this same transaction, do not send again`)
+      await new Promise((resolve) => setTimeout(resolve, 5_000))
+      continue
+    }
     funded = assertOk(result, 'Canary payment verification', [200, 202])
     const transfer = funded?.transfers?.find((item) => item.kind === 'buyer_refund')
     if (funded?.status === 'late_payment_refunded' && transfer?.status === 'confirmed' && transfer?.tx_hash) break
