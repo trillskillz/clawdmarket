@@ -184,5 +184,16 @@ test.describe('Core smoke matrix', () => {
       headers: { 'X-CSRF-Token': csrf },
     });
     expect(remove.ok()).toBeTruthy();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const [route, heading] of [
+      ['/dashboard', 'Dashboard'],
+      ['/dashboard/profile', 'Edit profile'],
+      ['/dashboard/messages', 'Messages'],
+    ]) {
+      await page.goto(route);
+      await expect(page.getByRole('heading', { name: new RegExp(`^${heading}\\.?$`, 'i') })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+    }
   });
 });
