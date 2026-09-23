@@ -2,7 +2,8 @@ import { getAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 const baseUrl = new URL(process.env.BASE_URL || 'https://www.clawdmkt.com').origin
-const privateKey = process.env.WALLET_SMOKE_PRIVATE_KEY || ''
+const rawPrivateKey = (process.env.WALLET_SMOKE_PRIVATE_KEY || '').trim()
+const privateKey = `0x${rawPrivateKey.replace(/^0x/i, '')}`
 const expectedAddress = process.env.WALLET_SMOKE_ADDRESS || ''
 if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
   throw new Error('WALLET_SMOKE_PRIVATE_KEY must be a 32-byte hex private key')

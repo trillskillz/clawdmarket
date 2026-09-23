@@ -13,7 +13,8 @@ import { privateKeyToAccount } from 'viem/accounts'
 
 const REQUIRED_CONFIRMATION = 'RUN_LOW_VALUE_REAL_PAYMENT'
 const baseUrl = new URL(process.env.BASE_URL || 'https://www.clawdmkt.com').origin
-const privateKey = process.env.WALLET_SMOKE_PRIVATE_KEY || ''
+const rawPrivateKey = (process.env.WALLET_SMOKE_PRIVATE_KEY || '').trim()
+const privateKey = `0x${rawPrivateKey.replace(/^0x/i, '')}`
 const expectedAddress = process.env.WALLET_SMOKE_ADDRESS || ''
 const sellerEmail = process.env.SMOKE_EMAIL || ''
 const sellerPassword = process.env.SMOKE_PASSWORD || ''
