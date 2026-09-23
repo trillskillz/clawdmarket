@@ -51,5 +51,8 @@ jobs:
       - name: Install runtime dependencies
         run: pnpm install --frozen-lockfile --prod
 
+      - name: Check production settlement gas reserves
+        run: node scripts/prod-payment-rails-preflight.mjs
+
       - name: Run production payment canary
         run: node scripts/prod-payment-canary.mjs

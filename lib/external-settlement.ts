@@ -2,7 +2,6 @@ import 'server-only'
 import {
   createPublicClient,
   decodeEventLog,
-  defineChain,
   encodeFunctionData,
   erc20Abi,
   formatUnits,
@@ -17,10 +16,11 @@ import {
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, payment_receipts, payout_addresses, settlement_nonces, settlement_transfers, trades, users } from '@/lib/schema'
-import { findAcceptedToken, getMppRecipientAddress, getTreasuryAddress, requireSettlementSigner } from '@/lib/payment-config'
+import { findAcceptedToken, getMppRecipientAddress, getTempoRpcUrl, getTreasuryAddress, requireSettlementSigner } from '@/lib/payment-config'
 import { getRpcUrl } from '@/lib/settlement'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { reportInternalError } from '@/lib/api-error'
+import { settlementAccount, settlementChain } from '@/lib/settlement-transaction'
 
 const TRANSFER_EVENT = erc20Abi.find((entry) => entry.type === 'event' && entry.name === 'Transfer')!
 
@@ -29,15 +29,6 @@ export class SettlementError extends Error {
     super(message)
     this.name = 'SettlementError'
   }
-}
-
-function chainFor(chainId: number, rpcUrl: string) {
-  return defineChain({
-    id: chainId,
-    name: `EVM ${chainId}`,
-    nativeCurrency: { name: 'Gas token', symbol: 'GAS', decimals: 18 },
-    rpcUrls: { default: { http: [rpcUrl] } },
-  })
 }
 
 export async function payoutAddressForUser(userId: string): Promise<Address | null> {
@@ -75,7 +66,7 @@ export async function verifyIncomingErc20Payment(params: {
   if (!token) throw new SettlementError('This token is not enabled for marketplace checkout', 'TOKEN_NOT_ACCEPTED', false)
   const rpcUrl = token.rpcUrl || getRpcUrl(params.chainId)
   if (!rpcUrl) throw new SettlementError('No RPC endpoint is configured for this network', 'RPC_NOT_CONFIGURED', false)
-  const client = createPublicClient({ chain: chainFor(params.chainId, rpcUrl), transport: http(rpcUrl) })
+  const client = createPublicClient({ chain: settlementChain(params.chainId, rpcUrl), transport: http(rpcUrl) })
   const receipt = await client.getTransactionReceipt({ hash: params.txHash }).catch(() => {
     throw new SettlementError('Payment transaction is not visible on the configured RPC yet', 'PAYMENT_CONFIRMING')
   })
@@ -197,11 +188,14 @@ export async function processSettlementTransfer(transferId: string, options: { w
   if (transfer.status === 'confirmed') return transfer
   if (transfer.status === 'failed') throw new SettlementError(transfer.last_error || 'Settlement transfer failed', 'TRANSFER_FAILED', false)
 
-  const rpcUrl = findAcceptedToken(transfer.chain_id, transfer.token_address)?.rpcUrl || getRpcUrl(transfer.chain_id)
+  const rpcUrl = transfer.chain_id === TEMPO_CHAIN_ID
+    ? getTempoRpcUrl()
+    : findAcceptedToken(transfer.chain_id, transfer.token_address)?.rpcUrl || getRpcUrl(transfer.chain_id)
   if (!rpcUrl) throw new SettlementError('No RPC endpoint is configured for settlement', 'RPC_NOT_CONFIGURED', false)
-  const chain = chainFor(transfer.chain_id, rpcUrl)
+  const chain = settlementChain(transfer.chain_id, rpcUrl)
   const client = createPublicClient({ chain, transport: http(rpcUrl) })
-  const { account } = requireSettlementSigner(transfer.from_address as Address)
+  const { privateKey } = requireSettlementSigner(transfer.from_address as Address)
+  const account = settlementAccount(transfer.chain_id, privateKey, transfer.from_address as Address)
 
   if (!transfer.raw_transaction) {
     const [claimed] = await db.update(settlement_transfers).set({
