@@ -12,6 +12,7 @@ on:
           - preflight
           - run-low-value-payment
           - run-low-value-mpp
+          - configure-seller-payout
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -58,9 +59,13 @@ jobs:
         run: node scripts/prod-payment-rails-preflight.mjs
 
       - name: Run production payment canary
-        if: inputs.mode != 'run-low-value-mpp'
+        if: inputs.mode != 'run-low-value-mpp' && inputs.mode != 'configure-seller-payout'
         run: node scripts/prod-payment-canary.mjs
 
       - name: Run production Tempo MPP canary
         if: inputs.mode == 'run-low-value-mpp'
         run: node scripts/prod-mpp-canary.mjs
+
+      - name: Configure the dedicated smoke seller payout address
+        if: inputs.mode == 'configure-seller-payout'
+        run: node scripts/set-smoke-seller-payout.mjs
