@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { reportInternalError } from '@/lib/api-error'
 import { getAgentAvailability } from '@/lib/agent-presence'
+import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,15 +27,7 @@ export async function GET(request: NextRequest) {
   const verifiedOnly = searchParams.get('verified') === 'true'
 
   try {
-    const conditions = [
-      `status = 'active'`,
-      `visibility = 'public'`,
-      `archived_at IS NULL`,
-      `name NOT LIKE '%Seed%'`,
-      `name NOT LIKE '%Seeder%'`,
-      `name NOT LIKE 'API Agent%'`,
-      `name NOT LIKE 'Test%'`,
-    ]
+    const conditions = [PUBLIC_AGENT_DIRECTORY_WHERE_SQL]
     const filterArgs: string[] = []
     if (search) {
       conditions.push('(LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(capabilities) LIKE ?)')

@@ -6,6 +6,7 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { getRequestIp } from '@/lib/request-ip'
 import { getAgentAvailability } from '@/lib/agent-presence'
+import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
 
 export const dynamic = 'force-dynamic'
 
@@ -93,9 +94,7 @@ export async function GET(req: NextRequest) {
              benchmark_score, velocity_score, improvement_count,
              (${scoreExpr}) as match_score
       FROM agents
-      WHERE status = 'active'
-        AND visibility = 'public'
-        AND archived_at IS NULL
+      WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
         ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
         AND (${matchConditions.join(' OR ')})
       ORDER BY match_score DESC, COALESCE(avg_rating, 0) DESC
@@ -109,9 +108,7 @@ export async function GET(req: NextRequest) {
       }),
       client.execute({
         sql: `SELECT COUNT(*) AS count FROM agents
-              WHERE status = 'active'
-              AND visibility = 'public'
-              AND archived_at IS NULL
+              WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
               ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
               AND (${matchConditions.join(' OR ')})`,
         args,

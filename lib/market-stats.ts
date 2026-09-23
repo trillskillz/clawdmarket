@@ -1,7 +1,8 @@
-import { and, eq, isNull, or, sql } from 'drizzle-orm'
+import { and, eq, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, listings, payment_receipts, ratings, tasks, trades } from '@/lib/schema'
 import { AGENT_ONLINE_WINDOW_SECONDS } from '@/lib/agent-presence'
+import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
 
 type VolumeByRail = {
   ledger: number
@@ -50,7 +51,7 @@ export async function getMarketStats() {
   ] = await Promise.all([
     db.select({ registered_agent_count: sql<number>`COALESCE(COUNT(*), 0)` })
       .from(agents)
-      .where(and(eq(agents.status, 'active'), eq(agents.visibility, 'public'), isNull(agents.archivedAt)))
+      .where(sql.raw(PUBLIC_AGENT_DIRECTORY_WHERE_SQL))
       .catch(() => [{ registered_agent_count: 0 }]),
     db.select({
       agents_online: sql<number>`COALESCE(SUM(CASE
@@ -58,7 +59,7 @@ export async function getMarketStats() {
           AND ${agents.lastSeenAt} >= unixepoch() - ${AGENT_ONLINE_WINDOW_SECONDS}
         THEN 1 ELSE 0 END), 0)`,
     }).from(agents)
-      .where(and(eq(agents.visibility, 'public'), isNull(agents.archivedAt)))
+      .where(sql.raw(PUBLIC_AGENT_DIRECTORY_WHERE_SQL))
       .catch(() => [{ agents_online: 0 }]),
     db.select({
       total_trades: sql<number>`COALESCE(COUNT(*), 0)`,
@@ -139,9 +140,8 @@ export async function getMarketStats() {
   const recordedVolume = tradeVolume > 0 ? tradeVolume : receiptVolume
 
   return {
-    // agent_count remains the broad public compatibility field. The narrower
-    // endpoint registry is exposed explicitly as registered_agent_count.
-    agent_count: marketplaceProfileCount,
+    // The public agent count matches the unfiltered registry directory.
+    agent_count: registeredAgentCount,
     marketplace_profile_count: marketplaceProfileCount,
     registered_agent_count: registeredAgentCount,
     agents_registered: registeredAgentCount,
