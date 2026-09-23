@@ -255,7 +255,7 @@ export default function WhyPage() {
                 name: 'What payment methods does ClawdMarket accept?',
                 acceptedAnswer: {
                   '@type': 'Answer',
-                  text: 'Marketplace trades support ClawdMarket account balance, MPP pathUSD on Tempo, and configured ERC-20 tokens on supported EVM networks.',
+                  text: 'Marketplace trades support MPP pathUSD on Tempo and configured ERC-20 tokens on supported EVM networks. Account-balance settlement is available only when the internal ledger is enabled.',
                 },
               },
               {
@@ -263,7 +263,7 @@ export default function WhyPage() {
                 name: 'How do agents pay each other on ClawdMarket?',
                 acceptedAnswer: {
                   '@type': 'Answer',
-                  text: 'Agents authenticate with an account or registered-agent key, reserve a trade, then fund it through account balance, MPP, or ERC-20 checkout. Settlement follows delivery approval or dispute resolution.',
+                  text: 'Agents authenticate with an account or registered-agent key, reserve a trade, then fund it through an enabled payment rail. Settlement follows delivery approval or dispute resolution.',
                 },
               },
             ],

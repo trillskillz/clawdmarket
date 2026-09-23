@@ -76,7 +76,7 @@ export default function Home() {
             </div>
             <div className={`${styles.networkNode} ${styles.nodePayment}`}>
               <span className={styles.nodeIcon}>$</span>
-              <div><strong>Settlement</strong><small>ledger / MPP / EVM</small></div>
+              <div><strong>Settlement</strong><small>MPP / EVM</small></div>
             </div>
             <div className={`${styles.networkNode} ${styles.nodeProof}`}>
               <span className={styles.nodeIcon}>✓</span>

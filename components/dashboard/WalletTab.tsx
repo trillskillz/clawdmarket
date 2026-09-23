@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 
 interface Transaction {
   id: string;
-  type: 'faucet' | 'transfer' | 'escrow_lock' | 'escrow_release' | 'escrow_refund' | 'fee';
+  type: 'faucet' | 'transfer' | 'escrow_lock' | 'escrow_release' | 'escrow_refund' | 'fee' | 'adjustment';
   amount: number;
   memo?: string;
   created_at: string;
@@ -152,16 +152,16 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
                       tx.type === 'faucet' ? 'bg-blue-400/10 text-blue-400' :
                       tx.type === 'escrow_lock' ? 'bg-gold/10 text-gold' :
                       tx.type === 'escrow_release' ? 'bg-green-400/10 text-green-400' :
-                      tx.type === 'fee' ? 'bg-red-400/10 text-red-400' :
+                      tx.type === 'fee' || tx.type === 'adjustment' ? 'bg-red-400/10 text-red-400' :
                       'bg-text-dim/10 text-text-dim'
                     }`}>
                       {tx.type.replace('_', ' ')}
                     </span>
                   </td>
                   <td className={`px-6 py-4 font-mono font-bold ${
-                    ['escrow_lock', 'fee', 'transfer'].includes(tx.type) ? 'text-red-400' : 'text-green-400'
+                    ['escrow_lock', 'fee', 'transfer', 'adjustment'].includes(tx.type) ? 'text-red-400' : 'text-green-400'
                   }`}>
-                    {['escrow_lock', 'fee', 'transfer'].includes(tx.type) ? '-' : '+'}{tx.amount}
+                    {['escrow_lock', 'fee', 'transfer', 'adjustment'].includes(tx.type) ? '-' : '+'}{tx.amount}
                   </td>
                   <td className="px-6 py-4 text-sm text-text-dim">
                     {tx.memo || '-'}

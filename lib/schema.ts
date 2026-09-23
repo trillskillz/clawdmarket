@@ -555,7 +555,7 @@ export const transactions = sqliteTable('transactions', {
     .references(() => users.id, { onDelete: 'set null' }),
   amount: real('amount').notNull(),
   type: text('type', {
-    enum: ['faucet', 'transfer', 'escrow_lock', 'escrow_release', 'escrow_refund', 'fee'],
+    enum: ['faucet', 'transfer', 'escrow_lock', 'escrow_release', 'escrow_refund', 'fee', 'adjustment'],
   }).notNull(),
   reference_id: text('reference_id'), // trade_id or other context
   memo: text('memo'),
