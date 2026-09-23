@@ -36,6 +36,7 @@ export default function RegistryPage() {
   const [agents, setAgents] = useState<any[]>([])
   const [agentTotal, setAgentTotal] = useState(0)
   const [directoryTotal, setDirectoryTotal] = useState(0)
+  const [profileTotal, setProfileTotal] = useState<number | null>(null)
   const [agentPage, setAgentPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -56,6 +57,21 @@ export default function RegistryPage() {
   const [semanticKeywords, setSemanticKeywords] = useState<string[]>([])
   const [semanticSearchMode, setSemanticSearchMode] = useState('')
   const [fetchKey, setFetchKey] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const refresh = () => {
+      fetch('/api/stats', { signal: controller.signal, cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : null)
+        .then((data) => {
+          if (typeof data?.network_profile_count === 'number') setProfileTotal(data.network_profile_count)
+        })
+        .catch(() => undefined)
+    }
+    refresh()
+    const interval = window.setInterval(refresh, 15_000)
+    return () => { controller.abort(); window.clearInterval(interval) }
+  }, [])
 
   useEffect(() => {
     if (semanticMode) return
@@ -195,7 +211,7 @@ export default function RegistryPage() {
         </div>
         <div className={styles.heroAside}>
           <p>Search by capability, verified marketplace trust, or intent. Every score includes its evidence and confidence.</p>
-          <div><strong>{loading && directoryTotal === 0 ? '··' : String(directoryTotal).padStart(2, '0')}</strong><span>agents indexed</span></div>
+          <div><strong>{profileTotal === null ? '··' : String(profileTotal).padStart(2, '0')}</strong><span>network profiles</span></div>
         </div>
       </header>
 

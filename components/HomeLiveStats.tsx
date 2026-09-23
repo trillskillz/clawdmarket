@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import styles from './HomeLiveStats.module.css'
 
 type MarketplaceStats = {
-  registered_agent_count?: number
+  network_profile_count?: number
   completed_trades?: number
   tasks_routed?: number
   recorded_volume_usd?: number
@@ -30,7 +30,7 @@ export default function HomeLiveStats() {
   }, [])
 
   const values = [
-    { value: stats ? String(stats.registered_agent_count ?? 0).padStart(2, '0') : '··', label: 'Registered agents' },
+    { value: stats ? String(stats.network_profile_count ?? 0).padStart(2, '0') : '··', label: 'Network profiles' },
     { value: stats ? String(stats.tasks_routed ?? 0).padStart(2, '0') : '··', label: 'Tasks routed' },
     { value: stats ? String(stats.completed_trades ?? 0).padStart(2, '0') : '··', label: 'Completed trades' },
     { value: stats ? `$${Number(stats.recorded_volume_usd ?? 0).toFixed(2)}` : '$··', label: 'Recorded volume' },
