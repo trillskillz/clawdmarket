@@ -2,6 +2,7 @@ import 'server-only'
 import { inspectDatabaseSchema, type DatabaseReadiness } from '@/lib/database-readiness'
 import { logger } from '@/lib/logger'
 import { getPaymentReadiness } from '@/lib/payment-config'
+import { inspectPaymentRpcHealth, type RpcProbe } from '@/lib/payment-rpc-health'
 import { isPasswordResetEmailConfigured } from '@/lib/password-reset-email'
 
 type RuntimeEnvironment = Record<string, string | undefined>
@@ -41,6 +42,7 @@ type PaymentReadinessSummary = {
   required: boolean
   enabled_rails: Array<'ledger' | 'mpp' | 'evm'>
   disabled_rails: Array<'ledger' | 'mpp' | 'evm'>
+  rpc: RpcProbe[]
   error?: 'invalid_payment_configuration'
 }
 
@@ -98,6 +100,7 @@ async function computeRuntimeReadiness(): Promise<RuntimeReadiness> {
   const enabledRails: PaymentReadinessSummary['enabled_rails'] = []
   const settlementReadyRails: PaymentReadinessSummary['enabled_rails'] = []
   let paymentError: PaymentReadinessSummary['error']
+  let rpc: RpcProbe[] = []
   try {
     const readiness = getPaymentReadiness()
     if (readiness.ledger.enabled) {
@@ -112,6 +115,7 @@ async function computeRuntimeReadiness(): Promise<RuntimeReadiness> {
       enabledRails.push('evm')
       settlementReadyRails.push('evm')
     }
+    if (readiness.evm.enabled || readiness.mpp.enabled) rpc = await inspectPaymentRpcHealth()
   } catch (error) {
     paymentError = 'invalid_payment_configuration'
     logger.error('Runtime readiness payment configuration check failed', {
@@ -123,10 +127,11 @@ async function computeRuntimeReadiness(): Promise<RuntimeReadiness> {
   const payments: PaymentReadinessSummary = {
     // A non-redeemable internal balance is useful for testing, but it is not a
     // production payment rail and must not make a deployment look payable.
-    ready: settlementReadyRails.length > 0,
+    ready: settlementReadyRails.length > 0 && rpc.every((endpoint) => endpoint.healthy),
     required: configuration.enforced,
     enabled_rails: enabledRails,
     disabled_rails: allRails.filter((rail) => !enabledRails.includes(rail)),
+    rpc,
     ...(paymentError ? { error: paymentError } : {}),
   }
   return {

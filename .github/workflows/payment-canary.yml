@@ -11,6 +11,7 @@ on:
         options:
           - preflight
           - run-low-value-payment
+          - run-seller-payout
           - run-low-value-mpp
           - configure-seller-payout
           - recover-base-payment
@@ -37,6 +38,7 @@ jobs:
       WALLET_SMOKE_PRIVATE_KEY: ${{ secrets.WALLET_SMOKE_PRIVATE_KEY }}
       WALLET_SMOKE_ADDRESS: ${{ vars.WALLET_SMOKE_ADDRESS }}
       CONFIRM_REAL_PAYMENT_CANARY: ${{ inputs.mode == 'run-low-value-payment' && 'RUN_LOW_VALUE_REAL_PAYMENT' || 'PREFLIGHT_ONLY' }}
+      CONFIRM_REAL_SELLER_PAYOUT_CANARY: ${{ inputs.mode == 'run-seller-payout' && 'RUN_LOW_VALUE_REAL_SELLER_PAYOUT' || 'PREFLIGHT_ONLY' }}
       CONFIRM_REAL_MPP_CANARY: ${{ inputs.mode == 'run-low-value-mpp' && 'RUN_LOW_VALUE_REAL_MPP_PAYMENT' || 'PREFLIGHT_ONLY' }}
 
     steps:

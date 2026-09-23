@@ -61,7 +61,7 @@ export function getAcceptedTokens() {
   return parseConfiguredTokens()
 }
 
-function explicitRpcUrl(token: AcceptedToken) {
+export function explicitRpcUrl(token: AcceptedToken) {
   const specific = process.env[`EVM_RPC_URL_${token.chainId}`]?.trim()
   const generic = getAcceptedTokens().length === 1 ? process.env.EVM_RPC_URL?.trim() : ''
   const value = token.rpcUrl?.trim() || specific || generic || ''
