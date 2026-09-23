@@ -12,6 +12,9 @@ import { base } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 
 const REQUIRED_CONFIRMATION = 'RUN_LOW_VALUE_REAL_PAYMENT'
+const PAYOUT_CONFIRMATION = 'RUN_LOW_VALUE_REAL_SELLER_PAYOUT'
+const sellerPayoutCanary = process.env.CONFIRM_REAL_SELLER_PAYOUT_CANARY === PAYOUT_CONFIRMATION
+const expectedSellerPayout = getAddress('0x89D8f773a0F59A429B71610B31c5d9c85Ca39E5d')
 const baseUrl = new URL(process.env.BASE_URL || 'https://www.clawdmkt.com').origin
 const rawPrivateKey = (process.env.WALLET_SMOKE_PRIVATE_KEY || '').trim()
 const privateKey = `0x${rawPrivateKey.replace(/^0x/i, '')}`
@@ -105,7 +108,7 @@ if (!paymentConfig.erc20_configured || !token || !paymentConfig.treasury_wallet)
 
 const tokenAddress = token.token_address
 const treasury = paymentConfig.treasury_wallet
-const maximumSpend = parseUnits('0.01', token.decimals)
+const maximumSpend = parseUnits(sellerPayoutCanary ? '0.11' : '0.01', token.decimals)
 const minimumBuyerGasReserve = 50_000_000_000_000n
 const [nativeBalance, startingUsdc] = await Promise.all([
   publicClient.getBalance({ address: account.address }),
@@ -162,14 +165,17 @@ const sellerHeaders = {
 const sellerPayout = assertOk(await api('/api/payments/payout-address', { headers: sellerHeaders }), 'Canary seller payout check')
 if (!sellerPayout.address) throw new Error('Configure the dedicated canary seller payout wallet before running. This script never changes seller payout settings.')
 getAddress(sellerPayout.address)
+if (sellerPayoutCanary && getAddress(sellerPayout.address) !== expectedSellerPayout) {
+  throw new Error('Dedicated smoke seller payout does not match the owner-approved destination')
+}
 console.log('Dedicated canary seller payout wallet is configured')
 
-if (process.env.CONFIRM_REAL_PAYMENT_CANARY !== REQUIRED_CONFIRMATION) {
+if (process.env.CONFIRM_REAL_PAYMENT_CANARY !== REQUIRED_CONFIRMATION && !sellerPayoutCanary) {
   console.log(`Preflight passed. Set CONFIRM_REAL_PAYMENT_CANARY=${REQUIRED_CONFIRMATION} to run the $0.01 payment and refund.`)
   process.exit(0)
 }
 
-const canaryPrice = 0.01
+const canaryPrice = sellerPayoutCanary ? 0.10 : 0.01
 let listingId = null
 let tradeId = null
 
@@ -181,7 +187,9 @@ try {
     body: JSON.stringify({
       category: 'other',
       title: `Production payment canary ${suffix}`,
-      description: 'Automated low-value production payment and refund canary. No seller work is requested.',
+      description: sellerPayoutCanary
+        ? 'Automated low-value production payment and seller payout canary. The delivery is a test artifact, not a service.'
+        : 'Automated low-value production payment and refund canary. No seller work is requested.',
       price_bankr: canaryPrice,
     }),
   }), 'Canary listing creation', [201])
@@ -207,7 +215,7 @@ try {
   const checkout = trade?.checkout
   if (!tradeId || checkout?.rail !== 'evm') throw new Error('Canary trade did not return an EVM checkout')
   console.log(`Canary trade: ${tradeId}`)
-  if (checkout.amount_usd !== canaryPrice) throw new Error(`Canary spend guard rejected quoted total ${checkout.amount_usd}`)
+  if (checkout.amount_usd !== (sellerPayoutCanary ? 0.11 : canaryPrice)) throw new Error(`Canary spend guard rejected quoted total ${checkout.amount_usd}`)
   if (checkout.treasury?.toLowerCase() !== treasury.toLowerCase()) throw new Error('Checkout treasury does not match payment configuration')
 
   const intentResult = assertOk(await api(checkout.intent_url, {
@@ -217,12 +225,18 @@ try {
   const intent = intentResult.intent
   if (!intentResult.created || intent.treasury_address.toLowerCase() !== treasury.toLowerCase()) throw new Error('Canary did not receive a new matching payment intent')
 
-  assertOk(await api(`/api/trades/${encodeURIComponent(tradeId)}/cancel`, {
-    method: 'POST', headers: buyerHeaders,
-  }, buyerCookies), 'Canary reservation cancellation')
+  if (!sellerPayoutCanary) {
+    assertOk(await api(`/api/trades/${encodeURIComponent(tradeId)}/cancel`, {
+      method: 'POST', headers: buyerHeaders,
+    }, buyerCookies), 'Canary reservation cancellation')
+  }
+
+  const startingSellerUsdc = sellerPayoutCanary
+    ? await publicClient.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'balanceOf', args: [expectedSellerPayout] })
+    : null
 
   const amount = parseUnits(checkout.amount_usd.toFixed(token.decimals), token.decimals)
-  if (amount > maximumSpend) throw new Error('Canary spend exceeds the hard $0.01 limit')
+  if (amount > maximumSpend) throw new Error('Canary spend exceeds the hard spend limit')
   const { request } = await publicClient.simulateContract({
     account,
     address: tokenAddress,
@@ -255,12 +269,37 @@ try {
       continue
     }
     funded = assertOk(result, 'Canary payment verification', [200, 202])
+    if (sellerPayoutCanary && funded?.trade?.status === 'escrow_held') break
     const transfer = funded?.transfers?.find((item) => item.kind === 'buyer_refund')
-    if (funded?.status === 'late_payment_refunded' && transfer?.status === 'confirmed' && transfer?.tx_hash) break
-    if (attempt === 11) throw new Error('Refund did not confirm within the canary retry window')
+    if (!sellerPayoutCanary && funded?.status === 'late_payment_refunded' && transfer?.status === 'confirmed' && transfer?.tx_hash) break
+    if (attempt === 11) throw new Error('Payment did not reach the expected state within the canary retry window')
     await new Promise((resolve) => setTimeout(resolve, 5_000))
   }
 
+  if (sellerPayoutCanary) {
+    assertOk(await api(`/api/trades/${encodeURIComponent(tradeId)}/delivery`, {
+      method: 'POST', headers: sellerHeaders,
+      body: JSON.stringify({ summary: `Automated payment canary delivery for trade ${tradeId}; no service was purchased.` }),
+    }), 'Canary seller delivery', [201])
+    let completed = false
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const result = assertOk(await api(`/api/trades/${encodeURIComponent(tradeId)}/confirm`, {
+        method: 'POST', headers: buyerHeaders,
+      }, buyerCookies), 'Canary buyer confirmation', [200, 202])
+      if (result.status === 'completed' && result.trade?.payout_status === 'complete') {
+        completed = true
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5_000))
+    }
+    if (!completed) throw new Error(`Seller payout is still processing for trade ${tradeId}; do not create a second payment`)
+    const endingSellerUsdc = await publicClient.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'balanceOf', args: [expectedSellerPayout] })
+    if (endingSellerUsdc - startingSellerUsdc !== parseUnits('0.10', token.decimals)) {
+      throw new Error(`Seller payout balance did not increase by exactly 0.10 USDC for trade ${tradeId}`)
+    }
+    console.log(`PASS: $0.11 Base USDC checkout, delivery, buyer confirmation, and $0.10 seller payout completed for trade ${tradeId}`)
+    process.exitCode = 0
+  } else {
   const refund = funded.transfers.find((item) => item.kind === 'buyer_refund')
   await publicClient.waitForTransactionReceipt({ hash: refund.tx_hash, confirmations: token.confirmations || 3, timeout: 120_000 })
   const endingUsdc = await publicClient.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })
@@ -269,6 +308,7 @@ try {
   }
   console.log(`Refund transaction: ${refund.tx_hash}`)
   console.log(`PASS: $0.01 Base USDC payment verification and full late-payment refund completed for trade ${tradeId}`)
+  }
 } finally {
   if (listingId) {
     const cleanup = await api(`/api/listings/${encodeURIComponent(listingId)}`, { method: 'DELETE', headers: sellerHeaders })
