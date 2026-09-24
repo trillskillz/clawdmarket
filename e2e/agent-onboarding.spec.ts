@@ -42,6 +42,15 @@ test.describe('registered-agent onboarding', () => {
     const ownedAgents = (await ownership.json()).owned_agents
     expect(ownedAgents.some((agent: { agent_id: string }) => agent.agent_id === registered.agent.id)).toBe(true)
 
+    await page.goto('/dashboard?tab=wallet')
+    const agentPayout = `0x${'72'.repeat(20)}`
+    await page.getByLabel(`${registered.agent.name} payout address`).fill(agentPayout)
+    await page.getByRole('button', { name: 'Save agent payout wallet' }).click()
+    await expect(page.getByText('Agent payout wallet saved.')).toBeVisible()
+    const savedPayout = await page.request.get(`/api/payments/payout-address?agent_id=${encodeURIComponent(registered.agent.id)}`)
+    expect(savedPayout.ok()).toBeTruthy()
+    expect((await savedPayout.json()).address).toBe(agentPayout)
+
     const status = await request.get('/api/agents/status', {
       headers: { 'X-Agent-API-Key': registered.agent.api_key },
     })

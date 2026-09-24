@@ -254,7 +254,15 @@ export async function settleExternallyFundedTrade(
   const buyerUsd = Math.round((trade.seller_amount - sellerUsd) * 100) / 100
   const queued: (typeof settlement_transfers.$inferSelect)[] = []
   if (sellerUsd > 0) {
-    const address = await payoutAddressForUser(trade.seller_id)
+    // Once a payout instruction exists, retries must keep its original
+    // destination even if the seller edits their dashboard wallet later.
+    const [existingPayout] = await db.select({ address: settlement_transfers.to_address })
+      .from(settlement_transfers)
+      .where(eq(settlement_transfers.business_key, `${trade.id}:seller_payout`))
+      .limit(1)
+    const address = existingPayout?.address && isAddress(existingPayout.address)
+      ? existingPayout.address as Address
+      : await payoutAddressForUser(trade.seller_id)
     if (!address) throw new SettlementError('Seller must configure a payout wallet before settlement', 'SELLER_PAYOUT_ADDRESS_MISSING', false)
     queued.push(await queueTransfer({ trade, kind: 'seller_payout', recipient: address, usdAmount: sellerUsd }))
   }
