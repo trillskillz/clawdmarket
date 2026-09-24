@@ -42,7 +42,7 @@ try {
   if (Number(active.rows[0].count) !== 0) throw new Error('An internal-credit trade is still active')
 
   const history = await transaction.execute({
-    sql: 'SELECT type, amount, from_user_id, to_user_id, reference_id FROM transactions WHERE from_user_id = ? OR to_user_id = ?',
+    sql: 'SELECT type, amount, from_user_id, to_user_id, reference_id, memo FROM transactions WHERE from_user_id = ? OR to_user_id = ?',
     args: [sellerId, sellerId],
   })
   const faucet = history.rows.find((row) => row.type === 'faucet' && row.to_user_id === sellerId && cents(row.amount) === 500_000)
@@ -52,26 +52,33 @@ try {
     throw new Error('Seller history differs from the audited faucet, trade release and prior adjustment')
   }
 
+  if (!release.from_user_id || String(release.memo || '').toLowerCase().includes('external')) {
+    throw new Error('Released credit is not an internal buyer escrow release')
+  }
+  // The historical trade row was removed, but its immutable transaction trail
+  // remains. Verify that trail instead of requiring the deleted trade row.
   const source = await transaction.execute({
-    sql: `SELECT t.id, t.payment_rail, t.buyer_id, t.seller_id,
-      (SELECT COUNT(*) FROM payment_receipts pr WHERE pr.trade_id = t.id) AS receipt_count,
-      (SELECT COUNT(*) FROM transactions tx WHERE tx.to_user_id = t.buyer_id AND tx.type = 'faucet') AS buyer_faucet_count
-      FROM trades t WHERE t.id = ?`,
-    args: [release.reference_id],
+    sql: `SELECT
+      (SELECT COUNT(*) FROM transactions tx WHERE tx.from_user_id = ? AND tx.type = 'escrow_lock' AND tx.reference_id = ?) AS lock_count,
+      (SELECT COALESCE(SUM(amount), 0) FROM transactions tx WHERE tx.from_user_id = ? AND tx.type = 'escrow_lock' AND tx.reference_id = ?) AS locked_amount,
+      (SELECT COUNT(*) FROM transactions tx WHERE tx.to_user_id = ? AND tx.type = 'faucet') AS buyer_faucet_count,
+      (SELECT COALESCE(SUM(amount), 0) FROM transactions tx WHERE tx.to_user_id = ? AND tx.type = 'faucet') AS buyer_faucet_amount,
+      (SELECT COUNT(*) FROM payment_receipts pr WHERE pr.trade_id = ?) AS receipt_count`,
+    args: [release.from_user_id, release.reference_id, release.from_user_id, release.reference_id,
+      release.from_user_id, release.from_user_id, release.reference_id],
   })
+  const proof = source.rows[0]
   console.log('Released-credit source check:', JSON.stringify({
-    tradeFound: source.rows.length === 1,
-    paymentRail: source.rows[0]?.payment_rail || null,
-    sellerMatches: source.rows[0]?.seller_id === sellerId,
-    buyerMatches: source.rows[0]?.buyer_id === release.from_user_id,
-    receiptCount: Number(source.rows[0]?.receipt_count ?? -1),
-    buyerFaucetCount: Number(source.rows[0]?.buyer_faucet_count ?? -1),
+    lockCount: Number(proof.lock_count),
+    lockedAmount: Number(proof.locked_amount),
+    buyerFaucetCount: Number(proof.buyer_faucet_count),
+    buyerFaucetAmount: Number(proof.buyer_faucet_amount),
+    receiptCount: Number(proof.receipt_count),
   }))
-  if (source.rows.length !== 1 || source.rows[0].payment_rail !== 'ledger' ||
-      source.rows[0].seller_id !== sellerId || source.rows[0].buyer_id !== release.from_user_id ||
-      Number(source.rows[0].receipt_count) !== 0 ||
-      Number(source.rows[0].buyer_faucet_count) < 1) {
-    throw new Error('Released credit is not the audited faucet-funded, unreceipted ledger trade')
+  if (Number(proof.lock_count) !== 1 || cents(proof.locked_amount) < 10_000 ||
+      Number(proof.buyer_faucet_count) < 1 || cents(proof.buyer_faucet_amount) < 10_000 ||
+      Number(proof.receipt_count) !== 0) {
+    throw new Error('Released credit is not backed by the audited faucet-funded escrow trail')
   }
 
   console.log('Reconciliation plan: void $100.00 faucet-funded seller credit; no crypto transfer')
