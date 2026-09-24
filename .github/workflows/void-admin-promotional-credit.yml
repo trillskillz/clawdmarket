@@ -1,0 +1,41 @@
+name: Void Admin Promotional Credit
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Enter VOID-ADMIN-500 to apply; leave blank for a read-only dry run'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx -y vercel@51.5.1 pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - run: node scripts/void-admin-promotional-credit.mjs
+      - if: inputs.confirm == 'VOID-ADMIN-500'
+        run: node scripts/void-admin-promotional-credit.mjs --apply
+      - if: inputs.confirm != '' && inputs.confirm != 'VOID-ADMIN-500'
+        run: exit 1
