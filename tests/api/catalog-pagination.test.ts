@@ -144,6 +144,11 @@ test('service catalog pages through more than 100 services without truncating th
   const payoutReady = await (await listServices(new NextRequest('http://localhost/api/listings?search=Scale%20Agent%20000'))).json()
   assert.equal(payoutReady.total, 1)
   assert.equal(payoutReady.listings[0].external_payment_ready, true)
+
+  const payable = await (await listServices(new NextRequest('http://localhost/api/listings?status=active&payment_ready=true'))).json()
+  assert.equal(payable.total, 1)
+  assert.equal(payable.listings[0].seller_id, 'user_agent_scale-agent-000')
+  assert.equal(payable.listings[0].external_payment_ready, true)
 })
 
 test('market statistics report full service totals instead of the current page size', async () => {

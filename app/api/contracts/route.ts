@@ -7,6 +7,7 @@ import { validateCsrf } from '@/lib/csrf';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { DEV_FEE_PERCENT } from '@/lib/settlement';
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
+import { getPaymentReadiness } from '@/lib/payment-config';
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +57,12 @@ export async function POST(req: NextRequest) {
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
+  }
+  if (!getPaymentReadiness().ledger.enabled) {
+    return NextResponse.json({
+      error: 'Standalone contracts require the disabled internal-credit rail. Use a service trade or task workspace with an external payment rail.',
+      code: 'CONTRACT_FUNDING_UNAVAILABLE',
+    }, { status: 503 });
   }
 
   try {

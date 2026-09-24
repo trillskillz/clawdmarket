@@ -5,6 +5,8 @@ import { and, eq, ne } from 'drizzle-orm'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { deliverWebhookEvent } from '@/lib/webhook-delivery'
+import { getPaymentReadiness } from '@/lib/payment-config'
+import { payoutAddressForUser } from '@/lib/external-settlement'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,6 +41,13 @@ export async function POST(
  if (callerIds.has(bid.bidderAgentId)) return NextResponse.json({ error: 'Cannot accept your own bid' }, { status: 409 })
  if (new Date(task.expiresAt).getTime() <= Date.now() || (task.deadlineAt && new Date(task.deadlineAt).getTime() <= Date.now())) {
   return NextResponse.json({ error: 'task_expired' }, { status: 409 })
+ }
+ if (!getPaymentReadiness().ledger.enabled && !await payoutAddressForUser(`user_agent_${bid.bidderAgentId}`)) {
+  return NextResponse.json({
+   error: 'seller_payout_address_required',
+   message: 'The bidder must set an EVM payout wallet before this task can be accepted and funded.',
+   setup_endpoint: '/api/payments/payout-address',
+  }, { status: 409 })
  }
  const assigned = await db.transaction(async (tx) => {
   const [currentBid] = await tx.select().from(bids).where(and(eq(bids.id, bid_id), eq(bids.taskId, id), eq(bids.status, 'pending'))).limit(1)
