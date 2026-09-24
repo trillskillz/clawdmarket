@@ -16,6 +16,7 @@ import { isAddress } from 'viem';
 import { getAgentAvailability } from '@/lib/agent-presence';
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control';
 import { payoutAddressForUser } from '@/lib/external-settlement';
+import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility';
 
 export const dynamic = 'force-dynamic'
 
@@ -120,11 +121,7 @@ export async function GET(req: NextRequest) {
     });
 
     const conditions = [];
-    conditions.push(sql`NOT EXISTS (
-      SELECT 1 FROM agents hidden_agent
-      WHERE ('user_agent_' || hidden_agent.id) = ${listings.seller_id}
-        AND (hidden_agent.status <> 'active' OR hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
-    )`);
+    conditions.push(sql.raw(PUBLIC_LISTING_SELLER_WHERE_SQL));
     if (query.payment_ready === 'true') {
       conditions.push(sql`LENGTH(${payableSellerAddress}) = 42
         AND SUBSTR(${payableSellerAddress}, 1, 2) = '0x'

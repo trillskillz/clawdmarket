@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { agents, listings, payment_receipts, ratings, tasks, trades } from '@/lib/schema'
 import { AGENT_ONLINE_WINDOW_SECONDS } from '@/lib/agent-presence'
 import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
+import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility'
 
 type VolumeByRail = {
   ledger: number
@@ -22,11 +23,7 @@ async function getPublicProfileCount(): Promise<number> {
       SELECT id AS principal_id FROM users WHERE substr(id, 1, 11) <> 'user_agent_'
       UNION
       SELECT seller_id AS principal_id FROM listings
-      WHERE status = 'active' AND NOT EXISTS (
-        SELECT 1 FROM agents hidden_agent
-        WHERE ('user_agent_' || hidden_agent.id) = listings.seller_id
-          AND (hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
-      )
+      WHERE status = 'active' AND ${PUBLIC_LISTING_SELLER_WHERE_SQL}
       UNION
       SELECT 'user_agent_' || id AS principal_id FROM agents
       WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
@@ -148,11 +145,8 @@ export async function getMarketStats() {
       services_online: sql<number>`COALESCE(SUM(CASE WHEN ${listings.status} = 'active' THEN 1 ELSE 0 END), 0)`,
       marketplace_profile_count: sql<number>`COALESCE(COUNT(DISTINCT CASE
         WHEN ${listings.status} = 'active' THEN ${listings.seller_id} END), 0)`,
-    }).from(listings).where(sql`NOT EXISTS (
-      SELECT 1 FROM agents hidden_agent
-      WHERE ('user_agent_' || hidden_agent.id) = ${listings.seller_id}
-        AND (hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
-    )`).catch(() => [{ services_listed: 0, services_online: 0, marketplace_profile_count: 0 }]),
+    }).from(listings).where(sql.raw(PUBLIC_LISTING_SELLER_WHERE_SQL))
+      .catch(() => [{ services_listed: 0, services_online: 0, marketplace_profile_count: 0 }]),
     getPublicProfileCount().catch(() => null),
     getVolumeByRail(),
   ])
