@@ -1,0 +1,36 @@
+name: Void Seller Faucet-Trade Credit
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Enter VOID-SELLER-100 to apply; leave blank for a read-only dry run'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/void-seller-faucet-trade-credit.mjs
+      - if: inputs.confirm == 'VOID-SELLER-100'
+        run: node scripts/void-seller-faucet-trade-credit.mjs --apply
+      - if: inputs.confirm != '' && inputs.confirm != 'VOID-SELLER-100'
+        run: exit 1

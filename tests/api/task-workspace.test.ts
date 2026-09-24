@@ -109,6 +109,20 @@ test('with internal credits disabled, an unpayable bidder cannot strand a task a
   }
 })
 
+test('legacy credit cannot fund a task even when the old toggle is set and the bidder has a payout wallet', async () => {
+  const f = await fixture()
+  await db.insert(schema.payout_addresses).values({
+    user_id: `user_agent_${f.seller}`,
+    address: '0x0000000000000000000000000000000000000001',
+  })
+  await bidAndAccept(f)
+  const response = await fund(request('', f.buyer, { payment_rail: 'ledger', expected_total: 26.25 }), params(f.taskId))
+  assert.equal(response.status, 503)
+  const [wallet] = await db.select().from(schema.wallets).where(eq(schema.wallets.user_id, f.buyer))
+  assert.equal(wallet.balance, 100)
+  assert.equal(wallet.escrow, 0)
+})
+
 test('hashed keys work through inbox and self-test; inactive agents and expired work are excluded', async () => {
   const f = await fixture()
   await db.insert(schema.tasks).values({ id: `expired_${f.taskId}`, posterAgentId: f.buyer, title: 'Expired', description: 'Expired task', budgetUsd: 1, expiresAt: '2000-01-01T00:00:00Z' })
@@ -217,7 +231,7 @@ test('agent inbox, bid history, and account work page beyond 100 records', async
   assert.equal(workLast.has_more, false)
 })
 
-test('job lifecycle links an accepted quote, one debit, validated private delivery, completion and receipt', async () => {
+test.skip('legacy-credit job lifecycle is retired until asset-backed funding is implemented', async () => {
   const f = await fixture()
   const requirementResponse = await patch(request(`/api/tasks/${f.taskId}`, f.buyer, { action: 'requirements', requirements: { output_format: 'json', required_json_keys: ['summary'], minimum_sources: 2, acceptance_criteria: ['Explain the findings'] } }, undefined, 'PATCH'), params(f.taskId))
   assert.equal(requirementResponse.status, 200)
@@ -291,7 +305,7 @@ test('a dispute cannot race an external payout after settlement starts', async (
   assert.equal(unchanged.status, 'pending_release')
 })
 
-test('failed funding rolls back the private listing and job link', async () => {
+test.skip('legacy-credit failed funding path is retired until asset-backed funding is implemented', async () => {
   const f = await fixture()
   await bidAndAccept(f)
   await db.update(schema.wallets).set({ balance: 0 }).where(eq(schema.wallets.user_id, f.buyer))
@@ -302,7 +316,7 @@ test('failed funding rolls back the private listing and job link', async () => {
   assert.equal((await db.select().from(schema.listings).where(eq(schema.listings.seller_id, `user_agent_${f.seller}`))).length, 0)
 })
 
-test('registered-agent funding is stopped by the server-enforced spend policy', async () => {
+test.skip('legacy-credit agent funding is retired until asset-backed funding is implemented', async () => {
   const suffix = crypto.randomUUID()
   const buyerAgent = `buyer_agent_${suffix}`
   const sellerAgent = `seller_agent_${suffix}`
@@ -337,7 +351,7 @@ test('registered-agent funding is stopped by the server-enforced spend policy', 
   assert.equal(policy.spending.spent_today, 0)
 })
 
-test('registered-agent daily spend includes earlier same-day settlements', async () => {
+test.skip('legacy-credit agent daily spend is retired until asset-backed funding is implemented', async () => {
   const suffix = crypto.randomUUID()
   const buyerAgent = `daily_buyer_${suffix}`
   const sellerAgent = `daily_seller_${suffix}`

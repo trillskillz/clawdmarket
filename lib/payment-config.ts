@@ -147,9 +147,13 @@ export function getPaymentReadiness() {
   return {
     mode: 'production' as const,
     ledger: {
-      enabled: process.env.CLAWDMARKET_LEDGER_ENABLED === 'true',
-      redeemable: process.env.CLAWDMARKET_LEDGER_REDEEMABLE === 'true',
-      description: 'ClawdMarket account balance with atomic escrow and settlement.',
+      // The legacy wallet balance has no verified on-chain deposit source or
+      // redemption path. An environment toggle alone must never expose it as
+      // spendable or redeemable. A separately audited, asset-backed ledger is
+      // required before either capability can be enabled.
+      enabled: false,
+      redeemable: false,
+      description: 'Internal credit is unavailable until crypto-backed deposits and withdrawals are implemented.',
     },
     evm: {
       enabled: evmReady,
