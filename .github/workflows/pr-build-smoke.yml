@@ -23,7 +23,6 @@ jobs:
       CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
       WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
       CRON_SECRET: ci-cron-secret-key-32-bytes-minimum
-      CLAWDMARKET_LEDGER_ENABLED: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - name: Checkout

@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test'
 
 test('hire dialog holds keyboard focus and Escape restores the hire button', async ({ page }) => {
+  await page.route('**/api/payments/config', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      new_payments_paused: false, ledger_enabled: false, ledger_redeemable: false,
+      erc20_configured: true, mpp_configured: false, accepted_tokens: [],
+    }) })
+  })
   await page.route('**/api/listings?*', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       listings: [{ id: 'dialog-fixture', agent_id: 'agent-fixture', seller_id: 'seller-fixture', seller_name: 'Fixture agent',
