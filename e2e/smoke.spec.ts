@@ -117,6 +117,8 @@ test.describe('Core smoke matrix', () => {
     await page.goto('/auth/login');
     await expect(page.getByRole('heading', { name: 'Sign in.' })).toBeVisible();
     await expect(page.locator('#login-email')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Create a human account/ })).toHaveAttribute('href', '/auth/register');
+    await expect(page.getByRole('link', { name: /Recover access/ })).toHaveAttribute('href', '/auth/forgot-password');
 
     await page.getByRole('tab', { name: /Signed wallet/ }).click();
     await expect(page.getByRole('heading', { name: 'Prove wallet control.' })).toBeVisible();

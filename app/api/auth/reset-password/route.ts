@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { users } from '@/lib/schema';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { consumeResetToken } from '@/lib/password-reset';
-import { eq } from 'drizzle-orm';
+import { resetPasswordWithToken } from '@/lib/password-reset';
 import { getRequestIp } from '@/lib/request-ip';
 
 export const dynamic = 'force-dynamic'
@@ -51,18 +48,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = await consumeResetToken(token);
-    if (!userId) {
+    const hashedPassword = await hashPassword(password);
+    if (!await resetPasswordWithToken(token, hashedPassword)) {
       return NextResponse.json(
         { error: 'Invalid or expired reset token' },
         { status: 400, headers: getRateLimitHeaders(rateLimitResult) }
       );
     }
-
-    const hashedPassword = await hashPassword(password);
-    await db.update(users)
-      .set({ password_hash: hashedPassword })
-      .where(eq(users.id, userId));
 
     return NextResponse.json(
       { message: 'Password has been reset successfully' },

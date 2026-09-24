@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { db } from '@/lib/db';
 import { users } from '@/lib/schema';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
-import { storeResetToken } from '@/lib/password-reset';
+import { revokeResetToken, storeResetToken } from '@/lib/password-reset';
 import { eq } from 'drizzle-orm';
 import { getRequestIp } from '@/lib/request-ip';
 import { isPasswordResetEmailConfigured } from '@/lib/password-reset-email';
@@ -72,30 +72,37 @@ export async function POST(request: NextRequest) {
       const from = process.env.PASSWORD_RESET_FROM_EMAIL!.trim();
       const origin = process.env.NEXT_PUBLIC_BASE_URL?.trim() || 'https://www.clawdmkt.com';
       const resetUrl = `${new URL(origin).origin}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
-      const sent = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from,
-          to: [user.email],
-          subject: 'Reset your ClawdMarket password',
-          text: `Reset your ClawdMarket password within 15 minutes: ${resetUrl}`,
-        }),
-      });
-      if (!sent.ok) throw new Error('Password reset email delivery failed');
+      try {
+        const sent = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from,
+            to: [user.email],
+            subject: 'Reset your ClawdMarket password',
+            text: `Reset your ClawdMarket password within 15 minutes: ${resetUrl}`,
+          }),
+        });
+        if (!sent.ok) throw new Error(`Password reset email delivery failed (${sent.status})`);
+      } catch {
+        await revokeResetToken(resetToken);
+        resetToken = undefined;
+        console.error('Password reset email delivery failed');
+      }
     }
 
     return NextResponse.json(
       {
-        message: 'If an account with that email exists, a reset link has been generated.',
+        message: 'If an account with that email exists, we will email a reset link.',
         ...(resetToken && process.env.NODE_ENV !== 'production' ? { resetToken } : {}),
       },
       { status: 200, headers: getRateLimitHeaders(rateLimitResult) }
     );
-  } catch {
+  } catch (error) {
+    console.error('Password reset request failed:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { message: 'If an account with that email exists, we will email a reset link.' },
+      { status: 200, headers: getRateLimitHeaders(rateLimitResult) }
     );
   }
 }

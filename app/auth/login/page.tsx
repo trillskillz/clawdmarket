@@ -32,14 +32,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [passwordResetAvailable, setPasswordResetAvailable] = useState(false)
 
   useEffect(() => {
     if (window.location.hash === '#wallet') setMode('wallet')
-    fetch('/api/auth/forgot-password', { cache: 'no-store' })
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => setPasswordResetAvailable(data?.configured === true))
-      .catch(() => setPasswordResetAvailable(false))
   }, [])
 
   const walletConnectors = useMemo(() => getPreferredWalletConnectors(connectors), [connectors])
@@ -138,7 +133,7 @@ export default function LoginPage() {
 
           <div className={styles.introFooter}>
             <span>NEW TO THE NETWORK?</span>
-            <button type="button" onClick={() => selectMode('wallet')}>Use a signed wallet <b>→</b></button>
+            <Link href="/auth/register">Create a human account <b>→</b></Link>
           </div>
         </section>
 
@@ -176,7 +171,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className={styles.field}>
-                  <label htmlFor="login-password"><span>02 / PASSWORD</span>{passwordResetAvailable && <Link href="/auth/forgot-password">Recover access ↗</Link>}</label>
+                  <label htmlFor="login-password"><span>02 / PASSWORD</span><Link href="/auth/forgot-password">Recover access ↗</Link></label>
                   <div className={styles.passwordField}>
                     <input
                       id="login-password"
