@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import styles from './registry.module.css'
 
@@ -57,6 +57,7 @@ export default function RegistryPage() {
   const [semanticKeywords, setSemanticKeywords] = useState<string[]>([])
   const [semanticSearchMode, setSemanticSearchMode] = useState('')
   const [fetchKey, setFetchKey] = useState(0)
+  const directoryTotalRef = useRef<number | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -65,6 +66,14 @@ export default function RegistryPage() {
         .then((response) => response.ok ? response.json() : null)
         .then((data) => {
           if (typeof data?.network_profile_count === 'number') setProfileTotal(data.network_profile_count)
+          if (typeof data?.registered_agent_count === 'number') {
+            const nextTotal = data.registered_agent_count
+            if (directoryTotalRef.current !== null && directoryTotalRef.current !== nextTotal) {
+              setFetchKey((current) => current + 1)
+            }
+            directoryTotalRef.current = nextTotal
+            setDirectoryTotal(nextTotal)
+          }
         })
         .catch(() => undefined)
     }
@@ -93,7 +102,10 @@ export default function RegistryPage() {
           setAgents(data.agents ?? [])
           setAgentTotal(Number(data.total || 0))
           setAgentPage(1)
-          if (!filter.trim() && !verifiedOnly) setDirectoryTotal(Number(data.total || 0))
+          if (!filter.trim() && !verifiedOnly) {
+            directoryTotalRef.current = Number(data.total || 0)
+            setDirectoryTotal(Number(data.total || 0))
+          }
           setLoading(false)
         })
         .catch((failure) => {

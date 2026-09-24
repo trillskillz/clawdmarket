@@ -231,7 +231,7 @@ test('market statistics report full service totals instead of the current page s
 
   await db.insert(schema.agents).values({
     id: 'new-public-agent-without-account',
-    name: 'New public agent',
+    name: 'Test Registered Agent',
     description: 'Public agent without a service listing or synthetic account.',
     capabilities: '[]',
     endpoint: 'https://new-public-agent.invalid',
@@ -242,6 +242,10 @@ test('market statistics report full service totals instead of the current page s
   const afterAgent = await (await getStats()).json()
   assert.equal(afterAgent.agent_count, 128)
   assert.equal(afterAgent.marketplace_profile_count, 128)
+  assert.equal(afterAgent.registered_agent_count, 126)
+  const newPublicAgent = await (await listAgents(new NextRequest('http://localhost/api/agents/list?search=Test%20Registered%20Agent'))).json()
+  assert.equal(newPublicAgent.total, 1)
+  assert.equal(newPublicAgent.agents[0].id, 'new-public-agent-without-account')
 
   await db.insert(schema.agents).values({
     id: 'private-test-agent',
@@ -264,6 +268,53 @@ test('market statistics report full service totals instead of the current page s
   const afterPrivateAgent = await (await getStats()).json()
   assert.equal(afterPrivateAgent.agent_count, 128)
   assert.equal(afterPrivateAgent.marketplace_profile_count, 128)
+})
+
+test('live counts and catalog follow a newly registered agent and its public status', async () => {
+  const before = await (await getStats()).json()
+  await db.insert(schema.users).values({
+    id: 'user_agent_live-listing-agent',
+    email: 'live-listing-agent@test.invalid',
+    password_hash: 'unused',
+    name: 'Live Listing Agent',
+    role: 'agent',
+  })
+  await db.insert(schema.agents).values({
+    id: 'live-listing-agent',
+    name: 'Live Listing Agent',
+    description: 'A newly registered public seller.',
+    capabilities: '[]',
+    endpoint: 'https://live-listing-agent.invalid',
+    owner_address: 'live-listing-agent-owner',
+    api_key: 'live-listing-agent-key',
+    status: 'active',
+  })
+  await db.insert(schema.listings).values({
+    id: 'live-listing-agent-service',
+    seller_id: 'user_agent_live-listing-agent',
+    category: 'analysis',
+    title: 'Live Listing Agent Service',
+    description: 'A service that becomes visible with its public agent.',
+    price_bankr: 10,
+    status: 'active',
+  })
+
+  const live = await (await getStats()).json()
+  assert.equal(live.network_profile_count, before.network_profile_count + 1)
+  assert.equal(live.registered_agent_count, before.registered_agent_count + 1)
+  assert.equal(live.active_seller_count, before.active_seller_count + 1)
+  assert.equal(live.services_online, before.services_online + 1)
+  assert.equal((await (await listAgents(new NextRequest('http://localhost/api/agents/list?search=Live%20Listing%20Agent'))).json()).total, 1)
+  assert.equal((await (await listServices(new NextRequest('http://localhost/api/listings?search=Live%20Listing%20Agent%20Service'))).json()).total, 1)
+
+  await db.$client.execute({ sql: `UPDATE agents SET status = 'inactive' WHERE id = ?`, args: ['live-listing-agent'] })
+  const inactive = await (await getStats()).json()
+  assert.equal(inactive.network_profile_count, before.network_profile_count)
+  assert.equal(inactive.registered_agent_count, before.registered_agent_count)
+  assert.equal(inactive.active_seller_count, before.active_seller_count)
+  assert.equal(inactive.services_online, before.services_online)
+  assert.equal((await (await listAgents(new NextRequest('http://localhost/api/agents/list?search=Live%20Listing%20Agent'))).json()).total, 0)
+  assert.equal((await (await listServices(new NextRequest('http://localhost/api/listings?search=Live%20Listing%20Agent%20Service'))).json()).total, 0)
 })
 
 test('task board filters and pages through more than 100 tasks', async () => {

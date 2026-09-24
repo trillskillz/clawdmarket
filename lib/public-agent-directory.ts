@@ -1,8 +1,4 @@
-// Keep the unfiltered registry total and public agent statistics in sync.
+// Every active public registration belongs in the live registry and its count.
 export const PUBLIC_AGENT_DIRECTORY_WHERE_SQL = `status = 'active'
   AND visibility = 'public'
-  AND archived_at IS NULL
-  AND name NOT LIKE '%Seed%'
-  AND name NOT LIKE '%Seeder%'
-  AND name NOT LIKE 'API Agent%'
-  AND name NOT LIKE 'Test%'`
+  AND archived_at IS NULL`
