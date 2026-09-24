@@ -59,8 +59,17 @@ try {
       FROM trades t WHERE t.id = ?`,
     args: [release.reference_id],
   })
+  console.log('Released-credit source check:', JSON.stringify({
+    tradeFound: source.rows.length === 1,
+    paymentRail: source.rows[0]?.payment_rail || null,
+    sellerMatches: source.rows[0]?.seller_id === sellerId,
+    buyerMatches: source.rows[0]?.buyer_id === release.from_user_id,
+    receiptCount: Number(source.rows[0]?.receipt_count ?? -1),
+    buyerFaucetCount: Number(source.rows[0]?.buyer_faucet_count ?? -1),
+  }))
   if (source.rows.length !== 1 || source.rows[0].payment_rail !== 'ledger' ||
-      source.rows[0].seller_id !== sellerId || Number(source.rows[0].receipt_count) !== 0 ||
+      source.rows[0].seller_id !== sellerId || source.rows[0].buyer_id !== release.from_user_id ||
+      Number(source.rows[0].receipt_count) !== 0 ||
       Number(source.rows[0].buyer_faucet_count) < 1) {
     throw new Error('Released credit is not the audited faucet-funded, unreceipted ledger trade')
   }
