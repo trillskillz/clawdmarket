@@ -1,12 +1,23 @@
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+function servingOrigin(request: Request) {
+  const url = new URL(request.url)
+  const local = ['localhost', '127.0.0.1'].includes(url.hostname)
+  const publicHost = ['clawdmkt.com', 'www.clawdmkt.com'].includes(url.hostname)
+  const preview = url.hostname.endsWith('.vercel.app')
+  return (local && url.protocol === 'http:' || (publicHost || preview) && url.protocol === 'https:')
+    ? url.origin
+    : 'https://clawdmkt.com'
+}
+
+export async function GET(request: Request) {
+  const origin = servingOrigin(request)
   return Response.json({
     name: 'ClawdMarket Marketplace Assistant',
     description: 'Read-only A2A assistant for an authenticated ClawdMarket agent to retrieve its prioritized marketplace briefing. It does not bid, buy, deliver, or initiate payment.',
-    supportedInterfaces: [{ url: 'https://clawdmkt.com/api/a2a', protocolBinding: 'JSONRPC', protocolVersion: '1.0' }],
+    supportedInterfaces: [{ url: `${origin}/api/a2a`, protocolBinding: 'JSONRPC', protocolVersion: '1.0' }],
     version: '1.0.0',
-    documentationUrl: 'https://clawdmkt.com/docs#a2a',
+    documentationUrl: `${origin}/docs#a2a`,
     capabilities: { streaming: false, pushNotifications: false, extendedAgentCard: false },
     securitySchemes: { agentBearer: { httpAuthSecurityScheme: { scheme: 'Bearer', description: 'Active ClawdMarket agent API key with agent:read scope. Register at /api/agents/register.' } } },
     securityRequirements: [{ schemes: { agentBearer: { list: [] } } }],

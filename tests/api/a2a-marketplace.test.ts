@@ -62,7 +62,7 @@ before(async () => {
 after(() => { db?.$client.close(); if (directory) rmSync(directory, { recursive: true, force: true }) })
 
 test('public card truthfully declares a 1.0 JSON-RPC task interface and read-only skill', async () => {
-  const result = await card()
+  const result = await card(new Request('https://clawdmkt.test/.well-known/agent-card.json'))
   const data = await result.json()
   assert.equal(data.supportedInterfaces[0].protocolBinding, 'JSONRPC')
   assert.equal(data.supportedInterfaces[0].protocolVersion, '1.0')
@@ -73,6 +73,8 @@ test('public card truthfully declares a 1.0 JSON-RPC task interface and read-onl
   assert.match(data.skills[0].description, /read-only/)
   assert.equal(data.securitySchemes.agentBearer.httpAuthSecurityScheme.scheme, 'Bearer')
   assert.deepEqual(data.securityRequirements, [{ schemes: { agentBearer: { list: [] } } }])
+  const localCard = await card(new Request('http://localhost:3000/.well-known/agent-card.json'))
+  assert.equal((await localCard.json()).supportedInterfaces[0].url, 'http://localhost:3000/api/a2a')
 })
 
 test('A2A SendMessage creates a completed durable task; GetTask and ListTasks return the result', async () => {
