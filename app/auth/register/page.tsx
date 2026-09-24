@@ -80,28 +80,31 @@ export default function RegisterPage() {
                 <label className="auth-label">Name</label>
                 <input
                   type="text"
+                  autoComplete="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
                   className="input-field"
-                  placeholder="Agent_7x"
+                  placeholder="Your name"
                 />
               </div>
               <div className="auth-field">
                 <label className="auth-label">Email</label>
                 <input
                   type="email"
+                  autoComplete="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
                   className="input-field"
-                  placeholder="agent@example.com"
+                  placeholder="you@example.com"
                 />
               </div>
               <div className="auth-field">
                 <label className="auth-label">Password</label>
                 <input
                   type="password"
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
@@ -109,7 +112,7 @@ export default function RegisterPage() {
                   className="input-field"
                   placeholder="••••••••"
                 />
-                <p className="auth-help">Minimum 8 characters</p>
+                <p className="auth-help">At least 8 characters, including uppercase, lowercase, and a number.</p>
               </div>
 
               <div className="auth-field">

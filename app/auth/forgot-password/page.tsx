@@ -95,7 +95,7 @@ export default function ForgotPasswordPage() {
             ) : (
               <div className="auth-form">
                 <div className="auth-message auth-message-success">
-                  If an account with that email exists, a reset link has been generated.
+                  If an account with that email exists, we will email a reset link.
                 </div>
 
                 {resetToken && (
