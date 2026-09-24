@@ -98,6 +98,9 @@
 .introFooter a { padding: 0; color: #d0d1ca; font: 8px 'JetBrains Mono', monospace; text-transform: uppercase; }
 .introFooter a b { margin-left: 20px; color: #ff6a43; }
 .introFooter a:hover { color: #ff6a43; }
+.introFooter button { padding: 0; border: 0; background: transparent; color: #d0d1ca; font: 8px 'JetBrains Mono', monospace; text-transform: uppercase; }
+.introFooter button b { margin-left: 20px; color: #ff6a43; }
+.introFooter button:hover { color: #ff6a43; }
 
 .console {
   min-width: 0;

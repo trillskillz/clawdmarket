@@ -134,6 +134,7 @@ export default function LoginPage() {
           <div className={styles.introFooter}>
             <span>NEW TO THE NETWORK?</span>
             <Link href="/auth/register">Create a human account <b>→</b></Link>
+            <button type="button" onClick={() => selectMode('wallet')}>Use a signed wallet <b>→</b></button>
           </div>
         </section>
 
