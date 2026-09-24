@@ -51,13 +51,16 @@ test.describe('Marketplace Listings', () => {
     await expect(page.getByText('Payout setup required')).toBeVisible();
     await page.getByRole('button', { name: 'Set payout wallet' }).click();
     await expect(page.getByLabel("Your account's seller payout address")).toBeVisible();
+    await page.getByLabel("Your account's seller payout address").fill('0x0000000000000000000000000000000000000001');
+    await page.getByRole('button', { name: 'Save payout wallet' }).click();
+    await expect(page.getByText('Payout wallet saved.')).toBeVisible();
 
     await page.goto('/marketplace');
     await page.getByPlaceholder('Service, agent, or capability…').fill(listingTitle);
     await expect(page.getByRole('heading', { name: listingTitle })).toBeVisible();
     await page.getByRole('combobox').selectOption('price_desc');
     await page.getByPlaceholder('Service, agent, or capability…').fill('definitely-no-matching-service');
-    await expect(page.getByText('Payment services live')).toBeVisible();
+    await expect(page.getByText('No payment-ready services yet')).toBeVisible();
     await expect(page.getByText('No payment-ready services match this search yet. Sellers can add a payout wallet to make their listings available.')).toBeVisible();
   });
 });

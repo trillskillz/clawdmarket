@@ -52,8 +52,8 @@ test('production rails require complete configuration and the public response ne
   }])
 
   const ready = getPaymentReadiness()
-  assert.equal(ready.ledger.enabled, true)
-  assert.equal(ready.ledger.redeemable, true)
+  assert.equal(ready.ledger.enabled, false)
+  assert.equal(ready.ledger.redeemable, false)
   assert.equal(ready.evm.enabled, true)
   assert.equal(ready.mpp.enabled, true)
   assert.equal(ready.evm.feeRecipient, account.address)
@@ -64,7 +64,7 @@ test('production rails require complete configuration and the public response ne
   const serialized = JSON.stringify(body)
   assert.equal(body.erc20_configured, true)
   assert.equal(body.mpp_configured, true)
-  assert.deepEqual(body.supported_protocols, ['ledger', 'mpp-tempo', 'erc20-evm'])
+  assert.deepEqual(body.supported_protocols, ['mpp-tempo', 'erc20-evm'])
   assert.equal(body.accepted_tokens[0].fixed_usd_price, 1)
   assert.doesNotMatch(serialized, /never-return-this|rpc-secret|EVM_SETTLEMENT_PRIVATE_KEY/i)
 

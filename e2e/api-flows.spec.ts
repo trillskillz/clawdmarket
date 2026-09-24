@@ -140,7 +140,32 @@ test.describe('API lifecycle matrix', () => {
     expect((await response.json()).code).toBe('DEMO_LISTING');
   });
 
-  test('complete service journey: fund, deliver, release, and rate', async ({ request }) => {
+  test('legacy local credit cannot buy a service when the crypto-backed rail is unavailable', async ({ request }) => {
+    const seller = await registerAccount(request, 'LegacySeller');
+    const buyer = await registerAccount(request, 'LegacyBuyer');
+    const sellerToken = await loginToken(request, seller.email, seller.password);
+    const buyerToken = await loginToken(request, buyer.email, buyer.password);
+    await fundLocalAccount(buyer.email, 100);
+
+    const listingResponse = await request.post('/api/listings', {
+      headers: { Authorization: `Bearer ${sellerToken}` },
+      data: { category: 'analysis', title: `Legacy guard ${Date.now()}`, description: 'Verifies historical credit is not spendable.', price_bankr: 20 },
+    });
+    expect(listingResponse.status()).toBe(201);
+    const listing = (await listingResponse.json()).listing;
+    const tradeResponse = await request.post('/api/trades', {
+      headers: { Authorization: `Bearer ${buyerToken}` },
+      data: { listing_id: listing.id, amount: 1, payment_rail: 'ledger' },
+    });
+    expect(tradeResponse.status()).toBe(503);
+    const walletResponse = await request.get('/api/wallet', { headers: { Authorization: `Bearer ${buyerToken}` } });
+    expect(walletResponse.ok()).toBeTruthy();
+    const wallet = await walletResponse.json();
+    expect(wallet.balance).toBe(100);
+    expect(wallet.escrow).toBe(0);
+  });
+
+  test.skip('legacy-credit service journey is retired until on-chain-backed deposits exist', async ({ request }) => {
     const seller = await registerAccount(request, 'JourneySeller');
     const buyer = await registerAccount(request, 'JourneyBuyer');
     const sellerToken = await loginToken(request, seller.email, seller.password);
@@ -216,7 +241,7 @@ test.describe('API lifecycle matrix', () => {
     expect((await sellerRatingsRes.json()).ratings.some((rating: any) => rating.trade_id === trade.id && rating.score === 5)).toBeTruthy();
   });
 
-  test('dashboard guides seller delivery and buyer release through the browser', async ({ page }) => {
+  test.skip('legacy-credit dashboard journey is retired until on-chain-backed deposits exist', async ({ page }) => {
     const seller = await registerAccount(page.request, 'BrowserSeller');
     const buyer = await registerAccount(page.request, 'BrowserBuyer');
     const sellerToken = await loginToken(page.request, seller.email, seller.password);
@@ -274,7 +299,7 @@ test.describe('API lifecycle matrix', () => {
     await expect(buyerTrade.getByText('Review submitted')).toBeVisible();
   });
 
-  test('explicit contract funding and milestone release lifecycle', async ({ request }) => {
+  test.skip('legacy-credit contract funding is retired until on-chain-backed deposits exist', async ({ request }) => {
     const seller = await registerAccount(request, 'ContractSeller');
     const buyer = await registerAccount(request, 'ContractBuyer');
     const sellerToken = await loginToken(request, seller.email, seller.password);
