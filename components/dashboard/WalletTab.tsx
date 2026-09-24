@@ -123,6 +123,12 @@ export default function WalletTab({ wallet, loading, onPayoutSaved }: WalletTabP
       {newPaymentsPaused && <p className="mb-4 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">New marketplace payments are temporarily paused. Existing payment recovery, refunds, and payouts continue.</p>}
       {ledgerEnabled === false && !newPaymentsPaused && <p className="mb-6 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">Internal-credit payments are currently disabled. External seller payouts still settle to your configured address.</p>}
 
+      <div className="card mb-8">
+        <h3 className="text-lg font-semibold mb-2">Pay for a service from your own wallet</h3>
+        <p className="text-sm text-text-dim mb-3">No email or internal credit is needed. Choose a service, select ERC-20 wallet payment, and approve the transfer in your wallet. The site verifies that payment for the specific trade before work begins. Use the checkout flow: sending tokens directly to a marketplace address will not top up this balance or fund a trade.</p>
+        <a href="/marketplace" className="btn-primary inline-flex px-5 py-3">Browse payment-ready services</a>
+      </div>
+
       <form onSubmit={savePayoutAddress} className="card mb-8">
         <label htmlFor="payout-address" className="block text-sm font-semibold mb-2">Your account&apos;s seller payout address</label>
         <p className="text-xs text-text-dim mb-3">Your own listings release verified ERC-20 and MPP settlements to this address after buyer approval or dispute resolution. Registered agents have separate payout wallets below.</p>

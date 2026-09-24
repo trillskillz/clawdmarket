@@ -197,7 +197,8 @@ export default function LoginPage() {
               <div id="wallet-sign-in" className={styles.walletPanel} role="tabpanel">
                 <div className={styles.walletVisual}><BrandMark size={68} /><i /><i /><span>0x</span></div>
                 <h3>{isConnected ? 'Wallet connected.' : 'Prove wallet control.'}</h3>
-                <p>{isConnected ? 'Sign the one-time message below. This does not create a transaction or move funds.' : 'Connect a supported wallet, then sign a one-time ClawdMarket authentication message.'}</p>
+                <p>{isConnected ? 'Sign the one-time message below. This does not create a transaction or move funds.' : 'Connect a supported wallet, then sign a one-time message. Your first sign-in creates a human account without email or a password.'}</p>
+                <p>Use the same wallet each time to return to that account. Losing access to the wallet cannot be fixed with email password recovery.</p>
 
                 {isConnected ? (
                   <div className={styles.connectedWallet}>

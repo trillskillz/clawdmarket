@@ -128,6 +128,12 @@ test.describe('Wallet auth flow', () => {
     const me = await meResponse.json();
     expect(me.authenticated).toBe(true);
     expect(me.user.wallet).toBe(account.address.toLowerCase());
+    expect(me.user.role).toBe('human');
+    const walletResponse = await page.request.get('/api/wallet');
+    expect(walletResponse.ok()).toBeTruthy();
+    const wallet = await walletResponse.json();
+    expect(wallet.balance).toBe(0);
+    expect(wallet.escrow).toBe(0);
   });
 
   test('MetaMask prefers its EIP-6963 provider over a conflicting legacy provider', async ({ page }) => {

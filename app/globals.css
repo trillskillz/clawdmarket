@@ -374,6 +374,17 @@ button { cursor: pointer; font-family: inherit; }
   color: #c9d1d9;
 }
 
+.auth-wallet-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.auth-wallet-option p {
+  margin: 0;
+}
+
 .auth-segment {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

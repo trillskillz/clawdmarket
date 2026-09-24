@@ -300,7 +300,7 @@ export default function MarketplacePage() {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
         if (typeof data?.recovery_reference === 'string') setTradeRecoveryReference(data.recovery_reference)
-        if (response.status === 401) throw new Error('Sign in before hiring an agent.')
+        if (response.status === 401) throw new Error('Sign in or create an account with your wallet before hiring an agent.')
         if (response.status === 402) throw new Error(data?.message || data?.error || 'Your account balance is insufficient.')
         throw new Error(data?.message || data?.error || `Trade failed (${response.status})`)
       }
@@ -527,16 +527,16 @@ export default function MarketplacePage() {
               <div className={styles.modalBody}>
                 <span className={styles.modalStep}>02 / SETTLEMENT</span>
                 <h3 id="hire-dialog-title">Choose how to fund escrow.</h3>
-                <p className={styles.settlementNotice}>The quoted total and 5% platform fee are fixed by the server. External funds remain held until delivery is accepted or a dispute is resolved.</p>
+                <p className={styles.settlementNotice}>The quoted total and 5% platform fee are fixed by the server. Pay directly from your wallet into this trade’s escrow; no email or account-credit deposit is required. External funds remain held until delivery is accepted or a dispute is resolved.</p>
                 <div className={styles.protocols}>
-                  <button type="button" disabled={submitting || !paymentConfig?.ledger_enabled} onClick={() => void createTrade('ledger').catch(() => undefined)}>
-                    <span>01</span><div><strong>{paymentConfig?.ledger_redeemable ? 'Account balance' : 'Internal account credit'}</strong><small>{paymentConfig?.ledger_redeemable ? 'Reserve available USD balance instantly and release it after approval.' : 'Reserve non-withdrawable account credit for marketplace activity.'}</small></div><i>→</i>
-                  </button>
+                  {paymentConfig?.ledger_enabled && <button type="button" disabled={submitting} onClick={() => void createTrade('ledger').catch(() => undefined)}>
+                    <span>01</span><div><strong>{paymentConfig.ledger_redeemable ? 'Account balance' : 'Internal account credit'}</strong><small>{paymentConfig.ledger_redeemable ? 'Reserve available USD balance instantly and release it after approval.' : 'Reserve non-withdrawable account credit for marketplace activity.'}</small></div><i>→</i>
+                  </button>}
                   <button type="button" disabled={submitting || !paymentConfig?.erc20_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('evm').catch(() => undefined)}>
-                    <span>02</span><div><strong>ERC-20 wallet</strong><small>Pay with {acceptedTokenLabel}.</small></div><i>→</i>
+                    <span>{paymentConfig?.ledger_enabled ? '02' : '01'}</span><div><strong>ERC-20 wallet</strong><small>Pay with {acceptedTokenLabel}.</small></div><i>→</i>
                   </button>
                   <button type="button" disabled={submitting || !paymentConfig?.mpp_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('mpp').catch(() => undefined)}>
-                    <span>03</span><div><strong>MPP on Tempo</strong><small>Let an authenticated machine client fund the trade in pathUSD.</small></div><i>→</i>
+                    <span>{paymentConfig?.ledger_enabled ? '03' : '02'}</span><div><strong>MPP on Tempo</strong><small>Let an authenticated machine client fund the trade in pathUSD.</small></div><i>→</i>
                   </button>
                 </div>
                 {!paymentConfig && <p role="status">Checking available payment rails…</p>}
@@ -546,7 +546,7 @@ export default function MarketplacePage() {
                 {submitting && <p>Creating escrow…</p>}
                 {tradeError && (
                   <div className={styles.tradeError} role="alert">
-                    <p>{tradeError} {tradeError.startsWith('Sign in') && <Link href="/auth/login">Sign in →</Link>}</p>
+                    <p>{tradeError} {tradeError.startsWith('Sign in') && <Link href={`/auth/login?next=${encodeURIComponent(`/marketplace?listing=${hireIntent.service.id}`)}#wallet`}>Continue with wallet →</Link>}</p>
                     {tradeRecoveryReference && <div><span>Save this recovery reference</span><code>{tradeRecoveryReference}</code></div>}
                   </div>
                 )}
