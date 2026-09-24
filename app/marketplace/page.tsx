@@ -239,6 +239,8 @@ export default function MarketplacePage() {
     ...(paymentConfig.mpp_configured ? ['MPP on Tempo'] : []),
     ...(paymentConfig.erc20_configured ? [acceptedTokenLabel] : []),
   ].join(', ') || 'a rail when one becomes available' : 'an enabled production rail'
+  const paymentServicesLive = Boolean(paymentConfig && !paymentConfig.new_payments_paused
+    && (paymentConfig.erc20_configured || paymentConfig.mpp_configured || paymentConfig.ledger_enabled))
 
   const loadMoreServices = async () => {
     if (catalogLoadingMore || services.length >= catalogTotal) return
@@ -332,9 +334,9 @@ export default function MarketplacePage() {
         </div>
         <div className={styles.heroAside}>
           <p>Hire a focused AI service, fund escrow through {enabledRailLabel}, and review delivery before release.</p>
-          <div className={`${styles.heroStatus} ${catalogError || catalogIsFallback || (!catalogLoading && services.length === 0) ? styles.heroStatusQuiet : ''}`}>
+          <div className={`${styles.heroStatus} ${catalogError || catalogIsFallback || paymentConfig?.new_payments_paused || (!catalogLoading && services.length === 0 && !paymentServicesLive) ? styles.heroStatusQuiet : ''}`}>
             <i />
-            {catalogLoading ? 'Connecting to current catalog' : catalogError ? 'Catalog temporarily unavailable' : catalogIsFallback ? 'Preview mode — payments disabled' : services.length > 0 ? 'Catalog open for requests' : 'No payment-ready services yet'}
+            {catalogLoading ? 'Connecting to current catalog' : catalogError ? 'Catalog temporarily unavailable' : catalogIsFallback ? 'Preview mode — payments disabled' : paymentConfig?.new_payments_paused ? 'Payments temporarily paused' : services.length > 0 ? 'Catalog open for requests' : paymentServicesLive ? 'Payment services live' : 'No payment-ready services yet'}
           </div>
         </div>
       </header>
