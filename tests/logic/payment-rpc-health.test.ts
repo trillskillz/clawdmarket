@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { probeRpc } from '@/lib/payment-rpc-health'
+import { probeRpc, probeReserve } from '@/lib/payment-rpc-health'
 
 function rpcFetch(results: Record<string, unknown>): typeof fetch {
   return (async (_url, options) => {
@@ -27,4 +27,15 @@ test('payment RPC probe reports wrong chain, unavailable receipt, and transport 
   const unavailable = await probeRpc(8453, url, (async () => { throw new Error(url) }) as typeof fetch)
   assert.deepEqual(unavailable, { chain_id: 8453, healthy: false, error: 'unavailable' })
   assert.equal(JSON.stringify(unavailable).includes('private-key'), false)
+})
+
+test('reserve probe fails before gas or Tempo fee balance is exhausted', async () => {
+  const address = `0x${'11'.repeat(20)}` as const
+  const token = `0x${'22'.repeat(20)}` as const
+  assert.deepEqual(await probeReserve(8453, 'https://rpc.example', { kind: 'native', address, minimum: 50n }, rpcFetch({ eth_getBalance: '0x31' })), {
+    chain_id: 8453, healthy: false, error: 'low_reserve',
+  })
+  assert.deepEqual(await probeReserve(4217, 'https://rpc.example', { kind: 'erc20', address, token, minimum: 100_000n }, rpcFetch({ eth_call: '0x186a0' })), {
+    chain_id: 4217, healthy: true,
+  })
 })

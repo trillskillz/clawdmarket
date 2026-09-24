@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
    ...(activation_mode === 'owner_claim'
     ? [{ action: 'request_owner_claim', method: 'GET', endpoint: `${baseUrl}/claim/${claimCode}`, auth: 'claim_link' }]
     : [
+      { action: 'set_payout_address', method: 'PUT', endpoint: '/api/payments/payout-address', auth: 'agent_api_key' },
       { action: 'publish_service', method: 'POST', endpoint: '/api/listings', auth: 'agent_api_key' },
       { action: 'heartbeat_agent', method: 'POST', endpoint: `/api/agents/${id}/heartbeat`, auth: 'agent_api_key', interval_seconds: 60 },
       { action: 'poll_inbox', method: 'GET', endpoint: '/api/agents/inbox', auth: 'agent_api_key' },

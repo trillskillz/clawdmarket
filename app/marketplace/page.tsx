@@ -57,13 +57,14 @@ const CATEGORIES = [
 
 const CATALOG_PAGE_SIZE = 24
 
-function catalogUrl(page: number, category: string, query: string, sort: string) {
+function catalogUrl(page: number, category: string, query: string, sort: string, ledgerEnabled: boolean) {
   const params = new URLSearchParams({
     status: 'active',
     limit: String(CATALOG_PAGE_SIZE),
     page: String(page),
     sort,
   })
+  if (!ledgerEnabled) params.set('payment_ready', 'true')
   if (category !== 'all') params.set('category', category)
   if (query.trim()) params.set('search', query.trim())
   return `/api/listings?${params.toString()}`
@@ -128,6 +129,7 @@ export default function MarketplacePage() {
   const [submitting, setSubmitting] = useState(false)
   const [catalogIsFallback, setCatalogIsFallback] = useState(false)
   const [listingQueryHandled, setListingQueryHandled] = useState(false)
+  const [directListingNotice, setDirectListingNotice] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'newest' | 'recommended' | 'trust_desc' | 'price_asc' | 'price_desc'>('newest')
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
@@ -159,7 +161,7 @@ export default function MarketplacePage() {
   }, [])
 
   useEffect(() => {
-    if (catalogLoading || hireIntent || listingQueryHandled) return
+    if (catalogLoading || !paymentConfig || hireIntent || listingQueryHandled) return
     const listingId = new URLSearchParams(window.location.search).get('listing')
     if (!listingId) {
       setListingQueryHandled(true)
@@ -168,6 +170,10 @@ export default function MarketplacePage() {
     const service = services.find((item) => item.id === listingId)
     if (service && !service.is_demo) {
       setListingQueryHandled(true)
+      if (!service.external_payment_ready && !paymentConfig.ledger_enabled) {
+        setDirectListingNotice('This seller must set a payout wallet before accepting payments. Browse the ready-to-hire services below.')
+        return
+      }
       trackClientEvent('hire_started', { listing_id: service.id, source: 'direct_link' })
       setHireIntent({ service, step: 'confirm', clientReference: crypto.randomUUID() })
       return
@@ -176,16 +182,22 @@ export default function MarketplacePage() {
     fetch(`/api/listings/${encodeURIComponent(listingId)}`, { signal: controller.signal })
       .then(async (response) => {
         const data = await response.json()
-        if (!response.ok) return
+        if (!response.ok) {
+          setDirectListingNotice('That service is not available for payment. Browse the ready-to-hire services below.')
+          return
+        }
         const requestedService = listingToService(data.listing)
-        if (requestedService.status !== 'listed' || requestedService.is_demo) return
+        if (requestedService.status !== 'listed' || requestedService.is_demo || (!requestedService.external_payment_ready && !paymentConfig.ledger_enabled)) {
+          setDirectListingNotice('This seller must have an active listing and payout wallet before accepting payments. Browse the ready-to-hire services below.')
+          return
+        }
         trackClientEvent('hire_started', { listing_id: requestedService.id, source: 'direct_link' })
         setHireIntent({ service: requestedService, step: 'confirm', clientReference: crypto.randomUUID() })
       })
-      .catch(() => undefined)
+      .catch(() => setDirectListingNotice('That service could not be loaded. Browse the ready-to-hire services below.'))
       .finally(() => setListingQueryHandled(true))
     return () => controller.abort()
-  }, [catalogLoading, services, hireIntent, listingQueryHandled])
+  }, [catalogLoading, paymentConfig, services, hireIntent, listingQueryHandled])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -194,7 +206,7 @@ export default function MarketplacePage() {
     setCatalogLoadMoreError(null)
     const delay = query.trim() ? 300 : 0
     const timeout = window.setTimeout(() => {
-      fetch(catalogUrl(1, category, query, sort), { signal: controller.signal })
+      fetch(catalogUrl(1, category, query, sort, Boolean(paymentConfig?.ledger_enabled)), { signal: controller.signal })
         .then(async (response) => {
           const data = await response.json()
           if (!response.ok) throw new Error(data?.error || `Catalog request failed (${response.status})`)
@@ -216,7 +228,7 @@ export default function MarketplacePage() {
       window.clearTimeout(timeout)
       controller.abort()
     }
-  }, [category, query, sort])
+  }, [category, query, sort, paymentConfig?.ledger_enabled])
 
   const filtered = services
   const acceptedTokenLabel = paymentConfig?.accepted_tokens?.length
@@ -234,7 +246,7 @@ export default function MarketplacePage() {
     setCatalogLoadingMore(true)
     setCatalogLoadMoreError(null)
     try {
-      const response = await fetch(catalogUrl(nextPage, category, query, sort))
+      const response = await fetch(catalogUrl(nextPage, category, query, sort, Boolean(paymentConfig?.ledger_enabled)))
       const data = await response.json()
       if (!response.ok) throw new Error(data?.error || `Catalog request failed (${response.status})`)
       const fallback = Boolean(data.fallback)
@@ -322,7 +334,7 @@ export default function MarketplacePage() {
           <p>Hire a focused AI service, fund escrow through {enabledRailLabel}, and review delivery before release.</p>
           <div className={`${styles.heroStatus} ${catalogError || catalogIsFallback || (!catalogLoading && services.length === 0) ? styles.heroStatusQuiet : ''}`}>
             <i />
-            {catalogLoading ? 'Connecting to current catalog' : catalogError ? 'Catalog temporarily unavailable' : catalogIsFallback ? 'Preview mode — payments disabled' : services.length > 0 ? 'Catalog open for requests' : 'Waiting for the first listed service'}
+            {catalogLoading ? 'Connecting to current catalog' : catalogError ? 'Catalog temporarily unavailable' : catalogIsFallback ? 'Preview mode — payments disabled' : services.length > 0 ? 'Catalog open for requests' : 'No payment-ready services yet'}
           </div>
         </div>
       </header>
@@ -350,10 +362,11 @@ export default function MarketplacePage() {
       </section>
 
       <section className={styles.catalogSection}>
+        {directListingNotice && <p role="status" className={styles.demoNotice}>{directListingNotice}</p>}
         <div className={styles.catalogHeader}>
           <div>
             <span className={styles.sectionKicker}>CURRENT CATALOG / OPEN NETWORK</span>
-            <h2>Listed services</h2>
+            <h2>Ready to hire</h2>
           </div>
           <div className={styles.filters} aria-label="Filter services by category">
             {CATEGORIES.map((item) => (
@@ -424,13 +437,13 @@ export default function MarketplacePage() {
                 <div><strong>${service.price_usd.toFixed(2)}</strong><span>per request</span></div>
                 <button
                   type="button"
-                  disabled={service.status !== 'listed' || service.is_demo}
+                  disabled={service.status !== 'listed' || service.is_demo || !paymentConfig || (!paymentConfig.ledger_enabled && (!service.external_payment_ready || (!paymentConfig.erc20_configured && !paymentConfig.mpp_configured)))}
                   onClick={() => {
                     trackClientEvent('hire_started', { listing_id: service.id, category: service.category, source: 'catalog' })
                     setHireIntent({ service, step: 'confirm', clientReference: crypto.randomUUID() })
                   }}
                 >
-                  {service.is_demo ? 'Preview only' : 'Hire agent'} <span>↗</span>
+                  {service.is_demo ? 'Preview only' : !service.external_payment_ready && !paymentConfig?.ledger_enabled ? 'Payout setup pending' : 'Hire agent'} <span>↗</span>
                 </button>
               </div>
             </article>
@@ -453,7 +466,7 @@ export default function MarketplacePage() {
           </div>
         )}
 
-        {!catalogLoading && !catalogError && filtered.length === 0 && <div className={styles.empty}>No services in this category yet.</div>}
+        {!catalogLoading && !catalogError && filtered.length === 0 && <div className={styles.empty}>No payment-ready services match this search yet. Sellers can add a payout wallet to make their listings available.</div>}
       </section>
 
       <section className={styles.integration}>

@@ -9,6 +9,11 @@ import { db } from '@/lib/db'
 const client = (db as any).$client
 
 async function ensureSchema() {
+  await client.execute(`CREATE TABLE IF NOT EXISTS payout_addresses (
+    user_id TEXT PRIMARY KEY NOT NULL,
+    address TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`)
   await client.execute({
     sql: `CREATE TABLE IF NOT EXISTS agents (
       id text PRIMARY KEY NOT NULL,
@@ -205,6 +210,8 @@ test('POST /api/listings accepts a registered-agent API key and creates a servic
   const body = await res.json()
   assert.equal(body.seller_agent_id, agentId)
   assert.equal(body.listing.seller_id, `user_agent_${agentId}`)
+  assert.equal(body.external_payment_ready, false)
+  assert.equal(body.next_action?.endpoint, '/api/payments/payout-address')
 
   const userResult = await client.execute({
     sql: `SELECT id, role FROM users WHERE id = ? LIMIT 1`,

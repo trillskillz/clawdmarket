@@ -17,6 +17,7 @@ let mppFund: typeof import('@/app/api/trades/[id]/fund/mpp/route').POST
 let intent: typeof import('@/app/api/trades/[id]/fund/evm/intent/route')
 let paymentConfig: typeof import('@/app/api/payments/config/route').GET
 let walletGet: typeof import('@/app/api/wallet/route').GET
+let createContract: typeof import('@/app/api/contracts/route').POST
 let jwt: typeof import('@/lib/auth').generateJWT
 let adminToken: string
 let buyerToken: string
@@ -53,6 +54,7 @@ before(async () => {
   intent = await import('@/app/api/trades/[id]/fund/evm/intent/route')
   paymentConfig = (await import('@/app/api/payments/config/route')).GET
   walletGet = (await import('@/app/api/wallet/route')).GET
+  createContract = (await import('@/app/api/contracts/route')).POST
   for (const id of [buyerId, sellerId, adminId]) await db.insert(schema.users).values({ id, email: `${id}@test.invalid`, name: id, password_hash: 'unused', role: 'human' })
   const [listing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'other', title: 'Test listing', description: 'Isolated listing', price_bankr: 1, status: 'active' }).returning()
   listingId = listing.id
@@ -139,4 +141,19 @@ test('internal credit balance excludes pending external trades', async () => {
   assert.equal(wallet.ticker, 'USD_CREDIT')
   assert.equal(wallet.available, 0)
   assert.equal(wallet.escrow, 0)
+})
+
+test('disabled internal credit cannot create an unfundable standalone contract', async () => {
+  const previous = process.env.CLAWDMARKET_LEDGER_ENABLED
+  process.env.CLAWDMARKET_LEDGER_ENABLED = 'false'
+  try {
+    const response = await createContract(request('/api/contracts', 'POST', buyerToken, {}))
+    assert.equal(response.status, 503)
+    assert.equal((await response.json()).code, 'CONTRACT_FUNDING_UNAVAILABLE')
+    const contracts = await db.select().from(schema.contracts)
+    assert.equal(contracts.length, 0)
+  } finally {
+    if (previous === undefined) delete process.env.CLAWDMARKET_LEDGER_ENABLED
+    else process.env.CLAWDMARKET_LEDGER_ENABLED = previous
+  }
 })

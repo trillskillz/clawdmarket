@@ -15,6 +15,7 @@ import { internalErrorResponse } from '@/lib/api-error';
 import { isAddress } from 'viem';
 import { getAgentAvailability } from '@/lib/agent-presence';
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control';
+import { payoutAddressForUser } from '@/lib/external-settlement';
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +36,12 @@ function getSortOrder(sort?: string) {
   }
 }
 
+const payableSellerAddress = sql<string | null>`COALESCE(
+  (SELECT p.address FROM payout_addresses p WHERE p.user_id = ${listings.seller_id} LIMIT 1),
+  (SELECT CASE WHEN u.email LIKE 'wallet_0x%@wallet.local' THEN SUBSTR(u.email, 8, 42) ELSE NULL END FROM users u WHERE u.id = ${listings.seller_id} LIMIT 1),
+  (SELECT a.owner_address FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)
+)`;
+
 async function selectListings(whereClause: any, limit: number, offset: number, sort?: string) {
   return db
     .select({
@@ -51,11 +58,7 @@ async function selectListings(whereClause: any, limit: number, offset: number, s
       agent_capabilities: sql<string>`COALESCE((SELECT a.capabilities FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), '[]')`,
       seller_status: sql<string | null>`(SELECT a.status FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)`,
       seller_last_seen_at: sql<number | null>`(SELECT a.last_seen_at FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)`,
-      seller_payout_address: sql<string | null>`COALESCE(
-        (SELECT p.address FROM payout_addresses p WHERE p.user_id = ${listings.seller_id} LIMIT 1),
-        CASE WHEN ${users.email} LIKE 'wallet_0x%@wallet.local' THEN SUBSTR(${users.email}, 8, 42) ELSE NULL END,
-        (SELECT a.owner_address FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)
-      )`,
+      seller_payout_address: payableSellerAddress,
       completed_trades: sql<number>`COALESCE((SELECT COUNT(*) FROM trades t WHERE t.seller_id = ${listings.seller_id} AND t.status IN ('completed', 'complete')), 0)`,
       category: listings.category,
       title: listings.title,
@@ -110,6 +113,7 @@ export async function GET(req: NextRequest) {
       search: searchParams.get('search') || undefined,
       seller_id: searchParams.get('seller_id') || undefined,
       seller: searchParams.get('seller') || undefined,
+      payment_ready: searchParams.get('payment_ready') || undefined,
       min_price: searchParams.get('min_price') || undefined,
       max_price: searchParams.get('max_price') || undefined,
       sort: searchParams.get('sort') || undefined,
@@ -119,8 +123,13 @@ export async function GET(req: NextRequest) {
     conditions.push(sql`NOT EXISTS (
       SELECT 1 FROM agents hidden_agent
       WHERE ('user_agent_' || hidden_agent.id) = ${listings.seller_id}
-        AND (hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
+        AND (hidden_agent.status <> 'active' OR hidden_agent.visibility <> 'public' OR hidden_agent.archived_at IS NOT NULL)
     )`);
+    if (query.payment_ready === 'true') {
+      conditions.push(sql`LENGTH(${payableSellerAddress}) = 42
+        AND SUBSTR(${payableSellerAddress}, 1, 2) = '0x'
+        AND SUBSTR(${payableSellerAddress}, 3) NOT GLOB '*[^0-9A-Fa-f]*'`);
+    }
     
     if (query.category) {
       conditions.push(eq(listings.category, query.category));
@@ -299,6 +308,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    const payoutReady = Boolean(await payoutAddressForUser(sellerId));
+    const paymentSetup = payoutReady ? { external_payment_ready: true } : {
+      external_payment_ready: false,
+      next_action: { action: 'set_payout_address', method: 'PUT', endpoint: '/api/payments/payout-address' },
+    };
 
     // Support bulk creation (array of listings)
     if (Array.isArray(body)) {
@@ -333,6 +347,7 @@ export async function POST(req: NextRequest) {
         {
           message: `Created ${results.length} of ${body.length} listings`,
           ...(sellerAgentId ? { seller_agent_id: sellerAgentId } : {}),
+          ...paymentSetup,
           results,
           errors,
         },
@@ -358,6 +373,7 @@ export async function POST(req: NextRequest) {
       {
         message: 'Listing created successfully',
         ...(sellerAgentId ? { seller_agent_id: sellerAgentId } : {}),
+        ...paymentSetup,
         listing: newListing,
       },
       { 

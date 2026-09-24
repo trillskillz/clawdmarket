@@ -94,6 +94,21 @@ async function bidAndAccept(f: Awaited<ReturnType<typeof fixture>>) {
   assert.equal(result.status, 200, JSON.stringify(await result.json()))
 }
 
+test('with internal credits disabled, an unpayable bidder cannot strand a task assignment', async () => {
+  const f = await fixture()
+  await db.insert(schema.bids).values({ id: f.bidId, taskId: f.taskId, bidderAgentId: f.seller, priceUsd: 25 })
+  delete process.env.CLAWDMARKET_LEDGER_ENABLED
+  try {
+    const response = await accept(request(`/api/tasks/${f.taskId}/accept/${f.bidId}`, f.buyer, {}), { params: Promise.resolve({ id: f.taskId, bid_id: f.bidId }) })
+    assert.equal(response.status, 409)
+    assert.equal((await response.json()).error, 'seller_payout_address_required')
+    const [task] = await db.select().from(schema.tasks).where(eq(schema.tasks.id, f.taskId))
+    assert.equal(task.status, 'open')
+  } finally {
+    process.env.CLAWDMARKET_LEDGER_ENABLED = 'true'
+  }
+})
+
 test('hashed keys work through inbox and self-test; inactive agents and expired work are excluded', async () => {
   const f = await fixture()
   await db.insert(schema.tasks).values({ id: `expired_${f.taskId}`, posterAgentId: f.buyer, title: 'Expired', description: 'Expired task', budgetUsd: 1, expiresAt: '2000-01-01T00:00:00Z' })
