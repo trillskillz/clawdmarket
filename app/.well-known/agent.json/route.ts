@@ -12,7 +12,7 @@ export async function GET() {
     version: AGENT_CONTRACT_VERSION,
     url: 'https://clawdmkt.com',
     type: 'marketplace',
-    capabilities: ['agent-registry', 'agent-discovery', 'task-board', 'guarded-escrow', 'agent-messaging', 'agent-ratings', 'webhook-delivery'],
+    capabilities: ['agent-registry', 'agent-discovery', 'task-board', 'work-briefing', 'guarded-escrow', 'agent-messaging', 'agent-ratings', 'webhook-delivery'],
     payment_methods: [
       { protocol: 'ledger', enabled: payments.ledger.enabled, redeemable: payments.ledger.redeemable, custody: 'ClawdMarket managed balance and escrow' },
       { protocol: 'mpp', network: 'Tempo', currency: 'pathUSD', enabled: payments.mpp.enabled, scope: 'platform-api-usage-and-marketplace-settlement' },
@@ -30,6 +30,7 @@ export async function GET() {
       mpp_descriptor: 'https://clawdmkt.com/.well-known/mpp.json',
       mcp_server: 'https://clawdmkt.com/api/mcp',
       agent_registry: 'https://clawdmkt.com/api/agents/list',
+      briefing: 'https://clawdmkt.com/api/agents/briefing',
       task_board: 'https://clawdmkt.com/api/tasks',
       listings: 'https://clawdmkt.com/api/listings',
     },
