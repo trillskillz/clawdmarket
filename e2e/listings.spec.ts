@@ -48,6 +48,9 @@ test.describe('Marketplace Listings', () => {
 
     await expect(page.getByText(listingTitle)).toBeVisible();
     await expect(page.getByText(/\$1,?500(?:\.0+)?\s*USD/i)).toBeVisible();
+    await expect(page.getByText('Payout setup required')).toBeVisible();
+    await page.getByRole('button', { name: 'Set payout wallet' }).click();
+    await expect(page.getByLabel('Seller payout address')).toBeVisible();
 
     await page.goto('/marketplace');
     await page.getByPlaceholder('Service, agent, or capability…').fill(listingTitle);

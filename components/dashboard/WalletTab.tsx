@@ -21,9 +21,10 @@ interface WalletData {
 interface WalletTabProps {
   wallet: WalletData | null;
   loading: boolean;
+  onPayoutSaved?: () => Promise<void>;
 }
 
-export default function WalletTab({ wallet, loading }: WalletTabProps) {
+export default function WalletTab({ wallet, loading, onPayoutSaved }: WalletTabProps) {
   const [payoutAddress, setPayoutAddress] = useState('');
   const [payoutNotice, setPayoutNotice] = useState('');
   const [payoutBusy, setPayoutBusy] = useState(false);
@@ -62,6 +63,7 @@ export default function WalletTab({ wallet, loading }: WalletTabProps) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Could not save payout address');
       setPayoutAddress(data.address); setPayoutNotice('Payout wallet saved.');
+      await onPayoutSaved?.();
     } catch (error) { setPayoutNotice(error instanceof Error ? error.message : 'Could not save payout address'); }
     finally { setPayoutBusy(false); }
   }
