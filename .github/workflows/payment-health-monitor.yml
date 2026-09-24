@@ -1,0 +1,48 @@
+name: Production Payment Health Monitor
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 3
+    env:
+      BASE_URL: ${{ (secrets.PROD_BASE_URL != '' && secrets.PROD_BASE_URL) || 'https://www.clawdmkt.com' }}
+      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+    steps:
+      - name: Check live payment readiness and both mainnet RPCs
+        shell: bash
+        run: |
+          set -euo pipefail
+          response=$(curl --fail --silent --show-error --max-time 20 "$BASE_URL/api/health/ready")
+          PAYMENT_HEALTH_RESPONSE="$response" node -e '
+            const readiness = JSON.parse(process.env.PAYMENT_HEALTH_RESPONSE);
+            const payment = readiness.checks?.payments;
+            if (readiness.status !== "ready" || !payment?.ready) process.exit(1);
+            if (!payment.enabled_rails?.includes("mpp") || !payment.enabled_rails?.includes("evm")) process.exit(1);
+            for (const chain of [8453, 4217]) {
+              if (!payment.rpc?.some((endpoint) => endpoint.chain_id === chain && endpoint.healthy === true)) process.exit(1);
+            }
+          '
+          echo 'Base USDC and Tempo pathUSD payment RPCs are healthy'
+
+      - name: Notify on payment health failure
+        if: failure() && env.ALERT_WEBHOOK_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          MSG="🚨 ClawdMarket production payment health failed. Base USDC or Tempo pathUSD may be unavailable. Check $RUN_URL"
+          MSG="$MSG" node -e 'process.stdout.write(JSON.stringify({ text: process.env.MSG, content: process.env.MSG }))' > "$RUNNER_TEMP/payment-alert.json"
+          curl --fail --silent --show-error --max-time 10 -X POST "$ALERT_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' --data-binary "@$RUNNER_TEMP/payment-alert.json"
