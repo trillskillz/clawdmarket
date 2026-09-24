@@ -216,6 +216,7 @@ export default function LoginPage() {
               </div>
             )}
 
+            <p className={styles.signupPrompt}>New here? <Link href="/auth/register">Create a human account ↗</Link></p>
             <div className={styles.securityNote}><i /><p><b>SESSION SECURITY</b><span>Credentials are sent over the current origin. Wallet login uses a single-use nonce and creates no onchain transaction.</span></p></div>
           </div>
 

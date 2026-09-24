@@ -180,6 +180,10 @@
 .field label a { color: #777d75; text-transform: uppercase; }
 .field label a:hover { color: #ff6a43; }
 
+.signupPrompt { margin-top: 26px; color: #777d75; font-size: 10px; }
+.signupPrompt a { margin-left: 6px; color: #f2eee5; text-decoration: underline; text-underline-offset: 3px; }
+.signupPrompt a:hover { color: #ff6a43; }
+
 .field input {
   width: 100%;
   height: 55px;
