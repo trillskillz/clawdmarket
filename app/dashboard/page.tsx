@@ -349,6 +349,7 @@ export default function DashboardPage() {
             loadingMore={listingLoadingMore}
             onLoadMore={loadMoreListings}
             onRefresh={fetchData}
+            onOpenWallet={() => selectTab('wallet')}
             getCsrfToken={getCsrfToken}
           />
         )}
@@ -359,7 +360,7 @@ export default function DashboardPage() {
           <ContractsTab contracts={contracts} total={contractTotal} loading={loading} loadingMore={contractLoadingMore} onLoadMore={loadMoreContracts} currentUserId={user?.id} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'wallet' && (
-          <WalletTab wallet={wallet} loading={loading} />
+          <WalletTab wallet={wallet} loading={loading} onPayoutSaved={fetchData} />
         )}
         {activeTab === 'analytics' && (
           <AnalyticsTab

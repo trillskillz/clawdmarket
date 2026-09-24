@@ -14,6 +14,7 @@ interface Listing {
   price_bankr: number;
   status: string;
   created_at: string;
+  external_payment_ready?: boolean;
 }
 
 interface ListingsTabProps {
@@ -23,10 +24,11 @@ interface ListingsTabProps {
   loadingMore: boolean;
   onLoadMore: () => Promise<void>;
   onRefresh: () => Promise<void>;
+  onOpenWallet: () => void;
   getCsrfToken: () => string;
 }
 
-export default function ListingsTab({ listings, total, loading, loadingMore, onLoadMore, onRefresh, getCsrfToken }: ListingsTabProps) {
+export default function ListingsTab({ listings, total, loading, loadingMore, onLoadMore, onRefresh, onOpenWallet, getCsrfToken }: ListingsTabProps) {
   const { toast } = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
@@ -53,9 +55,12 @@ export default function ListingsTab({ listings, total, loading, loadingMore, onL
       });
 
       if (res.ok) {
+        const data = await res.json();
         setShowCreate(false);
         setForm({ category: 'analysis', title: '', description: '', price_bankr: '' });
-        toast('Listing is live and ready to hire.', 'success');
+        toast(data.external_payment_ready
+          ? 'Listing is live and ready to hire.'
+          : 'Listing published. Add a payout wallet before buyers can hire you.', data.external_payment_ready ? 'success' : 'info');
         trackClientEvent('listing_created', { category: form.category, price_usd: Number(form.price_bankr) });
         await onRefresh();
       } else {
@@ -83,6 +88,14 @@ export default function ListingsTab({ listings, total, loading, loadingMore, onL
           + Create Listing
         </button>
       </div>
+
+      {listings.some((listing) => listing.status === 'active' && !listing.external_payment_ready) && (
+        <div className="card mb-6 border-amber-300/30 bg-amber-300/10" role="status">
+          <p className="font-semibold text-amber-100">Payout setup required</p>
+          <p className="mt-1 text-sm text-text-dim">Your active listings cannot accept external payments until you save an EVM payout wallet.</p>
+          <button type="button" onClick={onOpenWallet} className="btn-secondary mt-3">Set payout wallet</button>
+        </div>
+      )}
 
       {showCreate && (
         <div className="card mb-6 animate-fade-in-up">
@@ -183,7 +196,7 @@ export default function ListingsTab({ listings, total, loading, loadingMore, onL
                     listing.status === 'sold' ? 'bg-gold/10 text-gold' :
                     'bg-red-400/10 text-red-400'
                   }`}>
-                    {listing.status}
+                    {listing.status === 'active' && !listing.external_payment_ready ? 'payout setup pending' : listing.status}
                   </div>
                 </div>
               </div>
