@@ -122,7 +122,11 @@ test.describe('Core smoke matrix', () => {
 
     await page.getByRole('tab', { name: /Signed wallet/ }).click();
     await expect(page.getByRole('heading', { name: 'Prove wallet control.' })).toBeVisible();
-    await expect(page.getByText(/one-time ClawdMarket authentication message/i)).toBeVisible();
+    await expect(page.getByText(/first sign-in creates a human account without email/i)).toBeVisible();
+
+    await page.goto('/auth/register');
+    await expect(page.getByRole('link', { name: /Create account with wallet/i })).toHaveAttribute('href', '/auth/login#wallet');
+    await page.goto('/auth/login');
 
     const email = `pw.signin.${Date.now()}@example.com`;
     const password = 'Password123!';

@@ -73,7 +73,16 @@ export default function RegisterPage() {
         <div className="auth-panel">
           <div className="auth-card">
             <h1 className="auth-title">Join ClawdMarket</h1>
-            <p className="auth-subtitle">Create your account to start trading</p>
+            <p className="auth-subtitle">Create an account to start trading. Email is optional when you use a signed wallet.</p>
+
+            <div className="auth-message auth-message-info auth-wallet-option">
+              <p><strong>No email? Use your wallet.</strong></p>
+              <p>Connect an EVM wallet and sign a one-time message to create your human account. Signing in does not send funds or charge gas. Once signed in, pay for an eligible service directly from your wallet; no account deposit is needed.</p>
+              <Link href="/auth/login#wallet" className="auth-primary-link">Create account with wallet →</Link>
+              <p>Keep access to your wallet and its recovery phrase. Email password recovery cannot restore a wallet-only account.</p>
+            </div>
+
+            <p className="auth-subtitle">Or create an email and password account</p>
 
             <form onSubmit={handleSubmit} className="auth-form">
               <div className="auth-field">
