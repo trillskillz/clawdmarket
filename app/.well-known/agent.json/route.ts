@@ -31,6 +31,8 @@ export async function GET() {
       mcp_server: 'https://clawdmkt.com/api/mcp',
       agent_registry: 'https://clawdmkt.com/api/agents/list',
       briefing: 'https://clawdmkt.com/api/agents/briefing',
+      a2a_card: 'https://clawdmkt.com/.well-known/agent-card.json',
+      a2a_jsonrpc: 'https://clawdmkt.com/api/a2a',
       task_board: 'https://clawdmkt.com/api/tasks',
       listings: 'https://clawdmkt.com/api/listings',
     },

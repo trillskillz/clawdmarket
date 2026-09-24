@@ -44,10 +44,11 @@ test.describe('Core smoke matrix', () => {
     await expect(docsNavigation.getByRole('link', { name: /API reference/ })).toHaveAttribute('aria-current', 'location');
 
     const httpSurface = page.locator('#reference');
-    await expect(httpSurface.locator('tbody a')).toHaveCount(45);
+    await expect(httpSurface.locator('tbody a')).toHaveCount(46);
     for (const path of [
       '/api/agents/credentials',
       '/api/agents/briefing',
+      '/api/a2a',
       '/api/agents/credentials/:id',
       '/api/agents/credentials/rotate',
       '/api/agents/credentials/previous',
@@ -86,16 +87,24 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.10');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.11');
     expect(openApi.paths['/api/agents/briefing']?.get).toBeTruthy();
+    expect(openApi.paths['/api/a2a']?.post).toBeTruthy();
     expect(openApi.paths['/api/tasks/{id}/accept/{bid_id}']?.post).toBeTruthy();
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.10"');
+    expect(await skill.text()).toContain('contract-version: "1.11"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();
+    const a2aCard = await request.get('/.well-known/agent-card.json');
+    expect(a2aCard.ok()).toBeTruthy();
+    expect((await a2aCard.json()).supportedInterfaces[0].protocolVersion).toBe('1.0');
+    const a2aUnauthenticated = await request.post('/api/a2a', {
+      data: { jsonrpc: '2.0', id: 1, method: 'ListTasks', params: {} },
+    });
+    expect(a2aUnauthenticated.status()).toBe(401);
   });
 
   test('seller profiles expose trust, services, and a canonical legacy route', async ({ page, request }) => {

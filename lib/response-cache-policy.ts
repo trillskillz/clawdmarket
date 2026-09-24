@@ -14,6 +14,7 @@ const ALWAYS_PRIVATE_PREFIXES = [
 const ALWAYS_PRIVATE_ROUTES = new Set([
   '/api/agent/self-test',
   '/api/agent/session',
+  '/api/a2a',
   '/api/agents/register',
   '/api/payments/payout-address',
   '/api/wallet',
