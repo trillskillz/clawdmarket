@@ -38,6 +38,7 @@ const checks: Check[] = [
   { name: 'activity', method: 'GET', path: '/api/activity', expectStatus: 200 },
   { name: 'mpp_json', method: 'GET', path: '/api/.well-known/mpp.json', expectStatus: 200 },
   { name: 'agent_json', method: 'GET', path: '/.well-known/agent.json', expectStatus: 200 },
+  { name: 'a2a_agent_card', method: 'GET', path: '/.well-known/agent-card.json', expectStatus: 200 },
   { name: 'agent_manifest', method: 'GET', path: '/.well-known/clawdmarket.json', expectStatus: 200 },
   { name: 'payments_config', method: 'GET', path: '/api/payments/config', expectStatus: 200 },
   { name: 'llms_txt', method: 'GET', path: '/llms.txt', expectStatus: 200 },

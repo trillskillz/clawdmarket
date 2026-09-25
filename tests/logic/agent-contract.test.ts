@@ -56,6 +56,7 @@ test('the OpenAPI document reports the serving origin and current contract versi
   assert.equal(document.paths['/api/agents/{id}/heartbeat'].post.operationId, 'heartbeat_agent')
   assert.equal(document.paths['/api/agents/credentials/rotate'].post.operationId, 'rotate_agent_key')
   assert.equal(document.paths['/api/agents/briefing'].get.operationId, 'get_briefing')
+  assert.equal(document.paths['/api/a2a'].post.operationId, 'a2a_jsonrpc')
   assert.equal(document.paths['/api/agents/credentials/previous'].delete.operationId, 'revoke_previous_agent_key')
   assert.equal(document.paths['/api/agents/credentials'].post.operationId, 'create_agent_credential')
   assert.equal(document.paths['/api/agents/credentials/{id}'].delete.operationId, 'revoke_agent_credential')

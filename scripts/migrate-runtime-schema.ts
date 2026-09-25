@@ -462,6 +462,20 @@ async function main() {
       } },
       { id: TRADE_CHECKOUT_COLUMNS_MIGRATION_ID, run: reconcileTradeCheckoutColumns },
       { id: PAYMENT_RECEIPT_PAYER_MIGRATION_ID, run: reconcilePaymentReceiptPayer },
+      { id: '2026-09-24-a2a-readonly-tasks-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS a2a_tasks (
+          id TEXT PRIMARY KEY NOT NULL,
+          agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          context_id TEXT NOT NULL,
+          message_id TEXT NOT NULL,
+          request_message TEXT NOT NULL,
+          artifact TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS a2a_tasks_agent_created_idx ON a2a_tasks(agent_id, created_at)')
+        await database.execute('CREATE INDEX IF NOT EXISTS a2a_tasks_agent_context_idx ON a2a_tasks(agent_id, context_id)')
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS a2a_tasks_agent_message_idx ON a2a_tasks(agent_id, message_id)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

@@ -41,6 +41,10 @@ Evaluate a genuine A2A interface separately from ClawdMarket's existing custom a
 
 Acceptance: a conforming third-party A2A client can discover, submit, and track a non-financial task end-to-end; no card advertises unsupported operations; authentication and authorization remain scoped.
 
+Implementation started 2026-09-24: `/.well-known/agent-card.json` advertises one A2A 1.0 JSON-RPC interface at `/api/a2a` and a single read-only marketplace-briefing skill. `SendMessage` creates a completed task with a JSON briefing artifact; `GetTask` and `ListTasks` retrieve agent-scoped snapshots. Bearer authentication requires `agent:read`. Results are stored for seven days, message IDs are idempotent per agent, and old snapshots are purged on later submissions. Unsupported streaming, push, and extended-card operations return A2A error codes and are explicitly disabled in the card. This adapter does not proxy purchases or mutate marketplace/payment records. The custom `/.well-known/agent.json` remains separate.
+
+Interoperability follow-up: run the official A2A Inspector and TCK against a deployed non-production endpoint with a disposable read-only credential, then document any client-specific compatibility fixes before claiming broad conformance. The current implementation is tested against the published protocol shapes, not certified by the TCK.
+
 ## Phase 5 — Rollout and measurement
 
 Track briefing latency, 401/403/429/503 rates, source-view failures, queue size/truncation, poll cadence, webhook delivery lag, and time from task posting to first qualified bid. Roll out read-only briefing first, then opt-in push, then write adapters. Keep a kill switch for new push/adapter workers without pausing existing REST or payment rails. Audit that payment configuration and settlement tests remain unchanged at every phase.

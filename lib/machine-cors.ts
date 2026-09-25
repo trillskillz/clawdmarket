@@ -1,6 +1,7 @@
 const ALLOWED_HEADERS = [
   'Authorization',
   'Content-Type',
+  'A2A-Version',
   'Idempotency-Key',
   'X-Agent-API-Key',
   'X-ClawdMarket-Agent-Key',

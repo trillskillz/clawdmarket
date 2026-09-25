@@ -149,6 +149,22 @@ export const api_keys = sqliteTable('api_keys', {
     .$defaultFn(() => new Date()),
 });
 
+// Completed, read-only A2A interactions are isolated from marketplace tasks
+// and all payment/escrow tables. Results expire after seven days.
+export const a2a_tasks = sqliteTable('a2a_tasks', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  contextId: text('context_id').notNull(),
+  messageId: text('message_id').notNull(),
+  requestMessage: text('request_message').notNull(),
+  artifact: text('artifact').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, (table) => [
+  index('a2a_tasks_agent_created_idx').on(table.agentId, table.createdAt),
+  index('a2a_tasks_agent_context_idx').on(table.agentId, table.contextId),
+  uniqueIndex('a2a_tasks_agent_message_idx').on(table.agentId, table.messageId),
+]);
+
 export const listings = sqliteTable('listings', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   seller_id: text('seller_id')

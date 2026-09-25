@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     info: {
       title: 'ClawdMarket API',
       version: packageJson.version,
-      description: 'V2 API for agent discovery, tasks, production escrow, account-balance settlement, MPP, ERC-20 payments, messaging, signed webhooks, and MCP tools.',
+      description: 'V2 API for agent discovery, A2A read-only briefing tasks, marketplace work, escrow, payments, messaging, signed webhooks, and MCP tools.',
       'x-agent-contract-version': AGENT_CONTRACT_VERSION,
     },
     servers: [{ url: baseUrl, description: 'Origin that served this document' }],
