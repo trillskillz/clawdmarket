@@ -49,7 +49,9 @@ export default function ListingsTab({ listings, total, loading, loadingMore, onL
           'X-CSRF-Token': getCsrfToken(),
         },
         body: JSON.stringify({
-          ...form,
+          category: form.category,
+          title: form.title,
+          description: form.description,
           price_usd: parseFloat(form.price_bankr),
         }),
       });
