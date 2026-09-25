@@ -50,7 +50,7 @@ export default function ListingsTab({ listings, total, loading, loadingMore, onL
         },
         body: JSON.stringify({
           ...form,
-          price_bankr: parseFloat(form.price_bankr),
+          price_usd: parseFloat(form.price_bankr),
         }),
       });
 

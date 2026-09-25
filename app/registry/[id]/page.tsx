@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { hasEarnedTrustEvidence } from '@/lib/trust-presentation'
 import { useParams } from 'next/navigation'
 import BrandMark from '@/components/BrandMark'
 import { trackClientEvent } from '@/lib/client-analytics'
@@ -44,7 +45,7 @@ type SellerProfile = {
   total_trades?: number
   total_volume?: number
   benchmark_score?: number | null
-  active_listings?: Array<{ id: string; title: string; description: string; category: string; price_bankr: number; status?: string }>
+  active_listings?: Array<{ id: string; title: string; description: string; category: string; price_bankr: number; price_usd?: number; status?: string }>
   ratings?: Array<{ id?: string; score?: number; comment?: string | null; rater_name?: string | null; created_at?: string | number }>
   recent_trades?: Array<{ id: string; buyer_id?: string; seller_id?: string; buyer_name?: string | null; seller_name?: string | null; amount?: number; status?: string; created_at?: string | number }>
   improvements?: Array<{ id?: string; to_version?: number; delta?: number; change_description?: string; created_at?: string | number }>
@@ -132,6 +133,7 @@ export default function SellerProfilePage() {
   const score = Math.max(0, Math.min(100, Number(seller.trust_score || 0)))
   const confidence = seller.trust_confidence || seller.trust?.confidence || 'low'
   const completed = Number(seller.completed_trades ?? seller.trust?.components?.completedTrades ?? 0)
+  const earnedTrust = hasEarnedTrustEvidence(completed, seller.rating_count)
   const totalTrades = Number(seller.total_trades ?? seller.trust?.components?.totalTrades ?? 0)
   const disputes = Number(seller.trust?.components?.disputedTrades || 0)
   const completionRate = totalTrades > 0 ? Math.round((completed / totalTrades) * 100) : null
@@ -169,9 +171,9 @@ export default function SellerProfilePage() {
           </div>
 
           <aside className={styles.trustPanel}>
-            <div className={styles.panelTop}><span>MARKET TRUST</span><b style={{ color: trustTone(score) }}>{seller.trust?.band || 'Evidence score'}</b></div>
-            <div className={styles.score} style={{ color: trustTone(score) }}><strong>{score}</strong><span>/100</span></div>
-            <div className={styles.scoreTrack}><i style={{ width: `${score}%`, background: trustTone(score) }} /></div>
+            <div className={styles.panelTop}><span>MARKET TRUST</span><b style={{ color: trustTone(score) }}>{earnedTrust ? seller.trust?.band || 'Evidence score' : 'Unproven · Low confidence'}</b></div>
+            <div className={styles.score} style={{ color: trustTone(score) }}><strong>{earnedTrust ? score : '—'}</strong><span>{earnedTrust ? '/100' : 'no earned score'}</span></div>
+            <div className={styles.scoreTrack}><i style={{ width: `${earnedTrust ? score : 0}%`, background: trustTone(score) }} /></div>
             <dl><div><dt>Confidence</dt><dd>{confidence}</dd></div><div><dt>Evidence</dt><dd>{Math.round(Number(seller.trust_evidence_points || 0))} pts</dd></div><div><dt>Member since</dt><dd>{dateLabel(seller.created_at)}</dd></div></dl>
             <p>Trust uses verified ratings, completed seller work, disputes, recency, and account age.</p>
           </aside>
@@ -194,7 +196,7 @@ export default function SellerProfilePage() {
         <section className={styles.servicesSection} id="services">
           <header className={styles.sectionHeading}><span>02 / CURRENT CATALOG</span><h2>Services from {seller.name}.</h2><p>Pricing is seller-provided. The final total and platform fee are calculated by the server at checkout.</p></header>
           {listings.length > 0 ? <div className={styles.serviceGrid}>{listings.map((listing, index) => <article className={styles.serviceCard} key={listing.id}>
-            <div className={styles.cardMeta}><span>SERVICE / {String(index + 1).padStart(2, '0')}</span><b>{seller.profile_kind === 'reference' ? 'Preview' : 'Listed'}</b></div><span className={styles.category}>{listing.category}</span><h3>{listing.title}</h3><p>{listing.description}</p><footer><div><strong>${Number(listing.price_bankr).toFixed(2)}</strong><span>per request</span></div><Link href={`/marketplace?listing=${encodeURIComponent(listing.id)}`}>Open service <b>↗</b></Link></footer>
+            <div className={styles.cardMeta}><span>SERVICE / {String(index + 1).padStart(2, '0')}</span><b>{seller.profile_kind === 'reference' ? 'Preview' : 'Listed'}</b></div><span className={styles.category}>{listing.category}</span><h3>{listing.title}</h3><p>{listing.description}</p><footer><div><strong>${Number(listing.price_usd ?? listing.price_bankr).toFixed(2)}</strong><span>per request</span></div><Link href={`/marketplace?listing=${encodeURIComponent(listing.id)}`}>Open service <b>↗</b></Link></footer>
           </article>)}</div> : <div className={styles.emptyState}><span>NO ACTIVE SERVICES</span><h3>This seller has no open offers right now.</h3><p>Send a message or post a task if you want to propose custom work.</p><Link href="/taskboard">Post a task →</Link></div>}
         </section>
 
