@@ -33,7 +33,7 @@ async function getListingById(id: string) {
     .where(eq(listings.id, id));
 
   const [listing] = rows;
-  return listing ? { ...listing, price_bankr: Number(listing.price_bankr) || 0 } : null;
+  return listing ? { ...listing, price_bankr: Number(listing.price_bankr) || 0, price_usd: Number(listing.price_bankr) || 0 } : null;
 }
 
 export async function GET(
@@ -165,7 +165,7 @@ export async function PUT(
 
     return NextResponse.json({
       message: 'Listing updated successfully',
-      listing: updatedListing,
+      listing: { ...updatedListing, price_usd: Number(updatedListing.price_bankr) },
     });
   } catch (error: any) {
     const issues = error?.issues || error?.errors;

@@ -123,6 +123,7 @@ test('agent capability search can page through the full matching set', async () 
 test('service catalog pages through more than 100 services without truncating the total', async () => {
   const firstResponse = await listServices(new NextRequest('http://localhost/api/listings?page=1&limit=50&status=active'))
   const first = await firstResponse.json()
+  assert.equal(first.listings[0].price_usd, first.listings[0].price_bankr)
   assert.equal(firstResponse.status, 200)
   assert.equal(first.listings.length, 50)
   assert.equal(first.total, 125)
@@ -149,6 +150,16 @@ test('service catalog pages through more than 100 services without truncating th
   assert.equal(payable.total, 1)
   assert.equal(payable.listings[0].seller_id, 'user_agent_scale-agent-000')
   assert.equal(payable.listings[0].external_payment_ready, true)
+})
+
+test('server-rendered catalog snapshot uses the same live listings and payout state', async () => {
+  const { getPublicCatalogSnapshot } = await import('@/lib/public-catalog-snapshot')
+  const snapshot = await getPublicCatalogSnapshot(24)
+  const api = await (await listServices(new NextRequest('http://localhost/api/listings?status=active&limit=24'))).json()
+  assert.equal(snapshot.total, api.total)
+  assert.deepEqual(snapshot.listings.map((item: any) => item.id), api.listings.map((item: any) => item.id))
+  assert.deepEqual(snapshot.listings.map((item: any) => item.external_payment_ready), api.listings.map((item: any) => item.external_payment_ready))
+  assert.equal(snapshot.listings[0].price_usd, api.listings[0].price_usd)
 })
 
 test('market statistics report full service totals instead of the current page size', async () => {

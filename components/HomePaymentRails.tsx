@@ -10,8 +10,8 @@ type PaymentConfig = {
   accepted_tokens?: Array<{ chain_name?: string; symbol?: string }>
 }
 
-export default function HomePaymentRails({ className }: { className?: string }) {
-  const [config, setConfig] = useState<PaymentConfig | null>(null)
+export default function HomePaymentRails({ className, initialConfig = null }: { className?: string; initialConfig?: PaymentConfig | null }) {
+  const [config, setConfig] = useState<PaymentConfig | null>(initialConfig)
 
   useEffect(() => {
     const controller = new AbortController()

@@ -3,6 +3,8 @@ import Link from 'next/link'
 import BrandMark from '@/components/BrandMark'
 import HomeLiveStats from '@/components/HomeLiveStats'
 import HomePaymentRails from '@/components/HomePaymentRails'
+import { getMarketStats } from '@/lib/market-stats'
+import { GET as getPaymentConfig } from '@/app/api/payments/config/route'
 import styles from './home.module.css'
 
 export const metadata: Metadata = {
@@ -12,7 +14,13 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 }
 
-export default function Home() {
+export const dynamic = 'force-dynamic'
+
+export default async function Home() {
+  const [stats, paymentConfig] = await Promise.all([
+    getMarketStats().catch(() => null),
+    getPaymentConfig().then((response) => response.json()).catch(() => null),
+  ])
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
@@ -101,7 +109,7 @@ export default function Home() {
         </div>
       </section>
 
-      <HomeLiveStats />
+      <HomeLiveStats initialStats={stats} />
 
       <section className={styles.systemSection}>
         <div className={styles.sectionIntro}>
@@ -174,7 +182,7 @@ export default function Home() {
           <span>03 / Settlement rails</span>
           <p>Choose the payment path that fits each buyer.</p>
         </div>
-        <HomePaymentRails className={styles.rails} />
+        <HomePaymentRails className={styles.rails} initialConfig={paymentConfig} />
       </section>
 
       <section className={styles.pathsSection}>

@@ -215,8 +215,13 @@ export async function GET(req: NextRequest) {
         price_bankr: Number.isFinite(Number(listing.price_bankr))
           ? Number(listing.price_bankr)
           : 0,
+        price_usd: Number.isFinite(Number(listing.price_bankr))
+          ? Number(listing.price_bankr)
+          : 0,
         agent_trust: trust?.trustScore ?? 0,
         agent_trust_confidence: trust?.confidence ?? 'low',
+        agent_trust_rating_count: trust?.components.ratingCount ?? 0,
+        agent_trust_completed_trades: trust?.components.completedTrades ?? 0,
         agent_trust_drivers: trust?.drivers ?? ['No verified marketplace activity'],
         external_payment_ready: Boolean(sellerPayoutAddress && isAddress(sellerPayoutAddress)),
         seller_online: sellerAvailability === null ? null : sellerAvailability === 'online',
@@ -334,7 +339,7 @@ export async function POST(req: NextRequest) {
             price_bankr: validated.price_bankr,
           });
 
-          results.push({ index: i, success: true, listing: newListing });
+          results.push({ index: i, success: true, listing: { ...newListing, price_usd: Number(newListing.price_bankr) } });
         } catch {
           errors.push({ index: i, success: false, error: 'Listing could not be created' });
         }
@@ -371,7 +376,7 @@ export async function POST(req: NextRequest) {
         message: 'Listing created successfully',
         ...(sellerAgentId ? { seller_agent_id: sellerAgentId } : {}),
         ...paymentSetup,
-        listing: newListing,
+        listing: { ...newListing, price_usd: Number(newListing.price_bankr) },
       },
       { 
         status: 201,

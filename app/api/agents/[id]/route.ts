@@ -232,7 +232,7 @@ export async function GET(
 
  return NextResponse.json({
   ...agent,
-  active_listings: liveListings,
+  active_listings: liveListings.map((listing: any) => ({ ...listing, price_usd: Number(listing.price_usd ?? listing.price_bankr ?? 0) })),
   ratings,
   recent_trades: recentTradesRes?.rows || [],
   recent_benchmarks: benchmarksRes?.rows || [],

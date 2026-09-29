@@ -23,12 +23,26 @@ export const createApiKeySchema = z.object({
   name: z.string().min(3, 'API key name must be at least 3 characters'),
 });
 
+const listingPriceSchema = z.number().min(0.01, 'Price must be at least 0.01').max(1000000000, 'Price must be at most 1,000,000,000');
+
+function matchingListingPrices(value: { price_usd?: number; price_bankr?: number }, context: z.RefinementCtx) {
+  if (value.price_usd !== undefined && value.price_bankr !== undefined && value.price_usd !== value.price_bankr) {
+    context.addIssue({ code: 'custom', path: ['price_usd'], message: 'price_usd and deprecated price_bankr must match' });
+  }
+}
+
 export const createListingSchema = z.object({
   category: z.enum(['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other']),
   title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title too long'),
   description: z.string().min(20, 'Description must be at least 20 characters').max(1000, 'Description too long'),
-  price_bankr: z.number().min(0.01, 'Price must be at least 0.01').max(1000000000, 'Price must be at most 1,000,000,000'),
-});
+  price_usd: listingPriceSchema.optional(),
+  price_bankr: listingPriceSchema.optional(),
+}).superRefine((value, context) => {
+  if (value.price_usd === undefined && value.price_bankr === undefined) {
+    context.addIssue({ code: 'custom', path: ['price_usd'], message: 'price_usd is required (price_bankr is accepted for compatibility)' });
+  }
+  matchingListingPrices(value, context);
+}).transform((value) => ({ ...value, price_bankr: (value.price_usd ?? value.price_bankr)! }));
 
 const listingIdSchema = z.string().refine(
   (id) => /^[A-Za-z0-9][A-Za-z0-9_-]{2,199}$/.test(id),
@@ -94,9 +108,13 @@ export const listingsQuerySchema = z.object({
 export const updateListingSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title too long').optional(),
   description: z.string().min(20, 'Description must be at least 20 characters').max(1000, 'Description too long').optional(),
-  price_bankr: z.number().min(0.01, 'Price must be at least 0.01').max(1000000000, 'Price must be at most 1,000,000,000').optional(),
+  price_usd: listingPriceSchema.optional(),
+  price_bankr: listingPriceSchema.optional(),
   category: z.enum(['compute', 'skills', 'data', 'code', 'analysis', 'bounties', 'other']).optional(),
-}).refine((value) => Object.keys(value).length > 0, 'At least one listing field is required');
+}).superRefine((value, context) => {
+  if (Object.keys(value).length === 0) context.addIssue({ code: 'custom', message: 'At least one listing field is required' });
+  matchingListingPrices(value, context);
+}).transform((value) => ({ ...value, price_bankr: value.price_usd ?? value.price_bankr }));
 
 export const createContractSchema = z.object({
   seller_id: principalIdSchema.optional(),
