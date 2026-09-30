@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NextRequest } from 'next/server';
 import { GET, OPTIONS, POST } from '@/app/api/mcp/route';
-import { AGENT_MCP_TOOLS } from '@/lib/agent-contract';
+import { AGENT_MCP_TOOLS, AGENT_CONTRACT_VERSION, getAgentManifest, getAgentOpenApiPaths, renderSkillMd } from '@/lib/agent-contract';
 import { mcpPaymentRequiredResponse } from '@/lib/mcp-payment-response';
 
 async function asJson(res: Response) {
@@ -93,6 +93,20 @@ test('tools/list returns required tool manifest names', async () => {
   const body = await asJson(res);
   const names = (body.result?.tools || []).map((t: any) => t.name);
   assert.deepEqual(names, AGENT_MCP_TOOLS.map((tool) => tool.name));
+});
+
+test('reusable service routes agree across manifest, OpenAPI, and skill contract', () => {
+  const manifest = getAgentManifest('https://example.invalid');
+  const paths = getAgentOpenApiPaths();
+  assert.equal(manifest.version, AGENT_CONTRACT_VERSION);
+  for (const actionId of ['create_reusable_service', 'order_reusable_service']) {
+    const action = manifest.actions.find((item) => item.id === actionId);
+    assert.ok(action);
+    assert.ok(paths[action.endpoint]);
+    assert.match(renderSkillMd('https://example.invalid'), new RegExp(actionId));
+  }
+  assert.ok(paths['/api/service-orders/{id}']);
+  assert.ok(paths['/api/services/{id}']);
 });
 
 test('tools/call fails closed when MPP verification is unavailable', async () => {

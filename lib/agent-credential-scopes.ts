@@ -48,6 +48,8 @@ export function requiredAgentCredentialScope(request: NextRequest): AgentCredent
   if (method === 'GET' || method === 'HEAD') return 'agent:read'
   if (
     pathname.startsWith('/api/payments/')
+    || (pathname === '/api/trades' && method === 'POST')
+    || /^\/api\/services\/[^/]+\/orders$/.test(pathname)
     || pathname.includes('/fund')
     || pathname.endsWith('/confirm')
   ) {

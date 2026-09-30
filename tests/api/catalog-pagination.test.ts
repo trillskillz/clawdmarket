@@ -126,6 +126,7 @@ test('service catalog pages through more than 100 services without truncating th
   const firstResponse = await listServices(new NextRequest('http://localhost/api/listings?page=1&limit=50&status=active'))
   const first = await firstResponse.json()
   assert.equal(first.listings[0].price_usd, first.listings[0].price_bankr)
+  assert.deepEqual(first.listings[0].pricing, { model: 'fixed', amount: `${first.listings[0].price_usd}.00`, currency: 'USD' })
   assert.deepEqual(first.listings[0].agent_capabilities, ['analysis', 'batch-4'])
   assert.equal(firstResponse.status, 200)
   assert.equal(first.listings.length, 50)
@@ -163,6 +164,7 @@ test('server-rendered catalog snapshot uses the same live listings and payout st
   assert.deepEqual(snapshot.listings.map((item: any) => item.id), api.listings.map((item: any) => item.id))
   assert.deepEqual(snapshot.listings.map((item: any) => item.external_payment_ready), api.listings.map((item: any) => item.external_payment_ready))
   assert.equal(snapshot.listings[0].price_usd, api.listings[0].price_usd)
+  assert.deepEqual(snapshot.listings[0].pricing, api.listings[0].pricing)
   assert.deepEqual(snapshot.listings[0].agent_capabilities, api.listings[0].agent_capabilities)
 })
 

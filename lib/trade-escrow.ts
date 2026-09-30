@@ -5,6 +5,7 @@ import { messages, mpp_sessions, trades, transactions, wallets, tasks, task_work
 import { encryptMessage } from '@/lib/chat-crypto';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
+import { advanceServiceOrder } from '@/lib/service-order-state';
 
 export function addressFromSource(source?: string | null) {
   if (!source) return null;
@@ -69,6 +70,7 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
     if (!updated) {
       throw new Error('TRADE_NOT_PENDING_RELEASE');
     }
+    await advanceServiceOrder(tx, trade.id, 'completed');
 
     const [workspace] = await tx.select().from(task_workspaces).where(eq(task_workspaces.trade_id, trade.id)).limit(1);
     if (workspace) {

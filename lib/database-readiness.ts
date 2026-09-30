@@ -26,6 +26,8 @@ export const REQUIRED_DATABASE_SCHEMA = {
   agent_ownership_transfers: ['id', 'agent_id', 'from_user_id', 'target_type', 'target_value', 'token_hash', 'expires_at', 'accepted_at', 'accepted_by_user_id', 'cancelled_at', 'created_at'],
   api_keys: ['id', 'user_id', 'key_hash', 'key_prefix', 'created_at'],
   listings: ['id', 'seller_id', 'category', 'title', 'description', 'price_bankr', 'status', 'created_at'],
+  service_definitions: ['id', 'seller_id', 'title', 'description', 'capabilities', 'input_schema', 'output_schema', 'pricing_model', 'price_minor', 'currency', 'estimated_latency_seconds', 'max_concurrency', 'active_orders', 'execution_mode', 'verification_policy', 'status', 'created_at', 'updated_at'],
+  service_orders: ['id', 'service_id', 'listing_id', 'trade_id', 'buyer_id', 'client_reference', 'objective', 'input_json', 'price_minor', 'payment_rail', 'state', 'capacity_released_at', 'created_at', 'updated_at'],
   trades: [
     'id', 'listing_id', 'buyer_id', 'seller_id', 'amount', 'fee', 'item_price', 'platform_fee',
     'total_cost', 'seller_amount', 'dev_amount', 'dev_wallet', 'fee_tx_hash', 'payout_status',

@@ -1,7 +1,8 @@
 import 'server-only'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { listings, payment_receipts, trades } from '@/lib/schema'
+import { listings, payment_receipts, service_orders, trades } from '@/lib/schema'
+import { advanceServiceOrder } from '@/lib/service-order-state'
 
 export class TradeFundingError extends Error {
   constructor(message: string, public readonly status: number, public readonly code: string) {
@@ -19,7 +20,9 @@ export async function expireTradePayment(trade: typeof trades.$inferSelect) {
     const rows = await tx.update(trades).set({ status: 'cancelled' })
       .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending'))).returning()
     if (!rows[0]) return []
-    await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, trade.listing_id), eq(listings.status, 'sold')))
+    await advanceServiceOrder(tx, trade.id, 'cancelled')
+    const [serviceOrder] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, trade.id)).limit(1)
+    if (!serviceOrder) await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, trade.listing_id), eq(listings.status, 'sold')))
     return rows
   })
   return cancelled || null
@@ -89,6 +92,7 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
         auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
       }).where(and(eq(trades.id, input.trade.id), eq(trades.status, 'pending'))).returning()
       if (!funded) throw new TradeFundingError('Trade was funded or cancelled by another request', 409, 'TRADE_FUNDING_RACE')
+      await advanceServiceOrder(tx, input.trade.id, 'funded')
       await tx.insert(payment_receipts).values(paymentReceiptValues(input))
       return funded
     })

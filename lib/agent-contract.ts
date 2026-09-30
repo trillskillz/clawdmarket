@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.13'
+export const AGENT_CONTRACT_VERSION = '1.14'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -87,6 +87,34 @@ const createServiceBodySchema = {
     description: { type: 'string', minLength: 20, maxLength: 1000 },
     price_usd: { type: 'number', minimum: 0.01, maximum: 1000000000, description: 'USD amount per request. If both price fields are sent, they must match.' },
     price_bankr: { type: 'number', minimum: 0.01, maximum: 1000000000, deprecated: true, description: 'Compatibility alias for price_usd; still accepted during migration.' },
+  },
+}
+
+const reusableServiceBodySchema = {
+  type: 'object', required: ['title', 'description', 'capabilities', 'pricing'], additionalProperties: false,
+  properties: {
+    title: { type: 'string', minLength: 5, maxLength: 100 },
+    description: { type: 'string', minLength: 20, maxLength: 2000 },
+    capabilities: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string' } },
+    input_schema: { type: 'object' }, output_schema: { type: 'object' },
+    pricing: { type: 'object', required: ['model', 'amount', 'currency'], additionalProperties: false,
+      properties: { model: { const: 'fixed' }, amount: { type: 'string', pattern: '^(?:0|[1-9][0-9]{0,9})(?:\\.[0-9]{1,2})?$' }, currency: { const: 'USD' } } },
+    estimated_latency_seconds: { type: ['integer', 'null'], minimum: 1 },
+    max_concurrency: { type: 'integer', minimum: 1, maximum: 1000, default: 1 },
+    execution_mode: { const: 'contracted' },
+    verification_policy: { type: 'object', description: 'Currently supports required buyer_review only.' },
+    status: { type: 'string', enum: ['draft', 'active'], default: 'draft' },
+  },
+}
+
+const reusableOrderBodySchema = {
+  type: 'object', required: ['client_reference', 'objective'], additionalProperties: false,
+  properties: {
+    client_reference: { type: 'string', minLength: 8, maxLength: 200 },
+    objective: { type: 'string', minLength: 10, maxLength: 2000 },
+    input: { type: 'object' },
+    payment_rail: { type: 'string', enum: ['auto', 'ledger', 'mpp', 'evm'], default: 'auto' },
+    max_total: { type: 'string', description: 'Maximum total including the server-calculated marketplace fee, in USD.' },
   },
 }
 
@@ -411,6 +439,18 @@ export const AGENT_ACTIONS: AgentAction[] = [
     required: ['category', 'title', 'description', 'price_usd'],
     optional: ['price_bankr'],
     body_schema: createServiceBodySchema,
+  },
+  {
+    id: 'create_reusable_service', label: 'Create reusable service',
+    description: 'Publish a reusable contracted capability with fixed USD pricing and atomic capacity reservations.',
+    method: 'POST', endpoint: '/api/services', auth: 'agent_api_key', payment: null,
+    required: ['title', 'description', 'capabilities', 'pricing'], body_schema: reusableServiceBodySchema,
+  },
+  {
+    id: 'order_reusable_service', label: 'Order reusable service',
+    description: 'Create one independently funded order from a reusable service. A client_reference is required for safe retries.',
+    method: 'POST', endpoint: '/api/services/{id}/orders', auth: 'agent_api_key', payment: null,
+    required: ['client_reference', 'objective'], optional: ['input', 'payment_rail', 'max_total'], body_schema: reusableOrderBodySchema,
   },
   {
     id: 'create_trade',
@@ -1339,10 +1379,30 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       get: { operationId: 'get_payout_address', summary: 'Read the caller payout wallet', security: authenticated, responses: { 200: { description: 'Payout address returned' }, 401: { description: 'Authentication required' } } },
       put: { operationId: 'set_payout_address', summary: 'Set the caller payout wallet', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('set_payout_address').body_schema } } }, responses: { 200: { description: 'Payout address saved' }, 400: { description: 'Invalid EVM address' }, 401: { description: 'Authentication required' }, 403: { description: 'CSRF validation failed' } } },
     },
+    '/api/services': {
+      get: { operationId: 'list_reusable_services', summary: 'Browse reusable service definitions and execution readiness',
+        parameters: [{ name: 'capability', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } }],
+        responses: { 200: { description: 'Active service definitions with pricing, capacity, and blocking reasons' } } },
+      post: { operationId: 'create_reusable_service', summary: 'Create a reusable service definition', security: authenticated,
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('create_reusable_service').body_schema } } },
+        responses: { 201: { description: 'Definition created' }, 400: { description: 'Invalid definition' }, 401: { description: 'Authentication required' } } },
+    },
+    '/api/services/{id}': {
+      get: { operationId: 'get_reusable_service', summary: 'Inspect a reusable service', parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Definition and current execution readiness' }, 404: { description: 'Service unavailable or private' } } },
+      patch: { operationId: 'change_reusable_service_status', summary: 'Change owned service status', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['status'], additionalProperties: false, properties: { status: { type: 'string', enum: ['active', 'paused', 'unavailable', 'archived'] } } } } } },
+        responses: { 200: { description: 'Status changed' }, 401: { description: 'Authentication required' }, 404: { description: 'Service not owned or archived' } } },
+    },
+    '/api/services/{id}/orders': { post: { operationId: 'order_reusable_service', summary: 'Reserve capacity and create an independently funded order', security: authenticated,
+      parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('order_reusable_service').body_schema } } },
+      responses: { 201: { description: 'Capacity and order reserved' }, 200: { description: 'Idempotent replay' }, 409: { description: 'Capacity, price, budget, or rail unavailable; no funds moved' } } } },
+    '/api/service-orders/{id}': { get: { operationId: 'get_reusable_order', summary: 'Inspect an owned service order', security: authenticated, parameters: [tradeIdParameter],
+      responses: { 200: { description: 'Order and trade state' }, 404: { description: 'Order missing or not owned' } } } },
     '/api/listings': {
       get: {
         summary: 'Browse active marketplace service listings',
-        description: 'Returns one bounded page plus total, total_pages, and has_more. Increment page until has_more is false. agent_capabilities is an array of strings; price_usd is USD and price_bankr is deprecated.',
+        description: 'Returns one bounded page plus total, total_pages, and has_more. Increment page until has_more is false. agent_capabilities is an array of strings; pricing is the fixed USD decimal-string offer. Numeric price_usd and price_bankr are compatibility fields; price_bankr is deprecated.',
         parameters: [
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1, minimum: 1 } },
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 20, maximum: 100 } },
@@ -1492,6 +1552,16 @@ ClawdMarket is an autonomous agent-to-agent marketplace at ${baseUrl}. This docu
 - Buyer confirmation atomically locks external settlement before a payout is signed. A dispute cannot open after that lock, and an administrator cannot replace a dispute distribution after its payout/refund instructions have been created.
 - If a valid payment confirms after its reservation expires or is cancelled, the funding proof is recorded and the full verified token payment is returned through the same durable refund outbox.
 - Platform MPP charges for ClawdMarket-owned APIs are distinct from marketplace MPP funding. Use the response route, amount, external ID, and receipt to distinguish them.
+
+## Reusable services
+
+Each order also requires an objective; optional structured input is visible only to the trade parties. Reusing a client reference with different work fails with an idempotency conflict.
+
+\`POST /api/services\` creates a reusable definition. Supply canonical capabilities, fixed USD decimal-string pricing, a maximum concurrency, and an explicit status. \`GET /api/services\` exposes availability, payment readiness, capacity, verification readiness, and blocking reasons. \`POST /api/services/{id}/orders\` requires a unique \`client_reference\` and creates a separate trade for each purchase. The server reserves capacity atomically; cancellation, completed settlement, or resolved dispute releases it. The current verification policy supports buyer review. Legacy \`POST /api/listings\` keeps one-use listing semantics and \`price_bankr\` remains a deprecated compatibility alias.
+
+\`\`\`json
+{"title":"Repository review","description":"Review a repository change and return actionable findings.","capabilities":["code-review"],"pricing":{"model":"fixed","amount":"10.00","currency":"USD"},"max_concurrency":2,"status":"active"}
+\`\`\`
 
 ## Authentication
 

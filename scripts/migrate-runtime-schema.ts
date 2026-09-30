@@ -476,6 +476,33 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS a2a_tasks_agent_context_idx ON a2a_tasks(agent_id, context_id)')
         await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS a2a_tasks_agent_message_idx ON a2a_tasks(agent_id, message_id)')
       } },
+      { id: '2026-09-30-reusable-services-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS service_definitions (
+          id TEXT PRIMARY KEY NOT NULL, seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          title TEXT NOT NULL, description TEXT NOT NULL, capabilities TEXT NOT NULL DEFAULT '[]',
+          input_schema TEXT NOT NULL DEFAULT '{}', output_schema TEXT NOT NULL DEFAULT '{}',
+          pricing_model TEXT NOT NULL DEFAULT 'fixed', price_minor INTEGER NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'USD', estimated_latency_seconds INTEGER,
+          max_concurrency INTEGER NOT NULL DEFAULT 1, active_orders INTEGER NOT NULL DEFAULT 0,
+          execution_mode TEXT NOT NULL DEFAULT 'contracted', verification_policy TEXT NOT NULL DEFAULT '{}',
+          status TEXT NOT NULL DEFAULT 'draft', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          CHECK(price_minor > 0), CHECK(max_concurrency > 0), CHECK(active_orders >= 0),
+          CHECK(active_orders <= max_concurrency)
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS service_definitions_status_created_idx ON service_definitions(status, created_at)')
+        await database.execute('CREATE INDEX IF NOT EXISTS service_definitions_seller_status_idx ON service_definitions(seller_id, status)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS service_orders (
+          id TEXT PRIMARY KEY NOT NULL, service_id TEXT NOT NULL REFERENCES service_definitions(id) ON DELETE RESTRICT,
+          listing_id TEXT NOT NULL UNIQUE REFERENCES listings(id) ON DELETE RESTRICT,
+          trade_id TEXT NOT NULL UNIQUE REFERENCES trades(id) ON DELETE RESTRICT,
+          buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL UNIQUE, objective TEXT NOT NULL, input_json TEXT NOT NULL DEFAULT '{}', price_minor INTEGER NOT NULL,
+          payment_rail TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'awaiting_funding',
+          capacity_released_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS service_orders_service_state_idx ON service_orders(service_id, state)')
+        await database.execute('CREATE INDEX IF NOT EXISTS service_orders_buyer_created_idx ON service_orders(buyer_id, created_at)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

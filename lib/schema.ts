@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -187,6 +187,33 @@ export const listings = sqliteTable('listings', {
   index('listings_status_category_created_idx').on(table.status, table.category, table.created_at),
 ]);
 
+export const service_definitions = sqliteTable('service_definitions', {
+  id: text('id').primaryKey(),
+  seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  capabilities: text('capabilities').notNull().default('[]'),
+  input_schema: text('input_schema').notNull().default('{}'),
+  output_schema: text('output_schema').notNull().default('{}'),
+  pricing_model: text('pricing_model', { enum: ['fixed'] }).notNull().default('fixed'),
+  price_minor: integer('price_minor').notNull(),
+  currency: text('currency', { enum: ['USD'] }).notNull().default('USD'),
+  estimated_latency_seconds: integer('estimated_latency_seconds'),
+  max_concurrency: integer('max_concurrency').notNull().default(1),
+  active_orders: integer('active_orders').notNull().default(0),
+  execution_mode: text('execution_mode', { enum: ['contracted'] }).notNull().default('contracted'),
+  verification_policy: text('verification_policy').notNull().default('{}'),
+  status: text('status', { enum: ['draft', 'active', 'paused', 'unavailable', 'archived'] }).notNull().default('draft'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('service_definitions_status_created_idx').on(table.status, table.created_at),
+  index('service_definitions_seller_status_idx').on(table.seller_id, table.status),
+  check('service_definitions_price_positive', sql`${table.price_minor} > 0`),
+  check('service_definitions_capacity_positive', sql`${table.max_concurrency} > 0`),
+  check('service_definitions_capacity_bounded', sql`${table.active_orders} >= 0 AND ${table.active_orders} <= ${table.max_concurrency}`),
+]);
+
 export const trades = sqliteTable('trades', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   listing_id: text('listing_id')
@@ -226,6 +253,26 @@ export const trades = sqliteTable('trades', {
   completed_at: integer('completed_at', { mode: 'timestamp' }),
   rating_window_expires_at: text('rating_window_expires_at'),
 });
+
+export const service_orders = sqliteTable('service_orders', {
+  id: text('id').primaryKey(),
+  service_id: text('service_id').notNull().references(() => service_definitions.id, { onDelete: 'restrict' }),
+  listing_id: text('listing_id').notNull().unique().references(() => listings.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull().unique(),
+  objective: text('objective').notNull(),
+  input_json: text('input_json').notNull().default('{}'),
+  price_minor: integer('price_minor').notNull(),
+  payment_rail: text('payment_rail', { enum: ['ledger', 'mpp', 'evm'] }).notNull(),
+  state: text('state', { enum: ['awaiting_funding', 'funded', 'executing', 'verifying', 'completed', 'cancelled', 'disputed', 'resolved'] }).notNull().default('awaiting_funding'),
+  capacity_released_at: integer('capacity_released_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('service_orders_service_state_idx').on(table.service_id, table.state),
+  index('service_orders_buyer_created_idx').on(table.buyer_id, table.created_at),
+]);
 
 export const tasks = sqliteTable('tasks', {
   id: text('id').primaryKey(),

@@ -221,6 +221,7 @@ export async function GET(req: NextRequest) {
         price_usd: Number.isFinite(Number(listing.price_bankr))
           ? Number(listing.price_bankr)
           : 0,
+        pricing: { model: 'fixed', amount: Number(listing.price_bankr || 0).toFixed(2), currency: 'USD' },
         agent_trust: trust?.trustScore ?? 0,
         agent_trust_confidence: trust?.confidence ?? 'low',
         agent_trust_rating_count: trust?.components.ratingCount ?? 0,

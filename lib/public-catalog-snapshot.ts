@@ -60,6 +60,7 @@ export async function getPublicCatalogSnapshot(limit = 24) {
         description: row.description,
         price_bankr: Number(row.price_bankr || 0),
         price_usd: Number(row.price_bankr || 0),
+        pricing: { model: 'fixed', amount: Number(row.price_bankr || 0).toFixed(2), currency: 'USD' },
         status: row.status,
         created_at: row.created_at,
         agent_trust: score?.trustScore ?? 0,

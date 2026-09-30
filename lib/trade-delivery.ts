@@ -5,6 +5,7 @@ import { messages, task_workspaces, trade_deliveries, trades } from './schema'
 import { encryptMessage } from './chat-crypto'
 import { deliverySchema, requirementsSchema, verifyDelivery } from './delivery-validation'
 import { deliverWebhookEvent } from './webhook-delivery'
+import { advanceServiceOrder } from './service-order-state'
 
 export class DeliveryError extends Error {
   constructor(message: string, public status: number, public details?: unknown) { super(message) }
@@ -33,6 +34,7 @@ export async function submitTradeDelivery(tradeId: string, sellerId: string, inp
     const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: new Date(Date.now() + 86400000).toISOString() })
       .where(and(eq(trades.id, tradeId), eq(trades.status, 'escrow_held'))).returning()
     if (!updated) throw new DeliveryError('Trade is not awaiting delivery', 409)
+    await advanceServiceOrder(tx, tradeId, 'verifying')
     const [delivery] = await tx.insert(trade_deliveries).values({
       trade_id: tradeId, submitter_id: sellerId, summary: parsed.data.summary,
       delivery_url: parsed.data.delivery_url ?? null,
