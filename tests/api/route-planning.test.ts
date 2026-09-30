@@ -287,3 +287,67 @@ test('buyer policy filters planning and is rechecked before unpaid route reserva
   assert.equal((await blocked.json()).error_code, 'BUYER_PER_EXECUTION_LIMIT')
   assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.client_reference, `route:${planned.id}:attempt:1`))).length, 0)
 })
+
+test('stale first provider fails over before checkout and records one economic reservation', async () => {
+  const buyerId = `fallback-buyer-${crypto.randomUUID()}`
+  await db.insert(schema.users).values({ id: buyerId, name: 'Fallback Buyer', email: `${buyerId}@test.invalid`, password_hash: 'unused', role: 'human' })
+  const [firstId, secondId] = [crypto.randomUUID(), crypto.randomUUID()]
+  for (const [id, price] of [[firstId, 20], [secondId, 40]] as const) {
+    await db.insert(schema.service_definitions).values({ id, seller_id: 'route-seller', title: 'Translation fallback',
+      description: 'Translate a document under an unpaid fallback plan.', capabilities: '["translation"]',
+      price_minor: price, status: 'active', max_concurrency: 1, estimated_latency_seconds: 120 })
+  }
+  const planned = await planRoute(request('/api/routes/plan', buyerId, 'POST', {
+    client_reference: `fallback-${crypto.randomUUID()}`, objective: 'Translate this document into a target language',
+    required_capabilities: ['translation'], max_budget: { amount: '2.00', currency: 'USD' },
+    retry_policy: { max_attempts: 2 },
+  }))
+  assert.equal(planned.status, 201)
+  const route = (await planned.json()).route
+  assert.deepEqual(route.candidates.map((item: { service_id: string }) => item.service_id), [firstId, secondId])
+  await db.update(schema.service_definitions).set({ status: 'paused' }).where(eq(schema.service_definitions.id, firstId))
+  const execute = () => executeRoute(request(`/api/routes/${route.id}/execute`, buyerId, 'POST'), { params: Promise.resolve({ id: route.id }) })
+  const responses = await Promise.all([execute(), execute()])
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 201])
+  const bodies = await Promise.all(responses.map((response) => response.json()))
+  assert.equal(bodies[0].order.id, bodies[1].order.id)
+  assert.equal(bodies[0].order.service_id, secondId)
+  assert.equal(bodies[0].funds_state, 'no_funds_moved')
+  const attempts = await db.select().from(schema.route_attempts).where(eq(schema.route_attempts.route_id, route.id)).orderBy(schema.route_attempts.attempt_number)
+  assert.deepEqual(attempts.map((attempt) => `${attempt.attempt_number}:${attempt.state}`), ['1:ineligible', '2:reserved'])
+  assert.equal(attempts[0].failure_code, 'ROUTE_STALE_PROVIDER')
+  assert.equal(attempts[1].service_order_id, bodies[0].order.id)
+  const inspected = await getRoute(request(`/api/routes/${route.id}`, buyerId, 'GET'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(inspected.status, 200)
+  assert.deepEqual((await inspected.json()).attempts.map((attempt: { state: string }) => attempt.state), ['ineligible', 'reserved'])
+  const hidden = await getRoute(request(`/api/routes/${route.id}`, 'other-buyer', 'GET'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(hidden.status, 404)
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.client_reference, `route:${route.id}:attempt:1`))).length, 0)
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, firstId)))[0].active_orders, 0)
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, secondId)))[0].active_orders, 1)
+})
+
+test('max_attempts one does not reserve a fallback and a checking attempt resumes safely', async () => {
+  const buyerId = `single-attempt-buyer-${crypto.randomUUID()}`
+  await db.insert(schema.users).values({ id: buyerId, name: 'Single Buyer', email: `${buyerId}@test.invalid`, password_hash: 'unused', role: 'human' })
+  const firstId = crypto.randomUUID()
+  const secondId = crypto.randomUUID()
+  for (const [id, price] of [[firstId, 20], [secondId, 40]] as const) {
+    await db.insert(schema.service_definitions).values({ id, seller_id: 'route-seller', title: 'Research fallback',
+      description: 'Research an academic source under a bounded route.', capabilities: '["academic-research"]',
+      price_minor: price, status: 'active', estimated_latency_seconds: 120 })
+  }
+  const planned = await planRoute(request('/api/routes/plan', buyerId, 'POST', {
+    client_reference: `single-attempt-${crypto.randomUUID()}`, objective: 'Research the academic source for this request',
+    required_capabilities: ['academic-research'], max_budget: { amount: '2.00', currency: 'USD' },
+    retry_policy: { max_attempts: 1 },
+  }))
+  const route = (await planned.json()).route
+  await db.insert(schema.route_attempts).values({ id: crypto.randomUUID(), route_id: route.id, attempt_number: 1, service_id: firstId, state: 'checking' })
+  await db.update(schema.service_definitions).set({ status: 'paused' }).where(eq(schema.service_definitions.id, firstId))
+  const result = await executeRoute(request(`/api/routes/${route.id}/execute`, buyerId, 'POST'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(result.status, 409)
+  assert.equal((await result.json()).error_code, 'ROUTE_STALE_PROVIDER')
+  assert.equal((await db.select().from(schema.route_attempts).where(eq(schema.route_attempts.route_id, route.id))).length, 1)
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, secondId))).length, 0)
+})

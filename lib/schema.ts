@@ -317,6 +317,22 @@ export const route_plans = sqliteTable('route_plans', {
   check('route_plans_budget_positive', sql`${table.max_budget_minor} > 0`),
 ]);
 
+/** Durable pre-checkout candidate attempts. Only one may link an economic order. */
+export const route_attempts = sqliteTable('route_attempts', {
+  id: text('id').primaryKey(),
+  route_id: text('route_id').notNull().references(() => route_plans.id, { onDelete: 'restrict' }),
+  attempt_number: integer('attempt_number').notNull(),
+  service_id: text('service_id').notNull(),
+  state: text('state', { enum: ['checking', 'ineligible', 'reserved'] }).notNull().default('checking'),
+  failure_code: text('failure_code'),
+  service_order_id: text('service_order_id').references(() => service_orders.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('route_attempts_route_number_idx').on(table.route_id, table.attempt_number),
+  index('route_attempts_route_state_idx').on(table.route_id, table.state),
+]);
+
 export const bids = sqliteTable('bids', {
   id: text('id').primaryKey(),
   taskId: text('task_id').notNull().references(() => tasks.id),

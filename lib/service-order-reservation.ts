@@ -2,7 +2,7 @@ import 'server-only'
 import { and, eq, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { db } from '@/lib/db'
-import { listings, route_plans, service_definitions, service_orders, trades } from '@/lib/schema'
+import { listings, route_attempts, route_plans, service_definitions, service_orders, trades } from '@/lib/schema'
 import type { RequestPrincipal } from '@/lib/request-principal'
 import { serviceOrderInput } from '@/lib/service-definitions'
 import { selectMarketplaceRail } from '@/lib/payment-rail-selection'
@@ -24,7 +24,7 @@ export class ServiceOrderReservationError extends Error {
 }
 
 type OrderRequest = z.output<typeof serviceOrderInput>
-type ReservationArgs = { serviceId: string; principal: RequestPrincipal; request: OrderRequest; routeId?: string; externalOnly?: boolean }
+type ReservationArgs = { serviceId: string; principal: RequestPrincipal; request: OrderRequest; routeId?: string; attemptNumber?: number; externalOnly?: boolean }
 
 function sqliteBusy(error: unknown) {
   let current = error
@@ -73,7 +73,7 @@ async function replay(args: ReservationArgs) {
 
 /** Reserves capacity and creates an order in one transaction. External rails remain unpaid. */
 export async function reserveServiceOrder(args: ReservationArgs) {
-  const { serviceId: id, principal, request, routeId, externalOnly } = args
+  const { serviceId: id, principal, request, routeId, attemptNumber, externalOnly } = args
   const reference = request.client_reference
   const prior = await replay(args)
   if (prior) return prior
@@ -141,6 +141,12 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         const [linked] = await tx.update(route_plans).set({ state: 'awaiting_funding', service_order_id: order.id, updated_at: now })
           .where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId), eq(route_plans.state, 'reserving'), sql`${route_plans.service_order_id} IS NULL`)).returning({ id: route_plans.id })
         if (!linked) throw new ServiceOrderReservationError('ROUTE_STATE_CHANGED', 'Route changed while reserving')
+        if (attemptNumber !== undefined) {
+          const [attempt] = await tx.update(route_attempts).set({ state: 'reserved', service_order_id: order.id, updated_at: now })
+            .where(and(eq(route_attempts.route_id, routeId), eq(route_attempts.attempt_number, attemptNumber), eq(route_attempts.service_id, id), eq(route_attempts.state, 'checking')))
+            .returning({ id: route_attempts.id })
+          if (!attempt) throw new ServiceOrderReservationError('ROUTE_ATTEMPT_STATE_CHANGED', 'Route attempt changed while reserving')
+        }
       }
       return { order, trade, idempotent: false }
     })

@@ -558,6 +558,17 @@ async function main() {
         )`)
         await database.execute('CREATE INDEX IF NOT EXISTS buyer_spend_policy_events_buyer_version_idx ON buyer_spend_policy_events(buyer_id, version)')
       } },
+      { id: '2026-09-30-route-attempts-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS route_attempts (
+          id TEXT PRIMARY KEY NOT NULL, route_id TEXT NOT NULL REFERENCES route_plans(id) ON DELETE RESTRICT,
+          attempt_number INTEGER NOT NULL, service_id TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'checking', failure_code TEXT,
+          service_order_id TEXT REFERENCES service_orders(id) ON DELETE RESTRICT,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS route_attempts_route_number_idx ON route_attempts(route_id, attempt_number)')
+        await database.execute('CREATE INDEX IF NOT EXISTS route_attempts_route_state_idx ON route_attempts(route_id, state)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

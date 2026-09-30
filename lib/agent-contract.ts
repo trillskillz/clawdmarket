@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.20'
+export const AGENT_CONTRACT_VERSION = '1.21'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -396,7 +396,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
       agent_id: { type: 'string' }, expected_version: { type: 'integer', minimum: 0 },
       policy: { type: 'object', additionalProperties: false, properties: {
         max_per_execution: { type: 'string', description: 'USD decimal string' }, max_daily: { type: 'string' }, max_monthly: { type: 'string' },
-        max_retry_budget: { type: 'string', description: 'Stored for future failover; no automatic retry is enabled.' },
+        max_retry_budget: { type: 'string', description: 'Stored for future funded-order failover; current candidate fallback creates at most one unpaid order.' },
         approval_required_above: { type: 'string', description: 'Reservations above this amount fail until an approval workflow is available.' },
         allowed_capabilities: { type: 'array', items: { type: 'string' } }, blocked_capabilities: { type: 'array', items: { type: 'string' } },
         approved_providers: { type: 'array', items: { type: 'string' } }, blocked_providers: { type: 'array', items: { type: 'string' } },
@@ -509,11 +509,11 @@ export const AGENT_ACTIONS: AgentAction[] = [
   },
   {
     id: 'execute_route', label: 'Reserve routed work',
-    description: 'Revalidate the top provider and atomically reserve one unpaid external checkout. Buyer funding remains a separate authenticated action.',
+    description: 'Check up to the saved retry limit of ranked providers, record pre-checkout attempts, and atomically reserve one unpaid external checkout. Buyer funding remains a separate authenticated action.',
     method: 'POST', endpoint: '/api/routes/{id}/execute', auth: 'agent_api_key', payment: null, required: ['id'],
   },
   {
-    id: 'inspect_route', label: 'Inspect route', description: 'Read a route owned by the caller.',
+    id: 'inspect_route', label: 'Inspect route', description: 'Read a route and its pre-checkout candidate attempts, owned by the caller.',
     method: 'GET', endpoint: '/api/routes/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
   {
@@ -1467,10 +1467,10 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/routes/plan': { post: { operationId: 'plan_work', summary: 'Plan work without selecting a provider or moving funds', security: authenticated,
       requestBody: { required: true, content: { 'application/json': { schema: getAction('plan_work').body_schema } } },
       responses: { 201: { description: 'Nonbinding route plan created' }, 200: { description: 'Idempotent plan replay' }, 400: { description: 'Invalid objective or constraints' }, 409: { description: 'Reference conflict' } } } },
-    '/api/routes/{id}/execute': { post: { operationId: 'execute_route', summary: 'Reserve an unpaid order for the top current route candidate', security: authenticated, parameters: [tradeIdParameter],
+    '/api/routes/{id}/execute': { post: { operationId: 'execute_route', summary: 'Try saved candidates before checkout and reserve one unpaid order', security: authenticated, parameters: [tradeIdParameter],
       responses: { 201: { description: 'Unpaid order and external checkout created; no funds moved' }, 200: { description: 'Idempotent route replay' }, 404: { description: 'Route not owned' }, 409: { description: 'Provider, budget, price, capacity, or rail changed' }, 410: { description: 'Plan expired' }, 503: { description: 'Route execution disabled' } } } },
     '/api/routes/{id}': {
-      get: { operationId: 'inspect_route', summary: 'Inspect an owned route', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route state and candidate snapshot' }, 404: { description: 'Route not owned' } } },
+      get: { operationId: 'inspect_route', summary: 'Inspect an owned route', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route state, candidate snapshot, and pre-checkout attempts' }, 404: { description: 'Route not owned' } } },
       delete: { operationId: 'cancel_planned_route', summary: 'Cancel a planned route or unpaid checkout', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route cancelled or already cancelled; capacity released for unpaid orders' }, 404: { description: 'Route not owned' }, 409: { description: 'Funding has begun or reservation is in progress' } } },
     },
     '/api/services': {
@@ -1664,7 +1664,7 @@ Each order also requires an objective; optional structured input is visible only
 
 ## Route planning
 
-\`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and \`claimed_only\` evidence marker. \`POST /api/routes/{id}/execute\` rechecks the top candidate and atomically creates one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Funded work follows the existing trade dispute and settlement flow.
+\`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and \`claimed_only\` evidence marker. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
 
 ## Authentication
 
