@@ -8,8 +8,9 @@ import { getPaymentReadiness } from '@/lib/payment-config'
 import { getNewPaymentControl } from '@/lib/payment-control'
 import { payoutAddressForUser } from '@/lib/external-settlement'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
+import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
 
-const money = z.string().regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/, 'Use a USD decimal string with at most two places')
+export const money = z.string().regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/, 'Use a USD decimal string with at most two places')
   .transform((value, ctx) => {
     const [whole, fractional = ''] = value.split('.')
     const cents = Number(whole) * 100 + Number(fractional.padEnd(2, '0'))
@@ -20,7 +21,7 @@ const money = z.string().regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/, 'Use a USD 
     return cents
   })
 
-const jsonObject = z.record(z.string().max(100), z.unknown()).refine(
+export const jsonObject = z.record(z.string().max(100), z.unknown()).refine(
   (value) => JSON.stringify(value).length <= 8_192,
   'Schema or policy must be at most 8 KB',
 )
@@ -80,6 +81,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   const paymentReady = !paymentControl.paused && (rails.ledger.enabled || Boolean(payoutAddress && (rails.mpp.enabled || rails.evm.enabled)))
   const reasons: string[] = []
   if (service.status !== 'active') reasons.push('SERVICE_NOT_ACTIVE')
+  if (!reusableServiceWritesEnabled()) reasons.push('REUSABLE_SERVICES_DISABLED')
   if (!sellerVisible) reasons.push('SELLER_NOT_PUBLIC')
   if (!capacityAvailable) reasons.push('CAPACITY_FULL')
   if (paymentControl.paused) reasons.push('PAYMENTS_PAUSED')

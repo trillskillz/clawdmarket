@@ -9,6 +9,7 @@ import { changeServiceStatus, serviceDefinitionDto } from '@/lib/service-definit
 import { internalErrorResponse } from '@/lib/api-error'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
+import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
 
 export const dynamic = 'force-dynamic'
 const stateChange = z.object({ status: z.enum(['active', 'paused', 'unavailable', 'archived']) }).strict()
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!reusableServiceWritesEnabled()) return NextResponse.json({ success: false, error_code: 'REUSABLE_SERVICES_DISABLED', message: 'Reusable service updates are not enabled', retryable: true, state: 'no_funds_moved' }, { status: 503 })
   const principal = await resolveRequestPrincipal(request)
   if (!principal) return NextResponse.json({ success: false, error_code: 'UNAUTHORIZED', message: 'Authentication required', retryable: false }, { status: 401 })
   if (principal.usesCookieAuth && !validateCsrf(request)) return NextResponse.json({ success: false, error_code: 'CSRF_REJECTED', message: 'CSRF validation failed', retryable: false }, { status: 403 })

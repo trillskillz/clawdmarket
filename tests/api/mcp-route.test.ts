@@ -99,7 +99,7 @@ test('reusable service routes agree across manifest, OpenAPI, and skill contract
   const manifest = getAgentManifest('https://example.invalid');
   const paths = getAgentOpenApiPaths();
   assert.equal(manifest.version, AGENT_CONTRACT_VERSION);
-  for (const actionId of ['create_reusable_service', 'order_reusable_service']) {
+  for (const actionId of ['create_reusable_service', 'order_reusable_service', 'plan_work', 'inspect_route', 'cancel_planned_route']) {
     const action = manifest.actions.find((item) => item.id === actionId);
     assert.ok(action);
     assert.ok(paths[action.endpoint]);
@@ -107,6 +107,7 @@ test('reusable service routes agree across manifest, OpenAPI, and skill contract
   }
   assert.ok(paths['/api/service-orders/{id}']);
   assert.ok(paths['/api/services/{id}']);
+  assert.ok(paths['/api/routes/{id}']);
 });
 
 test('tools/call fails closed when MPP verification is unavailable', async () => {

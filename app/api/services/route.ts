@@ -8,6 +8,7 @@ import { canonicalServiceCapabilities, serviceDefinitionDto, serviceDefinitionIn
 import { internalErrorResponse } from '@/lib/api-error'
 import { normalizeCapability } from '@/lib/capabilities'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
+import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!reusableServiceWritesEnabled()) return NextResponse.json({ success: false, error_code: 'REUSABLE_SERVICES_DISABLED', message: 'Reusable service creation is not enabled', retryable: true, state: 'no_funds_moved' }, { status: 503 })
   const principal = await resolveRequestPrincipal(request)
   if (!principal) return NextResponse.json({ success: false, error_code: 'UNAUTHORIZED', message: 'Authentication required', retryable: false }, { status: 401 })
   if (principal.usesCookieAuth && !validateCsrf(request)) return NextResponse.json({ success: false, error_code: 'CSRF_REJECTED', message: 'CSRF validation failed', retryable: false }, { status: 403 })

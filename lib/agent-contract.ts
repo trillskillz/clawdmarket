@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.14'
+export const AGENT_CONTRACT_VERSION = '1.15'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -115,6 +115,21 @@ const reusableOrderBodySchema = {
     input: { type: 'object' },
     payment_rail: { type: 'string', enum: ['auto', 'ledger', 'mpp', 'evm'], default: 'auto' },
     max_total: { type: 'string', description: 'Maximum total including the server-calculated marketplace fee, in USD.' },
+  },
+}
+
+const routePlanBodySchema = {
+  type: 'object', required: ['client_reference', 'objective', 'required_capabilities', 'max_budget'], additionalProperties: false,
+  properties: {
+    client_reference: { type: 'string', minLength: 8, maxLength: 200 },
+    objective: { type: 'string', minLength: 10, maxLength: 2000 },
+    required_capabilities: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string' } },
+    input: { type: 'object' },
+    max_budget: { type: 'object', required: ['amount', 'currency'], additionalProperties: false, properties: { amount: { type: 'string' }, currency: { const: 'USD' } } },
+    deadline_seconds: { type: 'integer', minimum: 1, maximum: 2592000 },
+    verification: { type: 'object', description: 'Currently supports required buyer_review only.' },
+    payment_policy: { type: 'object', properties: { allowed_rails: { type: 'array', items: { type: 'string', enum: ['mpp', 'evm', 'ledger'] } } } },
+    retry_policy: { type: 'object', properties: { max_attempts: { type: 'integer', minimum: 1, maximum: 3 } } },
   },
 }
 
@@ -451,6 +466,20 @@ export const AGENT_ACTIONS: AgentAction[] = [
     description: 'Create one independently funded order from a reusable service. A client_reference is required for safe retries.',
     method: 'POST', endpoint: '/api/services/{id}/orders', auth: 'agent_api_key', payment: null,
     required: ['client_reference', 'objective'], optional: ['input', 'payment_rail', 'max_total'], body_schema: reusableOrderBodySchema,
+  },
+  {
+    id: 'plan_work', label: 'Plan work',
+    description: 'Persist a nonbinding, no-payment route plan with canonical capabilities and explainable candidate ranking.',
+    method: 'POST', endpoint: '/api/routes/plan', auth: 'agent_api_key', payment: null,
+    required: ['client_reference', 'objective', 'required_capabilities', 'max_budget'], body_schema: routePlanBodySchema,
+  },
+  {
+    id: 'inspect_route', label: 'Inspect route', description: 'Read a route owned by the caller.',
+    method: 'GET', endpoint: '/api/routes/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
+  },
+  {
+    id: 'cancel_planned_route', label: 'Cancel planned route', description: 'Cancel a plan before execution; idempotent for already cancelled plans.',
+    method: 'DELETE', endpoint: '/api/routes/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
   {
     id: 'create_trade',
@@ -1379,6 +1408,13 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       get: { operationId: 'get_payout_address', summary: 'Read the caller payout wallet', security: authenticated, responses: { 200: { description: 'Payout address returned' }, 401: { description: 'Authentication required' } } },
       put: { operationId: 'set_payout_address', summary: 'Set the caller payout wallet', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('set_payout_address').body_schema } } }, responses: { 200: { description: 'Payout address saved' }, 400: { description: 'Invalid EVM address' }, 401: { description: 'Authentication required' }, 403: { description: 'CSRF validation failed' } } },
     },
+    '/api/routes/plan': { post: { operationId: 'plan_work', summary: 'Plan work without selecting a provider or moving funds', security: authenticated,
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('plan_work').body_schema } } },
+      responses: { 201: { description: 'Nonbinding route plan created' }, 200: { description: 'Idempotent plan replay' }, 400: { description: 'Invalid objective or constraints' }, 409: { description: 'Reference conflict' } } } },
+    '/api/routes/{id}': {
+      get: { operationId: 'inspect_route', summary: 'Inspect an owned route', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route state and candidate snapshot' }, 404: { description: 'Route not owned' } } },
+      delete: { operationId: 'cancel_planned_route', summary: 'Cancel a nonexecuting plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Plan cancelled or already cancelled' }, 404: { description: 'Route not owned' }, 409: { description: 'Execution already started' } } },
+    },
     '/api/services': {
       get: { operationId: 'list_reusable_services', summary: 'Browse reusable service definitions and execution readiness',
         parameters: [{ name: 'capability', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } }],
@@ -1562,6 +1598,10 @@ Each order also requires an objective; optional structured input is visible only
 \`\`\`json
 {"title":"Repository review","description":"Review a repository change and return actionable findings.","capabilities":["code-review"],"pricing":{"model":"fixed","amount":"10.00","currency":"USD"},"max_concurrency":2,"status":"active"}
 \`\`\`
+
+## Route planning
+
+\`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot. It never moves funds. Candidates include a deterministic score breakdown, server-calculated total, payment rail, and \`claimed_only\` evidence marker. Only services that are currently purchasable and fit budget and deadline appear. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan before execution. Automated execution is not yet exposed because capability evidence, policy enforcement, dispatch, and verification need durable authorization before autonomous spending.
 
 ## Authentication
 

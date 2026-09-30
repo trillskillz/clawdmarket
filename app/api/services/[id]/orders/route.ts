@@ -17,6 +17,7 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { expireTradePayment } from '@/lib/trade-funding'
 import { withServiceReservationLock } from '@/lib/service-reservation-lock'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
+import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     return NextResponse.json({ order: serviceOrderDto(prior.order), trade: prior.trade, checkout: checkoutForTrade(prior.trade), idempotent: true }, { headers: { 'Cache-Control': 'no-store' } })
   }
+  if (!reusableServiceWritesEnabled()) return failure('REUSABLE_SERVICES_DISABLED', 'Reusable service orders are not enabled', 503, true)
 
   try {
     const [service] = await db.select().from(service_definitions).where(eq(service_definitions.id, id)).limit(1)

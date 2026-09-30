@@ -292,6 +292,31 @@ export const tasks = sqliteTable('tasks', {
   expiresAt: text('expires_at').notNull().default(sql`(datetime('now', '+7 days'))`),
 });
 
+export const route_plans = sqliteTable('route_plans', {
+  id: text('id').primaryKey(),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull().unique(),
+  objective: text('objective').notNull(),
+  required_capabilities: text('required_capabilities').notNull(),
+  input_json: text('input_json').notNull().default('{}'),
+  max_budget_minor: integer('max_budget_minor').notNull(),
+  currency: text('currency', { enum: ['USD'] }).notNull().default('USD'),
+  deadline_seconds: integer('deadline_seconds'),
+  verification_policy: text('verification_policy').notNull().default('{}'),
+  payment_policy: text('payment_policy').notNull().default('{}'),
+  retry_policy: text('retry_policy').notNull().default('{}'),
+  candidates_json: text('candidates_json').notNull().default('[]'),
+  state: text('state', { enum: ['planned', 'awaiting_funding', 'funded', 'dispatching', 'executing', 'verifying', 'retrying', 'awaiting_buyer', 'settling', 'completed', 'failed', 'cancelled', 'disputed'] }).notNull().default('planned'),
+  service_order_id: text('service_order_id').references(() => service_orders.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('route_plans_buyer_created_idx').on(table.buyer_id, table.created_at),
+  index('route_plans_state_expires_idx').on(table.state, table.expires_at),
+  check('route_plans_budget_positive', sql`${table.max_budget_minor} > 0`),
+]);
+
 export const bids = sqliteTable('bids', {
   id: text('id').primaryKey(),
   taskId: text('task_id').notNull().references(() => tasks.id),

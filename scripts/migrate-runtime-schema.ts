@@ -503,6 +503,22 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS service_orders_service_state_idx ON service_orders(service_id, state)')
         await database.execute('CREATE INDEX IF NOT EXISTS service_orders_buyer_created_idx ON service_orders(buyer_id, created_at)')
       } },
+      { id: '2026-09-30-route-plans-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS route_plans (
+          id TEXT PRIMARY KEY NOT NULL, buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL UNIQUE, objective TEXT NOT NULL,
+          required_capabilities TEXT NOT NULL, input_json TEXT NOT NULL DEFAULT '{}',
+          max_budget_minor INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
+          deadline_seconds INTEGER, verification_policy TEXT NOT NULL DEFAULT '{}',
+          payment_policy TEXT NOT NULL DEFAULT '{}', retry_policy TEXT NOT NULL DEFAULT '{}',
+          candidates_json TEXT NOT NULL DEFAULT '[]', state TEXT NOT NULL DEFAULT 'planned',
+          service_order_id TEXT REFERENCES service_orders(id) ON DELETE RESTRICT,
+          created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          CHECK(max_budget_minor > 0)
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS route_plans_buyer_created_idx ON route_plans(buyer_id, created_at)')
+        await database.execute('CREATE INDEX IF NOT EXISTS route_plans_state_expires_idx ON route_plans(state, expires_at)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

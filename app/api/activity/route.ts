@@ -121,7 +121,7 @@ export async function GET() {
          LIMIT 20`,
       ).then((result: any) => (result?.rows || []) as RatingActivityRow[]).catch(() => [] as RatingActivityRow[]),
       client.execute(
-        `SELECT id, name, created_at, owner_address
+        `SELECT id, name, created_at
          FROM agents
          WHERE status = 'active' AND visibility = 'public' AND archived_at IS NULL
          ORDER BY CASE

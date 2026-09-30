@@ -23,6 +23,7 @@
     "db:migrate:agent-env": "node --conditions=react-server --import tsx scripts/migrate-agent-env.ts",
     "db:migrate:runtime": "node --import tsx scripts/migrate-runtime-schema.ts",
     "ops:sync-release-monitor": "node --import tsx scripts/sync-release-monitor.ts",
+    "ops:reconcile-service-capacity": "node --conditions=react-server --import tsx scripts/reconcile-service-capacity.ts",
     "ops:payment-canary": "node scripts/prod-payment-canary.mjs",
     "ops:mpp-canary": "node scripts/prod-mpp-canary.mjs",
     "ops:verify-local-restore": "node --conditions=react-server --import tsx scripts/verify-local-restore.mjs",

@@ -166,3 +166,16 @@ test('public service DTO contains structured pricing and readiness without priva
   assert.equal(JSON.stringify(publicService).includes('reusable-seller@test.invalid'), false)
   assert.equal('seller_id' in publicService, false)
 })
+
+test('operator reconciliation releases a terminal order left by an older worker exactly once', async () => {
+  const offered = await service()
+  const result = await order(offered.id, `legacy-worker-${crypto.randomUUID()}`)
+  assert.equal(result.status, 201)
+  const { trade } = await result.json()
+  await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, trade.id))
+  const { reconcileTerminalServiceOrders } = await import('@/lib/service-order-state')
+  assert.equal(await reconcileTerminalServiceOrders(), 1)
+  assert.equal(await reconcileTerminalServiceOrders(), 0)
+  const [definition] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(definition.active_orders, 0)
+})

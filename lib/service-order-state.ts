@@ -1,6 +1,6 @@
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { service_definitions, service_orders } from '@/lib/schema'
+import { service_definitions, service_orders, trades } from '@/lib/schema'
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 export type ServiceOrderState = typeof service_orders.$inferSelect.state
@@ -25,4 +25,16 @@ export async function advanceServiceOrder(tx: Transaction, tradeId: string, stat
   }
   await tx.update(service_orders).set({ state, updated_at: now })
     .where(and(eq(service_orders.trade_id, tradeId), isNull(service_orders.capacity_released_at)))
+}
+
+/** Operator repair after a rollback or legacy worker settled a linked trade. */
+export async function reconcileTerminalServiceOrders(limit = 1_000) {
+  const rows = await db.select({ trade_id: service_orders.trade_id, status: trades.status })
+    .from(service_orders).innerJoin(trades, eq(service_orders.trade_id, trades.id))
+    .where(and(isNull(service_orders.capacity_released_at), inArray(trades.status, ['completed', 'complete', 'resolved', 'cancelled'])))
+    .limit(Math.max(1, Math.min(limit, 1_000)))
+  for (const row of rows) {
+    await db.transaction((tx) => advanceServiceOrder(tx, row.trade_id, row.status === 'complete' ? 'completed' : row.status as ServiceOrderState))
+  }
+  return rows.length
 }
