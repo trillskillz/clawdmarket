@@ -7,8 +7,8 @@ import { validateCsrf } from '@/lib/csrf'
 import { routePlanDto } from '@/lib/route-planning'
 import { internalErrorResponse } from '@/lib/api-error'
 import { expireTradePayment } from '@/lib/trade-funding'
-import { listRouteAttempts } from '@/lib/route-attempts'
 import { linkedRoutePaymentExposure, routePaymentExposure } from '@/lib/route-payment-exposure'
+import { inspectOwnedRoute } from '@/lib/route-inspection'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,9 +21,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!principal) return failure('UNAUTHORIZED', 'Authentication required', 401)
   try {
     const { id } = await params
-    const [plan] = await db.select().from(route_plans).where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, principal.userId))).limit(1)
-    if (!plan) return failure('ROUTE_NOT_FOUND', 'Route not found', 404)
-    return NextResponse.json({ route: routePlanDto(plan), attempts: await listRouteAttempts(id), payment_exposure: plan.service_order_id ? await linkedRoutePaymentExposure(plan.service_order_id) : null }, { headers: { 'Cache-Control': 'no-store' } })
+    const snapshot = await inspectOwnedRoute(id, principal.userId)
+    if (!snapshot) return failure('ROUTE_NOT_FOUND', 'Route not found', 404)
+    return NextResponse.json(snapshot, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return internalErrorResponse('Route lookup failed', error)
   }
