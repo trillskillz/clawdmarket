@@ -11,6 +11,7 @@ import { payoutAddressForUser } from '@/lib/external-settlement'
 import { selectMarketplaceRail, type MarketplaceRail } from '@/lib/payment-rail-selection'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
 import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
+import { supportsVerification, verificationPolicySchema, type VerificationPolicy } from '@/lib/verification-policy'
 
 export const routePlanInput = z.object({
   client_reference: z.string().trim().min(8).max(200),
@@ -19,7 +20,7 @@ export const routePlanInput = z.object({
   input: jsonObject.optional().default({}),
   max_budget: z.object({ amount: money, currency: z.literal('USD') }).strict(),
   deadline_seconds: z.number().int().min(1).max(30 * 24 * 3600).optional(),
-  verification: z.object({ required: z.literal(true).default(true), methods: z.tuple([z.literal('buyer_review')]).default(['buyer_review']) }).strict().default({ required: true, methods: ['buyer_review'] }),
+  verification: verificationPolicySchema.default({ required: true, methods: ['buyer_review'] }),
   payment_policy: z.object({ allowed_rails: z.array(z.enum(['mpp', 'evm', 'ledger'])).min(1).max(3).optional() }).strict().default({}),
   retry_policy: z.object({ max_attempts: z.number().int().min(1).max(3).default(1) }).strict().default({ max_attempts: 1 }),
 }).strict().superRefine((value, context) => {
@@ -40,7 +41,7 @@ export type RouteCandidate = {
   pricing: { model: 'fixed'; amount: string; currency: 'USD'; estimated_total: string }
   estimated_latency_seconds: number | null
   payment_rail: MarketplaceRail
-  verification_methods: ['buyer_review']
+  verification_methods: VerificationPolicy['methods']
   evidence_level: 'claimed_only'
   score: number
   score_components: { capability_fit: number; price: number; latency: number; capacity: number; verification: number }
@@ -68,6 +69,8 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     if (paymentControl.paused || service.active_orders >= service.max_concurrency) continue
     const offered = JSON.parse(service.capabilities) as string[]
     if (!capabilities.every((capability) => offered.includes(capability))) continue
+    const servicePolicy = verificationPolicySchema.safeParse(JSON.parse(service.verification_policy))
+    if (!servicePolicy.success || !supportsVerification(servicePolicy.data, input.verification)) continue
     const totalMinor = service.price_minor + Math.round(service.price_minor * 0.05)
     if (totalMinor > input.max_budget.amount) continue
     if (input.deadline_seconds && (!service.estimated_latency_seconds || service.estimated_latency_seconds > input.deadline_seconds)) continue
@@ -86,7 +89,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       service_id: service.id, seller_agent_id: service.seller_id.startsWith('user_agent_') ? service.seller_id.slice('user_agent_'.length) : null,
       pricing: { model: 'fixed', amount: servicePrice(service.price_minor), currency: 'USD', estimated_total: servicePrice(totalMinor) },
       estimated_latency_seconds: service.estimated_latency_seconds, payment_rail: rail,
-      verification_methods: ['buyer_review'], evidence_level: 'claimed_only', score,
+      verification_methods: servicePolicy.data.methods, evidence_level: 'claimed_only', score,
       score_components: components,
       explanation: ['All required canonical capabilities are claimed', 'Service is currently purchasable', 'Provider capability is not independently verified'],
     })

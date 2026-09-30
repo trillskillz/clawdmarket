@@ -6,6 +6,7 @@ import { encryptMessage } from '@/lib/chat-crypto';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
 import { advanceServiceOrder } from '@/lib/service-order-state';
+import { advanceBuyerReview } from '@/lib/verification-evidence';
 
 export function addressFromSource(source?: string | null) {
   if (!source) return null;
@@ -71,6 +72,7 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
       throw new Error('TRADE_NOT_PENDING_RELEASE');
     }
     await advanceServiceOrder(tx, trade.id, 'completed');
+    if (reason === 'auto_confirm') await advanceBuyerReview(tx, trade.id, 'skipped');
 
     const [workspace] = await tx.select().from(task_workspaces).where(eq(task_workspaces.trade_id, trade.id)).limit(1);
     if (workspace) {

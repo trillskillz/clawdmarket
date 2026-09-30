@@ -230,3 +230,26 @@ test('capacity consumed after planning fails the route without a second reservat
   const [definition] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
   assert.equal(definition.active_orders, 2)
 })
+
+test('planning and execution require the provider to support requested verification', async () => {
+  const offeredId = crypto.randomUUID()
+  await db.insert(schema.service_definitions).values({
+    id: offeredId, seller_id: 'route-seller', title: 'Structured security review',
+    description: 'Return structured security findings for a repository.',
+    capabilities: '["security-analysis","code-review"]', price_minor: 20, estimated_latency_seconds: 120,
+    status: 'active', output_schema: JSON.stringify({ type: 'object', properties: { findings: { type: 'array' } }, required: ['findings'] }),
+    verification_policy: JSON.stringify({ required: true, methods: ['buyer_review', 'schema'] }),
+  })
+  const planned = await planRoute(request('/api/routes/plan', 'other-buyer', 'POST', {
+    client_reference: `verified-plan-${crypto.randomUUID()}`, objective: 'Audit this repository for authentication vulnerabilities',
+    required_capabilities: ['security-analysis', 'code-review'], max_budget: { amount: '20.00', currency: 'USD' },
+    verification: { required: true, methods: ['buyer_review', 'schema'] },
+  }))
+  assert.equal(planned.status, 201)
+  const route = (await planned.json()).route
+  assert.deepEqual(route.candidates.map((candidate: { service_id: string }) => candidate.service_id), [offeredId])
+  assert.deepEqual(route.candidates[0].verification_methods, ['buyer_review', 'schema'])
+  const executed = await executeRoute(request(`/api/routes/${route.id}/execute`, 'other-buyer', 'POST'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(executed.status, 201)
+  assert.equal((await executed.json()).funds_state, 'no_funds_moved')
+})

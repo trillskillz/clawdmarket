@@ -8,6 +8,7 @@ import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { validateCsrf } from '@/lib/csrf';
 import { advanceServiceOrder } from '@/lib/service-order-state';
+import { advanceBuyerReview } from '@/lib/verification-evidence';
 
 export const dynamic = 'force-dynamic'
 
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .returning();
     if (!claimed) return null;
     await advanceServiceOrder(tx, trade.id, 'disputed');
+    await advanceBuyerReview(tx, trade.id, 'disputed');
     if (evidenceContent || evidenceUrl) {
       await tx.insert(trade_evidence).values({
         trade_id: trade.id,

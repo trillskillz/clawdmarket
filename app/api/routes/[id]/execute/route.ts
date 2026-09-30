@@ -12,6 +12,7 @@ import { routeExecutionEnabled } from '@/lib/routing-feature-flags'
 import { NewPaymentsPausedError } from '@/lib/payment-control'
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy'
 import { internalErrorResponse } from '@/lib/api-error'
+import { supportsVerification, verificationPolicySchema } from '@/lib/verification-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,7 +71,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const required = JSON.parse(plan.required_capabilities) as string[]
     const offered = JSON.parse(service.capabilities) as string[]
-    if (!required.every((capability) => offered.includes(capability)) || plan.deadline_seconds && (!service.estimated_latency_seconds || service.estimated_latency_seconds > plan.deadline_seconds)) {
+    const requestedVerification = verificationPolicySchema.safeParse(JSON.parse(plan.verification_policy))
+    const serviceVerification = verificationPolicySchema.safeParse(JSON.parse(service.verification_policy))
+    if (!required.every((capability) => offered.includes(capability))
+      || !requestedVerification.success || !serviceVerification.success || !supportsVerification(serviceVerification.data, requestedVerification.data)
+      || plan.deadline_seconds && (!service.estimated_latency_seconds || service.estimated_latency_seconds > plan.deadline_seconds)) {
       await db.update(route_plans).set({ state: 'failed', updated_at: new Date() }).where(and(eq(route_plans.id, id), eq(route_plans.state, 'reserving')))
       return failure('ROUTE_STALE_PROVIDER', 'Selected service no longer satisfies the plan', 409)
     }

@@ -41,6 +41,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   capability_challenges: ['id', 'agent_id', 'capability', 'challenge_data', 'expires_at', 'submitted_at', 'passed', 'score', 'created_at'],
   task_workspaces: ['task_id', 'trade_id', 'agreed_price', 'acceptance_criteria', 'created_at'],
   trade_deliveries: ['id', 'trade_id', 'submitter_id', 'content_hash', 'verification', 'created_at'],
+  verification_results: ['id', 'trade_id', 'delivery_id', 'content_hash', 'method', 'verifier', 'version', 'status', 'score', 'evidence_json', 'failure', 'created_at', 'updated_at'],
   wallets: ['id', 'user_id', 'balance', 'escrow', 'created_at'],
   transactions: ['id', 'from_user_id', 'to_user_id', 'amount', 'type', 'reference_id', 'created_at'],
   payment_receipts: [

@@ -519,6 +519,19 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS route_plans_buyer_created_idx ON route_plans(buyer_id, created_at)')
         await database.execute('CREATE INDEX IF NOT EXISTS route_plans_state_expires_idx ON route_plans(state, expires_at)')
       } },
+      { id: '2026-09-30-verification-results-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS verification_results (
+          id TEXT PRIMARY KEY NOT NULL, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE RESTRICT,
+          delivery_id TEXT REFERENCES trade_deliveries(id) ON DELETE RESTRICT,
+          content_hash TEXT NOT NULL, method TEXT NOT NULL, verifier TEXT NOT NULL,
+          version TEXT NOT NULL, status TEXT NOT NULL, score REAL,
+          evidence_json TEXT NOT NULL DEFAULT '{}', failure TEXT,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS verification_results_trade_content_method_version_idx ON verification_results(trade_id, content_hash, method, version)')
+        await database.execute('CREATE INDEX IF NOT EXISTS verification_results_trade_status_idx ON verification_results(trade_id, status)')
+        await database.execute('CREATE INDEX IF NOT EXISTS verification_results_delivery_idx ON verification_results(delivery_id)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

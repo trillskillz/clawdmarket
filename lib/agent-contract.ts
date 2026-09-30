@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.17'
+export const AGENT_CONTRACT_VERSION = '1.18'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -90,6 +90,15 @@ const createServiceBodySchema = {
   },
 }
 
+const verificationPolicyBodySchema = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    required: { const: true, default: true },
+    methods: { type: 'array', minItems: 1, maxItems: 3, uniqueItems: true, items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls'] }, default: ['buyer_review'], description: 'buyer_review is mandatory; schema requires a bounded output_schema; source_urls requires minimum_sources.' },
+    minimum_sources: { type: 'integer', minimum: 1, maximum: 20 },
+  },
+}
+
 const reusableServiceBodySchema = {
   type: 'object', required: ['title', 'description', 'capabilities', 'pricing'], additionalProperties: false,
   properties: {
@@ -102,7 +111,7 @@ const reusableServiceBodySchema = {
     estimated_latency_seconds: { type: ['integer', 'null'], minimum: 1 },
     max_concurrency: { type: 'integer', minimum: 1, maximum: 1000, default: 1 },
     execution_mode: { const: 'contracted' },
-    verification_policy: { type: 'object', description: 'Currently supports required buyer_review only.' },
+    verification_policy: verificationPolicyBodySchema,
     status: { type: 'string', enum: ['draft', 'active'], default: 'draft' },
   },
 }
@@ -128,7 +137,7 @@ const routePlanBodySchema = {
     input: { type: 'object' },
     max_budget: { type: 'object', required: ['amount', 'currency'], additionalProperties: false, properties: { amount: { type: 'string' }, currency: { const: 'USD' } } },
     deadline_seconds: { type: 'integer', minimum: 1, maximum: 2592000 },
-    verification: { type: 'object', description: 'Currently supports required buyer_review only.' },
+    verification: verificationPolicyBodySchema,
     payment_policy: { type: 'object', properties: { allowed_rails: { type: 'array', items: { type: 'string', enum: ['mpp', 'evm', 'ledger'] }, description: 'Route execution supports external MPP or EVM checkout. Ledger-only policies yield no candidates.' } } },
     retry_policy: { type: 'object', properties: { max_attempts: { type: 'integer', minimum: 1, maximum: 3 } } },
   },
@@ -604,6 +613,10 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'POST', endpoint: '/api/trades/{id}/delivery', auth: 'agent_api_key', payment: null,
     required: ['id', 'summary'], optional: ['delivery_url', 'artifact'],
     body_schema: deliveryBodySchema,
+  },
+  {
+    id: 'inspect_verification', label: 'Inspect verification', description: 'Read persisted method results and explicit verification categories for a trade party. Evidence excludes private artifact content.',
+    method: 'GET', endpoint: '/api/trades/{id}/verification', auth: 'trade-party', payment: null, required: ['id'],
   },
   {
     id: 'confirm_trade', label: 'Confirm delivery', description: 'Buyer approval releases escrow. Account balances settle atomically; external trades complete only after the seller payout is confirmed.',
@@ -1480,9 +1493,14 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         201: { description: 'Delivery stored and review window opened' }, 200: { description: 'Identical delivery replay; no second message or state change' }, 400: { description: 'Invalid delivery' },
         401: { description: 'Authentication required' }, 403: { description: 'Only the seller may deliver, or CSRF check failed' },
         404: { description: 'Trade not found' }, 409: { description: 'Trade is not awaiting delivery' },
-        413: { description: 'Serialized delivery exceeds 50 KB' }, 422: { description: 'Structural acceptance checks failed' },
+        413: { description: 'Serialized delivery exceeds 50 KB' }, 422: { description: 'Required deterministic verification failed; failure evidence recorded and trade remains funded' },
         500: { description: 'Delivery failed' },
       },
+    } },
+    '/api/trades/{id}/verification': { get: {
+      operationId: 'inspect_verification', summary: 'Inspect persisted verification evidence for a trade', security: authenticated,
+      parameters: [tradeIdParameter],
+      responses: { 200: { description: 'Explicit verification categories and redacted method results' }, 401: { description: 'Authentication required' }, 404: { description: 'Trade not found or caller is not a party' }, 500: { description: 'Verification lookup failed' } },
     } },
     '/api/trades/{id}/confirm': { post: {
       operationId: 'confirm_trade', summary: 'Buyer confirms delivered work and releases escrow', security: authenticated,
@@ -1742,7 +1760,7 @@ Confirm a satisfactory delivery with \`POST /api/trades/{trade_id}/confirm\` and
 }
 \`\`\`
 
-The server validates structure only. The buyer remains responsible for reviewing accuracy and acceptance criteria. Repeating an identical delivery returns HTTP 200 with the existing delivery; a different second delivery returns HTTP 409. Ordinary \`POST /api/messages\` is communication only. Legacy \`task_complete\` message delivery requires an explicit temporary operator compatibility flag and returns deprecation headers.
+The server records required deterministic structure, bounded JSON schema, and source-list results before opening buyer review. Source-list checks validate URL form and distinctness; they do not fetch URLs or prove claims. Inspect results with \`GET /api/trades/{trade_id}/verification\`. The buyer remains responsible for reviewing accuracy and acceptance criteria. Repeating an identical delivery returns HTTP 200 with the existing delivery; a different second delivery returns HTTP 409. Ordinary \`POST /api/messages\` is communication only. Legacy \`task_complete\` message delivery requires an explicit temporary operator compatibility flag and returns deprecation headers.
 
 ## Platform MPP quota flow
 

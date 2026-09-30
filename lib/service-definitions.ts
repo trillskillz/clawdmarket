@@ -9,6 +9,7 @@ import { getNewPaymentControl } from '@/lib/payment-control'
 import { payoutAddressForUser } from '@/lib/external-settlement'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
 import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
+import { outputSchemaV1, verificationPolicySchema } from '@/lib/verification-policy'
 
 export const money = z.string().regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/, 'Use a USD decimal string with at most two places')
   .transform((value, ctx) => {
@@ -26,11 +27,6 @@ export const jsonObject = z.record(z.string().max(100), z.unknown()).refine(
   'Schema or policy must be at most 8 KB',
 )
 
-const verificationPolicy = z.object({
-  required: z.literal(true).default(true),
-  methods: z.tuple([z.literal('buyer_review')]).default(['buyer_review']),
-}).strict()
-
 export const serviceDefinitionInput = z.object({
   title: z.string().trim().min(5).max(100),
   description: z.string().trim().min(20).max(2_000),
@@ -41,12 +37,16 @@ export const serviceDefinitionInput = z.object({
   estimated_latency_seconds: z.number().int().min(1).max(30 * 24 * 3600).nullable().optional(),
   max_concurrency: z.number().int().min(1).max(1_000).default(1),
   execution_mode: z.literal('contracted').default('contracted'),
-  verification_policy: verificationPolicy.default({ required: true, methods: ['buyer_review'] }),
+  verification_policy: verificationPolicySchema.default({ required: true, methods: ['buyer_review'] }),
   status: z.enum(['draft', 'active']).default('draft'),
 }).strict().superRefine((value, context) => {
   value.capabilities.forEach((capability, index) => {
     if (!normalizeCapability(capability)) context.addIssue({ code: 'custom', path: ['capabilities', index], message: 'Unknown canonical capability' })
   })
+  if (value.verification_policy.methods.includes('schema')) {
+    const parsed = outputSchemaV1.safeParse(value.output_schema)
+    if (!parsed.success) context.addIssue({ code: 'custom', path: ['output_schema'], message: 'schema verification requires the supported bounded JSON object schema' })
+  }
 })
 
 export const serviceOrderInput = z.object({
@@ -79,12 +79,15 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   ])
   const rails = getPaymentReadiness()
   const capacityAvailable = service.active_orders < service.max_concurrency
+  const parsedPolicy = verificationPolicySchema.safeParse(JSON.parse(service.verification_policy))
+  const verificationReady = parsedPolicy.success && (!parsedPolicy.data.methods.includes('schema') || outputSchemaV1.safeParse(JSON.parse(service.output_schema)).success)
   const paymentReady = !paymentControl.paused && (rails.ledger.enabled || Boolean(payoutAddress && (rails.mpp.enabled || rails.evm.enabled)))
   const reasons: string[] = []
   if (service.status !== 'active') reasons.push('SERVICE_NOT_ACTIVE')
   if (!reusableServiceWritesEnabled()) reasons.push('REUSABLE_SERVICES_DISABLED')
   if (!sellerVisible) reasons.push('SELLER_NOT_PUBLIC')
   if (!capacityAvailable) reasons.push('CAPACITY_FULL')
+  if (!verificationReady) reasons.push('VERIFICATION_UNSUPPORTED')
   if (paymentControl.paused) reasons.push('PAYMENTS_PAUSED')
   else if (!paymentReady) reasons.push(payoutAddress ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED')
   return {
@@ -107,7 +110,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
       available: service.status === 'active' && sellerVisible,
       payment_ready: paymentReady,
       capacity_available: capacityAvailable,
-      verification_ready: true,
+      verification_ready: verificationReady,
       blocking_reasons: reasons,
     },
     created_at: service.created_at,

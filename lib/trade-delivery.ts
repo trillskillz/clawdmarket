@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { db } from './db'
-import { messages, task_workspaces, trade_deliveries, trades } from './schema'
+import { messages, service_definitions, service_orders, task_workspaces, trade_deliveries, trades, verification_results } from './schema'
 import { encryptMessage } from './chat-crypto'
 import { deliverySchema, requirementsSchema, verifyDelivery } from './delivery-validation'
 import { deliverWebhookEvent } from './webhook-delivery'
 import { advanceServiceOrder } from './service-order-state'
 import { withKeyedWriteLock } from './service-reservation-lock'
+import { evaluateVerification, outputSchemaV1, verificationPolicySchema, type VerificationResult } from './verification-policy'
 
 export class DeliveryError extends Error {
   constructor(message: string, public status: number, public details?: unknown) { super(message) }
@@ -43,14 +44,36 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
   }
   const prior = await replay()
   if (prior) return prior
+  if (trade.status !== 'escrow_held') throw new DeliveryError('Trade is not awaiting delivery', 409)
   const [workspace] = await db.select().from(task_workspaces).where(eq(task_workspaces.trade_id, tradeId)).limit(1)
   const requirements = requirementsSchema.parse(workspace ? {
     ...workspace,
     acceptance_criteria: JSON.parse(workspace.acceptance_criteria),
     required_json_keys: JSON.parse(workspace.required_json_keys),
   } : {})
-  const verification = verifyDelivery(parsed.data, requirements)
-  if (verification.status === 'failed') throw new DeliveryError('Delivery does not meet the required structure', 422, verification)
+  const [service] = await db.select({ policy: service_definitions.verification_policy, output_schema: service_definitions.output_schema })
+    .from(service_orders).innerJoin(service_definitions, eq(service_orders.service_id, service_definitions.id))
+    .where(eq(service_orders.trade_id, tradeId)).limit(1)
+  const policy = verificationPolicySchema.safeParse(service ? JSON.parse(service.policy) : { required: true, methods: ['buyer_review'] })
+  if (!policy.success) throw new DeliveryError('Stored verification policy is unsupported', 409)
+  if (service && policy.data.methods.includes('schema') && !outputSchemaV1.safeParse(JSON.parse(service.output_schema)).success) {
+    throw new DeliveryError('Stored output schema is unsupported', 409)
+  }
+  const outcomes = evaluateVerification({ policy: policy.data, outputSchema: service ? JSON.parse(service.output_schema) : {}, delivery: parsed.data, legacyRequirements: requirements })
+  const legacyVerification = verifyDelivery(parsed.data, requirements)
+  const failed = outcomes.some((outcome) => outcome.status === 'failed') || legacyVerification.status === 'failed'
+  const verification = { ...legacyVerification, status: failed ? 'failed' : outcomes.some((outcome) => outcome.status === 'passed') ? 'passed' : 'manual_review',
+    methods: outcomes.map(({ method, status, score }) => ({ method, status, score })),
+    categories: { delivery_received: !failed, structure_verified: !failed && outcomes.some((outcome) => ['structure', 'schema'].includes(outcome.method) && outcome.status === 'passed'), semantic_verified: false, buyer_accepted: false } }
+  const evidenceRows = (deliveryId: string | null) => outcomes.map((outcome: VerificationResult) => ({
+    id: crypto.randomUUID(), trade_id: tradeId, delivery_id: deliveryId, content_hash: contentHash,
+    method: outcome.method, verifier: outcome.verifier, version: outcome.version,
+    status: outcome.status, score: outcome.score, evidence_json: JSON.stringify(outcome.evidence), failure: outcome.failure,
+  }))
+  if (failed) {
+    await db.insert(verification_results).values(evidenceRows(null).filter((row) => row.method !== 'buyer_review')).onConflictDoNothing()
+    throw new DeliveryError('Delivery failed required verification checks', 422, verification)
+  }
   const encrypted = await encryptMessage(JSON.stringify({ type: 'task_complete', trade_id: tradeId, ...parsed.data, content_hash: contentHash }))
   const commit = () => db.transaction(async (tx) => {
     const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: new Date(Date.now() + 86400000).toISOString() })
@@ -63,6 +86,7 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
       artifact_json: parsed.data.artifact ? JSON.stringify(parsed.data.artifact) : null,
       content_hash: contentHash, verification: JSON.stringify(verification),
     }).returning()
+    await tx.insert(verification_results).values(evidenceRows(delivery.id)).onConflictDoNothing()
     const [message] = await tx.insert(messages).values({
       sender_id: sellerId, receiver_id: trade.buyer_id,
       encrypted_content: encrypted.encrypted_content, nonce: encrypted.nonce,

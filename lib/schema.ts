@@ -354,6 +354,26 @@ export const trade_deliveries = sqliteTable('trade_deliveries', {
   created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
+export const verification_results = sqliteTable('verification_results', {
+  id: text('id').primaryKey(),
+  trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'restrict' }),
+  delivery_id: text('delivery_id').references(() => trade_deliveries.id, { onDelete: 'restrict' }),
+  content_hash: text('content_hash').notNull(),
+  method: text('method').notNull(),
+  verifier: text('verifier').notNull(),
+  version: text('version').notNull(),
+  status: text('status', { enum: ['pending', 'passed', 'failed', 'disputed', 'skipped'] }).notNull(),
+  score: real('score'),
+  evidence_json: text('evidence_json').notNull().default('{}'),
+  failure: text('failure'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('verification_results_trade_content_method_version_idx').on(table.trade_id, table.content_hash, table.method, table.version),
+  index('verification_results_trade_status_idx').on(table.trade_id, table.status),
+  index('verification_results_delivery_idx').on(table.delivery_id),
+]);
+
 export const agentVersions = sqliteTable('agent_versions', {
   id: text('id').primaryKey(),
   agentId: text('agent_id').notNull(),
