@@ -12,8 +12,8 @@ import { inspectOwnedRoute } from '@/lib/route-inspection'
 
 export const dynamic = 'force-dynamic'
 
-function failure(error_code: string, message: string, status: number) {
-  return NextResponse.json({ success: false, error_code, message, retryable: false, state: 'no_funds_moved' }, { status, headers: { 'Cache-Control': 'no-store' } })
+function failure(error_code: string, message: string, status: number, state = 'no_funds_moved') {
+  return NextResponse.json({ success: false, error_code, message, retryable: false, state }, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -50,9 +50,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       if (!order) throw new Error('ROUTE_ORDER_INVARIANT')
       const [trade] = await db.select().from(trades).where(eq(trades.id, order.trade_id)).limit(1)
       if (!trade) throw new Error('ROUTE_TRADE_INVARIANT')
-      if (trade.status !== 'pending') return failure('ROUTE_FUNDS_ALREADY_COMMITTED', 'Funded work cannot be cancelled as an unpaid reservation', 409)
+      if (trade.status !== 'pending') return failure('ROUTE_FUNDS_ALREADY_COMMITTED', 'Funded work cannot be cancelled as an unpaid reservation', 409, 'see_trade')
       const cancelledTrade = await expireTradePayment(trade)
-      if (!cancelledTrade) return failure('ROUTE_FUNDING_RACE', 'Funding or cancellation changed this route', 409)
+      if (!cancelledTrade) return failure('ROUTE_FUNDING_RACE', 'Funding or cancellation changed this route', 409, 'payment_unknown')
       const [updated] = await db.select().from(route_plans).where(eq(route_plans.id, id)).limit(1)
       const paymentExposure = await routePaymentExposure(cancelledTrade)
       return NextResponse.json({ route: routePlanDto(updated), funds_state: paymentExposure.late_payment_possible ? 'payment_unknown' : 'see_trade', payment_exposure: paymentExposure }, { headers: { 'Cache-Control': 'no-store' } })

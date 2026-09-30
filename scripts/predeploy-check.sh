@@ -134,6 +134,9 @@ pnpm exec next typegen
 echo "Checking TypeScript"
 pnpm run typecheck
 
+echo "Building TypeScript SDK"
+pnpm run sdk:build
+
 echo "Checking lint"
 pnpm run lint
 

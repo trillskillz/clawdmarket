@@ -12,6 +12,7 @@
     "start": "next start",
     "test": "node --conditions=react-server --import tsx --test --test-concurrency=1 tests/**/*.test.ts",
     "typecheck": "tsc --noEmit",
+    "sdk:build": "tsc -p sdk/typescript/tsconfig.json",
     "lint": "eslint .",
     "test:e2e": "playwright test",
     "test:mcp-contract": "node --conditions=react-server --import tsx --test tests/api/mcp-route.test.ts",

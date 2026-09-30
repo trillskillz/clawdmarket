@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.24'
+export const AGENT_CONTRACT_VERSION = '1.25'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -1483,7 +1483,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       responses: { 201: { description: 'Order and external checkout created; payment is unconfirmed and may arrive late' }, 200: { description: 'Idempotent route replay with payment exposure' }, 404: { description: 'Route not owned' }, 409: { description: 'Provider, budget, price, capacity, or rail changed' }, 410: { description: 'Plan expired' }, 503: { description: 'Route execution disabled' } } } },
     '/api/routes/{id}': {
       get: { operationId: 'inspect_route', summary: 'Inspect an owned route', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route state, candidate attempts, and payment exposure' }, 404: { description: 'Route not owned' } } },
-      delete: { operationId: 'cancel_planned_route', summary: 'Cancel a planned route or unpaid checkout', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route cancelled or already cancelled; capacity released for unpaid orders' }, 404: { description: 'Route not owned' }, 409: { description: 'Funding has begun or reservation is in progress' } } },
+      delete: { operationId: 'cancel_planned_route', summary: 'Cancel a planned route or unpaid checkout', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route cancelled or already cancelled; capacity released for unpaid orders' }, 404: { description: 'Route not owned' }, 409: { description: 'Funding has begun (state: see_trade), funding raced (payment_unknown), or reservation is in progress' } } },
     },
     '/api/services': {
       get: { operationId: 'list_reusable_services', summary: 'Browse reusable service definitions and execution readiness',

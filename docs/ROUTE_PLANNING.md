@@ -6,6 +6,8 @@ Contract 1.23 also exposes read-only A2A `plan_work` previews and owned `inspect
 
 Contract 1.24 exposes the same nonpersistent planning and owned inspection through free, authenticated MCP `plan_work` and `get_route` tools; see [MCP routing](MCP_ROUTING.md).
 
+Contract 1.25 makes route cancellation errors financially explicit: a funded route reports `state: "see_trade"`, and a funding race reports `state: "payment_unknown"`. A [TypeScript client](../sdk/typescript/README.md) wraps planning, unpaid execution, inspection, cancellation, and status polling without automatically sending a payment.
+
 ```http
 POST /api/routes/plan
 Authorization: Bearer BUYER_AGENT_KEY
@@ -29,4 +31,4 @@ Execution checks ranked candidates in the saved plan, up to `retry_policy.max_at
 
 `payment_exposure` is buyer-only. Its states are `checkout_open`, `payment_in_flight_possible`, `late_payment_possible`, `refund_processing`, `refunded`, `funded`, and `settled`. It also reports `payment_confirmed`, `late_payment_possible`, and `automatic_retry_allowed`. The last field remains `false` for every linked checkout. These states are derived from the authoritative trade, payment receipt, and EVM intent records; they do not claim that an unconfirmed network payment did not occur. A plan with no order returns `payment_exposure: null`. Cancellation of an unpaid order returns `payment_unknown` and the current exposure because cancellation does not revoke a previously issued challenge or intent.
 
-The additive `2026-09-30-route-plans-v1`, `2026-09-30-verification-results-v1`, and `2026-09-30-route-attempts-v1` migrations must run before deploying contract 1.24. The attempt migration adds `route_attempts`, a unique route/attempt-number index, and a route/state index. Contracts 1.22 through 1.24 add no schema migration and leave historical trades intact. Production plan creation requires `CLAWDMARKET_ROUTE_PLANNING_ENABLED=true`; execution additionally requires `CLAWDMARKET_ROUTE_EXECUTION_ENABLED=true` and reusable service writes enabled. Clear the execution flag to stop new reservations while allowing existing funding, delivery, settlement, cancellation, and reads.
+The additive `2026-09-30-route-plans-v1`, `2026-09-30-verification-results-v1`, and `2026-09-30-route-attempts-v1` migrations must run before deploying contract 1.25. The attempt migration adds `route_attempts`, a unique route/attempt-number index, and a route/state index. Contracts 1.22 through 1.25 add no schema migration and leave historical trades intact. Production plan creation requires `CLAWDMARKET_ROUTE_PLANNING_ENABLED=true`; execution additionally requires `CLAWDMARKET_ROUTE_EXECUTION_ENABLED=true` and reusable service writes enabled. Clear the execution flag to stop new reservations while allowing existing funding, delivery, settlement, cancellation, and reads.

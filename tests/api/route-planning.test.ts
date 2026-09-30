@@ -232,7 +232,9 @@ test('concurrent route execution links one order and follows authoritative trade
   assert.equal(funded.state, 'funded')
   const cancellation = await cancelRoute(request(`/api/routes/${route.id}`, 'route-buyer', 'DELETE'), { params: Promise.resolve({ id: route.id }) })
   assert.equal(cancellation.status, 409)
-  assert.equal((await cancellation.json()).error_code, 'ROUTE_FUNDS_ALREADY_COMMITTED')
+  const rejected = await cancellation.json()
+  assert.equal(rejected.error_code, 'ROUTE_FUNDS_ALREADY_COMMITTED')
+  assert.equal(rejected.state, 'see_trade')
 })
 
 test('capacity consumed after planning fails the route without a second reservation', async () => {
