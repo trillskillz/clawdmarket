@@ -56,6 +56,7 @@ required_files=(
   "lib/service-order-state.ts"
   "lib/route-planning.ts"
   "lib/route-attempts.ts"
+  "lib/route-payment-exposure.ts"
   "lib/verification-policy.ts"
   "lib/verification-evidence.ts"
   "lib/capability-performance.ts"

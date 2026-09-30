@@ -15,6 +15,7 @@ import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy'
 import { internalErrorResponse } from '@/lib/api-error'
 import { supportsVerification, verificationPolicySchema } from '@/lib/verification-policy'
 import { beginRouteAttempt, listRouteAttempts, markRouteAttemptIneligible } from '@/lib/route-attempts'
+import { routePaymentExposure } from '@/lib/route-payment-exposure'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +33,8 @@ async function linkedResponse(plan: typeof route_plans.$inferSelect, idempotent:
   if (!order) throw new Error('ROUTE_ORDER_INVARIANT')
   const [trade] = await db.select().from(trades).where(eq(trades.id, order.trade_id)).limit(1)
   if (!trade) throw new Error('ROUTE_TRADE_INVARIANT')
-  return NextResponse.json({ route: routePlanDto(plan), attempts: await listRouteAttempts(plan.id), order: serviceOrderDto(order), trade, checkout: trade.status === 'pending' ? checkoutForTrade(trade) : null, idempotent, funds_state: trade.status === 'pending' ? 'no_funds_moved' : 'see_trade' }, { status: idempotent ? 200 : 201, headers: { 'Cache-Control': 'no-store' } })
+  const paymentExposure = await routePaymentExposure(trade)
+  return NextResponse.json({ route: routePlanDto(plan), attempts: await listRouteAttempts(plan.id), order: serviceOrderDto(order), trade, checkout: trade.status === 'pending' ? checkoutForTrade(trade) : null, idempotent, funds_state: paymentExposure.late_payment_possible ? 'payment_unknown' : 'see_trade', payment_exposure: paymentExposure }, { status: idempotent ? 200 : 201, headers: { 'Cache-Control': 'no-store' } })
 }
 
 /** Execution commits only an unpaid order. Funding remains an explicit, authenticated checkout action. */
