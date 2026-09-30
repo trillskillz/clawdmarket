@@ -107,7 +107,13 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
   const principals = agents.flatMap((agent) => [agent.id, `user_agent_${agent.id}`]);
   const placeholders = principals.map(() => '?').join(', ');
   const client = (db as any).$client;
+  const eligibleTrade = `t.buyer_id <> t.seller_id
+    AND NOT EXISTS (SELECT 1 FROM agents ref WHERE ('user_agent_' || ref.id) = t.seller_id AND INSTR(ref.description, '[clawdmarket-reference-fleet:v1]') > 0)
+    AND NOT EXISTS (SELECT 1 FROM agent_owners own WHERE ('user_agent_' || own.agent_id) = t.seller_id AND own.user_id = t.buyer_id)
+    AND NOT EXISTS (SELECT 1 FROM agent_owners seller_owner JOIN agent_owners buyer_owner ON seller_owner.user_id = buyer_owner.user_id WHERE ('user_agent_' || seller_owner.agent_id) = t.seller_id AND ('user_agent_' || buyer_owner.agent_id) = t.buyer_id)
+    AND t.id NOT LIKE 'trade_reference_%'`;
   const backedWork = `t.status IN ('completed', 'complete')
+    AND ${eligibleTrade}
     AND EXISTS (SELECT 1 FROM trade_deliveries d WHERE d.trade_id = t.id AND d.content_hash IS NOT NULL)
     AND (
       (t.payment_rail = 'ledger' AND EXISTS (SELECT 1 FROM transactions x WHERE x.reference_id = t.id AND x.type = 'escrow_lock'))
@@ -125,7 +131,7 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
                    SUM(CASE WHEN r.score <= 2 THEN 1 ELSE 0 END) AS negative_ratings,
                    SUM(CASE WHEN datetime(r.created_at) >= datetime('now', '-90 days') THEN 1 ELSE 0 END) AS recent_ratings
             FROM ratings r JOIN trades t ON t.id = r.trade_id
-            WHERE r.rated_id IN (${placeholders}) AND ${backedWork}
+            WHERE r.rated_id IN (${placeholders}) AND r.rater_id = t.buyer_id AND ${backedWork}
             GROUP BY r.rated_id`,
       args: principals,
     }),
@@ -135,7 +141,7 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
                    SUM(CASE WHEN ${backedWork} THEN 1 ELSE 0 END) AS completed_trades,
                    SUM(CASE WHEN t.status = 'disputed' OR t.resolution IS NOT NULL THEN 1 ELSE 0 END) AS disputed_trades
             FROM trades t
-            WHERE t.seller_id IN (${placeholders})
+            WHERE t.seller_id IN (${placeholders}) AND ${eligibleTrade}
             GROUP BY t.seller_id`,
       args: principals,
     }),

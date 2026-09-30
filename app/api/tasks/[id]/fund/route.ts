@@ -10,6 +10,7 @@ import { calculateTradeFinancials, createLedgerTrade, ensureAdminFeeRecipient, T
 import { deliverWebhookEvent } from '@/lib/webhook-delivery'
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy'
 import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy'
+import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy'
 import { getPaymentReadiness } from '@/lib/payment-config'
 import { payoutAddressForUser } from '@/lib/external-settlement'
 import { checkoutForTrade } from '@/lib/trade-checkout'
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (input.data.payment_rail === 'ledger') {
         trade = await createLedgerTrade(tx, listing, principal.userId, feeRecipient, { agentId: principal.agentId, clientReference })
       } else {
-        if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: quote.totalCost })
+        if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: quote.totalCost, sellerId, paymentRail: input.data.payment_rail })
         await tx.update(listings).set({ status: 'sold' }).where(eq(listings.id, listing.id))
         ;[trade] = await tx.insert(trades).values({
           listing_id: listing.id,
@@ -123,6 +124,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     if (error instanceof FundingError) return NextResponse.json({ error: error.message }, { status: error.status })
     if (error instanceof AgentSpendPolicyError) return NextResponse.json({ error: error.message, code: error.code, spending_policy: error.policy }, { status: 409 })
+    if (error instanceof BuyerSpendPolicyError) return NextResponse.json({ success: false, error_code: error.code, message: error.message, retryable: false, state: 'no_funds_moved' }, { status: 409 })
     if (error instanceof TradeRaceError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 })
     console.error('[task/fund]', error)
     return NextResponse.json({ error: 'Could not fund task. Reload to check its status before retrying.' }, { status: 500 })

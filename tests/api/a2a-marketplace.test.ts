@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { NextRequest } from 'next/server'
+import { privateKeyToAccount } from 'viem/accounts'
 import { createLocalTestSchema } from '../helpers/local-schema'
 
 let directory: string
@@ -16,6 +17,7 @@ let card: typeof import('@/app/.well-known/agent-card.json/route').GET
 let hashKey: typeof import('@/lib/registered-agent-auth').hashAgentApiKey
 let seller: { id: string; key: string }
 let other: { id: string; key: string }
+const treasury = privateKeyToAccount(`0x${'66'.repeat(32)}`)
 
 async function registerAgent(name: string) {
   const result = await register(new NextRequest('https://clawdmkt.test/api/agents/register', {
@@ -43,6 +45,9 @@ before(async () => {
   process.env.TURSO_DATABASE_URL = `file:${join(directory, 'a2a.db')}`
   process.env.JWT_SECRET = 'isolated-a2a-tests-only'
   process.env.WEBHOOK_SECRET_KEY = 'isolated-a2a-tests-only'
+  process.env.TREASURY_ADDRESS = treasury.address
+  process.env.EVM_SETTLEMENT_PRIVATE_KEY = `0x${'66'.repeat(32)}`
+  process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId: 8453, chainName: 'Test Base', address: `0x${'44'.repeat(20)}`, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 3, rpcUrl: 'https://rpc.example.invalid' }])
   db = (await import('@/lib/db')).db
   schema = await import('@/lib/schema')
   await createLocalTestSchema(db.$client, schema)
@@ -69,7 +74,7 @@ test('public card truthfully declares a 1.0 JSON-RPC task interface and read-onl
   assert.equal(data.supportedInterfaces[0].url, 'https://clawdmkt.com/api/a2a')
   assert.equal(data.capabilities.streaming, false)
   assert.equal(data.capabilities.pushNotifications, false)
-  assert.equal(data.skills.length, 1)
+  assert.deepEqual(data.skills.map((skill: { id: string }) => skill.id), ['marketplace_briefing', 'plan_work', 'inspect_route'])
   assert.match(data.skills[0].description, /read-only/)
   assert.equal(data.securitySchemes.agentBearer.httpAuthSecurityScheme.scheme, 'Bearer')
   assert.deepEqual(data.securityRequirements, [{ schemes: { agentBearer: { list: [] } } }])
@@ -173,4 +178,66 @@ test('A2A never creates a marketplace trade, payment receipt, or wallet', async 
   assert.deepEqual(await db.select().from(schema.trades), trades)
   assert.deepEqual(await db.select().from(schema.payment_receipts), receipts)
   assert.deepEqual(await db.select().from(schema.wallets), wallets)
+})
+
+test('A2A plan_work previews shared routing candidates without a route or payment', async () => {
+  const planner = await registerAgent(`A2A Planner ${randomUUID().slice(0, 8)}`)
+  const readOnlyKey = `clawd_${randomUUID().replaceAll('-', '')}`
+  await db.insert(schema.agent_credentials).values({ id: `agc_${randomUUID()}`, agentId: planner.id,
+    name: 'Read-only A2A planner', keyHash: hashKey(readOnlyKey), keyPrefix: readOnlyKey.slice(0, 12),
+    scopes: JSON.stringify(['agent:read']), createdByType: 'test' })
+  const sellerId = `a2a-route-seller-${randomUUID()}`
+  const serviceId = randomUUID()
+  await db.insert(schema.users).values({ id: sellerId, name: 'A2A Route Seller', email: `${sellerId}@test.invalid`, password_hash: 'unused', role: 'human' })
+  await db.insert(schema.payout_addresses).values({ user_id: sellerId, address: treasury.address })
+  await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: sellerId, title: 'A2A security review',
+    description: 'Review authentication paths for a buyer agent.', capabilities: '["security-analysis"]',
+    price_minor: 200, status: 'active', estimated_latency_seconds: 120 })
+  const before = { routes: (await db.select().from(schema.route_plans)).length, trades: (await db.select().from(schema.trades)).length }
+  const input = { role: 'ROLE_USER', messageId: randomUUID(), parts: [{ data: { action: 'plan_work', request: {
+    objective: 'Review my API for authentication issues', required_capabilities: ['security'],
+    max_budget: { amount: '5.00', currency: 'USD' },
+  } }, mediaType: 'application/json' }] }
+  const result = await rpc('SendMessage', { message: input }, readOnlyKey)
+  assert.equal(result.status, 200, JSON.stringify(await result.clone().json()))
+  const task = (await result.json()).result.task
+  assert.equal(task.artifacts[0].artifactId, 'plan_work')
+  const artifact = task.artifacts[0].parts[0].data
+  assert.equal(artifact.kind, 'plan_work')
+  assert.equal(artifact.persisted, false)
+  assert.equal(artifact.funds_moved, false)
+  assert.deepEqual(artifact.plan.required_capabilities, ['security-analysis'])
+  assert.equal(artifact.plan.candidates[0].service_id, serviceId)
+  assert.equal((await db.select().from(schema.route_plans)).length, before.routes)
+  assert.equal((await db.select().from(schema.trades)).length, before.trades)
+  const replay = await rpc('SendMessage', { message: input }, readOnlyKey)
+  assert.equal((await replay.json()).result.task.id, task.id)
+  const changed = await rpc('SendMessage', { message: { ...input, parts: [{ data: { action: 'plan_work', request: {
+    objective: 'Review a different API authentication path', required_capabilities: ['security'],
+    max_budget: { amount: '5.00', currency: 'USD' },
+  } } }] } }, readOnlyKey)
+  assert.equal(changed.status, 409)
+  assert.equal((await changed.json()).error.code, -32602)
+  assert.equal((await rpc('SendMessage', { message: { ...message(), parts: [{ data: { action: 'execute_route', route_id: randomUUID() } }] } }, readOnlyKey)).status, 400)
+})
+
+test('A2A inspect_route reads only the calling agent route and its payment exposure', async () => {
+  const inspector = await registerAgent(`A2A Inspector ${randomUUID().slice(0, 8)}`)
+  const buyerId = `user_agent_${inspector.id}`
+  await db.insert(schema.users).values({ id: buyerId, name: 'A2A Route Buyer', email: `${buyerId}@test.invalid`, password_hash: 'unused', role: 'agent' }).onConflictDoNothing()
+  const routeId = randomUUID()
+  await db.insert(schema.route_plans).values({ id: routeId, buyer_id: buyerId, client_reference: `a2a-route-${routeId}`,
+    objective: 'Inspect my planned repository review', required_capabilities: '["security-analysis"]',
+    max_budget_minor: 500, candidates_json: '[]', expires_at: new Date(Date.now() + 300_000) })
+  const input = { role: 'ROLE_USER', messageId: randomUUID(), parts: [{ data: { action: 'inspect_route', route_id: routeId }, mediaType: 'application/json' }] }
+  const owner = await rpc('SendMessage', { message: input }, inspector.key)
+  assert.equal(owner.status, 200)
+  const task = (await owner.json()).result.task
+  assert.equal(task.artifacts[0].artifactId, 'inspect_route')
+  assert.equal(task.artifacts[0].parts[0].data.route.id, routeId)
+  assert.equal(task.artifacts[0].parts[0].data.payment_exposure, null)
+  const foreign = await rpc('SendMessage', { message: { ...input, messageId: randomUUID() } }, other.key)
+  assert.equal(foreign.status, 404)
+  assert.equal((await foreign.json()).error.data[0].reason, 'ROUTE_NOT_FOUND')
+  assert.equal((await rpc('GetTask', { id: task.id }, other.key)).status, 404)
 })

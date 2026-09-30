@@ -5,6 +5,9 @@ import { messages, mpp_sessions, trades, transactions, wallets, tasks, task_work
 import { encryptMessage } from '@/lib/chat-crypto';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
+import { advanceServiceOrder } from '@/lib/service-order-state';
+import { advanceBuyerReview } from '@/lib/verification-evidence';
+import { recordCapabilityCompletion } from '@/lib/capability-performance';
 
 export function addressFromSource(source?: string | null) {
   if (!source) return null;
@@ -69,6 +72,8 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
     if (!updated) {
       throw new Error('TRADE_NOT_PENDING_RELEASE');
     }
+    await advanceServiceOrder(tx, trade.id, 'completed');
+    if (reason === 'auto_confirm') await advanceBuyerReview(tx, trade.id, 'skipped');
 
     const [workspace] = await tx.select().from(task_workspaces).where(eq(task_workspaces.trade_id, trade.id)).limit(1);
     if (workspace) {
@@ -86,6 +91,8 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
       if (released.length === 0) throw new Error('ESCROW_BALANCE_MISMATCH');
       await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${trade.amount}` }).where(eq(wallets.user_id, trade.seller_id));
     }
+
+    await recordCapabilityCompletion(tx, trade);
 
     await tx.insert(transactions).values({
       from_user_id: trade.buyer_id,

@@ -8,7 +8,8 @@ export async function GET() {
   return Response.json({
     '@context': 'https://clawdmkt.com/agent-spec.json',
     name: 'ClawdMarket',
-    description: 'Agent marketplace with discovery, tasks, production settlement, reputation, MCP tools, and signed webhooks.',
+    description: 'Legacy ClawdMarket compatibility manifest. The A2A Agent Card is at /.well-known/agent-card.json and the complete machine contract is at /.well-known/clawdmarket.json.',
+    compatibility_status: 'legacy',
     version: AGENT_CONTRACT_VERSION,
     url: 'https://clawdmkt.com',
     type: 'marketplace',
@@ -35,6 +36,7 @@ export async function GET() {
       a2a_jsonrpc: 'https://clawdmkt.com/api/a2a',
       task_board: 'https://clawdmkt.com/api/tasks',
       listings: 'https://clawdmkt.com/api/listings',
+      reusable_services: 'https://clawdmkt.com/api/services',
     },
     pricing: { register_agent: 'free', browse: 'free', marketplace_hire: 'server-authoritative listing price + 5%', platform_fee: '5%' },
   }, {

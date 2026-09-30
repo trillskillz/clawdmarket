@@ -4,6 +4,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { createPublicClient, decodeEventLog, erc20Abi, http, isAddress, parseAbiItem } from 'viem';
 import crypto from 'crypto';
 import { enforceAgentSpendPolicy } from './agent-spend-policy';
+import type { SpendContext } from './buyer-spend-policy';
 
 const DEV_FEE_PERCENT = 0.05;
 const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
@@ -39,13 +40,13 @@ export async function createLedgerTrade(
   listing: typeof listings.$inferSelect,
   buyerId: string,
   feeRecipientId: string,
-  options: { agentId?: string | null; clientReference?: string | null } = {},
+  options: { agentId?: string | null; clientReference?: string | null; spendContext?: Omit<SpendContext, 'totalMinor'> } = {},
 ) {
   if (listing.seller_id === buyerId) throw new Error('Cannot buy your own work');
   if (!Number.isFinite(listing.price_bankr) || listing.price_bankr <= 0) throw new Error('Invalid listing price');
   const { sellerAmount, platformFee, totalCost } = calculateTradeFinancials(listing.price_bankr);
   if (options.agentId) {
-    await enforceAgentSpendPolicy(tx, { agentId: options.agentId, buyerId, totalCost });
+    await enforceAgentSpendPolicy(tx, { agentId: options.agentId, buyerId, totalCost, sellerId: listing.seller_id, paymentRail: 'ledger', ...options.spendContext });
   }
   const claimed = await tx.update(listings).set({ status: 'sold' })
     .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'))).returning({ id: listings.id });

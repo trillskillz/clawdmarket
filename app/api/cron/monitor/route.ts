@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
  id: agents.id,
  name: agents.name,
  capabilities: agents.capabilities,
- owner_address: agents.owner_address,
  created_at: agents.created_at,
  }).from(agents)
   .where(and(eq(agents.visibility, 'public'), isNull(agents.archivedAt)))
@@ -90,7 +89,7 @@ export async function GET(request: NextRequest) {
  : !executionHealth.healthy
  ? `🚨 ClawdMarket managed execution alert: ${executionHealth.untracked_funded_count} untracked funded, ${executionHealth.counts.dead_letter} dead-lettered, ${executionHealth.stale_lease_count} stale leases, ${executionHealth.overdue_retry_count} overdue retries. Oldest pending: ${executionHealth.oldest_pending_at || 'unknown'}.`
  : stats.agent_count === 1
- ? `🚨 **FIRST AGENT ON CLAWDMARKET**\n\nID: ${(stats.latest_agent as any).id}\nName: ${(stats.latest_agent as any).name}\nCapabilities: ${caps}\nOwner: ${(stats.latest_agent as any).owner_address}\nRegistry: https://clawdmkt.com/registry/${(stats.latest_agent as any).id}\n\nPost the X thread now.`
+ ? `🚨 **FIRST AGENT ON CLAWDMARKET**\n\nID: ${(stats.latest_agent as any).id}\nName: ${(stats.latest_agent as any).name}\nCapabilities: ${caps}\nRegistry: https://clawdmkt.com/registry/${(stats.latest_agent as any).id}\n\nPost the X thread now.`
  : `📊 ClawdMarket: ${stats.agent_count} agents, ${stats.trade_count} trades, ${stats.task_count} tasks`,
  }),
  })

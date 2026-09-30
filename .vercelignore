@@ -1,5 +1,4 @@
-# Ignore agent scripts and SDK source
-/sdk/
+# Ignore agent scripts
 /agents/
 /scripts/
 /test/

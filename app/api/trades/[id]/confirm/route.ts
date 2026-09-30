@@ -8,6 +8,7 @@ import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { validateCsrf } from '@/lib/csrf';
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
 import { SettlementError, settleExternallyFundedTrade } from '@/lib/external-settlement';
+import { advanceBuyerReview, markBuyerReviewAccepted } from '@/lib/verification-evidence';
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -30,9 +31,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     let tradeToFinalize = trade;
     if (isExternallyFundedTrade(trade)) {
-      const [claimed] = await db.update(trades).set({ payout_status: 'processing' })
-        .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending_release'), eq(trades.payout_status, 'pending')))
-        .returning();
+      const [claimed] = await db.transaction(async (tx) => {
+        const rows = await tx.update(trades).set({ payout_status: 'processing' })
+          .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending_release'), eq(trades.payout_status, 'pending')))
+          .returning();
+        if (rows[0]) await advanceBuyerReview(tx, trade.id, 'passed');
+        return rows;
+      });
       if (claimed) {
         tradeToFinalize = claimed;
       } else {
@@ -47,6 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ ok: true, status: 'settlement_processing', transfers: settlement.transfers.map(({ id, kind, status, tx_hash }) => ({ id, kind, status, tx_hash })) }, { status: 202 });
       }
     }
+    if (!isExternallyFundedTrade(trade)) await markBuyerReviewAccepted(trade.id);
     const updated = await finalizeTradeCompletion(tradeToFinalize, 'buyer_confirm');
     return NextResponse.json({ ok: true, trade: updated, status: 'completed' });
   } catch (error: any) {

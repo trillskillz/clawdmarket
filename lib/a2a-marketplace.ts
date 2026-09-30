@@ -5,6 +5,10 @@ import { GET as getBriefing } from '@/app/api/agents/briefing/route'
 import { hasAgentCredentialScope } from '@/lib/agent-credential-scopes'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth'
+import { routePlanInput, type NormalizedRouteRequest } from '@/lib/route-planning'
+import { routePlanningEnabled } from '@/lib/routing-feature-flags'
+import { inspectOwnedRoute } from '@/lib/route-inspection'
+import { previewRoute } from '@/lib/route-preview'
 
 const RETENTION_SECONDS = 7 * 24 * 60 * 60
 const HEADERS = { 'Cache-Control': 'private, no-store', 'A2A-Version': '1.0' }
@@ -31,16 +35,24 @@ function error(id: RpcId, code: number, message: string, status = 200, reason?: 
 
 function taskFromRow(row: JsonObject, historyLength = 1, includeArtifacts = true) {
   const requestMessage = JSON.parse(String(row.request_message))
+  const artifact = JSON.parse(String(row.artifact))
+  const kind = object(artifact) && typeof artifact.kind === 'string' ? artifact.kind : 'get_briefing'
+  const name = kind === 'plan_work' ? 'Route candidate preview' : kind === 'inspect_route' ? 'Owned route snapshot' : 'Marketplace briefing'
   return {
     id: String(row.id),
     contextId: String(row.context_id),
     status: { state: 'TASK_STATE_COMPLETED', timestamp: new Date(Number(row.created_at) * 1000).toISOString() },
-    ...(includeArtifacts ? { artifacts: [{ artifactId: 'briefing', name: 'Marketplace briefing', parts: [{ data: JSON.parse(String(row.artifact)), mediaType: 'application/json' }] }] } : {}),
+    ...(includeArtifacts ? { artifacts: [{ artifactId: kind === 'get_briefing' ? 'briefing' : kind, name, parts: [{ data: artifact, mediaType: 'application/json' }] }] } : {}),
     ...(historyLength > 0 ? { history: [requestMessage] } : {}),
   }
 }
 
-function parseBriefingMessage(value: unknown): { message: JsonObject; limit: number } | null {
+type ParsedMessage =
+  | { message: JsonObject; action: 'get_briefing'; limit: number }
+  | { message: JsonObject; action: 'plan_work'; request: NormalizedRouteRequest }
+  | { message: JsonObject; action: 'inspect_route'; routeId: string }
+
+function parseMessage(value: unknown): ParsedMessage | null {
   if (!object(value) || value.role !== 'ROLE_USER' || typeof value.messageId !== 'string' || value.messageId.length < 1 || value.messageId.length > 128 || !Array.isArray(value.parts) || value.parts.length !== 1) return null
   if (value.taskId != null || (value.contextId != null && (typeof value.contextId !== 'string' || value.contextId.length > 128 || !value.contextId))) return null
   const part = value.parts[0]
@@ -52,12 +64,20 @@ function parseBriefingMessage(value: unknown): { message: JsonObject; limit: num
     const match = /^(?:get (?:my )?)?(?:marketplace )?briefing(?: limit=(\d{1,2}))?$/i.exec(part.text.trim())
     if (!match) return null
     if (match[1]) limit = Number(match[1])
-  } else if (object(part.data) && part.data.action === 'get_briefing') {
+  } else if (object(part.data)) {
     if (part.mediaType != null && part.mediaType !== 'application/json') return null
+    if (part.data.action === 'plan_work' && object(part.data.request) && !('client_reference' in part.data.request)) {
+      const parsed = routePlanInput.safeParse({ ...part.data.request, client_reference: `a2a:${value.messageId}` })
+      return parsed.success ? { message: value, action: 'plan_work', request: parsed.data } : null
+    }
+    if (part.data.action === 'inspect_route' && typeof part.data.route_id === 'string' && /^[0-9a-f-]{36}$/i.test(part.data.route_id)) {
+      return { message: value, action: 'inspect_route', routeId: part.data.route_id }
+    }
+    if (part.data.action !== 'get_briefing') return null
     limit = part.data.limit == null ? 20 : Number(part.data.limit)
   } else return null
   if (!Number.isInteger(limit) || limit < 1 || limit > 50) return null
-  return { message: value, limit }
+  return { message: value, action: 'get_briefing', limit }
 }
 
 function taskQuery(params: unknown): { id: string; historyLength: number } | null {
@@ -130,26 +150,40 @@ export async function handleA2A(request: NextRequest) {
           ? error(id, -32004, 'Completed tasks cannot accept further messages.', 400, 'UNSUPPORTED_OPERATION')
           : error(id, -32001, 'Task not found.', 404, 'TASK_NOT_FOUND')
       }
-      const parsed = parseBriefingMessage(params.message)
-      if (!parsed) return error(id, -32602, 'Supported input: text "briefing" or data {"action":"get_briefing","limit":20}; limit 1-50.', 400)
+      const parsed = parseMessage(params.message)
+      if (!parsed) return error(id, -32602, 'Supported input: briefing, plan_work, or inspect_route as described in the Agent Card.', 400)
       const existing = await db.$client.execute({
         sql: 'SELECT * FROM a2a_tasks WHERE agent_id = ? AND message_id = ? AND created_at >= ? LIMIT 1',
         args: [auth.agentId, String(parsed.message.messageId), Math.floor(Date.now() / 1000) - RETENTION_SECONDS],
       })
-      if (existing.rows.length) return response(id, { result: { task: taskFromRow(existing.rows[0] as JsonObject) } }, 200, quotaHeaders)
-      const bearer = request.headers.get('authorization') || ''
-      const briefingResponse = await getBriefing(new NextRequest(new URL(`/api/agents/briefing?limit=${parsed.limit}`, request.url), { headers: { Authorization: bearer } }))
-      if (!briefingResponse.ok) return error(id, -32603, 'Marketplace briefing is temporarily unavailable; retry later.', 503)
-      const briefing = await briefingResponse.json()
+      if (existing.rows.length) {
+        if (String(existing.rows[0].request_message) !== JSON.stringify(parsed.message)) return error(id, -32602, 'Message ID was reused with different input.', 409)
+        return response(id, { result: { task: taskFromRow(existing.rows[0] as JsonObject) } }, 200, quotaHeaders)
+      }
+      let artifact: unknown
+      if (parsed.action === 'get_briefing') {
+        const bearer = request.headers.get('authorization') || ''
+        const briefingResponse = await getBriefing(new NextRequest(new URL(`/api/agents/briefing?limit=${parsed.limit}`, request.url), { headers: { Authorization: bearer } }))
+        if (!briefingResponse.ok) return error(id, -32603, 'Marketplace briefing is temporarily unavailable; retry later.', 503)
+        artifact = await briefingResponse.json()
+      } else if (parsed.action === 'plan_work') {
+        if (!routePlanningEnabled()) return error(id, -32603, 'Route planning is unavailable.', 503)
+        artifact = { kind: 'plan_work', ...await previewRoute(parsed.request, auth.syntheticUserId) }
+      } else {
+        const snapshot = await inspectOwnedRoute(parsed.routeId, auth.syntheticUserId)
+        if (!snapshot) return error(id, -32001, 'Route not found.', 404, 'ROUTE_NOT_FOUND')
+        artifact = { kind: 'inspect_route', ...snapshot }
+      }
       const taskId = randomUUID()
       const contextId = typeof parsed.message.contextId === 'string' ? parsed.message.contextId : randomUUID()
       const now = Math.floor(Date.now() / 1000)
       await db.$client.execute({ sql: 'DELETE FROM a2a_tasks WHERE created_at < ?', args: [now - RETENTION_SECONDS] })
       await db.$client.execute({
         sql: 'INSERT INTO a2a_tasks (id, agent_id, context_id, message_id, request_message, artifact, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(agent_id, message_id) DO NOTHING',
-        args: [taskId, auth.agentId, contextId, String(parsed.message.messageId), JSON.stringify(parsed.message), JSON.stringify(briefing), now],
+        args: [taskId, auth.agentId, contextId, String(parsed.message.messageId), JSON.stringify(parsed.message), JSON.stringify(artifact), now],
       })
       const saved = await db.$client.execute({ sql: 'SELECT * FROM a2a_tasks WHERE agent_id = ? AND message_id = ? LIMIT 1', args: [auth.agentId, String(parsed.message.messageId)] })
+      if (String(saved.rows[0]?.request_message) !== JSON.stringify(parsed.message)) return error(id, -32602, 'Message ID was reused with different input.', 409)
       const task = taskFromRow(saved.rows[0] as JsonObject)
       return response(id, { result: { task } }, 200, quotaHeaders)
     }

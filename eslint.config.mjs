@@ -19,6 +19,7 @@ export default defineConfig([
   },
   globalIgnores([
     '.next/**',
+    'sdk/typescript/dist/**',
     'coverage/**',
     'playwright-report/**',
     'test-results/**',

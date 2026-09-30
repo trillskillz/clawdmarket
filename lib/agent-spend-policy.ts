@@ -1,6 +1,7 @@
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { trades } from '@/lib/schema';
+import { enforceBuyerSpendPolicy, type SpendContext } from '@/lib/buyer-spend-policy';
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -10,6 +11,7 @@ export type AgentSpendSnapshot = {
   per_trade_limit: number;
   daily_limit: number;
   spent_today: number;
+  reserved_or_spent_today: number;
   remaining_today: number;
   resets_at: string;
 };
@@ -47,7 +49,7 @@ async function spentSince(tx: Transaction | typeof db, buyerId: string, since: D
     .where(and(
       eq(trades.buyer_id, buyerId),
       gte(trades.created_at, since),
-      sql`${trades.status} NOT IN ('pending', 'cancelled')`,
+      sql`${trades.status} <> 'cancelled'`,
     ));
   return round2(Number(row?.spent || 0));
 }
@@ -72,6 +74,7 @@ export async function getAgentSpendSnapshot(agentId: string, buyerId = `user_age
     per_trade_limit: limits.perTrade,
     daily_limit: limits.daily,
     spent_today: spentToday,
+    reserved_or_spent_today: spentToday,
     remaining_today: round2(Math.max(0, limits.daily - spentToday)),
     resets_at: windowEnd(now).toISOString(),
   };
@@ -79,7 +82,7 @@ export async function getAgentSpendSnapshot(agentId: string, buyerId = `user_age
 
 export async function enforceAgentSpendPolicy(
   tx: Transaction,
-  input: { agentId: string; buyerId: string; totalCost: number; now?: Date },
+  input: { agentId: string; buyerId: string; totalCost: number; now?: Date } & Omit<SpendContext, 'totalMinor'>,
 ): Promise<AgentSpendSnapshot> {
   const now = input.now || new Date();
   const limits = getAgentSpendLimits();
@@ -90,6 +93,7 @@ export async function enforceAgentSpendPolicy(
     per_trade_limit: limits.perTrade,
     daily_limit: limits.daily,
     spent_today: spentToday,
+    reserved_or_spent_today: spentToday,
     remaining_today: round2(Math.max(0, limits.daily - spentToday)),
     resets_at: windowEnd(now).toISOString(),
   };
@@ -108,5 +112,8 @@ export async function enforceAgentSpendPolicy(
       policy,
     );
   }
+  await enforceBuyerSpendPolicy(tx, input.buyerId, { totalMinor: Math.round(input.totalCost * 100),
+    sellerId: input.sellerId, capabilities: input.capabilities, paymentRail: input.paymentRail,
+    verificationMethods: input.verificationMethods, retrySpendMinor: input.retrySpendMinor }, now);
   return policy;
 }

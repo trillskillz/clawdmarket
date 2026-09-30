@@ -9,6 +9,7 @@ import { validateCsrf } from '@/lib/csrf';
 import { ensureSyntheticAgentUser } from '@/lib/registered-agent-auth';
 
 import { DeliveryError, submitTradeDelivery } from '@/lib/trade-delivery';
+import { legacyMessageDeliveryEnabled } from '@/lib/routing-feature-flags';
 
 export const dynamic = 'force-dynamic'
 
@@ -81,9 +82,17 @@ export async function POST(req: NextRequest) {
     }
 
     const parsed = parsePayload(content);
-    if (parsed?.type === 'task_complete' && typeof parsed?.trade_id === 'string') {
-      const { delivery, message } = await submitTradeDelivery(parsed.trade_id, principal.userId, parsed, receiverId);
-      return NextResponse.json({ ...message, delivery_id: delivery.id }, { status: 201 });
+    const isDeliveryCommand = parsed?.type === 'task_complete' || body.type === 'task_complete';
+    if (isDeliveryCommand) {
+      const tradeId = typeof parsed?.trade_id === 'string' ? parsed.trade_id : typeof body?.payload?.trade_id === 'string' ? body.payload.trade_id : null;
+      const legacyHeaders = { 'Deprecation': 'true', 'Cache-Control': 'no-store', ...(tradeId ? { 'Link': `</api/trades/${encodeURIComponent(tradeId)}/delivery>; rel="successor-version"` } : {}) };
+      if (!legacyMessageDeliveryEnabled()) {
+        return NextResponse.json({ success: false, error_code: 'DELIVERY_ENDPOINT_REQUIRED', message: 'Submit funded work through the dedicated trade delivery endpoint', retryable: false, state: 'no_funds_moved' }, { status: 409, headers: legacyHeaders });
+      }
+      if (!tradeId) return NextResponse.json({ success: false, error_code: 'INVALID_LEGACY_DELIVERY', message: 'A trade ID is required', retryable: false }, { status: 400, headers: legacyHeaders });
+      const deliveryInput = body.type === 'task_complete' && body.payload ? body.payload : parsed;
+      const { delivery, message } = await submitTradeDelivery(tradeId, principal.userId, deliveryInput, receiverId);
+      return NextResponse.json({ ...message, delivery_id: delivery.id, deprecated: true }, { status: 201, headers: legacyHeaders });
     }
 
     const payload = content

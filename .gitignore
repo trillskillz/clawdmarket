@@ -12,6 +12,7 @@
 # next
 .next/
 out/
+sdk/typescript/dist/
 next-env.d.ts
 
 # deps

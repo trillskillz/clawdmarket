@@ -26,6 +26,12 @@ export const REQUIRED_DATABASE_SCHEMA = {
   agent_ownership_transfers: ['id', 'agent_id', 'from_user_id', 'target_type', 'target_value', 'token_hash', 'expires_at', 'accepted_at', 'accepted_by_user_id', 'cancelled_at', 'created_at'],
   api_keys: ['id', 'user_id', 'key_hash', 'key_prefix', 'created_at'],
   listings: ['id', 'seller_id', 'category', 'title', 'description', 'price_bankr', 'status', 'created_at'],
+  service_definitions: ['id', 'seller_id', 'title', 'description', 'capabilities', 'input_schema', 'output_schema', 'pricing_model', 'price_minor', 'currency', 'estimated_latency_seconds', 'max_concurrency', 'active_orders', 'execution_mode', 'verification_policy', 'status', 'created_at', 'updated_at'],
+  service_orders: ['id', 'service_id', 'listing_id', 'trade_id', 'buyer_id', 'client_reference', 'objective', 'input_json', 'price_minor', 'payment_rail', 'state', 'capacity_released_at', 'created_at', 'updated_at'],
+  route_plans: ['id', 'buyer_id', 'client_reference', 'objective', 'required_capabilities', 'input_json', 'max_budget_minor', 'currency', 'deadline_seconds', 'verification_policy', 'payment_policy', 'retry_policy', 'candidates_json', 'state', 'service_order_id', 'created_at', 'expires_at', 'updated_at'],
+  route_attempts: ['id', 'route_id', 'attempt_number', 'service_id', 'state', 'failure_code', 'service_order_id', 'created_at', 'updated_at'],
+  workflows: ['id', 'buyer_id', 'client_reference', 'objective', 'plan_json', 'max_budget_minor', 'currency', 'deadline_seconds', 'state', 'created_at', 'updated_at'],
+  workflow_nodes: ['id', 'workflow_id', 'node_key', 'objective', 'required_capabilities', 'depends_on', 'budget_minor', 'deadline_seconds', 'depth', 'state', 'route_id', 'created_at'],
   trades: [
     'id', 'listing_id', 'buyer_id', 'seller_id', 'amount', 'fee', 'item_price', 'platform_fee',
     'total_cost', 'seller_amount', 'dev_amount', 'dev_wallet', 'fee_tx_hash', 'payout_status',
@@ -38,6 +44,10 @@ export const REQUIRED_DATABASE_SCHEMA = {
   capability_challenges: ['id', 'agent_id', 'capability', 'challenge_data', 'expires_at', 'submitted_at', 'passed', 'score', 'created_at'],
   task_workspaces: ['task_id', 'trade_id', 'agreed_price', 'acceptance_criteria', 'created_at'],
   trade_deliveries: ['id', 'trade_id', 'submitter_id', 'content_hash', 'verification', 'created_at'],
+  verification_results: ['id', 'trade_id', 'delivery_id', 'content_hash', 'method', 'verifier', 'version', 'status', 'score', 'evidence_json', 'failure', 'created_at', 'updated_at'],
+  capability_performance_events: ['id', 'trade_id', 'service_order_id', 'seller_agent_id', 'capability_id', 'evidence_kind', 'verification_method', 'created_at'],
+  buyer_spend_policies: ['buyer_id', 'owner_account_id', 'policy_json', 'version', 'created_at', 'updated_at'],
+  buyer_spend_policy_events: ['id', 'buyer_id', 'actor_account_id', 'version', 'old_policy_json', 'new_policy_json', 'created_at'],
   wallets: ['id', 'user_id', 'balance', 'escrow', 'created_at'],
   transactions: ['id', 'from_user_id', 'to_user_id', 'amount', 'type', 'reference_id', 'created_at'],
   payment_receipts: [

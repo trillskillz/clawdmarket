@@ -10,8 +10,8 @@ type MarketplaceStats = {
   recorded_volume_usd?: number
 }
 
-export default function HomeLiveStats() {
-  const [stats, setStats] = useState<MarketplaceStats | null>(null)
+export default function HomeLiveStats({ initialStats = null }: { initialStats?: MarketplaceStats | null }) {
+  const [stats, setStats] = useState<MarketplaceStats | null>(initialStats)
 
   useEffect(() => {
     const controller = new AbortController()

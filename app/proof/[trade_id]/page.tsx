@@ -75,6 +75,7 @@ export default async function ProofPage({ params }: Props) {
 
   const deliveries = await query('SELECT content_hash, verification, created_at FROM trade_deliveries WHERE trade_id = ?', [trade_id])
   const delivery = deliveries[0] || null
+  const verificationRows = delivery ? await query('SELECT method, status FROM verification_results WHERE trade_id = ? AND content_hash = ?', [trade_id, delivery.content_hash]) : []
   const paymentRows = await query('SELECT chain_id, tx_hash, external_id, payment_rail FROM payment_receipts WHERE trade_id = ? LIMIT 1', [trade_id])
   const payoutRows = await query("SELECT chain_id, tx_hash FROM settlement_transfers WHERE trade_id = ? AND kind = 'seller_payout' AND status = 'confirmed' LIMIT 1", [trade_id])
   const payment = paymentRows[0] || null
@@ -100,6 +101,18 @@ export default async function ProofPage({ params }: Props) {
 
   const capabilities = parseJson(task?.required_capabilities) || []
   const verification = parseJson(delivery?.verification)
+  const methodPassed = (method: string) => verificationRows.some((row: any) => row.method === method && row.status === 'passed')
+  const categories = {
+    identity_verified: false,
+    payment_verified: Boolean(payment),
+    delivery_received: Boolean(delivery),
+    structure_verified: methodPassed('schema') || methodPassed('structure') || verification?.status === 'passed',
+    semantic_verified: false,
+    buyer_accepted: methodPassed('buyer_review'),
+    deterministic_tests_passed: false,
+    provenance_verified: false,
+    benchmark_verified: false,
+  }
 
   const parties = [buyer, seller].filter(Boolean).map((party: any) => ({
     id: String(party.trust_id),
@@ -157,7 +170,7 @@ export default async function ProofPage({ params }: Props) {
 
             <section className={styles.proofPanel}>
               <p className={styles.panelLabel}>04 / DELIVERY RECORD</p>
-              <div className={styles.artifact}>{delivery ? <><p className={styles.artifactSummary}>SHA-256 fingerprint of the submitted delivery</p><pre className={styles.artifactCode}>{String(delivery.content_hash)}</pre><p className={styles.panelText}>Structural checks: {verification?.status === 'passed' ? 'passed' : 'buyer review required'}. Submitted {fmtDate(delivery.created_at)}.</p></> : <p className={styles.artifactEmpty}>No structured delivery record exists for this historical trade.</p>}</div>
+              <div className={styles.artifact}>{delivery ? <><p className={styles.artifactSummary}>SHA-256 fingerprint of the submitted delivery</p><pre className={styles.artifactCode}>{String(delivery.content_hash)}</pre><p className={styles.panelText}>Structural checks: {categories.structure_verified ? 'passed' : 'not established'}. Submitted {fmtDate(delivery.created_at)}.</p><p className={styles.panelText}>Verification states: {Object.entries(categories).map(([name, verified]) => `${name}=${verified ? 'yes' : 'unverified'}`).join(' · ')}. Source-list checks validate URL format and uniqueness only; URLs are not fetched.</p></> : <p className={styles.artifactEmpty}>No structured delivery record exists for this historical trade.</p>}</div>
               {taskRows[0]?.id && <Link href={`/taskboard/${taskRows[0].id}`}>Open job workspace →</Link>}
             </section>
 

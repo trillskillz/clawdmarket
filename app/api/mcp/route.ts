@@ -8,6 +8,13 @@ import { durableMppStore } from '@/lib/mpp-store';
 import { getMppRecipientAddress, getMppSecretKey, getTempoRpcUrl } from '@/lib/payment-config';
 import { reportInternalError } from '@/lib/api-error';
 import { mcpPaymentRequiredResponse } from '@/lib/mcp-payment-response';
+import { resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth';
+import { hasAgentCredentialScope } from '@/lib/agent-credential-scopes';
+import { routePlanInput } from '@/lib/route-planning';
+import { previewRoute } from '@/lib/route-preview';
+import { inspectOwnedRoute } from '@/lib/route-inspection';
+import { routePlanningEnabled } from '@/lib/routing-feature-flags';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -76,6 +83,19 @@ function paidMcpToolCall(body: any) {
 }
 
 const TOOLS = AGENT_MCP_TOOLS;
+const FREE_ROUTING_TOOLS = new Set(['plan_work', 'get_route']);
+
+class McpToolError extends Error {
+  constructor(public readonly code: string) { super(code); }
+}
+
+async function readAgentForRouting(req: NextRequest, tool: 'plan_work' | 'get_route') {
+  const auth = await resolveRegisteredAgentBearer(req.headers.get('authorization'));
+  if (auth.kind !== 'agent' || !hasAgentCredentialScope(auth.scopes, 'agent:read')) throw new McpToolError('AGENT_READ_AUTH_REQUIRED');
+  const quota = await rateLimit(`mcp-routing:${tool}:${auth.agentId}`, { interval: 60_000, maxRequests: tool === 'plan_work' ? 10 : 60, failClosed: true });
+  if (!quota.success) throw new McpToolError('MCP_ROUTING_RATE_LIMIT');
+  return auth;
+}
 
 function withCors(res: Response | NextResponse): Response {
   const headers = new Headers(res.headers);
@@ -171,6 +191,22 @@ async function executeTool(req: NextRequest, name: string, args: any) {
   const callApi = buildApiCaller(req);
 
   switch (name) {
+    case 'plan_work': {
+      const auth = await readAgentForRouting(req, 'plan_work');
+      if (!routePlanningEnabled()) throw new McpToolError('ROUTE_PLANNING_DISABLED');
+      const parsed = routePlanInput.safeParse(args);
+      if (!parsed.success) throw new McpToolError('INVALID_ROUTE_REQUEST');
+      return previewRoute(parsed.data, auth.syntheticUserId);
+    }
+
+    case 'get_route': {
+      const auth = await readAgentForRouting(req, 'get_route');
+      if (!args || typeof args.route_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(args.route_id)) throw new McpToolError('INVALID_ROUTE_ID');
+      const snapshot = await inspectOwnedRoute(args.route_id, auth.syntheticUserId);
+      if (!snapshot) throw new McpToolError('ROUTE_NOT_FOUND');
+      return snapshot;
+    }
+
     case 'list_agents': {
       const capability = typeof args?.capability === 'string' ? args.capability : undefined;
       const limit = typeof args?.limit === 'number' ? args.limit : 20;
@@ -295,7 +331,9 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const paymentGate: any = await paidMcpToolCall(body as any);
+      const paymentGate: any = FREE_ROUTING_TOOLS.has(name)
+        ? { status: 200, withReceipt: (payload: unknown) => payload }
+        : await paidMcpToolCall(body as any);
       if (paymentGate.status === 402) {
         if (paymentGate.challenge) {
           return withCors(mcpPaymentRequiredResponse(paymentGate.challenge));
@@ -321,7 +359,7 @@ export async function POST(req: NextRequest) {
 
         return withCors(NextResponse.json(paymentGate.withReceipt(baseResult)));
       } catch (error: any) {
-        const errorId = reportInternalError('MCP tool execution failed', error, { tool: name });
+        const errorId = error instanceof McpToolError ? error.code : reportInternalError('MCP tool execution failed', error, { tool: name });
         const errorResult = {
           jsonrpc: '2.0' as const,
           id: id ?? null,

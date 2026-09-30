@@ -87,20 +87,35 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.11');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.27');
+    expect(openApi.paths['/api/spending-policy']?.put?.responses?.['200']).toBeTruthy();
+    expect(openApi.paths['/api/agents/{id}/trust']?.get?.responses?.['200']).toBeTruthy();
     expect(openApi.paths['/api/agents/briefing']?.get).toBeTruthy();
+    expect(openApi.paths['/api/routes/metrics']?.get).toBeTruthy();
+    expect(openApi.paths['/api/workflows/plan']?.post).toBeTruthy();
+    const routeMetrics = await request.get('/api/routes/metrics');
+    expect(routeMetrics.ok()).toBeTruthy();
+    expect((await routeMetrics.json()).autonomy_status).toBe('not_implemented');
     expect(openApi.paths['/api/a2a']?.post).toBeTruthy();
+    const mcpTools = await request.post('/api/mcp', { data: { jsonrpc: '2.0', id: 'tools', method: 'tools/list', params: {} } });
+    expect(mcpTools.ok()).toBeTruthy();
+    expect((await mcpTools.json()).result.tools.map((tool: { name: string }) => tool.name)).toEqual(expect.arrayContaining(['plan_work', 'get_route']));
     expect(openApi.paths['/api/tasks/{id}/accept/{bid_id}']?.post).toBeTruthy();
+    expect(openApi.paths['/api/trades/{id}/delivery']?.post?.responses?.['200']).toBeTruthy();
+    expect(openApi.paths['/api/trades/{id}/verification']?.get?.responses?.['200']).toBeTruthy();
+    expect(openApi.paths['/api/messages']?.post?.description).toContain('Communication only');
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.11"');
+    expect(await skill.text()).toContain('contract-version: "1.27"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();
     const a2aCard = await request.get('/.well-known/agent-card.json');
     expect(a2aCard.ok()).toBeTruthy();
-    expect((await a2aCard.json()).supportedInterfaces[0].protocolVersion).toBe('1.0');
+    const card = await a2aCard.json();
+    expect(card.supportedInterfaces[0].protocolVersion).toBe('1.0');
+    expect(card.skills.map((entry: { id: string }) => entry.id)).toEqual(['marketplace_briefing', 'plan_work', 'inspect_route']);
     const a2aUnauthenticated = await request.post('/api/a2a', {
       data: { jsonrpc: '2.0', id: 1, method: 'ListTasks', params: {} },
     });

@@ -58,9 +58,9 @@ test.describe('Marketplace Listings', () => {
     await page.goto('/marketplace');
     await page.getByPlaceholder('Service, agent, or capability…').fill(listingTitle);
     await expect(page.getByRole('heading', { name: listingTitle })).toBeVisible();
-    await page.getByRole('combobox').selectOption('price_desc');
+    await page.getByRole('combobox', { name: 'SORT' }).selectOption('price_desc');
     await page.getByPlaceholder('Service, agent, or capability…').fill('definitely-no-matching-service');
-    await expect(page.getByText('No payment-ready services yet')).toBeVisible();
-    await expect(page.getByText('No payment-ready services match this search yet. Sellers can add a payout wallet to make their listings available.')).toBeVisible();
+    await expect(page.getByText('Service directory')).toBeVisible();
+    await expect(page.getByText('No listed services match this search yet.')).toBeVisible();
   });
 });

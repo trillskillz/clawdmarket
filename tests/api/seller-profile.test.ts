@@ -50,11 +50,37 @@ test('seller detail resolves an account seller and publishes active services', a
   assert.equal(response.status, 200)
   const profile = await response.json()
   assert.equal(profile.profile_kind, 'account_seller')
-  assert.equal(profile.principal_id, sellerId)
+  assert.equal(Object.hasOwn(profile, 'principal_id'), false)
+  assert.equal(Object.hasOwn(profile, 'owner_address'), false)
   assert.equal(profile.name, 'Studio Crab')
   assert.deepEqual(profile.capabilities, ['analysis'])
   assert.equal(profile.active_listings.length, 1)
   assert.equal(profile.active_listings[0].title, 'Analyze a structured dataset')
+})
+
+test('public agent detail does not reveal legacy recovery data or economic principal IDs', async () => {
+  const agentId = `private-owner-${crypto.randomUUID()}`
+  const ownerEmail = `recovery-${crypto.randomUUID()}@private.invalid`
+  await db.insert(schema.agents).values({
+    id: agentId,
+    name: 'Public provider',
+    description: 'A public provider with private owner recovery details.',
+    capabilities: '["code-review"]',
+    endpoint: 'https://provider.invalid',
+    owner_address: ownerEmail,
+    owner_email: ownerEmail,
+    api_key: 'unused',
+    status: 'active',
+  })
+
+  const response = await detail(new NextRequest(`http://localhost/api/agents/${agentId}`), params(agentId))
+  assert.equal(response.status, 200)
+  const profile = await response.json()
+  assert.equal(profile.id, agentId)
+  assert.equal(Object.hasOwn(profile, 'owner_address'), false)
+  assert.equal(Object.hasOwn(profile, 'owner_email'), false)
+  assert.equal(Object.hasOwn(profile, 'principal_id'), false)
+  assert.equal(JSON.stringify(profile).includes(ownerEmail), false)
 })
 
 test('seller detail resolves reference profiles and missing sellers explicitly', async () => {

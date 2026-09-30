@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -187,6 +187,33 @@ export const listings = sqliteTable('listings', {
   index('listings_status_category_created_idx').on(table.status, table.category, table.created_at),
 ]);
 
+export const service_definitions = sqliteTable('service_definitions', {
+  id: text('id').primaryKey(),
+  seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  capabilities: text('capabilities').notNull().default('[]'),
+  input_schema: text('input_schema').notNull().default('{}'),
+  output_schema: text('output_schema').notNull().default('{}'),
+  pricing_model: text('pricing_model', { enum: ['fixed'] }).notNull().default('fixed'),
+  price_minor: integer('price_minor').notNull(),
+  currency: text('currency', { enum: ['USD'] }).notNull().default('USD'),
+  estimated_latency_seconds: integer('estimated_latency_seconds'),
+  max_concurrency: integer('max_concurrency').notNull().default(1),
+  active_orders: integer('active_orders').notNull().default(0),
+  execution_mode: text('execution_mode', { enum: ['contracted'] }).notNull().default('contracted'),
+  verification_policy: text('verification_policy').notNull().default('{}'),
+  status: text('status', { enum: ['draft', 'active', 'paused', 'unavailable', 'archived'] }).notNull().default('draft'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('service_definitions_status_created_idx').on(table.status, table.created_at),
+  index('service_definitions_seller_status_idx').on(table.seller_id, table.status),
+  check('service_definitions_price_positive', sql`${table.price_minor} > 0`),
+  check('service_definitions_capacity_positive', sql`${table.max_concurrency} > 0`),
+  check('service_definitions_capacity_bounded', sql`${table.active_orders} >= 0 AND ${table.active_orders} <= ${table.max_concurrency}`),
+]);
+
 export const trades = sqliteTable('trades', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   listing_id: text('listing_id')
@@ -227,6 +254,26 @@ export const trades = sqliteTable('trades', {
   rating_window_expires_at: text('rating_window_expires_at'),
 });
 
+export const service_orders = sqliteTable('service_orders', {
+  id: text('id').primaryKey(),
+  service_id: text('service_id').notNull().references(() => service_definitions.id, { onDelete: 'restrict' }),
+  listing_id: text('listing_id').notNull().unique().references(() => listings.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull().unique(),
+  objective: text('objective').notNull(),
+  input_json: text('input_json').notNull().default('{}'),
+  price_minor: integer('price_minor').notNull(),
+  payment_rail: text('payment_rail', { enum: ['ledger', 'mpp', 'evm'] }).notNull(),
+  state: text('state', { enum: ['awaiting_funding', 'funded', 'executing', 'verifying', 'completed', 'cancelled', 'disputed', 'resolved'] }).notNull().default('awaiting_funding'),
+  capacity_released_at: integer('capacity_released_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('service_orders_service_state_idx').on(table.service_id, table.state),
+  index('service_orders_buyer_created_idx').on(table.buyer_id, table.created_at),
+]);
+
 export const tasks = sqliteTable('tasks', {
   id: text('id').primaryKey(),
   posterAgentId: text('poster_agent_id').notNull(),
@@ -245,6 +292,85 @@ export const tasks = sqliteTable('tasks', {
   expiresAt: text('expires_at').notNull().default(sql`(datetime('now', '+7 days'))`),
 });
 
+export const route_plans = sqliteTable('route_plans', {
+  id: text('id').primaryKey(),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull().unique(),
+  objective: text('objective').notNull(),
+  required_capabilities: text('required_capabilities').notNull(),
+  input_json: text('input_json').notNull().default('{}'),
+  max_budget_minor: integer('max_budget_minor').notNull(),
+  currency: text('currency', { enum: ['USD'] }).notNull().default('USD'),
+  deadline_seconds: integer('deadline_seconds'),
+  verification_policy: text('verification_policy').notNull().default('{}'),
+  payment_policy: text('payment_policy').notNull().default('{}'),
+  retry_policy: text('retry_policy').notNull().default('{}'),
+  candidates_json: text('candidates_json').notNull().default('[]'),
+  state: text('state', { enum: ['planned', 'reserving', 'awaiting_funding', 'funded', 'dispatching', 'executing', 'verifying', 'retrying', 'awaiting_buyer', 'settling', 'completed', 'failed', 'cancelled', 'disputed', 'resolved'] }).notNull().default('planned'),
+  service_order_id: text('service_order_id').references(() => service_orders.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('route_plans_buyer_created_idx').on(table.buyer_id, table.created_at),
+  index('route_plans_state_expires_idx').on(table.state, table.expires_at),
+  check('route_plans_budget_positive', sql`${table.max_budget_minor} > 0`),
+]);
+
+/** Durable pre-checkout candidate attempts. Only one may link an economic order. */
+export const route_attempts = sqliteTable('route_attempts', {
+  id: text('id').primaryKey(),
+  route_id: text('route_id').notNull().references(() => route_plans.id, { onDelete: 'restrict' }),
+  attempt_number: integer('attempt_number').notNull(),
+  service_id: text('service_id').notNull(),
+  state: text('state', { enum: ['checking', 'ineligible', 'reserved'] }).notNull().default('checking'),
+  failure_code: text('failure_code'),
+  service_order_id: text('service_order_id').references(() => service_orders.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('route_attempts_route_number_idx').on(table.route_id, table.attempt_number),
+  index('route_attempts_route_state_idx').on(table.route_id, table.state),
+]);
+
+/** Bounded, non-economic workflow plans. Child routes are not created until an authorized execution model exists. */
+export const workflows = sqliteTable('workflows', {
+  id: text('id').primaryKey(),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull().unique(),
+  objective: text('objective').notNull(),
+  plan_json: text('plan_json').notNull(),
+  max_budget_minor: integer('max_budget_minor').notNull(),
+  currency: text('currency', { enum: ['USD'] }).notNull().default('USD'),
+  deadline_seconds: integer('deadline_seconds').notNull(),
+  state: text('state', { enum: ['planned', 'cancelled'] }).notNull().default('planned'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('workflows_buyer_created_idx').on(table.buyer_id, table.created_at),
+  check('workflows_budget_positive', sql`${table.max_budget_minor} > 0`),
+]);
+
+export const workflow_nodes = sqliteTable('workflow_nodes', {
+  id: text('id').primaryKey(),
+  workflow_id: text('workflow_id').notNull().references(() => workflows.id, { onDelete: 'restrict' }),
+  node_key: text('node_key').notNull(),
+  objective: text('objective').notNull(),
+  required_capabilities: text('required_capabilities').notNull(),
+  depends_on: text('depends_on').notNull().default('[]'),
+  budget_minor: integer('budget_minor').notNull(),
+  deadline_seconds: integer('deadline_seconds').notNull(),
+  depth: integer('depth').notNull(),
+  state: text('state', { enum: ['planned'] }).notNull().default('planned'),
+  route_id: text('route_id').references(() => route_plans.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('workflow_nodes_workflow_key_idx').on(table.workflow_id, table.node_key),
+  index('workflow_nodes_workflow_state_idx').on(table.workflow_id, table.state),
+  check('workflow_nodes_budget_positive', sql`${table.budget_minor} > 0`),
+  check('workflow_nodes_depth_bounded', sql`${table.depth} >= 0 AND ${table.depth} <= 3`),
+]);
+
 export const bids = sqliteTable('bids', {
   id: text('id').primaryKey(),
   taskId: text('task_id').notNull().references(() => tasks.id),
@@ -258,6 +384,25 @@ export const bids = sqliteTable('bids', {
   counterOfferStatus: text('counter_offer_status').notNull().default('none'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
+
+export const buyer_spend_policies = sqliteTable('buyer_spend_policies', {
+  buyer_id: text('buyer_id').primaryKey().references(() => users.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  policy_json: text('policy_json').notNull(),
+  version: integer('version').notNull().default(1),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const buyer_spend_policy_events = sqliteTable('buyer_spend_policy_events', {
+  id: text('id').primaryKey(),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  version: integer('version').notNull(),
+  old_policy_json: text('old_policy_json'),
+  new_policy_json: text('new_policy_json').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [index('buyer_spend_policy_events_buyer_version_idx').on(table.buyer_id, table.version)]);
 
 export const task_workspaces = sqliteTable('task_workspaces', {
   task_id: text('task_id').primaryKey().references(() => tasks.id),
@@ -282,6 +427,26 @@ export const trade_deliveries = sqliteTable('trade_deliveries', {
   created_at: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
+export const verification_results = sqliteTable('verification_results', {
+  id: text('id').primaryKey(),
+  trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'restrict' }),
+  delivery_id: text('delivery_id').references(() => trade_deliveries.id, { onDelete: 'restrict' }),
+  content_hash: text('content_hash').notNull(),
+  method: text('method').notNull(),
+  verifier: text('verifier').notNull(),
+  version: text('version').notNull(),
+  status: text('status', { enum: ['pending', 'passed', 'failed', 'disputed', 'skipped'] }).notNull(),
+  score: real('score'),
+  evidence_json: text('evidence_json').notNull().default('{}'),
+  failure: text('failure'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('verification_results_trade_content_method_version_idx').on(table.trade_id, table.content_hash, table.method, table.version),
+  index('verification_results_trade_status_idx').on(table.trade_id, table.status),
+  index('verification_results_delivery_idx').on(table.delivery_id),
+]);
+
 export const agentVersions = sqliteTable('agent_versions', {
   id: text('id').primaryKey(),
   agentId: text('agent_id').notNull(),
@@ -296,6 +461,21 @@ export const agentVersions = sqliteTable('agent_versions', {
   changeDescription: text('change_description'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
+
+/** Immutable, economically backed completion evidence; one event per trade and capability. */
+export const capability_performance_events = sqliteTable('capability_performance_events', {
+  id: text('id').primaryKey(),
+  trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'restrict' }),
+  service_order_id: text('service_order_id').notNull().references(() => service_orders.id, { onDelete: 'restrict' }),
+  seller_agent_id: text('seller_agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  capability_id: text('capability_id').notNull(),
+  evidence_kind: text('evidence_kind', { enum: ['buyer_accepted_completion'] }).notNull(),
+  verification_method: text('verification_method').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('capability_performance_trade_capability_idx').on(table.trade_id, table.capability_id),
+  index('capability_performance_agent_capability_idx').on(table.seller_agent_id, table.capability_id),
+]);
 
 export const benchmarks = sqliteTable('benchmarks', {
   id: text('id').primaryKey(),

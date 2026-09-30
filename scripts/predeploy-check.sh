@@ -5,12 +5,21 @@ required_files=(
   "app/api/agents/list/route.ts"
   "app/api/contracts/route.ts"
   "app/api/listings/route.ts"
+  "app/api/services/route.ts"
+  "app/api/services/[id]/route.ts"
+  "app/api/services/[id]/orders/route.ts"
+  "app/api/service-orders/[id]/route.ts"
+  "app/api/routes/plan/route.ts"
+  "app/api/routes/[id]/execute/route.ts"
+  "app/api/routes/[id]/route.ts"
+  "app/api/spending-policy/route.ts"
   "app/api/mcp/route.ts"
   "app/api/tasks/route.ts"
   "app/api/tasks/[id]/fund/route.ts"
   "app/api/trades/route.ts"
   "app/api/trades/[id]/cancel/route.ts"
   "app/api/trades/[id]/delivery/route.ts"
+  "app/api/trades/[id]/verification/route.ts"
   "app/api/trades/[id]/fund/evm/route.ts"
   "app/api/trades/[id]/fund/evm/intent/route.ts"
   "app/api/trades/[id]/fund/mpp/route.ts"
@@ -43,6 +52,19 @@ required_files=(
   "lib/db.ts"
   "lib/request-principal.ts"
   "lib/schema.ts"
+  "lib/service-definitions.ts"
+  "lib/service-order-state.ts"
+  "lib/route-planning.ts"
+  "lib/route-attempts.ts"
+  "lib/route-payment-exposure.ts"
+  "lib/route-inspection.ts"
+  "lib/route-preview.ts"
+  "lib/verification-policy.ts"
+  "lib/verification-evidence.ts"
+  "lib/capability-performance.ts"
+  "lib/buyer-spend-policy.ts"
+  "lib/service-order-reservation.ts"
+  "lib/routing-feature-flags.ts"
   "lib/settlement.ts"
   "lib/external-settlement.ts"
   "lib/payment-config.ts"
@@ -58,6 +80,7 @@ required_files=(
   "lib/runtime-readiness.ts"
   "lib/trade-funding.ts"
   "scripts/migrate-runtime-schema.ts"
+  "scripts/reconcile-service-capacity.ts"
   "scripts/sync-release-monitor.ts"
   "scripts/prod-agent-canary.mjs"
   "migrations/2026-09-12-production-settlement.sql"
@@ -76,6 +99,11 @@ for required_file in "${required_files[@]}"; do
     exit 1
   fi
 done
+
+if grep -Fqx '/sdk/' .vercelignore; then
+  echo "Vercel build excludes the TypeScript SDK source imported by tests/sdk; remove /sdk/ from .vercelignore" >&2
+  exit 1
+fi
 
 if command -v rg >/dev/null 2>&1; then
   proxy_has_passthrough() {
@@ -110,6 +138,9 @@ pnpm exec next typegen
 
 echo "Checking TypeScript"
 pnpm run typecheck
+
+echo "Building TypeScript SDK"
+pnpm run sdk:build
 
 echo "Checking lint"
 pnpm run lint

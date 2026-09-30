@@ -5,6 +5,7 @@ import { messages, mpp_sessions, trades, transactions, wallets } from '@/lib/sch
 import { encryptMessage } from '@/lib/chat-crypto'
 import { deliverWebhookEvent } from '@/lib/webhook-delivery'
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness'
+import { advanceServiceOrder } from '@/lib/service-order-state'
 
 export type TradeResolution = 'buyer' | 'seller' | 'split'
 
@@ -30,6 +31,7 @@ export async function finalizeTradeDispute(
       .where(and(eq(trades.id, trade.id), eq(trades.status, 'disputed')))
       .returning()
     if (!claimed) return null
+    await advanceServiceOrder(tx, trade.id, 'resolved')
 
     if (!externalFunding) {
       await tx.insert(wallets).values({ user_id: trade.buyer_id, balance: 0, escrow: 0 }).onConflictDoNothing()

@@ -476,6 +476,121 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS a2a_tasks_agent_context_idx ON a2a_tasks(agent_id, context_id)')
         await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS a2a_tasks_agent_message_idx ON a2a_tasks(agent_id, message_id)')
       } },
+      { id: '2026-09-30-reusable-services-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS service_definitions (
+          id TEXT PRIMARY KEY NOT NULL, seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          title TEXT NOT NULL, description TEXT NOT NULL, capabilities TEXT NOT NULL DEFAULT '[]',
+          input_schema TEXT NOT NULL DEFAULT '{}', output_schema TEXT NOT NULL DEFAULT '{}',
+          pricing_model TEXT NOT NULL DEFAULT 'fixed', price_minor INTEGER NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'USD', estimated_latency_seconds INTEGER,
+          max_concurrency INTEGER NOT NULL DEFAULT 1, active_orders INTEGER NOT NULL DEFAULT 0,
+          execution_mode TEXT NOT NULL DEFAULT 'contracted', verification_policy TEXT NOT NULL DEFAULT '{}',
+          status TEXT NOT NULL DEFAULT 'draft', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          CHECK(price_minor > 0), CHECK(max_concurrency > 0), CHECK(active_orders >= 0),
+          CHECK(active_orders <= max_concurrency)
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS service_definitions_status_created_idx ON service_definitions(status, created_at)')
+        await database.execute('CREATE INDEX IF NOT EXISTS service_definitions_seller_status_idx ON service_definitions(seller_id, status)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS service_orders (
+          id TEXT PRIMARY KEY NOT NULL, service_id TEXT NOT NULL REFERENCES service_definitions(id) ON DELETE RESTRICT,
+          listing_id TEXT NOT NULL UNIQUE REFERENCES listings(id) ON DELETE RESTRICT,
+          trade_id TEXT NOT NULL UNIQUE REFERENCES trades(id) ON DELETE RESTRICT,
+          buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL UNIQUE, objective TEXT NOT NULL, input_json TEXT NOT NULL DEFAULT '{}', price_minor INTEGER NOT NULL,
+          payment_rail TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'awaiting_funding',
+          capacity_released_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS service_orders_service_state_idx ON service_orders(service_id, state)')
+        await database.execute('CREATE INDEX IF NOT EXISTS service_orders_buyer_created_idx ON service_orders(buyer_id, created_at)')
+      } },
+      { id: '2026-09-30-route-plans-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS route_plans (
+          id TEXT PRIMARY KEY NOT NULL, buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL UNIQUE, objective TEXT NOT NULL,
+          required_capabilities TEXT NOT NULL, input_json TEXT NOT NULL DEFAULT '{}',
+          max_budget_minor INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
+          deadline_seconds INTEGER, verification_policy TEXT NOT NULL DEFAULT '{}',
+          payment_policy TEXT NOT NULL DEFAULT '{}', retry_policy TEXT NOT NULL DEFAULT '{}',
+          candidates_json TEXT NOT NULL DEFAULT '[]', state TEXT NOT NULL DEFAULT 'planned',
+          service_order_id TEXT REFERENCES service_orders(id) ON DELETE RESTRICT,
+          created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          CHECK(max_budget_minor > 0)
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS route_plans_buyer_created_idx ON route_plans(buyer_id, created_at)')
+        await database.execute('CREATE INDEX IF NOT EXISTS route_plans_state_expires_idx ON route_plans(state, expires_at)')
+      } },
+      { id: '2026-09-30-verification-results-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS verification_results (
+          id TEXT PRIMARY KEY NOT NULL, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE RESTRICT,
+          delivery_id TEXT REFERENCES trade_deliveries(id) ON DELETE RESTRICT,
+          content_hash TEXT NOT NULL, method TEXT NOT NULL, verifier TEXT NOT NULL,
+          version TEXT NOT NULL, status TEXT NOT NULL, score REAL,
+          evidence_json TEXT NOT NULL DEFAULT '{}', failure TEXT,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS verification_results_trade_content_method_version_idx ON verification_results(trade_id, content_hash, method, version)')
+        await database.execute('CREATE INDEX IF NOT EXISTS verification_results_trade_status_idx ON verification_results(trade_id, status)')
+        await database.execute('CREATE INDEX IF NOT EXISTS verification_results_delivery_idx ON verification_results(delivery_id)')
+      } },
+      { id: '2026-09-30-capability-performance-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS capability_performance_events (
+          id TEXT PRIMARY KEY NOT NULL, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE RESTRICT,
+          service_order_id TEXT NOT NULL REFERENCES service_orders(id) ON DELETE RESTRICT,
+          seller_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+          capability_id TEXT NOT NULL, evidence_kind TEXT NOT NULL,
+          verification_method TEXT NOT NULL, created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS capability_performance_trade_capability_idx ON capability_performance_events(trade_id, capability_id)')
+        await database.execute('CREATE INDEX IF NOT EXISTS capability_performance_agent_capability_idx ON capability_performance_events(seller_agent_id, capability_id)')
+      } },
+      { id: '2026-09-30-buyer-spend-policy-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS buyer_spend_policies (
+          buyer_id TEXT PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          owner_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          policy_json TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute(`CREATE TABLE IF NOT EXISTS buyer_spend_policy_events (
+          id TEXT PRIMARY KEY NOT NULL, buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          actor_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          version INTEGER NOT NULL, old_policy_json TEXT, new_policy_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS buyer_spend_policy_events_buyer_version_idx ON buyer_spend_policy_events(buyer_id, version)')
+      } },
+      { id: '2026-09-30-route-attempts-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS route_attempts (
+          id TEXT PRIMARY KEY NOT NULL, route_id TEXT NOT NULL REFERENCES route_plans(id) ON DELETE RESTRICT,
+          attempt_number INTEGER NOT NULL, service_id TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'checking', failure_code TEXT,
+          service_order_id TEXT REFERENCES service_orders(id) ON DELETE RESTRICT,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS route_attempts_route_number_idx ON route_attempts(route_id, attempt_number)')
+        await database.execute('CREATE INDEX IF NOT EXISTS route_attempts_route_state_idx ON route_attempts(route_id, state)')
+      } },
+      { id: '2026-09-30-workflow-plans-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS workflows (
+          id TEXT PRIMARY KEY NOT NULL, buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL UNIQUE, objective TEXT NOT NULL, plan_json TEXT NOT NULL,
+          max_budget_minor INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
+          deadline_seconds INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'planned',
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          CHECK(max_budget_minor > 0)
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS workflows_buyer_created_idx ON workflows(buyer_id, created_at)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS workflow_nodes (
+          id TEXT PRIMARY KEY NOT NULL, workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE RESTRICT,
+          node_key TEXT NOT NULL, objective TEXT NOT NULL, required_capabilities TEXT NOT NULL,
+          depends_on TEXT NOT NULL DEFAULT '[]', budget_minor INTEGER NOT NULL,
+          deadline_seconds INTEGER NOT NULL, depth INTEGER NOT NULL,
+          state TEXT NOT NULL DEFAULT 'planned', route_id TEXT REFERENCES route_plans(id) ON DELETE RESTRICT,
+          created_at INTEGER NOT NULL,
+          CHECK(budget_minor > 0), CHECK(depth >= 0 AND depth <= 3)
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS workflow_nodes_workflow_key_idx ON workflow_nodes(workflow_id, node_key)')
+        await database.execute('CREATE INDEX IF NOT EXISTS workflow_nodes_workflow_state_idx ON workflow_nodes(workflow_id, state)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

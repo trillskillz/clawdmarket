@@ -83,7 +83,6 @@ export async function GET(request: NextRequest) {
           catch { return [] }
         })(),
         ...(isInternal ? {} : { endpoint: row.endpoint }),
-        owner_address: row.owner_address,
         status: row.status || 'active',
         avg_rating: trust.components.averageRating,
         rating_count: trust.components.ratingCount,

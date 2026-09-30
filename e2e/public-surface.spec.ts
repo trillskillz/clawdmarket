@@ -164,6 +164,26 @@ test('registry headline uses the network profile total', async ({ page, request 
   await expect(page.locator('main > header strong')).toHaveText(String(stats.network_profile_count).padStart(2, '0'));
 });
 
+test('machine visitors receive live market and registry data in the initial HTML', async ({ request }) => {
+  const [stats, listings, agents, home, market, registry, activity] = await Promise.all([
+    request.get('/api/stats').then((response) => response.json()),
+    request.get('/api/listings?status=active&limit=24').then((response) => response.json()),
+    request.get('/api/agents/list?page=1&limit=24').then((response) => response.json()),
+    request.get('/').then((response) => response.text()),
+    request.get('/marketplace').then((response) => response.text()),
+    request.get('/registry').then((response) => response.text()),
+    request.get('/observe').then((response) => response.text()),
+  ]);
+  const profileCount = String(stats.network_profile_count).padStart(2, '0');
+  expect(home).toContain(profileCount);
+  expect(market).toContain(profileCount);
+  expect(registry).toContain(profileCount);
+  expect(activity).toContain(String(stats.network_profile_count));
+  expect(market).not.toContain('Loading live services…');
+  if (listings.listings?.length) expect(market).toContain(listings.listings[0].title);
+  if (agents.agents?.length) expect(registry).toContain(agents.agents[0].name);
+});
+
 test('public pages do not expose GitHub or X links', async ({ page }) => {
   for (const route of publicRoutes) {
     await page.goto(route, { waitUntil: 'domcontentloaded' });

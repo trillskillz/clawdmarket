@@ -18,12 +18,14 @@ import {
   ensureAdminFeeRecipient,
 } from '@/lib/settlement';
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy';
+import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy';
 import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy';
 import { getPaymentReadiness } from '@/lib/payment-config';
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
 import { NewPaymentsPausedError, requireNewPaymentsOpen } from '@/lib/payment-control';
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
+import { selectMarketplaceRail } from '@/lib/payment-rail-selection';
 
 export const dynamic = 'force-dynamic'
 
@@ -79,7 +81,8 @@ async function createTradePost(req: NextRequest) {
     const [existingTrade] = await db.select().from(trades).where(eq(trades.client_reference, clientReference)).limit(1);
     if (existingTrade) {
       if (existingTrade.buyer_id !== auth.userId || existingTrade.listing_id !== validated.listing_id
-        || existingTrade.payment_rail !== validated.payment_rail || validated.amount !== 1 || validated.allow_partial_fill) {
+        || (validated.payment_rail !== 'auto' && existingTrade.payment_rail !== validated.payment_rail)
+        || validated.amount !== 1 || validated.allow_partial_fill) {
         return NextResponse.json({ error: 'Idempotency key already belongs to another trade', code: 'IDEMPOTENCY_CONFLICT' }, { status: 409 });
       }
       return NextResponse.json({ message: 'Existing trade returned.', trade: existingTrade, code: 'TRADE_EXISTS', checkout: checkoutForTrade(existingTrade) });
@@ -156,27 +159,23 @@ async function createTradePost(req: NextRequest) {
 
     const itemPrice = Number(listing.price_bankr);
     const { totalCost, sellerAmount, devAmount } = calculateTradeFinancials(itemPrice);
+    const readiness = getPaymentReadiness();
+    const sellerPayout = await payoutAddressForUser(listing.seller_id);
+    const selectedRail = selectMarketplaceRail(validated.payment_rail, readiness, Boolean(sellerPayout));
+    if (!selectedRail) {
+      return NextResponse.json({
+        error: sellerPayout || validated.payment_rail === 'ledger'
+          ? 'The requested payment rail is unavailable.'
+          : 'The seller must configure a payout wallet before external checkout.',
+        code: sellerPayout || validated.payment_rail === 'ledger'
+          ? 'PAYMENT_RAIL_NOT_CONFIGURED' : 'SELLER_PAYOUT_ADDRESS_REQUIRED',
+        state: 'no_funds_moved',
+      }, { status: sellerPayout || validated.payment_rail === 'ledger' ? 503 : 409 });
+    }
 
-    if (validated.payment_rail === 'mpp' || validated.payment_rail === 'evm') {
-      const readiness = getPaymentReadiness();
-      const railReady = validated.payment_rail === 'mpp' ? readiness.mpp.enabled : readiness.evm.enabled;
-      if (!railReady) {
-        return NextResponse.json({
-          error: `${validated.payment_rail.toUpperCase()} settlement is not configured on this deployment`,
-          code: 'PAYMENT_RAIL_NOT_CONFIGURED',
-          state: 'no_funds_moved',
-        }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
-      }
-      const sellerPayout = await payoutAddressForUser(listing.seller_id);
-      if (!sellerPayout) {
-        return NextResponse.json({
-          error: 'The seller must configure a payout wallet before accepting external payments',
-          code: 'SELLER_PAYOUT_ADDRESS_REQUIRED',
-          state: 'no_funds_moved',
-        }, { status: 409 });
-      }
+    if (selectedRail === 'mpp' || selectedRail === 'evm') {
       const [newTrade] = await db.transaction(async (tx) => {
-        if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost });
+        if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost, sellerId: listing.seller_id, paymentRail: selectedRail });
         const claimed = await tx.update(listings).set({ status: 'sold' })
           .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'))).returning({ id: listings.id });
         if (!claimed.length) throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
@@ -191,9 +190,9 @@ async function createTradePost(req: NextRequest) {
           total_cost: totalCost,
           seller_amount: sellerAmount,
           dev_amount: devAmount,
-          dev_wallet: validated.payment_rail === 'mpp' ? readiness.mpp.feeRecipient : readiness.evm.feeRecipient,
+          dev_wallet: selectedRail === 'mpp' ? readiness.mpp.feeRecipient : readiness.evm.feeRecipient,
           payout_status: 'pending',
-          payment_rail: validated.payment_rail,
+          payment_rail: selectedRail,
           client_reference: clientReference,
           payment_due_at: new Date(Date.now() + 30 * 60_000).toISOString(),
           status: 'pending',
@@ -334,6 +333,9 @@ async function createTradePost(req: NextRequest) {
         spending_policy: error.policy,
         ...envMeta('clawdmarket/api/trades'),
       }, { status: 409 });
+    }
+    if (error instanceof BuyerSpendPolicyError) {
+      return NextResponse.json({ ...paymentError(error.code, error.message), ...envMeta('clawdmarket/api/trades') }, { status: 409 });
     }
 
     const zodIssues = error?.errors || error?.issues;

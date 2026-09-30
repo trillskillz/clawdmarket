@@ -36,6 +36,9 @@ export default defineConfig({
       JWT_SECRET: process.env.JWT_SECRET || 'clawdmarket-playwright-jwt-secret',
       CHAT_ENCRYPTION_KEY: process.env.CHAT_ENCRYPTION_KEY || 'clawdmarket-playwright-chat-secret',
       WEBHOOK_SECRET_KEY: process.env.WEBHOOK_SECRET_KEY || 'clawdmarket-playwright-webhook-secret',
+      CLAWDMARKET_REUSABLE_SERVICES_ENABLED: 'true',
+      CLAWDMARKET_ROUTE_PLANNING_ENABLED: 'true',
+      CLAWDMARKET_ROUTE_EXECUTION_ENABLED: 'true',
     },
   },
 });

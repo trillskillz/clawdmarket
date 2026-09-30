@@ -17,6 +17,7 @@ import { getAgentAvailability } from '@/lib/agent-presence';
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control';
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility';
+import { publicCapabilities } from '@/lib/public-capabilities';
 
 export const dynamic = 'force-dynamic'
 
@@ -204,6 +205,7 @@ export async function GET(req: NextRequest) {
         seller_status: sellerStatus,
         seller_last_seen_at: sellerLastSeenAt,
         seller_payout_address: sellerPayoutAddress,
+        agent_capabilities: storedCapabilities,
         ...publicListing
       } = listing;
       const trust = trustMap.get(String(listing.agent_id));
@@ -212,11 +214,18 @@ export async function GET(req: NextRequest) {
         : null;
       return {
         ...publicListing,
+        agent_capabilities: publicCapabilities(storedCapabilities),
         price_bankr: Number.isFinite(Number(listing.price_bankr))
           ? Number(listing.price_bankr)
           : 0,
+        price_usd: Number.isFinite(Number(listing.price_bankr))
+          ? Number(listing.price_bankr)
+          : 0,
+        pricing: { model: 'fixed', amount: Number(listing.price_bankr || 0).toFixed(2), currency: 'USD' },
         agent_trust: trust?.trustScore ?? 0,
         agent_trust_confidence: trust?.confidence ?? 'low',
+        agent_trust_rating_count: trust?.components.ratingCount ?? 0,
+        agent_trust_completed_trades: trust?.components.completedTrades ?? 0,
         agent_trust_drivers: trust?.drivers ?? ['No verified marketplace activity'],
         external_payment_ready: Boolean(sellerPayoutAddress && isAddress(sellerPayoutAddress)),
         seller_online: sellerAvailability === null ? null : sellerAvailability === 'online',
@@ -334,7 +343,7 @@ export async function POST(req: NextRequest) {
             price_bankr: validated.price_bankr,
           });
 
-          results.push({ index: i, success: true, listing: newListing });
+          results.push({ index: i, success: true, listing: { ...newListing, price_usd: Number(newListing.price_bankr) } });
         } catch {
           errors.push({ index: i, success: false, error: 'Listing could not be created' });
         }
@@ -371,7 +380,7 @@ export async function POST(req: NextRequest) {
         message: 'Listing created successfully',
         ...(sellerAgentId ? { seller_agent_id: sellerAgentId } : {}),
         ...paymentSetup,
-        listing: newListing,
+        listing: { ...newListing, price_usd: Number(newListing.price_bankr) },
       },
       { 
         status: 201,

@@ -132,22 +132,14 @@ export default function TradesTab({ trades, total, loading, loadingMore, onLoadM
       throw new Error('Only the seller can submit delivery for this trade.');
     }
 
-    const res = await fetch('/api/messages', {
+    const res = await fetch(`/api/trades/${trade.id}/delivery`, {
       method: 'POST',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'X-CSRF-Token': getCsrfToken ? getCsrfToken() : '',
       },
-      body: JSON.stringify({
-        receiverId: trade.buyer_id,
-        content: JSON.stringify({
-          type: 'task_complete',
-          trade_id: trade.id,
-          summary,
-          ...(deliveryUrl ? { delivery_url: deliveryUrl } : {}),
-        }),
-      }),
+      body: JSON.stringify({ summary, ...(deliveryUrl ? { delivery_url: deliveryUrl } : {}) }),
     });
 
     const data = await res.json().catch(() => ({}));
