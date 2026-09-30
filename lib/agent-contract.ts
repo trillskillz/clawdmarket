@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.25'
+export const AGENT_CONTRACT_VERSION = '1.26'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -506,6 +506,11 @@ export const AGENT_ACTIONS: AgentAction[] = [
     description: 'Persist a nonbinding, no-payment route plan with canonical capabilities and explainable candidate ranking.',
     method: 'POST', endpoint: '/api/routes/plan', auth: 'agent_api_key', payment: null,
     required: ['client_reference', 'objective', 'required_capabilities', 'max_budget'], body_schema: routePlanBodySchema,
+  },
+  {
+    id: 'inspect_route_metrics', label: 'Inspect route metrics',
+    description: 'Read aggregate route funnel and strictly evidenced assisted GMV. Autonomous GMV remains zero until router dispatch and verification exist.',
+    method: 'GET', endpoint: '/api/routes/metrics', auth: 'none', payment: null,
   },
   {
     id: 'execute_route', label: 'Reserve routed work',
@@ -1479,6 +1484,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/routes/plan': { post: { operationId: 'plan_work', summary: 'Plan work without selecting a provider or moving funds', security: authenticated,
       requestBody: { required: true, content: { 'application/json': { schema: getAction('plan_work').body_schema } } },
       responses: { 201: { description: 'Nonbinding route plan created' }, 200: { description: 'Idempotent plan replay' }, 400: { description: 'Invalid objective or constraints' }, 409: { description: 'Reference conflict' } } } },
+    '/api/routes/metrics': { get: { operationId: 'inspect_route_metrics', summary: 'Public route funnel and evidenced assisted GMV; autonomous GMV remains zero until end-to-end routing exists',
+      responses: { 200: { description: 'Aggregate counts, rates, assisted routed GMV, and autonomy status without private route data' } } } },
     '/api/routes/{id}/execute': { post: { operationId: 'execute_route', summary: 'Try saved candidates before checkout and reserve one unpaid order', security: authenticated, parameters: [tradeIdParameter],
       responses: { 201: { description: 'Order and external checkout created; payment is unconfirmed and may arrive late' }, 200: { description: 'Idempotent route replay with payment exposure' }, 404: { description: 'Route not owned' }, 409: { description: 'Provider, budget, price, capacity, or rail changed' }, 410: { description: 'Plan expired' }, 503: { description: 'Route execution disabled' } } } },
     '/api/routes/{id}': {
