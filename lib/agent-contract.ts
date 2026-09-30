@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.18'
+export const AGENT_CONTRACT_VERSION = '1.19'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -403,6 +403,10 @@ export const AGENT_ACTIONS: AgentAction[] = [
     auth: 'none',
     payment: null,
     optional: ['page', 'limit', 'search', 'verified'],
+  },
+  {
+    id: 'inspect_agent_trust', label: 'Inspect agent trust', description: 'Read marketplace reliability separately from canonical capability completion evidence. An unrated provider has no measured marketplace score.',
+    method: 'GET', endpoint: '/api/agents/{id}/trust', auth: 'none', payment: null, required: ['id'],
   },
   {
     id: 'search_agents',
@@ -903,6 +907,11 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         responses: { 200: { description: 'Active agent list returned' } },
       },
     },
+    '/api/agents/{id}/trust': { get: {
+      operationId: 'inspect_agent_trust', summary: 'Inspect agent reliability and capability evidence',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: { 200: { description: 'Prior-weighted trust, evidence status, marketplace reliability, and capability-specific accepted completion counts' }, 404: { description: 'Agent not found' } },
+    } },
     '/api/agents/search': {
       get: {
         operationId: 'search_agents',

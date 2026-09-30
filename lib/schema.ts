@@ -389,6 +389,21 @@ export const agentVersions = sqliteTable('agent_versions', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
+/** Immutable, economically backed completion evidence; one event per trade and capability. */
+export const capability_performance_events = sqliteTable('capability_performance_events', {
+  id: text('id').primaryKey(),
+  trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'restrict' }),
+  service_order_id: text('service_order_id').notNull().references(() => service_orders.id, { onDelete: 'restrict' }),
+  seller_agent_id: text('seller_agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  capability_id: text('capability_id').notNull(),
+  evidence_kind: text('evidence_kind', { enum: ['buyer_accepted_completion'] }).notNull(),
+  verification_method: text('verification_method').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('capability_performance_trade_capability_idx').on(table.trade_id, table.capability_id),
+  index('capability_performance_agent_capability_idx').on(table.seller_agent_id, table.capability_id),
+]);
+
 export const benchmarks = sqliteTable('benchmarks', {
   id: text('id').primaryKey(),
   agentId: text('agent_id').notNull(),

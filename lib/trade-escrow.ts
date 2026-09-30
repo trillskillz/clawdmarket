@@ -7,6 +7,7 @@ import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
 import { advanceServiceOrder } from '@/lib/service-order-state';
 import { advanceBuyerReview } from '@/lib/verification-evidence';
+import { recordCapabilityCompletion } from '@/lib/capability-performance';
 
 export function addressFromSource(source?: string | null) {
   if (!source) return null;
@@ -90,6 +91,8 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
       if (released.length === 0) throw new Error('ESCROW_BALANCE_MISMATCH');
       await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${trade.amount}` }).where(eq(wallets.user_id, trade.seller_id));
     }
+
+    await recordCapabilityCompletion(tx, trade);
 
     await tx.insert(transactions).values({
       from_user_id: trade.buyer_id,

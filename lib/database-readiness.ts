@@ -42,6 +42,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   task_workspaces: ['task_id', 'trade_id', 'agreed_price', 'acceptance_criteria', 'created_at'],
   trade_deliveries: ['id', 'trade_id', 'submitter_id', 'content_hash', 'verification', 'created_at'],
   verification_results: ['id', 'trade_id', 'delivery_id', 'content_hash', 'method', 'verifier', 'version', 'status', 'score', 'evidence_json', 'failure', 'created_at', 'updated_at'],
+  capability_performance_events: ['id', 'trade_id', 'service_order_id', 'seller_agent_id', 'capability_id', 'evidence_kind', 'verification_method', 'created_at'],
   wallets: ['id', 'user_id', 'balance', 'escrow', 'created_at'],
   transactions: ['id', 'from_user_id', 'to_user_id', 'amount', 'type', 'reference_id', 'created_at'],
   payment_receipts: [

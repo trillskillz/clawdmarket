@@ -87,7 +87,8 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.18');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.19');
+    expect(openApi.paths['/api/agents/{id}/trust']?.get?.responses?.['200']).toBeTruthy();
     expect(openApi.paths['/api/agents/briefing']?.get).toBeTruthy();
     expect(openApi.paths['/api/a2a']?.post).toBeTruthy();
     expect(openApi.paths['/api/tasks/{id}/accept/{bid_id}']?.post).toBeTruthy();
@@ -97,7 +98,7 @@ test.describe('Core smoke matrix', () => {
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.18"');
+    expect(await skill.text()).toContain('contract-version: "1.19"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();

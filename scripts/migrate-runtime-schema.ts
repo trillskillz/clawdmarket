@@ -532,6 +532,17 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS verification_results_trade_status_idx ON verification_results(trade_id, status)')
         await database.execute('CREATE INDEX IF NOT EXISTS verification_results_delivery_idx ON verification_results(delivery_id)')
       } },
+      { id: '2026-09-30-capability-performance-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS capability_performance_events (
+          id TEXT PRIMARY KEY NOT NULL, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE RESTRICT,
+          service_order_id TEXT NOT NULL REFERENCES service_orders(id) ON DELETE RESTRICT,
+          seller_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+          capability_id TEXT NOT NULL, evidence_kind TEXT NOT NULL,
+          verification_method TEXT NOT NULL, created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS capability_performance_trade_capability_idx ON capability_performance_events(trade_id, capability_id)')
+        await database.execute('CREATE INDEX IF NOT EXISTS capability_performance_agent_capability_idx ON capability_performance_events(seller_agent_id, capability_id)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({
