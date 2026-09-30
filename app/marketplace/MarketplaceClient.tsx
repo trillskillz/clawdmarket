@@ -73,12 +73,9 @@ function catalogUrl(page: number, category: string, query: string, sort: string,
 }
 
 function listingToService(listing: any, fallback = false): AgentService {
-  let capabilities: string[] = []
-  try {
-    capabilities = Array.isArray(listing.agent_capabilities)
-      ? listing.agent_capabilities
-      : JSON.parse(listing.agent_capabilities || '[]')
-  } catch {}
+  let capabilities: string[] = Array.isArray(listing.agent_capabilities)
+    ? listing.agent_capabilities.filter((item: unknown): item is string => typeof item === 'string')
+    : []
   if (capabilities.length === 0) capabilities = [listing.category || 'general']
   const name = String(listing.seller_name || 'Independent agent')
   return {

@@ -209,3 +209,21 @@ test('reusing an idempotency key with another rail or quantity is rejected', asy
     assert.equal((await response.json()).code, 'IDEMPOTENCY_CONFLICT')
   }
 })
+
+test('omitted rail selects an operational rail and an idempotent replay keeps the reservation', async () => {
+  const f = await fixture()
+  await db.update(schema.listings).set({ status: 'active' }).where(eq(schema.listings.id, f.listing.id))
+  await db.insert(schema.payout_addresses).values({ user_id: f.seller, address: treasury.address })
+  const reference = `auto_${crypto.randomUUID()}`
+  const body = { listing_id: f.listing.id, amount: 1, client_reference: reference }
+  const created = await createTrade(request(f.trade.id, f.buyer, body))
+  assert.equal(created.status, 201, JSON.stringify(await created.clone().json()))
+  const first = await created.json()
+  assert.equal(first.trade.payment_rail, 'evm')
+  assert.equal(first.trade.status, 'pending')
+  const repeated = await createTrade(request(f.trade.id, f.buyer, body))
+  assert.equal(repeated.status, 200)
+  assert.equal((await repeated.json()).trade.id, first.trade.id)
+  const trades = await db.select().from(schema.trades).where(eq(schema.trades.listing_id, f.listing.id))
+  assert.equal(trades.length, 2) // Historical fixture plus one new reservation.
+})

@@ -11,7 +11,6 @@ import styles from './profile.module.css'
 
 type SellerProfile = {
   id: string
-  principal_id?: string
   profile_kind?: 'registered_agent' | 'account_seller' | 'reference'
   name: string
   description?: string | null
@@ -24,7 +23,6 @@ type SellerProfile = {
   last_seen_at?: string | number | null
   endpoint_failures?: number
   created_at?: string | number
-  owner_address?: string | null
   endpoint?: string | null
   model_id?: string | null
   mpp_endpoint?: string | null
@@ -47,7 +45,7 @@ type SellerProfile = {
   benchmark_score?: number | null
   active_listings?: Array<{ id: string; title: string; description: string; category: string; price_bankr: number; price_usd?: number; status?: string }>
   ratings?: Array<{ id?: string; score?: number; comment?: string | null; rater_name?: string | null; created_at?: string | number }>
-  recent_trades?: Array<{ id: string; buyer_id?: string; seller_id?: string; buyer_name?: string | null; seller_name?: string | null; amount?: number; status?: string; created_at?: string | number }>
+  recent_trades?: Array<{ id: string; direction: 'sold' | 'bought'; counterparty_name?: string | null; amount?: number; status?: string; created_at?: string | number }>
   improvements?: Array<{ id?: string; to_version?: number; delta?: number; change_description?: string; created_at?: string | number }>
 }
 
@@ -77,10 +75,6 @@ function timeAgo(value?: string | number) {
 function compactId(value?: string | null) {
   if (!value) return 'Not published'
   return value.length > 24 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value
-}
-
-function profileIdFromPrincipal(value?: string) {
-  return value?.startsWith('user_agent_') ? value.slice('user_agent_'.length) : value
 }
 
 function trustTone(score: number) {
@@ -150,7 +144,7 @@ export default function SellerProfilePage() {
     : presence === 'offline' ? 'Offline'
       : presence === 'unknown' ? 'No recent check-in'
         : presence === 'listed' ? 'Listed' : 'Inactive'
-  const messagePrincipal = seller.principal_id || `user_agent_${seller.id}`
+  const messagePrincipal = seller.profile_kind === 'registered_agent' ? `user_agent_${seller.id}` : seller.id
 
   return (
     <main className={styles.page}>
@@ -204,11 +198,7 @@ export default function SellerProfilePage() {
           <article className={styles.historyPanel}><div className={styles.sectionHeading}><span>03 / BUYER REVIEWS</span><h2>Verified feedback.</h2></div>{(seller.ratings || []).length > 0 ? <div className={styles.reviewList}>{(seller.ratings || []).slice(0, 5).map((review, index) => <div className={styles.review} key={review.id || index}><div><Stars score={Number(review.score || 0)} /><span>{timeAgo(review.created_at)}</span></div><p>{review.comment || 'Verified marketplace rating.'}</p><b>{review.rater_name || 'Verified buyer'}</b></div>)}</div> : <div className={styles.inlineEmpty}><span>★</span><p>No verified reviews yet.</p></div>}</article>
 
           <article className={styles.historyPanel}><div className={styles.sectionHeading}><span>04 / MARKET ACTIVITY</span><h2>Recent transactions.</h2></div>{activity.length > 0 ? <div className={styles.activityList}>{activity.slice(0, 7).map((trade) => {
-            const sellerIds = new Set([seller.id, seller.principal_id, `user_agent_${seller.id}`])
-            const isSeller = sellerIds.has(trade.seller_id)
-            const counterpartyId = isSeller ? trade.buyer_id : trade.seller_id
-            const counterpartyName = isSeller ? trade.buyer_name : trade.seller_name
-            return <div className={styles.activity} key={trade.id}><span>{isSeller ? 'SOLD' : 'BOUGHT'}</span><div>{counterpartyId ? <Link href={`/registry/${encodeURIComponent(profileIdFromPrincipal(counterpartyId) || '')}`}>{counterpartyName || compactId(counterpartyId)}</Link> : <b>{counterpartyName || 'Marketplace member'}</b>}<small>{timeAgo(trade.created_at)} · {trade.status || 'recorded'}</small></div><strong>${Number(trade.amount || 0).toFixed(2)}</strong></div>
+            return <div className={styles.activity} key={trade.id}><span>{trade.direction === 'sold' ? 'SOLD' : 'BOUGHT'}</span><div><b>{trade.counterparty_name || 'Marketplace member'}</b><small>{timeAgo(trade.created_at)} · {trade.status || 'recorded'}</small></div><strong>${Number(trade.amount || 0).toFixed(2)}</strong></div>
           })}</div> : <div className={styles.inlineEmpty}><span>↗</span><p>No public trade activity yet.</p></div>}</article>
         </section>
 
@@ -216,7 +206,7 @@ export default function SellerProfilePage() {
           <div className={styles.sectionHeading}><span>05 / CAPABILITY SIGNAL</span><h2>Measured improvement.</h2><p>Benchmarks measure capability; they do not increase the marketplace trust score.</p></div><div className={styles.benchmarkScore}><strong>{seller.benchmark_score == null ? '—' : Math.round(seller.benchmark_score)}</strong><span>/100 latest benchmark</span></div><div className={styles.improvementList}>{(seller.improvements || []).slice(0, 4).map((improvement, index) => <div key={improvement.id || index}><span>v{improvement.to_version || index + 2}</span><p>{improvement.change_description || 'Capability update recorded.'}</p><b>{Number(improvement.delta || 0) >= 0 ? '+' : ''}{Number(improvement.delta || 0).toFixed(1)} pts</b></div>)}</div>
         </section>}
 
-        <details className={styles.technical}><summary><span>06 / TECHNICAL IDENTITY</span><b>Inspect integration details +</b></summary><dl><div><dt>Seller ID</dt><dd>{seller.id}</dd></div><div><dt>Settlement principal</dt><dd>{seller.principal_id || 'Not published'}</dd></div><div><dt>Owner wallet</dt><dd>{seller.owner_address || 'Not published'}</dd></div><div><dt>Agent endpoint</dt><dd>{seller.endpoint || 'Not published'}</dd></div><div><dt>MPP endpoint</dt><dd>{seller.mpp_endpoint || 'Not published'}</dd></div><div><dt>Model</dt><dd>{seller.model_id || 'Not published'}</dd></div></dl></details>
+        <details className={styles.technical}><summary><span>06 / TECHNICAL IDENTITY</span><b>Inspect integration details +</b></summary><dl><div><dt>Seller ID</dt><dd>{seller.id}</dd></div><div><dt>Agent endpoint</dt><dd>{seller.endpoint || 'Not published'}</dd></div><div><dt>MPP endpoint</dt><dd>{seller.mpp_endpoint || 'Not published'}</dd></div><div><dt>Model</dt><dd>{seller.model_id || 'Not published'}</dd></div></dl></details>
 
         <section className={styles.cta}><div><span>READY TO WORK TOGETHER?</span><h2>Hire the service.<br />Verify the delivery.</h2></div><p>Choose an active offer in the marketplace, fund it through an enabled production rail, and release settlement only after reviewing the result.</p><div><Link href="/marketplace">Browse services <span>↗</span></Link><Link href="/docs#trades">Read settlement flow <span>→</span></Link></div></section>
       </div>

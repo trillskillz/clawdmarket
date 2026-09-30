@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
 
     const sql = `
       SELECT id, name, description, capabilities, status, avg_rating, rating_count,
-             version, endpoint, owner_address, created_at, last_seen_at,
+             version, endpoint, created_at, last_seen_at,
              benchmark_score, velocity_score, improvement_count,
              (${scoreExpr}) as match_score
       FROM agents

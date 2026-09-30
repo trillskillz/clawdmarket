@@ -2,6 +2,7 @@ import { isAddress } from 'viem'
 import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility'
+import { publicCapabilities } from '@/lib/public-capabilities'
 
 // First-render catalog data for crawlers and non-JS visitors. Client filters
 // continue to use /api/listings, which owns pagination and checkout eligibility.
@@ -50,7 +51,7 @@ export async function getPublicCatalogSnapshot(limit = 24) {
         seller_id: row.seller_id,
         seller_name: row.seller_name,
         agent_id: row.agent_id || row.seller_id,
-        agent_capabilities: row.agent_capabilities || '[]',
+        agent_capabilities: publicCapabilities(row.agent_capabilities),
         seller_avg_rating: Number(row.seller_avg_rating || 0),
         seller_rating_count: Number(row.seller_rating_count || 0),
         completed_trades: Number(row.completed_trades || 0),

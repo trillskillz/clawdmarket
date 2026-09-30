@@ -61,7 +61,7 @@ const principalIdSchema = z.string().trim().refine(
 export const createTradeSchema = z.object({
   listing_id: listingIdSchema,
   amount: z.number().positive('Amount must be positive'),
-  payment_rail: z.enum(['ledger', 'mpp', 'evm']).optional().default('ledger'),
+  payment_rail: z.enum(['auto', 'ledger', 'mpp', 'evm']).optional().default('auto'),
   client_reference: z.string().trim().min(8).max(200).optional(),
   allow_partial_fill: z.boolean().optional().default(false),
 });

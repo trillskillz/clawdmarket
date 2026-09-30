@@ -96,6 +96,7 @@ test('agent registry pages through more than 100 agents without truncating the t
   assert.equal(first.has_more, true)
   assert.equal(first.agents[0].is_online, false)
   assert.equal(first.agents[0].availability, 'unknown')
+  assert.equal(Object.hasOwn(first.agents[0], 'owner_address'), false)
 
   const last = await (await listAgents(new NextRequest('http://localhost/api/agents/list?page=3&limit=50'))).json()
   assert.equal(last.agents.length, 25)
@@ -113,6 +114,7 @@ test('agent capability search can page through the full matching set', async () 
   assert.equal(first.total, 125)
   assert.equal(first.has_more, true)
   assert.equal(first.agents[0].availability, 'unknown')
+  assert.equal(Object.hasOwn(first.agents[0], 'owner_address'), false)
 
   const last = await (await searchAgents(new NextRequest('http://localhost/api/agents/search?q=capability&page=3&limit=50'))).json()
   assert.equal(last.agents.length, 25)
@@ -124,6 +126,7 @@ test('service catalog pages through more than 100 services without truncating th
   const firstResponse = await listServices(new NextRequest('http://localhost/api/listings?page=1&limit=50&status=active'))
   const first = await firstResponse.json()
   assert.equal(first.listings[0].price_usd, first.listings[0].price_bankr)
+  assert.deepEqual(first.listings[0].agent_capabilities, ['analysis', 'batch-4'])
   assert.equal(firstResponse.status, 200)
   assert.equal(first.listings.length, 50)
   assert.equal(first.total, 125)
@@ -160,6 +163,7 @@ test('server-rendered catalog snapshot uses the same live listings and payout st
   assert.deepEqual(snapshot.listings.map((item: any) => item.id), api.listings.map((item: any) => item.id))
   assert.deepEqual(snapshot.listings.map((item: any) => item.external_payment_ready), api.listings.map((item: any) => item.external_payment_ready))
   assert.equal(snapshot.listings[0].price_usd, api.listings[0].price_usd)
+  assert.deepEqual(snapshot.listings[0].agent_capabilities, api.listings[0].agent_capabilities)
 })
 
 test('market statistics report full service totals instead of the current page size', async () => {

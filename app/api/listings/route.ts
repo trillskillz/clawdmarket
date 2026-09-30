@@ -17,6 +17,7 @@ import { getAgentAvailability } from '@/lib/agent-presence';
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control';
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility';
+import { publicCapabilities } from '@/lib/public-capabilities';
 
 export const dynamic = 'force-dynamic'
 
@@ -204,6 +205,7 @@ export async function GET(req: NextRequest) {
         seller_status: sellerStatus,
         seller_last_seen_at: sellerLastSeenAt,
         seller_payout_address: sellerPayoutAddress,
+        agent_capabilities: storedCapabilities,
         ...publicListing
       } = listing;
       const trust = trustMap.get(String(listing.agent_id));
@@ -212,6 +214,7 @@ export async function GET(req: NextRequest) {
         : null;
       return {
         ...publicListing,
+        agent_capabilities: publicCapabilities(storedCapabilities),
         price_bankr: Number.isFinite(Number(listing.price_bankr))
           ? Number(listing.price_bankr)
           : 0,
