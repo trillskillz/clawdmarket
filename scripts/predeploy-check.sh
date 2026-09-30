@@ -100,6 +100,11 @@ for required_file in "${required_files[@]}"; do
   fi
 done
 
+if grep -Fqx '/sdk/' .vercelignore; then
+  echo "Vercel build excludes the TypeScript SDK source imported by tests/sdk; remove /sdk/ from .vercelignore" >&2
+  exit 1
+fi
+
 if command -v rg >/dev/null 2>&1; then
   proxy_has_passthrough() {
     rg -q "startsWith\('/api/'\)|NextResponse\.next\(\)" proxy.ts
