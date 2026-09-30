@@ -333,6 +333,44 @@ export const route_attempts = sqliteTable('route_attempts', {
   index('route_attempts_route_state_idx').on(table.route_id, table.state),
 ]);
 
+/** Bounded, non-economic workflow plans. Child routes are not created until an authorized execution model exists. */
+export const workflows = sqliteTable('workflows', {
+  id: text('id').primaryKey(),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull().unique(),
+  objective: text('objective').notNull(),
+  plan_json: text('plan_json').notNull(),
+  max_budget_minor: integer('max_budget_minor').notNull(),
+  currency: text('currency', { enum: ['USD'] }).notNull().default('USD'),
+  deadline_seconds: integer('deadline_seconds').notNull(),
+  state: text('state', { enum: ['planned', 'cancelled'] }).notNull().default('planned'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('workflows_buyer_created_idx').on(table.buyer_id, table.created_at),
+  check('workflows_budget_positive', sql`${table.max_budget_minor} > 0`),
+]);
+
+export const workflow_nodes = sqliteTable('workflow_nodes', {
+  id: text('id').primaryKey(),
+  workflow_id: text('workflow_id').notNull().references(() => workflows.id, { onDelete: 'restrict' }),
+  node_key: text('node_key').notNull(),
+  objective: text('objective').notNull(),
+  required_capabilities: text('required_capabilities').notNull(),
+  depends_on: text('depends_on').notNull().default('[]'),
+  budget_minor: integer('budget_minor').notNull(),
+  deadline_seconds: integer('deadline_seconds').notNull(),
+  depth: integer('depth').notNull(),
+  state: text('state', { enum: ['planned'] }).notNull().default('planned'),
+  route_id: text('route_id').references(() => route_plans.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  uniqueIndex('workflow_nodes_workflow_key_idx').on(table.workflow_id, table.node_key),
+  index('workflow_nodes_workflow_state_idx').on(table.workflow_id, table.state),
+  check('workflow_nodes_budget_positive', sql`${table.budget_minor} > 0`),
+  check('workflow_nodes_depth_bounded', sql`${table.depth} >= 0 AND ${table.depth} <= 3`),
+]);
+
 export const bids = sqliteTable('bids', {
   id: text('id').primaryKey(),
   taskId: text('task_id').notNull().references(() => tasks.id),

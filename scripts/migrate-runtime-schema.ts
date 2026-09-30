@@ -569,6 +569,28 @@ async function main() {
         await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS route_attempts_route_number_idx ON route_attempts(route_id, attempt_number)')
         await database.execute('CREATE INDEX IF NOT EXISTS route_attempts_route_state_idx ON route_attempts(route_id, state)')
       } },
+      { id: '2026-09-30-workflow-plans-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS workflows (
+          id TEXT PRIMARY KEY NOT NULL, buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL UNIQUE, objective TEXT NOT NULL, plan_json TEXT NOT NULL,
+          max_budget_minor INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
+          deadline_seconds INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'planned',
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          CHECK(max_budget_minor > 0)
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS workflows_buyer_created_idx ON workflows(buyer_id, created_at)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS workflow_nodes (
+          id TEXT PRIMARY KEY NOT NULL, workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE RESTRICT,
+          node_key TEXT NOT NULL, objective TEXT NOT NULL, required_capabilities TEXT NOT NULL,
+          depends_on TEXT NOT NULL DEFAULT '[]', budget_minor INTEGER NOT NULL,
+          deadline_seconds INTEGER NOT NULL, depth INTEGER NOT NULL,
+          state TEXT NOT NULL DEFAULT 'planned', route_id TEXT REFERENCES route_plans(id) ON DELETE RESTRICT,
+          created_at INTEGER NOT NULL,
+          CHECK(budget_minor > 0), CHECK(depth >= 0 AND depth <= 3)
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS workflow_nodes_workflow_key_idx ON workflow_nodes(workflow_id, node_key)')
+        await database.execute('CREATE INDEX IF NOT EXISTS workflow_nodes_workflow_state_idx ON workflow_nodes(workflow_id, state)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

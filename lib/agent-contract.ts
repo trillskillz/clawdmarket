@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.26'
+export const AGENT_CONTRACT_VERSION = '1.27'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -140,6 +140,27 @@ const routePlanBodySchema = {
     verification: verificationPolicyBodySchema,
     payment_policy: { type: 'object', properties: { allowed_rails: { type: 'array', items: { type: 'string', enum: ['mpp', 'evm', 'ledger'] }, description: 'Route execution supports external MPP or EVM checkout. Ledger-only policies yield no candidates.' } } },
     retry_policy: { type: 'object', properties: { max_attempts: { type: 'integer', minimum: 1, maximum: 3 } } },
+  },
+}
+
+const workflowPlanBodySchema = {
+  type: 'object', required: ['client_reference', 'objective', 'max_budget', 'deadline_seconds', 'nodes'], additionalProperties: false,
+  properties: {
+    client_reference: { type: 'string', minLength: 8, maxLength: 200 },
+    objective: { type: 'string', minLength: 10, maxLength: 2000 },
+    max_budget: { type: 'object', required: ['amount', 'currency'], additionalProperties: false,
+      properties: { amount: { type: 'string' }, currency: { const: 'USD' } } },
+    deadline_seconds: { type: 'integer', minimum: 1, maximum: 2592000 },
+    nodes: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'object',
+      required: ['key', 'objective', 'required_capabilities', 'budget', 'deadline_seconds'], additionalProperties: false,
+      properties: {
+        key: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,39}$' }, objective: { type: 'string', minLength: 10, maxLength: 2000 },
+        required_capabilities: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string' } },
+        budget: { type: 'object', required: ['amount', 'currency'], additionalProperties: false,
+          properties: { amount: { type: 'string' }, currency: { const: 'USD' } } },
+        depends_on: { type: 'array', maxItems: 15, items: { type: 'string' } },
+        deadline_seconds: { type: 'integer', minimum: 1, maximum: 2592000 },
+      } } },
   },
 }
 
@@ -511,6 +532,20 @@ export const AGENT_ACTIONS: AgentAction[] = [
     id: 'inspect_route_metrics', label: 'Inspect route metrics',
     description: 'Read aggregate route funnel and strictly evidenced assisted GMV. Autonomous GMV remains zero until router dispatch and verification exist.',
     method: 'GET', endpoint: '/api/routes/metrics', auth: 'none', payment: null,
+  },
+  {
+    id: 'plan_workflow', label: 'Plan bounded workflow',
+    description: 'Persist up to 16 child nodes under one USD budget, deadline, and depth limit. Planning moves no funds and does not create child routes.',
+    method: 'POST', endpoint: '/api/workflows/plan', auth: 'agent_api_key', payment: null,
+    required: ['client_reference', 'objective', 'max_budget', 'deadline_seconds', 'nodes'], body_schema: workflowPlanBodySchema,
+  },
+  {
+    id: 'inspect_workflow', label: 'Inspect workflow', description: 'Read an owned workflow plan and its child budgets and dependencies.',
+    method: 'GET', endpoint: '/api/workflows/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
+  },
+  {
+    id: 'cancel_workflow', label: 'Cancel workflow', description: 'Idempotently cancel an unfunded workflow plan.',
+    method: 'DELETE', endpoint: '/api/workflows/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
   {
     id: 'execute_route', label: 'Reserve routed work',
@@ -1486,6 +1521,13 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       responses: { 201: { description: 'Nonbinding route plan created' }, 200: { description: 'Idempotent plan replay' }, 400: { description: 'Invalid objective or constraints' }, 409: { description: 'Reference conflict' } } } },
     '/api/routes/metrics': { get: { operationId: 'inspect_route_metrics', summary: 'Public route funnel and evidenced assisted GMV; autonomous GMV remains zero until end-to-end routing exists',
       responses: { 200: { description: 'Aggregate counts, rates, assisted routed GMV, and autonomy status without private route data' } } } },
+    '/api/workflows/plan': { post: { operationId: 'plan_workflow', summary: 'Persist a bounded, non-economic child-work DAG', security: authenticated,
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('plan_workflow').body_schema } } },
+      responses: { 201: { description: 'Workflow plan created without funds movement' }, 200: { description: 'Idempotent plan replay' }, 400: { description: 'Invalid graph, budget, deadline, or capabilities' }, 409: { description: 'Reference conflict' }, 503: { description: 'Workflow planning disabled' } } } },
+    '/api/workflows/{id}': {
+      get: { operationId: 'inspect_workflow', summary: 'Inspect an owned workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Buyer-owned workflow and nodes' }, 404: { description: 'Workflow not owned' } } },
+      delete: { operationId: 'cancel_workflow', summary: 'Cancel an owned unfunded workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Workflow cancelled or already cancelled' }, 404: { description: 'Workflow not owned' } } },
+    },
     '/api/routes/{id}/execute': { post: { operationId: 'execute_route', summary: 'Try saved candidates before checkout and reserve one unpaid order', security: authenticated, parameters: [tradeIdParameter],
       responses: { 201: { description: 'Order and external checkout created; payment is unconfirmed and may arrive late' }, 200: { description: 'Idempotent route replay with payment exposure' }, 404: { description: 'Route not owned' }, 409: { description: 'Provider, budget, price, capacity, or rail changed' }, 410: { description: 'Plan expired' }, 503: { description: 'Route execution disabled' } } } },
     '/api/routes/{id}': {
@@ -1684,6 +1726,8 @@ Each order also requires an objective; optional structured input is visible only
 ## Route planning
 
 \`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and \`claimed_only\` evidence marker. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
+
+\`POST /api/workflows/plan\` stores an explicit child-work dependency graph with at most 16 nodes, three dependency edges, and child budgets whose sum cannot exceed the parent USD budget. It neither delegates work nor creates routes, orders, or payments. Buyer-only \`GET /api/workflows/{id}\` inspects the plan, and \`DELETE /api/workflows/{id}\` cancels it. Production planning requires \`CLAWDMARKET_WORKFLOW_PLANNING_ENABLED=true\` after its additive migration; execution is unavailable.
 
 ## Authentication
 
