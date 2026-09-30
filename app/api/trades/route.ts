@@ -18,6 +18,7 @@ import {
   ensureAdminFeeRecipient,
 } from '@/lib/settlement';
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy';
+import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy';
 import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy';
 import { getPaymentReadiness } from '@/lib/payment-config';
 import { payoutAddressForUser } from '@/lib/external-settlement';
@@ -174,7 +175,7 @@ async function createTradePost(req: NextRequest) {
 
     if (selectedRail === 'mpp' || selectedRail === 'evm') {
       const [newTrade] = await db.transaction(async (tx) => {
-        if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost });
+        if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost, sellerId: listing.seller_id, paymentRail: selectedRail });
         const claimed = await tx.update(listings).set({ status: 'sold' })
           .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'))).returning({ id: listings.id });
         if (!claimed.length) throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
@@ -332,6 +333,9 @@ async function createTradePost(req: NextRequest) {
         spending_policy: error.policy,
         ...envMeta('clawdmarket/api/trades'),
       }, { status: 409 });
+    }
+    if (error instanceof BuyerSpendPolicyError) {
+      return NextResponse.json({ ...paymentError(error.code, error.message), ...envMeta('clawdmarket/api/trades') }, { status: 409 });
     }
 
     const zodIssues = error?.errors || error?.issues;

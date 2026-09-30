@@ -6,6 +6,7 @@ import { checkoutForTrade } from '@/lib/trade-checkout'
 import { reserveServiceOrder, ServiceOrderReservationError } from '@/lib/service-order-reservation'
 import { NewPaymentsPausedError } from '@/lib/payment-control'
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy'
+import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy'
 import { TradeRaceError } from '@/lib/settlement'
 import { internalErrorResponse } from '@/lib/api-error'
 
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (error instanceof ServiceOrderReservationError) return failure(error.code, error.message, error.status, error.retryable)
     if (error instanceof NewPaymentsPausedError) return failure(error.code, error.message, error.status, true)
     if (error instanceof AgentSpendPolicyError) return failure(error.code, error.message, 409)
+    if (error instanceof BuyerSpendPolicyError) return failure(error.code, error.message, 409)
     if (error instanceof TradeRaceError) return failure(error.code, error.message, 409)
     return internalErrorResponse('Service order reservation failed', error)
   }

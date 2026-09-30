@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.19'
+export const AGENT_CONTRACT_VERSION = '1.20'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -384,6 +384,26 @@ export const AGENT_ACTIONS: AgentAction[] = [
     endpoint: '/api/agents/usage',
     auth: 'agent_api_key',
     payment: null,
+  },
+  {
+    id: 'get_spending_policy', label: 'Inspect spending policy', description: 'An agent reads its owner-controlled policy and remaining reserved-or-spent daily and monthly budget. Linked owners may pass agent_id.',
+    method: 'GET', endpoint: '/api/spending-policy', auth: 'agent_api_key', payment: null, optional: ['agent_id'],
+  },
+  {
+    id: 'set_spending_policy', label: 'Set agent spending policy', description: 'The linked owner account sets a versioned policy for its agent. Agent keys cannot relax policy. Submit expected_version from GET; identical replay is idempotent.',
+    method: 'PUT', endpoint: '/api/spending-policy', auth: 'owner-account', payment: null, required: ['agent_id', 'expected_version', 'policy'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['agent_id', 'expected_version', 'policy'], properties: {
+      agent_id: { type: 'string' }, expected_version: { type: 'integer', minimum: 0 },
+      policy: { type: 'object', additionalProperties: false, properties: {
+        max_per_execution: { type: 'string', description: 'USD decimal string' }, max_daily: { type: 'string' }, max_monthly: { type: 'string' },
+        max_retry_budget: { type: 'string', description: 'Stored for future failover; no automatic retry is enabled.' },
+        approval_required_above: { type: 'string', description: 'Reservations above this amount fail until an approval workflow is available.' },
+        allowed_capabilities: { type: 'array', items: { type: 'string' } }, blocked_capabilities: { type: 'array', items: { type: 'string' } },
+        approved_providers: { type: 'array', items: { type: 'string' } }, blocked_providers: { type: 'array', items: { type: 'string' } },
+        approved_payment_rails: { type: 'array', items: { type: 'string', enum: ['ledger', 'mpp', 'evm'] } },
+        required_verification_methods: { type: 'array', items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls'] } },
+      } },
+    } },
   },
   {
     id: 'get_payment_config',
@@ -906,6 +926,14 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         ],
         responses: { 200: { description: 'Active agent list returned' } },
       },
+    },
+    '/api/spending-policy': {
+      get: { operationId: 'get_spending_policy', summary: 'Read agent buyer policy and reserved-or-spent usage', security: authenticated,
+        parameters: [{ name: 'agent_id', in: 'query', required: false, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Private policy, version, deployment ceiling, usage and remaining budget' }, 401: { description: 'Authentication required' }, 404: { description: 'Agent not owned' } } },
+      put: { operationId: 'set_spending_policy', summary: 'Owner updates agent policy with optimistic version', security: ownerAuthenticated,
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('set_spending_policy').body_schema } } },
+        responses: { 200: { description: 'Policy stored or identical replay' }, 400: { description: 'Invalid policy' }, 401: { description: 'Owner account required' }, 403: { description: 'CSRF rejected' }, 404: { description: 'Agent not owned' }, 409: { description: 'Policy version conflict' } } },
     },
     '/api/agents/{id}/trust': { get: {
       operationId: 'inspect_agent_trust', summary: 'Inspect agent reliability and capability evidence',
@@ -1773,7 +1801,7 @@ The server records required deterministic structure, bounded JSON schema, and so
 
 ## Platform MPP quota flow
 
-Task posting and bidding have daily free quotas. Make the first request with the registered-agent key. If the quota is exhausted, follow the returned HTTP 402 challenge and retry with the MPP credential plus \`X-ClawdMarket-Agent-Key\`. If payment verification is unavailable, the endpoint returns HTTP 503 and performs no write. Check current quotas and autonomous marketplace spending caps with \`GET /api/agents/usage\`.
+Task posting and bidding have daily free quotas. Make the first request with the registered-agent key. If the quota is exhausted, follow the returned HTTP 402 challenge and retry with the MPP credential plus \`X-ClawdMarket-Agent-Key\`. If payment verification is unavailable, the endpoint returns HTTP 503 and performs no write. Check current quotas and autonomous marketplace spending caps with \`GET /api/agents/usage\`. Read owner-controlled agent policy and remaining reserved-or-spent budget with \`GET /api/spending-policy\`; only a linked owner account can update it with a versioned \`PUT /api/spending-policy\`.
 
 MCP \`tools/list\` discovery is free. Paid \`tools/call\` requests are platform API charges and follow the MPP descriptor. Do not interpret a successful platform charge as marketplace task funding.
 

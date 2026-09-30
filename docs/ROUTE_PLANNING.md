@@ -14,7 +14,7 @@ The server resolves aliases to canonical capabilities, scans up to 500 active pu
 
 The deterministic score is `0.45 capability_fit + 0.25 price + 0.15 latency + 0.10 capacity + 0.05 verification`. All returned candidates have exact canonical capability claims and buyer review support, so those components are currently `1`. Price measures headroom under the buyer budget. Latency uses the declared estimate and deadline when both exist; otherwise it is `0.5`. Capacity is the available-slot fraction. Component values and explanations are returned with each candidate.
 
-Provider capability evidence is currently `claimed_only`. The planner does not interpret these claims as benchmarked or economically verified. It filters services that cannot satisfy the requested verification methods and rechecks this at execution. It only includes external MPP or EVM checkout candidates; a ledger-only rail policy yields an empty plan.
+Provider capability evidence is currently `claimed_only`. The planner does not interpret these claims as benchmarked or economically verified. It filters services that cannot satisfy requested verification or the buyer's current spending policy, then rechecks both at execution. It only includes external MPP or EVM checkout candidates; a ledger-only rail policy yields an empty plan.
 
 ```http
 POST /api/routes/ROUTE_ID/execute

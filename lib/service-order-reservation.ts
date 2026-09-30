@@ -115,11 +115,12 @@ export async function reserveServiceOrder(args: ReservationArgs) {
           sql`${service_definitions.active_orders} < ${service_definitions.max_concurrency}`))
         .returning({ id: service_definitions.id })
       if (!claimed) throw new ServiceOrderReservationError('SERVICE_CAPACITY_OR_PRICE_CHANGED', 'Service capacity or price changed; re-plan before retrying')
-      if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100 })
+      const spendContext = { sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: (JSON.parse(service.verification_policy) as { methods?: string[] }).methods || ['buyer_review'] }
+      if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100, ...spendContext })
       const [listing] = await tx.insert(listings).values({ seller_id: service.seller_id, category: 'skills', title: service.title,
         description: service.description, price_bankr: service.price_minor / 100, status: rail === 'ledger' ? 'active' : 'sold' }).returning()
       const trade = rail === 'ledger'
-        ? await createLedgerTrade(tx, listing, principal.userId, feeRecipient!, { agentId: principal.agentId, clientReference: reference })
+        ? await createLedgerTrade(tx, listing, principal.userId, feeRecipient!, { agentId: principal.agentId, clientReference: reference, spendContext })
         : (await tx.insert(trades).values({
             listing_id: listing.id, buyer_id: principal.userId, seller_id: service.seller_id,
             amount: service.price_minor / 100, fee: feeMinor / 100,

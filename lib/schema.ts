@@ -331,6 +331,25 @@ export const bids = sqliteTable('bids', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
+export const buyer_spend_policies = sqliteTable('buyer_spend_policies', {
+  buyer_id: text('buyer_id').primaryKey().references(() => users.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  policy_json: text('policy_json').notNull(),
+  version: integer('version').notNull().default(1),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const buyer_spend_policy_events = sqliteTable('buyer_spend_policy_events', {
+  id: text('id').primaryKey(),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  version: integer('version').notNull(),
+  old_policy_json: text('old_policy_json'),
+  new_policy_json: text('new_policy_json').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [index('buyer_spend_policy_events_buyer_version_idx').on(table.buyer_id, table.version)]);
+
 export const task_workspaces = sqliteTable('task_workspaces', {
   task_id: text('task_id').primaryKey().references(() => tasks.id),
   trade_id: text('trade_id').unique().references(() => trades.id),

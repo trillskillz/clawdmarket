@@ -543,6 +543,21 @@ async function main() {
         await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS capability_performance_trade_capability_idx ON capability_performance_events(trade_id, capability_id)')
         await database.execute('CREATE INDEX IF NOT EXISTS capability_performance_agent_capability_idx ON capability_performance_events(seller_agent_id, capability_id)')
       } },
+      { id: '2026-09-30-buyer-spend-policy-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS buyer_spend_policies (
+          buyer_id TEXT PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          owner_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          policy_json TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute(`CREATE TABLE IF NOT EXISTS buyer_spend_policy_events (
+          id TEXT PRIMARY KEY NOT NULL, buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          actor_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          version INTEGER NOT NULL, old_policy_json TEXT, new_policy_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS buyer_spend_policy_events_buyer_version_idx ON buyer_spend_policy_events(buyer_id, version)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

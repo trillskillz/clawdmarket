@@ -253,3 +253,37 @@ test('planning and execution require the provider to support requested verificat
   assert.equal(executed.status, 201)
   assert.equal((await executed.json()).funds_state, 'no_funds_moved')
 })
+
+test('buyer policy filters planning and is rechecked before unpaid route reservation', async () => {
+  const policyBuyer = 'user_agent_route-policy-buyer'
+  await db.insert(schema.users).values({ id: policyBuyer, name: 'Policy buyer', email: 'route-policy-buyer@test.invalid', password_hash: 'unused', role: 'agent' })
+  const serviceId = crypto.randomUUID()
+  await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: 'route-seller', title: 'Policy checked review',
+    description: 'Review a repository under a buyer-owned spending policy.', capabilities: '["security-analysis","code-review"]',
+    price_minor: 20, status: 'active', estimated_latency_seconds: 120 })
+  const policyBase = { max_per_execution: 100, max_daily: 1000, approved_payment_rails: ['evm'],
+    allowed_capabilities: ['security-analysis', 'code-review'] }
+  await db.insert(schema.buyer_spend_policies).values({ buyer_id: policyBuyer, owner_account_id: 'other-buyer',
+    policy_json: JSON.stringify({ ...policyBase, approved_providers: ['another-seller'] }) })
+  const excluded = await planRoute(request('/api/routes/plan', policyBuyer, 'POST', {
+    client_reference: `policy-excluded-${crypto.randomUUID()}`, objective: 'Audit this repository for authentication vulnerabilities',
+    required_capabilities: ['security-analysis', 'code-review'], max_budget: { amount: '20.00', currency: 'USD' },
+  }))
+  assert.equal(excluded.status, 201)
+  assert.deepEqual((await excluded.json()).route.candidates, [])
+  await db.update(schema.buyer_spend_policies).set({ policy_json: JSON.stringify({ ...policyBase, approved_providers: ['route-seller'] }) })
+    .where(eq(schema.buyer_spend_policies.buyer_id, policyBuyer))
+  const allowed = await planRoute(request('/api/routes/plan', policyBuyer, 'POST', {
+    client_reference: `policy-allowed-${crypto.randomUUID()}`, objective: 'Audit this repository for authentication vulnerabilities',
+    required_capabilities: ['security-analysis', 'code-review'], max_budget: { amount: '20.00', currency: 'USD' },
+  }))
+  assert.equal(allowed.status, 201)
+  const planned = (await allowed.json()).route
+  assert.equal(planned.candidates[0].service_id, serviceId)
+  await db.update(schema.buyer_spend_policies).set({ policy_json: JSON.stringify({ ...policyBase, max_per_execution: 0, approved_providers: ['route-seller'] }) })
+    .where(eq(schema.buyer_spend_policies.buyer_id, policyBuyer))
+  const blocked = await executeRoute(request(`/api/routes/${planned.id}/execute`, policyBuyer, 'POST'), { params: Promise.resolve({ id: planned.id }) })
+  assert.equal(blocked.status, 409)
+  assert.equal((await blocked.json()).error_code, 'BUYER_PER_EXECUTION_LIMIT')
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.client_reference, `route:${planned.id}:attempt:1`))).length, 0)
+})

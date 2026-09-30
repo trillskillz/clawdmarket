@@ -12,6 +12,7 @@ import { selectMarketplaceRail, type MarketplaceRail } from '@/lib/payment-rail-
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
 import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
 import { supportsVerification, verificationPolicySchema, type VerificationPolicy } from '@/lib/verification-policy'
+import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from '@/lib/buyer-spend-policy'
 
 export const routePlanInput = z.object({
   client_reference: z.string().trim().min(8).max(200),
@@ -61,8 +62,11 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
   const truncated = rows.length > 500
   const readiness = getPaymentReadiness()
   const paymentControl = await getNewPaymentControl()
+  const buyerPolicy = await loadBuyerSpendPolicy(buyerId)
+  const buyerUsage = buyerPolicy ? await buyerPolicyUsage(buyerId) : null
   // Route execution creates an unpaid checkout; ledger would debit immediately.
-  const allowedRails = (input.payment_policy.allowed_rails || ['mpp', 'evm']).filter((rail) => rail !== 'ledger')
+  const allowedRails = (input.payment_policy.allowed_rails || ['mpp', 'evm']).filter((rail) => rail !== 'ledger'
+    && (!buyerPolicy?.policy.approved_payment_rails || buyerPolicy.policy.approved_payment_rails.includes(rail)))
   const candidates: RouteCandidate[] = []
   for (const service of rows.slice(0, 500)) {
     if (service.seller_id === buyerId) continue
@@ -73,11 +77,15 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     if (!servicePolicy.success || !supportsVerification(servicePolicy.data, input.verification)) continue
     const totalMinor = service.price_minor + Math.round(service.price_minor * 0.05)
     if (totalMinor > input.max_budget.amount) continue
+    if (buyerPolicy && (buyerPolicy.policy.max_daily !== undefined && buyerUsage!.reserved_or_spent_today_minor + totalMinor > buyerPolicy.policy.max_daily
+      || buyerPolicy.policy.max_monthly !== undefined && buyerUsage!.reserved_or_spent_month_minor + totalMinor > buyerPolicy.policy.max_monthly)) continue
     if (input.deadline_seconds && (!service.estimated_latency_seconds || service.estimated_latency_seconds > input.deadline_seconds)) continue
     if (service.seller_id.startsWith('user_agent_') && await referenceFleetPaidServicePublicationLocked(service.seller_id.slice('user_agent_'.length))) continue
     const sellerPayout = Boolean(await payoutAddressForUser(service.seller_id))
     const rail = allowedRails.map((item) => selectMarketplaceRail(item, readiness, sellerPayout)).find(Boolean)
     if (!rail) continue
+    if (buyerPolicy && checkBuyerPolicyConstraints(buyerPolicy.policy, { totalMinor, sellerId: service.seller_id,
+      capabilities: offered, paymentRail: rail, verificationMethods: servicePolicy.data.methods })) continue
     const priceScore = Math.max(0, 1 - totalMinor / input.max_budget.amount)
     const latencyScore = service.estimated_latency_seconds && input.deadline_seconds
       ? Math.max(0, 1 - service.estimated_latency_seconds / input.deadline_seconds)

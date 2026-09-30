@@ -11,6 +11,7 @@ import { checkoutForTrade } from '@/lib/trade-checkout'
 import { routeExecutionEnabled } from '@/lib/routing-feature-flags'
 import { NewPaymentsPausedError } from '@/lib/payment-control'
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy'
+import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy'
 import { internalErrorResponse } from '@/lib/api-error'
 import { supportsVerification, verificationPolicySchema } from '@/lib/verification-policy'
 
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (error instanceof NewPaymentsPausedError) return failure(error.code, error.message, error.status, true)
     if (error instanceof AgentSpendPolicyError) return failure(error.code, error.message, 409)
+    if (error instanceof BuyerSpendPolicyError) return failure(error.code, error.message, 409)
     return internalErrorResponse('Route execution failed', error)
   }
 }
