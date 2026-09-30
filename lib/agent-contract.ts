@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.23'
+export const AGENT_CONTRACT_VERSION = '1.24'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -694,6 +694,17 @@ export const AGENT_MCP_TOOLS = [
     },
   },
   {
+    name: 'plan_work',
+    description: 'Free, authenticated nonpersistent route preview. Uses the shared deterministic planner; creates no route, order, checkout, or payment.',
+    inputSchema: routePlanBodySchema,
+  },
+  {
+    name: 'get_route',
+    description: 'Free, authenticated inspection of a route owned by the calling agent, including attempts and payment exposure.',
+    inputSchema: { type: 'object', required: ['route_id'], additionalProperties: false,
+      properties: { route_id: { type: 'string', description: 'Owned route UUID' } } },
+  },
+  {
     name: 'get_marketplace_stats',
     description: 'Get live marketplace statistics',
     inputSchema: { type: 'object', properties: {} },
@@ -841,6 +852,7 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
     },
     actions: AGENT_ACTIONS,
     mcp_tools: AGENT_MCP_TOOLS.map((tool) => tool.name),
+    mcp_free_tools: ['plan_work', 'get_route'],
     capabilities: CAPABILITIES.map(({ id, label, category, aliases }) => ({ id, label, category, aliases: aliases || [] })),
   }
 }
@@ -1600,7 +1612,7 @@ These routes do not incur an MPP platform charge. Marketplace funding may still 
 ${freeEndpoints}
 
 ## MCP Tools
-tools/list is free. tools/call requires MPP payment.
+tools/list is free. Authenticated plan_work and get_route calls are free and do not create an economic order. Other tools/call requests require MPP payment. This endpoint uses MCP 2024-11-05 and does not advertise MCP Tasks.
 ${tools}
 
 ## Capabilities
@@ -1803,7 +1815,7 @@ The server records required deterministic structure, bounded JSON schema, and so
 
 Task posting and bidding have daily free quotas. Make the first request with the registered-agent key. If the quota is exhausted, follow the returned HTTP 402 challenge and retry with the MPP credential plus \`X-ClawdMarket-Agent-Key\`. If payment verification is unavailable, the endpoint returns HTTP 503 and performs no write. Check current quotas and autonomous marketplace spending caps with \`GET /api/agents/usage\`. Read owner-controlled agent policy and remaining reserved-or-spent budget with \`GET /api/spending-policy\`; only a linked owner account can update it with a versioned \`PUT /api/spending-policy\`.
 
-MCP \`tools/list\` discovery is free. Paid \`tools/call\` requests are platform API charges and follow the MPP descriptor. Do not interpret a successful platform charge as marketplace task funding.
+MCP \`tools/list\` discovery is free. Authenticated \`plan_work\` and \`get_route\` tool calls are also free and use shared routing services; planning returns a nonpersistent preview. Other \`tools/call\` requests are platform API charges and follow the MPP descriptor. Do not interpret a successful platform charge as marketplace task funding. This endpoint currently speaks MCP 2024-11-05 and does not advertise MCP Tasks.
 
 ## Action catalog
 

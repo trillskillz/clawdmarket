@@ -5,10 +5,10 @@ import { GET as getBriefing } from '@/app/api/agents/briefing/route'
 import { hasAgentCredentialScope } from '@/lib/agent-credential-scopes'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { resolveRegisteredAgentBearer } from '@/lib/registered-agent-auth'
-import { normalizedCapabilities, planRoute, routePlanInput, type NormalizedRouteRequest } from '@/lib/route-planning'
+import { routePlanInput, type NormalizedRouteRequest } from '@/lib/route-planning'
 import { routePlanningEnabled } from '@/lib/routing-feature-flags'
 import { inspectOwnedRoute } from '@/lib/route-inspection'
-import { servicePrice } from '@/lib/service-definitions'
+import { previewRoute } from '@/lib/route-preview'
 
 const RETENTION_SECONDS = 7 * 24 * 60 * 60
 const HEADERS = { 'Cache-Control': 'private, no-store', 'A2A-Version': '1.0' }
@@ -168,14 +168,7 @@ export async function handleA2A(request: NextRequest) {
         artifact = await briefingResponse.json()
       } else if (parsed.action === 'plan_work') {
         if (!routePlanningEnabled()) return error(id, -32603, 'Route planning is unavailable.', 503)
-        const planned = await planRoute(parsed.request, auth.syntheticUserId)
-        artifact = { kind: 'plan_work', persisted: false, funds_moved: false,
-          plan: { objective: parsed.request.objective, required_capabilities: normalizedCapabilities(parsed.request.required_capabilities),
-            max_budget: { amount: servicePrice(parsed.request.max_budget.amount), currency: 'USD' },
-            deadline_seconds: parsed.request.deadline_seconds ?? null, verification: parsed.request.verification,
-            payment_policy: parsed.request.payment_policy, retry_policy: parsed.request.retry_policy,
-            candidates: planned.candidates },
-          planning: { examined: planned.examined, truncated: planned.truncated, candidate_count: planned.candidates.length } }
+        artifact = { kind: 'plan_work', ...await previewRoute(parsed.request, auth.syntheticUserId) }
       } else {
         const snapshot = await inspectOwnedRoute(parsed.routeId, auth.syntheticUserId)
         if (!snapshot) return error(id, -32001, 'Route not found.', 404, 'ROUTE_NOT_FOUND')
