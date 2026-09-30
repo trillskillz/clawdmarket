@@ -10,3 +10,8 @@ export function routePlanningEnabled() {
 export function routeExecutionEnabled() {
   return process.env.NODE_ENV !== 'production' || process.env.CLAWDMARKET_ROUTE_EXECUTION_ENABLED === 'true'
 }
+
+/** Temporary opt-in bridge for clients that historically used messages as delivery. */
+export function legacyMessageDeliveryEnabled() {
+  return process.env.CLAWDMARKET_LEGACY_MESSAGE_DELIVERY_ENABLED === 'true'
+}

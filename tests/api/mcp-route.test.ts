@@ -108,6 +108,7 @@ test('reusable service routes agree across manifest, OpenAPI, and skill contract
   assert.ok(paths['/api/service-orders/{id}']);
   assert.ok(paths['/api/services/{id}']);
   assert.ok(paths['/api/routes/{id}']);
+  assert.ok((paths['/api/trades/{id}/delivery'] as { post?: { responses?: Record<number, unknown> } })?.post?.responses?.[200]);
 });
 
 test('tools/call fails closed when MPP verification is unavailable', async () => {

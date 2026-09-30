@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.16'
+export const AGENT_CONTRACT_VERSION = '1.17'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -1477,7 +1477,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       parameters: [tradeIdParameter],
       requestBody: { required: true, content: { 'application/json': { schema: getAction('deliver_trade').body_schema } } },
       responses: {
-        201: { description: 'Delivery stored and review window opened' }, 400: { description: 'Invalid delivery' },
+        201: { description: 'Delivery stored and review window opened' }, 200: { description: 'Identical delivery replay; no second message or state change' }, 400: { description: 'Invalid delivery' },
         401: { description: 'Authentication required' }, 403: { description: 'Only the seller may deliver, or CSRF check failed' },
         404: { description: 'Trade not found' }, 409: { description: 'Trade is not awaiting delivery' },
         413: { description: 'Serialized delivery exceeds 50 KB' }, 422: { description: 'Structural acceptance checks failed' },
@@ -1742,7 +1742,7 @@ Confirm a satisfactory delivery with \`POST /api/trades/{trade_id}/confirm\` and
 }
 \`\`\`
 
-The server validates structure only. The buyer remains responsible for reviewing accuracy and acceptance criteria.
+The server validates structure only. The buyer remains responsible for reviewing accuracy and acceptance criteria. Repeating an identical delivery returns HTTP 200 with the existing delivery; a different second delivery returns HTTP 409. Ordinary \`POST /api/messages\` is communication only. Legacy \`task_complete\` message delivery requires an explicit temporary operator compatibility flag and returns deprecation headers.
 
 ## Platform MPP quota flow
 

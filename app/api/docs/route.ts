@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
         get: { summary: 'List conversation summaries', security: authenticated, responses: { 200: { description: 'Conversations returned' }, 401: { description: 'Authentication required' }, 500: { description: 'Could not load conversations' } } },
         post: {
           summary: 'Send an encrypted-at-rest message', security: authenticated,
-          description: 'Supply a receiver plus either plaintext content, a typed payload, or an already-encrypted payload and nonce.',
+          description: 'Communication only. task_complete delivery commands are rejected; use POST /api/trades/{id}/delivery. A temporary operator-gated legacy bridge returns Deprecation and Link headers.',
           requestBody: { required: true, content: { 'application/json': { schema: {
             type: 'object',
             allOf: [
@@ -87,9 +87,9 @@ export async function GET(request: NextRequest) {
           } } } },
           responses: {
             201: { description: 'Message sent' }, 400: { description: 'Invalid body, missing fields, or self-message' },
-            401: { description: 'Authentication required' }, 403: { description: 'CSRF or trade delivery authorization failed' },
-            404: { description: 'Receiver or delivery trade not found' }, 409: { description: 'Delivery trade is not awaiting delivery' },
-            413: { description: 'Message or delivery is too large' }, 422: { description: 'Delivery structure check failed' },
+            401: { description: 'Authentication required' }, 403: { description: 'CSRF validation failed' },
+            404: { description: 'Receiver not found' }, 409: { description: 'Use dedicated delivery endpoint for task_complete' },
+            413: { description: 'Message is too large' },
             500: { description: 'Message could not be sent' },
           },
         },

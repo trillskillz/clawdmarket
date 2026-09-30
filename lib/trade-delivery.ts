@@ -6,12 +6,26 @@ import { encryptMessage } from './chat-crypto'
 import { deliverySchema, requirementsSchema, verifyDelivery } from './delivery-validation'
 import { deliverWebhookEvent } from './webhook-delivery'
 import { advanceServiceOrder } from './service-order-state'
+import { withKeyedWriteLock } from './service-reservation-lock'
 
 export class DeliveryError extends Error {
   constructor(message: string, public status: number, public details?: unknown) { super(message) }
 }
 
-export async function submitTradeDelivery(tradeId: string, sellerId: string, input: unknown, expectedBuyerId?: string) {
+function sqliteBusy(error: unknown) {
+  let current = error
+  for (let depth = 0; current && depth < 6; depth += 1) {
+    if (typeof current === 'object' && ('code' in current && String(current.code) === 'SQLITE_BUSY' || 'message' in current && /SQLITE_BUSY|database is locked/i.test(String(current.message)))) return true
+    current = typeof current === 'object' && 'cause' in current ? current.cause : null
+  }
+  return false
+}
+
+export function submitTradeDelivery(tradeId: string, sellerId: string, input: unknown, expectedBuyerId?: string) {
+  return withKeyedWriteLock(`delivery:${tradeId}`, () => submitTradeDeliveryUnlocked(tradeId, sellerId, input, expectedBuyerId))
+}
+
+async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, input: unknown, expectedBuyerId?: string) {
   const parsed = deliverySchema.safeParse(input)
   if (!parsed.success) throw new DeliveryError('Invalid delivery', 400, parsed.error.issues)
   const serialized = JSON.stringify(parsed.data)
@@ -20,6 +34,15 @@ export async function submitTradeDelivery(tradeId: string, sellerId: string, inp
   if (!trade) throw new DeliveryError('Trade not found', 404)
   if (trade.seller_id !== sellerId) throw new DeliveryError('Only the seller can submit delivery', 403)
   if (expectedBuyerId && expectedBuyerId !== trade.buyer_id) throw new DeliveryError('Delivery must be addressed to the trade buyer', 403)
+  const contentHash = createHash('sha256').update(serialized).digest('hex')
+  const replay = async () => {
+    const [existing] = await db.select().from(trade_deliveries).where(eq(trade_deliveries.trade_id, tradeId)).limit(1)
+    if (!existing) return null
+    if (existing.submitter_id !== sellerId || existing.content_hash !== contentHash) throw new DeliveryError('A different delivery was already submitted', 409)
+    return { delivery: existing, message: null, trade, verification: JSON.parse(existing.verification), idempotent: true }
+  }
+  const prior = await replay()
+  if (prior) return prior
   const [workspace] = await db.select().from(task_workspaces).where(eq(task_workspaces.trade_id, tradeId)).limit(1)
   const requirements = requirementsSchema.parse(workspace ? {
     ...workspace,
@@ -28,9 +51,8 @@ export async function submitTradeDelivery(tradeId: string, sellerId: string, inp
   } : {})
   const verification = verifyDelivery(parsed.data, requirements)
   if (verification.status === 'failed') throw new DeliveryError('Delivery does not meet the required structure', 422, verification)
-  const contentHash = createHash('sha256').update(serialized).digest('hex')
   const encrypted = await encryptMessage(JSON.stringify({ type: 'task_complete', trade_id: tradeId, ...parsed.data, content_hash: contentHash }))
-  const result = await db.transaction(async (tx) => {
+  const commit = () => db.transaction(async (tx) => {
     const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: new Date(Date.now() + 86400000).toISOString() })
       .where(and(eq(trades.id, tradeId), eq(trades.status, 'escrow_held'))).returning()
     if (!updated) throw new DeliveryError('Trade is not awaiting delivery', 409)
@@ -47,10 +69,28 @@ export async function submitTradeDelivery(tradeId: string, sellerId: string, inp
     }).returning()
     return { delivery, message, trade: updated, verification }
   })
+  let result: Awaited<ReturnType<typeof commit>> | null = null
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      result = await commit()
+      break
+    } catch (error) {
+      if (sqliteBusy(error) && attempt < 5) {
+        await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
+        const raced = await replay()
+        if (raced) return raced
+        continue
+      }
+      const raced = await replay()
+      if (raced) return raced
+      throw error
+    }
+  }
+  if (!result) throw new Error('DELIVERY_RESERVATION_UNAVAILABLE')
   await Promise.allSettled([
     deliverWebhookEvent(trade.buyer_id, 'message.received', { message_id: result.message.id, from_agent_id: sellerId, type: 'task_complete', trade_id: tradeId }),
     deliverWebhookEvent(trade.buyer_id, 'trade.status_changed', { trade_id: tradeId, new_status: 'pending_release' }),
     deliverWebhookEvent(sellerId, 'trade.status_changed', { trade_id: tradeId, new_status: 'pending_release' }),
   ])
-  return result
+  return { ...result, idempotent: false }
 }
