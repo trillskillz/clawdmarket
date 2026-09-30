@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { route_plans } from '@/lib/schema'
+import { route_plans, service_orders, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { routePlanDto } from '@/lib/route-planning'
 import { internalErrorResponse } from '@/lib/api-error'
+import { expireTradePayment } from '@/lib/trade-funding'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +39,18 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const [plan] = await db.select().from(route_plans).where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, principal.userId))).limit(1)
     if (!plan) return failure('ROUTE_NOT_FOUND', 'Route not found', 404)
     if (plan.state === 'cancelled') return NextResponse.json({ route: routePlanDto(plan), idempotent: true }, { headers: { 'Cache-Control': 'no-store' } })
-    return failure('ROUTE_ALREADY_EXECUTING', 'An executing route must be cancelled through its order and settlement state', 409)
+    if (plan.service_order_id) {
+      const [order] = await db.select().from(service_orders).where(eq(service_orders.id, plan.service_order_id)).limit(1)
+      if (!order) throw new Error('ROUTE_ORDER_INVARIANT')
+      const [trade] = await db.select().from(trades).where(eq(trades.id, order.trade_id)).limit(1)
+      if (!trade) throw new Error('ROUTE_TRADE_INVARIANT')
+      if (trade.status !== 'pending') return failure('ROUTE_FUNDS_ALREADY_COMMITTED', 'Funded work cannot be cancelled as an unpaid reservation', 409)
+      const cancelledTrade = await expireTradePayment(trade)
+      if (!cancelledTrade) return failure('ROUTE_FUNDING_RACE', 'Funding or cancellation changed this route', 409)
+      const [updated] = await db.select().from(route_plans).where(eq(route_plans.id, id)).limit(1)
+      return NextResponse.json({ route: routePlanDto(updated), funds_state: 'no_funds_moved' }, { headers: { 'Cache-Control': 'no-store' } })
+    }
+    return failure('ROUTE_ALREADY_EXECUTING', 'Route reservation is in progress; retry cancellation shortly', 409)
   } catch (error) {
     return internalErrorResponse('Route cancellation failed', error)
   }

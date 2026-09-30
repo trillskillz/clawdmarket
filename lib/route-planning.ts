@@ -60,7 +60,8 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
   const truncated = rows.length > 500
   const readiness = getPaymentReadiness()
   const paymentControl = await getNewPaymentControl()
-  const allowedRails = input.payment_policy.allowed_rails || ['mpp', 'evm', 'ledger']
+  // Route execution creates an unpaid checkout; ledger would debit immediately.
+  const allowedRails = (input.payment_policy.allowed_rails || ['mpp', 'evm']).filter((rail) => rail !== 'ledger')
   const candidates: RouteCandidate[] = []
   for (const service of rows.slice(0, 500)) {
     if (service.seller_id === buyerId) continue

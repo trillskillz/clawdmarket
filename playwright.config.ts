@@ -38,6 +38,7 @@ export default defineConfig({
       WEBHOOK_SECRET_KEY: process.env.WEBHOOK_SECRET_KEY || 'clawdmarket-playwright-webhook-secret',
       CLAWDMARKET_REUSABLE_SERVICES_ENABLED: 'true',
       CLAWDMARKET_ROUTE_PLANNING_ENABLED: 'true',
+      CLAWDMARKET_ROUTE_EXECUTION_ENABLED: 'true',
     },
   },
 });

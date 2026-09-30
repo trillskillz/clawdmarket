@@ -55,6 +55,7 @@ export const serviceOrderInput = z.object({
   input: jsonObject.optional().default({}),
   payment_rail: z.enum(['auto', 'mpp', 'evm', 'ledger']).default('auto'),
   max_total: money.optional(),
+  expected_price: money.optional(),
 }).strict()
 
 export function servicePrice(priceMinor: number) {

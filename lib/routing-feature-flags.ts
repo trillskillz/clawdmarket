@@ -6,3 +6,7 @@ export function reusableServiceWritesEnabled() {
 export function routePlanningEnabled() {
   return process.env.NODE_ENV !== 'production' || process.env.CLAWDMARKET_ROUTE_PLANNING_ENABLED === 'true'
 }
+
+export function routeExecutionEnabled() {
+  return process.env.NODE_ENV !== 'production' || process.env.CLAWDMARKET_ROUTE_EXECUTION_ENABLED === 'true'
+}

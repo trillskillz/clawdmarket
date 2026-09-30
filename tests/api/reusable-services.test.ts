@@ -138,6 +138,18 @@ test('service orders enforce server totals, ownership, and current availability'
   assert.equal(publicRead.status, 404)
 })
 
+test('service orders reject a stale fixed-price snapshot before capacity reservation', async () => {
+  const offered = await service()
+  const response = await createOrder(request(`/api/services/${offered.id}/orders`, buyerId, {
+    client_reference: `stale-price-${crypto.randomUUID()}`, objective: 'Review the attached repository change',
+    expected_price: '9.00',
+  }), { params: Promise.resolve({ id: offered.id }) })
+  assert.equal(response.status, 409)
+  assert.equal((await response.json()).error_code, 'SERVICE_PRICE_CHANGED')
+  const [current] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(current.active_orders, 0)
+})
+
 test('managed reference agents cannot publish paid reusable services', async () => {
   const agentId = `reference-${crypto.randomUUID()}`
   const userId = `user_agent_${agentId}`

@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.15'
+export const AGENT_CONTRACT_VERSION = '1.16'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -115,6 +115,7 @@ const reusableOrderBodySchema = {
     input: { type: 'object' },
     payment_rail: { type: 'string', enum: ['auto', 'ledger', 'mpp', 'evm'], default: 'auto' },
     max_total: { type: 'string', description: 'Maximum total including the server-calculated marketplace fee, in USD.' },
+    expected_price: { type: 'string', description: 'Optional fixed-price snapshot; reservation fails if the current service price differs.' },
   },
 }
 
@@ -128,7 +129,7 @@ const routePlanBodySchema = {
     max_budget: { type: 'object', required: ['amount', 'currency'], additionalProperties: false, properties: { amount: { type: 'string' }, currency: { const: 'USD' } } },
     deadline_seconds: { type: 'integer', minimum: 1, maximum: 2592000 },
     verification: { type: 'object', description: 'Currently supports required buyer_review only.' },
-    payment_policy: { type: 'object', properties: { allowed_rails: { type: 'array', items: { type: 'string', enum: ['mpp', 'evm', 'ledger'] } } } },
+    payment_policy: { type: 'object', properties: { allowed_rails: { type: 'array', items: { type: 'string', enum: ['mpp', 'evm', 'ledger'] }, description: 'Route execution supports external MPP or EVM checkout. Ledger-only policies yield no candidates.' } } },
     retry_policy: { type: 'object', properties: { max_attempts: { type: 'integer', minimum: 1, maximum: 3 } } },
   },
 }
@@ -465,7 +466,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     id: 'order_reusable_service', label: 'Order reusable service',
     description: 'Create one independently funded order from a reusable service. A client_reference is required for safe retries.',
     method: 'POST', endpoint: '/api/services/{id}/orders', auth: 'agent_api_key', payment: null,
-    required: ['client_reference', 'objective'], optional: ['input', 'payment_rail', 'max_total'], body_schema: reusableOrderBodySchema,
+    required: ['client_reference', 'objective'], optional: ['input', 'payment_rail', 'max_total', 'expected_price'], body_schema: reusableOrderBodySchema,
   },
   {
     id: 'plan_work', label: 'Plan work',
@@ -474,11 +475,16 @@ export const AGENT_ACTIONS: AgentAction[] = [
     required: ['client_reference', 'objective', 'required_capabilities', 'max_budget'], body_schema: routePlanBodySchema,
   },
   {
+    id: 'execute_route', label: 'Reserve routed work',
+    description: 'Revalidate the top provider and atomically reserve one unpaid external checkout. Buyer funding remains a separate authenticated action.',
+    method: 'POST', endpoint: '/api/routes/{id}/execute', auth: 'agent_api_key', payment: null, required: ['id'],
+  },
+  {
     id: 'inspect_route', label: 'Inspect route', description: 'Read a route owned by the caller.',
     method: 'GET', endpoint: '/api/routes/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
   {
-    id: 'cancel_planned_route', label: 'Cancel planned route', description: 'Cancel a plan before execution; idempotent for already cancelled plans.',
+    id: 'cancel_planned_route', label: 'Cancel route', description: 'Cancel a plan or an unpaid routed checkout; idempotent for already cancelled routes.',
     method: 'DELETE', endpoint: '/api/routes/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
   {
@@ -1411,9 +1417,11 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/routes/plan': { post: { operationId: 'plan_work', summary: 'Plan work without selecting a provider or moving funds', security: authenticated,
       requestBody: { required: true, content: { 'application/json': { schema: getAction('plan_work').body_schema } } },
       responses: { 201: { description: 'Nonbinding route plan created' }, 200: { description: 'Idempotent plan replay' }, 400: { description: 'Invalid objective or constraints' }, 409: { description: 'Reference conflict' } } } },
+    '/api/routes/{id}/execute': { post: { operationId: 'execute_route', summary: 'Reserve an unpaid order for the top current route candidate', security: authenticated, parameters: [tradeIdParameter],
+      responses: { 201: { description: 'Unpaid order and external checkout created; no funds moved' }, 200: { description: 'Idempotent route replay' }, 404: { description: 'Route not owned' }, 409: { description: 'Provider, budget, price, capacity, or rail changed' }, 410: { description: 'Plan expired' }, 503: { description: 'Route execution disabled' } } } },
     '/api/routes/{id}': {
       get: { operationId: 'inspect_route', summary: 'Inspect an owned route', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route state and candidate snapshot' }, 404: { description: 'Route not owned' } } },
-      delete: { operationId: 'cancel_planned_route', summary: 'Cancel a nonexecuting plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Plan cancelled or already cancelled' }, 404: { description: 'Route not owned' }, 409: { description: 'Execution already started' } } },
+      delete: { operationId: 'cancel_planned_route', summary: 'Cancel a planned route or unpaid checkout', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route cancelled or already cancelled; capacity released for unpaid orders' }, 404: { description: 'Route not owned' }, 409: { description: 'Funding has begun or reservation is in progress' } } },
     },
     '/api/services': {
       get: { operationId: 'list_reusable_services', summary: 'Browse reusable service definitions and execution readiness',
@@ -1601,7 +1609,7 @@ Each order also requires an objective; optional structured input is visible only
 
 ## Route planning
 
-\`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot. It never moves funds. Candidates include a deterministic score breakdown, server-calculated total, payment rail, and \`claimed_only\` evidence marker. Only services that are currently purchasable and fit budget and deadline appear. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan before execution. Automated execution is not yet exposed because capability evidence, policy enforcement, dispatch, and verification need durable authorization before autonomous spending.
+\`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and \`claimed_only\` evidence marker. \`POST /api/routes/{id}/execute\` rechecks the top candidate and atomically creates one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Funded work follows the existing trade dispute and settlement flow.
 
 ## Authentication
 

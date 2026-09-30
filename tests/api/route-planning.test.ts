@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { NextRequest } from 'next/server'
+import { eq } from 'drizzle-orm'
 import { privateKeyToAccount } from 'viem/accounts'
 import { createLocalTestSchema } from '../helpers/local-schema'
 
@@ -15,6 +16,7 @@ let createService: typeof import('@/app/api/services/route').POST
 let planRoute: typeof import('@/app/api/routes/plan/route').POST
 let getRoute: typeof import('@/app/api/routes/[id]/route').GET
 let cancelRoute: typeof import('@/app/api/routes/[id]/route').DELETE
+let executeRoute: typeof import('@/app/api/routes/[id]/execute/route').POST
 const treasury = privateKeyToAccount(`0x${'66'.repeat(32)}`)
 
 before(async () => {
@@ -34,6 +36,7 @@ before(async () => {
   planRoute = (await import('@/app/api/routes/plan/route')).POST
   getRoute = (await import('@/app/api/routes/[id]/route')).GET
   cancelRoute = (await import('@/app/api/routes/[id]/route')).DELETE
+  executeRoute = (await import('@/app/api/routes/[id]/execute/route')).POST
   await db.insert(schema.users).values([
     { id: 'route-seller', name: 'Route Seller', email: 'route-seller@test.invalid', password_hash: 'unused', role: 'human' },
     { id: 'route-buyer', name: 'Route Buyer', email: 'route-buyer@test.invalid', password_hash: 'unused', role: 'human' },
@@ -118,4 +121,112 @@ test('planning enforces declared deadline and rejects a changed idempotent reque
   const changed = await plan(reference)
   assert.equal(changed.status, 409)
   assert.equal((await changed.json()).error_code, 'IDEMPOTENCY_CONFLICT')
+})
+
+test('execution reserves an unpaid order once and cancellation releases capacity', async () => {
+  const offered = await service('4.00')
+  const planned = await plan(`execute-${crypto.randomUUID()}`)
+  const route = (await planned.json()).route
+  assert.equal(route.candidates[0].service_id, offered.id)
+  const path = `/api/routes/${route.id}/execute`
+  const execute = () => executeRoute(request(path, 'route-buyer', 'POST'), { params: Promise.resolve({ id: route.id }) })
+  const first = await execute()
+  assert.equal(first.status, 201, JSON.stringify(await first.clone().json()))
+  const body = await first.json()
+  assert.equal(body.route.state, 'awaiting_funding')
+  assert.equal(body.funds_state, 'no_funds_moved')
+  assert.equal(body.trade.status, 'pending')
+  assert.equal(body.trade.payment_rail, 'evm')
+  assert.equal(body.checkout.rail, 'evm')
+  const repeated = await execute()
+  assert.equal(repeated.status, 200)
+  assert.equal((await repeated.json()).order.id, body.order.id)
+  const [reserved] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(reserved.active_orders, 1)
+  const cancelled = await cancelRoute(request(`/api/routes/${route.id}`, 'route-buyer', 'DELETE'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(cancelled.status, 200)
+  assert.equal((await cancelled.json()).route.state, 'cancelled')
+  const [released] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(released.active_orders, 0)
+  assert.equal((await execute()).status, 200)
+})
+
+test('route execution rejects stale price and expired plans without creating orders', async () => {
+  const offered = await service('3.00')
+  const planned = await plan(`stale-${crypto.randomUUID()}`)
+  const route = (await planned.json()).route
+  assert.equal(route.candidates[0].service_id, offered.id)
+  await db.update(schema.service_definitions).set({ price_minor: 900 }).where(eq(schema.service_definitions.id, offered.id))
+  const changed = await executeRoute(request(`/api/routes/${route.id}/execute`, 'route-buyer', 'POST'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(changed.status, 409)
+  assert.equal((await changed.json()).error_code, 'ROUTE_STALE_PROVIDER')
+  const [failed] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, route.id))
+  assert.equal(failed.state, 'failed')
+  assert.equal(failed.service_order_id, null)
+  const later = await plan(`expired-${crypto.randomUUID()}`)
+  const laterRoute = (await later.json()).route
+  await db.update(schema.route_plans).set({ expires_at: new Date(Date.now() - 1_000) }).where(eq(schema.route_plans.id, laterRoute.id))
+  const expired = await executeRoute(request(`/api/routes/${laterRoute.id}/execute`, 'route-buyer', 'POST'), { params: Promise.resolve({ id: laterRoute.id }) })
+  assert.equal(expired.status, 410)
+  assert.equal((await expired.json()).error_code, 'ROUTE_PLAN_EXPIRED')
+})
+
+test('route execution enforces buyer ownership and cannot use a ledger-only plan', async () => {
+  const offered = await service('2.00')
+  const planned = await plan(`owner-${crypto.randomUUID()}`)
+  const route = (await planned.json()).route
+  assert.equal(route.candidates[0].service_id, offered.id)
+  const forbidden = await executeRoute(request(`/api/routes/${route.id}/execute`, 'other-buyer', 'POST'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(forbidden.status, 404)
+  const ledgerOnly = await planRoute(request('/api/routes/plan', 'route-buyer', 'POST', {
+    client_reference: `ledger-only-${crypto.randomUUID()}`, objective: 'Audit this repository for authentication vulnerabilities',
+    required_capabilities: ['security-analysis', 'code-review'], max_budget: { amount: '20.00', currency: 'USD' },
+    payment_policy: { allowed_rails: ['ledger'] },
+  }))
+  assert.deepEqual((await ledgerOnly.json()).route.candidates, [])
+})
+
+test('concurrent route execution links one order and follows authoritative trade transitions', async () => {
+  const offered = await service('1.00')
+  const planned = await plan(`race-${crypto.randomUUID()}`)
+  const route = (await planned.json()).route
+  assert.equal(route.candidates[0].service_id, offered.id)
+  const execute = () => executeRoute(request(`/api/routes/${route.id}/execute`, 'route-buyer', 'POST'), { params: Promise.resolve({ id: route.id }) })
+  const responses = await Promise.all([execute(), execute()])
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 201])
+  const bodies = await Promise.all(responses.map((response) => response.json()))
+  assert.equal(bodies[0].order.id, bodies[1].order.id)
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.client_reference, `route:${route.id}:attempt:1`))).length, 1)
+  const { advanceServiceOrder } = await import('@/lib/service-order-state')
+  await db.transaction(async (tx) => {
+    await tx.update(schema.trades).set({ status: 'escrow_held' }).where(eq(schema.trades.id, bodies[0].trade.id))
+    await advanceServiceOrder(tx, bodies[0].trade.id, 'funded')
+  })
+  const [funded] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, route.id))
+  assert.equal(funded.state, 'funded')
+  const cancellation = await cancelRoute(request(`/api/routes/${route.id}`, 'route-buyer', 'DELETE'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(cancellation.status, 409)
+  assert.equal((await cancellation.json()).error_code, 'ROUTE_FUNDS_ALREADY_COMMITTED')
+})
+
+test('capacity consumed after planning fails the route without a second reservation', async () => {
+  const offered = await service('0.50')
+  const planned = await plan(`capacity-${crypto.randomUUID()}`)
+  const route = (await planned.json()).route
+  assert.equal(route.candidates[0].service_id, offered.id)
+  const createOrder = (await import('@/app/api/services/[id]/orders/route')).POST
+  for (let slot = 0; slot < 2; slot += 1) {
+    const occupied = await createOrder(request(`/api/services/${offered.id}/orders`, 'other-buyer', 'POST', {
+      client_reference: `occupy-${slot}-${crypto.randomUUID()}`, objective: 'Review this repository for a separate buyer', payment_rail: 'evm',
+    }), { params: Promise.resolve({ id: offered.id }) })
+    assert.equal(occupied.status, 201)
+  }
+  const execution = await executeRoute(request(`/api/routes/${route.id}/execute`, 'route-buyer', 'POST'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(execution.status, 409)
+  assert.equal((await execution.json()).error_code, 'SERVICE_CAPACITY_OR_PRICE_CHANGED')
+  const [failed] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, route.id))
+  assert.equal(failed.state, 'failed')
+  assert.equal(failed.service_order_id, null)
+  const [definition] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(definition.active_orders, 2)
 })
