@@ -400,6 +400,7 @@ export const service_orders = sqliteTable('service_orders', {
   price_minor: integer('price_minor').notNull(),
   payment_rail: text('payment_rail', { enum: ['ledger', 'mpp', 'evm'] }).notNull(),
   state: text('state', { enum: ['awaiting_funding', 'funded', 'executing', 'verifying', 'completed', 'cancelled', 'disputed', 'resolved'] }).notNull().default('awaiting_funding'),
+  execution_started_at: integer('execution_started_at', { mode: 'timestamp' }),
   capacity_released_at: integer('capacity_released_at', { mode: 'timestamp' }),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),

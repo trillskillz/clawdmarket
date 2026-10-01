@@ -49,7 +49,7 @@ async function spentSince(tx: Transaction | typeof db, buyerId: string, since: D
     .where(and(
       eq(trades.buyer_id, buyerId),
       gte(trades.created_at, since),
-      sql`${trades.status} <> 'cancelled'`,
+      sql`(${trades.status} <> 'cancelled' OR (${trades.payment_rail} <> 'ledger' AND ${trades.payout_status} <> 'refunded'))`,
     ));
   return round2(Number(row?.spent || 0));
 }

@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { listings, payment_receipts, service_orders, trades } from '@/lib/schema'
 import { advanceServiceOrder } from '@/lib/service-order-state'
+import { queueFundedWorkOrder } from '@/lib/service-order-dispatch'
 
 export class TradeFundingError extends Error {
   constructor(message: string, public readonly status: number, public readonly code: string) {
@@ -94,6 +95,7 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
       if (!funded) throw new TradeFundingError('Trade was funded or cancelled by another request', 409, 'TRADE_FUNDING_RACE')
       await advanceServiceOrder(tx, input.trade.id, 'funded')
       await tx.insert(payment_receipts).values(paymentReceiptValues(input))
+      await queueFundedWorkOrder(tx, input.trade.id, input.trade.seller_id)
       return funded
     })
   } catch (error) {

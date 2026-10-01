@@ -18,6 +18,9 @@ let cancelTrade: typeof import('@/app/api/trades/[id]/cancel/route').POST
 let getService: typeof import('@/app/api/services/[id]/route').GET
 let changeService: typeof import('@/app/api/services/[id]/route').PATCH
 let listServices: typeof import('@/app/api/services/route').GET
+let getWorkOrder: typeof import('@/app/api/trades/[id]/work-order/route').GET
+let startWorkOrder: typeof import('@/app/api/trades/[id]/work-order/start/route').POST
+let listTrades: typeof import('@/app/api/trades/route').GET
 const sellerId = 'reusable-seller'
 const buyerId = 'reusable-buyer'
 const treasury = privateKeyToAccount(`0x${'77'.repeat(32)}`)
@@ -26,6 +29,7 @@ before(async () => {
   fixtureDirectory = mkdtempSync(join(tmpdir(), 'clawdmarket-workspace-test-reusable-services-'))
   process.env.TURSO_DATABASE_URL = `file:${join(fixtureDirectory, 'services.db')}`
   process.env.JWT_SECRET = 'reusable-service-tests-only'
+  process.env.CHAT_ENCRYPTION_KEY = 'reusable-service-chat-key-32-bytes-minimum'
   process.env.TREASURY_ADDRESS = treasury.address
   process.env.EVM_SETTLEMENT_PRIVATE_KEY = `0x${'77'.repeat(32)}`
   process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{
@@ -44,9 +48,13 @@ before(async () => {
   getService = (await import('@/app/api/services/[id]/route')).GET
   changeService = (await import('@/app/api/services/[id]/route')).PATCH
   listServices = (await import('@/app/api/services/route')).GET
+  getWorkOrder = (await import('@/app/api/trades/[id]/work-order/route')).GET
+  startWorkOrder = (await import('@/app/api/trades/[id]/work-order/start/route')).POST
+  listTrades = (await import('@/app/api/trades/route')).GET
   await db.insert(schema.users).values([
     { id: sellerId, name: 'Reusable Seller', email: 'reusable-seller@test.invalid', password_hash: 'unused', role: 'human' },
     { id: buyerId, name: 'Reusable Buyer', email: 'reusable-buyer@test.invalid', password_hash: 'unused', role: 'human' },
+    { id: 'reusable-outsider', name: 'Outsider', email: 'reusable-outsider@test.invalid', password_hash: 'unused', role: 'human' },
   ])
   await db.insert(schema.payout_addresses).values({ user_id: sellerId, address: treasury.address })
 })
@@ -177,6 +185,151 @@ test('public service DTO contains structured pricing and readiness without priva
   assert.equal(publicService.readiness.purchasable, true)
   assert.equal(JSON.stringify(publicService).includes('reusable-seller@test.invalid'), false)
   assert.equal('seller_id' in publicService, false)
+})
+
+test('party work order is durable, private, and seller-readable only after funding', async () => {
+  const offered = await service()
+  const created = await order(offered.id, `pull-dispatch-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade, order: savedOrder } = await created.json()
+  const path = `/api/trades/${trade.id}/work-order`
+  const params = { params: Promise.resolve({ id: trade.id as string }) }
+  const read = (userId?: string) => getWorkOrder(new NextRequest(`http://localhost${path}`, {
+    headers: userId ? { Authorization: `Bearer ${token({ userId, email: `${userId}@test.invalid`, role: 'human' })}` } : {},
+  }), params)
+  assert.equal((await read()).status, 401)
+  assert.equal((await read('reusable-outsider')).status, 404)
+  const premature = await read(sellerId)
+  assert.equal(premature.status, 409)
+  assert.equal(JSON.stringify(await premature.json()).includes('abc123'), false)
+  const buyerView = await read(buyerId)
+  assert.equal(buyerView.status, 200)
+  assert.deepEqual((await buyerView.json()).work_order.input, { revision: 'abc123' })
+  const { advanceServiceOrder } = await import('@/lib/service-order-state')
+  await db.transaction(async (tx) => {
+    await tx.update(schema.trades).set({ status: 'escrow_held', funded_at: new Date().toISOString() })
+      .where(eq(schema.trades.id, trade.id))
+    await advanceServiceOrder(tx, trade.id, 'funded')
+  })
+  const funded = await read(sellerId)
+  assert.equal(funded.status, 200)
+  assert.equal(funded.headers.get('cache-control'), 'private, no-store')
+  const body = await funded.json()
+  assert.equal(body.work_order.id, savedOrder.id)
+  assert.deepEqual(body.work_order.input, { revision: 'abc123' })
+  assert.deepEqual(body.work_order.capabilities, ['code-review'])
+  assert.deepEqual(body.work_order.delivery, { method: 'POST', url: `/api/trades/${trade.id}/delivery` })
+  assert.equal(JSON.stringify(body).includes('reusable-buyer@test.invalid'), false)
+  assert.equal('buyer_id' in body.work_order, false)
+  const listed = await listTrades(new NextRequest('http://localhost/api/trades?limit=100', {
+    headers: { Authorization: `Bearer ${token({ userId: sellerId, email: `${sellerId}@test.invalid`, role: 'human' })}` },
+  }))
+  assert.equal(listed.status, 200)
+  const item = (await listed.json()).trades.find((candidate: { id: string }) => candidate.id === trade.id)
+  assert.equal(item.service_order_id, savedOrder.id)
+  assert.equal(item.work_order_url, path)
+})
+
+test('seller starts funded execution once and delivery still advances the linked route', async () => {
+  const offered = await service()
+  const created = await order(offered.id, `execution-start-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade, order: savedOrder } = await created.json()
+  const path = `/api/trades/${trade.id}/work-order/start`
+  const params = { params: Promise.resolve({ id: trade.id as string }) }
+  const start = (userId?: string) => startWorkOrder(new NextRequest(`http://localhost${path}`, {
+    method: 'POST', headers: userId ? { Authorization: `Bearer ${token({ userId, email: `${userId}@test.invalid`, role: 'human' })}` } : {},
+  }), params)
+  assert.equal((await start()).status, 401)
+  assert.equal((await start(buyerId)).status, 404)
+  assert.equal((await start('reusable-outsider')).status, 404)
+  assert.equal((await start(sellerId)).status, 409)
+  assert.equal((await startWorkOrder(new NextRequest(`http://localhost${path}`, {
+    method: 'POST', headers: { Cookie: `auth-token=${token({ userId: sellerId, email: `${sellerId}@test.invalid`, role: 'human' })}` },
+  }), params)).status, 403)
+  const [unfunded] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  assert.equal(unfunded.state, 'awaiting_funding')
+  assert.equal(unfunded.execution_started_at, null)
+  await db.insert(schema.route_plans).values({ id: crypto.randomUUID(), buyer_id: buyerId,
+    client_reference: `execution-route-${crypto.randomUUID()}`, objective: 'Review a funded repository change',
+    required_capabilities: '["code-review"]', max_budget_minor: 1050, deadline_seconds: 600,
+    state: 'funded', service_order_id: savedOrder.id, expires_at: new Date(Date.now() + 300_000) })
+  const { advanceServiceOrder } = await import('@/lib/service-order-state')
+  await db.transaction(async (tx) => {
+    await tx.update(schema.trades).set({ status: 'escrow_held', funded_at: new Date().toISOString() })
+      .where(eq(schema.trades.id, trade.id))
+    await advanceServiceOrder(tx, trade.id, 'funded')
+  })
+  const ready = await getWorkOrder(new NextRequest(`http://localhost/api/trades/${trade.id}/work-order`, {
+    headers: { Authorization: `Bearer ${token({ userId: sellerId, email: `${sellerId}@test.invalid`, role: 'human' })}` },
+  }), params)
+  assert.deepEqual((await ready.json()).work_order.start, { method: 'POST', url: path })
+  const responses = await Promise.all([start(sellerId), start(sellerId)])
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 201])
+  const bodies = await Promise.all(responses.map((response) => response.json()))
+  assert.equal(bodies[0].order.execution_started_at, bodies[1].order.execution_started_at)
+  const [started] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  assert.equal(started.state, 'executing')
+  assert.ok(started.execution_started_at)
+  const [route] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.service_order_id, savedOrder.id))
+  assert.equal(route.state, 'executing')
+  const [stillEscrowed] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  assert.equal(stillEscrowed.status, 'escrow_held')
+  assert.equal(stillEscrowed.total_cost, trade.total_cost)
+  const workOrder = await getWorkOrder(new NextRequest(`http://localhost/api/trades/${trade.id}/work-order`, {
+    headers: { Authorization: `Bearer ${token({ userId: sellerId, email: `${sellerId}@test.invalid`, role: 'human' })}` },
+  }), params)
+  const currentWorkOrder = (await workOrder.json()).work_order
+  assert.equal(currentWorkOrder.execution_started_at, started.execution_started_at?.toISOString())
+  assert.equal(currentWorkOrder.execution_timing.deadline_seconds, 600)
+  assert.equal(currentWorkOrder.execution_timing.awaiting_delivery, true)
+  assert.equal(currentWorkOrder.start, null)
+  const { inspectOwnedRoute } = await import('@/lib/route-inspection')
+  const buyerRoute = await inspectOwnedRoute(route.id, buyerId)
+  assert.equal(buyerRoute?.execution_timing?.due_at, currentWorkOrder.execution_timing.due_at)
+  const { POST: deliver } = await import('@/app/api/trades/[id]/delivery/route')
+  const delivered = await deliver(request(`/api/trades/${trade.id}/delivery`, sellerId,
+    { summary: 'The code review is complete with actionable findings.' }), params)
+  assert.equal(delivered.status, 201, JSON.stringify(await delivered.clone().json()))
+  const [afterDelivery] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  const [routeAfterDelivery] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, route.id))
+  assert.equal(afterDelivery.state, 'verifying')
+  assert.equal(afterDelivery.execution_started_at?.toISOString(), started.execution_started_at?.toISOString())
+  assert.equal(routeAfterDelivery.state, 'awaiting_buyer')
+  const replay = await start(sellerId)
+  assert.equal(replay.status, 200)
+  assert.equal((await replay.json()).idempotent, true)
+})
+
+test('verified funding atomically queues one private provider work notice per subscribed webhook', async () => {
+  const offered = await service()
+  const created = await order(offered.id, `dispatch-outbox-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade } = await created.json()
+  const [pending] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  const webhookId = `work-order-hook-${crypto.randomUUID()}`
+  await db.insert(schema.webhooks).values({ id: webhookId, agent_id: sellerId,
+    url: 'https://provider.example.invalid/work', secret_hash: 'test-hash',
+    events: JSON.stringify(['work_order.ready']), active: 1 })
+  const { recordExternalTradeFunding } = await import('@/lib/trade-funding')
+  const funding = { trade: pending, rail: 'evm' as const, txHash: `0x${'ab'.repeat(32)}`,
+    externalId: `proof-${crypto.randomUUID()}`, payerAddress: `0x${'11'.repeat(20)}`,
+    tokenAddress: `0x${'44'.repeat(20)}`, chainId: 8453, tokenSymbol: 'USDC',
+    tokenDecimals: 6, tokenAmount: BigInt(10_500_000), tokenUsdPrice: 1, usdValue: 10.5 }
+  assert.equal((await db.select().from(schema.webhook_deliveries).where(eq(schema.webhook_deliveries.webhook_id, webhookId))).length, 0)
+  const funded = await recordExternalTradeFunding(funding)
+  assert.equal(funded.status, 'escrow_held')
+  const replay = await recordExternalTradeFunding({ ...funding, trade: funded })
+  assert.equal(replay.id, funded.id)
+  const notices = await db.select().from(schema.webhook_deliveries).where(eq(schema.webhook_deliveries.webhook_id, webhookId))
+  assert.equal(notices.length, 1)
+  assert.equal(notices[0].attempts, 0)
+  const payload = JSON.parse(notices[0].payload)
+  assert.equal(payload.delivery_id, notices[0].id)
+  assert.equal(payload.event, 'work_order.ready')
+  assert.deepEqual(payload.data, { trade_id: trade.id, work_order_url: `/api/trades/${trade.id}/work-order` })
+  assert.equal(JSON.stringify(payload).includes('abc123'), false)
+  assert.equal(JSON.stringify(payload).includes('reusable-buyer@test.invalid'), false)
 })
 
 test('operator reconciliation releases a terminal order left by an older worker exactly once', async () => {

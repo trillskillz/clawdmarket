@@ -141,3 +141,42 @@ test('repeated briefing reads do not create trades or payment receipts', async (
   assert.equal((await db.select().from(schema.payment_receipts)).length, beforeReceipts.length)
   assert.deepEqual(await db.select().from(schema.wallets), beforeWallets)
 })
+
+test('funded reusable work points seller briefing at its private work order', async () => {
+  const serviceId = randomUUID()
+  await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: `user_agent_${seller.id}`,
+    title: 'Private research service', description: 'Return structured private research for a funded buyer.',
+    capabilities: '["web-research"]', price_minor: 1000, active_orders: 1,
+    status: 'active', verification_policy: '{"required":true,"methods":["buyer_review"]}' })
+  const [listing] = await db.insert(schema.listings).values({ seller_id: `user_agent_${seller.id}`,
+    category: 'analysis', title: 'Private research order', description: 'Private funded work order.',
+    price_bankr: 10, status: 'sold' }).returning()
+  const [trade] = await db.insert(schema.trades).values({ listing_id: listing.id,
+    buyer_id: `user_agent_${other.id}`, seller_id: `user_agent_${seller.id}`,
+    amount: 10, fee: .5, total_cost: 10.5, payment_rail: 'evm', status: 'escrow_held' }).returning()
+  await db.insert(schema.service_orders).values({ id: randomUUID(), service_id: serviceId,
+    listing_id: listing.id, trade_id: trade.id, buyer_id: `user_agent_${other.id}`,
+    client_reference: `briefing-work-${randomUUID()}`, objective: 'Research this private topic',
+    input_json: '{"topic":"private"}', price_minor: 1000, payment_rail: 'evm', state: 'funded' })
+  const response = await briefing(request('/api/agents/briefing', seller.key))
+  assert.equal(response.status, 200)
+  const item = (await response.json()).action_items.find((candidate: { id: string }) => candidate.id === `trade:${trade.id}`)
+  assert.equal(item.inspect.url, `/api/trades/${trade.id}/work-order`)
+  assert.equal(JSON.stringify(item).includes('private'), false)
+  const { GET: inspectWorkOrder } = await import('@/app/api/trades/[id]/work-order/route')
+  const params = { params: Promise.resolve({ id: trade.id }) }
+  assert.equal((await inspectWorkOrder(request(item.inspect.url, seller.key), params)).status, 200)
+  assert.equal((await inspectWorkOrder(request(item.inspect.url, other.key), params)).status, 200)
+  const noReadKey = `clawd_${randomUUID().replaceAll('-', '')}`
+  await db.insert(schema.agent_credentials).values({ id: `agc_${randomUUID()}`, agentId: seller.id,
+    name: 'Write only', keyHash: hashAgentApiKey(noReadKey), keyPrefix: noReadKey.slice(0, 12),
+    scopes: JSON.stringify(['marketplace:write']), createdByType: 'test' })
+  assert.equal((await inspectWorkOrder(request(item.inspect.url, noReadKey), params)).status, 401)
+  const { POST: startWorkOrder } = await import('@/app/api/trades/[id]/work-order/start/route')
+  const startRequest = (key: string) => new NextRequest(`https://clawdmkt.test${item.inspect.url}/start`, {
+    method: 'POST', headers: { 'X-ClawdMarket-Agent-Key': key },
+  })
+  assert.equal((await startWorkOrder(startRequest(other.key), params)).status, 404)
+  assert.equal((await startWorkOrder(startRequest(seller.key), params)).status, 201)
+  assert.equal((await startWorkOrder(startRequest(seller.key), params)).status, 200)
+})

@@ -1,19 +1,7 @@
 import { deliverWebhookEvent } from './webhook-delivery';
+import type { WebhookEventType } from './webhook-events';
 
-export type WebhookEvent =
-  | 'task.assigned'
-  | 'task.bid_received'
-  | 'trade.created'
-  | 'trade.status_changed'
-  | 'trade.completed'
-  | 'trade.disputed'
-  | 'trade.auto_confirmed'
-  | 'message.received'
-  | 'rating.received'
-  | 'payment.received'
-  | 'agent.deactivated'
-  | 'balance.changed'
-  | 'listing.sold';
+export type WebhookEvent = WebhookEventType;
 
 export interface WebhookPayload {
   event: WebhookEvent;

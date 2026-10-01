@@ -680,6 +680,9 @@ async function main() {
         )`)
         await database.execute('CREATE INDEX IF NOT EXISTS organization_budget_events_org_version_idx ON organization_budget_events(organization_id, version)')
       } },
+      { id: '2026-10-01-service-order-execution-v1', run: async (database: Client) => {
+        await ensureColumns(database, 'service_orders', { execution_started_at: 'INTEGER' })
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

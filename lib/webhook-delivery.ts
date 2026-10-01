@@ -3,22 +3,9 @@ import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { webhook_deliveries, webhooks } from '@/lib/schema';
 import { safeExternalFetch } from '@/lib/webhook-url';
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events';
 
-export const ALLOWED_WEBHOOK_EVENTS = [
-  'task.assigned',
-  'task.bid_received',
-  'trade.created',
-  'trade.status_changed',
-  'trade.completed',
-  'trade.disputed',
-  'trade.auto_confirmed',
-  'message.received',
-  'rating.received',
-  'payment.received',
-  'agent.deactivated',
-  'balance.changed',
-  'listing.sold',
-] as const;
+export const ALLOWED_WEBHOOK_EVENTS = WEBHOOK_EVENT_TYPES;
 
 export type WebhookEventType = (typeof ALLOWED_WEBHOOK_EVENTS)[number];
 const MAX_DELIVERY_ATTEMPTS = 8;
