@@ -296,6 +296,37 @@ test('seller starts funded execution once and delivery still advances the linked
   assert.equal((await replay.json()).idempotent, true)
 })
 
+test('verified funding atomically queues one private provider work notice per subscribed webhook', async () => {
+  const offered = await service()
+  const created = await order(offered.id, `dispatch-outbox-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade } = await created.json()
+  const [pending] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  const webhookId = `work-order-hook-${crypto.randomUUID()}`
+  await db.insert(schema.webhooks).values({ id: webhookId, agent_id: sellerId,
+    url: 'https://provider.example.invalid/work', secret_hash: 'test-hash',
+    events: JSON.stringify(['work_order.ready']), active: 1 })
+  const { recordExternalTradeFunding } = await import('@/lib/trade-funding')
+  const funding = { trade: pending, rail: 'evm' as const, txHash: `0x${'ab'.repeat(32)}`,
+    externalId: `proof-${crypto.randomUUID()}`, payerAddress: `0x${'11'.repeat(20)}`,
+    tokenAddress: `0x${'44'.repeat(20)}`, chainId: 8453, tokenSymbol: 'USDC',
+    tokenDecimals: 6, tokenAmount: BigInt(10_500_000), tokenUsdPrice: 1, usdValue: 10.5 }
+  assert.equal((await db.select().from(schema.webhook_deliveries).where(eq(schema.webhook_deliveries.webhook_id, webhookId))).length, 0)
+  const funded = await recordExternalTradeFunding(funding)
+  assert.equal(funded.status, 'escrow_held')
+  const replay = await recordExternalTradeFunding({ ...funding, trade: funded })
+  assert.equal(replay.id, funded.id)
+  const notices = await db.select().from(schema.webhook_deliveries).where(eq(schema.webhook_deliveries.webhook_id, webhookId))
+  assert.equal(notices.length, 1)
+  assert.equal(notices[0].attempts, 0)
+  const payload = JSON.parse(notices[0].payload)
+  assert.equal(payload.delivery_id, notices[0].id)
+  assert.equal(payload.event, 'work_order.ready')
+  assert.deepEqual(payload.data, { trade_id: trade.id, work_order_url: `/api/trades/${trade.id}/work-order` })
+  assert.equal(JSON.stringify(payload).includes('abc123'), false)
+  assert.equal(JSON.stringify(payload).includes('reusable-buyer@test.invalid'), false)
+})
+
 test('operator reconciliation releases a terminal order left by an older worker exactly once', async () => {
   const offered = await service()
   const result = await order(offered.id, `legacy-worker-${crypto.randomUUID()}`)

@@ -89,7 +89,7 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.35');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.36');
     expect(openApi.paths['/api/organizations/{id}/budget']?.put).toBeTruthy();
     expect(openApi.paths['/api/organizations/{id}/service-accounts']?.post).toBeTruthy();
     expect(openApi.paths['/api/spending-policy']?.put?.responses?.['200']).toBeTruthy();
@@ -119,7 +119,7 @@ test.describe('Core smoke matrix', () => {
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.35"');
+    expect(await skill.text()).toContain('contract-version: "1.36"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();
@@ -216,13 +216,14 @@ test.describe('Core smoke matrix', () => {
 
     const create = await page.request.post('/api/webhooks', {
       headers: { 'X-CSRF-Token': csrf },
-      data: { url: 'https://example.com/webhook', events: ['trade.created'] },
+      data: { url: 'https://example.com/webhook', events: ['work_order.ready'] },
     });
     expect(create.ok()).toBeTruthy();
     const created = await create.json();
 
     const list = await page.request.get('/api/webhooks');
     expect(list.ok()).toBeTruthy();
+    expect((await list.json()).webhooks.find((webhook: { id: string }) => webhook.id === created.webhook.id)?.events).toContain('work_order.ready');
 
     const remove = await page.request.delete(`/api/webhooks/${created.webhook.id}`, {
       headers: { 'X-CSRF-Token': csrf },

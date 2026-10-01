@@ -15,6 +15,7 @@ import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy'
 import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets'
 import { expireTradePayment } from '@/lib/trade-funding'
 import { withServiceReservationLock } from '@/lib/service-reservation-lock'
+import { queueFundedWorkOrder } from '@/lib/service-order-dispatch'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
 import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
 
@@ -150,6 +151,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
           if (!attempt) throw new ServiceOrderReservationError('ROUTE_ATTEMPT_STATE_CHANGED', 'Route attempt changed while reserving')
         }
       }
+      if (rail === 'ledger') await queueFundedWorkOrder(tx, trade.id, service.seller_id)
       return { order, trade, idempotent: false }
     })
     return await withServiceReservationLock(id, () => withOrganizationBuyerLock(principal.agentId, principal.userId, async () => {

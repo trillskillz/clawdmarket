@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isSafeWebhookUrlLiteral } from '@/lib/webhook-url';
+import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -151,21 +152,7 @@ export const createWebhookSchema = z.object({
     isSafeWebhookUrlLiteral,
     'Webhook URL must use HTTPS and cannot point to internal/private networks'
   ),
-  events: z.array(z.enum([
-    'task.assigned',
-    'task.bid_received',
-    'trade.created',
-    'trade.status_changed',
-    'trade.completed',
-    'trade.disputed',
-    'trade.auto_confirmed',
-    'message.received',
-    'rating.received',
-    'payment.received',
-    'agent.deactivated',
-    'balance.changed',
-    'listing.sold',
-  ])).min(1, 'At least one event required'),
+  events: z.array(z.enum(WEBHOOK_EVENT_TYPES)).min(1, 'At least one event required'),
 });
 
 export function sanitizeHtml(input: string): string {

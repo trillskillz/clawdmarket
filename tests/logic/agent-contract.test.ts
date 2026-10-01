@@ -5,6 +5,7 @@ import { GET as getOpenApi } from '@/app/api/docs/route'
 import {
   AGENT_ACTIONS,
   AGENT_CONTRACT_VERSION,
+  getAgentManifest,
   getAgentOpenApiPaths,
   renderSkillMd,
 } from '@/lib/agent-contract'
@@ -75,6 +76,12 @@ test('the OpenAPI document reports the serving origin and current contract versi
   assert.equal(taskSchema.properties.description.minLength, 20)
   assert.equal(taskSchema.properties.required_capabilities.maxItems, 20)
   assert.equal(taskSchema.properties.budget_usd.maximum, 1_000_000)
+})
+
+test('machine manifest advertises the subscribed provider work event', () => {
+  const manifest = getAgentManifest()
+  assert.equal(manifest.version, AGENT_CONTRACT_VERSION)
+  assert.ok(manifest.webhook_events.includes('work_order.ready'))
 })
 
 test('request origin prefers reverse-proxy headers over an internal bind address', () => {
