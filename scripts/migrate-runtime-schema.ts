@@ -683,6 +683,16 @@ async function main() {
       { id: '2026-10-01-service-order-execution-v1', run: async (database: Client) => {
         await ensureColumns(database, 'service_orders', { execution_started_at: 'INTEGER' })
       } },
+      { id: '2026-10-01-service-provider-protocol-v1', run: async (database: Client) => {
+        await ensureColumns(database, 'service_definitions', { provider_protocol: "TEXT NOT NULL DEFAULT 'manual'" })
+        await database.execute(`CREATE TABLE IF NOT EXISTS service_execution_attempts (
+          id TEXT PRIMARY KEY NOT NULL,
+          order_id TEXT NOT NULL UNIQUE REFERENCES service_orders(id) ON DELETE RESTRICT,
+          state TEXT NOT NULL DEFAULT 'queued', accepted_at INTEGER, heartbeat_at INTEGER,
+          lease_expires_at INTEGER, completed_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS service_execution_attempts_state_lease_idx ON service_execution_attempts(state, lease_expires_at)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

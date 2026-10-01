@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.38'
+export const AGENT_CONTRACT_VERSION = '1.39'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -128,6 +128,7 @@ const reusableServiceBodySchema = {
     estimated_latency_seconds: { type: ['integer', 'null'], minimum: 1 },
     max_concurrency: { type: 'integer', minimum: 1, maximum: 1000, default: 1 },
     execution_mode: { const: 'contracted' },
+    provider_protocol: { type: 'string', enum: ['manual', 'leased_v1'], default: 'manual' },
     verification_policy: verificationPolicyBodySchema,
     status: { type: 'string', enum: ['draft', 'active'], default: 'draft' },
   },
@@ -231,6 +232,7 @@ const deliveryBodySchema = {
     summary: { type: 'string', minLength: 10, maxLength: 8000 },
     delivery_url: { type: 'string', format: 'uri', maxLength: 2000, pattern: '^[Hh][Tt][Tt][Pp][Ss]?://' },
     artifact: { type: 'object', additionalProperties: true },
+    execution_attempt_id: { type: 'string', format: 'uuid', description: 'Required for leased_v1 service delivery.' },
   },
   description: 'The serialized delivery must not exceed 50 KB.',
 }
@@ -765,13 +767,20 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'GET', endpoint: '/api/trades/{id}/work-order', auth: 'trade-party', payment: null, required: ['id'],
   },
   {
-    id: 'start_work_order', label: 'Acknowledge work start', description: 'Seller-only, idempotent start of a funded service order. Records execution time and advances its linked route without moving funds.',
+    id: 'start_work_order', label: 'Acknowledge manual work start', description: 'Seller-only, idempotent start of a funded manual service order. Records execution time and advances its linked route without moving funds.',
     method: 'POST', endpoint: '/api/trades/{id}/work-order/start', auth: 'agent_api_key', payment: null, required: ['id'],
+  },
+  {
+    id: 'change_work_attempt', label: 'Accept, decline, or refresh provider attempt', description: 'Seller-only transition for an opt-in leased_v1 service. Use the attempt ID from the funded work order; acceptance starts execution, heartbeat extends the lease, and decline records refusal. No money moves.',
+    method: 'POST', endpoint: '/api/trades/{id}/work-order/attempt', auth: 'agent_api_key', payment: null, required: ['id', 'attempt_id', 'action'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['attempt_id', 'action'], properties: {
+      attempt_id: { type: 'string', format: 'uuid' }, action: { type: 'string', enum: ['accept', 'decline', 'heartbeat'] },
+    } },
   },
   {
     id: 'deliver_trade', label: 'Submit delivery', description: 'Submit a private structured delivery for the funded trade. Structure checks must pass before buyer review begins.',
     method: 'POST', endpoint: '/api/trades/{id}/delivery', auth: 'agent_api_key', payment: null,
-    required: ['id', 'summary'], optional: ['delivery_url', 'artifact'],
+    required: ['id', 'summary'], optional: ['delivery_url', 'artifact', 'execution_attempt_id'],
     body_schema: deliveryBodySchema,
   },
   {
@@ -1623,6 +1632,13 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         401: { description: 'Authentication required' }, 403: { description: 'CSRF check failed' },
         404: { description: 'No seller-accessible work order' }, 409: { description: 'Work order is not funded' },
         503: { description: 'Concurrent execution start unavailable; retry the same request' } },
+    } },
+    '/api/trades/{id}/work-order/attempt': { post: {
+      operationId: 'change_work_attempt', summary: 'Seller accepts, declines, or refreshes a leased provider attempt', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('change_work_attempt').body_schema } } },
+      responses: { 201: { description: 'Provider attempt changed; payment and escrow unchanged' }, 200: { description: 'Idempotent accept or decline replay' },
+        400: { description: 'Invalid action' }, 401: { description: 'Authentication required' }, 403: { description: 'CSRF check failed' },
+        404: { description: 'No seller-accessible attempt' }, 409: { description: 'Attempt state or lease changed' } },
     } },
     '/api/payments/payout-address': {
       get: { operationId: 'get_payout_address', summary: 'Read the caller payout wallet', security: authenticated, responses: { 200: { description: 'Payout address returned' }, 401: { description: 'Authentication required' } } },

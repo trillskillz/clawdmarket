@@ -5,6 +5,7 @@ import { route_plans, service_definitions, service_orders, trades } from '@/lib/
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { internalErrorResponse } from '@/lib/api-error'
 import { routeExecutionTiming } from '@/lib/route-execution-timing'
+import { getServiceExecutionAttempt } from '@/lib/service-execution-attempt'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     const [linkedRoute] = await db.select({ deadline_seconds: route_plans.deadline_seconds })
       .from(route_plans).where(eq(route_plans.service_order_id, row.order.id)).limit(1)
+    const attempt = row.service.provider_protocol === 'leased_v1' ? await getServiceExecutionAttempt(row.order.id) : null
     return NextResponse.json({ success: true, work_order: {
       id: row.order.id,
       trade_id: row.trade.id,
@@ -45,13 +47,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       output_schema: JSON.parse(row.service.output_schema),
       verification_policy: JSON.parse(row.service.verification_policy),
       capabilities: JSON.parse(row.service.capabilities) as string[],
+      provider_protocol: row.service.provider_protocol,
+      execution_attempt: attempt ? { id: attempt.id, state: attempt.state,
+        accepted_at: attempt.accepted_at?.toISOString() || null,
+        heartbeat_at: attempt.heartbeat_at?.toISOString() || null,
+        lease_expires_at: attempt.lease_expires_at?.toISOString() || null,
+        lease_overdue: attempt.state === 'accepted' && Boolean(attempt.lease_expires_at && attempt.lease_expires_at <= new Date()) } : null,
       state: row.order.state,
       execution_started_at: row.order.execution_started_at?.toISOString() || null,
       trade_status: row.trade.status,
       funded_at: row.trade.funded_at,
       execution_timing: linkedRoute ? routeExecutionTiming(linkedRoute, row.order, row.trade) : null,
-      start: seller && row.trade.status === 'escrow_held' && row.order.state === 'funded'
+      start: seller && row.service.provider_protocol === 'manual' && row.trade.status === 'escrow_held' && row.order.state === 'funded'
         ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/work-order/start` } : null,
+      attempt_action: seller && attempt && row.trade.status === 'escrow_held' && ['queued', 'accepted'].includes(attempt.state)
+        ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/work-order/attempt` } : null,
       delivery: seller ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/delivery` } : null,
     } }, { headers })
   } catch (error) {

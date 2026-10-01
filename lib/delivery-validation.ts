@@ -5,6 +5,7 @@ export const deliverySchema = z.object({
   summary: z.string().trim().min(10).max(8000),
   delivery_url: httpUrl.optional(),
   artifact: z.record(z.string(), z.unknown()).optional(),
+  execution_attempt_id: z.uuid().optional(),
 })
 
 export const requirementsSchema = z.object({

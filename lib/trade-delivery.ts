@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, gt } from 'drizzle-orm'
 import { db } from './db'
-import { messages, service_definitions, service_orders, task_workspaces, trade_deliveries, trades, verification_results } from './schema'
+import { messages, service_definitions, service_execution_attempts, service_orders, task_workspaces, trade_deliveries, trades, verification_results } from './schema'
 import { encryptMessage } from './chat-crypto'
 import { deliverySchema, requirementsSchema, verifyDelivery } from './delivery-validation'
 import { deliverWebhookEvent } from './webhook-delivery'
@@ -51,9 +51,18 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
     acceptance_criteria: JSON.parse(workspace.acceptance_criteria),
     required_json_keys: JSON.parse(workspace.required_json_keys),
   } : {})
-  const [service] = await db.select({ policy: service_definitions.verification_policy, output_schema: service_definitions.output_schema })
+  const [service] = await db.select({ policy: service_definitions.verification_policy, output_schema: service_definitions.output_schema,
+    provider_protocol: service_definitions.provider_protocol, order_id: service_orders.id })
     .from(service_orders).innerJoin(service_definitions, eq(service_orders.service_id, service_definitions.id))
     .where(eq(service_orders.trade_id, tradeId)).limit(1)
+  if (service?.provider_protocol === 'leased_v1') {
+    const [attempt] = await db.select().from(service_execution_attempts)
+      .where(eq(service_execution_attempts.order_id, service.order_id)).limit(1)
+    if (!attempt || parsed.data.execution_attempt_id !== attempt.id || attempt.state !== 'accepted'
+      || !attempt.lease_expires_at || attempt.lease_expires_at <= new Date()) {
+      throw new DeliveryError('An accepted, active execution attempt is required for delivery', 409)
+    }
+  }
   const policy = verificationPolicySchema.safeParse(service ? JSON.parse(service.policy) : { required: true, methods: ['buyer_review'] })
   if (!policy.success) throw new DeliveryError('Stored verification policy is unsupported', 409)
   if (service && policy.data.methods.includes('schema') && !outputSchemaV1.safeParse(JSON.parse(service.output_schema)).success) {
@@ -76,6 +85,17 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
   }
   const encrypted = await encryptMessage(JSON.stringify({ type: 'task_complete', trade_id: tradeId, ...parsed.data, content_hash: contentHash }))
   const commit = () => db.transaction(async (tx) => {
+    if (service?.provider_protocol === 'leased_v1') {
+      const now = new Date()
+      const [completed] = await tx.update(service_execution_attempts)
+        .set({ state: 'delivered', completed_at: now, updated_at: now })
+        .where(and(eq(service_execution_attempts.order_id, service.order_id),
+          eq(service_execution_attempts.id, parsed.data.execution_attempt_id!),
+          eq(service_execution_attempts.state, 'accepted'),
+          gt(service_execution_attempts.lease_expires_at, now)))
+        .returning({ id: service_execution_attempts.id })
+      if (!completed) throw new DeliveryError('Execution attempt expired before delivery', 409)
+    }
     const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: new Date(Date.now() + 86400000).toISOString() })
       .where(and(eq(trades.id, tradeId), eq(trades.status, 'escrow_held'))).returning()
     if (!updated) throw new DeliveryError('Trade is not awaiting delivery', 409)

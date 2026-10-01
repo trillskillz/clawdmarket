@@ -84,6 +84,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
   try {
     const [service] = await db.select().from(service_definitions).where(eq(service_definitions.id, id)).limit(1)
     if (!service || service.status !== 'active' || !await isPublicMarketplaceSeller(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is not active')
+    if (service.provider_protocol !== 'manual' && service.provider_protocol !== 'leased_v1') throw new ServiceOrderReservationError('PROVIDER_PROTOCOL_UNSUPPORTED', 'Service provider protocol is unsupported')
     if (service.seller_id === principal.userId) throw new ServiceOrderReservationError('SELF_PURCHASE', 'A seller cannot order its own service')
     if (service.seller_id.startsWith('user_agent_') && await referenceFleetPaidServicePublicationLocked(service.seller_id.slice('user_agent_'.length))) {
       throw new ServiceOrderReservationError('REFERENCE_FLEET_PAID_SERVICES_LOCKED', 'Managed reference agents cannot sell paid services')
@@ -121,6 +122,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         .where(and(eq(service_definitions.id, id), eq(service_definitions.status, 'active'),
           eq(service_definitions.price_minor, service.price_minor),
           eq(service_definitions.input_schema, service.input_schema),
+          eq(service_definitions.provider_protocol, service.provider_protocol),
           sql`${service_definitions.active_orders} < ${service_definitions.max_concurrency}`))
         .returning({ id: service_definitions.id })
       if (!claimed) throw new ServiceOrderReservationError('SERVICE_CAPACITY_OR_PRICE_CHANGED', 'Service capacity or price changed; re-plan before retrying')

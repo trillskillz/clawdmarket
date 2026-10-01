@@ -73,6 +73,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     && (!buyerPolicy?.policy.approved_payment_rails || buyerPolicy.policy.approved_payment_rails.includes(rail)))
   const candidates: RouteCandidate[] = []
   for (const service of rows.slice(0, 500)) {
+    if (service.provider_protocol !== 'manual' && service.provider_protocol !== 'leased_v1') continue
     if (service.seller_id === buyerId) continue
     if (paymentControl.paused || service.active_orders >= service.max_concurrency) continue
     const offered = JSON.parse(service.capabilities) as string[]
