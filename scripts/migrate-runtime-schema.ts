@@ -623,6 +623,26 @@ async function main() {
         await ensureColumns(database, 'organization_agent_assignments', { team_id: 'TEXT REFERENCES organization_teams(id) ON DELETE RESTRICT' })
         await ensureColumns(database, 'organization_audit_events', { team_id: 'TEXT' })
       } },
+      { id: '2026-09-30-enterprise-memberships-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_invitations (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL, target_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL DEFAULT 'pending', expires_at INTEGER NOT NULL,
+          accepted_at INTEGER, cancelled_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organization_invitations_org_reference_idx ON organization_invitations(organization_id, client_reference)')
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_invitations_target_status_idx ON organization_invitations(target_account_id, status)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_memberships (
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          role TEXT NOT NULL DEFAULT 'viewer', status TEXT NOT NULL DEFAULT 'active',
+          accepted_invitation_id TEXT NOT NULL REFERENCES organization_invitations(id) ON DELETE RESTRICT,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          PRIMARY KEY(organization_id, account_id)
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_memberships_account_status_idx ON organization_memberships(account_id, status)')
+        await ensureColumns(database, 'organization_audit_events', { member_account_id: 'TEXT' })
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

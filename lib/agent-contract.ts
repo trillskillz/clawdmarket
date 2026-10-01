@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.29'
+export const AGENT_CONTRACT_VERSION = '1.30'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -547,7 +547,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     id: 'cancel_workflow', label: 'Cancel workflow', description: 'Idempotently cancel an unfunded workflow plan.',
     method: 'DELETE', endpoint: '/api/workflows/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
-  { id: 'list_organizations', label: 'List organizations', description: 'List private accounting namespaces owned by this account.',
+  { id: 'list_organizations', label: 'List organizations', description: 'List private accounting namespaces owned by or shared with this account.',
     method: 'GET', endpoint: '/api/organizations', auth: 'owner-account', payment: null },
   { id: 'create_organization', label: 'Create organization', description: 'Create an accounting-only organization with an idempotency reference.',
     method: 'POST', endpoint: '/api/organizations', auth: 'owner-account', payment: null, required: ['client_reference', 'name'],
@@ -556,6 +556,26 @@ export const AGENT_ACTIONS: AgentAction[] = [
     } } },
   { id: 'inspect_organization', label: 'Inspect organization', description: 'Read private assignments and recent audit events.',
     method: 'GET', endpoint: '/api/organizations/{id}', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'list_organization_invitations', label: 'List organization invitations', description: 'Owner-only invitation status list.',
+    method: 'GET', endpoint: '/api/organizations/{id}/invitations', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'invite_organization_viewer', label: 'Invite organization viewer', description: 'Invite one existing account to read organization and team metadata.',
+    method: 'POST', endpoint: '/api/organizations/{id}/invitations', auth: 'owner-account', payment: null,
+    required: ['id', 'client_reference', 'target_account_id'], body_schema: { type: 'object', required: ['client_reference', 'target_account_id'],
+      additionalProperties: false, properties: { client_reference: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' },
+        target_account_id: { type: 'string', minLength: 1, maxLength: 200 } } } },
+  { id: 'list_pending_organization_invitations', label: 'List pending invitations', description: 'List invitations addressed to the authenticated account.',
+    method: 'GET', endpoint: '/api/organizations/invitations', auth: 'owner-account', payment: null },
+  { id: 'accept_organization_invitation', label: 'Accept organization invitation', description: 'Accept a seven-day invitation addressed to this account.',
+    method: 'POST', endpoint: '/api/organizations/invitations/{invitationId}/accept', auth: 'owner-account', payment: null,
+    required: ['invitationId'] },
+  { id: 'cancel_organization_invitation', label: 'Cancel organization invitation', description: 'Owner-only cancellation of a pending invitation.',
+    method: 'DELETE', endpoint: '/api/organizations/{id}/invitations/{invitationId}', auth: 'owner-account', payment: null,
+    required: ['id', 'invitationId'] },
+  { id: 'list_organization_members', label: 'List organization members', description: 'Owner-only membership status list.',
+    method: 'GET', endpoint: '/api/organizations/{id}/members', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'revoke_organization_member', label: 'Revoke organization member', description: 'Owner-only revocation of a read-only member.',
+    method: 'DELETE', endpoint: '/api/organizations/{id}/members/{accountId}', auth: 'owner-account', payment: null,
+    required: ['id', 'accountId'] },
   { id: 'list_organization_teams', label: 'List organization teams', description: 'List private owner-scoped accounting teams.',
     method: 'GET', endpoint: '/api/organizations/{id}/teams', auth: 'owner-account', payment: null, required: ['id'] },
   { id: 'create_organization_team', label: 'Create organization team', description: 'Create an idempotent team within an owned organization.',
@@ -1563,8 +1583,28 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         requestBody: { required: true, content: { 'application/json': { schema: getAction('create_organization').body_schema } } },
         responses: { 201: { description: 'Organization created' }, 200: { description: 'Idempotent replay' }, 409: { description: 'Reference conflict' }, 503: { description: 'Enterprise foundation disabled' } } },
     },
-    '/api/organizations/{id}': { get: { operationId: 'inspect_organization', summary: 'Inspect owned organization, assignments, and audit', security: ownerAuthenticated,
-      parameters: [tradeIdParameter], responses: { 200: { description: 'Private organization details' }, 404: { description: 'Organization not owned' } } } },
+    '/api/organizations/{id}': { get: { operationId: 'inspect_organization', summary: 'Inspect owned organization or limited viewer metadata', security: ownerAuthenticated,
+      parameters: [tradeIdParameter], responses: { 200: { description: 'Owner details or read-only viewer summary' }, 404: { description: 'Organization inaccessible' } } } },
+    '/api/organizations/{id}/invitations': {
+      get: { operationId: 'list_organization_invitations', summary: 'List owner-only invitation statuses', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], responses: { 200: { description: 'Private invitation list' }, 404: { description: 'Organization not owned' } } },
+      post: { operationId: 'invite_organization_viewer', summary: 'Invite one account as a read-only organization viewer', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('invite_organization_viewer').body_schema } } },
+        responses: { 201: { description: 'Invitation created' }, 200: { description: 'Idempotent replay' }, 404: { description: 'Organization or target absent' }, 409: { description: 'Conflict' } } },
+    },
+    '/api/organizations/invitations': { get: { operationId: 'list_pending_organization_invitations', summary: 'List invitations addressed to the caller', security: ownerAuthenticated,
+      responses: { 200: { description: 'Private pending invitations' } } } },
+    '/api/organizations/invitations/{invitationId}/accept': { post: { operationId: 'accept_organization_invitation', summary: 'Accept a read-only invitation addressed to the caller', security: ownerAuthenticated,
+      parameters: [{ name: 'invitationId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Viewer membership active or idempotent replay' }, 404: { description: 'Invitation not addressed to caller' }, 410: { description: 'Invitation expired' } } } },
+    '/api/organizations/{id}/invitations/{invitationId}': { delete: { operationId: 'cancel_organization_invitation', summary: 'Cancel an owned pending invitation', security: ownerAuthenticated,
+      parameters: [tradeIdParameter, { name: 'invitationId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Invitation cancelled or idempotent replay' }, 404: { description: 'Invitation inaccessible' }, 409: { description: 'Already accepted' } } } },
+    '/api/organizations/{id}/members': { get: { operationId: 'list_organization_members', summary: 'List private owner-only membership status', security: ownerAuthenticated,
+      parameters: [tradeIdParameter], responses: { 200: { description: 'Membership status list' }, 404: { description: 'Organization not owned' } } } },
+    '/api/organizations/{id}/members/{accountId}': { delete: { operationId: 'revoke_organization_member', summary: 'Revoke an owned organization viewer', security: ownerAuthenticated,
+      parameters: [tradeIdParameter, { name: 'accountId', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: { 200: { description: 'Membership revoked or idempotent replay' }, 404: { description: 'Membership inaccessible' } } } },
     '/api/organizations/{id}/teams': {
       get: { operationId: 'list_organization_teams', summary: 'List owned organization accounting teams', security: ownerAuthenticated,
         parameters: [tradeIdParameter], responses: { 200: { description: 'Private team list' }, 404: { description: 'Organization not owned' } } },
@@ -1787,7 +1827,7 @@ Each order also requires an objective; optional structured input is visible only
 
 ## Enterprise accounting foundation
 
-An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`POST /api/organizations/{id}/teams\` creates an owner-only team; \`PATCH /api/organizations/{id}/teams/{teamId}\` archives it after its assignments are removed. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center and optionally an active team; \`DELETE\` removes the assignment. Organization creation uses a client reference and team creation uses a unique slug for safe retries. Assignments and audit events are private. These records grant no ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migrations.
+An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`POST /api/organizations/{id}/teams\` creates an owner-only team; \`PATCH /api/organizations/{id}/teams/{teamId}\` archives it after its assignments are removed. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center and optionally an active team; \`DELETE\` removes the assignment. An owner may invite a specific account ID with \`POST /api/organizations/{id}/invitations\`; that account sees the pending invitation through \`GET /api/organizations/invitations\` and accepts it with \`POST /api/organizations/invitations/{invitationId}/accept\`. The owner can cancel pending invitations and revoke active members. Members have viewer-only access to organization names and team metadata; assignments, audit, invitations, and membership lists remain owner-only. Neither membership nor team assignment grants ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migrations.
 
 ## Authentication
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq, desc, and } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { organizations, organization_audit_events } from '@/lib/schema'
+import { organizations, organization_audit_events, organization_memberships } from '@/lib/schema'
 import { resolveAuthenticatedOwnerAccount } from '@/lib/agent-owner-auth'
 import { validateCsrf } from '@/lib/csrf'
 import { organizationDto, organizationInput, enterpriseFoundationEnabled } from '@/lib/enterprise-foundation'
@@ -19,9 +19,17 @@ export async function GET(request: NextRequest) {
   try {
     const owner = await resolveAuthenticatedOwnerAccount(request)
     if (!owner) return failure('OWNER_ACCOUNT_REQUIRED', 'Owner account required', 401)
-    const rows = await db.select().from(organizations).where(eq(organizations.owner_account_id, owner.userId))
-      .orderBy(desc(organizations.created_at)).limit(100)
-    return NextResponse.json({ organizations: rows.map(organizationDto) }, { headers: { 'Cache-Control': 'private, no-store' } })
+    const [owned, shared] = await Promise.all([
+      db.select().from(organizations).where(eq(organizations.owner_account_id, owner.userId))
+        .orderBy(desc(organizations.created_at)).limit(100),
+      db.select({ organization: organizations }).from(organization_memberships)
+        .innerJoin(organizations, eq(organizations.id, organization_memberships.organization_id))
+        .where(and(eq(organization_memberships.account_id, owner.userId), eq(organization_memberships.status, 'active'))).limit(100),
+    ])
+    return NextResponse.json({ organizations: [
+      ...owned.map((row) => ({ ...organizationDto(row), role: 'owner' as const })),
+      ...shared.map(({ organization }) => ({ ...organizationDto(organization), role: 'viewer' as const })),
+    ] }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) { return internalErrorResponse('Organization lookup failed', error) }
 }
 

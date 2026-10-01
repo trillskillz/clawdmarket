@@ -175,6 +175,36 @@ export const organization_teams = sqliteTable('organization_teams', {
   index('organization_teams_org_status_idx').on(table.organization_id, table.status),
 ]);
 
+/** Read-only organization access. The owner is represented by organizations.owner_account_id. */
+export const organization_invitations = sqliteTable('organization_invitations', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  target_account_id: text('target_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  status: text('status', { enum: ['pending', 'accepted', 'cancelled'] }).notNull().default('pending'),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  accepted_at: integer('accepted_at', { mode: 'timestamp' }),
+  cancelled_at: integer('cancelled_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  uniqueIndex('organization_invitations_org_reference_idx').on(table.organization_id, table.client_reference),
+  index('organization_invitations_target_status_idx').on(table.target_account_id, table.status),
+]);
+
+export const organization_memberships = sqliteTable('organization_memberships', {
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  account_id: text('account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  role: text('role', { enum: ['viewer'] }).notNull().default('viewer'),
+  status: text('status', { enum: ['active', 'revoked'] }).notNull().default('active'),
+  accepted_invitation_id: text('accepted_invitation_id').notNull().references(() => organization_invitations.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.organization_id, table.account_id] }),
+  index('organization_memberships_account_status_idx').on(table.account_id, table.status),
+]);
+
 export const organization_agent_assignments = sqliteTable('organization_agent_assignments', {
   agent_id: text('agent_id').primaryKey().references(() => agents.id, { onDelete: 'cascade' }),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
@@ -188,9 +218,10 @@ export const organization_audit_events = sqliteTable('organization_audit_events'
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
   actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
-  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned'] }).notNull(),
+  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked'] }).notNull(),
   agent_id: text('agent_id'),
   team_id: text('team_id'),
+  member_account_id: text('member_account_id'),
   cost_center: text('cost_center'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
 }, (table) => [index('organization_audit_org_created_idx').on(table.organization_id, table.created_at)]);
