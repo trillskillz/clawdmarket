@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { createLocalTestSchema } from '../helpers/local-schema'
 
@@ -107,4 +108,35 @@ test('approval, verification, and retry ceilings fail closed without an approval
   assert.equal(checkBuyerPolicyConstraints(parsed, { ...base, totalMinor: 51 }), 'BUYER_APPROVAL_REQUIRED')
   assert.equal(checkBuyerPolicyConstraints(parsed, { ...base, verificationMethods: ['buyer_review'] }), 'BUYER_VERIFICATION_REQUIRED')
   assert.equal(checkBuyerPolicyConstraints(parsed, { ...base, retrySpendMinor: 101 }), 'BUYER_RETRY_BUDGET_EXCEEDED')
+})
+
+test('cancelled external checkout holds buyer budget until refund is confirmed', async () => {
+  const { buyerPolicyUsage, enforceBuyerSpendPolicy, buyerSpendPolicyInput } = await import('@/lib/buyer-spend-policy')
+  const { getAgentSpendSnapshot } = await import('@/lib/agent-spend-policy')
+  const buyerId = 'policy-outsider'
+  const now = new Date()
+  await db.insert(schema.buyer_spend_policies).values({ buyer_id: buyerId, owner_account_id: buyerId,
+    policy_json: JSON.stringify(buyerSpendPolicyInput.parse({ max_daily: '1.00' })),
+    version: 1, created_at: now, updated_at: now })
+  const [listing] = await db.insert(schema.listings).values({ seller_id: 'policy-seller', category: 'skills',
+    title: 'External checkout', description: 'Late payment budget test', price_bankr: 0.8, status: 'sold' }).returning()
+  const [trade] = await db.insert(schema.trades).values({ listing_id: listing.id, buyer_id: buyerId,
+    seller_id: 'policy-seller', amount: 0.8, fee: 0.04, total_cost: 0.84,
+    payment_rail: 'evm', status: 'pending' }).returning()
+  assert.equal((await buyerPolicyUsage(buyerId)).reserved_or_spent_today_minor, 84)
+  await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, trade.id))
+  assert.equal((await buyerPolicyUsage(buyerId)).reserved_or_spent_today_minor, 84)
+  assert.equal((await getAgentSpendSnapshot('budget-test', buyerId)).reserved_or_spent_today, 0.84)
+  await assert.rejects(() => db.transaction((tx) => enforceBuyerSpendPolicy(tx, buyerId, { totalMinor: 20 })),
+    (error: unknown) => (error as { code?: string }).code === 'BUYER_DAILY_LIMIT')
+  await db.update(schema.trades).set({ payout_status: 'refunded' }).where(eq(schema.trades.id, trade.id))
+  assert.equal((await buyerPolicyUsage(buyerId)).reserved_or_spent_today_minor, 0)
+  assert.equal((await getAgentSpendSnapshot('budget-test', buyerId)).reserved_or_spent_today, 0)
+  await db.transaction((tx) => enforceBuyerSpendPolicy(tx, buyerId, { totalMinor: 20 }))
+  const [ledger] = await db.insert(schema.trades).values({ listing_id: listing.id, buyer_id: buyerId,
+    seller_id: 'policy-seller', amount: 0.5, fee: 0, total_cost: 0.5,
+    payment_rail: 'ledger', status: 'escrow_held' }).returning()
+  assert.equal((await buyerPolicyUsage(buyerId)).reserved_or_spent_today_minor, 50)
+  await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, ledger.id))
+  assert.equal((await buyerPolicyUsage(buyerId)).reserved_or_spent_today_minor, 0)
 })

@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.32'
+export const AGENT_CONTRACT_VERSION = '1.33'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -401,14 +401,14 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'check_usage',
     label: 'Check usage and billing',
-    description: 'Inspect daily free write quotas, autonomous marketplace spending caps, remaining allowance, and over-quota MPP retry instructions.',
+    description: 'Inspect daily free write quotas, autonomous marketplace spending caps, remaining allowance, and over-quota MPP retry instructions. Cancelled external checkouts remain reserved until refund completion.',
     method: 'GET',
     endpoint: '/api/agents/usage',
     auth: 'agent_api_key',
     payment: null,
   },
   {
-    id: 'get_spending_policy', label: 'Inspect spending policy', description: 'An agent reads its owner-controlled policy and remaining reserved-or-spent daily and monthly budget. Linked owners may pass agent_id.',
+    id: 'get_spending_policy', label: 'Inspect spending policy', description: 'An agent reads its owner-controlled policy and remaining reserved-or-spent daily and monthly budget. Cancelled external checkouts remain reserved until refund completion because payment may arrive late. Linked owners may pass agent_id.',
     method: 'GET', endpoint: '/api/spending-policy', auth: 'agent_api_key', payment: null, optional: ['agent_id'],
   },
   {

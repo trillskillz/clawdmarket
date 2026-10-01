@@ -81,7 +81,8 @@ export function checkBuyerPolicyConstraints(policy: BuyerSpendPolicy, context: S
 
 async function reservedMinorSince(source: Transaction | typeof db, buyerId: string, since: Date) {
   const [row] = await source.select({ total: sql<number>`COALESCE(SUM(CAST(ROUND((CASE WHEN ${trades.total_cost} > 0 THEN ${trades.total_cost} ELSE ${trades.amount} + ${trades.fee} END) * 100) AS INTEGER)), 0)` })
-    .from(trades).where(and(eq(trades.buyer_id, buyerId), gte(trades.created_at, since), sql`${trades.status} <> 'cancelled'`))
+    .from(trades).where(and(eq(trades.buyer_id, buyerId), gte(trades.created_at, since),
+      sql`(${trades.status} <> 'cancelled' OR (${trades.payment_rail} <> 'ledger' AND ${trades.payout_status} <> 'refunded'))`))
   return Number(row?.total || 0)
 }
 
