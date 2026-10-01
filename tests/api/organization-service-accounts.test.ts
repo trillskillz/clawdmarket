@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { createLocalTestSchema } from '../helpers/local-schema'
@@ -76,7 +75,7 @@ test('read-only service key is issued once, scoped, expirable, and revocable', a
   assert.match(token, /^cmo_[a-f0-9]{64}$/)
   assert.equal(created.headers.get('cache-control'), 'private, no-store')
   const [stored] = await db.select().from(schema.organization_service_accounts).where(eq(schema.organization_service_accounts.id, accountId))
-  assert.equal(stored.credential_hash, createHash('sha256').update(token).digest('hex'))
+  assert.equal(stored.credential_hash, (await import('@/lib/registered-agent-auth')).hashAgentApiKey(`organization-read:${token}`))
   assert.equal(JSON.stringify(stored).includes(token), false)
   const replay = await createKey(request(path, 'POST', ownerToken, payload), params)
   assert.equal(replay.status, 200)

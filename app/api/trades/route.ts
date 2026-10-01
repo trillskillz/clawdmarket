@@ -26,8 +26,30 @@ import { checkoutForTrade } from '@/lib/trade-checkout';
 import { NewPaymentsPausedError, requireNewPaymentsOpen } from '@/lib/payment-control';
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
 import { selectMarketplaceRail } from '@/lib/payment-rail-selection';
+import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets';
 
 export const dynamic = 'force-dynamic'
+
+async function withTradeReservationRetry<T>(agentId: string | null, buyerId: string, operation: () => Promise<T>): Promise<T> {
+  return withOrganizationBuyerLock(agentId, buyerId, async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try { return await operation() }
+      catch (error) {
+        let current: unknown = error
+        let busy = false
+        for (let depth = 0; current && depth < 5; depth += 1) {
+          if (typeof current === 'object' && 'message' in current && /SQLITE_BUSY|database is locked/i.test(String(current.message))) {
+            busy = true; break
+          }
+          current = typeof current === 'object' && 'cause' in current ? current.cause : null
+        }
+        if (!busy || attempt === 4) throw error
+        await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
+      }
+    }
+    throw new Error('trade_reservation_retry_exhausted')
+  })
+}
 
 async function createTradePost(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -174,12 +196,12 @@ async function createTradePost(req: NextRequest) {
     }
 
     if (selectedRail === 'mpp' || selectedRail === 'evm') {
-      const [newTrade] = await db.transaction(async (tx) => {
+      const [newTrade] = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction(async (tx) => {
         if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost, sellerId: listing.seller_id, paymentRail: selectedRail });
         const claimed = await tx.update(listings).set({ status: 'sold' })
           .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'))).returning({ id: listings.id });
         if (!claimed.length) throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
-        return tx.insert(trades).values({
+        const [trade] = await tx.insert(trades).values({
           listing_id: listing.id,
           buyer_id: auth.userId,
           seller_id: listing.seller_id,
@@ -198,7 +220,9 @@ async function createTradePost(req: NextRequest) {
           status: 'pending',
           auto_confirm_at: new Date(Date.now() + (30 * 60 + 259200) * 1000).toISOString(),
         }).returning();
-      });
+        await attributeOrganizationTrade(tx, auth.agentId, trade, Math.round(totalCost * 100));
+        return [trade];
+      }));
       const checkout = checkoutForTrade(newTrade);
       await Promise.allSettled([
         fireWebhook(auth.userId, 'trade.created', { trade: newTrade, checkout }),
@@ -256,7 +280,8 @@ async function createTradePost(req: NextRequest) {
 
     const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
 
-    const newTrade = await db.transaction((tx) => createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { agentId: auth.agentId, clientReference }));
+    const newTrade = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction((tx) =>
+      createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { agentId: auth.agentId, clientReference })));
     // ─── ESCROW LOGIC END ───
 
     // Queue webhook records durably before returning the trade response.

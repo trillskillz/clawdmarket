@@ -233,11 +233,48 @@ export const organization_agent_assignments = sqliteTable('organization_agent_as
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
 }, (table) => [index('organization_assignments_org_idx').on(table.organization_id)]);
 
+/** Owner-set hard ceilings for assigned agent buyers. Null means no ceiling for that window. */
+export const organization_spend_budgets = sqliteTable('organization_spend_budgets', {
+  organization_id: text('organization_id').primaryKey().references(() => organizations.id, { onDelete: 'restrict' }),
+  max_per_execution_minor: integer('max_per_execution_minor'),
+  max_daily_minor: integer('max_daily_minor'),
+  max_monthly_minor: integer('max_monthly_minor'),
+  version: integer('version').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  check('organization_budget_per_execution_positive', sql`${table.max_per_execution_minor} IS NULL OR ${table.max_per_execution_minor} > 0`),
+  check('organization_budget_daily_positive', sql`${table.max_daily_minor} IS NULL OR ${table.max_daily_minor} > 0`),
+  check('organization_budget_monthly_positive', sql`${table.max_monthly_minor} IS NULL OR ${table.max_monthly_minor} > 0`),
+]);
+
+/** Immutable attribution at reservation time; reassignment never rewrites financial history. */
+export const organization_trade_attributions = sqliteTable('organization_trade_attributions', {
+  trade_id: text('trade_id').primaryKey().references(() => trades.id, { onDelete: 'restrict' }),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  agent_id: text('agent_id').notNull(),
+  team_id: text('team_id'),
+  cost_center: text('cost_center').notNull(),
+  total_minor: integer('total_minor').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [index('organization_trade_attributions_org_created_idx').on(table.organization_id, table.created_at),
+  check('organization_trade_attributions_total_positive', sql`${table.total_minor} > 0`)]);
+
+export const organization_budget_events = sqliteTable('organization_budget_events', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  version: integer('version').notNull(),
+  old_budget_json: text('old_budget_json'),
+  new_budget_json: text('new_budget_json').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [index('organization_budget_events_org_version_idx').on(table.organization_id, table.version)]);
+
 export const organization_audit_events = sqliteTable('organization_audit_events', {
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
   actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
-  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked'] }).notNull(),
+  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked', 'budget_updated'] }).notNull(),
   agent_id: text('agent_id'),
   team_id: text('team_id'),
   member_account_id: text('member_account_id'),

@@ -12,6 +12,7 @@ import { payoutAddressForUser } from '@/lib/external-settlement'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
 import { createLedgerTrade, ensureAdminFeeRecipient } from '@/lib/settlement'
 import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy'
+import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets'
 import { expireTradePayment } from '@/lib/trade-funding'
 import { withServiceReservationLock } from '@/lib/service-reservation-lock'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
@@ -131,6 +132,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
             payment_due_at: new Date(Date.now() + 30 * 60_000).toISOString(), status: 'pending',
             auto_confirm_at: new Date(Date.now() + (30 * 60 + 259200) * 1000).toISOString(),
           }).returning())[0]
+      if (rail !== 'ledger') await attributeOrganizationTrade(tx, principal.agentId, trade, totalMinor, now)
       const [order] = await tx.insert(service_orders).values({
         id: crypto.randomUUID(), service_id: id, listing_id: listing.id, trade_id: trade.id,
         buyer_id: principal.userId, client_reference: reference, objective: request.objective,
@@ -150,7 +152,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       }
       return { order, trade, idempotent: false }
     })
-    return await withServiceReservationLock(id, async () => {
+    return await withServiceReservationLock(id, () => withOrganizationBuyerLock(principal.agentId, principal.userId, async () => {
       for (let attempt = 0; attempt < 6; attempt += 1) {
         try { return await reserveOnce() }
         catch (error) {
@@ -159,7 +161,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         }
       }
       throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Service reservation unavailable', 503, true)
-    })
+    }))
   } catch (error) {
     const raced = await replay(args)
     if (raced) return raced

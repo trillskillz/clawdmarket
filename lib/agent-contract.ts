@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.31'
+export const AGENT_CONTRACT_VERSION = '1.32'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -590,6 +590,18 @@ export const AGENT_ACTIONS: AgentAction[] = [
     } } },
   { id: 'revoke_organization_service_account', label: 'Revoke service account', description: 'Immediately revoke an owned organization read key.',
     method: 'DELETE', endpoint: '/api/organizations/{id}/service-accounts/{accountId}', auth: 'owner-account', payment: null, required: ['id', 'accountId'] },
+  { id: 'inspect_organization_budget', label: 'Inspect organization budget', description: 'Owner-only USD ceilings and current attributed or conservatively counted agent reservations.',
+    method: 'GET', endpoint: '/api/organizations/{id}/budget', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'set_organization_budget', label: 'Set organization budget', description: 'Owner-only versioned hard ceilings for agents currently assigned to this organization.',
+    method: 'PUT', endpoint: '/api/organizations/{id}/budget', auth: 'owner-account', payment: null,
+    required: ['id', 'expected_version', 'max_per_execution', 'max_daily', 'max_monthly'],
+    body_schema: { type: 'object', additionalProperties: false,
+      required: ['expected_version', 'max_per_execution', 'max_daily', 'max_monthly'], properties: {
+        expected_version: { type: 'integer', minimum: 0 },
+        max_per_execution: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
+        max_daily: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
+        max_monthly: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
+      } } },
   { id: 'create_organization_team', label: 'Create organization team', description: 'Create an idempotent team within an owned organization.',
     method: 'POST', endpoint: '/api/organizations/{id}/teams', auth: 'owner-account', payment: null, required: ['id', 'slug', 'name'],
     body_schema: { type: 'object', required: ['slug', 'name'], additionalProperties: false, properties: {
@@ -1635,6 +1647,13 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/organizations/{id}/service-accounts/{accountId}': { delete: { operationId: 'revoke_organization_service_account', summary: 'Revoke a read-only organization credential', security: ownerAuthenticated,
       parameters: [tradeIdParameter, { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       responses: { 200: { description: 'Credential revoked or idempotent replay' }, 404: { description: 'Credential not owned' } } } },
+    '/api/organizations/{id}/budget': {
+      get: { operationId: 'inspect_organization_budget', summary: 'Inspect owner-only budget and current usage', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], responses: { 200: { description: 'Current ceilings and conservative reservation usage' }, 404: { description: 'Organization not owned' } } },
+      put: { operationId: 'set_organization_budget', summary: 'Set versioned USD caps for assigned agent buyers', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('set_organization_budget').body_schema } } },
+        responses: { 200: { description: 'Budget updated or idempotent replay' }, 409: { description: 'Expected version conflict' }, 503: { description: 'Enterprise foundation disabled' } } },
+    },
     '/api/organizations/{id}/teams/{teamId}': { patch: { operationId: 'archive_organization_team', summary: 'Archive an empty team', security: ownerAuthenticated,
       parameters: [tradeIdParameter, { name: 'teamId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       requestBody: { required: true, content: { 'application/json': { schema: getAction('archive_organization_team').body_schema } } },
@@ -1851,7 +1870,7 @@ Each order also requires an objective; optional structured input is visible only
 
 ## Enterprise accounting foundation
 
-An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`POST /api/organizations/{id}/teams\` creates an owner-only team; \`PATCH /api/organizations/{id}/teams/{teamId}\` archives it after its assignments are removed. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center and optionally an active team; \`DELETE\` removes the assignment. An owner may invite a specific account ID with \`POST /api/organizations/{id}/invitations\`; that account sees the pending invitation through \`GET /api/organizations/invitations\` and accepts it with \`POST /api/organizations/invitations/{invitationId}/accept\`. The owner can cancel pending invitations and revoke active members. Members have viewer-only access to organization names and team metadata; assignments, audit, invitations, and membership lists remain owner-only. Owners can issue and revoke expiring \`cmo_\` organization read keys through \`/api/organizations/{id}/service-accounts\`; keys can read only their organization summary and teams and cannot authenticate to routing or checkout. Neither membership, service credential, nor team assignment grants ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migrations.
+An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`POST /api/organizations/{id}/teams\` creates an owner-only team; \`PATCH /api/organizations/{id}/teams/{teamId}\` archives it after its assignments are removed. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center and optionally an active team; \`DELETE\` removes the assignment. The owner can set versioned per-execution, UTC-day, and UTC-month USD ceilings through \`PUT /api/organizations/{id}/budget\`. These are enforced transactionally for trades opened by currently assigned agent buyers; immutable trade-time cost-center attribution survives reassignment. An owner may invite a specific account ID with \`POST /api/organizations/{id}/invitations\`; that account sees the pending invitation through \`GET /api/organizations/invitations\` and accepts it with \`POST /api/organizations/invitations/{invitationId}/accept\`. The owner can cancel pending invitations and revoke active members. Members have viewer-only access to organization names and team metadata; assignments, audit, budgets, invitations, and membership lists remain owner-only. Owners can issue and revoke expiring \`cmo_\` organization read keys through \`/api/organizations/{id}/service-accounts\`; keys can read only their organization summary and teams and cannot authenticate to routing or checkout. Neither membership, service credential, nor team assignment grants ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migrations; previously set budgets remain active when the flag is off.
 
 ## Authentication
 

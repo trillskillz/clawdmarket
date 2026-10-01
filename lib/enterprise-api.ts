@@ -14,3 +14,22 @@ export async function enterpriseMutationAccount(request: NextRequest) {
     return { account: null, error: enterpriseFailure('CSRF_REJECTED', 'CSRF validation failed', 403) }
   return { account, error: null }
 }
+
+export async function retryEnterpriseBusy<T>(operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try { return await operation() }
+    catch (error) {
+      let current: unknown = error
+      let busy = false
+      for (let depth = 0; current && depth < 5; depth += 1) {
+        if (typeof current === 'object' && 'message' in current && /SQLITE_BUSY|database is locked/i.test(String(current.message))) {
+          busy = true; break
+        }
+        current = typeof current === 'object' && 'cause' in current ? current.cause : null
+      }
+      if (!busy || attempt === 4) throw error
+      await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
+    }
+  }
+  throw new Error('enterprise_busy_retry_exhausted')
+}

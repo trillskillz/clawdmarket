@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { and, eq, gt } from 'drizzle-orm'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { organizations, organization_service_accounts, organization_audit_events } from '@/lib/schema'
 import { isUserBanned } from '@/lib/agent-moderation'
 import { withKeyedWriteLock } from '@/lib/service-reservation-lock'
+import { hashAgentApiKey } from '@/lib/registered-agent-auth'
 
 export const serviceAccountInput = z.object({
   client_reference: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
@@ -14,7 +15,8 @@ export const serviceAccountInput = z.object({
 }).strict()
 
 function credentialHash(token: string) {
-  return createHash('sha256').update(token).digest('hex')
+  // The shared digest is keyed and domain separated; this token retains a distinct parser.
+  return hashAgentApiKey(`organization-read:${token}`)
 }
 
 export function serviceAccountDto(row: typeof organization_service_accounts.$inferSelect) {

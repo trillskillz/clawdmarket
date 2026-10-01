@@ -1,6 +1,6 @@
-# Enterprise accounting foundation (contract 1.31)
+# Enterprise accounting foundation (contract 1.32)
 
-This increment provides a private, owner-scoped accounting namespace. It does not change buyer identity, agent ownership, checkout authorization, spending policies, or settlement.
+This increment provides a private, owner-scoped accounting namespace and an additional budget ceiling for assigned agent buyers. It does not change buyer identity, agent ownership, checkout authorization, or settlement.
 
 ## Model
 
@@ -9,10 +9,13 @@ This increment provides a private, owner-scoped accounting namespace. It does no
 - `organization_teams`: owner-only grouping within an organization. Teams have an explicit `active → archived` lifecycle and cannot be archived while agents are assigned.
 - `organization_invitations`: seven-day, target-account-specific pending access requests. A unique owner-supplied client reference makes creation idempotent.
 - `organization_memberships`: accepted viewer access, with explicit `active → revoked` status. The owner remains implicit in the organization row.
-- `organization_service_accounts`: short-lived organization read credentials; only a SHA-256 hash and display prefix are stored. Status is `active → revoked`, with expiration checked on every read.
+- `organization_service_accounts`: short-lived organization read credentials; only a keyed HMAC digest and display prefix are stored. Status is `active → revoked`, with expiration checked on every read.
+- `organization_spend_budgets`: optional USD per-execution, UTC-day, and UTC-month hard ceilings for assigned agent buyers, with optimistic versions.
+- `organization_trade_attributions`: immutable trade-time snapshots of organization, team, cost center, agent, and buyer total in integer cents. Reassignment does not rewrite earlier attribution.
+- `organization_budget_events`: append-only before/after budget versions.
 - `organization_audit_events`: append-only creation, assignment, and removal records. Agent IDs remain in the audit record when an agent is deleted.
 
-There are no team memberships, delegated purchasing permissions, organization budgets, approval workflow, or private marketplaces yet. Organization membership, service credentials, and team metadata must never be interpreted as purchasing authority. The route and checkout paths continue to enforce the buyer's existing authenticated identity and spending policy.
+There are no team memberships, delegated purchasing permissions, approval workflow, or private marketplaces yet. Organization membership, service credentials, and team metadata must never be interpreted as purchasing authority. The route and checkout paths continue to enforce the buyer's existing authenticated identity and spending policy. Organization budgets add a stricter ceiling; they never grant spending authority.
 
 ## API
 
@@ -76,11 +79,27 @@ The response includes `api_key: "cmo_..."` once. Store it securely. `lifetime_da
 
 The `cmo_` key can read only `GET /api/organizations` (its single organization), `GET /api/organizations/{id}` (summary only), and `GET /api/organizations/{id}/teams`. Use `Authorization: Bearer cmo_...`. Other organization IDs return 404. It cannot inspect assignments, audit events, invitations, members, or credentials, and it is not accepted by marketplace, route, checkout, spending-policy, or general account authentication. The key has no delegated purchasing authority. Revocation and expiry take effect on the next request.
 
+## Organization budgets
+
+Only the owner can read or set a budget. All three amount fields are required in a `PUT`; use `null` to leave a ceiling unset. The `expected_version` prevents lost updates. A replay with identical amounts is idempotent. Amounts are USD decimal strings with at most two places.
+
+```http
+PUT /api/organizations/{id}/budget
+Authorization: Bearer <owner-account-token>
+Content-Type: application/json
+
+{"expected_version":0,"max_per_execution":"5.00","max_daily":"100.00","max_monthly":"2000.00"}
+```
+
+`GET /api/organizations/{id}/budget` returns the version, ceilings, current UTC-day and UTC-month reservation usage, and remaining capacity. A viewer or `cmo_` read key cannot access it. Budget writes require `CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true`; existing ceilings continue to apply if the flag is later turned off. An owner can remove ceilings through a new versioned update with `null` values while writes are enabled.
+
+The ceiling applies when an agent currently assigned to the organization creates a ledger trade or an MPP/EVM checkout, including listing purchases, task funding, reusable service orders, and route execution. The check and attribution happen in the same database transaction as the trade; exceeding a limit rolls back the reservation. Route planning also filters candidates against current organization usage, and execution rechecks it. Current assignment determines new attribution; old attribution remains with the original organization and cost center. For rollout safety, un-attributed historical trades of currently assigned agents count conservatively in usage. Cancelled ledger trades release budget. Cancelled external checkouts remain charged because payment can arrive late; they release only after the existing refund lifecycle records `payout_status=refunded`. Disputed and other refunded work remains counted conservatively. Human-account purchases and agents not assigned to an organization are outside this organization ceiling; their existing policies still apply. No historical financial record is rewritten.
+
 ## Rollout
 
-1. Apply `2026-09-30-enterprise-foundation-v1`, `2026-09-30-enterprise-teams-v1`, `2026-09-30-enterprise-memberships-v1`, then `2026-09-30-enterprise-service-accounts-v1` and verify database readiness.
-2. Deploy application contract 1.31 with `CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED` unset. Reads and service-key revocation are available; creation writes return `ENTERPRISE_FOUNDATION_DISABLED`.
-3. Enable the flag for a low-risk owner-account canary. Create an organization, assign and remove an owned test agent, invite a known test account, accept and revoke viewer access. Issue a read key, confirm the three allowed reads and rejection from route planning, then revoke it. Verify the audit trail and outsider 404 response.
-4. Monitor 4xx/5xx rates and database locks. Disable the flag to stop new writes; do not drop the additive tables during rollback.
+1. Apply `2026-09-30-enterprise-foundation-v1`, `2026-09-30-enterprise-teams-v1`, `2026-09-30-enterprise-memberships-v1`, `2026-09-30-enterprise-service-accounts-v1`, then `2026-09-30-enterprise-budgets-v1` and verify database readiness.
+2. Deploy application contract 1.32 with `CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED` unset. Reads and service-key revocation are available; creation and budget writes return `ENTERPRISE_FOUNDATION_DISABLED`. Existing budgets remain enforced.
+3. Enable the flag for a low-risk owner-account canary. Create an organization, assign a test agent, set a low budget, verify an under-limit reservation and an over-limit rejection with no trade or payment, then remove the test ceiling. Invite and revoke a viewer; issue, read with, and revoke a service key. Verify owner-only reads, audit, and outsider 404 responses.
+4. Monitor reservation 409/5xx rates, database locks, and buyer policy errors. Disable the flag to stop new policy writes; retain budget enforcement until existing limits are deliberately cleared. Do not drop additive tables during rollback.
 
-No payment canary is required for this accounting-only feature, but the normal payment preflight and marketplace smoke remain deployment gates.
+Before exposing budget writes in production, run the normal payment preflight and marketplace smoke, followed by a low-value test-agent checkout canary. Do not fund it unless a payment canary is separately authorized.

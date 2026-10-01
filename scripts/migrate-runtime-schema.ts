@@ -656,6 +656,30 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS organization_service_accounts_org_status_idx ON organization_service_accounts(organization_id, status)')
         await ensureColumns(database, 'organization_audit_events', { service_account_id: 'TEXT' })
       } },
+      { id: '2026-09-30-enterprise-budgets-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_spend_budgets (
+          organization_id TEXT PRIMARY KEY NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          max_per_execution_minor INTEGER, max_daily_minor INTEGER, max_monthly_minor INTEGER,
+          version INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          CHECK(max_per_execution_minor IS NULL OR max_per_execution_minor > 0),
+          CHECK(max_daily_minor IS NULL OR max_daily_minor > 0),
+          CHECK(max_monthly_minor IS NULL OR max_monthly_minor > 0)
+        )`)
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_trade_attributions (
+          trade_id TEXT PRIMARY KEY NOT NULL REFERENCES trades(id) ON DELETE RESTRICT,
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          agent_id TEXT NOT NULL, team_id TEXT, cost_center TEXT NOT NULL,
+          total_minor INTEGER NOT NULL CHECK(total_minor > 0), created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_trade_attributions_org_created_idx ON organization_trade_attributions(organization_id, created_at)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_budget_events (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          actor_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          version INTEGER NOT NULL, old_budget_json TEXT, new_budget_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_budget_events_org_version_idx ON organization_budget_events(organization_id, version)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

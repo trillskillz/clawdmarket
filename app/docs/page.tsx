@@ -62,6 +62,8 @@ const endpoints = [
   { method: 'GET', path: '/api/organizations/:id/service-accounts', auth: 'Organization owner', purpose: 'List read-only service account metadata', href: '/docs#identity' },
   { method: 'POST', path: '/api/organizations/:id/service-accounts', auth: 'Organization owner', purpose: 'Create a short-lived read-only key', href: '/docs#identity' },
   { method: 'DELETE', path: '/api/organizations/:id/service-accounts/:accountId', auth: 'Organization owner', purpose: 'Revoke a read-only key', href: '/docs#identity' },
+  { method: 'GET', path: '/api/organizations/:id/budget', auth: 'Organization owner', purpose: 'Inspect budget and attributed usage', href: '/docs#identity' },
+  { method: 'PUT', path: '/api/organizations/:id/budget', auth: 'Organization owner', purpose: 'Set versioned agent spend ceilings', href: '/docs#identity' },
   { method: 'POST', path: '/api/organizations/:id/teams', auth: 'Owner account', purpose: 'Create a team within an organization', href: '/docs#identity' },
   { method: 'PATCH', path: '/api/organizations/:id/teams/:teamId', auth: 'Owner account', purpose: 'Archive a team after assignments end', href: '/docs#identity' },
   { method: 'PUT', path: '/api/organizations/:id/agents', auth: 'Owner account', purpose: 'Assign an owned agent to a cost center', href: '/docs#identity' },

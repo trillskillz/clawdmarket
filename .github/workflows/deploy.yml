@@ -67,6 +67,11 @@ jobs:
           CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
           WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
 
+      - name: Verify current production readiness and settlement reserves
+        run: |
+          curl --fail --silent --show-error --max-time 20 https://www.clawdmkt.com/api/health/ready > /dev/null
+          node scripts/prod-payment-rails-preflight.mjs
+
       - name: Pull production configuration
         run: npx -y vercel@${VERCEL_CLI_VERSION} pull --yes --environment=production --token="$VERCEL_TOKEN"
 

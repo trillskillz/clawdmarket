@@ -10,6 +10,7 @@ import { calculateTradeFinancials, createLedgerTrade, ensureAdminFeeRecipient, T
 import { deliverWebhookEvent } from '@/lib/webhook-delivery'
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy'
 import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy'
+import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets'
 import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy'
 import { getPaymentReadiness } from '@/lib/payment-config'
 import { payoutAddressForUser } from '@/lib/external-settlement'
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       throw new FundingError('The assigned agent must configure a payout wallet before external funding', 409)
     }
     const feeRecipient = await ensureAdminFeeRecipient()
-    const result = await db.transaction(async (tx) => {
+    const result = await withOrganizationBuyerLock(principal.agentId, principal.userId, () => db.transaction(async (tx) => {
       const [currentTask] = await tx.select().from(tasks).where(eq(tasks.id, id)).limit(1)
       if (currentTask.status !== 'assigned' || currentTask.winningBidId !== task.winningBidId) throw new FundingError('Task changed; reload before funding', 409)
       const [bid] = await tx.select().from(bids).where(and(eq(bids.id, task.winningBidId!), eq(bids.taskId, id), eq(bids.status, 'accepted'))).limit(1)
@@ -111,10 +112,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           payment_due_at: new Date(Date.now() + 30 * 60_000).toISOString(),
           status: 'pending',
         }).returning()
+        await attributeOrganizationTrade(tx, principal.agentId, trade, Math.round(quote.totalCost * 100))
       }
       await tx.update(task_workspaces).set({ trade_id: trade.id, agreed_price: price }).where(eq(task_workspaces.task_id, id))
       return { trade, created: true }
-    })
+    }))
     if (result.created) await Promise.allSettled([
       deliverWebhookEvent(principal.userId, 'trade.created', { task_id: id, trade_id: result.trade.id }),
       deliverWebhookEvent(sellerId, 'trade.created', { task_id: id, trade_id: result.trade.id }),

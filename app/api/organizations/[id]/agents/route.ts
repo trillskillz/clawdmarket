@@ -7,6 +7,7 @@ import { validateCsrf } from '@/lib/csrf'
 import { assignmentInput, enterpriseFoundationEnabled } from '@/lib/enterprise-foundation'
 import { internalErrorResponse } from '@/lib/api-error'
 import { rateLimit } from '@/lib/rate-limit'
+import { retryEnterpriseBusy } from '@/lib/enterprise-api'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +30,7 @@ async function mutate(request: NextRequest, id: string, operation: 'assign' | 'u
     const agent_id = parsed.data.agent_id
     const cost_center = 'cost_center' in parsed.data ? parsed.data.cost_center as string : undefined
     const team_id = 'team_id' in parsed.data ? parsed.data.team_id as string | undefined : undefined
-    const result = await db.transaction(async (tx) => {
+    const result = await retryEnterpriseBusy(() => db.transaction(async (tx) => {
       const [organization] = await tx.select({ id: organizations.id }).from(organizations).where(and(
         eq(organizations.id, id), eq(organizations.owner_account_id, owner.userId))).limit(1)
       if (!organization) return 'not_found' as const
@@ -62,7 +63,7 @@ async function mutate(request: NextRequest, id: string, operation: 'assign' | 'u
         actor_account_id: owner.userId, action: 'agent_unassigned', agent_id, team_id: current.team_id,
         cost_center: current.cost_center, created_at: new Date() })
       return 'changed' as const
-    })
+    }))
     if (result === 'not_found') return failure('ORGANIZATION_NOT_FOUND', 'Organization not found', 404)
     if (result === 'invalid') return failure('INVALID_AGENT_ASSIGNMENT', 'Cost center is required', 400)
     if (result === 'team_not_found') return failure('TEAM_NOT_FOUND', 'Active team not found in organization', 404)

@@ -7,6 +7,7 @@ import { validateCsrf } from '@/lib/csrf'
 import { organizationDto, organizationInput, enterpriseFoundationEnabled } from '@/lib/enterprise-foundation'
 import { internalErrorResponse } from '@/lib/api-error'
 import { rateLimit } from '@/lib/rate-limit'
+import { retryEnterpriseBusy } from '@/lib/enterprise-api'
 import { resolveOrganizationServiceAccount } from '@/lib/organization-service-accounts'
 
 export const dynamic = 'force-dynamic'
@@ -62,14 +63,14 @@ export async function POST(request: NextRequest) {
     const limit = await rateLimit(`organization-create:${owner.userId}`, { interval: 86_400_000, maxRequests: 20, failClosed: true })
     if (!limit.success) return failure('ORGANIZATION_RATE_LIMIT', 'Organization creation rate limit reached', 429)
     try {
-      const row = await db.transaction(async (tx) => {
+      const row = await retryEnterpriseBusy(() => db.transaction(async (tx) => {
         const now = new Date()
         const [created] = await tx.insert(organizations).values({ id: crypto.randomUUID(), owner_account_id: owner.userId,
           client_reference, name, created_at: now, updated_at: now }).returning()
         await tx.insert(organization_audit_events).values({ id: crypto.randomUUID(), organization_id: created.id,
           actor_account_id: owner.userId, action: 'created', created_at: now })
         return created
-      })
+      }))
       return NextResponse.json({ organization: organizationDto(row), idempotent: false }, { status: 201, headers: { 'Cache-Control': 'private, no-store' } })
     } catch (error) {
       const raced = await replay()
