@@ -15,6 +15,17 @@ export const outputSchemaV1 = z.object({
   }
 })
 
+/** Empty schemas predate input enforcement and remain unrestricted for compatibility. */
+export function checkServiceInput(input: Record<string, unknown>, schemaInput: unknown): { status: 'valid' | 'invalid' | 'unsupported'; failure: string | null } {
+  if (schemaInput && typeof schemaInput === 'object' && !Array.isArray(schemaInput) && Object.keys(schemaInput).length === 0) {
+    return { status: 'valid', failure: null }
+  }
+  const schema = outputSchemaV1.safeParse(schemaInput)
+  if (!schema.success) return { status: 'unsupported', failure: 'unsupported_input_schema' }
+  const result = verifyOutputSchema(input, schema.data)
+  return { status: result.status === 'passed' ? 'valid' : 'invalid', failure: result.failure }
+}
+
 const method = z.enum(['buyer_review', 'schema', 'source_urls'])
 export const verificationPolicySchema = z.object({
   required: z.literal(true).default(true),
@@ -62,7 +73,7 @@ export function verifyOutputSchema(artifact: Record<string, unknown> | undefined
   else {
     for (const key of schema.required) if (!Object.hasOwn(artifact, key)) failures.push(`missing:${key}`)
     for (const [key, value] of Object.entries(artifact)) {
-      const definition = schema.properties[key]
+      const definition = Object.hasOwn(schema.properties, key) ? schema.properties[key] : undefined
       if (!definition) {
         if (schema.additionalProperties === false) failures.push(`unexpected:${key}`)
       } else if (!matchesType(value, definition.type)) failures.push(`type:${key}`)

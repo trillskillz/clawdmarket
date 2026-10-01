@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const maxAttempts = Math.max(1, Math.min(3, Number((JSON.parse(plan.retry_policy) as { max_attempts?: number }).max_attempts || 1)))
     let lastCode = 'ROUTE_NO_ELIGIBLE_PROVIDER'
-    const providerFailures = new Set(['SERVICE_UNAVAILABLE', 'SERVICE_CAPACITY_OR_PRICE_CHANGED', 'SERVICE_PRICE_CHANGED', 'SELLER_PAYOUT_REQUIRED', 'PAYMENT_RAIL_UNAVAILABLE', 'REFERENCE_FLEET_PAID_SERVICES_LOCKED'])
+    const providerFailures = new Set(['SERVICE_UNAVAILABLE', 'SERVICE_CAPACITY_OR_PRICE_CHANGED', 'SERVICE_PRICE_CHANGED', 'SERVICE_INPUT_INVALID', 'SERVICE_INPUT_SCHEMA_UNSUPPORTED', 'SELLER_PAYOUT_REQUIRED', 'PAYMENT_RAIL_UNAVAILABLE', 'REFERENCE_FLEET_PAID_SERVICES_LOCKED'])
     for (let index = 0; index < Math.min(maxAttempts, candidates.length); index += 1) {
       const candidate = candidates[index]
       const attemptNumber = index + 1

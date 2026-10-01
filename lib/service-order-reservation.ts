@@ -18,6 +18,7 @@ import { withServiceReservationLock } from '@/lib/service-reservation-lock'
 import { queueFundedWorkOrder } from '@/lib/service-order-dispatch'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
 import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
+import { checkServiceInput } from '@/lib/verification-policy'
 
 export class ServiceOrderReservationError extends Error {
   constructor(public readonly code: string, message: string, public readonly status = 409, public readonly retryable = false) {
@@ -87,6 +88,11 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     if (service.seller_id.startsWith('user_agent_') && await referenceFleetPaidServicePublicationLocked(service.seller_id.slice('user_agent_'.length))) {
       throw new ServiceOrderReservationError('REFERENCE_FLEET_PAID_SERVICES_LOCKED', 'Managed reference agents cannot sell paid services')
     }
+    let inputSchema: unknown
+    try { inputSchema = JSON.parse(service.input_schema) } catch { inputSchema = null }
+    const inputCheck = checkServiceInput(request.input, inputSchema)
+    if (inputCheck.status === 'unsupported') throw new ServiceOrderReservationError('SERVICE_INPUT_SCHEMA_UNSUPPORTED', 'Service input schema is unsupported')
+    if (inputCheck.status === 'invalid') throw new ServiceOrderReservationError('SERVICE_INPUT_INVALID', `Order input does not match service schema: ${inputCheck.failure}`, 422)
     if (request.expected_price !== undefined && service.price_minor !== request.expected_price) throw new ServiceOrderReservationError('SERVICE_PRICE_CHANGED', 'Service price changed; re-plan before retrying')
     await requireNewPaymentsOpen()
     const expired = await db.select({ trade: trades }).from(service_orders)
@@ -114,6 +120,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         .set({ active_orders: sql`${service_definitions.active_orders} + 1`, updated_at: now })
         .where(and(eq(service_definitions.id, id), eq(service_definitions.status, 'active'),
           eq(service_definitions.price_minor, service.price_minor),
+          eq(service_definitions.input_schema, service.input_schema),
           sql`${service_definitions.active_orders} < ${service_definitions.max_concurrency}`))
         .returning({ id: service_definitions.id })
       if (!claimed) throw new ServiceOrderReservationError('SERVICE_CAPACITY_OR_PRICE_CHANGED', 'Service capacity or price changed; re-plan before retrying')

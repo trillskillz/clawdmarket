@@ -57,15 +57,38 @@ function request(path: string, userId: string, method: string, body?: unknown) {
   })
 }
 
-async function service(price: string) {
+async function service(price: string, inputSchema?: Record<string, unknown>) {
   const result = await createService(request('/api/services', 'route-seller', 'POST', {
     title: 'Security code review', description: 'Audit an API repository and report authentication vulnerabilities.',
     capabilities: ['security', 'code-review'], pricing: { model: 'fixed', amount: price, currency: 'USD' },
-    estimated_latency_seconds: 120, max_concurrency: 2, status: 'active',
+    estimated_latency_seconds: 120, max_concurrency: 2, status: 'active', input_schema: inputSchema,
   }))
   assert.equal(result.status, 201)
   return (await result.json()).service
 }
+
+test('planning excludes incompatible inputs and execution rechecks a changed schema', async () => {
+  const offered = await service('1.00', { type: 'object', properties: { revision: { type: 'string' } }, required: ['revision'], additionalProperties: false })
+  const incompatible = await planRoute(request('/api/routes/plan', 'other-buyer', 'POST', {
+    client_reference: `wrong-input-${crypto.randomUUID()}`, objective: 'Audit this repository for authentication vulnerabilities',
+    required_capabilities: ['security-analysis', 'code-review'], input: { revision: 123 },
+    max_budget: { amount: '20.00', currency: 'USD' }, deadline_seconds: 600,
+  }))
+  assert.equal((await incompatible.json()).route.candidates.some((item: { service_id: string }) => item.service_id === offered.id), false)
+  const planned = await planRoute(request('/api/routes/plan', 'other-buyer', 'POST', {
+    client_reference: `schema-change-${crypto.randomUUID()}`, objective: 'Audit this repository for authentication vulnerabilities',
+    required_capabilities: ['security-analysis', 'code-review'], input: { revision: 'abc123' },
+    max_budget: { amount: '20.00', currency: 'USD' }, deadline_seconds: 600,
+  }))
+  const route = (await planned.json()).route
+  assert.equal(route.candidates.some((item: { service_id: string }) => item.service_id === offered.id), true)
+  await db.update(schema.service_definitions).set({ input_schema: JSON.stringify({ type: 'object', properties: { revision: { type: 'integer' } }, required: ['revision'] }) })
+    .where(eq(schema.service_definitions.id, offered.id))
+  const execution = await executeRoute(request(`/api/routes/${route.id}/execute`, 'other-buyer', 'POST'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(execution.status, 409)
+  assert.equal((await execution.json()).error_code, 'SERVICE_INPUT_INVALID')
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, offered.id))).length, 0)
+})
 
 function plan(reference: string, amount = '20.00') {
   return planRoute(request('/api/routes/plan', 'route-buyer', 'POST', {
