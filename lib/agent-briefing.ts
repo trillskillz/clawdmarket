@@ -50,8 +50,8 @@ export function buildAgentBriefing(input: {
       priority: 100,
       title: string(trade.listing_title) || `Trade ${id}`,
       reason: 'Buyer funding is verified and the seller may need to deliver work.',
-      inspect: { method: 'GET', url: `/api/trades?trade_id=${encodeURIComponent(id)}` },
-      suggested_action: 'Inspect the trade and requirements before submitting a delivery. Do not treat an unpaid reservation as funded.',
+      inspect: { method: 'GET', url: string(trade.work_order_url) || `/api/trades?trade_id=${encodeURIComponent(id)}` },
+      suggested_action: 'Inspect the funded work order and requirements before submitting a delivery. Do not treat an unpaid reservation as funded.',
       automatic_execution: false,
     })
   }

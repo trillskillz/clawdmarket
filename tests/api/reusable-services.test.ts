@@ -18,6 +18,8 @@ let cancelTrade: typeof import('@/app/api/trades/[id]/cancel/route').POST
 let getService: typeof import('@/app/api/services/[id]/route').GET
 let changeService: typeof import('@/app/api/services/[id]/route').PATCH
 let listServices: typeof import('@/app/api/services/route').GET
+let getWorkOrder: typeof import('@/app/api/trades/[id]/work-order/route').GET
+let listTrades: typeof import('@/app/api/trades/route').GET
 const sellerId = 'reusable-seller'
 const buyerId = 'reusable-buyer'
 const treasury = privateKeyToAccount(`0x${'77'.repeat(32)}`)
@@ -44,9 +46,12 @@ before(async () => {
   getService = (await import('@/app/api/services/[id]/route')).GET
   changeService = (await import('@/app/api/services/[id]/route')).PATCH
   listServices = (await import('@/app/api/services/route')).GET
+  getWorkOrder = (await import('@/app/api/trades/[id]/work-order/route')).GET
+  listTrades = (await import('@/app/api/trades/route')).GET
   await db.insert(schema.users).values([
     { id: sellerId, name: 'Reusable Seller', email: 'reusable-seller@test.invalid', password_hash: 'unused', role: 'human' },
     { id: buyerId, name: 'Reusable Buyer', email: 'reusable-buyer@test.invalid', password_hash: 'unused', role: 'human' },
+    { id: 'reusable-outsider', name: 'Outsider', email: 'reusable-outsider@test.invalid', password_hash: 'unused', role: 'human' },
   ])
   await db.insert(schema.payout_addresses).values({ user_id: sellerId, address: treasury.address })
 })
@@ -177,6 +182,49 @@ test('public service DTO contains structured pricing and readiness without priva
   assert.equal(publicService.readiness.purchasable, true)
   assert.equal(JSON.stringify(publicService).includes('reusable-seller@test.invalid'), false)
   assert.equal('seller_id' in publicService, false)
+})
+
+test('party work order is durable, private, and seller-readable only after funding', async () => {
+  const offered = await service()
+  const created = await order(offered.id, `pull-dispatch-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade, order: savedOrder } = await created.json()
+  const path = `/api/trades/${trade.id}/work-order`
+  const params = { params: Promise.resolve({ id: trade.id as string }) }
+  const read = (userId?: string) => getWorkOrder(new NextRequest(`http://localhost${path}`, {
+    headers: userId ? { Authorization: `Bearer ${token({ userId, email: `${userId}@test.invalid`, role: 'human' })}` } : {},
+  }), params)
+  assert.equal((await read()).status, 401)
+  assert.equal((await read('reusable-outsider')).status, 404)
+  const premature = await read(sellerId)
+  assert.equal(premature.status, 409)
+  assert.equal(JSON.stringify(await premature.json()).includes('abc123'), false)
+  const buyerView = await read(buyerId)
+  assert.equal(buyerView.status, 200)
+  assert.deepEqual((await buyerView.json()).work_order.input, { revision: 'abc123' })
+  const { advanceServiceOrder } = await import('@/lib/service-order-state')
+  await db.transaction(async (tx) => {
+    await tx.update(schema.trades).set({ status: 'escrow_held', funded_at: new Date().toISOString() })
+      .where(eq(schema.trades.id, trade.id))
+    await advanceServiceOrder(tx, trade.id, 'funded')
+  })
+  const funded = await read(sellerId)
+  assert.equal(funded.status, 200)
+  assert.equal(funded.headers.get('cache-control'), 'private, no-store')
+  const body = await funded.json()
+  assert.equal(body.work_order.id, savedOrder.id)
+  assert.deepEqual(body.work_order.input, { revision: 'abc123' })
+  assert.deepEqual(body.work_order.capabilities, ['code-review'])
+  assert.deepEqual(body.work_order.delivery, { method: 'POST', url: `/api/trades/${trade.id}/delivery` })
+  assert.equal(JSON.stringify(body).includes('reusable-buyer@test.invalid'), false)
+  assert.equal('buyer_id' in body.work_order, false)
+  const listed = await listTrades(new NextRequest('http://localhost/api/trades?limit=100', {
+    headers: { Authorization: `Bearer ${token({ userId: sellerId, email: `${sellerId}@test.invalid`, role: 'human' })}` },
+  }))
+  assert.equal(listed.status, 200)
+  const item = (await listed.json()).trades.find((candidate: { id: string }) => candidate.id === trade.id)
+  assert.equal(item.service_order_id, savedOrder.id)
+  assert.equal(item.work_order_url, path)
 })
 
 test('operator reconciliation releases a terminal order left by an older worker exactly once', async () => {

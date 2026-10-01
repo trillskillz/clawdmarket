@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users, wallets, fee_errors, ratings } from '@/lib/schema';
+import { trades, listings, users, wallets, fee_errors, ratings, service_orders } from '@/lib/schema';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
@@ -449,6 +449,7 @@ export async function GET(req: NextRequest) {
           auto_confirm_at: trades.auto_confirm_at,
           created_at: trades.created_at,
           completed_at: trades.completed_at,
+          service_order_id: sql<string | null>`(SELECT ${service_orders.id} FROM ${service_orders} WHERE ${service_orders.trade_id} = ${trades.id} LIMIT 1)`,
           rated_by_caller: sql<number>`EXISTS(
             SELECT 1 FROM ${ratings}
             WHERE ${ratings.trade_id} = ${trades.id}
@@ -466,6 +467,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       trades: userTrades.map((trade) => ({
         ...trade,
+        work_order_url: trade.service_order_id ? `/api/trades/${encodeURIComponent(trade.id)}/work-order` : null,
         checkout: trade.buyer_id === auth.userId && (
           (trade.status === 'pending' && ['mpp', 'evm'].includes(trade.payment_rail))
           || (trade.status === 'cancelled' && trade.payment_rail === 'evm' && trade.payout_status !== 'refunded')
