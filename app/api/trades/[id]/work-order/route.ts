@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { service_definitions, service_orders, trades } from '@/lib/schema'
+import { route_plans, service_definitions, service_orders, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { internalErrorResponse } from '@/lib/api-error'
+import { routeExecutionTiming } from '@/lib/route-execution-timing'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       || row.order.state === 'awaiting_funding' || row.order.state === 'cancelled')) {
       return failure('WORK_ORDER_NOT_FUNDED', 'Work order is not funded', 409)
     }
+    const [linkedRoute] = await db.select({ deadline_seconds: route_plans.deadline_seconds })
+      .from(route_plans).where(eq(route_plans.service_order_id, row.order.id)).limit(1)
     return NextResponse.json({ success: true, work_order: {
       id: row.order.id,
       trade_id: row.trade.id,
@@ -46,6 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       execution_started_at: row.order.execution_started_at?.toISOString() || null,
       trade_status: row.trade.status,
       funded_at: row.trade.funded_at,
+      execution_timing: linkedRoute ? routeExecutionTiming(linkedRoute, row.order, row.trade) : null,
       start: seller && row.trade.status === 'escrow_held' && row.order.state === 'funded'
         ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/work-order/start` } : null,
       delivery: seller ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/delivery` } : null,

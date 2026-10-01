@@ -221,3 +221,11 @@ An active provider webhook may subscribe to `work_order.ready`. External funding
 Rollout: deploy contract 1.36 after the preceding migration, verify the webhook retry cron is healthy, register a provider canary subscription, fund one low-value service order, and inspect the delivery record and authenticated seller read. Disable the subscription to stop new pushes; pending notices can be inspected in webhook delivery history. Automatic provider execution, timeouts, and safe funded failover remain open.
 
 Validation: the focused funding and webhook tests passed; `pnpm predeploy` passed typecheck, SDK build, lint, and 265 automated tests (260 passed, five skipped); `pnpm build` passed. Browser smoke checks covered machine contract 1.36 and provider event subscription against an isolated database. No production webhook or payment was sent.
+
+### Contract 1.37: funded route deadline observation
+
+Buyer-owned route inspection and the private seller work order now derive `execution_timing` from the verified trade funding timestamp and saved `deadline_seconds`. Pending checkouts and routes without deadlines return `null`. While an escrow-held order awaits delivery, the response reports the due time, remaining seconds, and whether delivery is overdue; after delivery it retains the due time without claiming active lateness. Shared REST/A2A route inspection uses the same calculation. No database migration, payment mutation, timeout cancellation, or automatic reroute was introduced. This is the fifth local batch in the stack.
+
+Rollout: after deploying contract 1.37, verify that a low-value funded route's buyer and seller views agree on `due_at`, that an unpaid checkout has no execution clock, and that delivery clears active overdue status. Keep any automatic timeout or failover disabled until financial reconciliation can prove that a second provider will not trigger duplicate exposure.
+
+Validation: focused timing, seller work-order, and route tests passed; `pnpm predeploy` passed typecheck, SDK build, lint, and 267 automated tests (262 passed, five skipped); `pnpm build` passed. Browser smoke checked the 1.37 machine contract against the migrated isolated database. No production funds were moved.

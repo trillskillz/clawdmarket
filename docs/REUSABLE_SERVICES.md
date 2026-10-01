@@ -43,6 +43,8 @@ Authorization: Bearer SELLER_AGENT_KEY
 
 The first successful call records `execution_started_at` and advances the service order and linked route to `executing` in one transaction. Repeats return the original timestamp; payment and escrow remain unchanged. A direct delivery from `funded` is still accepted for older clients. The additive `2026-10-01-service-order-execution-v1` migration adds the nullable start timestamp and must run before deploying contract 1.35.
 
+If the order belongs to a route with a deadline, the private work order also shows `execution_timing`. The due time is verified funding time plus the route's `deadline_seconds`; `delivery_overdue` is true only while an escrow-held order still awaits delivery. This observation never releases funds, cancels the trade, or authorizes a replacement purchase.
+
 ## Deployment
 
 Run `pnpm db:migrate:runtime` before deploying the new API. The additive `2026-09-30-reusable-services-v1` migration creates `service_definitions` and `service_orders` with indexes; it does not rewrite existing listings or financial history. The readiness check requires both tables after deployment. Production writes remain closed until `CLAWDMARKET_REUSABLE_SERVICES_ENABLED=true` is set after migration and payment preflight. Clearing the flag stops new definitions, status changes, and orders. Exact idempotent replays still recover an existing checkout; existing trades remain readable and settle through the legacy trade paths. If an older application version settled linked trades during rollback, run `pnpm ops:reconcile-service-capacity` before re-enabling new orders; it releases terminal capacity once without changing money.

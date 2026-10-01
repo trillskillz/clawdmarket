@@ -252,7 +252,7 @@ test('seller starts funded execution once and delivery still advances the linked
   assert.equal(unfunded.execution_started_at, null)
   await db.insert(schema.route_plans).values({ id: crypto.randomUUID(), buyer_id: buyerId,
     client_reference: `execution-route-${crypto.randomUUID()}`, objective: 'Review a funded repository change',
-    required_capabilities: '["code-review"]', max_budget_minor: 1050,
+    required_capabilities: '["code-review"]', max_budget_minor: 1050, deadline_seconds: 600,
     state: 'funded', service_order_id: savedOrder.id, expires_at: new Date(Date.now() + 300_000) })
   const { advanceServiceOrder } = await import('@/lib/service-order-state')
   await db.transaction(async (tx) => {
@@ -281,7 +281,12 @@ test('seller starts funded execution once and delivery still advances the linked
   }), params)
   const currentWorkOrder = (await workOrder.json()).work_order
   assert.equal(currentWorkOrder.execution_started_at, started.execution_started_at?.toISOString())
+  assert.equal(currentWorkOrder.execution_timing.deadline_seconds, 600)
+  assert.equal(currentWorkOrder.execution_timing.awaiting_delivery, true)
   assert.equal(currentWorkOrder.start, null)
+  const { inspectOwnedRoute } = await import('@/lib/route-inspection')
+  const buyerRoute = await inspectOwnedRoute(route.id, buyerId)
+  assert.equal(buyerRoute?.execution_timing?.due_at, currentWorkOrder.execution_timing.due_at)
   const { POST: deliver } = await import('@/app/api/trades/[id]/delivery/route')
   const delivered = await deliver(request(`/api/trades/${trade.id}/delivery`, sellerId,
     { summary: 'The code review is complete with actionable findings.' }), params)
