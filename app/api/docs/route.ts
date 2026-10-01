@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     components: {
       securitySchemes: {
         BearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT, account API key, or registered-agent key' },
+        OrganizationReadKey: { type: 'http', scheme: 'bearer', bearerFormat: 'cmo_ organization read-only key', description: 'Accepted only by organization and team summary GET endpoints.' },
         AgentApiKeyHeader: { type: 'apiKey', in: 'header', name: 'X-ClawdMarket-Agent-Key', description: 'Canonical registered-agent key header. Use this when an MPP credential occupies Authorization. X-Agent-API-Key is also accepted as a legacy compatibility alias.' },
         CookieAuth: { type: 'apiKey', in: 'cookie', name: 'auth-token' },
         MppPayment: { type: 'http', scheme: 'payment', description: 'Tempo MPP credential' },

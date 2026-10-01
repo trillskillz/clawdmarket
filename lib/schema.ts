@@ -149,6 +149,140 @@ export const api_keys = sqliteTable('api_keys', {
     .$defaultFn(() => new Date()),
 });
 
+/** Private accounting namespace. Association never grants ownership or spending authority. */
+export const organizations = sqliteTable('organizations', {
+  id: text('id').primaryKey(),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  name: text('name').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  uniqueIndex('organizations_owner_reference_idx').on(table.owner_account_id, table.client_reference),
+  index('organizations_owner_created_idx').on(table.owner_account_id, table.created_at),
+]);
+
+export const organization_teams = sqliteTable('organization_teams', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  slug: text('slug').notNull(),
+  name: text('name').notNull(),
+  status: text('status', { enum: ['active', 'archived'] }).notNull().default('active'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  uniqueIndex('organization_teams_org_slug_idx').on(table.organization_id, table.slug),
+  index('organization_teams_org_status_idx').on(table.organization_id, table.status),
+]);
+
+/** Read-only organization access. The owner is represented by organizations.owner_account_id. */
+export const organization_invitations = sqliteTable('organization_invitations', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  target_account_id: text('target_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  status: text('status', { enum: ['pending', 'accepted', 'cancelled'] }).notNull().default('pending'),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  accepted_at: integer('accepted_at', { mode: 'timestamp' }),
+  cancelled_at: integer('cancelled_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  uniqueIndex('organization_invitations_org_reference_idx').on(table.organization_id, table.client_reference),
+  index('organization_invitations_target_status_idx').on(table.target_account_id, table.status),
+]);
+
+export const organization_memberships = sqliteTable('organization_memberships', {
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  account_id: text('account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  role: text('role', { enum: ['viewer'] }).notNull().default('viewer'),
+  status: text('status', { enum: ['active', 'revoked'] }).notNull().default('active'),
+  accepted_invitation_id: text('accepted_invitation_id').notNull().references(() => organization_invitations.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.organization_id, table.account_id] }),
+  index('organization_memberships_account_status_idx').on(table.account_id, table.status),
+]);
+
+/** Dedicated read-only keys. These are never accepted by general account or marketplace authentication. */
+export const organization_service_accounts = sqliteTable('organization_service_accounts', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  name: text('name').notNull(),
+  lifetime_days: integer('lifetime_days').notNull(),
+  credential_hash: text('credential_hash').notNull(),
+  credential_prefix: text('credential_prefix').notNull(),
+  status: text('status', { enum: ['active', 'revoked'] }).notNull().default('active'),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  revoked_at: integer('revoked_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  uniqueIndex('organization_service_accounts_org_reference_idx').on(table.organization_id, table.client_reference),
+  uniqueIndex('organization_service_accounts_hash_idx').on(table.credential_hash),
+  index('organization_service_accounts_org_status_idx').on(table.organization_id, table.status),
+]);
+
+export const organization_agent_assignments = sqliteTable('organization_agent_assignments', {
+  agent_id: text('agent_id').primaryKey().references(() => agents.id, { onDelete: 'cascade' }),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  team_id: text('team_id').references(() => organization_teams.id, { onDelete: 'restrict' }),
+  cost_center: text('cost_center').notNull(),
+  assigned_at: integer('assigned_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [index('organization_assignments_org_idx').on(table.organization_id)]);
+
+/** Owner-set hard ceilings for assigned agent buyers. Null means no ceiling for that window. */
+export const organization_spend_budgets = sqliteTable('organization_spend_budgets', {
+  organization_id: text('organization_id').primaryKey().references(() => organizations.id, { onDelete: 'restrict' }),
+  max_per_execution_minor: integer('max_per_execution_minor'),
+  max_daily_minor: integer('max_daily_minor'),
+  max_monthly_minor: integer('max_monthly_minor'),
+  version: integer('version').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  check('organization_budget_per_execution_positive', sql`${table.max_per_execution_minor} IS NULL OR ${table.max_per_execution_minor} > 0`),
+  check('organization_budget_daily_positive', sql`${table.max_daily_minor} IS NULL OR ${table.max_daily_minor} > 0`),
+  check('organization_budget_monthly_positive', sql`${table.max_monthly_minor} IS NULL OR ${table.max_monthly_minor} > 0`),
+]);
+
+/** Immutable attribution at reservation time; reassignment never rewrites financial history. */
+export const organization_trade_attributions = sqliteTable('organization_trade_attributions', {
+  trade_id: text('trade_id').primaryKey().references(() => trades.id, { onDelete: 'restrict' }),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  agent_id: text('agent_id').notNull(),
+  team_id: text('team_id'),
+  cost_center: text('cost_center').notNull(),
+  total_minor: integer('total_minor').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [index('organization_trade_attributions_org_created_idx').on(table.organization_id, table.created_at),
+  check('organization_trade_attributions_total_positive', sql`${table.total_minor} > 0`)]);
+
+export const organization_budget_events = sqliteTable('organization_budget_events', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  version: integer('version').notNull(),
+  old_budget_json: text('old_budget_json'),
+  new_budget_json: text('new_budget_json').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [index('organization_budget_events_org_version_idx').on(table.organization_id, table.version)]);
+
+export const organization_audit_events = sqliteTable('organization_audit_events', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked', 'budget_updated'] }).notNull(),
+  agent_id: text('agent_id'),
+  team_id: text('team_id'),
+  member_account_id: text('member_account_id'),
+  service_account_id: text('service_account_id'),
+  cost_center: text('cost_center'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [index('organization_audit_org_created_idx').on(table.organization_id, table.created_at)]);
+
 // Completed, read-only A2A interactions are isolated from marketplace tasks
 // and all payment/escrow tables. Results expire after seven days.
 export const a2a_tasks = sqliteTable('a2a_tasks', {

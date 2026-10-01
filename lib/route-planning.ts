@@ -13,6 +13,7 @@ import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-flee
 import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
 import { supportsVerification, verificationPolicySchema, type VerificationPolicy } from '@/lib/verification-policy'
 import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from '@/lib/buyer-spend-policy'
+import { organizationBudgetForAgent, organizationBudgetUsage } from '@/lib/organization-budgets'
 
 export const routePlanInput = z.object({
   client_reference: z.string().trim().min(8).max(200),
@@ -64,6 +65,9 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
   const paymentControl = await getNewPaymentControl()
   const buyerPolicy = await loadBuyerSpendPolicy(buyerId)
   const buyerUsage = buyerPolicy ? await buyerPolicyUsage(buyerId) : null
+  const organizationBudget = buyerId.startsWith('user_agent_')
+    ? await organizationBudgetForAgent(buyerId.slice('user_agent_'.length)) : null
+  const organizationUsage = organizationBudget ? await organizationBudgetUsage(organizationBudget.organization_id) : null
   // Route execution creates an unpaid checkout; ledger would debit immediately.
   const allowedRails = (input.payment_policy.allowed_rails || ['mpp', 'evm']).filter((rail) => rail !== 'ledger'
     && (!buyerPolicy?.policy.approved_payment_rails || buyerPolicy.policy.approved_payment_rails.includes(rail)))
@@ -77,6 +81,10 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     if (!servicePolicy.success || !supportsVerification(servicePolicy.data, input.verification)) continue
     const totalMinor = service.price_minor + Math.round(service.price_minor * 0.05)
     if (totalMinor > input.max_budget.amount) continue
+    if (organizationBudget && (
+      organizationBudget.budget.max_per_execution_minor !== null && totalMinor > organizationBudget.budget.max_per_execution_minor
+      || organizationBudget.budget.max_daily_minor !== null && organizationUsage!.reserved_or_spent_today_minor + totalMinor > organizationBudget.budget.max_daily_minor
+      || organizationBudget.budget.max_monthly_minor !== null && organizationUsage!.reserved_or_spent_month_minor + totalMinor > organizationBudget.budget.max_monthly_minor)) continue
     if (buyerPolicy && (buyerPolicy.policy.max_daily !== undefined && buyerUsage!.reserved_or_spent_today_minor + totalMinor > buyerPolicy.policy.max_daily
       || buyerPolicy.policy.max_monthly !== undefined && buyerUsage!.reserved_or_spent_month_minor + totalMinor > buyerPolicy.policy.max_monthly)) continue
     if (input.deadline_seconds && (!service.estimated_latency_seconds || service.estimated_latency_seconds > input.deadline_seconds)) continue

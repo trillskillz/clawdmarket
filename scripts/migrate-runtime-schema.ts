@@ -591,6 +591,95 @@ async function main() {
         await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS workflow_nodes_workflow_key_idx ON workflow_nodes(workflow_id, node_key)')
         await database.execute('CREATE INDEX IF NOT EXISTS workflow_nodes_workflow_state_idx ON workflow_nodes(workflow_id, state)')
       } },
+      { id: '2026-09-30-enterprise-foundation-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organizations (
+          id TEXT PRIMARY KEY NOT NULL, owner_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL, name TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organizations_owner_reference_idx ON organizations(owner_account_id, client_reference)')
+        await database.execute('CREATE INDEX IF NOT EXISTS organizations_owner_created_idx ON organizations(owner_account_id, created_at)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_agent_assignments (
+          agent_id TEXT PRIMARY KEY NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          cost_center TEXT NOT NULL, assigned_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_assignments_org_idx ON organization_agent_assignments(organization_id)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_audit_events (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          actor_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          action TEXT NOT NULL, agent_id TEXT,
+          cost_center TEXT, created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_audit_org_created_idx ON organization_audit_events(organization_id, created_at)')
+      } },
+      { id: '2026-09-30-enterprise-teams-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_teams (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          slug TEXT NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active',
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organization_teams_org_slug_idx ON organization_teams(organization_id, slug)')
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_teams_org_status_idx ON organization_teams(organization_id, status)')
+        await ensureColumns(database, 'organization_agent_assignments', { team_id: 'TEXT REFERENCES organization_teams(id) ON DELETE RESTRICT' })
+        await ensureColumns(database, 'organization_audit_events', { team_id: 'TEXT' })
+      } },
+      { id: '2026-09-30-enterprise-memberships-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_invitations (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL, target_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL DEFAULT 'pending', expires_at INTEGER NOT NULL,
+          accepted_at INTEGER, cancelled_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organization_invitations_org_reference_idx ON organization_invitations(organization_id, client_reference)')
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_invitations_target_status_idx ON organization_invitations(target_account_id, status)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_memberships (
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          role TEXT NOT NULL DEFAULT 'viewer', status TEXT NOT NULL DEFAULT 'active',
+          accepted_invitation_id TEXT NOT NULL REFERENCES organization_invitations(id) ON DELETE RESTRICT,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          PRIMARY KEY(organization_id, account_id)
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_memberships_account_status_idx ON organization_memberships(account_id, status)')
+        await ensureColumns(database, 'organization_audit_events', { member_account_id: 'TEXT' })
+      } },
+      { id: '2026-09-30-enterprise-service-accounts-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_service_accounts (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL, name TEXT NOT NULL, lifetime_days INTEGER NOT NULL,
+          credential_hash TEXT NOT NULL, credential_prefix TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active', expires_at INTEGER NOT NULL,
+          revoked_at INTEGER, created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organization_service_accounts_org_reference_idx ON organization_service_accounts(organization_id, client_reference)')
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organization_service_accounts_hash_idx ON organization_service_accounts(credential_hash)')
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_service_accounts_org_status_idx ON organization_service_accounts(organization_id, status)')
+        await ensureColumns(database, 'organization_audit_events', { service_account_id: 'TEXT' })
+      } },
+      { id: '2026-09-30-enterprise-budgets-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_spend_budgets (
+          organization_id TEXT PRIMARY KEY NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          max_per_execution_minor INTEGER, max_daily_minor INTEGER, max_monthly_minor INTEGER,
+          version INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          CHECK(max_per_execution_minor IS NULL OR max_per_execution_minor > 0),
+          CHECK(max_daily_minor IS NULL OR max_daily_minor > 0),
+          CHECK(max_monthly_minor IS NULL OR max_monthly_minor > 0)
+        )`)
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_trade_attributions (
+          trade_id TEXT PRIMARY KEY NOT NULL REFERENCES trades(id) ON DELETE RESTRICT,
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          agent_id TEXT NOT NULL, team_id TEXT, cost_center TEXT NOT NULL,
+          total_minor INTEGER NOT NULL CHECK(total_minor > 0), created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_trade_attributions_org_created_idx ON organization_trade_attributions(organization_id, created_at)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_budget_events (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          actor_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          version INTEGER NOT NULL, old_budget_json TEXT, new_budget_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_budget_events_org_version_idx ON organization_budget_events(organization_id, version)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

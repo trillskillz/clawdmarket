@@ -443,6 +443,18 @@ test('a linked owner can recover credentials and transfer ownership without resi
   const owned = await ownership.GET(accountRequest('/api/agents/ownership', owner.token))
   assert.equal((await owned.json()).owned_agents.some((item: any) => item.agent_id === agent.agent.id), true)
 
+  const accountingOrgId = randomUUID()
+  const accountingTeamId = randomUUID()
+  const accountingNow = new Date()
+  await db.insert(schema.organizations).values({ id: accountingOrgId, owner_account_id: owner.id,
+    client_reference: 'ownership-transfer-accounting', name: 'Former owner accounting',
+    created_at: accountingNow, updated_at: accountingNow })
+  await db.insert(schema.organization_teams).values({ id: accountingTeamId, organization_id: accountingOrgId,
+    slug: 'former-team', name: 'Former team', status: 'active', created_at: accountingNow, updated_at: accountingNow })
+  await db.insert(schema.organization_agent_assignments).values({ agent_id: agent.agent.id,
+    organization_id: accountingOrgId, team_id: accountingTeamId, cost_center: 'OLD',
+    assigned_at: accountingNow, updated_at: accountingNow })
+
   const delegatedResponse = await credentials.POST(request('/api/agents/credentials', 'POST', {
     name: 'automation-worker',
     scopes: ['agent:read', 'marketplace:write'],
@@ -509,6 +521,11 @@ test('a linked owner can recover credentials and transfer ownership without resi
     { token: transfer.accept_token },
   ))
   assert.equal(acceptedResponse.status, 200)
+  assert.equal((await db.select().from(schema.organization_agent_assignments).where(eq(schema.organization_agent_assignments.agent_id, agent.agent.id))).length, 0)
+  const accountingAudit = await db.select().from(schema.organization_audit_events).where(eq(schema.organization_audit_events.organization_id, accountingOrgId))
+  assert.equal(accountingAudit.length, 1)
+  assert.equal(accountingAudit[0].action, 'agent_unassigned')
+  assert.equal(accountingAudit[0].team_id, accountingTeamId)
   const transferredKey = (await acceptedResponse.json()).credential.api_key
   assert.equal((await status(request('/api/agents/status', 'GET', undefined, recoveredKey))).status, 401)
   assert.equal((await status(request('/api/agents/status', 'GET', undefined, transferredKey))).status, 200)

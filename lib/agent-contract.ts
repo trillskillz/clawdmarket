@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.27'
+export const AGENT_CONTRACT_VERSION = '1.32'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -10,6 +10,7 @@ export type AgentAuth =
   | 'optional_agent_api_key'
   | 'agent_api_key'
   | 'owner-account'
+  | 'owner-or-organization-read-key'
   | 'owner-and-agent-key'
   | 'mpp'
   | 'task-owner'
@@ -547,6 +548,77 @@ export const AGENT_ACTIONS: AgentAction[] = [
     id: 'cancel_workflow', label: 'Cancel workflow', description: 'Idempotently cancel an unfunded workflow plan.',
     method: 'DELETE', endpoint: '/api/workflows/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
+  { id: 'list_organizations', label: 'List organizations', description: 'List account-accessible organizations or the single organization assigned to a read key.',
+    method: 'GET', endpoint: '/api/organizations', auth: 'owner-or-organization-read-key', payment: null },
+  { id: 'create_organization', label: 'Create organization', description: 'Create an accounting-only organization with an idempotency reference.',
+    method: 'POST', endpoint: '/api/organizations', auth: 'owner-account', payment: null, required: ['client_reference', 'name'],
+    body_schema: { type: 'object', required: ['client_reference', 'name'], additionalProperties: false, properties: {
+      client_reference: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' }, name: { type: 'string', minLength: 1, maxLength: 120 },
+    } } },
+  { id: 'inspect_organization', label: 'Inspect organization', description: 'Owner sees assignments and audit; a viewer or service read key sees summary only.',
+    method: 'GET', endpoint: '/api/organizations/{id}', auth: 'owner-or-organization-read-key', payment: null, required: ['id'] },
+  { id: 'list_organization_invitations', label: 'List organization invitations', description: 'Owner-only invitation status list.',
+    method: 'GET', endpoint: '/api/organizations/{id}/invitations', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'invite_organization_viewer', label: 'Invite organization viewer', description: 'Invite one existing account to read organization and team metadata.',
+    method: 'POST', endpoint: '/api/organizations/{id}/invitations', auth: 'owner-account', payment: null,
+    required: ['id', 'client_reference', 'target_account_id'], body_schema: { type: 'object', required: ['client_reference', 'target_account_id'],
+      additionalProperties: false, properties: { client_reference: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' },
+        target_account_id: { type: 'string', minLength: 1, maxLength: 200 } } } },
+  { id: 'list_pending_organization_invitations', label: 'List pending invitations', description: 'List invitations addressed to the authenticated account.',
+    method: 'GET', endpoint: '/api/organizations/invitations', auth: 'owner-account', payment: null },
+  { id: 'accept_organization_invitation', label: 'Accept organization invitation', description: 'Accept a seven-day invitation addressed to this account.',
+    method: 'POST', endpoint: '/api/organizations/invitations/{invitationId}/accept', auth: 'owner-account', payment: null,
+    required: ['invitationId'] },
+  { id: 'cancel_organization_invitation', label: 'Cancel organization invitation', description: 'Owner-only cancellation of a pending invitation.',
+    method: 'DELETE', endpoint: '/api/organizations/{id}/invitations/{invitationId}', auth: 'owner-account', payment: null,
+    required: ['id', 'invitationId'] },
+  { id: 'list_organization_members', label: 'List organization members', description: 'Owner-only membership status list.',
+    method: 'GET', endpoint: '/api/organizations/{id}/members', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'revoke_organization_member', label: 'Revoke organization member', description: 'Owner-only revocation of a read-only member.',
+    method: 'DELETE', endpoint: '/api/organizations/{id}/members/{accountId}', auth: 'owner-account', payment: null,
+    required: ['id', 'accountId'] },
+  { id: 'list_organization_teams', label: 'List organization teams', description: 'List accounting team metadata in an accessible organization.',
+    method: 'GET', endpoint: '/api/organizations/{id}/teams', auth: 'owner-or-organization-read-key', payment: null, required: ['id'] },
+  { id: 'list_organization_service_accounts', label: 'List service accounts', description: 'Owner-only credential metadata; no secret values.',
+    method: 'GET', endpoint: '/api/organizations/{id}/service-accounts', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'create_organization_service_account', label: 'Create service account', description: 'Issue a short-lived read-only organization key. The raw key appears only in the initial response.',
+    method: 'POST', endpoint: '/api/organizations/{id}/service-accounts', auth: 'owner-account', payment: null,
+    required: ['id', 'client_reference', 'name'], optional: ['lifetime_days'],
+    body_schema: { type: 'object', required: ['client_reference', 'name'], additionalProperties: false, properties: {
+      client_reference: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' },
+      name: { type: 'string', minLength: 1, maxLength: 120 }, lifetime_days: { type: 'integer', minimum: 1, maximum: 90, default: 30 },
+    } } },
+  { id: 'revoke_organization_service_account', label: 'Revoke service account', description: 'Immediately revoke an owned organization read key.',
+    method: 'DELETE', endpoint: '/api/organizations/{id}/service-accounts/{accountId}', auth: 'owner-account', payment: null, required: ['id', 'accountId'] },
+  { id: 'inspect_organization_budget', label: 'Inspect organization budget', description: 'Owner-only USD ceilings and current attributed or conservatively counted agent reservations.',
+    method: 'GET', endpoint: '/api/organizations/{id}/budget', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'set_organization_budget', label: 'Set organization budget', description: 'Owner-only versioned hard ceilings for agents currently assigned to this organization.',
+    method: 'PUT', endpoint: '/api/organizations/{id}/budget', auth: 'owner-account', payment: null,
+    required: ['id', 'expected_version', 'max_per_execution', 'max_daily', 'max_monthly'],
+    body_schema: { type: 'object', additionalProperties: false,
+      required: ['expected_version', 'max_per_execution', 'max_daily', 'max_monthly'], properties: {
+        expected_version: { type: 'integer', minimum: 0 },
+        max_per_execution: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
+        max_daily: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
+        max_monthly: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
+      } } },
+  { id: 'create_organization_team', label: 'Create organization team', description: 'Create an idempotent team within an owned organization.',
+    method: 'POST', endpoint: '/api/organizations/{id}/teams', auth: 'owner-account', payment: null, required: ['id', 'slug', 'name'],
+    body_schema: { type: 'object', required: ['slug', 'name'], additionalProperties: false, properties: {
+      slug: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,63}$' }, name: { type: 'string', minLength: 1, maxLength: 120 },
+    } } },
+  { id: 'archive_organization_team', label: 'Archive organization team', description: 'Archive an active team after its agent assignments are removed.',
+    method: 'PATCH', endpoint: '/api/organizations/{id}/teams/{teamId}', auth: 'owner-account', payment: null, required: ['id', 'teamId', 'status'],
+    body_schema: { type: 'object', required: ['status'], additionalProperties: false, properties: { status: { type: 'string', enum: ['archived'] } } } },
+  { id: 'assign_organization_agent', label: 'Assign agent to organization', description: 'Assign an already owned agent to a cost center; grants no purchasing authority.',
+    method: 'PUT', endpoint: '/api/organizations/{id}/agents', auth: 'owner-account', payment: null, required: ['id', 'agent_id', 'cost_center'], optional: ['team_id'],
+    body_schema: { type: 'object', required: ['agent_id', 'cost_center'], additionalProperties: false, properties: {
+      agent_id: { type: 'string', minLength: 1, maxLength: 200 }, cost_center: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$' },
+      team_id: { type: 'string', format: 'uuid' },
+    } } },
+  { id: 'unassign_organization_agent', label: 'Remove agent assignment', description: 'Idempotently remove an accounting assignment.',
+    method: 'DELETE', endpoint: '/api/organizations/{id}/agents', auth: 'owner-account', payment: null, required: ['id', 'agent_id'],
+    body_schema: { type: 'object', required: ['agent_id'], additionalProperties: false, properties: { agent_id: { type: 'string', minLength: 1, maxLength: 200 } } } },
   {
     id: 'execute_route', label: 'Reserve routed work',
     description: 'Check up to the saved retry limit of ranked providers, record pre-checkout attempts, and atomically reserve one unpaid external checkout. Buyer funding remains a separate authenticated action.',
@@ -901,6 +973,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const agentAuthenticated = [{ BearerAuth: [] }, { AgentApiKeyHeader: [] }]
   const authenticated = [...agentAuthenticated, { CookieAuth: [] }]
   const ownerAuthenticated = [{ BearerAuth: [] }, { CookieAuth: [] }]
+  const organizationReaderAuthenticated = [...ownerAuthenticated, { OrganizationReadKey: [] }]
   const ownerLinkSecurity = [
     { BearerAuth: [], AgentApiKeyHeader: [] },
     { CookieAuth: [], AgentApiKeyHeader: [] },
@@ -1528,6 +1601,71 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       get: { operationId: 'inspect_workflow', summary: 'Inspect an owned workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Buyer-owned workflow and nodes' }, 404: { description: 'Workflow not owned' } } },
       delete: { operationId: 'cancel_workflow', summary: 'Cancel an owned unfunded workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Workflow cancelled or already cancelled' }, 404: { description: 'Workflow not owned' } } },
     },
+    '/api/organizations': {
+      get: { operationId: 'list_organizations', summary: 'List account organizations or one service-account organization', security: organizationReaderAuthenticated,
+        responses: { 200: { description: 'Owned organizations' }, 401: { description: 'Owner authentication required' } } },
+      post: { operationId: 'create_organization', summary: 'Create an accounting-only organization', security: ownerAuthenticated,
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('create_organization').body_schema } } },
+        responses: { 201: { description: 'Organization created' }, 200: { description: 'Idempotent replay' }, 409: { description: 'Reference conflict' }, 503: { description: 'Enterprise foundation disabled' } } },
+    },
+    '/api/organizations/{id}': { get: { operationId: 'inspect_organization', summary: 'Inspect owned organization or limited viewer metadata', security: organizationReaderAuthenticated,
+      parameters: [tradeIdParameter], responses: { 200: { description: 'Owner details or read-only viewer summary' }, 404: { description: 'Organization inaccessible' } } } },
+    '/api/organizations/{id}/invitations': {
+      get: { operationId: 'list_organization_invitations', summary: 'List owner-only invitation statuses', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], responses: { 200: { description: 'Private invitation list' }, 404: { description: 'Organization not owned' } } },
+      post: { operationId: 'invite_organization_viewer', summary: 'Invite one account as a read-only organization viewer', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('invite_organization_viewer').body_schema } } },
+        responses: { 201: { description: 'Invitation created' }, 200: { description: 'Idempotent replay' }, 404: { description: 'Organization or target absent' }, 409: { description: 'Conflict' } } },
+    },
+    '/api/organizations/invitations': { get: { operationId: 'list_pending_organization_invitations', summary: 'List invitations addressed to the caller', security: ownerAuthenticated,
+      responses: { 200: { description: 'Private pending invitations' } } } },
+    '/api/organizations/invitations/{invitationId}/accept': { post: { operationId: 'accept_organization_invitation', summary: 'Accept a read-only invitation addressed to the caller', security: ownerAuthenticated,
+      parameters: [{ name: 'invitationId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Viewer membership active or idempotent replay' }, 404: { description: 'Invitation not addressed to caller' }, 410: { description: 'Invitation expired' } } } },
+    '/api/organizations/{id}/invitations/{invitationId}': { delete: { operationId: 'cancel_organization_invitation', summary: 'Cancel an owned pending invitation', security: ownerAuthenticated,
+      parameters: [tradeIdParameter, { name: 'invitationId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Invitation cancelled or idempotent replay' }, 404: { description: 'Invitation inaccessible' }, 409: { description: 'Already accepted' } } } },
+    '/api/organizations/{id}/members': { get: { operationId: 'list_organization_members', summary: 'List private owner-only membership status', security: ownerAuthenticated,
+      parameters: [tradeIdParameter], responses: { 200: { description: 'Membership status list' }, 404: { description: 'Organization not owned' } } } },
+    '/api/organizations/{id}/members/{accountId}': { delete: { operationId: 'revoke_organization_member', summary: 'Revoke an owned organization viewer', security: ownerAuthenticated,
+      parameters: [tradeIdParameter, { name: 'accountId', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: { 200: { description: 'Membership revoked or idempotent replay' }, 404: { description: 'Membership inaccessible' } } } },
+    '/api/organizations/{id}/teams': {
+      get: { operationId: 'list_organization_teams', summary: 'List organization accounting teams', security: organizationReaderAuthenticated,
+        parameters: [tradeIdParameter], responses: { 200: { description: 'Private team list' }, 404: { description: 'Organization not owned' } } },
+      post: { operationId: 'create_organization_team', summary: 'Create an accounting-only team', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('create_organization_team').body_schema } } },
+        responses: { 201: { description: 'Team created' }, 200: { description: 'Idempotent replay' }, 409: { description: 'Team slug conflict' } } },
+    },
+    '/api/organizations/{id}/service-accounts': {
+      get: { operationId: 'list_organization_service_accounts', summary: 'List owned organization credential metadata', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], responses: { 200: { description: 'Credential metadata without raw keys' }, 404: { description: 'Organization not owned' } } },
+      post: { operationId: 'create_organization_service_account', summary: 'Create a read-only organization credential', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('create_organization_service_account').body_schema } } },
+        responses: { 201: { description: 'New key shown once' }, 200: { description: 'Idempotent replay without raw key' }, 409: { description: 'Reference conflict' }, 503: { description: 'Enterprise foundation disabled' } } },
+    },
+    '/api/organizations/{id}/service-accounts/{accountId}': { delete: { operationId: 'revoke_organization_service_account', summary: 'Revoke a read-only organization credential', security: ownerAuthenticated,
+      parameters: [tradeIdParameter, { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Credential revoked or idempotent replay' }, 404: { description: 'Credential not owned' } } } },
+    '/api/organizations/{id}/budget': {
+      get: { operationId: 'inspect_organization_budget', summary: 'Inspect owner-only budget and current usage', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], responses: { 200: { description: 'Current ceilings and conservative reservation usage' }, 404: { description: 'Organization not owned' } } },
+      put: { operationId: 'set_organization_budget', summary: 'Set versioned USD caps for assigned agent buyers', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('set_organization_budget').body_schema } } },
+        responses: { 200: { description: 'Budget updated or idempotent replay' }, 409: { description: 'Expected version conflict' }, 503: { description: 'Enterprise foundation disabled' } } },
+    },
+    '/api/organizations/{id}/teams/{teamId}': { patch: { operationId: 'archive_organization_team', summary: 'Archive an empty team', security: ownerAuthenticated,
+      parameters: [tradeIdParameter, { name: 'teamId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('archive_organization_team').body_schema } } },
+      responses: { 200: { description: 'Archived team or idempotent replay' }, 409: { description: 'Team still has agent assignments' } } } },
+    '/api/organizations/{id}/agents': {
+      put: { operationId: 'assign_organization_agent', summary: 'Assign an owned agent to a cost center', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('assign_organization_agent').body_schema } } },
+        responses: { 200: { description: 'Agent assigned or idempotent replay' }, 403: { description: 'Agent not owned' }, 409: { description: 'Agent already assigned' } } },
+      delete: { operationId: 'unassign_organization_agent', summary: 'Remove an owned agent cost center assignment', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('unassign_organization_agent').body_schema } } },
+        responses: { 200: { description: 'Assignment removed or idempotent replay' }, 403: { description: 'Agent not owned' } } },
+    },
     '/api/routes/{id}/execute': { post: { operationId: 'execute_route', summary: 'Try saved candidates before checkout and reserve one unpaid order', security: authenticated, parameters: [tradeIdParameter],
       responses: { 201: { description: 'Order and external checkout created; payment is unconfirmed and may arrive late' }, 200: { description: 'Idempotent route replay with payment exposure' }, 404: { description: 'Route not owned' }, 409: { description: 'Provider, budget, price, capacity, or rail changed' }, 410: { description: 'Plan expired' }, 503: { description: 'Route execution disabled' } } } },
     '/api/routes/{id}': {
@@ -1675,6 +1813,7 @@ export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
     optional_agent_api_key: 'optional registered-agent key',
     agent_api_key: 'registered-agent key',
     'owner-account': 'authenticated human account or signed-wallet account',
+    'owner-or-organization-read-key': 'owner account, accepted viewer, or scoped organization read key',
     'owner-and-agent-key': 'authenticated human account plus current primary agent key',
     mpp: 'MPP credential',
     'task-owner': 'task owner authentication',
@@ -1728,6 +1867,10 @@ Each order also requires an objective; optional structured input is visible only
 \`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and \`claimed_only\` evidence marker. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
 
 \`POST /api/workflows/plan\` stores an explicit child-work dependency graph with at most 16 nodes, three dependency edges, and child budgets whose sum cannot exceed the parent USD budget. It neither delegates work nor creates routes, orders, or payments. Buyer-only \`GET /api/workflows/{id}\` inspects the plan, and \`DELETE /api/workflows/{id}\` cancels it. Production planning requires \`CLAWDMARKET_WORKFLOW_PLANNING_ENABLED=true\` after its additive migration; execution is unavailable.
+
+## Enterprise accounting foundation
+
+An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`POST /api/organizations/{id}/teams\` creates an owner-only team; \`PATCH /api/organizations/{id}/teams/{teamId}\` archives it after its assignments are removed. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center and optionally an active team; \`DELETE\` removes the assignment. The owner can set versioned per-execution, UTC-day, and UTC-month USD ceilings through \`PUT /api/organizations/{id}/budget\`. These are enforced transactionally for trades opened by currently assigned agent buyers; immutable trade-time cost-center attribution survives reassignment. An owner may invite a specific account ID with \`POST /api/organizations/{id}/invitations\`; that account sees the pending invitation through \`GET /api/organizations/invitations\` and accepts it with \`POST /api/organizations/invitations/{invitationId}/accept\`. The owner can cancel pending invitations and revoke active members. Members have viewer-only access to organization names and team metadata; assignments, audit, budgets, invitations, and membership lists remain owner-only. Owners can issue and revoke expiring \`cmo_\` organization read keys through \`/api/organizations/{id}/service-accounts\`; keys can read only their organization summary and teams and cannot authenticate to routing or checkout. Neither membership, service credential, nor team assignment grants ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migrations; previously set budgets remain active when the flag is off.
 
 ## Authentication
 

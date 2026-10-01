@@ -5,6 +5,7 @@ import { createPublicClient, decodeEventLog, erc20Abi, http, isAddress, parseAbi
 import crypto from 'crypto';
 import { enforceAgentSpendPolicy } from './agent-spend-policy';
 import type { SpendContext } from './buyer-spend-policy';
+import { attributeOrganizationTrade } from './organization-budgets';
 
 const DEV_FEE_PERCENT = 0.05;
 const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
@@ -70,6 +71,7 @@ export async function createLedgerTrade(
     escrow_session_id: sessionId, status: 'escrow_held',
     auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
   }).returning();
+  await attributeOrganizationTrade(tx, options.agentId, trade, Math.round(totalCost * 100));
   await tx.insert(transactions).values({
     from_user_id: buyerId, amount: sellerAmount, type: 'escrow_lock', reference_id: trade.id,
     memo: `Account-balance escrow lock for listing ${listing.id}`,
