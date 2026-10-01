@@ -39,6 +39,8 @@ type RegistrationActivityRow = {
   created_at: unknown
 }
 
+type AccountRegistrationRow = RegistrationActivityRow
+
 function shortId(id?: string | null) {
   return id ? id.slice(0, 8) : 'unknown'
 }
@@ -93,7 +95,7 @@ export async function GET() {
   try {
     const client = (db as any).$client
 
-    const [recentTrades, recentRatings, recentRegistrations] = await Promise.all([
+    const [recentTrades, recentRatings, recentRegistrations, recentAgentAccounts] = await Promise.all([
       client.execute(
         `SELECT id, status, created_at, completed_at,
                 buyer_id AS buyer_agent_id, seller_id AS seller_agent_id
@@ -123,7 +125,8 @@ export async function GET() {
       client.execute(
         `SELECT id, name, created_at
          FROM agents
-         WHERE status = 'active' AND visibility = 'public' AND archived_at IS NULL
+         WHERE visibility = 'public' AND archived_at IS NULL
+           AND (status = 'active' OR (status = 'inactive' AND claim_code IS NOT NULL AND claimed_at IS NULL))
          ORDER BY CASE
            WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
              THEN datetime(created_at / 1000, 'unixepoch')
@@ -132,6 +135,18 @@ export async function GET() {
          END DESC
          LIMIT 10`,
       ).then((result: any) => (result?.rows || []) as RegistrationActivityRow[]).catch(() => [] as RegistrationActivityRow[]),
+      client.execute(
+        `SELECT id, name, created_at
+         FROM users
+         WHERE role = 'agent' AND substr(id, 1, 11) <> 'user_agent_' AND COALESCE(is_banned, 0) = 0
+         ORDER BY CASE
+           WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
+             THEN datetime(created_at / 1000, 'unixepoch')
+           WHEN typeof(created_at) IN ('integer', 'real') THEN datetime(created_at, 'unixepoch')
+           ELSE datetime(created_at)
+         END DESC
+         LIMIT 10`,
+      ).then((result: any) => (result?.rows || []) as AccountRegistrationRow[]).catch(() => [] as AccountRegistrationRow[]),
     ])
 
     const principalIds = new Set<string>()
@@ -221,6 +236,22 @@ export async function GET() {
         }
       })
 
+    const accountRegistrationEvents: Array<ActivityEvent & { createdAt: Date }> = recentAgentAccounts
+      .filter((account: AccountRegistrationRow) => safeDate(account.created_at) !== null)
+      .map((account: AccountRegistrationRow) => {
+        const createdAt = safeDate(account.created_at) as Date
+        const name = account.name || `Agent ${shortId(account.id)}`
+        return {
+          id: `account_registration_${account.id}`,
+          type: 'agent_registered' as const,
+          description: `New agent account "${name}" joined`,
+          agent_name: name,
+          timestamp: createdAt.toISOString(),
+          relative: relativeTime(createdAt),
+          createdAt,
+        }
+      })
+
     // Fetch recent agent improvements
     const improvementsResult = await client.execute(
       `SELECT ai.id, ai.from_version, ai.to_version, ai.created_at,
@@ -253,7 +284,7 @@ export async function GET() {
         }
       })
 
-    const events = [...tradeEvents, ...ratingEvents, ...registrationEvents, ...improvementEvents]
+    const events = [...tradeEvents, ...ratingEvents, ...registrationEvents, ...accountRegistrationEvents, ...improvementEvents]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 50)
       .map(({ createdAt: _createdAt, ...event }) => event)

@@ -417,3 +417,31 @@ test('activity includes mixed-format timestamps and disables response caching', 
   assert.equal(registration.description, 'New agent "Mixed Timestamp Agent" registered')
   assert.equal(registration.timestamp, createdAt)
 })
+
+test('activity shows new agent accounts and public registrations awaiting claim', async () => {
+  const createdAt = new Date(Date.now() + 10_000)
+  await db.insert(schema.users).values([
+    { id: 'joined-agent-account', email: 'joined-agent@test.invalid', password_hash: 'unused', name: 'Joined Agent', role: 'agent', created_at: createdAt },
+    { id: 'user_agent_pending-agent', email: 'pending-agent@test.invalid', password_hash: 'unused', name: 'Pending Agent', role: 'agent', created_at: createdAt },
+  ])
+  await db.insert(schema.agents).values([
+    {
+      id: 'pending-agent', name: 'Pending Agent', description: '', capabilities: '[]', endpoint: '',
+      owner_address: '', api_key: 'pending-agent-key', status: 'inactive', visibility: 'public',
+      claimCode: 'claim_pending-agent', created_at: createdAt,
+    },
+    {
+      id: 'private-pending-agent', name: 'Private Pending Agent', description: '', capabilities: '[]', endpoint: '',
+      owner_address: '', api_key: 'private-pending-agent-key', status: 'inactive', visibility: 'private',
+      claimCode: 'claim_private-pending-agent', created_at: createdAt,
+    },
+  ])
+
+  const activity = await (await getActivity()).json()
+  assert.equal(activity.find((event: any) => event.id === 'account_registration_joined-agent-account')?.description,
+    'New agent account "Joined Agent" joined')
+  assert.equal(activity.find((event: any) => event.id === 'registration_pending-agent')?.description,
+    'New agent "Pending Agent" registered')
+  assert.equal(activity.some((event: any) => event.id === 'account_registration_user_agent_pending-agent'), false)
+  assert.equal(activity.some((event: any) => event.id === 'registration_private-pending-agent'), false)
+})
