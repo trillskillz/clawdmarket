@@ -19,6 +19,7 @@ let getService: typeof import('@/app/api/services/[id]/route').GET
 let changeService: typeof import('@/app/api/services/[id]/route').PATCH
 let listServices: typeof import('@/app/api/services/route').GET
 let getWorkOrder: typeof import('@/app/api/trades/[id]/work-order/route').GET
+let startWorkOrder: typeof import('@/app/api/trades/[id]/work-order/start/route').POST
 let listTrades: typeof import('@/app/api/trades/route').GET
 const sellerId = 'reusable-seller'
 const buyerId = 'reusable-buyer'
@@ -28,6 +29,7 @@ before(async () => {
   fixtureDirectory = mkdtempSync(join(tmpdir(), 'clawdmarket-workspace-test-reusable-services-'))
   process.env.TURSO_DATABASE_URL = `file:${join(fixtureDirectory, 'services.db')}`
   process.env.JWT_SECRET = 'reusable-service-tests-only'
+  process.env.CHAT_ENCRYPTION_KEY = 'reusable-service-chat-key-32-bytes-minimum'
   process.env.TREASURY_ADDRESS = treasury.address
   process.env.EVM_SETTLEMENT_PRIVATE_KEY = `0x${'77'.repeat(32)}`
   process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{
@@ -47,6 +49,7 @@ before(async () => {
   changeService = (await import('@/app/api/services/[id]/route')).PATCH
   listServices = (await import('@/app/api/services/route')).GET
   getWorkOrder = (await import('@/app/api/trades/[id]/work-order/route')).GET
+  startWorkOrder = (await import('@/app/api/trades/[id]/work-order/start/route')).POST
   listTrades = (await import('@/app/api/trades/route')).GET
   await db.insert(schema.users).values([
     { id: sellerId, name: 'Reusable Seller', email: 'reusable-seller@test.invalid', password_hash: 'unused', role: 'human' },
@@ -225,6 +228,72 @@ test('party work order is durable, private, and seller-readable only after fundi
   const item = (await listed.json()).trades.find((candidate: { id: string }) => candidate.id === trade.id)
   assert.equal(item.service_order_id, savedOrder.id)
   assert.equal(item.work_order_url, path)
+})
+
+test('seller starts funded execution once and delivery still advances the linked route', async () => {
+  const offered = await service()
+  const created = await order(offered.id, `execution-start-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade, order: savedOrder } = await created.json()
+  const path = `/api/trades/${trade.id}/work-order/start`
+  const params = { params: Promise.resolve({ id: trade.id as string }) }
+  const start = (userId?: string) => startWorkOrder(new NextRequest(`http://localhost${path}`, {
+    method: 'POST', headers: userId ? { Authorization: `Bearer ${token({ userId, email: `${userId}@test.invalid`, role: 'human' })}` } : {},
+  }), params)
+  assert.equal((await start()).status, 401)
+  assert.equal((await start(buyerId)).status, 404)
+  assert.equal((await start('reusable-outsider')).status, 404)
+  assert.equal((await start(sellerId)).status, 409)
+  assert.equal((await startWorkOrder(new NextRequest(`http://localhost${path}`, {
+    method: 'POST', headers: { Cookie: `auth-token=${token({ userId: sellerId, email: `${sellerId}@test.invalid`, role: 'human' })}` },
+  }), params)).status, 403)
+  const [unfunded] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  assert.equal(unfunded.state, 'awaiting_funding')
+  assert.equal(unfunded.execution_started_at, null)
+  await db.insert(schema.route_plans).values({ id: crypto.randomUUID(), buyer_id: buyerId,
+    client_reference: `execution-route-${crypto.randomUUID()}`, objective: 'Review a funded repository change',
+    required_capabilities: '["code-review"]', max_budget_minor: 1050,
+    state: 'funded', service_order_id: savedOrder.id, expires_at: new Date(Date.now() + 300_000) })
+  const { advanceServiceOrder } = await import('@/lib/service-order-state')
+  await db.transaction(async (tx) => {
+    await tx.update(schema.trades).set({ status: 'escrow_held', funded_at: new Date().toISOString() })
+      .where(eq(schema.trades.id, trade.id))
+    await advanceServiceOrder(tx, trade.id, 'funded')
+  })
+  const ready = await getWorkOrder(new NextRequest(`http://localhost/api/trades/${trade.id}/work-order`, {
+    headers: { Authorization: `Bearer ${token({ userId: sellerId, email: `${sellerId}@test.invalid`, role: 'human' })}` },
+  }), params)
+  assert.deepEqual((await ready.json()).work_order.start, { method: 'POST', url: path })
+  const responses = await Promise.all([start(sellerId), start(sellerId)])
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 201])
+  const bodies = await Promise.all(responses.map((response) => response.json()))
+  assert.equal(bodies[0].order.execution_started_at, bodies[1].order.execution_started_at)
+  const [started] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  assert.equal(started.state, 'executing')
+  assert.ok(started.execution_started_at)
+  const [route] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.service_order_id, savedOrder.id))
+  assert.equal(route.state, 'executing')
+  const [stillEscrowed] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  assert.equal(stillEscrowed.status, 'escrow_held')
+  assert.equal(stillEscrowed.total_cost, trade.total_cost)
+  const workOrder = await getWorkOrder(new NextRequest(`http://localhost/api/trades/${trade.id}/work-order`, {
+    headers: { Authorization: `Bearer ${token({ userId: sellerId, email: `${sellerId}@test.invalid`, role: 'human' })}` },
+  }), params)
+  const currentWorkOrder = (await workOrder.json()).work_order
+  assert.equal(currentWorkOrder.execution_started_at, started.execution_started_at?.toISOString())
+  assert.equal(currentWorkOrder.start, null)
+  const { POST: deliver } = await import('@/app/api/trades/[id]/delivery/route')
+  const delivered = await deliver(request(`/api/trades/${trade.id}/delivery`, sellerId,
+    { summary: 'The code review is complete with actionable findings.' }), params)
+  assert.equal(delivered.status, 201, JSON.stringify(await delivered.clone().json()))
+  const [afterDelivery] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  const [routeAfterDelivery] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, route.id))
+  assert.equal(afterDelivery.state, 'verifying')
+  assert.equal(afterDelivery.execution_started_at?.toISOString(), started.execution_started_at?.toISOString())
+  assert.equal(routeAfterDelivery.state, 'awaiting_buyer')
+  const replay = await start(sellerId)
+  assert.equal(replay.status, 200)
+  assert.equal((await replay.json()).idempotent, true)
 })
 
 test('operator reconciliation releases a terminal order left by an older worker exactly once', async () => {

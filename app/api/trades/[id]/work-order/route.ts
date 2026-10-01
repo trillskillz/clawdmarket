@@ -43,8 +43,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       verification_policy: JSON.parse(row.service.verification_policy),
       capabilities: JSON.parse(row.service.capabilities) as string[],
       state: row.order.state,
+      execution_started_at: row.order.execution_started_at?.toISOString() || null,
       trade_status: row.trade.status,
       funded_at: row.trade.funded_at,
+      start: seller && row.trade.status === 'escrow_held' && row.order.state === 'funded'
+        ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/work-order/start` } : null,
       delivery: seller ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/delivery` } : null,
     } }, { headers })
   } catch (error) {

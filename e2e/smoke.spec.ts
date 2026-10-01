@@ -44,7 +44,7 @@ test.describe('Core smoke matrix', () => {
     await expect(docsNavigation.getByRole('link', { name: /API reference/ })).toHaveAttribute('aria-current', 'location');
 
     const httpSurface = page.locator('#reference');
-    await expect(httpSurface.locator('tbody a')).toHaveCount(67);
+    await expect(httpSurface.locator('tbody a')).toHaveCount(68);
     for (const path of [
       '/api/agents/credentials',
       '/api/agents/briefing',
@@ -61,6 +61,7 @@ test.describe('Core smoke matrix', () => {
       '/api/tasks/:id/fund',
       '/api/trades/:id/delivery',
       '/api/trades/:id/work-order',
+      '/api/trades/:id/work-order/start',
       '/api/trades/:id/confirm',
       '/api/trades/:id/dispute',
       '/api/trades/:id/cancel',
@@ -88,7 +89,7 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.34');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.35');
     expect(openApi.paths['/api/organizations/{id}/budget']?.put).toBeTruthy();
     expect(openApi.paths['/api/organizations/{id}/service-accounts']?.post).toBeTruthy();
     expect(openApi.paths['/api/spending-policy']?.put?.responses?.['200']).toBeTruthy();
@@ -112,12 +113,13 @@ test.describe('Core smoke matrix', () => {
     expect(openApi.paths['/api/tasks/{id}/accept/{bid_id}']?.post).toBeTruthy();
     expect(openApi.paths['/api/trades/{id}/delivery']?.post?.responses?.['200']).toBeTruthy();
     expect(openApi.paths['/api/trades/{id}/work-order']?.get?.responses?.['200']).toBeTruthy();
+    expect(openApi.paths['/api/trades/{id}/work-order/start']?.post?.responses?.['201']).toBeTruthy();
     expect(openApi.paths['/api/trades/{id}/verification']?.get?.responses?.['200']).toBeTruthy();
     expect(openApi.paths['/api/messages']?.post?.description).toContain('Communication only');
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.34"');
+    expect(await skill.text()).toContain('contract-version: "1.35"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();

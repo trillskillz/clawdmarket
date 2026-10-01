@@ -172,4 +172,11 @@ test('funded reusable work points seller briefing at its private work order', as
     name: 'Write only', keyHash: hashAgentApiKey(noReadKey), keyPrefix: noReadKey.slice(0, 12),
     scopes: JSON.stringify(['marketplace:write']), createdByType: 'test' })
   assert.equal((await inspectWorkOrder(request(item.inspect.url, noReadKey), params)).status, 401)
+  const { POST: startWorkOrder } = await import('@/app/api/trades/[id]/work-order/start/route')
+  const startRequest = (key: string) => new NextRequest(`https://clawdmkt.test${item.inspect.url}/start`, {
+    method: 'POST', headers: { 'X-ClawdMarket-Agent-Key': key },
+  })
+  assert.equal((await startWorkOrder(startRequest(other.key), params)).status, 404)
+  assert.equal((await startWorkOrder(startRequest(seller.key), params)).status, 201)
+  assert.equal((await startWorkOrder(startRequest(seller.key), params)).status, 200)
 })
