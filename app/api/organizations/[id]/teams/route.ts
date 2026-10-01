@@ -7,6 +7,7 @@ import { validateCsrf } from '@/lib/csrf'
 import { enterpriseFoundationEnabled, loadOrganizationAccess, teamDto, teamInput } from '@/lib/enterprise-foundation'
 import { internalErrorResponse } from '@/lib/api-error'
 import { rateLimit } from '@/lib/rate-limit'
+import { resolveOrganizationServiceAccount } from '@/lib/organization-service-accounts'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,10 +19,15 @@ function failure(error_code: string, message: string, status: number) {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const owner = await resolveAuthenticatedOwnerAccount(request)
-    if (!owner) return failure('OWNER_ACCOUNT_REQUIRED', 'Owner account required', 401)
-    const access = await loadOrganizationAccess((await params).id, owner.userId)
-    if (!access) return failure('ORGANIZATION_NOT_FOUND', 'Organization not found', 404)
-    const organization = access.organization
+    const id = (await params).id
+    let organization
+    if (owner) organization = (await loadOrganizationAccess(id, owner.userId))?.organization
+    else {
+      const service = await resolveOrganizationServiceAccount(request)
+      if (!service) return failure('OWNER_ACCOUNT_REQUIRED', 'Owner account required', 401)
+      if (service.organizationId === id) [organization] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1)
+    }
+    if (!organization) return failure('ORGANIZATION_NOT_FOUND', 'Organization not found', 404)
     const teams = await db.select().from(organization_teams).where(eq(organization_teams.organization_id, organization.id)).limit(100)
     return NextResponse.json({ teams: teams.map(teamDto) }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) { return internalErrorResponse('Organization team lookup failed', error) }

@@ -1,17 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq, desc } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agent_owners, organization_agent_assignments, organization_audit_events } from '@/lib/schema'
+import { agent_owners, organization_agent_assignments, organization_audit_events, organizations } from '@/lib/schema'
 import { resolveAuthenticatedOwnerAccount } from '@/lib/agent-owner-auth'
 import { loadOrganizationAccess, organizationDto } from '@/lib/enterprise-foundation'
 import { internalErrorResponse } from '@/lib/api-error'
+import { resolveOrganizationServiceAccount } from '@/lib/organization-service-accounts'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const owner = await resolveAuthenticatedOwnerAccount(request)
-    if (!owner) return NextResponse.json({ success: false, error_code: 'OWNER_ACCOUNT_REQUIRED', message: 'Owner account required', retryable: false, state: 'no_funds_moved' }, { status: 401 })
+    if (!owner) {
+      const service = await resolveOrganizationServiceAccount(request)
+      if (!service) return NextResponse.json({ success: false, error_code: 'OWNER_ACCOUNT_REQUIRED', message: 'Owner account required', retryable: false, state: 'no_funds_moved' }, { status: 401 })
+      const id = (await params).id
+      if (id !== service.organizationId) return NextResponse.json({ success: false, error_code: 'ORGANIZATION_NOT_FOUND', message: 'Organization not found', retryable: false, state: 'no_funds_moved' }, { status: 404 })
+      const [organization] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1)
+      if (!organization) return NextResponse.json({ success: false, error_code: 'ORGANIZATION_NOT_FOUND', message: 'Organization not found', retryable: false, state: 'no_funds_moved' }, { status: 404 })
+      return NextResponse.json({ organization: organizationDto(organization), role: 'service_account' },
+        { headers: { 'Cache-Control': 'private, no-store' } })
+    }
     const access = await loadOrganizationAccess((await params).id, owner.userId)
     if (!access) return NextResponse.json({ success: false, error_code: 'ORGANIZATION_NOT_FOUND', message: 'Organization not found', retryable: false, state: 'no_funds_moved' }, { status: 404 })
     const { organization } = access

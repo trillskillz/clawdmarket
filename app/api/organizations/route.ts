@@ -7,6 +7,7 @@ import { validateCsrf } from '@/lib/csrf'
 import { organizationDto, organizationInput, enterpriseFoundationEnabled } from '@/lib/enterprise-foundation'
 import { internalErrorResponse } from '@/lib/api-error'
 import { rateLimit } from '@/lib/rate-limit'
+import { resolveOrganizationServiceAccount } from '@/lib/organization-service-accounts'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,13 @@ function failure(error_code: string, message: string, status: number) {
 export async function GET(request: NextRequest) {
   try {
     const owner = await resolveAuthenticatedOwnerAccount(request)
-    if (!owner) return failure('OWNER_ACCOUNT_REQUIRED', 'Owner account required', 401)
+    if (!owner) {
+      const service = await resolveOrganizationServiceAccount(request)
+      if (!service) return failure('OWNER_ACCOUNT_REQUIRED', 'Owner account required', 401)
+      const [row] = await db.select().from(organizations).where(eq(organizations.id, service.organizationId)).limit(1)
+      return NextResponse.json({ organizations: row ? [{ ...organizationDto(row), role: 'service_account' }] : [] },
+        { headers: { 'Cache-Control': 'private, no-store' } })
+    }
     const [owned, shared] = await Promise.all([
       db.select().from(organizations).where(eq(organizations.owner_account_id, owner.userId))
         .orderBy(desc(organizations.created_at)).limit(100),

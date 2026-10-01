@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.30'
+export const AGENT_CONTRACT_VERSION = '1.31'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -10,6 +10,7 @@ export type AgentAuth =
   | 'optional_agent_api_key'
   | 'agent_api_key'
   | 'owner-account'
+  | 'owner-or-organization-read-key'
   | 'owner-and-agent-key'
   | 'mpp'
   | 'task-owner'
@@ -547,15 +548,15 @@ export const AGENT_ACTIONS: AgentAction[] = [
     id: 'cancel_workflow', label: 'Cancel workflow', description: 'Idempotently cancel an unfunded workflow plan.',
     method: 'DELETE', endpoint: '/api/workflows/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
-  { id: 'list_organizations', label: 'List organizations', description: 'List private accounting namespaces owned by or shared with this account.',
-    method: 'GET', endpoint: '/api/organizations', auth: 'owner-account', payment: null },
+  { id: 'list_organizations', label: 'List organizations', description: 'List account-accessible organizations or the single organization assigned to a read key.',
+    method: 'GET', endpoint: '/api/organizations', auth: 'owner-or-organization-read-key', payment: null },
   { id: 'create_organization', label: 'Create organization', description: 'Create an accounting-only organization with an idempotency reference.',
     method: 'POST', endpoint: '/api/organizations', auth: 'owner-account', payment: null, required: ['client_reference', 'name'],
     body_schema: { type: 'object', required: ['client_reference', 'name'], additionalProperties: false, properties: {
       client_reference: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' }, name: { type: 'string', minLength: 1, maxLength: 120 },
     } } },
-  { id: 'inspect_organization', label: 'Inspect organization', description: 'Read private assignments and recent audit events.',
-    method: 'GET', endpoint: '/api/organizations/{id}', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'inspect_organization', label: 'Inspect organization', description: 'Owner sees assignments and audit; a viewer or service read key sees summary only.',
+    method: 'GET', endpoint: '/api/organizations/{id}', auth: 'owner-or-organization-read-key', payment: null, required: ['id'] },
   { id: 'list_organization_invitations', label: 'List organization invitations', description: 'Owner-only invitation status list.',
     method: 'GET', endpoint: '/api/organizations/{id}/invitations', auth: 'owner-account', payment: null, required: ['id'] },
   { id: 'invite_organization_viewer', label: 'Invite organization viewer', description: 'Invite one existing account to read organization and team metadata.',
@@ -576,8 +577,19 @@ export const AGENT_ACTIONS: AgentAction[] = [
   { id: 'revoke_organization_member', label: 'Revoke organization member', description: 'Owner-only revocation of a read-only member.',
     method: 'DELETE', endpoint: '/api/organizations/{id}/members/{accountId}', auth: 'owner-account', payment: null,
     required: ['id', 'accountId'] },
-  { id: 'list_organization_teams', label: 'List organization teams', description: 'List private owner-scoped accounting teams.',
-    method: 'GET', endpoint: '/api/organizations/{id}/teams', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'list_organization_teams', label: 'List organization teams', description: 'List accounting team metadata in an accessible organization.',
+    method: 'GET', endpoint: '/api/organizations/{id}/teams', auth: 'owner-or-organization-read-key', payment: null, required: ['id'] },
+  { id: 'list_organization_service_accounts', label: 'List service accounts', description: 'Owner-only credential metadata; no secret values.',
+    method: 'GET', endpoint: '/api/organizations/{id}/service-accounts', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'create_organization_service_account', label: 'Create service account', description: 'Issue a short-lived read-only organization key. The raw key appears only in the initial response.',
+    method: 'POST', endpoint: '/api/organizations/{id}/service-accounts', auth: 'owner-account', payment: null,
+    required: ['id', 'client_reference', 'name'], optional: ['lifetime_days'],
+    body_schema: { type: 'object', required: ['client_reference', 'name'], additionalProperties: false, properties: {
+      client_reference: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' },
+      name: { type: 'string', minLength: 1, maxLength: 120 }, lifetime_days: { type: 'integer', minimum: 1, maximum: 90, default: 30 },
+    } } },
+  { id: 'revoke_organization_service_account', label: 'Revoke service account', description: 'Immediately revoke an owned organization read key.',
+    method: 'DELETE', endpoint: '/api/organizations/{id}/service-accounts/{accountId}', auth: 'owner-account', payment: null, required: ['id', 'accountId'] },
   { id: 'create_organization_team', label: 'Create organization team', description: 'Create an idempotent team within an owned organization.',
     method: 'POST', endpoint: '/api/organizations/{id}/teams', auth: 'owner-account', payment: null, required: ['id', 'slug', 'name'],
     body_schema: { type: 'object', required: ['slug', 'name'], additionalProperties: false, properties: {
@@ -949,6 +961,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const agentAuthenticated = [{ BearerAuth: [] }, { AgentApiKeyHeader: [] }]
   const authenticated = [...agentAuthenticated, { CookieAuth: [] }]
   const ownerAuthenticated = [{ BearerAuth: [] }, { CookieAuth: [] }]
+  const organizationReaderAuthenticated = [...ownerAuthenticated, { OrganizationReadKey: [] }]
   const ownerLinkSecurity = [
     { BearerAuth: [], AgentApiKeyHeader: [] },
     { CookieAuth: [], AgentApiKeyHeader: [] },
@@ -1577,13 +1590,13 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       delete: { operationId: 'cancel_workflow', summary: 'Cancel an owned unfunded workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Workflow cancelled or already cancelled' }, 404: { description: 'Workflow not owned' } } },
     },
     '/api/organizations': {
-      get: { operationId: 'list_organizations', summary: 'List private owner-scoped accounting organizations', security: ownerAuthenticated,
+      get: { operationId: 'list_organizations', summary: 'List account organizations or one service-account organization', security: organizationReaderAuthenticated,
         responses: { 200: { description: 'Owned organizations' }, 401: { description: 'Owner authentication required' } } },
       post: { operationId: 'create_organization', summary: 'Create an accounting-only organization', security: ownerAuthenticated,
         requestBody: { required: true, content: { 'application/json': { schema: getAction('create_organization').body_schema } } },
         responses: { 201: { description: 'Organization created' }, 200: { description: 'Idempotent replay' }, 409: { description: 'Reference conflict' }, 503: { description: 'Enterprise foundation disabled' } } },
     },
-    '/api/organizations/{id}': { get: { operationId: 'inspect_organization', summary: 'Inspect owned organization or limited viewer metadata', security: ownerAuthenticated,
+    '/api/organizations/{id}': { get: { operationId: 'inspect_organization', summary: 'Inspect owned organization or limited viewer metadata', security: organizationReaderAuthenticated,
       parameters: [tradeIdParameter], responses: { 200: { description: 'Owner details or read-only viewer summary' }, 404: { description: 'Organization inaccessible' } } } },
     '/api/organizations/{id}/invitations': {
       get: { operationId: 'list_organization_invitations', summary: 'List owner-only invitation statuses', security: ownerAuthenticated,
@@ -1606,12 +1619,22 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       parameters: [tradeIdParameter, { name: 'accountId', in: 'path', required: true, schema: { type: 'string' } }],
       responses: { 200: { description: 'Membership revoked or idempotent replay' }, 404: { description: 'Membership inaccessible' } } } },
     '/api/organizations/{id}/teams': {
-      get: { operationId: 'list_organization_teams', summary: 'List owned organization accounting teams', security: ownerAuthenticated,
+      get: { operationId: 'list_organization_teams', summary: 'List organization accounting teams', security: organizationReaderAuthenticated,
         parameters: [tradeIdParameter], responses: { 200: { description: 'Private team list' }, 404: { description: 'Organization not owned' } } },
       post: { operationId: 'create_organization_team', summary: 'Create an accounting-only team', security: ownerAuthenticated,
         parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('create_organization_team').body_schema } } },
         responses: { 201: { description: 'Team created' }, 200: { description: 'Idempotent replay' }, 409: { description: 'Team slug conflict' } } },
     },
+    '/api/organizations/{id}/service-accounts': {
+      get: { operationId: 'list_organization_service_accounts', summary: 'List owned organization credential metadata', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], responses: { 200: { description: 'Credential metadata without raw keys' }, 404: { description: 'Organization not owned' } } },
+      post: { operationId: 'create_organization_service_account', summary: 'Create a read-only organization credential', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('create_organization_service_account').body_schema } } },
+        responses: { 201: { description: 'New key shown once' }, 200: { description: 'Idempotent replay without raw key' }, 409: { description: 'Reference conflict' }, 503: { description: 'Enterprise foundation disabled' } } },
+    },
+    '/api/organizations/{id}/service-accounts/{accountId}': { delete: { operationId: 'revoke_organization_service_account', summary: 'Revoke a read-only organization credential', security: ownerAuthenticated,
+      parameters: [tradeIdParameter, { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Credential revoked or idempotent replay' }, 404: { description: 'Credential not owned' } } } },
     '/api/organizations/{id}/teams/{teamId}': { patch: { operationId: 'archive_organization_team', summary: 'Archive an empty team', security: ownerAuthenticated,
       parameters: [tradeIdParameter, { name: 'teamId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       requestBody: { required: true, content: { 'application/json': { schema: getAction('archive_organization_team').body_schema } } },
@@ -1771,6 +1794,7 @@ export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
     optional_agent_api_key: 'optional registered-agent key',
     agent_api_key: 'registered-agent key',
     'owner-account': 'authenticated human account or signed-wallet account',
+    'owner-or-organization-read-key': 'owner account, accepted viewer, or scoped organization read key',
     'owner-and-agent-key': 'authenticated human account plus current primary agent key',
     mpp: 'MPP credential',
     'task-owner': 'task owner authentication',
@@ -1827,7 +1851,7 @@ Each order also requires an objective; optional structured input is visible only
 
 ## Enterprise accounting foundation
 
-An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`POST /api/organizations/{id}/teams\` creates an owner-only team; \`PATCH /api/organizations/{id}/teams/{teamId}\` archives it after its assignments are removed. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center and optionally an active team; \`DELETE\` removes the assignment. An owner may invite a specific account ID with \`POST /api/organizations/{id}/invitations\`; that account sees the pending invitation through \`GET /api/organizations/invitations\` and accepts it with \`POST /api/organizations/invitations/{invitationId}/accept\`. The owner can cancel pending invitations and revoke active members. Members have viewer-only access to organization names and team metadata; assignments, audit, invitations, and membership lists remain owner-only. Neither membership nor team assignment grants ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migrations.
+An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`POST /api/organizations/{id}/teams\` creates an owner-only team; \`PATCH /api/organizations/{id}/teams/{teamId}\` archives it after its assignments are removed. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center and optionally an active team; \`DELETE\` removes the assignment. An owner may invite a specific account ID with \`POST /api/organizations/{id}/invitations\`; that account sees the pending invitation through \`GET /api/organizations/invitations\` and accepts it with \`POST /api/organizations/invitations/{invitationId}/accept\`. The owner can cancel pending invitations and revoke active members. Members have viewer-only access to organization names and team metadata; assignments, audit, invitations, and membership lists remain owner-only. Owners can issue and revoke expiring \`cmo_\` organization read keys through \`/api/organizations/{id}/service-accounts\`; keys can read only their organization summary and teams and cannot authenticate to routing or checkout. Neither membership, service credential, nor team assignment grants ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migrations.
 
 ## Authentication
 

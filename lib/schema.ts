@@ -205,6 +205,25 @@ export const organization_memberships = sqliteTable('organization_memberships', 
   index('organization_memberships_account_status_idx').on(table.account_id, table.status),
 ]);
 
+/** Dedicated read-only keys. These are never accepted by general account or marketplace authentication. */
+export const organization_service_accounts = sqliteTable('organization_service_accounts', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  name: text('name').notNull(),
+  lifetime_days: integer('lifetime_days').notNull(),
+  credential_hash: text('credential_hash').notNull(),
+  credential_prefix: text('credential_prefix').notNull(),
+  status: text('status', { enum: ['active', 'revoked'] }).notNull().default('active'),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  revoked_at: integer('revoked_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  uniqueIndex('organization_service_accounts_org_reference_idx').on(table.organization_id, table.client_reference),
+  uniqueIndex('organization_service_accounts_hash_idx').on(table.credential_hash),
+  index('organization_service_accounts_org_status_idx').on(table.organization_id, table.status),
+]);
+
 export const organization_agent_assignments = sqliteTable('organization_agent_assignments', {
   agent_id: text('agent_id').primaryKey().references(() => agents.id, { onDelete: 'cascade' }),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
@@ -218,10 +237,11 @@ export const organization_audit_events = sqliteTable('organization_audit_events'
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
   actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
-  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked'] }).notNull(),
+  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked'] }).notNull(),
   agent_id: text('agent_id'),
   team_id: text('team_id'),
   member_account_id: text('member_account_id'),
+  service_account_id: text('service_account_id'),
   cost_center: text('cost_center'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
 }, (table) => [index('organization_audit_org_created_idx').on(table.organization_id, table.created_at)]);

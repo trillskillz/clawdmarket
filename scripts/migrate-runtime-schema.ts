@@ -643,6 +643,19 @@ async function main() {
         await database.execute('CREATE INDEX IF NOT EXISTS organization_memberships_account_status_idx ON organization_memberships(account_id, status)')
         await ensureColumns(database, 'organization_audit_events', { member_account_id: 'TEXT' })
       } },
+      { id: '2026-09-30-enterprise-service-accounts-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_service_accounts (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL, name TEXT NOT NULL, lifetime_days INTEGER NOT NULL,
+          credential_hash TEXT NOT NULL, credential_prefix TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active', expires_at INTEGER NOT NULL,
+          revoked_at INTEGER, created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organization_service_accounts_org_reference_idx ON organization_service_accounts(organization_id, client_reference)')
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organization_service_accounts_hash_idx ON organization_service_accounts(credential_hash)')
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_service_accounts_org_status_idx ON organization_service_accounts(organization_id, status)')
+        await ensureColumns(database, 'organization_audit_events', { service_account_id: 'TEXT' })
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({
