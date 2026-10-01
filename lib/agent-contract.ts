@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.28'
+export const AGENT_CONTRACT_VERSION = '1.29'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -556,10 +556,21 @@ export const AGENT_ACTIONS: AgentAction[] = [
     } } },
   { id: 'inspect_organization', label: 'Inspect organization', description: 'Read private assignments and recent audit events.',
     method: 'GET', endpoint: '/api/organizations/{id}', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'list_organization_teams', label: 'List organization teams', description: 'List private owner-scoped accounting teams.',
+    method: 'GET', endpoint: '/api/organizations/{id}/teams', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'create_organization_team', label: 'Create organization team', description: 'Create an idempotent team within an owned organization.',
+    method: 'POST', endpoint: '/api/organizations/{id}/teams', auth: 'owner-account', payment: null, required: ['id', 'slug', 'name'],
+    body_schema: { type: 'object', required: ['slug', 'name'], additionalProperties: false, properties: {
+      slug: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,63}$' }, name: { type: 'string', minLength: 1, maxLength: 120 },
+    } } },
+  { id: 'archive_organization_team', label: 'Archive organization team', description: 'Archive an active team after its agent assignments are removed.',
+    method: 'PATCH', endpoint: '/api/organizations/{id}/teams/{teamId}', auth: 'owner-account', payment: null, required: ['id', 'teamId', 'status'],
+    body_schema: { type: 'object', required: ['status'], additionalProperties: false, properties: { status: { type: 'string', enum: ['archived'] } } } },
   { id: 'assign_organization_agent', label: 'Assign agent to organization', description: 'Assign an already owned agent to a cost center; grants no purchasing authority.',
-    method: 'PUT', endpoint: '/api/organizations/{id}/agents', auth: 'owner-account', payment: null, required: ['id', 'agent_id', 'cost_center'],
+    method: 'PUT', endpoint: '/api/organizations/{id}/agents', auth: 'owner-account', payment: null, required: ['id', 'agent_id', 'cost_center'], optional: ['team_id'],
     body_schema: { type: 'object', required: ['agent_id', 'cost_center'], additionalProperties: false, properties: {
       agent_id: { type: 'string', minLength: 1, maxLength: 200 }, cost_center: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$' },
+      team_id: { type: 'string', format: 'uuid' },
     } } },
   { id: 'unassign_organization_agent', label: 'Remove agent assignment', description: 'Idempotently remove an accounting assignment.',
     method: 'DELETE', endpoint: '/api/organizations/{id}/agents', auth: 'owner-account', payment: null, required: ['id', 'agent_id'],
@@ -1554,6 +1565,17 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     },
     '/api/organizations/{id}': { get: { operationId: 'inspect_organization', summary: 'Inspect owned organization, assignments, and audit', security: ownerAuthenticated,
       parameters: [tradeIdParameter], responses: { 200: { description: 'Private organization details' }, 404: { description: 'Organization not owned' } } } },
+    '/api/organizations/{id}/teams': {
+      get: { operationId: 'list_organization_teams', summary: 'List owned organization accounting teams', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], responses: { 200: { description: 'Private team list' }, 404: { description: 'Organization not owned' } } },
+      post: { operationId: 'create_organization_team', summary: 'Create an accounting-only team', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('create_organization_team').body_schema } } },
+        responses: { 201: { description: 'Team created' }, 200: { description: 'Idempotent replay' }, 409: { description: 'Team slug conflict' } } },
+    },
+    '/api/organizations/{id}/teams/{teamId}': { patch: { operationId: 'archive_organization_team', summary: 'Archive an empty team', security: ownerAuthenticated,
+      parameters: [tradeIdParameter, { name: 'teamId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('archive_organization_team').body_schema } } },
+      responses: { 200: { description: 'Archived team or idempotent replay' }, 409: { description: 'Team still has agent assignments' } } } },
     '/api/organizations/{id}/agents': {
       put: { operationId: 'assign_organization_agent', summary: 'Assign an owned agent to a cost center', security: ownerAuthenticated,
         parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('assign_organization_agent').body_schema } } },
@@ -1765,7 +1787,7 @@ Each order also requires an objective; optional structured input is visible only
 
 ## Enterprise accounting foundation
 
-An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center; \`DELETE\` removes the assignment. Creation uses a client reference for safe retries. Assignments and audit events are private. These records grant no ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migration.
+An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`POST /api/organizations/{id}/teams\` creates an owner-only team; \`PATCH /api/organizations/{id}/teams/{teamId}\` archives it after its assignments are removed. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center and optionally an active team; \`DELETE\` removes the assignment. Organization creation uses a client reference and team creation uses a unique slug for safe retries. Assignments and audit events are private. These records grant no ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migrations.
 
 ## Authentication
 

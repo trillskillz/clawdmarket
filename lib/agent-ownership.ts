@@ -8,6 +8,8 @@ import {
   agent_owners,
   agent_ownership_transfers,
   agents,
+  organization_agent_assignments,
+  organization_audit_events,
 } from '@/lib/schema'
 
 export const OWNERSHIP_TRANSFER_TTL_SECONDS = 24 * 60 * 60
@@ -309,6 +311,22 @@ export async function acceptOwnershipTransfer(input: {
         isNull(agents.archivedAt),
       )).returning({ id: agents.id })
       if (!ownerUpdated || !agentUpdated) throw new Error('ownership_transfer_state_changed')
+
+      // Accounting associations belong to the former owner and grant no authority to the recipient.
+      // Remove them in the same transaction so old teams cannot retain orphaned assignments.
+      const [accountingAssignment] = await tx.delete(organization_agent_assignments).where(
+        eq(organization_agent_assignments.agent_id, input.agentId),
+      ).returning()
+      if (accountingAssignment) await tx.insert(organization_audit_events).values({
+        id: crypto.randomUUID(),
+        organization_id: accountingAssignment.organization_id,
+        actor_account_id: input.acceptingUserId,
+        action: 'agent_unassigned',
+        agent_id: input.agentId,
+        team_id: accountingAssignment.team_id,
+        cost_center: accountingAssignment.cost_center,
+        created_at: now,
+      })
 
       const revokedNamed = await tx.update(agent_credentials).set({
         revokedAt: now,

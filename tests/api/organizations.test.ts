@@ -15,6 +15,9 @@ let list: typeof import('@/app/api/organizations/route').GET
 let inspect: typeof import('@/app/api/organizations/[id]/route').GET
 let assign: typeof import('@/app/api/organizations/[id]/agents/route').PUT
 let unassign: typeof import('@/app/api/organizations/[id]/agents/route').DELETE
+let createTeam: typeof import('@/app/api/organizations/[id]/teams/route').POST
+let listTeams: typeof import('@/app/api/organizations/[id]/teams/route').GET
+let archiveTeam: typeof import('@/app/api/organizations/[id]/teams/[teamId]/route').PATCH
 
 before(async () => {
   directory = mkdtempSync(join(tmpdir(), 'clawdmarket-workspace-test-organizations-'))
@@ -28,6 +31,8 @@ before(async () => {
   ;({ POST: create, GET: list } = await import('@/app/api/organizations/route'))
   inspect = (await import('@/app/api/organizations/[id]/route')).GET
   ;({ PUT: assign, DELETE: unassign } = await import('@/app/api/organizations/[id]/agents/route'))
+  ;({ POST: createTeam, GET: listTeams } = await import('@/app/api/organizations/[id]/teams/route'))
+  archiveTeam = (await import('@/app/api/organizations/[id]/teams/[teamId]/route')).PATCH
   await db.insert(schema.users).values([
     { id: 'org-owner', email: 'owner@test.invalid', name: 'Owner', password_hash: 'unused' },
     { id: 'org-outsider', email: 'outsider@test.invalid', name: 'Outsider', password_hash: 'unused' },
@@ -35,11 +40,46 @@ before(async () => {
   await db.insert(schema.agents).values([
     { id: 'org-agent', name: 'Owned', description: 'Owned agent', capabilities: '[]', endpoint: 'https://test.invalid', owner_address: '', api_key: 'unused' },
     { id: 'other-agent', name: 'Other', description: 'Other agent', capabilities: '[]', endpoint: 'https://test.invalid', owner_address: '', api_key: 'unused' },
+    { id: 'team-agent', name: 'Team', description: 'Team agent', capabilities: '[]', endpoint: 'https://test.invalid', owner_address: '', api_key: 'unused' },
   ])
   await db.insert(schema.agent_owners).values([
     { agentId: 'org-agent', userId: 'org-owner', establishedBy: 'test' },
     { agentId: 'other-agent', userId: 'org-outsider', establishedBy: 'test' },
+    { agentId: 'team-agent', userId: 'org-owner', establishedBy: 'test' },
   ])
+})
+
+test('owner-only teams are idempotent, scoped, and archived only after assignments end', async () => {
+  const created = await create(request('/api/organizations', 'POST', 'org-owner', { client_reference: 'team-org', name: 'Team Org' }))
+  assert.equal(created.status, 201)
+  const organizationId = (await created.json()).organization.id as string
+  const params = { params: Promise.resolve({ id: organizationId }) }
+  const teamPath = `/api/organizations/${organizationId}/teams`
+  const teamBody = { slug: 'platform', name: 'Platform' }
+  assert.equal((await createTeam(request(teamPath, 'POST', 'org-outsider', teamBody), params)).status, 404)
+  const teamCreated = await createTeam(request(teamPath, 'POST', 'org-owner', teamBody), params)
+  assert.equal(teamCreated.status, 201, JSON.stringify(await teamCreated.clone().json()))
+  const team = (await teamCreated.json()).team
+  assert.equal(team.status, 'active')
+  assert.equal((await (await createTeam(request(teamPath, 'POST', 'org-owner', teamBody), params)).json()).idempotent, true)
+  assert.equal((await createTeam(request(teamPath, 'POST', 'org-owner', { ...teamBody, name: 'Other' }), params)).status, 409)
+  assert.equal((await listTeams(request(teamPath, 'GET', 'org-outsider'), params)).status, 404)
+  assert.equal((await (await listTeams(request(teamPath, 'GET', 'org-owner'), params)).json()).teams.length, 1)
+  const otherOrg = await create(request('/api/organizations', 'POST', 'org-owner', { client_reference: 'other-team-org', name: 'Other Org' }))
+  const otherOrgId = (await otherOrg.json()).organization.id as string
+  assert.equal((await assign(request(`/api/organizations/${otherOrgId}/agents`, 'PUT', 'org-owner', {
+    agent_id: 'team-agent', cost_center: 'ENG', team_id: team.id }), { params: Promise.resolve({ id: otherOrgId }) })).status, 404)
+  const agentPath = `/api/organizations/${organizationId}/agents`
+  assert.equal((await assign(request(agentPath, 'PUT', 'org-owner', { agent_id: 'team-agent', cost_center: 'ENG', team_id: team.id }), params)).status, 200)
+  const archiveParams = { params: Promise.resolve({ id: organizationId, teamId: team.id }) }
+  const archivePath = `${teamPath}/${team.id}`
+  assert.equal((await archiveTeam(request(archivePath, 'PATCH', 'org-owner', { status: 'archived' }), archiveParams)).status, 409)
+  assert.equal((await unassign(request(agentPath, 'DELETE', 'org-owner', { agent_id: 'team-agent' }), params)).status, 200)
+  const archived = await archiveTeam(request(archivePath, 'PATCH', 'org-owner', { status: 'archived' }), archiveParams)
+  assert.equal((await archived.json()).team.status, 'archived')
+  assert.equal((await (await archiveTeam(request(archivePath, 'PATCH', 'org-owner', { status: 'archived' }), archiveParams)).json()).idempotent, true)
+  assert.equal((await assign(request(agentPath, 'PUT', 'org-owner', { agent_id: 'team-agent', cost_center: 'ENG', team_id: team.id }), params)).status, 404)
+  assert.equal((await db.select().from(schema.trades)).length, 0)
 })
 
 after(() => {
@@ -78,6 +118,6 @@ test('organization creation, assignment, private reads, audit, and idempotency',
   assert.equal(JSON.stringify(detail).includes('owner@test.invalid'), false)
   assert.equal((await unassign(request(path, 'DELETE', 'org-owner', { agent_id: 'org-agent' }), params)).status, 200)
   assert.equal((await (await unassign(request(path, 'DELETE', 'org-owner', { agent_id: 'org-agent' }), params)).json()).idempotent, true)
-  assert.equal((await db.select().from(schema.organization_audit_events)).length, 3)
+  assert.equal((await db.select().from(schema.organization_audit_events)).filter((row) => row.organization_id === organization.id).length, 3)
   assert.equal((await db.select().from(schema.trades)).length, 0)
 })

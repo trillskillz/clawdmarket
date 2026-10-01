@@ -8,6 +8,12 @@ export const organizationInput = z.object({
 export const assignmentInput = z.object({
   agent_id: z.string().min(1).max(200),
   cost_center: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/),
+  team_id: z.uuid().optional(),
+}).strict()
+
+export const teamInput = z.object({
+  slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+  name: z.string().trim().min(1).max(120),
 }).strict()
 
 export function enterpriseFoundationEnabled() {
@@ -18,4 +24,9 @@ export function enterpriseFoundationEnabled() {
 export function organizationDto(row: { id: string, name: string, created_at: Date, updated_at: Date }) {
   return { id: row.id, name: row.name, created_at: row.created_at.toISOString(), updated_at: row.updated_at.toISOString(),
     authority: 'accounting_only' as const }
+}
+
+export function teamDto(row: { id: string, slug: string, name: string, status: string, created_at: Date, updated_at: Date }) {
+  return { id: row.id, slug: row.slug, name: row.name, status: row.status,
+    created_at: row.created_at.toISOString(), updated_at: row.updated_at.toISOString(), authority: 'accounting_only' as const }
 }

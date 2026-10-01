@@ -612,6 +612,17 @@ async function main() {
         )`)
         await database.execute('CREATE INDEX IF NOT EXISTS organization_audit_org_created_idx ON organization_audit_events(organization_id, created_at)')
       } },
+      { id: '2026-09-30-enterprise-teams-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_teams (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          slug TEXT NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active',
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organization_teams_org_slug_idx ON organization_teams(organization_id, slug)')
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_teams_org_status_idx ON organization_teams(organization_id, status)')
+        await ensureColumns(database, 'organization_agent_assignments', { team_id: 'TEXT REFERENCES organization_teams(id) ON DELETE RESTRICT' })
+        await ensureColumns(database, 'organization_audit_events', { team_id: 'TEXT' })
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

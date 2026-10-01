@@ -162,9 +162,23 @@ export const organizations = sqliteTable('organizations', {
   index('organizations_owner_created_idx').on(table.owner_account_id, table.created_at),
 ]);
 
+export const organization_teams = sqliteTable('organization_teams', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  slug: text('slug').notNull(),
+  name: text('name').notNull(),
+  status: text('status', { enum: ['active', 'archived'] }).notNull().default('active'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  uniqueIndex('organization_teams_org_slug_idx').on(table.organization_id, table.slug),
+  index('organization_teams_org_status_idx').on(table.organization_id, table.status),
+]);
+
 export const organization_agent_assignments = sqliteTable('organization_agent_assignments', {
   agent_id: text('agent_id').primaryKey().references(() => agents.id, { onDelete: 'cascade' }),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  team_id: text('team_id').references(() => organization_teams.id, { onDelete: 'restrict' }),
   cost_center: text('cost_center').notNull(),
   assigned_at: integer('assigned_at', { mode: 'timestamp' }).notNull(),
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
@@ -174,8 +188,9 @@ export const organization_audit_events = sqliteTable('organization_audit_events'
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
   actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
-  action: text('action', { enum: ['created', 'agent_assigned', 'agent_unassigned'] }).notNull(),
+  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned'] }).notNull(),
   agent_id: text('agent_id'),
+  team_id: text('team_id'),
   cost_center: text('cost_center'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
 }, (table) => [index('organization_audit_org_created_idx').on(table.organization_id, table.created_at)]);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agent_owners, organizations, organization_agent_assignments, organization_audit_events } from '@/lib/schema'
+import { agent_owners, organizations, organization_teams, organization_agent_assignments, organization_audit_events } from '@/lib/schema'
 import { resolveAuthenticatedOwnerAccount } from '@/lib/agent-owner-auth'
 import { validateCsrf } from '@/lib/csrf'
 import { assignmentInput, enterpriseFoundationEnabled } from '@/lib/enterprise-foundation'
@@ -28,6 +28,7 @@ async function mutate(request: NextRequest, id: string, operation: 'assign' | 'u
     if (!limit.success) return failure('ORGANIZATION_RATE_LIMIT', 'Organization assignment rate limit reached', 429)
     const agent_id = parsed.data.agent_id
     const cost_center = 'cost_center' in parsed.data ? parsed.data.cost_center as string : undefined
+    const team_id = 'team_id' in parsed.data ? parsed.data.team_id as string | undefined : undefined
     const result = await db.transaction(async (tx) => {
       const [organization] = await tx.select({ id: organizations.id }).from(organizations).where(and(
         eq(organizations.id, id), eq(organizations.owner_account_id, owner.userId))).limit(1)
@@ -39,13 +40,18 @@ async function mutate(request: NextRequest, id: string, operation: 'assign' | 'u
         .where(eq(organization_agent_assignments.agent_id, agent_id)).limit(1)
       if (operation === 'assign') {
         if (!cost_center) return 'invalid' as const
-        if (current?.organization_id === id && current.cost_center === cost_center) return 'idempotent' as const
+        if (team_id) {
+          const [team] = await tx.select({ id: organization_teams.id }).from(organization_teams).where(and(
+            eq(organization_teams.id, team_id), eq(organization_teams.organization_id, id), eq(organization_teams.status, 'active'))).limit(1)
+          if (!team) return 'team_not_found' as const
+        }
+        if (current?.organization_id === id && current.cost_center === cost_center && current.team_id === (team_id || null)) return 'idempotent' as const
         if (current) return 'conflict' as const
         const now = new Date()
         await tx.insert(organization_agent_assignments).values({ agent_id, organization_id: id,
-          cost_center, assigned_at: now, updated_at: now })
+          team_id: team_id || null, cost_center, assigned_at: now, updated_at: now })
         await tx.insert(organization_audit_events).values({ id: crypto.randomUUID(), organization_id: id,
-          actor_account_id: owner.userId, action: 'agent_assigned', agent_id, cost_center, created_at: now })
+          actor_account_id: owner.userId, action: 'agent_assigned', agent_id, team_id: team_id || null, cost_center, created_at: now })
         return 'changed' as const
       }
       if (!current) return 'idempotent' as const
@@ -53,11 +59,13 @@ async function mutate(request: NextRequest, id: string, operation: 'assign' | 'u
       await tx.delete(organization_agent_assignments).where(and(eq(organization_agent_assignments.agent_id, agent_id),
         eq(organization_agent_assignments.organization_id, id)))
       await tx.insert(organization_audit_events).values({ id: crypto.randomUUID(), organization_id: id,
-        actor_account_id: owner.userId, action: 'agent_unassigned', agent_id, cost_center: current.cost_center, created_at: new Date() })
+        actor_account_id: owner.userId, action: 'agent_unassigned', agent_id, team_id: current.team_id,
+        cost_center: current.cost_center, created_at: new Date() })
       return 'changed' as const
     })
     if (result === 'not_found') return failure('ORGANIZATION_NOT_FOUND', 'Organization not found', 404)
     if (result === 'invalid') return failure('INVALID_AGENT_ASSIGNMENT', 'Cost center is required', 400)
+    if (result === 'team_not_found') return failure('TEAM_NOT_FOUND', 'Active team not found in organization', 404)
     if (result === 'agent_not_owned') return failure('AGENT_NOT_OWNED', 'Agent is not linked to this account', 403)
     if (result === 'conflict') return failure('AGENT_ASSIGNMENT_CONFLICT', 'Agent already has an organization assignment', 409)
     return NextResponse.json({ agent_id, organization_id: id, assigned: operation === 'assign', idempotent: result === 'idempotent' },
