@@ -149,6 +149,37 @@ export const api_keys = sqliteTable('api_keys', {
     .$defaultFn(() => new Date()),
 });
 
+/** Private accounting namespace. Association never grants ownership or spending authority. */
+export const organizations = sqliteTable('organizations', {
+  id: text('id').primaryKey(),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  name: text('name').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [
+  uniqueIndex('organizations_owner_reference_idx').on(table.owner_account_id, table.client_reference),
+  index('organizations_owner_created_idx').on(table.owner_account_id, table.created_at),
+]);
+
+export const organization_agent_assignments = sqliteTable('organization_agent_assignments', {
+  agent_id: text('agent_id').primaryKey().references(() => agents.id, { onDelete: 'cascade' }),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  cost_center: text('cost_center').notNull(),
+  assigned_at: integer('assigned_at', { mode: 'timestamp' }).notNull(),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [index('organization_assignments_org_idx').on(table.organization_id)]);
+
+export const organization_audit_events = sqliteTable('organization_audit_events', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  action: text('action', { enum: ['created', 'agent_assigned', 'agent_unassigned'] }).notNull(),
+  agent_id: text('agent_id'),
+  cost_center: text('cost_center'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => [index('organization_audit_org_created_idx').on(table.organization_id, table.created_at)]);
+
 // Completed, read-only A2A interactions are isolated from marketplace tasks
 // and all payment/escrow tables. Results expire after seven days.
 export const a2a_tasks = sqliteTable('a2a_tasks', {

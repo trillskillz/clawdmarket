@@ -2,7 +2,7 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.27'
+export const AGENT_CONTRACT_VERSION = '1.28'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -547,6 +547,23 @@ export const AGENT_ACTIONS: AgentAction[] = [
     id: 'cancel_workflow', label: 'Cancel workflow', description: 'Idempotently cancel an unfunded workflow plan.',
     method: 'DELETE', endpoint: '/api/workflows/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
+  { id: 'list_organizations', label: 'List organizations', description: 'List private accounting namespaces owned by this account.',
+    method: 'GET', endpoint: '/api/organizations', auth: 'owner-account', payment: null },
+  { id: 'create_organization', label: 'Create organization', description: 'Create an accounting-only organization with an idempotency reference.',
+    method: 'POST', endpoint: '/api/organizations', auth: 'owner-account', payment: null, required: ['client_reference', 'name'],
+    body_schema: { type: 'object', required: ['client_reference', 'name'], additionalProperties: false, properties: {
+      client_reference: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' }, name: { type: 'string', minLength: 1, maxLength: 120 },
+    } } },
+  { id: 'inspect_organization', label: 'Inspect organization', description: 'Read private assignments and recent audit events.',
+    method: 'GET', endpoint: '/api/organizations/{id}', auth: 'owner-account', payment: null, required: ['id'] },
+  { id: 'assign_organization_agent', label: 'Assign agent to organization', description: 'Assign an already owned agent to a cost center; grants no purchasing authority.',
+    method: 'PUT', endpoint: '/api/organizations/{id}/agents', auth: 'owner-account', payment: null, required: ['id', 'agent_id', 'cost_center'],
+    body_schema: { type: 'object', required: ['agent_id', 'cost_center'], additionalProperties: false, properties: {
+      agent_id: { type: 'string', minLength: 1, maxLength: 200 }, cost_center: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$' },
+    } } },
+  { id: 'unassign_organization_agent', label: 'Remove agent assignment', description: 'Idempotently remove an accounting assignment.',
+    method: 'DELETE', endpoint: '/api/organizations/{id}/agents', auth: 'owner-account', payment: null, required: ['id', 'agent_id'],
+    body_schema: { type: 'object', required: ['agent_id'], additionalProperties: false, properties: { agent_id: { type: 'string', minLength: 1, maxLength: 200 } } } },
   {
     id: 'execute_route', label: 'Reserve routed work',
     description: 'Check up to the saved retry limit of ranked providers, record pre-checkout attempts, and atomically reserve one unpaid external checkout. Buyer funding remains a separate authenticated action.',
@@ -1528,6 +1545,23 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       get: { operationId: 'inspect_workflow', summary: 'Inspect an owned workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Buyer-owned workflow and nodes' }, 404: { description: 'Workflow not owned' } } },
       delete: { operationId: 'cancel_workflow', summary: 'Cancel an owned unfunded workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Workflow cancelled or already cancelled' }, 404: { description: 'Workflow not owned' } } },
     },
+    '/api/organizations': {
+      get: { operationId: 'list_organizations', summary: 'List private owner-scoped accounting organizations', security: ownerAuthenticated,
+        responses: { 200: { description: 'Owned organizations' }, 401: { description: 'Owner authentication required' } } },
+      post: { operationId: 'create_organization', summary: 'Create an accounting-only organization', security: ownerAuthenticated,
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('create_organization').body_schema } } },
+        responses: { 201: { description: 'Organization created' }, 200: { description: 'Idempotent replay' }, 409: { description: 'Reference conflict' }, 503: { description: 'Enterprise foundation disabled' } } },
+    },
+    '/api/organizations/{id}': { get: { operationId: 'inspect_organization', summary: 'Inspect owned organization, assignments, and audit', security: ownerAuthenticated,
+      parameters: [tradeIdParameter], responses: { 200: { description: 'Private organization details' }, 404: { description: 'Organization not owned' } } } },
+    '/api/organizations/{id}/agents': {
+      put: { operationId: 'assign_organization_agent', summary: 'Assign an owned agent to a cost center', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('assign_organization_agent').body_schema } } },
+        responses: { 200: { description: 'Agent assigned or idempotent replay' }, 403: { description: 'Agent not owned' }, 409: { description: 'Agent already assigned' } } },
+      delete: { operationId: 'unassign_organization_agent', summary: 'Remove an owned agent cost center assignment', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('unassign_organization_agent').body_schema } } },
+        responses: { 200: { description: 'Assignment removed or idempotent replay' }, 403: { description: 'Agent not owned' } } },
+    },
     '/api/routes/{id}/execute': { post: { operationId: 'execute_route', summary: 'Try saved candidates before checkout and reserve one unpaid order', security: authenticated, parameters: [tradeIdParameter],
       responses: { 201: { description: 'Order and external checkout created; payment is unconfirmed and may arrive late' }, 200: { description: 'Idempotent route replay with payment exposure' }, 404: { description: 'Route not owned' }, 409: { description: 'Provider, budget, price, capacity, or rail changed' }, 410: { description: 'Plan expired' }, 503: { description: 'Route execution disabled' } } } },
     '/api/routes/{id}': {
@@ -1728,6 +1762,10 @@ Each order also requires an objective; optional structured input is visible only
 \`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and \`claimed_only\` evidence marker. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
 
 \`POST /api/workflows/plan\` stores an explicit child-work dependency graph with at most 16 nodes, three dependency edges, and child budgets whose sum cannot exceed the parent USD budget. It neither delegates work nor creates routes, orders, or payments. Buyer-only \`GET /api/workflows/{id}\` inspects the plan, and \`DELETE /api/workflows/{id}\` cancels it. Production planning requires \`CLAWDMARKET_WORKFLOW_PLANNING_ENABLED=true\` after its additive migration; execution is unavailable.
+
+## Enterprise accounting foundation
+
+An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center; \`DELETE\` removes the assignment. Creation uses a client reference for safe retries. Assignments and audit events are private. These records grant no ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migration.
 
 ## Authentication
 

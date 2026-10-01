@@ -44,7 +44,7 @@ test.describe('Core smoke matrix', () => {
     await expect(docsNavigation.getByRole('link', { name: /API reference/ })).toHaveAttribute('aria-current', 'location');
 
     const httpSurface = page.locator('#reference');
-    await expect(httpSurface.locator('tbody a')).toHaveCount(46);
+    await expect(httpSurface.locator('tbody a')).toHaveCount(51);
     for (const path of [
       '/api/agents/credentials',
       '/api/agents/briefing',
@@ -87,12 +87,15 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.27');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.28');
     expect(openApi.paths['/api/spending-policy']?.put?.responses?.['200']).toBeTruthy();
     expect(openApi.paths['/api/agents/{id}/trust']?.get?.responses?.['200']).toBeTruthy();
     expect(openApi.paths['/api/agents/briefing']?.get).toBeTruthy();
     expect(openApi.paths['/api/routes/metrics']?.get).toBeTruthy();
     expect(openApi.paths['/api/workflows/plan']?.post).toBeTruthy();
+    expect(openApi.paths['/api/organizations']?.post).toBeTruthy();
+    expect(openApi.paths['/api/organizations/{id}/agents']?.put).toBeTruthy();
+    expect((await request.get('/api/organizations')).status()).toBe(401);
     const routeMetrics = await request.get('/api/routes/metrics');
     expect(routeMetrics.ok()).toBeTruthy();
     expect((await routeMetrics.json()).autonomy_status).toBe('not_implemented');
@@ -107,7 +110,7 @@ test.describe('Core smoke matrix', () => {
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.27"');
+    expect(await skill.text()).toContain('contract-version: "1.28"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();

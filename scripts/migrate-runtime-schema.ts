@@ -591,6 +591,27 @@ async function main() {
         await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS workflow_nodes_workflow_key_idx ON workflow_nodes(workflow_id, node_key)')
         await database.execute('CREATE INDEX IF NOT EXISTS workflow_nodes_workflow_state_idx ON workflow_nodes(workflow_id, state)')
       } },
+      { id: '2026-09-30-enterprise-foundation-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS organizations (
+          id TEXT PRIMARY KEY NOT NULL, owner_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          client_reference TEXT NOT NULL, name TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS organizations_owner_reference_idx ON organizations(owner_account_id, client_reference)')
+        await database.execute('CREATE INDEX IF NOT EXISTS organizations_owner_created_idx ON organizations(owner_account_id, created_at)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_agent_assignments (
+          agent_id TEXT PRIMARY KEY NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          cost_center TEXT NOT NULL, assigned_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_assignments_org_idx ON organization_agent_assignments(organization_id)')
+        await database.execute(`CREATE TABLE IF NOT EXISTS organization_audit_events (
+          id TEXT PRIMARY KEY NOT NULL, organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+          actor_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          action TEXT NOT NULL, agent_id TEXT,
+          cost_center TEXT, created_at INTEGER NOT NULL
+        )`)
+        await database.execute('CREATE INDEX IF NOT EXISTS organization_audit_org_created_idx ON organization_audit_events(organization_id, created_at)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({
