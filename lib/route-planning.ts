@@ -11,7 +11,7 @@ import { payoutAddressForUser } from '@/lib/external-settlement'
 import { selectMarketplaceRail, type MarketplaceRail } from '@/lib/payment-rail-selection'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
 import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
-import { supportsVerification, verificationPolicySchema, type VerificationPolicy } from '@/lib/verification-policy'
+import { checkServiceInput, supportsVerification, verificationPolicySchema, type VerificationPolicy } from '@/lib/verification-policy'
 import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from '@/lib/buyer-spend-policy'
 import { organizationBudgetForAgent, organizationBudgetUsage } from '@/lib/organization-budgets'
 
@@ -77,6 +77,9 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     if (paymentControl.paused || service.active_orders >= service.max_concurrency) continue
     const offered = JSON.parse(service.capabilities) as string[]
     if (!capabilities.every((capability) => offered.includes(capability))) continue
+    let inputSchema: unknown
+    try { inputSchema = JSON.parse(service.input_schema) } catch { inputSchema = null }
+    if (checkServiceInput(input.input, inputSchema).status !== 'valid') continue
     const servicePolicy = verificationPolicySchema.safeParse(JSON.parse(service.verification_policy))
     if (!servicePolicy.success || !supportsVerification(servicePolicy.data, input.verification)) continue
     const totalMinor = service.price_minor + Math.round(service.price_minor * 0.05)

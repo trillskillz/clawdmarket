@@ -72,15 +72,50 @@ function request(path: string, userId: string, body: unknown) {
   })
 }
 
-async function service(maxConcurrency = 1) {
+async function service(maxConcurrency = 1, inputSchema?: Record<string, unknown>) {
   const response = await createService(request('/api/services', sellerId, {
     title: 'Reusable code review', description: 'Review a code change and return findings with evidence.',
     capabilities: ['code-review'], pricing: { model: 'fixed', amount: '10.00', currency: 'USD' },
-    max_concurrency: maxConcurrency, status: 'active',
+    max_concurrency: maxConcurrency, status: 'active', input_schema: inputSchema,
   }))
   assert.equal(response.status, 201, JSON.stringify(await response.clone().json()))
   return (await response.json()).service
 }
+
+test('declared input is checked before order, trade, or capacity reservation', async () => {
+  const offered = await service(1, { type: 'object', properties: { revision: { type: 'string' } }, required: ['revision'], additionalProperties: false })
+  const reference = `invalid-input-${crypto.randomUUID()}`
+  const invalid = await createOrder(request(`/api/services/${offered.id}/orders`, buyerId, {
+    client_reference: reference, objective: 'Review the attached repository change', input: { revision: 123 },
+  }), { params: Promise.resolve({ id: offered.id }) })
+  assert.equal(invalid.status, 422)
+  assert.equal((await invalid.json()).error_code, 'SERVICE_INPUT_INVALID')
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, offered.id))).length, 0)
+  const [unchanged] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(unchanged.active_orders, 0)
+  const accepted = await order(offered.id, reference)
+  assert.equal(accepted.status, 201)
+  const replay = await order(offered.id, reference)
+  assert.equal(replay.status, 200)
+  assert.equal((await replay.json()).order.id, (await accepted.json()).order.id)
+})
+
+test('unsupported stored input schema blocks purchase readiness and orders', async () => {
+  const offered = await service()
+  await db.update(schema.service_definitions).set({ input_schema: JSON.stringify({ $ref: 'https://example.invalid/schema' }) })
+    .where(eq(schema.service_definitions.id, offered.id))
+  const response = await getService(new NextRequest(`http://localhost/api/services/${offered.id}`), { params: Promise.resolve({ id: offered.id }) })
+  assert.equal(response.status, 200)
+  const readiness = (await response.json()).service.readiness
+  assert.equal(readiness.input_ready, false)
+  assert.equal(readiness.purchasable, false)
+  assert.ok(readiness.blocking_reasons.includes('INPUT_SCHEMA_UNSUPPORTED'))
+  const purchase = await order(offered.id, `bad-schema-${crypto.randomUUID()}`)
+  assert.equal(purchase.status, 409)
+  assert.equal((await purchase.json()).error_code, 'SERVICE_INPUT_SCHEMA_UNSUPPORTED')
+  const [current] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(current.active_orders, 0)
+})
 
 async function order(serviceId: string, reference: string) {
   return createOrder(request(`/api/services/${serviceId}/orders`, buyerId, { client_reference: reference, objective: 'Review the attached repository change', input: { revision: 'abc123' } }), { params: Promise.resolve({ id: serviceId }) })

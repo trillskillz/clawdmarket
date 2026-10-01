@@ -9,7 +9,7 @@ import { getNewPaymentControl } from '@/lib/payment-control'
 import { payoutAddressForUser } from '@/lib/external-settlement'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
 import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
-import { outputSchemaV1, verificationPolicySchema } from '@/lib/verification-policy'
+import { checkServiceInput, outputSchemaV1, verificationPolicySchema } from '@/lib/verification-policy'
 
 export const money = z.string().regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/, 'Use a USD decimal string with at most two places')
   .transform((value, ctx) => {
@@ -43,6 +43,9 @@ export const serviceDefinitionInput = z.object({
   value.capabilities.forEach((capability, index) => {
     if (!normalizeCapability(capability)) context.addIssue({ code: 'custom', path: ['capabilities', index], message: 'Unknown canonical capability' })
   })
+  if (checkServiceInput({}, value.input_schema).status === 'unsupported') {
+    context.addIssue({ code: 'custom', path: ['input_schema'], message: 'input_schema requires the supported bounded JSON object schema' })
+  }
   if (value.verification_policy.methods.includes('schema')) {
     const parsed = outputSchemaV1.safeParse(value.output_schema)
     if (!parsed.success) context.addIssue({ code: 'custom', path: ['output_schema'], message: 'schema verification requires the supported bounded JSON object schema' })
@@ -79,6 +82,9 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   ])
   const rails = getPaymentReadiness()
   const capacityAvailable = service.active_orders < service.max_concurrency
+  let inputSchema: unknown
+  try { inputSchema = JSON.parse(service.input_schema) } catch { inputSchema = null }
+  const inputReady = checkServiceInput({}, inputSchema).status !== 'unsupported'
   const parsedPolicy = verificationPolicySchema.safeParse(JSON.parse(service.verification_policy))
   const verificationReady = parsedPolicy.success && (!parsedPolicy.data.methods.includes('schema') || outputSchemaV1.safeParse(JSON.parse(service.output_schema)).success)
   const paymentReady = !paymentControl.paused && (rails.ledger.enabled || Boolean(payoutAddress && (rails.mpp.enabled || rails.evm.enabled)))
@@ -87,6 +93,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   if (!reusableServiceWritesEnabled()) reasons.push('REUSABLE_SERVICES_DISABLED')
   if (!sellerVisible) reasons.push('SELLER_NOT_PUBLIC')
   if (!capacityAvailable) reasons.push('CAPACITY_FULL')
+  if (!inputReady) reasons.push('INPUT_SCHEMA_UNSUPPORTED')
   if (!verificationReady) reasons.push('VERIFICATION_UNSUPPORTED')
   if (paymentControl.paused) reasons.push('PAYMENTS_PAUSED')
   else if (!paymentReady) reasons.push(payoutAddress ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED')
@@ -96,7 +103,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
     title: service.title,
     description: service.description,
     capabilities: JSON.parse(service.capabilities) as string[],
-    input_schema: JSON.parse(service.input_schema),
+    input_schema: inputSchema,
     output_schema: JSON.parse(service.output_schema),
     pricing: { model: service.pricing_model, amount: servicePrice(service.price_minor), currency: service.currency },
     estimated_latency_seconds: service.estimated_latency_seconds,
@@ -110,6 +117,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
       available: service.status === 'active' && sellerVisible,
       payment_ready: paymentReady,
       capacity_available: capacityAvailable,
+      input_ready: inputReady,
       verification_ready: verificationReady,
       blocking_reasons: reasons,
     },

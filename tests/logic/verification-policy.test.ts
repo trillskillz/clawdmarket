@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { outputSchemaV1, verificationPolicySchema, verifyOutputSchema, verifySourceList, supportsVerification } from '@/lib/verification-policy'
+import { checkServiceInput, outputSchemaV1, verificationPolicySchema, verifyOutputSchema, verifySourceList, supportsVerification } from '@/lib/verification-policy'
 import { serviceDefinitionInput } from '@/lib/service-definitions'
 
 const outputSchema = { type: 'object', properties: { findings: { type: 'array' }, score: { type: 'number' } }, required: ['findings'], additionalProperties: false }
@@ -12,6 +12,16 @@ test('bounded schema verification checks required keys, types, and extra propert
   assert.equal(verifyOutputSchema({ findings: 'wrong' }, outputSchema).failure, 'type:findings')
   assert.equal(verifyOutputSchema({ findings: [], extra: true }, outputSchema).failure, 'unexpected:extra')
   assert.equal(outputSchemaV1.safeParse({ ...outputSchema, $ref: 'https://example.invalid/schema' }).success, false)
+})
+
+test('service input accepts legacy empty schemas and enforces bounded declared fields', () => {
+  const schema = { type: 'object', properties: { revision: { type: 'string' } }, required: ['revision'], additionalProperties: false }
+  assert.equal(checkServiceInput({ arbitrary: true }, {}).status, 'valid')
+  assert.equal(checkServiceInput({ revision: 'abc123' }, schema).status, 'valid')
+  assert.equal(checkServiceInput({}, schema).failure, 'missing:revision')
+  assert.equal(checkServiceInput({ revision: 123 }, schema).failure, 'type:revision')
+  assert.equal(checkServiceInput({ revision: 'abc123', secret: true }, schema).failure, 'unexpected:secret')
+  assert.equal(checkServiceInput({}, { ...schema, $ref: 'https://example.invalid/schema' }).status, 'unsupported')
 })
 
 test('source-list checks reject duplicate and malformed URLs without fetching content', () => {
@@ -40,4 +50,5 @@ test('service creation requires a supported output schema when schema verificati
     verification_policy: { required: true as const, methods: ['buyer_review', 'schema'] } }
   assert.equal(serviceDefinitionInput.safeParse({ ...base, output_schema: outputSchema }).success, true)
   assert.equal(serviceDefinitionInput.safeParse({ ...base, output_schema: { $ref: 'https://example.invalid/schema' } }).success, false)
+  assert.equal(serviceDefinitionInput.safeParse({ ...base, input_schema: { $ref: 'https://example.invalid/schema' } }).success, false)
 })

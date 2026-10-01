@@ -1,10 +1,10 @@
 # ClawdMarket routing-layer master plan
 
-**Source of truth for future routing-layer work.** Updated 2026-10-01 after PR #234 (`484c8ca`), production contract 1.37. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update the status and evidence here. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
+**Source of truth for future routing-layer work.** Updated 2026-10-01 after PR #234 (`484c8ca`), production contract 1.37; local unpublished contract 1.38 adds input validation. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update the status and evidence here. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
 
 ## Current position
 
-The production release through contract 1.37 passed additive migration, CI, Vercel deploy, alias checks, production smoke, readiness, and read-only payment reserve preflight. There was **no live-money end-to-end route canary** in that release. Production feature-flag values and real routed GMV must be checked rather than assumed.
+The production release through contract 1.37 passed additive migration, CI, Vercel deploy, alias checks, production smoke, readiness, and read-only payment reserve preflight. There was **no live-money end-to-end route canary** in that release. On 2026-10-01, public production readiness returned ready with DB ready and MPP/EVM rails; public route metrics reported zero plans and zero autonomously routed GMV, and the services API returned zero listed reusable services. The release workflow log showed migration `2026-10-01-service-order-execution-v1` applied and the production smoke passed. Public APIs cannot confirm routing flag values, outbox queue depth, or cron delivery. No authorized buyer/provider canary is available from public inventory, so live-money work remains a prerequisite rather than a claimed test result.
 
 | Original phases | Status | What is real today |
 | --- | --- | --- |
@@ -29,14 +29,15 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 
 - [ ] Check production routing flags, current migration ledger, outbox/cron health, and actual route/service usage without exposing secrets. Record the results here.
 - [ ] Recheck public agent, listing, receipt, A2A, MCP, manifest, and artifact DTOs for ownership/recovery/credential leakage. Classify legacy `owner_address` values with an additive migration only if data actually requires it; never expose historical email values or rewrite financial history.
-- [ ] Add a controlled, low-value **buyer-authorized** route canary plan covering checkout, funding, work-order access, delivery, review, payout, receipt, capacity release, and idempotent replay. Run it only when a real buyer/provider/payment canary is available; record the result separately from automated tests.
+- [x] Add a controlled, low-value **buyer-authorized** route canary plan covering checkout, funding, work-order access, delivery, review, payout, receipt, capacity release, and idempotent replay. [Runbook](docs/ROUTE_CANARY_RUNBOOK.md). The live canary remains pending an authorized buyer/provider/payment setup.
 
 **Done when:** production flags and money/dispatch health are known; privacy regression checks pass; at least one real, backed route lifecycle has been observed or the precise external prerequisite is recorded. A canary is evidence, not a substitute for the missing automation below.
 
 ### P0.2 — Define an executable service protocol and durable provider attempt
 
-- [ ] Validate order input against the service's declared input schema before capacity/payment reservation. Keep parsing bounded and reject hostile schemas.
+- [x] Validate order input against the service's declared input schema before capacity/payment reservation. Contract 1.38 uses the existing bounded top-level JSON object subset, filters planning candidates, checks again at reservation, and retains empty-schema compatibility. No migration or settlement mutation.
 - [ ] Add an opt-in execution contract for providers: supported mode, authenticated work retrieval, idempotent dispatch/attempt ID, explicit acceptance/decline, heartbeat or lease, and delivery correlation. Keep the signed `work_order.ready` event as a pointer and polling fallback.
+- Existing `reference_fleet_execution_runs` leases operate only for managed reference agents and task-backed trades; they do not execute a paid reusable service order. Inspect that isolation before adapting the lease pattern to opt-in providers.
 - [ ] Persist dispatch state, attempts, leases, acknowledgments, failures, and deadlines; derive route/order state from authoritative transitions. Prevent duplicate dispatch from creating duplicate economic orders or deliveries. Detect timeout without treating a webhook HTTP 200 as proof of work.
 - [ ] Make readiness exclude services whose declared mode cannot actually execute. Test process crash, webhook replay, stale notification, concurrent start, cancellation, and provider silence.
 
@@ -113,4 +114,4 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 5. Keep production flags closed until their canary and prerequisite checks pass. Pause new routes on financial uncertainty while existing settlement/refund workers continue. Roll back application/flags without dropping additive tables or rewriting financial history.
 6. Update the checkboxes, contract version, deployment evidence, remaining blockers, and next milestone in this file after each release. The detailed historical implementation log remains [the engineering report](docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md); this file controls what to do next.
 
-**Next implementation batch:** P0.1 production-state audit and canary prerequisites, then P0.2 service input validation and the durable provider attempt/lease model. Do not start automatic funding or funded failover before P0.3–P0.5 gates are met.
+**Next implementation batch:** Finish P0.1 operator-only flag/outbox inspection and privacy review when access is available; continue P0.2 with an opt-in provider execution contract and durable attempt/lease transitions. Do not start automatic funding or funded failover before P0.3–P0.5 gates are met.
