@@ -1,11 +1,13 @@
 import type { service_execution_attempts, service_orders, trades } from '@/lib/schema'
+import type { routeExecutionTiming } from '@/lib/route-execution-timing'
 
 type Attempt = Pick<typeof service_execution_attempts.$inferSelect, 'id' | 'state' | 'accepted_at' | 'heartbeat_at' | 'lease_expires_at' | 'completed_at'>
 type Order = Pick<typeof service_orders.$inferSelect, 'state' | 'capacity_released_at'>
 type Trade = Pick<typeof trades.$inferSelect, 'id' | 'status'>
+type Timing = Pick<NonNullable<ReturnType<typeof routeExecutionTiming>>, 'delivery_overdue'>
 
 /** Read-only provider state. An expired or missing attempt never authorizes another checkout. */
-export function providerExecutionStatus(protocol: string, order: Order, trade: Trade, attempt: Attempt | null, now = new Date()) {
+export function providerExecutionStatus(protocol: string, order: Order, trade: Trade, attempt: Attempt | null, timing?: Timing | null, now = new Date()) {
   if (protocol !== 'leased_v1') return null
   const fundedWork = trade.status === 'escrow_held' && !order.capacity_released_at
     && (order.state === 'funded' || order.state === 'executing')
@@ -15,7 +17,8 @@ export function providerExecutionStatus(protocol: string, order: Order, trade: T
     : !attempt ? 'attempt_missing'
       : attempt.state === 'declined' ? 'provider_declined'
         : attempt.state === 'expired' || leaseOverdue ? 'lease_expired'
-          : attempt.state === 'interrupted' ? 'attempt_interrupted' : null
+          : attempt.state === 'interrupted' ? 'attempt_interrupted'
+            : timing?.delivery_overdue ? 'delivery_deadline_overdue' : null
   const reconciliation = trade.status === 'disputed' ? { state: 'dispute_open' as const, action: null }
     : trade.status === 'resolved' ? { state: 'resolved' as const, action: null }
       : attentionReason ? { state: 'dispute_available' as const,
