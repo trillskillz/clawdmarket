@@ -1,6 +1,6 @@
 # ClawdMarket routing-layer master plan
 
-**Source of truth for future routing-layer work.** Updated 2026-10-01 after PR #235 (`c9f8cad`), production contract 1.38; local unpublished contract 1.39 adds provider attempts. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update the status and evidence here. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
+**Source of truth for future routing-layer work.** Updated 2026-10-01 after PR #235 (`c9f8cad`), production contract 1.38; local unpublished contract 1.39 adds provider attempts and an operator routing snapshot. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update the status and evidence here. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
 
 ## Current position
 
@@ -16,7 +16,7 @@ The production release through contract 1.38 passed CI, Vercel deploy, alias che
 | 7 instant mode | Not started | Existing platform MPP and contracted settlement exist; no metered instant service execution lifecycle. |
 | 8 spend policy and 9 failover | Partial | Buyer/agent/organization ceilings and pre-checkout fallback are enforced. Retry budget and funded failover are not; a cancelled external checkout may still be paid late. |
 | 10 A2A and 11 MCP | Read-only routing | Both expose shared planning/inspection. Neither can spend; MCP Tasks and write authorization remain. |
-| 12 contract, 13 SDK, 14 metrics | Partial | Shared machine contract 1.37, TypeScript route client, evidenced assisted-route metrics. Python client and true autonomous GMV are absent. |
+| 12 contract, 13 SDK, 14 metrics | Partial | Production machine contract 1.38; local contract 1.39, TypeScript route client, evidenced assisted-route metrics. Python client and true autonomous GMV are absent. |
 | 15 workflows and 16 enterprise | Foundations only | Bounded workflow plans; organizations, teams, read-only service accounts, immutable audit, and agent budget attribution. No child execution or delegated purchasing authority. |
 
 The live buyer flow is still: plan → reserve **unpaid** order → caller funds → provider receives a signed pointer or polls → provider starts/delivers → buyer accepts → existing settlement. It does **not** yet satisfy “give ClawdMarket an objective and receive a verified, settled result without manually composing marketplace calls.”
@@ -27,7 +27,7 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 
 ### P0.1 — Establish the release and security baseline for automatic work
 
-- [ ] Check production routing flags, current migration ledger, outbox/cron health, and actual route/service usage without exposing secrets. Record the results here.
+- [ ] Check production routing flags, current migration ledger, outbox/cron health, and actual route/service usage without exposing secrets. Local admin-only `/api/admin/routing/health` now returns these aggregates and records webhook cron heartbeats; production inspection awaits its release and an authorized operator session. Record the live results here.
 - [ ] Recheck public agent, listing, receipt, A2A, MCP, manifest, and artifact DTOs for ownership/recovery/credential leakage. Classify legacy `owner_address` values with an additive migration only if data actually requires it; never expose historical email values or rewrite financial history.
 - [x] Add a controlled, low-value **buyer-authorized** route canary plan covering checkout, funding, work-order access, delivery, review, payout, receipt, capacity release, and idempotent replay. [Runbook](docs/ROUTE_CANARY_RUNBOOK.md). The live canary remains pending an authorized buyer/provider/payment setup.
 
@@ -114,4 +114,4 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 5. Keep production flags closed until their canary and prerequisite checks pass. Pause new routes on financial uncertainty while existing settlement/refund workers continue. Roll back application/flags without dropping additive tables or rewriting financial history.
 6. Update the checkboxes, contract version, deployment evidence, remaining blockers, and next milestone in this file after each release. The detailed historical implementation log remains [the engineering report](docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md); this file controls what to do next.
 
-**Next implementation batch:** Finish P0.1 operator-only flag/outbox inspection and privacy review when access is available; continue P0.2 with restart and webhook replay checks, stale notification handling, and a real opt-in provider canary before calling the protocol operational. Do not start automatic funding or funded failover before P0.3–P0.5 gates are met.
+**Next implementation batch:** Complete the P0.1 public DTO privacy review and inspect the operator snapshot after release; continue P0.2 with restart and webhook replay checks, stale notification handling, and a real opt-in provider canary before calling the protocol operational. Do not start automatic funding or funded failover before P0.3–P0.5 gates are met.

@@ -536,6 +536,15 @@ export const bids = sqliteTable('bids', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
+/** Last observed worker run, used only for operator health inspection. */
+export const worker_heartbeats = sqliteTable('worker_heartbeats', {
+  worker_name: text('worker_name').primaryKey(),
+  last_started_at: integer('last_started_at', { mode: 'timestamp' }),
+  last_succeeded_at: integer('last_succeeded_at', { mode: 'timestamp' }),
+  last_failed_at: integer('last_failed_at', { mode: 'timestamp' }),
+  last_outcome: text('last_outcome', { enum: ['success', 'failure'] }),
+});
+
 export const buyer_spend_policies = sqliteTable('buyer_spend_policies', {
   buyer_id: text('buyer_id').primaryKey().references(() => users.id, { onDelete: 'restrict' }),
   owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),

@@ -693,6 +693,13 @@ async function main() {
         )`)
         await database.execute('CREATE INDEX IF NOT EXISTS service_execution_attempts_state_lease_idx ON service_execution_attempts(state, lease_expires_at)')
       } },
+      { id: '2026-10-01-worker-heartbeats-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS worker_heartbeats (
+          worker_name TEXT PRIMARY KEY NOT NULL,
+          last_started_at INTEGER, last_succeeded_at INTEGER, last_failed_at INTEGER,
+          last_outcome TEXT
+        )`)
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({
