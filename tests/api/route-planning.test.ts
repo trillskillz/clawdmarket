@@ -451,5 +451,31 @@ test('planning separates provider claims from backed completion evidence without
   assert.deepEqual(observed.capability_evidence, [{ capability_id: 'translation', accepted_completion_count: 1, measured_quality_score: null }])
   assert.equal(observed.score_components.backed_execution, 0.2)
   assert.ok(observed.score > claimed.score)
-  assert.match(observed.explanation.at(-1), /quality remains unmeasured/)
+  assert.ok(observed.explanation.some((item: string) => /quality remains unmeasured/.test(item)))
+
+  const recordFailure = async (state: 'declined' | 'expired', funded: boolean, createdAt: Date, buyer = 'other-buyer') => {
+    const [failedListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
+      title: 'Provider failure fixture', description: 'Historical provider attempt.', price_bankr: 1, status: 'sold' }).returning()
+    const [failedTrade] = await db.insert(schema.trades).values({ listing_id: failedListing.id, buyer_id: buyer,
+      seller_id: sellerId, amount: 1, fee: 0.05, status: funded ? 'escrow_held' : 'pending',
+      funded_at: funded ? createdAt.toISOString() : null, payment_rail: 'evm' }).returning()
+    const orderId = crypto.randomUUID()
+    await db.insert(schema.service_orders).values({ id: orderId, service_id: serviceId,
+      listing_id: failedListing.id, trade_id: failedTrade.id, buyer_id: buyer,
+      client_reference: crypto.randomUUID(), objective: 'Attempt the requested translation',
+      price_minor: 100, payment_rail: 'evm', state: funded ? 'funded' : 'awaiting_funding' })
+    await db.insert(schema.service_execution_attempts).values({ id: crypto.randomUUID(), order_id: orderId,
+      state, created_at: createdAt, completed_at: createdAt })
+  }
+  await recordFailure('declined', true, new Date())
+  await recordFailure('expired', true, new Date())
+  await recordFailure('expired', true, new Date(Date.now() - 100 * 24 * 3600_000))
+  await recordFailure('declined', false, new Date())
+  await recordFailure('declined', true, new Date(), sellerId)
+  const penalized = await planFor()
+  assert.deepEqual(penalized.provider_failures, { provider_declines_90d: 1, lease_expiries_90d: 1 })
+  assert.equal(penalized.score_components.provider_failure_penalty, 0.4)
+  assert.ok(penalized.score < observed.score)
+  assert.equal(penalized.evidence_level, 'backed_completion_observed')
+  assert.match(penalized.explanation.at(-1), /penalty is capped/)
 })
