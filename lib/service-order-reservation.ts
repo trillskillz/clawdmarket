@@ -12,6 +12,7 @@ import { payoutAddressForUser } from '@/lib/external-settlement'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
 import { createLedgerTrade, ensureAdminFeeRecipient } from '@/lib/settlement'
 import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy'
+import { enforceBuyerSpendPolicy } from '@/lib/buyer-spend-policy'
 import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets'
 import { expireTradePayment } from '@/lib/trade-funding'
 import { withServiceReservationLock } from '@/lib/service-reservation-lock'
@@ -134,6 +135,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       if (!claimed) throw new ServiceOrderReservationError('SERVICE_CAPACITY_OR_PRICE_CHANGED', 'Service capacity or price changed; re-plan before retrying')
       const spendContext = { sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: contract.verificationPolicy!.methods }
       if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100, ...spendContext })
+      else await enforceBuyerSpendPolicy(tx, principal.userId, { totalMinor, ...spendContext }, now)
       const [listing] = await tx.insert(listings).values({ seller_id: service.seller_id, category: 'skills', title: service.title,
         description: service.description, price_bankr: service.price_minor / 100, status: rail === 'ledger' ? 'active' : 'sold' }).returning()
       const trade = rail === 'ledger'

@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.60'
+export const AGENT_CONTRACT_VERSION = '1.61'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -537,7 +537,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
   },
   {
     id: 'order_reusable_service', label: 'Order reusable service',
-    description: 'Create one independently funded order from a reusable service. A client_reference is required for safe retries.',
+    description: 'Create one independently funded order from a reusable service. Any saved buyer policy is rechecked by authenticated buyer ID in the reservation transaction, including account buyers without an agent identity. Provider, capability, rail, verification, approval, and spend restrictions fail closed. A client_reference is required for safe retries; exact existing checkout replay preserves its order and exposure after a policy change.',
     method: 'POST', endpoint: '/api/services/{id}/orders', auth: 'agent_api_key', payment: null,
     required: ['client_reference', 'objective'], optional: ['input', 'payment_rail', 'max_total', 'expected_price'], body_schema: reusableOrderBodySchema,
   },
@@ -1745,7 +1745,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     },
     '/api/services/{id}/orders': { post: { operationId: 'order_reusable_service', summary: 'Reserve capacity and create an independently funded order', security: authenticated,
       parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('order_reusable_service').body_schema } } },
-      responses: { 201: { description: 'Capacity and order reserved' }, 200: { description: 'Idempotent replay' }, 409: { description: 'Capacity, price, budget, input schema, execution mode, provider protocol, verification contract, or rail unavailable; no funds moved' }, 422: { description: 'SERVICE_INPUT_INVALID: input does not match declared service schema; no funds moved' } } } },
+      responses: { 201: { description: 'Capacity and order reserved after transactional saved buyer-policy checks' }, 200: { description: 'Idempotent existing checkout replay, including after buyer-policy changes' }, 409: { description: 'Capacity, price, budget, input schema, execution mode, provider protocol, verification contract, rail, or BUYER_* policy restriction blocks reservation; no funds moved' }, 422: { description: 'SERVICE_INPUT_INVALID: input does not match declared service schema; no funds moved' } } } },
     '/api/service-orders/{id}': { get: { operationId: 'get_reusable_order', summary: 'Inspect an owned service order', security: authenticated, parameters: [tradeIdParameter],
       responses: { 200: { description: 'Order, trade, and leased provider attempt status' }, 404: { description: 'Order missing or not owned' } } } },
     '/api/listings': {
@@ -1845,6 +1845,7 @@ export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {
 - Capability resolver: ${baseUrl}/api/capabilities/resolve?q=web+search
 - Autonomous briefing: ${baseUrl}/api/agents/briefing (agent:read; no platform charge)
 - Reusable service readiness: only contracted execution with manual or leased_v1 provider protocols and a supported verification contract can reserve an order. execution_mode_ready and verification_ready explain eligibility; malformed stored schemas or policies fail closed before capacity or checkout creation.
+- Buyer reservation policy: direct service orders and saved route execution check any saved policy by authenticated buyer ID in the capacity/order transaction, including account buyers without an agent identity. Full totals include the fee and existing pending or unreconciled cancelled external checkouts. Exact existing checkout replay remains available after policy changes and creates no additional exposure.
 - Funded reusable work: an authenticated seller follows a briefing item's inspect URL to GET /api/trades/{id}/work-order; the buyer may read before funding.
 - Seller execution acknowledgment: POST /api/trades/{id}/work-order/start after funding; repeating it cannot start or charge twice.
 - Provider acknowledgment: leased_v1 funded attempts persist acknowledgment_due_at ten minutes after creation. A queued acknowledgment deadline cannot be extended by webhook or dispatch retries. Late actions return WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED; cron records acknowledgment_timed_out, and private provider_execution marks acknowledgment_timeout for buyer reconciliation.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Account buyer reservation policy (contract 1.61)
+- Transactional enforcement of saved buyer policies for direct service orders and saved route execution when the authenticated buyer has no agent identity; agent deployment and organization checks retain their existing path.
+- Coverage for policy changes, full totals, concurrent service reservations, cross-worker retry exposure, cancelled checkout budgets, and exact checkout replay after policy changes.
+
 ### Provider action recovery (contract 1.60)
 - Bounded transaction retries for provider acceptance, decline, and heartbeat, with current-state and deadline checks on each retry and a private, retryable `WORK_ATTEMPT_UNAVAILABLE` response when contention persists.
 - Recovery coverage for atomic rollback, cross-worker acceptance/dispute races, acknowledgment expiry between retries, and unchanged financial exposure.

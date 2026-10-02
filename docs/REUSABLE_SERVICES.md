@@ -57,6 +57,12 @@ The seller must accept or decline before the deadline. Late acknowledgment retur
 
 Acceptance keeps the separate ten-minute heartbeat lease; passing the original acknowledgment deadline does not expire accepted work. Timeout observation leaves the order and route funded, holds escrow and capacity, and advertises the existing buyer dispute action. A dispute interrupts a queued attempt before its deadline and preserves an already overdue acknowledgment as `acknowledgment_timed_out`. Conditional observer writes preserve acceptance or terminal state changes committed by another worker. Operator health exposes aggregate `acknowledgment_overdue_count` and `acknowledgment_timed_out_count` for funded work awaiting reconciliation. Acknowledgment timeouts are distinct from the existing lease-expiry ranking signal.
 
+## Buyer reservation policy
+
+Contract 1.61 checks any saved spending policy by the authenticated buyer ID inside the capacity/order transaction, including account buyers without an agent identity. Direct service orders and saved route execution enforce provider, capability, payment rail, verification, approval, and per-execution/daily/monthly restrictions. Server totals include the fee; pending checkouts and cancelled external checkouts awaiting refund reconciliation count against the budget. A rejected reservation rolls back capacity and creates no listing, trade, or order.
+
+Concurrent reservations at different services share the same buyer budget. Retries re-read saved policy and current exposure in the transaction. Exact replay of an existing checkout returns its saved order after a policy changes and adds no exposure. Buyers with no saved policy retain existing behavior; registered agents retain deployment and organization limits. Policy updates still use the existing linked-owner agent policy API; this change adds no account policy editor or autonomous payment authority.
+
 ## Provider action recovery
 
 Contract 1.60 retries transient database contention for seller acceptance, decline, and heartbeat in up to six fresh transactions with bounded backoff. Every transaction rechecks the authoritative trade, order, attempt, and current time. Failed transactions roll back attempt and execution changes together. Retries preserve the saved acknowledgment deadline; a previously committed acceptance or decline returns its existing idempotent result.
