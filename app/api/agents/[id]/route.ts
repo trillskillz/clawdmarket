@@ -5,7 +5,7 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { FALLBACK_AGENTS, fallbackAgentForListingId } from '@/lib/fallback-agents'
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback'
 import { getAgentAvailability } from '@/lib/agent-presence'
-import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
+import { canViewAgentProfile } from '@/lib/agent-profile-visibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,8 +85,7 @@ export async function GET(
  let profileKind: 'registered_agent' | 'account_seller' | 'reference' = 'registered_agent'
  let principalId = registeredPrincipalId
  if (row && (row.visibility === 'private' || row.archived_at != null)) {
-  const auth = await resolveRegisteredAgentRequest(request)
-  if (auth.kind !== 'agent' || auth.agentId !== id) {
+  if (!await canViewAgentProfile(request, id, String(row.visibility || 'public'), row.archived_at)) {
    return NextResponse.json({ error: 'not_found', message: 'Seller not found' }, { status: 404 })
   }
  }

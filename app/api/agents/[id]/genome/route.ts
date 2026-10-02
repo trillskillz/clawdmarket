@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { internalErrorResponse } from '@/lib/api-error'
+import { canViewAgentProfile } from '@/lib/agent-profile-visibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,7 @@ interface GenomeNode {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
@@ -31,7 +32,7 @@ export async function GET(
 
     const [agentResult, versionsResult, improvementsResult] = await Promise.all([
       client.execute(
-        'SELECT id, name, version, base_agent_id, benchmark_score, model_id, created_at FROM agents WHERE id = ? LIMIT 1',
+        'SELECT id, name, version, base_agent_id, benchmark_score, model_id, created_at, visibility, archived_at FROM agents WHERE id = ? LIMIT 1',
         [id]
       ).catch(() => null),
       client.execute(
@@ -55,6 +56,9 @@ export async function GET(
 
     const agent = agentResult?.rows?.[0]
     if (!agent) {
+      return NextResponse.json({ error: 'not_found', message: 'Agent not found' }, { status: 404 })
+    }
+    if (!await canViewAgentProfile(request, id, String(agent.visibility || 'public'), agent.archived_at)) {
       return NextResponse.json({ error: 'not_found', message: 'Agent not found' }, { status: 404 })
     }
 

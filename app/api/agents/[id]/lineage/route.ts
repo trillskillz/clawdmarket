@@ -3,16 +3,9 @@ import { db } from '@/lib/db'
 import { agents, agentVersions, agentImprovements, benchmarks } from '@/lib/schema'
 import { eq, desc } from 'drizzle-orm'
 import { authenticateRequest } from '@/lib/auth'
+import { canViewAgentProfile } from '@/lib/agent-profile-visibility'
 
 export const dynamic = 'force-dynamic'
-
-function stripPromptFields(obj: Record<string, any>): Record<string, any> {
-  const safe = { ...obj }
-  for (const key of ['systemPrompt', 'newSystemPrompt', 'system_prompt', 'new_system_prompt', 'prompt']) {
-    delete safe[key]
-  }
-  return safe
-}
 
 export async function GET(
   request: NextRequest,
@@ -29,23 +22,74 @@ export async function GET(
   }
 
   try {
-    const agent = await db.select().from(agents)
+    const agent = await db.select({
+      id: agents.id,
+      baseAgentId: agents.baseAgentId,
+      version: agents.version,
+      benchmarkScore: agents.benchmarkScore,
+      velocityScore: agents.velocityScore,
+      visibility: agents.visibility,
+      archivedAt: agents.archivedAt,
+    }).from(agents)
       .where(eq(agents.id, id)).get().catch(() => null)
     if (!agent) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+    if (!await canViewAgentProfile(request, id, agent.visibility, agent.archivedAt)) {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 })
+    }
 
     const baseId = agent.baseAgentId || agent.id
+    if (baseId !== id) {
+      const baseAgent = await db.select({
+        visibility: agents.visibility,
+        archivedAt: agents.archivedAt,
+      }).from(agents).where(eq(agents.id, baseId)).get()
+      if (!baseAgent || !await canViewAgentProfile(request, baseId, baseAgent.visibility, baseAgent.archivedAt)) {
+        return NextResponse.json({ error: 'not_found' }, { status: 404 })
+      }
+    }
 
-    const versions = await db.select().from(agentVersions)
+    const versions = await db.select({
+      id: agentVersions.id,
+      agentId: agentVersions.agentId,
+      baseAgentId: agentVersions.baseAgentId,
+      version: agentVersions.version,
+      modelId: agentVersions.modelId,
+      benchmarkScore: agentVersions.benchmarkScore,
+      improvedByAgentId: agentVersions.improvedByAgentId,
+      changeDescription: agentVersions.changeDescription,
+      createdAt: agentVersions.createdAt,
+    }).from(agentVersions)
       .where(eq(agentVersions.baseAgentId, baseId))
       .orderBy(agentVersions.version)
       .all().catch(() => [])
 
-    const improvements = await db.select().from(agentImprovements)
+    const improvements = await db.select({
+      id: agentImprovements.id,
+      baseAgentId: agentImprovements.baseAgentId,
+      fromAgentId: agentImprovements.fromAgentId,
+      toAgentId: agentImprovements.toAgentId,
+      fromVersion: agentImprovements.fromVersion,
+      toVersion: agentImprovements.toVersion,
+      improvedByAgentId: agentImprovements.improvedByAgentId,
+      benchmarkBefore: agentImprovements.benchmarkBefore,
+      benchmarkAfter: agentImprovements.benchmarkAfter,
+      delta: agentImprovements.delta,
+      changeDescription: agentImprovements.changeDescription,
+      createdAt: agentImprovements.createdAt,
+    }).from(agentImprovements)
       .where(eq(agentImprovements.baseAgentId, baseId))
       .orderBy(desc(agentImprovements.createdAt))
       .all().catch(() => [])
 
-    const bmHistory = await db.select().from(benchmarks)
+    const bmHistory = await db.select({
+      id: benchmarks.id,
+      capability: benchmarks.capability,
+      score: benchmarks.score,
+      status: benchmarks.status,
+      runTimeMs: benchmarks.runTimeMs,
+      createdAt: benchmarks.createdAt,
+      scoredAt: benchmarks.scoredAt,
+    }).from(benchmarks)
       .where(eq(benchmarks.agentId, id))
       .orderBy(desc(benchmarks.createdAt))
       .limit(20)
@@ -64,8 +108,8 @@ export async function GET(
       improvement_count: improvements.length,
       total_delta: parseFloat(totalDelta.toFixed(2)),
       avg_delta_per_improvement: parseFloat(avgDeltaPerImprovement.toFixed(2)),
-      versions: versions.map((v: any) => stripPromptFields(v)),
-      improvements: improvements.map((i: any) => stripPromptFields(i)),
+      versions,
+      improvements,
       benchmark_history: bmHistory,
     })
   } catch {
