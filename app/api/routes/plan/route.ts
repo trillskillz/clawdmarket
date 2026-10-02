@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ route: routePlanDto(prior), idempotent: true }, { headers: { 'Cache-Control': 'no-store' } })
   }
-  if (!routePlanningEnabled()) return NextResponse.json({ success: false, error_code: 'ROUTE_PLANNING_DISABLED', message: 'Route planning is not enabled', retryable: true, state: 'no_funds_moved' }, { status: 503 })
+  if (!routePlanningEnabled(principal.userId)) return NextResponse.json({ success: false, error_code: 'ROUTE_PLANNING_DISABLED', message: 'Route planning is not enabled', retryable: true, state: 'no_funds_moved' }, { status: 503 })
   const limit = await rateLimit(`route-plan:${principal.userId}`, { interval: 60_000, maxRequests: 10, failClosed: true })
   if (!limit.success) return NextResponse.json({ success: false, error_code: 'ROUTE_PLAN_RATE_LIMIT', message: 'Route planning rate limit reached', retryable: true, state: 'no_funds_moved' }, { status: 429, headers: getRateLimitHeaders(limit) })
   try {

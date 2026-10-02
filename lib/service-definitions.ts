@@ -8,7 +8,7 @@ import { getPaymentReadiness } from '@/lib/payment-config'
 import { getNewPaymentControl } from '@/lib/payment-control'
 import { payoutAddressForUser } from '@/lib/external-settlement'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
-import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
+import { reusableServiceReadinessEnabled } from '@/lib/routing-feature-flags'
 import { checkServiceInput, outputSchemaV1, verificationPolicySchema } from '@/lib/verification-policy'
 
 export const money = z.string().regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/, 'Use a USD decimal string with at most two places')
@@ -75,7 +75,7 @@ export function canonicalServiceCapabilities(values: string[]) {
   return [...new Set(values.map((value) => normalizeCapability(value)!).filter(Boolean))]
 }
 
-export async function serviceDefinitionDto(service: typeof service_definitions.$inferSelect) {
+export async function serviceDefinitionDto(service: typeof service_definitions.$inferSelect, requesterId?: string) {
   const [payoutAddress, paymentControl, sellerVisible] = await Promise.all([
     payoutAddressForUser(service.seller_id),
     getNewPaymentControl(),
@@ -92,7 +92,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   const paymentReady = !paymentControl.paused && (rails.ledger.enabled || Boolean(payoutAddress && (rails.mpp.enabled || rails.evm.enabled)))
   const reasons: string[] = []
   if (service.status !== 'active') reasons.push('SERVICE_NOT_ACTIVE')
-  if (!reusableServiceWritesEnabled()) reasons.push('REUSABLE_SERVICES_DISABLED')
+  if (!reusableServiceReadinessEnabled(requesterId, service.seller_id)) reasons.push('REUSABLE_SERVICES_DISABLED')
   if (!sellerVisible) reasons.push('SELLER_NOT_PUBLIC')
   if (!capacityAvailable) reasons.push('CAPACITY_FULL')
   if (!inputReady) reasons.push('INPUT_SCHEMA_UNSUPPORTED')

@@ -10,7 +10,7 @@ import { getNewPaymentControl } from '@/lib/payment-control'
 import { payoutAddressForUser } from '@/lib/external-settlement'
 import { selectMarketplaceRail, type MarketplaceRail } from '@/lib/payment-rail-selection'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
-import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
+import { reusableServiceBuyerOrdersEnabled, reusableServiceSellerWritesEnabled } from '@/lib/routing-feature-flags'
 import { checkServiceInput, supportsVerification, verificationPolicySchema, type VerificationPolicy } from '@/lib/verification-policy'
 import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from '@/lib/buyer-spend-policy'
 import { organizationBudgetForAgent, organizationBudgetUsage } from '@/lib/organization-budgets'
@@ -55,7 +55,7 @@ export type RouteCandidate = {
 /** Nonbinding candidate snapshot. Provider claims alone never authorize payment. */
 export async function planRoute(input: NormalizedRouteRequest, buyerId: string) {
   const capabilities = normalizedCapabilities(input.required_capabilities)
-  if (!reusableServiceWritesEnabled()) return { capabilities, candidates: [] as RouteCandidate[], examined: 0, truncated: false }
+  if (!reusableServiceBuyerOrdersEnabled(buyerId)) return { capabilities, candidates: [] as RouteCandidate[], examined: 0, truncated: false }
   const rows = await db.select().from(service_definitions).where(and(
     eq(service_definitions.status, 'active'),
     sql`(${service_definitions.seller_id} NOT GLOB 'user_agent_*' OR EXISTS (
@@ -155,6 +155,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     && (!buyerPolicy?.policy.approved_payment_rails || buyerPolicy.policy.approved_payment_rails.includes(rail)))
   const candidates: RouteCandidate[] = []
   for (const service of rows.slice(0, 500)) {
+    if (!reusableServiceSellerWritesEnabled(service.seller_id)) continue
     if (service.provider_protocol !== 'manual' && service.provider_protocol !== 'leased_v1') continue
     if (service.seller_id === buyerId) continue
     if (paymentControl.paused || service.active_orders >= service.max_concurrency) continue

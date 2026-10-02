@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!plan) return failure('ROUTE_NOT_FOUND', 'Route not found', 404)
     const linked = await linkedResponse(plan, true)
     if (linked) return linked
-    if (!routeExecutionEnabled()) return failure('ROUTE_EXECUTION_DISABLED', 'Route execution is not enabled', 503, true)
+    if (!routeExecutionEnabled(principal.userId)) return failure('ROUTE_EXECUTION_DISABLED', 'Route execution is not enabled', 503, true)
     if (plan.state !== 'planned' && plan.state !== 'reserving') return failure('ROUTE_NOT_EXECUTABLE', 'Route is not executable', 409)
     if (plan.expires_at <= new Date()) {
       await db.update(route_plans).set({ state: 'failed', updated_at: new Date() }).where(and(eq(route_plans.id, id), eq(route_plans.state, plan.state)))
