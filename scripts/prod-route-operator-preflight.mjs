@@ -1,4 +1,5 @@
 import { createClient } from '@libsql/client'
+import { inspectLegacyOwnerValues } from './legacy-owner-classification.mjs'
 
 const url = process.env.TURSO_DATABASE_URL || ''
 const authToken = process.env.TURSO_AUTH_TOKEN || ''
@@ -36,10 +37,7 @@ try {
       SUM(CASE WHEN status IN ('pending', 'signing', 'prepared', 'submitted') AND updated_at < unixepoch() - 900 THEN 1 ELSE 0 END) AS stuck_count
       FROM settlement_transfers`),
     read("SELECT last_outcome, last_succeeded_at FROM worker_heartbeats WHERE worker_name = 'webhooks' LIMIT 1"),
-    read(`SELECT COUNT(*) AS total,
-      SUM(CASE WHEN owner_address LIKE '%@%' THEN 1 ELSE 0 END) AS email_like,
-      SUM(CASE WHEN owner_address GLOB '0x[0-9A-Fa-f]*' AND LENGTH(owner_address) = 42 THEN 1 ELSE 0 END) AS wallet_like
-      FROM agents`),
+    inspectLegacyOwnerValues(client),
   ])
   const states = (rows) => Object.fromEntries(rows.map((row) => [String(row.state), Number(row.count || 0)]))
   const workerRow = worker[0]
@@ -52,7 +50,7 @@ try {
     webhook_outbox: Object.fromEntries(Object.entries(webhooks[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
     settlement_outbox: Object.fromEntries(Object.entries(transfers[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
     webhook_worker: { outcome: workerRow?.last_outcome || 'never_observed', age_minutes: workerAgeMinutes },
-    legacy_owner_values: { total: Number(legacyOwner[0]?.total || 0), email_like: Number(legacyOwner[0]?.email_like || 0), wallet_like: Number(legacyOwner[0]?.wallet_like || 0) },
+    legacy_owner_values: legacyOwner,
   }
   console.log(JSON.stringify(snapshot, null, 2))
   if (snapshot.migrations < 32 || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
