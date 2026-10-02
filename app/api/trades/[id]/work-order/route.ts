@@ -6,6 +6,7 @@ import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { internalErrorResponse } from '@/lib/api-error'
 import { routeExecutionTiming } from '@/lib/route-execution-timing'
 import { getServiceExecutionAttempt } from '@/lib/service-execution-attempt'
+import { providerExecutionStatus } from '@/lib/provider-execution-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const [linkedRoute] = await db.select({ deadline_seconds: route_plans.deadline_seconds })
       .from(route_plans).where(eq(route_plans.service_order_id, row.order.id)).limit(1)
     const attempt = row.service.provider_protocol === 'leased_v1' ? await getServiceExecutionAttempt(row.order.id) : null
+    const now = new Date()
+    const executionTiming = linkedRoute ? routeExecutionTiming(linkedRoute, row.order, row.trade, now) : null
     return NextResponse.json({ success: true, work_order: {
       id: row.order.id,
       trade_id: row.trade.id,
@@ -57,7 +60,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       execution_started_at: row.order.execution_started_at?.toISOString() || null,
       trade_status: row.trade.status,
       funded_at: row.trade.funded_at,
-      execution_timing: linkedRoute ? routeExecutionTiming(linkedRoute, row.order, row.trade) : null,
+      execution_timing: executionTiming,
+      provider_execution: providerExecutionStatus(row.service.provider_protocol, row.order, row.trade, attempt, executionTiming, now),
       start: seller && row.service.provider_protocol === 'manual' && row.trade.status === 'escrow_held' && row.order.state === 'funded'
         ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/work-order/start` } : null,
       attempt_action: seller && attempt && row.trade.status === 'escrow_held' && ['queued', 'accepted'].includes(attempt.state)

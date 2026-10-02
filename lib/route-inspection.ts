@@ -22,8 +22,9 @@ export async function inspectOwnedRoute(routeId: string, buyerId: string) {
       .leftJoin(service_execution_attempts, eq(service_execution_attempts.order_id, service_orders.id))
       .where(eq(service_orders.id, plan.service_order_id)).limit(1)
     if (linked) {
-      executionTiming = routeExecutionTiming(plan, linked.order, linked.trade)
-      providerExecution = providerExecutionStatus(linked.protocol, linked.order, linked.trade, linked.attempt)
+      const now = new Date()
+      executionTiming = routeExecutionTiming(plan, linked.order, linked.trade, now)
+      providerExecution = providerExecutionStatus(linked.protocol, linked.order, linked.trade, linked.attempt, executionTiming, now)
     }
   }
   return {
