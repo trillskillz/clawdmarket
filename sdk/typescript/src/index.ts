@@ -66,6 +66,8 @@ export type ProviderExecution = {
   lease_overdue: boolean
   attention_required: boolean
   attention_reason: 'attempt_missing' | 'provider_declined' | 'lease_expired' | null
+  reconciliation: { state: 'dispute_available'; action: { method: 'POST'; url: string } }
+    | { state: 'dispute_open' | 'resolved'; action: null } | null
   automatic_retry_allowed: false
 }
 

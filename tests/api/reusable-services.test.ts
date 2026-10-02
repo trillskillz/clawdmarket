@@ -466,7 +466,9 @@ test('expired provider lease preserves escrow and capacity without dispatching a
   assert.deepEqual((await missing.json()).provider_execution, {
     attempt_id: null, state: 'missing', accepted_at: null, heartbeat_at: null,
     lease_expires_at: null, completed_at: null, lease_overdue: false,
-    attention_required: true, attention_reason: 'attempt_missing', automatic_retry_allowed: false,
+    attention_required: true, attention_reason: 'attempt_missing',
+    reconciliation: { state: 'dispute_available', action: { method: 'POST', url: `/api/trades/${trade.id}/dispute` } },
+    automatic_retry_allowed: false,
   })
   await db.transaction(async (tx) => {
     await queueFundedWorkOrder(tx, trade.id, sellerId)
@@ -498,6 +500,8 @@ test('expired provider lease preserves escrow and capacity without dispatching a
   assert.equal(routeSnapshot.provider_execution.state, 'expired')
   assert.equal(routeSnapshot.provider_execution.attention_required, true)
   assert.equal(routeSnapshot.provider_execution.attention_reason, 'lease_expired')
+  assert.deepEqual(routeSnapshot.provider_execution.reconciliation,
+    { state: 'dispute_available', action: { method: 'POST', url: `/api/trades/${trade.id}/dispute` } })
   assert.equal(routeSnapshot.provider_execution.automatic_retry_allowed, false)
   assert.equal(routeSnapshot.payment_exposure.state, 'funded')
   const orderSnapshot = await buyerOrder()
@@ -514,6 +518,26 @@ test('expired provider lease preserves escrow and capacity without dispatching a
     .where(eq(schema.service_execution_attempts.order_id, savedOrder.id))).length, 1)
   await assert.rejects(changeServiceExecutionAttempt(trade.id, sellerId, attempt.id, 'heartbeat'),
     (error: any) => error.code === 'WORK_ATTEMPT_LEASE_EXPIRED')
+  const { POST: dispute } = await import('@/app/api/trades/[id]/dispute/route')
+  const disputePath = `/api/trades/${trade.id}/dispute`
+  assert.equal((await dispute(request(disputePath, 'reusable-outsider', { reason: 'Provider lease expired' }),
+    { params: Promise.resolve({ id: trade.id }) })).status, 403)
+  const frozen = await dispute(request(disputePath, buyerId, { reason: 'Provider lease expired before delivery' }),
+    { params: Promise.resolve({ id: trade.id }) })
+  assert.equal(frozen.status, 200)
+  const [disputedOrder] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  const [disputedRoute] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, routeId))
+  const [disputedTrade] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  const [heldCapacity] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(disputedOrder.state, 'disputed')
+  assert.equal(disputedRoute.state, 'disputed')
+  assert.equal(disputedTrade.status, 'disputed')
+  assert.equal(heldCapacity.active_orders, 1)
+  assert.equal(disputedOrder.capacity_released_at, null)
+  const frozenSnapshot = await buyerRoute()
+  assert.equal((await frozenSnapshot.json()).provider_execution.reconciliation.state, 'dispute_open')
+  assert.equal((await dispute(request(disputePath, buyerId, { reason: 'Replayed dispute' }),
+    { params: Promise.resolve({ id: trade.id }) })).status, 400)
 })
 
 test('replayed work notice is suppressed after provider decline without changing funds', async () => {
