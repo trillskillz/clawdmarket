@@ -1,6 +1,6 @@
 import 'server-only'
 import { db } from '@/lib/db'
-import { routeExecutionEnabled, routePlanningEnabled, reusableServiceWritesEnabled, workflowPlanningEnabled } from '@/lib/routing-feature-flags'
+import { routeExecutionEnabled, routePlanningEnabled, reusableServiceWritesEnabled, routingCanaryConfigured, workflowPlanningEnabled } from '@/lib/routing-feature-flags'
 import { inspectWebhookDeliveryHealth } from '@/lib/webhook-delivery'
 import { inspectSettlementHealth } from '@/lib/settlement-monitoring'
 import { inspectWorkerHeartbeat } from '@/lib/worker-heartbeats'
@@ -41,6 +41,7 @@ export async function getRoutingOperatorSnapshot() {
       route_planning: routePlanningEnabled(),
       route_execution: routeExecutionEnabled(),
       workflow_planning: workflowPlanningEnabled(),
+      scoped_route_canary: routingCanaryConfigured(),
     },
     migrations: migrations.rows.map((row) => ({ id: String(row.id), applied_at: String(row.applied_at) })),
     usage: {

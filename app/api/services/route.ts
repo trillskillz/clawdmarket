@@ -8,7 +8,7 @@ import { canonicalServiceCapabilities, serviceDefinitionDto, serviceDefinitionIn
 import { internalErrorResponse } from '@/lib/api-error'
 import { normalizeCapability } from '@/lib/capabilities'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
-import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
+import { reusableServiceSellerWritesEnabled } from '@/lib/routing-feature-flags'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,16 +34,16 @@ export async function GET(request: NextRequest) {
     const [{ total }] = await db.select({ total: sql<number>`COUNT(*)` }).from(service_definitions).where(where)
     const rows = await db.select().from(service_definitions).where(where)
       .orderBy(desc(service_definitions.created_at)).limit(limit).offset((page - 1) * limit)
-    return NextResponse.json({ services: await Promise.all(rows.map(serviceDefinitionDto)), page, limit, total: Number(total), has_more: page * limit < Number(total) }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ services: await Promise.all(rows.map((service) => serviceDefinitionDto(service))), page, limit, total: Number(total), has_more: page * limit < Number(total) }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return internalErrorResponse('Service directory failed', error)
   }
 }
 
 export async function POST(request: NextRequest) {
-  if (!reusableServiceWritesEnabled()) return NextResponse.json({ success: false, error_code: 'REUSABLE_SERVICES_DISABLED', message: 'Reusable service creation is not enabled', retryable: true, state: 'no_funds_moved' }, { status: 503 })
   const principal = await resolveRequestPrincipal(request)
   if (!principal) return NextResponse.json({ success: false, error_code: 'UNAUTHORIZED', message: 'Authentication required', retryable: false }, { status: 401 })
+  if (!reusableServiceSellerWritesEnabled(principal.userId)) return NextResponse.json({ success: false, error_code: 'REUSABLE_SERVICES_DISABLED', message: 'Reusable service creation is not enabled', retryable: true, state: 'no_funds_moved' }, { status: 503 })
   if (principal.usesCookieAuth && !validateCsrf(request)) return NextResponse.json({ success: false, error_code: 'CSRF_REJECTED', message: 'CSRF validation failed', retryable: false }, { status: 403 })
   const parsed = serviceDefinitionInput.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ success: false, error_code: 'INVALID_SERVICE', message: 'Service definition is invalid', retryable: false, details: parsed.error.issues }, { status: 400 })
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       max_concurrency: input.max_concurrency, execution_mode: 'contracted', provider_protocol: input.provider_protocol,
       verification_policy: JSON.stringify(input.verification_policy), status: input.status,
     }).returning()
-    return NextResponse.json({ service: await serviceDefinitionDto(service) }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ service: await serviceDefinitionDto(service, principal.userId) }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return internalErrorResponse('Service creation failed', error)
   }

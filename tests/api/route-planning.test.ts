@@ -148,6 +148,77 @@ test('planning enforces declared deadline and rejects a changed idempotent reque
   assert.equal((await changed.json()).error_code, 'IDEMPOTENCY_CONFLICT')
 })
 
+test('production canary flags admit only the configured buyer and seller', async () => {
+  let canaryServiceId: string | undefined
+  let canaryRouteId: string | undefined
+  const original = {
+    nodeEnv: process.env.NODE_ENV,
+    buyer: process.env.CLAWDMARKET_ROUTE_CANARY_BUYER_ID,
+    seller: process.env.CLAWDMARKET_ROUTE_CANARY_SELLER_ID,
+    services: process.env.CLAWDMARKET_REUSABLE_SERVICES_ENABLED,
+    planning: process.env.CLAWDMARKET_ROUTE_PLANNING_ENABLED,
+    execution: process.env.CLAWDMARKET_ROUTE_EXECUTION_ENABLED,
+  }
+  try {
+    Reflect.set(process.env, 'NODE_ENV', 'production')
+    process.env.CLAWDMARKET_ROUTE_CANARY_BUYER_ID = 'other-buyer'
+    process.env.CLAWDMARKET_ROUTE_CANARY_SELLER_ID = 'route-seller'
+    delete process.env.CLAWDMARKET_REUSABLE_SERVICES_ENABLED
+    delete process.env.CLAWDMARKET_ROUTE_PLANNING_ENABLED
+    delete process.env.CLAWDMARKET_ROUTE_EXECUTION_ENABLED
+    const { reusableServiceWritesEnabled, reusableServiceSellerWritesEnabled, reusableServiceBuyerOrdersEnabled,
+      routePlanningEnabled, routeExecutionEnabled } = await import('@/lib/routing-feature-flags')
+    assert.equal(reusableServiceWritesEnabled(), false)
+    assert.equal(routePlanningEnabled(), false)
+    assert.equal(routeExecutionEnabled(), false)
+    assert.equal(reusableServiceSellerWritesEnabled('route-seller'), true)
+    assert.equal(reusableServiceSellerWritesEnabled('other-buyer'), false)
+    assert.equal(reusableServiceBuyerOrdersEnabled('other-buyer'), true)
+    assert.equal(reusableServiceBuyerOrdersEnabled('route-seller'), false)
+    assert.equal(routePlanningEnabled('other-buyer'), true)
+    assert.equal(routeExecutionEnabled('other-buyer'), true)
+    assert.equal(routePlanningEnabled('route-buyer'), false)
+    const offered = await service('0.10')
+    canaryServiceId = offered.id
+    assert.equal(offered.readiness.purchasable, true)
+    const deniedService = await createService(request('/api/services', 'route-buyer', 'POST', {
+      title: 'Unscoped service', description: 'This provider is outside the production route canary.',
+      capabilities: ['code-review'], pricing: { model: 'fixed', amount: '0.10', currency: 'USD' }, status: 'active',
+    }))
+    assert.equal(deniedService.status, 503)
+    const deniedPlan = await planRoute(request('/api/routes/plan', 'route-buyer', 'POST', {
+      client_reference: `unscoped-${crypto.randomUUID()}`, objective: 'Review this code for authentication issues',
+      required_capabilities: ['code-review'], max_budget: { amount: '0.11', currency: 'USD' },
+    }))
+    assert.equal(deniedPlan.status, 503)
+    const planned = await planRoute(request('/api/routes/plan', 'other-buyer', 'POST', {
+      client_reference: `scoped-${crypto.randomUUID()}`, objective: 'Review this code for authentication issues',
+      required_capabilities: ['code-review'], max_budget: { amount: '0.11', currency: 'USD' },
+      payment_policy: { allowed_rails: ['evm'] },
+    }))
+    assert.equal(planned.status, 201)
+    const route = (await planned.json()).route
+    canaryRouteId = route.id
+    assert.equal(route.candidates.some((candidate: { service_id: string }) => candidate.service_id === offered.id), true)
+    const executed = await executeRoute(request(`/api/routes/${route.id}/execute`, 'other-buyer', 'POST'),
+      { params: Promise.resolve({ id: route.id }) })
+    assert.equal(executed.status, 201, JSON.stringify(await executed.clone().json()))
+    assert.equal((await executed.json()).trade.status, 'pending')
+  } finally {
+    if (canaryRouteId) await cancelRoute(request(`/api/routes/${canaryRouteId}`, 'other-buyer', 'DELETE'),
+      { params: Promise.resolve({ id: canaryRouteId }) })
+    if (canaryServiceId) await db.update(schema.service_definitions).set({ status: 'archived' })
+      .where(eq(schema.service_definitions.id, canaryServiceId))
+    for (const [name, value] of Object.entries({ NODE_ENV: original.nodeEnv,
+      CLAWDMARKET_ROUTE_CANARY_BUYER_ID: original.buyer, CLAWDMARKET_ROUTE_CANARY_SELLER_ID: original.seller,
+      CLAWDMARKET_REUSABLE_SERVICES_ENABLED: original.services, CLAWDMARKET_ROUTE_PLANNING_ENABLED: original.planning,
+      CLAWDMARKET_ROUTE_EXECUTION_ENABLED: original.execution })) {
+      if (value === undefined) delete process.env[name]
+      else process.env[name] = value
+    }
+  }
+})
+
 test('execution reserves an unpaid order once and cancellation releases capacity', async () => {
   const offered = await service('4.00')
   const planned = await plan(`execute-${crypto.randomUUID()}`)

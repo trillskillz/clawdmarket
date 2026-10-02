@@ -17,7 +17,7 @@ import { expireTradePayment } from '@/lib/trade-funding'
 import { withServiceReservationLock } from '@/lib/service-reservation-lock'
 import { queueFundedWorkOrder } from '@/lib/service-order-dispatch'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
-import { reusableServiceWritesEnabled } from '@/lib/routing-feature-flags'
+import { reusableServiceBuyerOrdersEnabled, reusableServiceSellerWritesEnabled } from '@/lib/routing-feature-flags'
 import { checkServiceInput } from '@/lib/verification-policy'
 
 export class ServiceOrderReservationError extends Error {
@@ -80,10 +80,11 @@ export async function reserveServiceOrder(args: ReservationArgs) {
   const reference = request.client_reference
   const prior = await replay(args)
   if (prior) return prior
-  if (!reusableServiceWritesEnabled()) throw new ServiceOrderReservationError('REUSABLE_SERVICES_DISABLED', 'Reusable service orders are not enabled', 503, true)
+  if (!reusableServiceBuyerOrdersEnabled(principal.userId)) throw new ServiceOrderReservationError('REUSABLE_SERVICES_DISABLED', 'Reusable service orders are not enabled', 503, true)
   try {
     const [service] = await db.select().from(service_definitions).where(eq(service_definitions.id, id)).limit(1)
     if (!service || service.status !== 'active' || !await isPublicMarketplaceSeller(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is not active')
+    if (!reusableServiceSellerWritesEnabled(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is outside the active canary', 409)
     if (service.provider_protocol !== 'manual' && service.provider_protocol !== 'leased_v1') throw new ServiceOrderReservationError('PROVIDER_PROTOCOL_UNSUPPORTED', 'Service provider protocol is unsupported')
     if (service.seller_id === principal.userId) throw new ServiceOrderReservationError('SELF_PURCHASE', 'A seller cannot order its own service')
     if (service.seller_id.startsWith('user_agent_') && await referenceFleetPaidServicePublicationLocked(service.seller_id.slice('user_agent_'.length))) {
