@@ -25,5 +25,16 @@ export async function inspectLegacyOwnerValues(client) {
     'malformed_wallet_like', 'opaque_short', 'opaque_medium', 'opaque_long',
   ].map((category) => [category, 0]))
   for (const row of result.rows) categories[String(row.category)] = Number(row.count || 0)
-  return { total: Object.values(categories).reduce((sum, count) => sum + count, 0), ...categories }
+  const collisions = await client.execute(`WITH wallet_owners AS (
+    SELECT LOWER(owner_address) AS wallet, COUNT(*) AS agents
+    FROM agents
+    WHERE LENGTH(owner_address) = 42 AND LOWER(SUBSTR(owner_address, 1, 2)) = '0x'
+      AND SUBSTR(owner_address, 3) NOT GLOB '*[^0-9A-Fa-f]*'
+    GROUP BY LOWER(owner_address) HAVING COUNT(*) > 1
+  ) SELECT COUNT(*) AS groups, COALESCE(SUM(agents), 0) AS agents FROM wallet_owners`)
+  return {
+    total: Object.values(categories).reduce((sum, count) => sum + count, 0), ...categories,
+    evm_address_collision_groups: Number(collisions.rows[0]?.groups || 0),
+    evm_address_agents_in_collision: Number(collisions.rows[0]?.agents || 0),
+  }
 }
