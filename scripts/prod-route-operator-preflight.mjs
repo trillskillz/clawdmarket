@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { inspectLegacyOwnerValues } from './legacy-owner-classification.mjs'
+import { inspectLegacyOwnerValues } from '../lib/legacy-owner-classification.mjs'
 
 const url = process.env.TURSO_DATABASE_URL || ''
 const authToken = process.env.TURSO_AUTH_TOKEN || ''

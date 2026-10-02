@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createClient } from '@libsql/client'
-import { inspectLegacyOwnerValues } from '../../scripts/legacy-owner-classification.mjs'
+import { inspectLegacyOwnerValues } from '../../lib/legacy-owner-classification.mjs'
 
 test('legacy owner inventory partitions stored values without emitting any value', async () => {
   const client = createClient({ url: ':memory:' })
