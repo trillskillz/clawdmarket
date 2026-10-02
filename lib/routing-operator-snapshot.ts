@@ -12,7 +12,7 @@ function countByState(rows: readonly Record<string, unknown>[]) {
 /** Aggregate-only operator snapshot. No account, endpoint, payload, or credential values leave this function. */
 export async function getRoutingOperatorSnapshot() {
   const client = db.$client
-  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, webhooks, settlement, cron] = await Promise.all([
+  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, overdueDeliveries, webhooks, settlement, cron] = await Promise.all([
     client.execute('SELECT id, applied_at FROM _clawdmarket_migrations ORDER BY applied_at DESC, id DESC LIMIT 8'),
     client.execute('SELECT status AS state, COUNT(*) AS count FROM service_definitions GROUP BY status'),
     client.execute('SELECT state, COUNT(*) AS count FROM route_plans GROUP BY state'),
@@ -30,6 +30,12 @@ export async function getRoutingOperatorSnapshot() {
       LEFT JOIN service_execution_attempts a ON a.order_id = o.id
       WHERE s.provider_protocol = 'leased_v1' AND t.status = 'escrow_held'
         AND o.state IN ('funded', 'executing') AND o.capacity_released_at IS NULL AND a.id IS NULL`),
+    client.execute(`SELECT COUNT(*) AS count FROM route_plans r
+      JOIN service_orders o ON o.id = r.service_order_id
+      JOIN trades t ON t.id = o.trade_id
+      WHERE t.status = 'escrow_held' AND o.state IN ('funded', 'executing')
+        AND o.capacity_released_at IS NULL AND r.deadline_seconds IS NOT NULL
+        AND unixepoch(t.funded_at) + r.deadline_seconds <= unixepoch()`),
     inspectWebhookDeliveryHealth(),
     inspectSettlementHealth(client),
     inspectWorkerHeartbeat('webhooks', 5),
@@ -52,6 +58,7 @@ export async function getRoutingOperatorSnapshot() {
       overdue_lease_count: Number(attemptHealth.rows[0]?.overdue_lease_count || 0),
       terminal_active_count: Number(attemptHealth.rows[0]?.terminal_active_count || 0),
       funded_without_attempt_count: Number(missingAttempts.rows[0]?.count || 0),
+      delivery_deadline_overdue_count: Number(overdueDeliveries.rows[0]?.count || 0),
     },
     outboxes: { webhook: webhooks, settlement },
     workers: { webhooks: cron },
