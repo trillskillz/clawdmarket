@@ -46,7 +46,7 @@ export type RouteCandidate = {
   verification_methods: VerificationPolicy['methods']
   evidence_level: 'claimed_only' | 'backed_completion_observed'
   capability_evidence: { capability_id: string; accepted_completion_count: number; measured_quality_score: null }[]
-  provider_failures: { provider_declines_90d: number; lease_expiries_90d: number; uncorrected_verification_failures_90d: number }
+  provider_failures: { provider_declines_90d: number; lease_expiries_90d: number; uncorrected_verification_failures_90d: number; buyer_refund_resolutions_90d: number }
   score: number
   score_components: { capability_fit: number; price: number; latency: number; capacity: number; verification: number; backed_execution: number; provider_failure_penalty: number }
   explanation: string[]
@@ -73,6 +73,15 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     .groupBy(capability_performance_events.seller_agent_id, capability_performance_events.capability_id) : []
   const backedCounts = new Map(performanceRows.map((row) => [`${row.agentId}:${row.capabilityId}`, Number(row.count)]))
   const cutoff = new Date(Date.now() - 90 * 24 * 3600_000)
+  // A dispute becomes a refund signal only after the authoritative distribution is final.
+  const confirmedBuyerRefund = sql`(${trades.status} = 'resolved' AND ${trades.resolution} = 'buyer'
+    AND ${trades.payout_status} = 'complete'
+    AND EXISTS (SELECT 1 FROM transactions refund WHERE refund.reference_id = ${trades.id} AND refund.type = 'escrow_refund')
+    AND ((${trades.payment_rail} = 'ledger' AND ${trades.fee_tx_hash} IS NULL
+      AND EXISTS (SELECT 1 FROM transactions locked WHERE locked.reference_id = ${trades.id} AND locked.type = 'escrow_lock'))
+      OR ((${trades.payment_rail} IN ('mpp', 'evm') OR ${trades.fee_tx_hash} IS NOT NULL)
+      AND EXISTS (SELECT 1 FROM settlement_transfers transfer WHERE transfer.trade_id = ${trades.id}
+        AND transfer.kind = 'buyer_refund' AND transfer.status = 'confirmed' AND transfer.tx_hash IS NOT NULL))))`
   const failureRows = rows.length ? await db.select({ serviceId: service_orders.service_id,
     state: service_execution_attempts.state, count: sql<number>`COUNT(*)` })
     .from(service_execution_attempts)
@@ -84,7 +93,8 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       gte(service_execution_attempts.created_at, cutoff),
       sql`${trades.funded_at} IS NOT NULL`,
       ne(trades.buyer_id, trades.seller_id),
-      sql`${trades.id} NOT GLOB 'trade_reference_*'`))
+      sql`${trades.id} NOT GLOB 'trade_reference_*'`,
+      sql`NOT COALESCE(${confirmedBuyerRefund}, 0)`))
     .groupBy(service_orders.service_id, service_execution_attempts.state) : []
   const failureCounts = new Map(failureRows.map((row) => [`${row.serviceId}:${row.state}`, Number(row.count)]))
   const verificationFailureRows = rows.length ? await db.select({ serviceId: service_orders.service_id,
@@ -100,10 +110,21 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       sql`${trades.funded_at} IS NOT NULL`,
       ne(trades.buyer_id, trades.seller_id),
       sql`${trades.id} NOT GLOB 'trade_reference_*'`,
+      sql`NOT COALESCE(${confirmedBuyerRefund}, 0)`,
       sql`NOT EXISTS (SELECT 1 FROM trade_deliveries delivered WHERE delivered.trade_id = ${trades.id})`,
       sql`NOT EXISTS (SELECT 1 FROM service_execution_attempts attempt WHERE attempt.order_id = ${service_orders.id} AND attempt.state IN ('declined', 'expired'))`))
     .groupBy(service_orders.service_id) : []
   const verificationFailureCounts = new Map(verificationFailureRows.map((row) => [row.serviceId, Number(row.count)]))
+  const refundRows = rows.length ? await db.select({ serviceId: service_orders.service_id,
+    count: sql<number>`COUNT(DISTINCT ${trades.id})` })
+    .from(service_orders)
+    .innerJoin(trades, eq(trades.id, service_orders.trade_id))
+    .where(and(inArray(service_orders.service_id, rows.slice(0, 500).map((row) => row.id)),
+      gte(trades.completed_at, cutoff), sql`${trades.funded_at} IS NOT NULL`,
+      ne(trades.buyer_id, trades.seller_id), sql`${trades.id} NOT GLOB 'trade_reference_*'`,
+      confirmedBuyerRefund))
+    .groupBy(service_orders.service_id) : []
+  const refundCounts = new Map(refundRows.map((row) => [row.serviceId, Number(row.count)]))
   const readiness = getPaymentReadiness()
   const paymentControl = await getNewPaymentControl()
   const buyerPolicy = await loadBuyerSpendPolicy(buyerId)
@@ -154,9 +175,11 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     const backedExecution = Math.min(backedCount, 5) / 5
     const providerFailures = { provider_declines_90d: failureCounts.get(`${service.id}:declined`) || 0,
       lease_expiries_90d: failureCounts.get(`${service.id}:expired`) || 0,
-      uncorrected_verification_failures_90d: verificationFailureCounts.get(service.id) || 0 }
+      uncorrected_verification_failures_90d: verificationFailureCounts.get(service.id) || 0,
+      buyer_refund_resolutions_90d: refundCounts.get(service.id) || 0 }
     const providerFailurePenalty = Math.min(providerFailures.provider_declines_90d
-      + providerFailures.lease_expiries_90d + providerFailures.uncorrected_verification_failures_90d, 5) / 5
+      + providerFailures.lease_expiries_90d + providerFailures.uncorrected_verification_failures_90d
+      + providerFailures.buyer_refund_resolutions_90d, 5) / 5
     const components = { capability_fit: 1, price: priceScore, latency: latencyScore, capacity: capacityScore,
       verification: 1, backed_execution: backedExecution, provider_failure_penalty: providerFailurePenalty }
     const score = Math.round((0.4 * components.capability_fit + 0.25 * priceScore + 0.15 * latencyScore
@@ -173,8 +196,8 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       explanation: ['All required canonical capabilities are claimed', 'Service is currently purchasable',
         backedCount > 0 ? 'Economically backed buyer-accepted completions observed for every required capability; quality remains unmeasured'
           : 'Provider capability is not independently verified',
-        providerFailurePenalty > 0 ? 'Recent funded provider declines, lease expiries, or uncorrected deterministic verification failures observed; penalty is capped'
-          : 'No recent provider attempt or uncorrected verification failure observed; reliability remains unmeasured'],
+        providerFailurePenalty > 0 ? 'Recent funded provider declines, lease expiries, uncorrected deterministic verification failures, or finalized buyer refunds observed; penalty is capped'
+          : 'No recent provider attempt, uncorrected verification failure, or finalized buyer refund observed; reliability remains unmeasured'],
     })
   }
   candidates.sort((a, b) => b.score - a.score || a.pricing.estimated_total.localeCompare(b.pricing.estimated_total) || a.service_id.localeCompare(b.service_id))

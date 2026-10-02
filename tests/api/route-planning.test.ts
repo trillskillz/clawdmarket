@@ -418,13 +418,13 @@ test('planning separates provider claims from backed completion evidence without
   await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: sellerId,
     title: 'Document translation', description: 'Translate a document with a saved deliverable.',
     capabilities: '["translation"]', price_minor: 100, status: 'active', estimated_latency_seconds: 120 })
+  const { planRoute: computePlan, routePlanInput } = await import('@/lib/route-planning')
   const planFor = async () => {
-    const response = await planRoute(request('/api/routes/plan', buyerId, 'POST', {
+    const input = routePlanInput.parse({
       client_reference: `evidence-plan-${crypto.randomUUID()}`, objective: 'Translate this document for review',
       required_capabilities: ['translation'], max_budget: { amount: '2.00', currency: 'USD' },
-    }))
-    assert.equal(response.status, 201)
-    return (await response.json()).route.candidates.find((candidate: { service_id: string }) => candidate.service_id === serviceId)
+    })
+    return (await computePlan(input, buyerId)).candidates.find((candidate) => candidate.service_id === serviceId)!
   }
   const claimed = await planFor()
   assert.equal(claimed.evidence_level, 'claimed_only')
@@ -474,11 +474,11 @@ test('planning separates provider claims from backed completion evidence without
   await recordFailure('declined', true, new Date(), sellerId)
   const penalized = await planFor()
   assert.deepEqual(penalized.provider_failures, { provider_declines_90d: 1, lease_expiries_90d: 1,
-    uncorrected_verification_failures_90d: 0 })
+    uncorrected_verification_failures_90d: 0, buyer_refund_resolutions_90d: 0 })
   assert.equal(penalized.score_components.provider_failure_penalty, 0.4)
   assert.ok(penalized.score < observed.score)
   assert.equal(penalized.evidence_level, 'backed_completion_observed')
-  assert.match(penalized.explanation.at(-1), /penalty is capped/)
+  assert.match(penalized.explanation.at(-1) ?? '', /penalty is capped/)
 
   const [rejectedListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
     title: 'Rejected translation', description: 'Translation awaiting a corrected submission.', price_bankr: 1,
@@ -511,4 +511,58 @@ test('planning separates provider claims from backed completion evidence without
   assert.equal(corrected.provider_failures.uncorrected_verification_failures_90d, 0)
   assert.equal(corrected.score_components.provider_failure_penalty, 0.4)
   assert.equal(corrected.score, penalized.score)
+
+  const [refundListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
+    title: 'Refunded translation', description: 'A disputed funded service order.', price_bankr: 1, status: 'sold' }).returning()
+  const [refundTrade] = await db.insert(schema.trades).values({ listing_id: refundListing.id,
+    buyer_id: 'other-buyer', seller_id: sellerId, amount: 1, fee: 0.05, status: 'disputed',
+    funded_at: new Date().toISOString(), payment_rail: 'evm' }).returning()
+  const refundOrderId = crypto.randomUUID()
+  await db.insert(schema.service_orders).values({ id: refundOrderId, service_id: serviceId,
+    listing_id: refundListing.id, trade_id: refundTrade.id, buyer_id: 'other-buyer',
+    client_reference: crypto.randomUUID(), objective: 'Translate a disputed document',
+    price_minor: 100, payment_rail: 'evm', state: 'disputed' })
+  await db.insert(schema.service_execution_attempts).values({ id: crypto.randomUUID(), order_id: refundOrderId,
+    state: 'expired', created_at: new Date(), completed_at: new Date() })
+  const openDispute = await planFor()
+  assert.equal(openDispute.provider_failures.buyer_refund_resolutions_90d, 0)
+  assert.equal(openDispute.provider_failures.lease_expiries_90d, 2)
+  await db.update(schema.trades).set({ status: 'resolved', resolution: 'buyer',
+    payout_status: 'processing', completed_at: new Date() }).where(eq(schema.trades.id, refundTrade.id))
+  const processing = await planFor()
+  assert.equal(processing.provider_failures.buyer_refund_resolutions_90d, 0)
+  assert.equal(processing.provider_failures.lease_expiries_90d, 2)
+  await db.update(schema.trades).set({ payout_status: 'complete' }).where(eq(schema.trades.id, refundTrade.id))
+  const missingDistribution = await planFor()
+  assert.equal(missingDistribution.provider_failures.buyer_refund_resolutions_90d, 0)
+  assert.equal(missingDistribution.provider_failures.lease_expiries_90d, 2)
+  await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_refund', reference_id: refundTrade.id })
+  await db.insert(schema.settlement_transfers).values({ business_key: `refund:${refundTrade.id}`,
+    trade_id: refundTrade.id, kind: 'buyer_refund', chain_id: 8453, token_address: `0x${'44'.repeat(20)}`,
+    from_address: treasury.address, to_address: treasury.address, token_amount: '1000000', usd_amount: 1,
+    status: 'confirmed', tx_hash: `0x${'77'.repeat(32)}`, confirmed_at: new Date() })
+  const refunded = await planFor()
+  assert.equal(refunded.provider_failures.buyer_refund_resolutions_90d, 1)
+  assert.equal(refunded.provider_failures.lease_expiries_90d, 1)
+  assert.equal(refunded.score_components.provider_failure_penalty, 0.6)
+
+  const [ledgerListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
+    title: 'Ledger refund', description: 'A funded service order refunded to its buyer.', price_bankr: 1,
+    status: 'sold' }).returning()
+  const [ledgerTrade] = await db.insert(schema.trades).values({ listing_id: ledgerListing.id,
+    buyer_id: 'other-buyer', seller_id: sellerId, amount: 1, fee: 0.05, status: 'resolved',
+    resolution: 'buyer', payout_status: 'complete', completed_at: new Date(),
+    funded_at: new Date().toISOString(), payment_rail: 'ledger' }).returning()
+  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: serviceId,
+    listing_id: ledgerListing.id, trade_id: ledgerTrade.id, buyer_id: 'other-buyer',
+    client_reference: crypto.randomUUID(), objective: 'Translate a ledger-funded document',
+    price_minor: 100, payment_rail: 'ledger', state: 'resolved' })
+  await db.insert(schema.transactions).values([{ amount: 1, type: 'escrow_lock', reference_id: ledgerTrade.id },
+    { amount: 1, type: 'escrow_refund', reference_id: ledgerTrade.id }])
+  const ledgerRefunded = await planFor()
+  assert.equal(ledgerRefunded.provider_failures.buyer_refund_resolutions_90d, 2)
+  assert.equal(ledgerRefunded.score_components.provider_failure_penalty, 0.8)
+  await db.update(schema.trades).set({ resolution: 'split' }).where(eq(schema.trades.id, ledgerTrade.id))
+  const splitResolution = await planFor()
+  assert.equal(splitResolution.provider_failures.buyer_refund_resolutions_90d, 1)
 })
