@@ -432,7 +432,8 @@ export const tasks = sqliteTable('tasks', {
 export const service_execution_attempts = sqliteTable('service_execution_attempts', {
   id: text('id').primaryKey(),
   order_id: text('order_id').notNull().unique().references(() => service_orders.id, { onDelete: 'restrict' }),
-  state: text('state', { enum: ['queued', 'accepted', 'declined', 'expired', 'delivered', 'interrupted'] }).notNull().default('queued'),
+  state: text('state', { enum: ['queued', 'accepted', 'declined', 'expired', 'delivered', 'interrupted', 'acknowledgment_timed_out'] }).notNull().default('queued'),
+  acknowledgment_due_at: integer('acknowledgment_due_at', { mode: 'timestamp' }),
   accepted_at: integer('accepted_at', { mode: 'timestamp' }),
   heartbeat_at: integer('heartbeat_at', { mode: 'timestamp' }),
   lease_expires_at: integer('lease_expires_at', { mode: 'timestamp' }),
@@ -441,6 +442,7 @@ export const service_execution_attempts = sqliteTable('service_execution_attempt
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 }, (table) => [
   index('service_execution_attempts_state_lease_idx').on(table.state, table.lease_expires_at),
+  index('service_execution_attempts_state_ack_idx').on(table.state, table.acknowledgment_due_at),
 ]);
 
 export const route_plans = sqliteTable('route_plans', {

@@ -14,6 +14,8 @@ import { reusableServiceBuyerOrdersEnabled, reusableServiceSellerWritesEnabled }
 import { checkServiceInput, supportsVerification, verificationPolicySchema, type VerificationPolicy } from '@/lib/verification-policy'
 import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from '@/lib/buyer-spend-policy'
 import { organizationBudgetForAgent, organizationBudgetUsage } from '@/lib/organization-budgets'
+import { serviceContractReadiness } from '@/lib/service-contract-readiness'
+import { storedServiceCapabilities } from '@/lib/route-service-eligibility'
 
 export const routePlanInput = z.object({
   client_reference: z.string().trim().min(8).max(200),
@@ -156,16 +158,15 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
   const candidates: RouteCandidate[] = []
   for (const service of rows.slice(0, 500)) {
     if (!reusableServiceSellerWritesEnabled(service.seller_id)) continue
-    if (service.provider_protocol !== 'manual' && service.provider_protocol !== 'leased_v1') continue
+    const contract = serviceContractReadiness(service)
+    if (!contract.ready) continue
     if (service.seller_id === buyerId) continue
     if (paymentControl.paused || service.active_orders >= service.max_concurrency) continue
-    const offered = JSON.parse(service.capabilities) as string[]
-    if (!capabilities.every((capability) => offered.includes(capability))) continue
-    let inputSchema: unknown
-    try { inputSchema = JSON.parse(service.input_schema) } catch { inputSchema = null }
-    if (checkServiceInput(input.input, inputSchema).status !== 'valid') continue
-    const servicePolicy = verificationPolicySchema.safeParse(JSON.parse(service.verification_policy))
-    if (!servicePolicy.success || !supportsVerification(servicePolicy.data, input.verification)) continue
+    const offered = storedServiceCapabilities(service.capabilities)
+    if (!offered || !capabilities.every((capability) => offered.includes(capability))) continue
+    if (checkServiceInput(input.input, contract.inputSchema).status !== 'valid') continue
+    const servicePolicy = contract.verificationPolicy!
+    if (!supportsVerification(servicePolicy, input.verification)) continue
     const totalMinor = service.price_minor + Math.round(service.price_minor * 0.05)
     if (totalMinor > input.max_budget.amount) continue
     if (organizationBudget && (
@@ -180,7 +181,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     const rail = allowedRails.map((item) => selectMarketplaceRail(item, readiness, sellerPayout)).find(Boolean)
     if (!rail) continue
     if (buyerPolicy && checkBuyerPolicyConstraints(buyerPolicy.policy, { totalMinor, sellerId: service.seller_id,
-      capabilities: offered, paymentRail: rail, verificationMethods: servicePolicy.data.methods })) continue
+      capabilities: offered, paymentRail: rail, verificationMethods: servicePolicy.methods })) continue
     const priceScore = Math.max(0, 1 - totalMinor / input.max_budget.amount)
     const latencyScore = service.estimated_latency_seconds && input.deadline_seconds
       ? Math.max(0, 1 - service.estimated_latency_seconds / input.deadline_seconds)
@@ -211,7 +212,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       service_id: service.id, seller_agent_id: agentId,
       pricing: { model: 'fixed', amount: servicePrice(service.price_minor), currency: 'USD', estimated_total: servicePrice(totalMinor) },
       estimated_latency_seconds: service.estimated_latency_seconds, payment_rail: rail,
-      verification_methods: servicePolicy.data.methods,
+      verification_methods: servicePolicy.methods,
       evidence_level: backedCount > 0 ? 'backed_completion_observed' : 'claimed_only',
       capability_evidence: capabilityEvidence, provider_failures: providerFailures, score,
       score_components: components,

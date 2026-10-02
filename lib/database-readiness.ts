@@ -38,7 +38,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   listings: ['id', 'seller_id', 'category', 'title', 'description', 'price_bankr', 'status', 'created_at'],
   service_definitions: ['id', 'seller_id', 'title', 'description', 'capabilities', 'input_schema', 'output_schema', 'pricing_model', 'price_minor', 'currency', 'estimated_latency_seconds', 'max_concurrency', 'active_orders', 'execution_mode', 'provider_protocol', 'verification_policy', 'status', 'created_at', 'updated_at'],
   service_orders: ['id', 'service_id', 'listing_id', 'trade_id', 'buyer_id', 'client_reference', 'objective', 'input_json', 'price_minor', 'payment_rail', 'state', 'execution_started_at', 'capacity_released_at', 'created_at', 'updated_at'],
-  service_execution_attempts: ['id', 'order_id', 'state', 'accepted_at', 'heartbeat_at', 'lease_expires_at', 'completed_at', 'created_at', 'updated_at'],
+  service_execution_attempts: ['id', 'order_id', 'state', 'acknowledgment_due_at', 'accepted_at', 'heartbeat_at', 'lease_expires_at', 'completed_at', 'created_at', 'updated_at'],
   worker_heartbeats: ['worker_name', 'last_started_at', 'last_succeeded_at', 'last_failed_at', 'last_outcome'],
   route_plans: ['id', 'buyer_id', 'client_reference', 'objective', 'required_capabilities', 'input_json', 'max_budget_minor', 'currency', 'deadline_seconds', 'verification_policy', 'payment_policy', 'retry_policy', 'candidates_json', 'state', 'service_order_id', 'created_at', 'expires_at', 'updated_at'],
   route_attempts: ['id', 'route_id', 'attempt_number', 'service_id', 'state', 'failure_code', 'service_order_id', 'created_at', 'updated_at'],

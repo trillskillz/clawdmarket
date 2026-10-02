@@ -13,9 +13,9 @@ import { NewPaymentsPausedError } from '@/lib/payment-control'
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy'
 import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy'
 import { internalErrorResponse } from '@/lib/api-error'
-import { supportsVerification, verificationPolicySchema } from '@/lib/verification-policy'
 import { beginRouteAttempt, listRouteAttempts, markRouteAttemptIneligible } from '@/lib/route-attempts'
 import { routePaymentExposure } from '@/lib/route-payment-exposure'
+import { serviceSupportsRoute } from '@/lib/route-service-eligibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const maxAttempts = Math.max(1, Math.min(3, Number((JSON.parse(plan.retry_policy) as { max_attempts?: number }).max_attempts || 1)))
     let lastCode = 'ROUTE_NO_ELIGIBLE_PROVIDER'
-    const providerFailures = new Set(['SERVICE_UNAVAILABLE', 'SERVICE_CAPACITY_OR_PRICE_CHANGED', 'SERVICE_PRICE_CHANGED', 'SERVICE_INPUT_INVALID', 'SERVICE_INPUT_SCHEMA_UNSUPPORTED', 'SELLER_PAYOUT_REQUIRED', 'PAYMENT_RAIL_UNAVAILABLE', 'REFERENCE_FLEET_PAID_SERVICES_LOCKED'])
+    const providerFailures = new Set(['ROUTE_STALE_PROVIDER', 'SERVICE_UNAVAILABLE', 'SERVICE_CAPACITY_OR_PRICE_CHANGED', 'SERVICE_PRICE_CHANGED', 'SERVICE_INPUT_INVALID', 'SERVICE_INPUT_SCHEMA_UNSUPPORTED', 'EXECUTION_MODE_UNSUPPORTED', 'PROVIDER_PROTOCOL_UNSUPPORTED', 'VERIFICATION_UNSUPPORTED', 'SELLER_PAYOUT_REQUIRED', 'PAYMENT_RAIL_UNAVAILABLE', 'REFERENCE_FLEET_PAID_SERVICES_LOCKED'])
     for (let index = 0; index < Math.min(maxAttempts, candidates.length); index += 1) {
       const candidate = candidates[index]
       const attemptNumber = index + 1
@@ -89,19 +89,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await markRouteAttemptIneligible(id, attemptNumber, lastCode)
         continue
       }
-      const required = JSON.parse(plan.required_capabilities) as string[]
-      const offered = JSON.parse(service.capabilities) as string[]
-      const requestedVerification = verificationPolicySchema.safeParse(JSON.parse(plan.verification_policy))
-      const serviceVerification = verificationPolicySchema.safeParse(JSON.parse(service.verification_policy))
-      if (!required.every((capability) => offered.includes(capability))
-        || !requestedVerification.success || !serviceVerification.success || !supportsVerification(serviceVerification.data, requestedVerification.data)
-        || plan.deadline_seconds && (!service.estimated_latency_seconds || service.estimated_latency_seconds > plan.deadline_seconds)) {
+      if (!serviceSupportsRoute(service, plan)) {
         lastCode = 'ROUTE_STALE_PROVIDER'
         await markRouteAttemptIneligible(id, attemptNumber, lastCode)
         continue
       }
       try {
-        const result = await reserveServiceOrder({ serviceId: candidate.service_id, principal, routeId: id, attemptNumber, externalOnly: true, request: {
+        const result = await reserveServiceOrder({ serviceId: candidate.service_id, principal, routeId: id, attemptNumber, externalOnly: true, expectedSellerId: service.seller_id, request: {
           client_reference: `route:${id}:attempt:${attemptNumber}`, objective: plan.objective,
           input: JSON.parse(plan.input_json), payment_rail: candidate.payment_rail,
           max_total: plan.max_budget_minor, expected_price: service.price_minor,

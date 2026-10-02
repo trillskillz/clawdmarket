@@ -60,14 +60,16 @@ export type PaymentExposure = {
 
 export type ProviderExecution = {
   attempt_id: string | null
-  state: 'not_started' | 'missing' | 'queued' | 'accepted' | 'declined' | 'expired' | 'delivered' | 'interrupted'
+  state: 'not_started' | 'missing' | 'queued' | 'accepted' | 'declined' | 'expired' | 'delivered' | 'interrupted' | 'acknowledgment_timed_out'
+  acknowledgment_due_at: string | null
+  acknowledgment_overdue: boolean
   accepted_at: string | null
   heartbeat_at: string | null
   lease_expires_at: string | null
   completed_at: string | null
   lease_overdue: boolean
   attention_required: boolean
-  attention_reason: 'attempt_missing' | 'provider_declined' | 'lease_expired' | 'attempt_interrupted' | null
+  attention_reason: 'attempt_missing' | 'provider_declined' | 'lease_expired' | 'attempt_interrupted' | 'acknowledgment_timeout' | 'delivery_deadline_overdue' | null
   reconciliation: { state: 'dispute_available'; action: { method: 'POST'; url: string } }
     | { state: 'dispute_open' | 'resolved'; action: null } | null
   automatic_retry_allowed: false

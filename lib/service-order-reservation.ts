@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { db } from '@/lib/db'
 import { listings, route_attempts, route_plans, service_definitions, service_orders, trades } from '@/lib/schema'
@@ -12,6 +12,7 @@ import { payoutAddressForUser } from '@/lib/external-settlement'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
 import { createLedgerTrade, ensureAdminFeeRecipient } from '@/lib/settlement'
 import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy'
+import { enforceBuyerSpendPolicy } from '@/lib/buyer-spend-policy'
 import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets'
 import { expireTradePayment } from '@/lib/trade-funding'
 import { withServiceReservationLock } from '@/lib/service-reservation-lock'
@@ -19,6 +20,8 @@ import { queueFundedWorkOrder } from '@/lib/service-order-dispatch'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
 import { reusableServiceBuyerOrdersEnabled, reusableServiceSellerWritesEnabled } from '@/lib/routing-feature-flags'
 import { checkServiceInput } from '@/lib/verification-policy'
+import { serviceContractReadiness } from '@/lib/service-contract-readiness'
+import { serviceSupportsRoute } from '@/lib/route-service-eligibility'
 
 export class ServiceOrderReservationError extends Error {
   constructor(public readonly code: string, message: string, public readonly status = 409, public readonly retryable = false) {
@@ -27,7 +30,7 @@ export class ServiceOrderReservationError extends Error {
 }
 
 type OrderRequest = z.output<typeof serviceOrderInput>
-type ReservationArgs = { serviceId: string; principal: RequestPrincipal; request: OrderRequest; routeId?: string; attemptNumber?: number; externalOnly?: boolean }
+type ReservationArgs = { serviceId: string; principal: RequestPrincipal; request: OrderRequest; routeId?: string; attemptNumber?: number; externalOnly?: boolean; expectedSellerId?: string }
 
 function sqliteBusy(error: unknown) {
   let current = error
@@ -83,16 +86,20 @@ export async function reserveServiceOrder(args: ReservationArgs) {
   if (!reusableServiceBuyerOrdersEnabled(principal.userId)) throw new ServiceOrderReservationError('REUSABLE_SERVICES_DISABLED', 'Reusable service orders are not enabled', 503, true)
   try {
     const [service] = await db.select().from(service_definitions).where(eq(service_definitions.id, id)).limit(1)
+    if (service && args.expectedSellerId !== undefined && service.seller_id !== args.expectedSellerId) {
+      throw new ServiceOrderReservationError('ROUTE_STALE_PROVIDER', 'Service provider changed after route eligibility was checked')
+    }
     if (!service || service.status !== 'active' || !await isPublicMarketplaceSeller(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is not active')
     if (!reusableServiceSellerWritesEnabled(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is outside the active canary', 409)
-    if (service.provider_protocol !== 'manual' && service.provider_protocol !== 'leased_v1') throw new ServiceOrderReservationError('PROVIDER_PROTOCOL_UNSUPPORTED', 'Service provider protocol is unsupported')
+    const contract = serviceContractReadiness(service)
+    if (!contract.executionModeReady) throw new ServiceOrderReservationError('EXECUTION_MODE_UNSUPPORTED', 'Service execution mode is unsupported')
+    if (!contract.protocolReady) throw new ServiceOrderReservationError('PROVIDER_PROTOCOL_UNSUPPORTED', 'Service provider protocol is unsupported')
+    if (!contract.verificationReady) throw new ServiceOrderReservationError('VERIFICATION_UNSUPPORTED', 'Service verification contract is unsupported')
     if (service.seller_id === principal.userId) throw new ServiceOrderReservationError('SELF_PURCHASE', 'A seller cannot order its own service')
     if (service.seller_id.startsWith('user_agent_') && await referenceFleetPaidServicePublicationLocked(service.seller_id.slice('user_agent_'.length))) {
       throw new ServiceOrderReservationError('REFERENCE_FLEET_PAID_SERVICES_LOCKED', 'Managed reference agents cannot sell paid services')
     }
-    let inputSchema: unknown
-    try { inputSchema = JSON.parse(service.input_schema) } catch { inputSchema = null }
-    const inputCheck = checkServiceInput(request.input, inputSchema)
+    const inputCheck = checkServiceInput(request.input, contract.inputSchema)
     if (inputCheck.status === 'unsupported') throw new ServiceOrderReservationError('SERVICE_INPUT_SCHEMA_UNSUPPORTED', 'Service input schema is unsupported')
     if (inputCheck.status === 'invalid') throw new ServiceOrderReservationError('SERVICE_INPUT_INVALID', `Order input does not match service schema: ${inputCheck.failure}`, 422)
     if (request.expected_price !== undefined && service.price_minor !== request.expected_price) throw new ServiceOrderReservationError('SERVICE_PRICE_CHANGED', 'Service price changed; re-plan before retrying')
@@ -117,18 +124,27 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         if (!plan || plan.state !== 'reserving' || plan.service_order_id) throw new ServiceOrderReservationError('ROUTE_STATE_CHANGED', 'Route is no longer available for reservation')
         if (plan.expires_at <= now) throw new ServiceOrderReservationError('ROUTE_PLAN_EXPIRED', 'Route plan expired before execution', 410)
         if (totalMinor > plan.max_budget_minor) throw new ServiceOrderReservationError('BUDGET_EXCEEDED', 'Current total exceeds route budget')
+        if (!serviceSupportsRoute(service, plan)) throw new ServiceOrderReservationError('ROUTE_STALE_PROVIDER', 'Service no longer satisfies the saved route requirements')
       }
       const [claimed] = await tx.update(service_definitions)
         .set({ active_orders: sql`${service_definitions.active_orders} + 1`, updated_at: now })
         .where(and(eq(service_definitions.id, id), eq(service_definitions.status, 'active'),
           eq(service_definitions.price_minor, service.price_minor),
+          eq(service_definitions.seller_id, service.seller_id),
+          eq(service_definitions.capabilities, service.capabilities),
+          service.estimated_latency_seconds === null ? isNull(service_definitions.estimated_latency_seconds)
+            : eq(service_definitions.estimated_latency_seconds, service.estimated_latency_seconds),
           eq(service_definitions.input_schema, service.input_schema),
+          eq(service_definitions.output_schema, service.output_schema),
+          eq(service_definitions.verification_policy, service.verification_policy),
+          eq(service_definitions.execution_mode, service.execution_mode),
           eq(service_definitions.provider_protocol, service.provider_protocol),
           sql`${service_definitions.active_orders} < ${service_definitions.max_concurrency}`))
         .returning({ id: service_definitions.id })
       if (!claimed) throw new ServiceOrderReservationError('SERVICE_CAPACITY_OR_PRICE_CHANGED', 'Service capacity or price changed; re-plan before retrying')
-      const spendContext = { sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: (JSON.parse(service.verification_policy) as { methods?: string[] }).methods || ['buyer_review'] }
+      const spendContext = { sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: contract.verificationPolicy!.methods }
       if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100, ...spendContext })
+      else await enforceBuyerSpendPolicy(tx, principal.userId, { totalMinor, ...spendContext }, now)
       const [listing] = await tx.insert(listings).values({ seller_id: service.seller_id, category: 'skills', title: service.title,
         description: service.description, price_bankr: service.price_minor / 100, status: rail === 'ledger' ? 'active' : 'sold' }).returning()
       const trade = rail === 'ledger'

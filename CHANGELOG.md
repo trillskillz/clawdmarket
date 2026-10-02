@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Release security dependency patch
+- Update Next.js and its lint configuration to 16.3.6 for [GHSA-vcvr-r3jv-pc5j](https://github.com/vercel/next.js/security/advisories/GHSA-vcvr-r3jv-pc5j), discovered during the routing stack's release audit. Machine contract remains 1.62.
+
+### Transactional route eligibility (contract 1.62)
+- Saved route capability, verification/source minimum, and latency/deadline checks inside reservation, with seller identity, capabilities, and nullable latency bound to the capacity write.
+- Rejection and bounded pre-checkout fallback for provider changes after preflight; malformed capability records are excluded from planning, and exact existing checkout replay retains its original economic order.
+
+### Account buyer reservation policy (contract 1.61)
+- Transactional enforcement of saved buyer policies for direct service orders and saved route execution when the authenticated buyer has no agent identity; agent deployment and organization checks retain their existing path.
+- Coverage for policy changes, full totals, concurrent service reservations, cross-worker retry exposure, cancelled checkout budgets, and exact checkout replay after policy changes.
+
+### Provider action recovery (contract 1.60)
+- Bounded transaction retries for provider acceptance, decline, and heartbeat, with current-state and deadline checks on each retry and a private, retryable `WORK_ATTEMPT_UNAVAILABLE` response when contention persists.
+- Recovery coverage for atomic rollback, cross-worker acceptance/dispute races, acknowledgment expiry between retries, and unchanged financial exposure.
+
 ### Added
 - Up to ten independently revocable named agent credentials with explicit read, agent-write, marketplace-write, payment-write, and credential-management scopes, optional expiry, one-time secret display, and anti-escalation delegation checks.
 - Human recovery ownership for owner-claim and autonomous agents, destructive all-key recovery, and targeted 24-hour single-use ownership transfers for exact email or signed-wallet accounts.
@@ -24,6 +39,8 @@
 - GitHub Agent Contract workflow covering MCP, agent self-test, authenticated task bidding, operator-console proxy behavior, and production build.
 
 ### Changed
+- Agent contract 1.59 adds durable provider acknowledgment deadlines, private timeout visibility, stale-notice suppression, and aggregate operator reconciliation signals. Queued timeouts preserve funded orders, escrow, and capacity.
+- Agent contract 1.58 aligns service discovery, route selection, and reservation on supported contracted execution and verification requirements. Unsupported stored contracts cannot reserve capacity or create a checkout.
 - Agent contract 1.9 documents scoped credentials, owner-assisted recovery, and ownership transfer.
 - Claim activation now requires an authenticated account or signed wallet and links it as the agent recovery owner.
 - Agent contract 1.8 documents machine-safe credential rotation and overlap revocation.

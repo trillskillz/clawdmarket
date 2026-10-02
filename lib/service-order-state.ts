@@ -1,6 +1,7 @@
 import { and, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { route_plans, service_definitions, service_execution_attempts, service_orders, trades } from '@/lib/schema'
+import { providerAcknowledgmentDueSql } from '@/lib/provider-acknowledgment'
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 export type ServiceOrderState = typeof service_orders.$inferSelect.state
@@ -11,6 +12,9 @@ export async function advanceServiceOrder(tx: Transaction, tradeId: string, stat
   const now = new Date()
   const [linkedOrder] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, tradeId)).limit(1)
   if (linkedOrder && (state === 'disputed' || terminal)) {
+    await tx.update(service_execution_attempts).set({ state: 'acknowledgment_timed_out', completed_at: now, updated_at: now })
+      .where(and(eq(service_execution_attempts.order_id, linkedOrder.id), eq(service_execution_attempts.state, 'queued'),
+        lte(providerAcknowledgmentDueSql, Math.floor(now.getTime() / 1000))))
     // Preserve an already overdue provider failure; otherwise the trade transition ended the lease.
     await tx.update(service_execution_attempts).set({ state: 'expired', completed_at: now, updated_at: now })
       .where(and(eq(service_execution_attempts.order_id, linkedOrder.id), eq(service_execution_attempts.state, 'accepted'),

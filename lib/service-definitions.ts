@@ -10,6 +10,7 @@ import { payoutAddressForUser } from '@/lib/external-settlement'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
 import { reusableServiceReadinessEnabled } from '@/lib/routing-feature-flags'
 import { checkServiceInput, outputSchemaV1, verificationPolicySchema } from '@/lib/verification-policy'
+import { serviceContractReadiness } from '@/lib/service-contract-readiness'
 
 export const money = z.string().regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/, 'Use a USD decimal string with at most two places')
   .transform((value, ctx) => {
@@ -83,21 +84,17 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   ])
   const rails = getPaymentReadiness()
   const capacityAvailable = service.active_orders < service.max_concurrency
-  let inputSchema: unknown
-  try { inputSchema = JSON.parse(service.input_schema) } catch { inputSchema = null }
-  const inputReady = checkServiceInput({}, inputSchema).status !== 'unsupported'
-  const protocolReady = service.provider_protocol === 'manual' || service.provider_protocol === 'leased_v1'
-  const parsedPolicy = verificationPolicySchema.safeParse(JSON.parse(service.verification_policy))
-  const verificationReady = parsedPolicy.success && (!parsedPolicy.data.methods.includes('schema') || outputSchemaV1.safeParse(JSON.parse(service.output_schema)).success)
+  const contract = serviceContractReadiness(service)
   const paymentReady = !paymentControl.paused && (rails.ledger.enabled || Boolean(payoutAddress && (rails.mpp.enabled || rails.evm.enabled)))
   const reasons: string[] = []
   if (service.status !== 'active') reasons.push('SERVICE_NOT_ACTIVE')
   if (!reusableServiceReadinessEnabled(requesterId, service.seller_id)) reasons.push('REUSABLE_SERVICES_DISABLED')
   if (!sellerVisible) reasons.push('SELLER_NOT_PUBLIC')
   if (!capacityAvailable) reasons.push('CAPACITY_FULL')
-  if (!inputReady) reasons.push('INPUT_SCHEMA_UNSUPPORTED')
-  if (!protocolReady) reasons.push('PROVIDER_PROTOCOL_UNSUPPORTED')
-  if (!verificationReady) reasons.push('VERIFICATION_UNSUPPORTED')
+  if (!contract.inputReady) reasons.push('INPUT_SCHEMA_UNSUPPORTED')
+  if (!contract.executionModeReady) reasons.push('EXECUTION_MODE_UNSUPPORTED')
+  if (!contract.protocolReady) reasons.push('PROVIDER_PROTOCOL_UNSUPPORTED')
+  if (!contract.verificationReady) reasons.push('VERIFICATION_UNSUPPORTED')
   if (paymentControl.paused) reasons.push('PAYMENTS_PAUSED')
   else if (!paymentReady) reasons.push(payoutAddress ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED')
   return {
@@ -106,24 +103,25 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
     title: service.title,
     description: service.description,
     capabilities: JSON.parse(service.capabilities) as string[],
-    input_schema: inputSchema,
-    output_schema: JSON.parse(service.output_schema),
+    input_schema: contract.inputSchema,
+    output_schema: contract.outputSchema,
     pricing: { model: service.pricing_model, amount: servicePrice(service.price_minor), currency: service.currency },
     estimated_latency_seconds: service.estimated_latency_seconds,
     max_concurrency: service.max_concurrency,
     current_capacity: Math.max(0, service.max_concurrency - service.active_orders),
     execution_mode: service.execution_mode,
     provider_protocol: service.provider_protocol,
-    verification_policy: JSON.parse(service.verification_policy),
+    verification_policy: contract.policyInput,
     status: service.status,
     readiness: {
       purchasable: reasons.length === 0,
       available: service.status === 'active' && sellerVisible,
       payment_ready: paymentReady,
       capacity_available: capacityAvailable,
-      input_ready: inputReady,
-      provider_protocol_ready: protocolReady,
-      verification_ready: verificationReady,
+      input_ready: contract.inputReady,
+      execution_mode_ready: contract.executionModeReady,
+      provider_protocol_ready: contract.protocolReady,
+      verification_ready: contract.verificationReady,
       blocking_reasons: reasons,
     },
     created_at: service.created_at,

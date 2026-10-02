@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { service_definitions, service_execution_attempts, service_orders, trades, webhook_deliveries, webhooks } from '@/lib/schema';
 import { safeExternalFetch } from '@/lib/webhook-url';
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events';
+import { PROVIDER_ACKNOWLEDGMENT_TIMEOUT_SECONDS } from '@/lib/provider-acknowledgment';
 
 export const ALLOWED_WEBHOOK_EVENTS = WEBHOOK_EVENT_TYPES;
 
@@ -28,6 +29,8 @@ async function workOrderNoticeActionable(payload: string): Promise<boolean> {
     attemptId: service_execution_attempts.id,
     attemptState: service_execution_attempts.state,
     leaseExpiresAt: service_execution_attempts.lease_expires_at,
+    acknowledgmentDueAt: service_execution_attempts.acknowledgment_due_at,
+    attemptCreatedAt: service_execution_attempts.created_at,
   }).from(trades)
     .innerJoin(service_orders, eq(service_orders.trade_id, trades.id))
     .innerJoin(service_definitions, eq(service_definitions.id, service_orders.service_id))
@@ -36,7 +39,11 @@ async function workOrderNoticeActionable(payload: string): Promise<boolean> {
   if (!row || row.tradeStatus !== 'escrow_held' || row.capacityReleasedAt) return false;
   if (row.protocol === 'manual') return ['funded', 'executing'].includes(row.orderState);
   if (row.protocol !== 'leased_v1' || row.attemptId !== data.execution_attempt_id) return false;
-  if (row.attemptState === 'queued') return row.orderState === 'funded';
+  if (row.attemptState === 'queued') {
+    const dueAt = row.acknowledgmentDueAt || (row.attemptCreatedAt
+      ? new Date(row.attemptCreatedAt.getTime() + PROVIDER_ACKNOWLEDGMENT_TIMEOUT_SECONDS * 1000) : null);
+    return row.orderState === 'funded' && !!dueAt && dueAt > new Date();
+  }
   return row.attemptState === 'accepted' && row.orderState === 'executing'
     && !!row.leaseExpiresAt && row.leaseExpiresAt > new Date();
 }

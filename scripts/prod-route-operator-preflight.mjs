@@ -14,6 +14,10 @@ try {
     read('SELECT state, COUNT(*) AS count FROM service_orders GROUP BY state'),
     read('SELECT state, COUNT(*) AS count FROM service_execution_attempts GROUP BY state'),
     read(`SELECT
+      COUNT(CASE WHEN a.state = 'queued' AND COALESCE(a.acknowledgment_due_at, a.created_at + 600) <= unixepoch()
+        AND t.status = 'escrow_held' AND o.state = 'funded' AND o.capacity_released_at IS NULL THEN 1 END) AS acknowledgment_overdue_count,
+      COUNT(CASE WHEN a.state = 'acknowledgment_timed_out' AND t.status = 'escrow_held'
+        AND o.state = 'funded' AND o.capacity_released_at IS NULL THEN 1 END) AS acknowledgment_timed_out_count,
       COUNT(CASE WHEN a.state = 'accepted' AND a.lease_expires_at <= unixepoch() THEN 1 END) AS overdue_lease_count,
       COUNT(CASE WHEN a.state IN ('queued', 'accepted') AND (t.status != 'escrow_held' OR o.capacity_released_at IS NOT NULL) THEN 1 END) AS terminal_active_count
       FROM service_execution_attempts a JOIN service_orders o ON o.id = a.order_id JOIN trades t ON t.id = o.trade_id`),
@@ -53,7 +57,7 @@ try {
     legacy_owner_values: legacyOwner,
   }
   console.log(JSON.stringify(snapshot, null, 2))
-  if (snapshot.migrations < 32 || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
+  if (snapshot.migrations < 33 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
     || snapshot.webhook_outbox.failed_count || snapshot.webhook_outbox.overdue_count
     || snapshot.settlement_outbox.failed_count || snapshot.settlement_outbox.stuck_count) {
     throw new Error('Production operator preflight found an unhealthy routing or payment state')

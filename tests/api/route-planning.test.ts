@@ -410,7 +410,7 @@ test('buyer policy filters planning and is rechecked before unpaid route reserva
   assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.client_reference, `route:${planned.id}:attempt:1`))).length, 0)
 })
 
-test('stale first provider fails over before checkout and records one economic reservation', async () => {
+test('an invalidated verification contract falls back before checkout and records one economic reservation', async () => {
   const buyerId = `fallback-buyer-${crypto.randomUUID()}`
   await db.insert(schema.users).values({ id: buyerId, name: 'Fallback Buyer', email: `${buyerId}@test.invalid`, password_hash: 'unused', role: 'human' })
   const [firstId, secondId] = [crypto.randomUUID(), crypto.randomUUID()]
@@ -427,7 +427,7 @@ test('stale first provider fails over before checkout and records one economic r
   assert.equal(planned.status, 201)
   const route = (await planned.json()).route
   assert.deepEqual(route.candidates.map((item: { service_id: string }) => item.service_id), [firstId, secondId])
-  await db.update(schema.service_definitions).set({ status: 'paused' }).where(eq(schema.service_definitions.id, firstId))
+  await db.update(schema.service_definitions).set({ verification_policy: '{broken' }).where(eq(schema.service_definitions.id, firstId))
   const execute = () => executeRoute(request(`/api/routes/${route.id}/execute`, buyerId, 'POST'), { params: Promise.resolve({ id: route.id }) })
   const responses = await Promise.all([execute(), execute()])
   assert.deepEqual(responses.map((response) => response.status).sort(), [200, 201])
@@ -717,4 +717,52 @@ test('planning separates provider claims from backed completion evidence without
   await db.delete(schema.agent_owners).where(eq(schema.agent_owners.agentId, agentId))
   const ownershipChanged = await planFor()
   assert.deepEqual(ownershipChanged.provider_failures, beforeRelatedOwner.provider_failures)
+})
+
+test('planning skips unsupported contracts and saved routes recheck them before checkout', async () => {
+  const cases = [
+    { field: 'execution_mode', value: 'instant' },
+    { field: 'provider_protocol', value: 'unsupported' },
+    { field: 'verification_policy', value: '{broken' },
+    { field: 'verification_policy', value: JSON.stringify({ required: true, methods: ['buyer_review', 'schema'] }) },
+    { field: 'output_schema', value: '{broken' },
+  ]
+  for (const item of cases) {
+    const buyerId = `contract-buyer-${crypto.randomUUID()}`
+    await db.insert(schema.users).values({ id: buyerId, name: 'Contract Buyer', email: `${buyerId}@test.invalid`, password_hash: 'unused', role: 'human' })
+    const createPlan = (reference: string) => planRoute(request('/api/routes/plan', buyerId, 'POST', {
+      client_reference: reference, objective: 'Audit this repository for authentication vulnerabilities',
+      required_capabilities: ['security-analysis', 'code-review'], input: { revision: 'abc123' },
+      max_budget: { amount: '20.00', currency: 'USD' }, deadline_seconds: 600,
+    }))
+    const offered = await service('0.01')
+    try {
+      const planned = await createPlan(`contract-change-${crypto.randomUUID()}`)
+      assert.equal(planned.status, 201)
+      const route = (await planned.json()).route
+      assert.equal(route.candidates[0].service_id, offered.id)
+      await db.$client.execute({ sql: `UPDATE service_definitions SET ${item.field} = ? WHERE id = ?`, args: [item.value, offered.id] })
+      const filtered = await createPlan(`unsupported-contract-${crypto.randomUUID()}`)
+      assert.equal(filtered.status, 201, `${item.field}: ${item.value}`)
+      assert.equal((await filtered.json()).route.candidates.some((candidate: { service_id: string }) => candidate.service_id === offered.id), false)
+      const beforeCounts = { listings: (await db.select().from(schema.listings)).length, trades: (await db.select().from(schema.trades)).length }
+      const execution = await executeRoute(request(`/api/routes/${route.id}/execute`, buyerId, 'POST'), { params: Promise.resolve({ id: route.id }) })
+      assert.equal(execution.status, 409)
+      const body = await execution.json()
+      assert.equal(body.error_code, 'ROUTE_STALE_PROVIDER')
+      assert.equal(body.state, 'no_funds_moved')
+      assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, offered.id))).length, 0)
+      assert.equal((await db.select().from(schema.listings)).length, beforeCounts.listings)
+      assert.equal((await db.select().from(schema.trades)).length, beforeCounts.trades)
+      const [current] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+      assert.equal(current.active_orders, 0)
+      const inspected = await getRoute(request(`/api/routes/${route.id}`, buyerId, 'GET'), { params: Promise.resolve({ id: route.id }) })
+      const snapshot = await inspected.json()
+      assert.equal(snapshot.route.state, 'failed')
+      assert.equal(snapshot.attempts[0].state, 'ineligible')
+      assert.equal(snapshot.attempts[0].failure_code, 'ROUTE_STALE_PROVIDER')
+    } finally {
+      await db.update(schema.service_definitions).set({ status: 'archived' }).where(eq(schema.service_definitions.id, offered.id))
+    }
+  }
 })
