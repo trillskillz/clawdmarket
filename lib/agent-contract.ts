@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.49'
+export const AGENT_CONTRACT_VERSION = '1.50'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -754,7 +754,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'POST', endpoint: '/api/trades/{id}/fund/mpp', auth: 'trade-buyer', payment: null, required: ['id'],
   },
   {
-    id: 'cancel_trade', label: 'Cancel unpaid trade', description: 'Cancel a reserved trade before payment is verified and return its listing to the active catalog.',
+    id: 'cancel_trade', label: 'Cancel unpaid trade', description: 'Cancel an unpaid reservation. Inspect payment_exposure afterward: external payment can still arrive late and require a refund.',
     method: 'POST', endpoint: '/api/trades/{id}/cancel', auth: 'trade-buyer', payment: null, required: ['id'],
   },
   {
@@ -1617,7 +1617,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     } },
     '/api/trades/{id}/cancel': { post: {
       operationId: 'cancel_trade', summary: 'Cancel an unpaid reserved trade', security: authenticated, parameters: [tradeIdParameter],
-      responses: { 200: { description: 'Trade cancelled and listing reactivated' }, 401: { description: 'Authentication required' }, 403: { description: 'Only the buyer may cancel' }, 404: { description: 'Trade not found' }, 409: { description: 'Trade is already funded or closed' } },
+      responses: { 200: { description: 'Trade cancelled or already cancelled; returns payment_exposure and payment_unknown until external payment is reconciled' }, 401: { description: 'Authentication required' }, 403: { description: 'Only the buyer may cancel' }, 404: { description: 'Trade not found' }, 409: { description: 'Funding won the race or trade is funded/closed; inspect payment_exposure' } },
     } },
     '/api/trades/{id}/work-order': { get: {
       operationId: 'inspect_work_order', summary: 'Read a private reusable service work order and execution timing', security: authenticated, parameters: [tradeIdParameter],
@@ -1923,7 +1923,7 @@ Each order also requires an objective; optional structured input is visible only
 
 ## Route planning
 
-\`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and capability evidence. \`claimed_only\` means no backed accepted completion was observed for every required capability; \`backed_completion_observed\` means such completion evidence exists, not that quality was measured or independently verified. The backed-execution score component is capped at five completions. Recent funded provider declines, expired leases, and uncorrected deterministic verification failures are reported by service and subtract a capped score penalty; failed checks on one trade count once and a corrected delivery committed by the delivery endpoint removes that signal. Zero observed failures do not prove reliability. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
+\`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and capability evidence. \`claimed_only\` means no backed accepted completion was observed for every required capability; \`backed_completion_observed\` means such completion evidence exists, not that quality was measured or independently verified. The backed-execution score component is capped at five distinct eligible buyer accounts, and repeated purchases by one buyer cannot increase it. Recent funded provider declines, expired leases, uncorrected deterministic verification failures, and confirmed full buyer refunds are reported by service and subtract a capped score penalty. Owner-linked and reference trades are excluded from planning evidence; zero observed failures do not prove reliability. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. \`POST /api/trades/{id}/cancel\` returns the saved cancellation and payment_exposure; a cancelled external checkout may still receive a late payment. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
 
 \`POST /api/workflows/plan\` stores an explicit child-work dependency graph with at most 16 nodes, three dependency edges, and child budgets whose sum cannot exceed the parent USD budget. It neither delegates work nor creates routes, orders, or payments. Buyer-only \`GET /api/workflows/{id}\` inspects the plan, and \`DELETE /api/workflows/{id}\` cancels it. Production planning requires \`CLAWDMARKET_WORKFLOW_PLANNING_ENABLED=true\` after its additive migration; execution is unavailable.
 

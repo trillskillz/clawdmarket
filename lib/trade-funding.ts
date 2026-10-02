@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { listings, payment_receipts, service_orders, trades } from '@/lib/schema'
 import { advanceServiceOrder } from '@/lib/service-order-state'
 import { queueFundedWorkOrder } from '@/lib/service-order-dispatch'
+import { withKeyedWriteLock } from '@/lib/service-reservation-lock'
 
 export class TradeFundingError extends Error {
   constructor(message: string, public readonly status: number, public readonly code: string) {
@@ -16,17 +17,37 @@ export function paymentDeadlinePassed(trade: typeof trades.$inferSelect) {
   return Boolean(trade.payment_due_at && Date.parse(trade.payment_due_at) <= Date.now())
 }
 
+function sqliteBusy(error: unknown) {
+  let current = error
+  for (let depth = 0; current && typeof current === 'object' && depth < 6; depth += 1) {
+    const cause = current as { code?: string; message?: string; cause?: unknown }
+    if (cause.code === 'SQLITE_BUSY' || /SQLITE_BUSY|database is locked/i.test(cause.message || '')) return true
+    current = cause.cause
+  }
+  return false
+}
+
 export async function expireTradePayment(trade: typeof trades.$inferSelect) {
-  const [cancelled] = await db.transaction(async (tx) => {
-    const rows = await tx.update(trades).set({ status: 'cancelled' })
-      .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending'))).returning()
-    if (!rows[0]) return []
-    await advanceServiceOrder(tx, trade.id, 'cancelled')
-    const [serviceOrder] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, trade.id)).limit(1)
-    if (!serviceOrder) await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, trade.listing_id), eq(listings.status, 'sold')))
-    return rows
+  return withKeyedWriteLock(`trade-cancel:${trade.id}`, async () => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      try {
+        const [cancelled] = await db.transaction(async (tx) => {
+          const rows = await tx.update(trades).set({ status: 'cancelled' })
+            .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending'))).returning()
+          if (!rows[0]) return []
+          await advanceServiceOrder(tx, trade.id, 'cancelled')
+          const [serviceOrder] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, trade.id)).limit(1)
+          if (!serviceOrder) await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, trade.listing_id), eq(listings.status, 'sold')))
+          return rows
+        })
+        return cancelled || null
+      } catch (error) {
+        if (!sqliteBusy(error) || attempt === 5) throw error
+        await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
+      }
+    }
+    throw new Error('TRADE_CANCELLATION_UNAVAILABLE')
   })
-  return cancelled || null
 }
 
 export type ExternalFundingInput = {

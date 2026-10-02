@@ -155,6 +155,30 @@ test('a reusable definition creates independent orders and releases capacity on 
   assert.equal((await order(offered.id, `blocked-${crypto.randomUUID()}`)).status, 409)
   const cancelled = await cancelTrade(request(`/api/trades/${firstBody.trade.id}/cancel`, buyerId, {}), { params: Promise.resolve({ id: firstBody.trade.id }) })
   assert.equal(cancelled.status, 200)
+  assert.equal(cancelled.headers.get('cache-control'), 'private, no-store')
+  const cancelledBody = await cancelled.json()
+  assert.equal(cancelledBody.trade.status, 'cancelled')
+  assert.equal(cancelledBody.idempotent, false)
+  assert.equal(cancelledBody.funds_state, 'payment_unknown')
+  assert.equal(cancelledBody.payment_exposure.state, 'late_payment_possible')
+  assert.equal(cancelledBody.payment_exposure.automatic_retry_allowed, false)
+  const cancellationReplay = await cancelTrade(request(`/api/trades/${firstBody.trade.id}/cancel`, buyerId, {}),
+    { params: Promise.resolve({ id: firstBody.trade.id }) })
+  assert.equal(cancellationReplay.status, 200)
+  assert.equal((await cancellationReplay.json()).idempotent, true)
+  assert.equal((await cancelTrade(request(`/api/trades/${firstBody.trade.id}/cancel`, 'reusable-outsider', {}),
+    { params: Promise.resolve({ id: firstBody.trade.id }) })).status, 403)
+  await db.insert(schema.payment_receipts).values({ route: `/api/trades/${firstBody.trade.id}/fund/evm`,
+    trade_id: firstBody.trade.id, payment_rail: 'evm', amount: 10.50, currency: 'USDC',
+    tx_hash: `0x${'66'.repeat(32)}` })
+  await db.update(schema.trades).set({ payout_status: 'processing' }).where(eq(schema.trades.id, firstBody.trade.id))
+  const latePayment = await cancelTrade(request(`/api/trades/${firstBody.trade.id}/cancel`, buyerId, {}),
+    { params: Promise.resolve({ id: firstBody.trade.id }) })
+  assert.equal((await latePayment.json()).payment_exposure.state, 'refund_processing')
+  await db.update(schema.trades).set({ payout_status: 'refunded' }).where(eq(schema.trades.id, firstBody.trade.id))
+  const refundedReplay = await cancelTrade(request(`/api/trades/${firstBody.trade.id}/cancel`, buyerId, {}),
+    { params: Promise.resolve({ id: firstBody.trade.id }) })
+  assert.equal((await refundedReplay.json()).payment_exposure.state, 'refunded')
   const [released] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, firstBody.order.id))
   assert.equal(released.state, 'cancelled')
   assert.ok(released.capacity_released_at)
@@ -181,6 +205,38 @@ test('concurrent reservations cannot exceed configured capacity and a repeated r
   assert.equal((await repeated.json()).trade.id, winner.trade.id)
   const [current] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
   assert.equal(current.active_orders, 1)
+})
+
+test('concurrent cancellation returns a saved trade and releases one capacity slot', async () => {
+  const offered = await service()
+  const created = await order(offered.id, `cancel-race-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade } = await created.json()
+  const path = `/api/trades/${trade.id}/cancel`
+  const params = { params: Promise.resolve({ id: trade.id as string }) }
+  const outcomes = await Promise.all([cancelTrade(request(path, buyerId, {}), params),
+    cancelTrade(request(path, buyerId, {}), params)])
+  assert.deepEqual(outcomes.map((response) => response.status), [200, 200])
+  const bodies = await Promise.all(outcomes.map((response) => response.json()))
+  assert.equal(bodies.every((body) => body.trade?.status === 'cancelled'), true)
+  assert.deepEqual(bodies.map((body) => body.idempotent).sort(), [false, true])
+  const [definition] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(definition.active_orders, 0)
+})
+
+test('an unpaid legacy ledger trade has no external late-payment exposure', async () => {
+  const [listing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
+    title: 'Legacy code review', description: 'An unpaid legacy listing.', price_bankr: 10,
+    status: 'sold' }).returning()
+  const [trade] = await db.insert(schema.trades).values({ listing_id: listing.id, buyer_id: buyerId,
+    seller_id: sellerId, amount: 10, fee: 0.5, payment_rail: 'ledger', status: 'pending' }).returning()
+  const response = await cancelTrade(request(`/api/trades/${trade.id}/cancel`, buyerId, {}),
+    { params: Promise.resolve({ id: trade.id }) })
+  assert.equal(response.status, 200)
+  const body = await response.json()
+  assert.equal(body.funds_state, 'no_funds_moved')
+  assert.equal(body.payment_exposure, null)
+  assert.equal((await db.select().from(schema.listings).where(eq(schema.listings.id, listing.id)))[0].status, 'active')
 })
 
 test('service orders enforce server totals, ownership, and current availability', async () => {
@@ -487,8 +543,10 @@ test('expired provider lease preserves escrow and capacity without dispatching a
   assert.equal(overdue.attention_reason, 'lease_expired')
   await assert.rejects(changeServiceExecutionAttempt(trade.id, sellerId, attempt.id, 'accept'),
     (error: any) => error.code === 'WORK_ATTEMPT_LEASE_EXPIRED')
-  assert.equal((await cancelTrade(request(`/api/trades/${trade.id}/cancel`, buyerId, {}),
-    { params: Promise.resolve({ id: trade.id }) })).status, 409)
+  const fundedCancellation = await cancelTrade(request(`/api/trades/${trade.id}/cancel`, buyerId, {}),
+    { params: Promise.resolve({ id: trade.id }) })
+  assert.equal(fundedCancellation.status, 409)
+  assert.equal((await fundedCancellation.json()).payment_exposure.state, 'funded')
   assert.equal(await expireServiceExecutionAttempts(), 1)
   assert.equal(await expireServiceExecutionAttempts(), 0)
   const [expired] = await db.select().from(schema.service_execution_attempts)
