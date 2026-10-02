@@ -610,7 +610,7 @@ test('expired provider lease preserves escrow and capacity without dispatching a
   const missing = await buyerRoute()
   assert.equal(missing.status, 200)
   assert.deepEqual((await missing.json()).provider_execution, {
-    attempt_id: null, state: 'missing', accepted_at: null, heartbeat_at: null,
+    attempt_id: null, state: 'missing', accepted_at: null, acknowledgment_due_at: null, acknowledgment_overdue: false, heartbeat_at: null,
     lease_expires_at: null, completed_at: null, lease_overdue: false,
     attention_required: true, attention_reason: 'attempt_missing',
     reconciliation: { state: 'dispute_available', action: { method: 'POST', url: `/api/trades/${trade.id}/dispute` } },

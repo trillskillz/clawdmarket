@@ -1,7 +1,8 @@
 import type { service_execution_attempts, service_orders, trades } from '@/lib/schema'
 import type { routeExecutionTiming } from '@/lib/route-execution-timing'
+import { providerAcknowledgmentDueAt } from '@/lib/provider-acknowledgment'
 
-type Attempt = Pick<typeof service_execution_attempts.$inferSelect, 'id' | 'state' | 'accepted_at' | 'heartbeat_at' | 'lease_expires_at' | 'completed_at'>
+type Attempt = Pick<typeof service_execution_attempts.$inferSelect, 'id' | 'state' | 'acknowledgment_due_at' | 'created_at' | 'accepted_at' | 'heartbeat_at' | 'lease_expires_at' | 'completed_at'>
 type Order = Pick<typeof service_orders.$inferSelect, 'state' | 'capacity_released_at'>
 type Trade = Pick<typeof trades.$inferSelect, 'id' | 'status'>
 type Timing = Pick<NonNullable<ReturnType<typeof routeExecutionTiming>>, 'delivery_overdue'>
@@ -13,12 +14,16 @@ export function providerExecutionStatus(protocol: string, order: Order, trade: T
     && (order.state === 'funded' || order.state === 'executing')
   const leaseOverdue = fundedWork && attempt?.state === 'accepted'
     && !!attempt.lease_expires_at && attempt.lease_expires_at <= now
+  const acknowledgmentDueAt = attempt ? providerAcknowledgmentDueAt(attempt) : null
+  const acknowledgmentOverdue = fundedWork && attempt?.state === 'queued'
+    && !!acknowledgmentDueAt && acknowledgmentDueAt <= now
   const attentionReason = !fundedWork ? null
     : !attempt ? 'attempt_missing'
-      : attempt.state === 'declined' ? 'provider_declined'
-        : attempt.state === 'expired' || leaseOverdue ? 'lease_expired'
-          : attempt.state === 'interrupted' ? 'attempt_interrupted'
-            : timing?.delivery_overdue ? 'delivery_deadline_overdue' : null
+      : attempt.state === 'acknowledgment_timed_out' || acknowledgmentOverdue ? 'acknowledgment_timeout'
+        : attempt.state === 'declined' ? 'provider_declined'
+          : attempt.state === 'expired' || leaseOverdue ? 'lease_expired'
+            : attempt.state === 'interrupted' ? 'attempt_interrupted'
+              : timing?.delivery_overdue ? 'delivery_deadline_overdue' : null
   const reconciliation = trade.status === 'disputed' ? { state: 'dispute_open' as const, action: null }
     : trade.status === 'resolved' ? { state: 'resolved' as const, action: null }
       : attentionReason ? { state: 'dispute_available' as const,
@@ -27,6 +32,8 @@ export function providerExecutionStatus(protocol: string, order: Order, trade: T
     attempt_id: attempt?.id || null,
     state: attempt?.state || (fundedWork ? 'missing' : 'not_started'),
     accepted_at: attempt?.accepted_at?.toISOString() || null,
+    acknowledgment_due_at: acknowledgmentDueAt?.toISOString() || null,
+    acknowledgment_overdue: Boolean(acknowledgmentOverdue),
     heartbeat_at: attempt?.heartbeat_at?.toISOString() || null,
     lease_expires_at: attempt?.lease_expires_at?.toISOString() || null,
     completed_at: attempt?.completed_at?.toISOString() || null,

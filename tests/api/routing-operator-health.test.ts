@@ -51,6 +51,7 @@ test('routing operator health is admin-only and exposes aggregates without priva
   assert.deepEqual(beforeBody.migrations, [{ id: '2026-10-01-service-provider-protocol-v1', applied_at: '2026-10-01T00:00:00.000Z' }])
   assert.deepEqual(beforeBody.usage.services, {})
   assert.deepEqual(beforeBody.provider_execution, {
+    acknowledgment_overdue_count: 0, acknowledgment_timed_out_count: 0,
     overdue_lease_count: 0, terminal_active_count: 0, funded_without_attempt_count: 0, delivery_deadline_overdue_count: 0,
   })
   assert.equal(beforeBody.outboxes.webhook.retrying_count, 0)
@@ -106,10 +107,23 @@ test('operator snapshot exposes aggregate missing, overdue, and terminal attempt
   assert.equal((await snapshot()).provider_execution.funded_without_attempt_count, 1)
   assert.equal((await snapshot()).provider_execution.delivery_deadline_overdue_count, 1)
   await db.insert(schema.service_execution_attempts).values({ id: attemptId, order_id: orderId,
+    state: 'queued', acknowledgment_due_at: new Date(Date.now() - 1000) })
+  const queued = await snapshot()
+  assert.equal(queued.provider_execution.acknowledgment_overdue_count, 1)
+  assert.equal(queued.provider_execution.acknowledgment_timed_out_count, 0)
+  const { expireServiceAcknowledgmentAttempts } = await import('@/lib/service-execution-attempt')
+  assert.equal(await expireServiceAcknowledgmentAttempts(), 1)
+  const timedOut = await snapshot()
+  assert.equal(timedOut.provider_execution.acknowledgment_overdue_count, 0)
+  assert.equal(timedOut.provider_execution.acknowledgment_timed_out_count, 1)
+  assert.equal(JSON.stringify(timedOut).includes(attemptId), false)
+  assert.equal(JSON.stringify(timedOut).includes(tradeId), false)
+  await db.update(schema.service_execution_attempts).set({
     state: 'accepted', accepted_at: new Date(Date.now() - 20 * 60_000),
-    lease_expires_at: new Date(Date.now() - 10 * 60_000) })
+    lease_expires_at: new Date(Date.now() - 10 * 60_000) }).where(eq(schema.service_execution_attempts.id, attemptId))
   const overdue = await snapshot()
   assert.deepEqual(overdue.provider_execution, {
+    acknowledgment_overdue_count: 0, acknowledgment_timed_out_count: 0,
     overdue_lease_count: 1, terminal_active_count: 0, funded_without_attempt_count: 0, delivery_deadline_overdue_count: 1,
   })
   assert.equal(JSON.stringify(overdue).includes(attemptId), false)

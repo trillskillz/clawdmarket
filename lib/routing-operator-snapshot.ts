@@ -4,6 +4,7 @@ import { routeExecutionEnabled, routePlanningEnabled, reusableServiceWritesEnabl
 import { inspectWebhookDeliveryHealth } from '@/lib/webhook-delivery'
 import { inspectSettlementHealth } from '@/lib/settlement-monitoring'
 import { inspectWorkerHeartbeat } from '@/lib/worker-heartbeats'
+import { PROVIDER_ACKNOWLEDGMENT_TIMEOUT_SECONDS } from '@/lib/provider-acknowledgment'
 
 function countByState(rows: readonly Record<string, unknown>[]) {
   return Object.fromEntries(rows.map((row) => [String(row.state), Number(row.count || 0)]))
@@ -19,6 +20,10 @@ export async function getRoutingOperatorSnapshot() {
     client.execute('SELECT state, COUNT(*) AS count FROM service_orders GROUP BY state'),
     client.execute('SELECT state, COUNT(*) AS count FROM service_execution_attempts GROUP BY state'),
     client.execute(`SELECT
+      COUNT(CASE WHEN a.state = 'queued' AND COALESCE(a.acknowledgment_due_at, a.created_at + ${PROVIDER_ACKNOWLEDGMENT_TIMEOUT_SECONDS}) <= unixepoch()
+        AND t.status = 'escrow_held' AND o.state = 'funded' AND o.capacity_released_at IS NULL THEN 1 END) AS acknowledgment_overdue_count,
+      COUNT(CASE WHEN a.state = 'acknowledgment_timed_out' AND t.status = 'escrow_held'
+        AND o.state = 'funded' AND o.capacity_released_at IS NULL THEN 1 END) AS acknowledgment_timed_out_count,
       COUNT(CASE WHEN a.state = 'accepted' AND a.lease_expires_at <= unixepoch() THEN 1 END) AS overdue_lease_count,
       COUNT(CASE WHEN a.state IN ('queued', 'accepted') AND (t.status != 'escrow_held' OR o.capacity_released_at IS NOT NULL) THEN 1 END) AS terminal_active_count
       FROM service_execution_attempts a
@@ -55,6 +60,8 @@ export async function getRoutingOperatorSnapshot() {
       orders: countByState(orders.rows), provider_attempts: countByState(attempts.rows),
     },
     provider_execution: {
+      acknowledgment_overdue_count: Number(attemptHealth.rows[0]?.acknowledgment_overdue_count || 0),
+      acknowledgment_timed_out_count: Number(attemptHealth.rows[0]?.acknowledgment_timed_out_count || 0),
       overdue_lease_count: Number(attemptHealth.rows[0]?.overdue_lease_count || 0),
       terminal_active_count: Number(attemptHealth.rows[0]?.terminal_active_count || 0),
       funded_without_attempt_count: Number(missingAttempts.rows[0]?.count || 0),

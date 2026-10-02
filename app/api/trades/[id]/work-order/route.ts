@@ -7,6 +7,7 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { routeExecutionTiming } from '@/lib/route-execution-timing'
 import { getServiceExecutionAttempt } from '@/lib/service-execution-attempt'
 import { providerExecutionStatus } from '@/lib/provider-execution-status'
+import { providerAcknowledgmentDueAt } from '@/lib/provider-acknowledgment'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,6 +53,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       capabilities: JSON.parse(row.service.capabilities) as string[],
       provider_protocol: row.service.provider_protocol,
       execution_attempt: attempt ? { id: attempt.id, state: attempt.state,
+        acknowledgment_due_at: providerAcknowledgmentDueAt(attempt).toISOString(),
+        acknowledgment_overdue: attempt.state === 'queued' && providerAcknowledgmentDueAt(attempt) <= now,
         accepted_at: attempt.accepted_at?.toISOString() || null,
         heartbeat_at: attempt.heartbeat_at?.toISOString() || null,
         lease_expires_at: attempt.lease_expires_at?.toISOString() || null,
@@ -64,7 +67,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       provider_execution: providerExecutionStatus(row.service.provider_protocol, row.order, row.trade, attempt, executionTiming, now),
       start: seller && row.service.provider_protocol === 'manual' && row.trade.status === 'escrow_held' && row.order.state === 'funded'
         ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/work-order/start` } : null,
-      attempt_action: seller && attempt && row.trade.status === 'escrow_held' && ['queued', 'accepted'].includes(attempt.state)
+      attempt_action: seller && attempt && row.trade.status === 'escrow_held'
+        && (attempt.state === 'queued' && providerAcknowledgmentDueAt(attempt) > now
+          || attempt.state === 'accepted' && !!attempt.lease_expires_at && attempt.lease_expires_at > now)
         ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/work-order/attempt` } : null,
       delivery: seller ? { method: 'POST', url: `/api/trades/${encodeURIComponent(row.trade.id)}/delivery` } : null,
     } }, { headers })

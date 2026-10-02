@@ -25,6 +25,14 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       'CREATE TABLE webhooks (id TEXT PRIMARY KEY, url TEXT NOT NULL, events TEXT NOT NULL, created_at TEXT NOT NULL)',
       "INSERT INTO webhooks (id, url, events, created_at) VALUES ('legacy-webhook', 'https://example.com/hook', '[]', datetime('now'))",
     ]) await client.execute(statement)
+    await client.execute(`CREATE TABLE service_execution_attempts (
+      id TEXT PRIMARY KEY, order_id TEXT NOT NULL UNIQUE, state TEXT NOT NULL,
+      accepted_at INTEGER, heartbeat_at INTEGER, lease_expires_at INTEGER, completed_at INTEGER,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`)
+    for (const state of ['queued', 'accepted', 'delivered']) await client.execute({
+      sql: 'INSERT INTO service_execution_attempts (id, order_id, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      args: [`legacy-${state}`, `order-${state}`, state, 1000, 1001],
+    })
     client.close()
 
     const environment = { ...process.env, TURSO_DATABASE_URL: databaseUrl }
@@ -112,6 +120,11 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(tableNames.has('buyer_spend_policies'), true)
       assert.equal(tableNames.has('buyer_spend_policy_events'), true)
       assert.equal(tableNames.has('service_execution_attempts'), true)
+      const providerAttempts = await migrated.execute('PRAGMA table_info("service_execution_attempts")')
+      assert.equal(names(providerAttempts.rows).has('acknowledgment_due_at'), true)
+      const deadlines = await migrated.execute('SELECT state, acknowledgment_due_at, created_at, updated_at FROM service_execution_attempts ORDER BY state')
+      assert.deepEqual(deadlines.rows.map((row) => ({ state: row.state, due: row.acknowledgment_due_at, created: row.created_at, updated: row.updated_at })),
+        ['accepted', 'delivered', 'queued'].map((state) => ({ state, due: 1600, created: 1000, updated: 1001 })))
       assert.equal(tableNames.has('worker_heartbeats'), true)
       const workerHeartbeats = await migrated.execute('PRAGMA table_info("worker_heartbeats")')
       assert.equal(names(workerHeartbeats.rows).has('last_outcome'), true)
@@ -137,7 +150,7 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
-      assert.equal(migrationRows.rows.length, 32)
+      assert.equal(migrationRows.rows.length, 33)
     } finally {
       migrated.close()
     }

@@ -55,6 +55,8 @@ required_files=(
   "lib/schema.ts"
   "lib/service-definitions.ts"
   "lib/service-order-state.ts"
+  "lib/provider-acknowledgment.ts"
+  "migrations/2026-10-02-provider-acknowledgment-deadline.sql"
   "lib/route-planning.ts"
   "lib/route-attempts.ts"
   "lib/route-payment-exposure.ts"

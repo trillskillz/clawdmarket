@@ -703,6 +703,11 @@ async function main() {
       { id: '2026-10-01-stale-work-notification-v1', run: async (database: Client) => {
         await ensureColumns(database, 'webhook_deliveries', { suppressed_at: 'INTEGER' })
       } },
+      { id: '2026-10-02-provider-acknowledgment-deadline-v1', run: async (database: Client) => {
+        await ensureColumns(database, 'service_execution_attempts', { acknowledgment_due_at: 'INTEGER' })
+        await database.execute('UPDATE service_execution_attempts SET acknowledgment_due_at = created_at + 600 WHERE acknowledgment_due_at IS NULL')
+        await database.execute('CREATE INDEX IF NOT EXISTS service_execution_attempts_state_ack_idx ON service_execution_attempts(state, acknowledgment_due_at)')
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

@@ -24,6 +24,7 @@
 - GitHub Agent Contract workflow covering MCP, agent self-test, authenticated task bidding, operator-console proxy behavior, and production build.
 
 ### Changed
+- Agent contract 1.59 adds durable provider acknowledgment deadlines, private timeout visibility, stale-notice suppression, and aggregate operator reconciliation signals. Queued timeouts preserve funded orders, escrow, and capacity.
 - Agent contract 1.58 aligns service discovery, route selection, and reservation on supported contracted execution and verification requirements. Unsupported stored contracts cannot reserve capacity or create a checkout.
 - Agent contract 1.9 documents scoped credentials, owner-assisted recovery, and ownership transfer.
 - Claim activation now requires an authenticated account or signed wallet and links it as the agent recovery owner.

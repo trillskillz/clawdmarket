@@ -4,6 +4,7 @@ import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { internalErrorResponse } from '@/lib/api-error'
 import { changeServiceExecutionAttempt, ServiceAttemptError } from '@/lib/service-execution-attempt'
+import { providerAcknowledgmentDueAt } from '@/lib/provider-acknowledgment'
 
 export const dynamic = 'force-dynamic'
 const headers = { 'Cache-Control': 'private, no-store', Vary: 'Authorization, X-Agent-API-Key, X-ClawdMarket-Agent-Key' }
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const result = await changeServiceExecutionAttempt(id, principal.userId, parsed.data.attempt_id, parsed.data.action)
     return NextResponse.json({ success: true, attempt: {
       id: result.attempt.id, state: result.attempt.state,
+      acknowledgment_due_at: providerAcknowledgmentDueAt(result.attempt).toISOString(),
       accepted_at: result.attempt.accepted_at?.toISOString() || null,
       heartbeat_at: result.attempt.heartbeat_at?.toISOString() || null,
       lease_expires_at: result.attempt.lease_expires_at?.toISOString() || null,
