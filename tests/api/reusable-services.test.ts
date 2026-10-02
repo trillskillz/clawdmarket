@@ -822,11 +822,21 @@ test('a verified payment racing cancellation enters cancelled-trade reconciliati
   await assert.rejects(recordExternalTradeFunding(funding),
     (error: any) => error.code === 'TRADE_NOT_AWAITING_PAYMENT')
   const [cancelledTrade] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
-  const recorded = await recordCancelledExternalFunding({ ...funding, trade: cancelledTrade })
-  assert.equal(recorded.status, 'cancelled')
-  assert.equal(recorded.payout_status, 'processing')
-  const [receipt] = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, trade.id))
+  const recorded = await Promise.all([
+    recordCancelledExternalFunding({ ...funding, trade: cancelledTrade }),
+    recordCancelledExternalFunding({ ...funding, trade: cancelledTrade }),
+  ])
+  assert.deepEqual(recorded.map((row) => row.status), ['cancelled', 'cancelled'])
+  assert.deepEqual(recorded.map((row) => row.payout_status), ['processing', 'processing'])
+  const receipts = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, trade.id))
+  assert.equal(receipts.length, 1)
+  const [receipt] = receipts
   assert.equal(receipt.tx_hash, funding.txHash)
+  await assert.rejects(recordCancelledExternalFunding({ ...funding, trade: cancelledTrade, txHash: `0x${'ad'.repeat(32)}` }),
+    (error: any) => error.code === 'PAYMENT_PROOF_REUSED')
+  await db.update(schema.trades).set({ payout_status: 'refunded' }).where(eq(schema.trades.id, trade.id))
+  const replay = await recordCancelledExternalFunding({ ...funding, trade: cancelledTrade })
+  assert.equal(replay.payout_status, 'refunded')
   const [cancelledOrder] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
   const [definition] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
   assert.equal(cancelledOrder.state, 'cancelled')
