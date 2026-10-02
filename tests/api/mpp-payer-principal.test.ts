@@ -41,4 +41,16 @@ test('verified MPP payer resolves only an unambiguous registered agent', async (
   await db.insert(schema.agents).values({ id: 'mpp-agent-two', name: 'Two', description: 'Test agent',
     capabilities: '[]', endpoint: 'https://example.invalid', owner_address: payer.toUpperCase(), api_key: 'unused' })
   assert.equal(await resolveRequestPrincipal(paidRequest(payer)), null)
+  assert.equal(await resolveRequestPrincipal(paidRequest(`prefix:${payer}`)), null)
+  assert.equal(await resolveRequestPrincipal(paidRequest(`${payer}:suffix`)), null)
+  const inactivePayer = `0x${'b'.repeat(40)}`
+  await db.insert(schema.agents).values({ id: 'mpp-inactive-agent', name: 'Inactive', description: 'Test agent',
+    capabilities: '[]', endpoint: 'https://example.invalid', owner_address: inactivePayer,
+    api_key: 'unused', status: 'inactive' })
+  assert.equal(await resolveRequestPrincipal(paidRequest(inactivePayer)), null)
+  const archivedPayer = `0x${'c'.repeat(40)}`
+  await db.insert(schema.agents).values({ id: 'mpp-archived-agent', name: 'Archived', description: 'Test agent',
+    capabilities: '[]', endpoint: 'https://example.invalid', owner_address: archivedPayer,
+    api_key: 'unused', archivedAt: new Date() })
+  assert.equal(await resolveRequestPrincipal(paidRequest(archivedPayer)), null)
 })
