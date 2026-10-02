@@ -56,9 +56,22 @@ export type PaymentExposure = {
   retry_blocking_reason: string
 }
 
-export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null }
+export type ProviderExecution = {
+  attempt_id: string | null
+  state: 'not_started' | 'missing' | 'queued' | 'accepted' | 'declined' | 'expired' | 'delivered'
+  accepted_at: string | null
+  heartbeat_at: string | null
+  lease_expires_at: string | null
+  completed_at: string | null
+  lease_overdue: boolean
+  attention_required: boolean
+  attention_reason: 'attempt_missing' | 'provider_declined' | 'lease_expired' | null
+  automatic_retry_allowed: false
+}
+
+export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null; provider_execution: ProviderExecution | null }
 export type PlannedRoute = { route: RoutePlan; idempotent: boolean; planning?: { examined: number; truncated: boolean; candidate_count: number; funds_moved: false } }
-export type ExecutedRoute = RouteSnapshot & {
+export type ExecutedRoute = Pick<RouteSnapshot, 'route' | 'attempts' | 'payment_exposure'> & {
   order: { id: string; service_id: string; trade_id: string; [key: string]: unknown }
   trade: { id: string; status: string; payment_rail: string; [key: string]: unknown }
   checkout: Record<string, unknown> | null
