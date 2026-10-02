@@ -621,4 +621,29 @@ test('planning separates provider claims from backed completion evidence without
   await db.update(schema.trades).set({ resolution: 'split' }).where(eq(schema.trades.id, ledgerTrade.id))
   const splitResolution = await planFor()
   assert.equal(splitResolution.provider_failures.buyer_refund_resolutions_90d, 1)
+
+  const [relatedListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
+    title: 'Uncorrected related work', description: 'A funded service order with failed verification.',
+    price_bankr: 1, status: 'sold' }).returning()
+  const [relatedTrade] = await db.insert(schema.trades).values({ listing_id: relatedListing.id,
+    buyer_id: 'other-buyer', seller_id: sellerId, amount: 1, fee: 0.05, status: 'escrow_held',
+    funded_at: new Date().toISOString(), payment_rail: 'evm' }).returning()
+  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: serviceId,
+    listing_id: relatedListing.id, trade_id: relatedTrade.id, buyer_id: 'other-buyer',
+    client_reference: crypto.randomUUID(), objective: 'Translate another funded document',
+    price_minor: 100, payment_rail: 'evm', state: 'funded' })
+  await db.insert(schema.verification_results).values({ id: crypto.randomUUID(), trade_id: relatedTrade.id,
+    content_hash: crypto.randomUUID(), method: 'schema', verifier: 'clawdmarket-deterministic-v1',
+    version: '1', status: 'failed', failure: 'invalid_output', evidence_json: '{}' })
+  await recordFailure('declined', true, new Date(), relatedBuyerId)
+  const beforeRelatedOwner = await planFor()
+  assert.equal(beforeRelatedOwner.provider_failures.uncorrected_verification_failures_90d, 1)
+  assert.equal(beforeRelatedOwner.provider_failures.provider_declines_90d, 2)
+  await db.insert(schema.agent_owners).values({ agentId, userId: 'other-buyer', establishedBy: 'test' })
+  const relatedOwner = await planFor()
+  assert.deepEqual(relatedOwner.provider_failures, { provider_declines_90d: 0, lease_expiries_90d: 0,
+    uncorrected_verification_failures_90d: 0, buyer_refund_resolutions_90d: 0 })
+  await db.delete(schema.agent_owners).where(eq(schema.agent_owners.agentId, agentId))
+  const ownershipChanged = await planFor()
+  assert.deepEqual(ownershipChanged.provider_failures, beforeRelatedOwner.provider_failures)
 })

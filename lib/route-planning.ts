@@ -84,6 +84,15 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
   const backedCounts = new Map(performanceRows.map((row) => [`${row.agentId}:${row.capabilityId}`,
     { completions: Number(row.count), buyers: Number(row.buyerCount) }]))
   const cutoff = new Date(Date.now() - 90 * 24 * 3600_000)
+  const unrelatedTrade = sql`(${trades.buyer_id} <> ${trades.seller_id}
+    AND ${trades.id} NOT GLOB 'trade_reference_*'
+    AND NOT EXISTS (SELECT 1 FROM agent_owners seller_owner
+      WHERE ('user_agent_' || seller_owner.agent_id) = ${trades.seller_id}
+      AND seller_owner.user_id = ${trades.buyer_id})
+    AND NOT EXISTS (SELECT 1 FROM agent_owners seller_owner JOIN agent_owners buyer_owner
+      ON seller_owner.user_id = buyer_owner.user_id
+      WHERE ('user_agent_' || seller_owner.agent_id) = ${trades.seller_id}
+      AND ('user_agent_' || buyer_owner.agent_id) = ${trades.buyer_id}))`
   // A dispute becomes a refund signal only after the authoritative distribution is final.
   const confirmedBuyerRefund = sql`(${trades.status} = 'resolved' AND ${trades.resolution} = 'buyer'
     AND ${trades.payout_status} = 'complete'
@@ -103,8 +112,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       inArray(service_execution_attempts.state, ['declined', 'expired']),
       gte(service_execution_attempts.created_at, cutoff),
       sql`${trades.funded_at} IS NOT NULL`,
-      ne(trades.buyer_id, trades.seller_id),
-      sql`${trades.id} NOT GLOB 'trade_reference_*'`,
+      unrelatedTrade,
       sql`NOT COALESCE(${confirmedBuyerRefund}, 0)`))
     .groupBy(service_orders.service_id, service_execution_attempts.state) : []
   const failureCounts = new Map(failureRows.map((row) => [`${row.serviceId}:${row.state}`, Number(row.count)]))
@@ -119,8 +127,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       isNull(verification_results.delivery_id),
       gte(verification_results.created_at, cutoff),
       sql`${trades.funded_at} IS NOT NULL`,
-      ne(trades.buyer_id, trades.seller_id),
-      sql`${trades.id} NOT GLOB 'trade_reference_*'`,
+      unrelatedTrade,
       sql`NOT COALESCE(${confirmedBuyerRefund}, 0)`,
       sql`NOT EXISTS (SELECT 1 FROM trade_deliveries delivered WHERE delivered.trade_id = ${trades.id})`,
       sql`NOT EXISTS (SELECT 1 FROM service_execution_attempts attempt WHERE attempt.order_id = ${service_orders.id} AND attempt.state IN ('declined', 'expired'))`))
@@ -132,7 +139,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     .innerJoin(trades, eq(trades.id, service_orders.trade_id))
     .where(and(inArray(service_orders.service_id, rows.slice(0, 500).map((row) => row.id)),
       gte(trades.completed_at, cutoff), sql`${trades.funded_at} IS NOT NULL`,
-      ne(trades.buyer_id, trades.seller_id), sql`${trades.id} NOT GLOB 'trade_reference_*'`,
+      unrelatedTrade,
       confirmedBuyerRefund))
     .groupBy(service_orders.service_id) : []
   const refundCounts = new Map(refundRows.map((row) => [row.serviceId, Number(row.count)]))
