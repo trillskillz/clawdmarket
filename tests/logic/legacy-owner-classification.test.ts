@@ -13,21 +13,23 @@ test('legacy owner inventory partitions stored values without emitting any value
   ]
   try {
     await client.execute('CREATE TABLE agents (id TEXT PRIMARY KEY, owner_address TEXT NOT NULL, owner_email TEXT)')
-    await client.execute('CREATE TABLE agent_owners (agent_id TEXT PRIMARY KEY)')
+    await client.execute('CREATE TABLE agent_owners (agent_id TEXT PRIMARY KEY, user_id TEXT NOT NULL)')
     await client.batch(values.map((value, index) => ({ sql: 'INSERT INTO agents (id, owner_address) VALUES (?, ?)', args: [`agent-${index}`, value] })))
     await client.execute("UPDATE agents SET owner_email = 'OWNER@example.invalid' WHERE id = 'agent-2'")
-    await client.execute("INSERT INTO agent_owners (agent_id) VALUES ('agent-2'), ('agent-3'), ('agent-9')")
+    await client.execute("INSERT INTO agent_owners (agent_id, user_id) VALUES ('agent-2', 'owner-a'), ('agent-3', 'owner-a'), ('agent-9', 'owner-b'), ('agent-13', 'owner-c')")
     const inventory = await inspectLegacyOwnerValues(client)
     assert.deepEqual(inventory, {
       total: 14, blank: 2, email_like: 1, evm_address: 2, url_like: 1, uuid_like: 1,
       agent_reference_like: 2, malformed_wallet_like: 1, opaque_short: 2, opaque_medium: 1, opaque_long: 1,
       evm_address_collision_groups: 1, evm_address_agents_in_collision: 2,
       linked_owner_by_category: {
-        blank: 0, email_like: 1, evm_address: 1, url_like: 0, uuid_like: 0,
+        blank: 0, email_like: 1, evm_address: 2, url_like: 0, uuid_like: 0,
         agent_reference_like: 0, malformed_wallet_like: 0, opaque_short: 1,
         opaque_medium: 0, opaque_long: 0,
       },
       email_like_owner_email_matches: 1,
+      evm_address_collision_groups_with_multiple_linked_accounts: 1,
+      evm_address_collision_groups_with_incomplete_links: 0,
     })
     const serialized = JSON.stringify(inventory)
     for (const value of values.filter(Boolean)) assert.equal(serialized.includes(value), false)
