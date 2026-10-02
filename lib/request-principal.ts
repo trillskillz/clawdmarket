@@ -77,11 +77,15 @@ export async function resolveRequestPrincipal(req: NextRequest): Promise<Request
   const payer = verifiedMppPayer(req);
   if (!payer) return null;
 
-  const [row] = await db
+  const matchingAgents = await db
     .select({ id: agents.id, name: agents.name })
     .from(agents)
     .where(sql`LOWER(${agents.owner_address}) = ${payer}`)
-    .limit(1);
+    .limit(2);
+  // A legacy wallet can appear on several agents. Never choose an arbitrary
+  // agent identity for a payment credential that proves only wallet control.
+  if (matchingAgents.length > 1) return null;
+  const row = matchingAgents[0];
   if (!row) {
     const userId = `user_wallet_${payer.slice(2)}`;
     const nowIso = new Date().toISOString();
