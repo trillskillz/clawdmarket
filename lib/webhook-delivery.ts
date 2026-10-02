@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { webhook_deliveries, webhooks } from '@/lib/schema';
+import { service_definitions, service_execution_attempts, service_orders, trades, webhook_deliveries, webhooks } from '@/lib/schema';
 import { safeExternalFetch } from '@/lib/webhook-url';
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events';
 
@@ -10,6 +10,36 @@ export const ALLOWED_WEBHOOK_EVENTS = WEBHOOK_EVENT_TYPES;
 export type WebhookEventType = (typeof ALLOWED_WEBHOOK_EVENTS)[number];
 const MAX_DELIVERY_ATTEMPTS = 8;
 const DELIVERY_LEASE_MS = 2 * 60_000;
+
+/** A notification is only a pointer. Check the current funded work before sending a retry. */
+async function workOrderNoticeActionable(payload: string): Promise<boolean> {
+  let data: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(payload);
+    if (!parsed || typeof parsed !== 'object' || !parsed.data || typeof parsed.data !== 'object') return false;
+    data = parsed.data;
+  } catch { return false; }
+  if (typeof data.trade_id !== 'string') return false;
+  const [row] = await db.select({
+    tradeStatus: trades.status,
+    orderState: service_orders.state,
+    capacityReleasedAt: service_orders.capacity_released_at,
+    protocol: service_definitions.provider_protocol,
+    attemptId: service_execution_attempts.id,
+    attemptState: service_execution_attempts.state,
+    leaseExpiresAt: service_execution_attempts.lease_expires_at,
+  }).from(trades)
+    .innerJoin(service_orders, eq(service_orders.trade_id, trades.id))
+    .innerJoin(service_definitions, eq(service_definitions.id, service_orders.service_id))
+    .leftJoin(service_execution_attempts, eq(service_execution_attempts.order_id, service_orders.id))
+    .where(eq(trades.id, data.trade_id)).limit(1);
+  if (!row || row.tradeStatus !== 'escrow_held' || row.capacityReleasedAt) return false;
+  if (row.protocol === 'manual') return ['funded', 'executing'].includes(row.orderState);
+  if (row.protocol !== 'leased_v1' || row.attemptId !== data.execution_attempt_id) return false;
+  if (row.attemptState === 'queued') return row.orderState === 'funded';
+  return row.attemptState === 'accepted' && row.orderState === 'executing'
+    && !!row.leaseExpiresAt && row.leaseExpiresAt > new Date();
+}
 
 export async function hashSecret(secret: string): Promise<string> {
   const buf = new TextEncoder().encode(secret);
@@ -75,12 +105,13 @@ async function recordFailure(deliveryId: string, webhookId: string, attempt: num
   ]);
 }
 
-export async function attemptWebhookDelivery(deliveryId: string): Promise<'delivered' | 'failed' | 'skipped'> {
+export async function attemptWebhookDelivery(deliveryId: string): Promise<'delivered' | 'failed' | 'skipped' | 'suppressed'> {
   const now = new Date();
   const [claimed] = await db.update(webhook_deliveries).set({ locked_at: now })
     .where(and(
       eq(webhook_deliveries.id, deliveryId),
       eq(webhook_deliveries.success, 0),
+      isNull(webhook_deliveries.suppressed_at),
       lt(webhook_deliveries.attempts, MAX_DELIVERY_ATTEMPTS),
       or(isNull(webhook_deliveries.locked_at), lt(webhook_deliveries.locked_at, new Date(now.getTime() - DELIVERY_LEASE_MS))),
     )).returning({ id: webhook_deliveries.id });
@@ -99,6 +130,12 @@ export async function attemptWebhookDelivery(deliveryId: string): Promise<'deliv
     .innerJoin(webhooks, eq(webhook_deliveries.webhook_id, webhooks.id))
     .where(eq(webhook_deliveries.id, deliveryId)).limit(1);
   if (!row) return 'skipped';
+  if (row.event_type === 'work_order.ready' && !await workOrderNoticeActionable(row.payload)) {
+    await db.update(webhook_deliveries).set({
+      suppressed_at: new Date(), next_attempt_at: null, locked_at: null,
+    }).where(and(eq(webhook_deliveries.id, deliveryId), eq(webhook_deliveries.success, 0), isNull(webhook_deliveries.suppressed_at)));
+    return 'suppressed';
+  }
   const attempt = row.attempts + 1;
   if (row.active !== 1) {
     await db.update(webhook_deliveries).set({
@@ -154,19 +191,19 @@ export async function attemptWebhookDelivery(deliveryId: string): Promise<'deliv
 export async function processPendingWebhookDeliveries(limit = 20) {
   const result = await db.$client.execute({
     sql: `SELECT id FROM webhook_deliveries
-          WHERE success = 0 AND attempts < ?
+          WHERE success = 0 AND suppressed_at IS NULL AND attempts < ?
             AND (next_attempt_at IS NULL OR next_attempt_at <= unixepoch())
             AND (locked_at IS NULL OR locked_at < unixepoch() - ?)
           ORDER BY COALESCE(next_attempt_at, created_at), created_at
           LIMIT ?`,
     args: [MAX_DELIVERY_ATTEMPTS, Math.ceil(DELIVERY_LEASE_MS / 1000), Math.max(1, Math.min(100, limit))],
   });
-  const outcomes = { attempted: 0, delivered: 0, failed: 0, skipped: 0 };
+  const outcomes = { attempted: 0, delivered: 0, failed: 0, skipped: 0, suppressed: 0 };
   const ids = result.rows.map((candidate) => String(candidate.id));
   for (let index = 0; index < ids.length; index += 5) {
     const batch = await Promise.all(ids.slice(index, index + 5).map((id) => attemptWebhookDelivery(id)));
     for (const outcome of batch) {
-      outcomes.attempted += outcome === 'skipped' ? 0 : 1;
+      outcomes.attempted += outcome === 'skipped' || outcome === 'suppressed' ? 0 : 1;
       outcomes[outcome] += 1;
     }
   }
@@ -176,10 +213,10 @@ export async function processPendingWebhookDeliveries(limit = 20) {
 export async function inspectWebhookDeliveryHealth() {
   const result = await db.$client.execute({
     sql: `SELECT
-            SUM(CASE WHEN success = 0 AND attempts < ? THEN 1 ELSE 0 END) AS retrying_count,
-            SUM(CASE WHEN success = 0 AND attempts >= ? THEN 1 ELSE 0 END) AS failed_count,
-            SUM(CASE WHEN success = 0 AND attempts < ? AND next_attempt_at IS NOT NULL AND next_attempt_at < unixepoch() - 900 THEN 1 ELSE 0 END) AS overdue_count,
-            MIN(CASE WHEN success = 0 THEN created_at ELSE NULL END) AS oldest_pending_at
+            SUM(CASE WHEN success = 0 AND suppressed_at IS NULL AND attempts < ? THEN 1 ELSE 0 END) AS retrying_count,
+            SUM(CASE WHEN success = 0 AND suppressed_at IS NULL AND attempts >= ? THEN 1 ELSE 0 END) AS failed_count,
+            SUM(CASE WHEN success = 0 AND suppressed_at IS NULL AND attempts < ? AND next_attempt_at IS NOT NULL AND next_attempt_at < unixepoch() - 900 THEN 1 ELSE 0 END) AS overdue_count,
+            MIN(CASE WHEN success = 0 AND suppressed_at IS NULL THEN created_at ELSE NULL END) AS oldest_pending_at
           FROM webhook_deliveries`,
     args: [MAX_DELIVERY_ATTEMPTS, MAX_DELIVERY_ATTEMPTS, MAX_DELIVERY_ATTEMPTS],
   });

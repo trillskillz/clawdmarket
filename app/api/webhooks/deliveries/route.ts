@@ -20,16 +20,17 @@ export async function GET(request: NextRequest) {
       success: webhook_deliveries.success,
       created_at: webhook_deliveries.created_at,
       next_attempt_at: webhook_deliveries.next_attempt_at,
+      suppressed_at: webhook_deliveries.suppressed_at,
       last_error: webhook_deliveries.last_error,
     }).from(webhook_deliveries)
       .innerJoin(webhooks, eq(webhook_deliveries.webhook_id, webhooks.id))
       .where(eq(webhooks.agent_id, principal.userId))
-      .orderBy(desc(webhook_deliveries.delivered_at))
+      .orderBy(desc(webhook_deliveries.created_at), desc(webhook_deliveries.id))
       .limit(20)
 
     const deliveries = rows.map((row) => ({
       ...row,
-      status: row.success === 1 ? 'delivered' : row.attempts === 0 ? 'queued' : row.next_attempt_at ? 'retrying' : 'failed',
+      status: row.suppressed_at ? 'suppressed' : row.success === 1 ? 'delivered' : row.attempts === 0 ? 'queued' : row.next_attempt_at ? 'retrying' : 'failed',
     }))
     return NextResponse.json({ deliveries, total: deliveries.length }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

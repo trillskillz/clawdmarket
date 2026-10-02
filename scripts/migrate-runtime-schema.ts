@@ -700,6 +700,9 @@ async function main() {
           last_outcome TEXT
         )`)
       } },
+      { id: '2026-10-01-stale-work-notification-v1', run: async (database: Client) => {
+        await ensureColumns(database, 'webhook_deliveries', { suppressed_at: 'INTEGER' })
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

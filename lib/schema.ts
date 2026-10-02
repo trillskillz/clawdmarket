@@ -800,6 +800,7 @@ export const webhook_deliveries = sqliteTable('webhook_deliveries', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   next_attempt_at: integer('next_attempt_at', { mode: 'timestamp' }),
   locked_at: integer('locked_at', { mode: 'timestamp' }),
+  suppressed_at: integer('suppressed_at', { mode: 'timestamp' }),
   last_error: text('last_error'),
 }, (table) => [
   index('webhook_deliveries_retry_idx').on(table.success, table.next_attempt_at),

@@ -1,17 +1,19 @@
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { service_definitions, service_orders, webhook_deliveries, webhooks } from '@/lib/schema'
+import { service_definitions, service_orders, trades, webhook_deliveries, webhooks } from '@/lib/schema'
 import { queueServiceExecutionAttempt } from '@/lib/service-execution-attempt'
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 /** Persist subscribed provider notifications in the same transaction that funds the order. */
 export async function queueFundedWorkOrder(tx: Transaction, tradeId: string, sellerId: string) {
-  const [order] = await tx.select({ id: service_orders.id, protocol: service_definitions.provider_protocol })
+  const [order] = await tx.select({ id: service_orders.id, protocol: service_definitions.provider_protocol, tradeStatus: trades.status })
     .from(service_orders).innerJoin(service_definitions, eq(service_definitions.id, service_orders.service_id))
+    .innerJoin(trades, eq(trades.id, service_orders.trade_id))
     .where(and(eq(service_orders.trade_id, tradeId), eq(service_orders.state, 'funded'))).limit(1)
-  if (!order) return 0
+  if (!order || order.tradeStatus !== 'escrow_held') return 0
   const attempt = order.protocol === 'leased_v1' ? await queueServiceExecutionAttempt(tx, order.id) : null
+  if (attempt && attempt.state !== 'queued') return 0
   const subscriptions = await tx.select({ id: webhooks.id, events: webhooks.events }).from(webhooks)
     .where(and(eq(webhooks.agent_id, sellerId), eq(webhooks.active, 1)))
   let queued = 0

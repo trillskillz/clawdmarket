@@ -457,6 +457,101 @@ test('expired provider lease preserves escrow and capacity without dispatching a
     (error: any) => error.code === 'WORK_ATTEMPT_LEASE_EXPIRED')
 })
 
+test('replayed work notice is suppressed after provider decline without changing funds', async () => {
+  const offered = await service()
+  await db.update(schema.service_definitions).set({ provider_protocol: 'leased_v1' })
+    .where(eq(schema.service_definitions.id, offered.id))
+  const created = await order(offered.id, `stale-notice-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade, order: savedOrder } = await created.json()
+  const webhookId = `stale-work-hook-${crypto.randomUUID()}`
+  await db.insert(schema.webhooks).values({ id: webhookId, agent_id: sellerId,
+    url: 'https://provider.example.invalid/stale-work', secret_hash: 'test-hash',
+    events: JSON.stringify(['work_order.ready']), active: 1 })
+  const { advanceServiceOrder } = await import('@/lib/service-order-state')
+  const { queueFundedWorkOrder } = await import('@/lib/service-order-dispatch')
+  await db.transaction(async (tx) => {
+    await tx.update(schema.trades).set({ status: 'escrow_held', funded_at: new Date().toISOString() })
+      .where(eq(schema.trades.id, trade.id))
+    await advanceServiceOrder(tx, trade.id, 'funded')
+    await queueFundedWorkOrder(tx, trade.id, sellerId)
+  })
+
+  // A new connection sees the same queued ID, as a restarted worker would.
+  const { createClient } = await import('@libsql/client')
+  const reopened = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  const persisted = await reopened.execute({
+    sql: 'SELECT a.id AS attempt_id, d.id AS delivery_id FROM service_execution_attempts a JOIN service_orders o ON o.id = a.order_id JOIN webhook_deliveries d ON d.id = ? WHERE o.id = ?',
+    args: [`work-order-ready:${savedOrder.id}:${webhookId}`, savedOrder.id],
+  })
+  reopened.close()
+  assert.equal(persisted.rows.length, 1)
+  const attemptId = String(persisted.rows[0].attempt_id)
+  const deliveryId = String(persisted.rows[0].delivery_id)
+  await db.transaction(async (tx) => { await queueFundedWorkOrder(tx, trade.id, sellerId) })
+  assert.equal((await db.select().from(schema.webhook_deliveries).where(eq(schema.webhook_deliveries.webhook_id, webhookId))).length, 1)
+
+  const { changeServiceExecutionAttempt } = await import('@/lib/service-execution-attempt')
+  await changeServiceExecutionAttempt(trade.id, sellerId, attemptId, 'decline')
+  const replayWebhookId = `late-work-hook-${crypto.randomUUID()}`
+  await db.insert(schema.webhooks).values({ id: replayWebhookId, agent_id: sellerId,
+    url: 'https://provider.example.invalid/late-work', secret_hash: 'test-hash',
+    events: JSON.stringify(['work_order.ready']), active: 1 })
+  await db.transaction(async (tx) => { assert.equal(await queueFundedWorkOrder(tx, trade.id, sellerId), 0) })
+  assert.equal((await db.select().from(schema.webhook_deliveries).where(eq(schema.webhook_deliveries.webhook_id, replayWebhookId))).length, 0)
+  const { attemptWebhookDelivery, inspectWebhookDeliveryHealth } = await import('@/lib/webhook-delivery')
+  // Recover an abandoned claim after its worker lease has elapsed.
+  await db.update(schema.webhook_deliveries).set({ locked_at: new Date(Date.now() - 3 * 60_000) })
+    .where(eq(schema.webhook_deliveries.id, deliveryId))
+  assert.equal(await attemptWebhookDelivery(deliveryId), 'suppressed')
+  assert.equal(await attemptWebhookDelivery(deliveryId), 'skipped')
+  const [notice] = await db.select().from(schema.webhook_deliveries).where(eq(schema.webhook_deliveries.id, deliveryId))
+  assert.equal(notice.attempts, 0)
+  assert.equal(notice.success, 0)
+  assert.ok(notice.suppressed_at)
+  const { GET: deliveryHistory } = await import('@/app/api/webhooks/deliveries/route')
+  const history = await deliveryHistory(new NextRequest('http://localhost/api/webhooks/deliveries', {
+    headers: { Authorization: `Bearer ${token({ userId: sellerId, email: `${sellerId}@test.invalid`, role: 'human' })}` },
+  }))
+  assert.equal(history.status, 200)
+  assert.equal((await history.json()).deliveries.find((row: { id: string }) => row.id === deliveryId)?.status, 'suppressed')
+  const health = await inspectWebhookDeliveryHealth()
+  assert.equal(health.failed_count, 0)
+  const [orderAfter] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  const [tradeAfter] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  assert.equal(orderAfter.state, 'funded')
+  assert.equal(tradeAfter.status, 'escrow_held')
+})
+
+test('terminal work order suppresses its pending notice after resolution', async () => {
+  const offered = await service()
+  const created = await order(offered.id, `terminal-notice-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade, order: savedOrder } = await created.json()
+  const webhookId = `terminal-work-hook-${crypto.randomUUID()}`
+  await db.insert(schema.webhooks).values({ id: webhookId, agent_id: sellerId,
+    url: 'https://provider.example.invalid/terminal-work', secret_hash: 'test-hash',
+    events: JSON.stringify(['work_order.ready']), active: 1 })
+  const { advanceServiceOrder } = await import('@/lib/service-order-state')
+  const { queueFundedWorkOrder } = await import('@/lib/service-order-dispatch')
+  await db.transaction(async (tx) => {
+    await tx.update(schema.trades).set({ status: 'escrow_held', funded_at: new Date().toISOString() })
+      .where(eq(schema.trades.id, trade.id))
+    await advanceServiceOrder(tx, trade.id, 'funded')
+    await queueFundedWorkOrder(tx, trade.id, sellerId)
+    await tx.update(schema.trades).set({ status: 'resolved' }).where(eq(schema.trades.id, trade.id))
+    await advanceServiceOrder(tx, trade.id, 'resolved')
+  })
+  const deliveryId = `work-order-ready:${savedOrder.id}:${webhookId}`
+  const { attemptWebhookDelivery } = await import('@/lib/webhook-delivery')
+  assert.equal(await attemptWebhookDelivery(deliveryId), 'suppressed')
+  const [notice] = await db.select().from(schema.webhook_deliveries).where(eq(schema.webhook_deliveries.id, deliveryId))
+  assert.equal(notice.success, 0)
+  assert.equal(notice.attempts, 0)
+  const [definition] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(definition.active_orders, 0)
+})
+
 test('verified funding atomically queues one private provider work notice per subscribed webhook', async () => {
   const offered = await service()
   const created = await order(offered.id, `dispatch-outbox-${crypto.randomUUID()}`)

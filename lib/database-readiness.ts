@@ -87,7 +87,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   password_reset_tokens: ['token_hash', 'user_id', 'expires_at', 'created_at'],
   wallet_auth_nonces: ['nonce_hash', 'address', 'chain_id', 'domain', 'uri', 'issued_at', 'expires_at', 'consumed_at'],
   webhooks: ['id', 'agent_id', 'url', 'secret_hash', 'events', 'active', 'failure_count', 'created_at'],
-  webhook_deliveries: ['id', 'webhook_id', 'event_type', 'payload', 'attempts', 'success', 'created_at', 'next_attempt_at', 'locked_at', 'last_error'],
+  webhook_deliveries: ['id', 'webhook_id', 'event_type', 'payload', 'attempts', 'success', 'created_at', 'next_attempt_at', 'locked_at', 'suppressed_at', 'last_error'],
   rate_limits: ['key', 'count', 'reset_at'],
   agent_usage_events: ['id', 'agent_id', 'feature', 'event_type', 'route', 'payer', 'amount_usd', 'created_at'],
   user_ips: ['user_id', 'ip', 'last_seen'],
