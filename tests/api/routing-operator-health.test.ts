@@ -50,6 +50,9 @@ test('routing operator health is admin-only and exposes aggregates without priva
   assert.equal(beforeBody.workers.webhooks.status, 'never_observed')
   assert.deepEqual(beforeBody.migrations, [{ id: '2026-10-01-service-provider-protocol-v1', applied_at: '2026-10-01T00:00:00.000Z' }])
   assert.deepEqual(beforeBody.usage.services, {})
+  assert.deepEqual(beforeBody.provider_execution, {
+    overdue_lease_count: 0, terminal_active_count: 0, funded_without_attempt_count: 0,
+  })
   assert.equal(beforeBody.outboxes.webhook.retrying_count, 0)
   assert.equal(beforeBody.outboxes.settlement.failed_count, 0)
   assert.equal(typeof beforeBody.flags.route_execution, 'boolean')
@@ -70,4 +73,42 @@ test('routing operator health is admin-only and exposes aggregates without priva
   const { recordWorkerHeartbeat } = await import('@/lib/worker-heartbeats')
   await recordWorkerHeartbeat('webhooks', 'failed')
   assert.equal((await (await inspect(request(path, 'routing-admin'))).json()).workers.webhooks.status, 'failed')
+})
+
+test('operator snapshot exposes aggregate missing, overdue, and terminal attempt states', async () => {
+  const schema = await import('@/lib/schema')
+  const sellerId = `operator-seller-${crypto.randomUUID()}`
+  const buyerId = `operator-buyer-${crypto.randomUUID()}`
+  const listingId = crypto.randomUUID()
+  const serviceId = crypto.randomUUID()
+  const tradeId = crypto.randomUUID()
+  const orderId = crypto.randomUUID()
+  const attemptId = crypto.randomUUID()
+  for (const id of [sellerId, buyerId]) {
+    await db.insert(schema.users).values({ id, name: id, email: `${id}@test.invalid`, password_hash: 'unused', role: 'human' })
+  }
+  await db.insert(schema.listings).values({ id: listingId, seller_id: sellerId,
+    category: 'analysis', title: 'Operator fixture', description: 'Operator fixture listing', price_bankr: 10 })
+  await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: sellerId,
+    title: 'Operator fixture', description: 'Operator fixture service', price_minor: 1000, provider_protocol: 'leased_v1' })
+  await db.insert(schema.trades).values({ id: tradeId, listing_id: listingId,
+    buyer_id: buyerId, seller_id: sellerId, amount: 10, fee: 0.5, status: 'escrow_held' })
+  await db.insert(schema.service_orders).values({ id: orderId, service_id: serviceId, listing_id: listingId,
+    trade_id: tradeId, buyer_id: buyerId, client_reference: `operator-${orderId}`,
+    objective: 'Inspect provider attempt health', price_minor: 1000, payment_rail: 'evm', state: 'funded' })
+
+  const snapshot = async () => (await inspect(request('/api/admin/routing/health', 'routing-admin'))).json()
+  assert.equal((await snapshot()).provider_execution.funded_without_attempt_count, 1)
+  await db.insert(schema.service_execution_attempts).values({ id: attemptId, order_id: orderId,
+    state: 'accepted', accepted_at: new Date(Date.now() - 20 * 60_000),
+    lease_expires_at: new Date(Date.now() - 10 * 60_000) })
+  const overdue = await snapshot()
+  assert.deepEqual(overdue.provider_execution, {
+    overdue_lease_count: 1, terminal_active_count: 0, funded_without_attempt_count: 0,
+  })
+  assert.equal(JSON.stringify(overdue).includes(attemptId), false)
+
+  await db.update(schema.trades).set({ status: 'resolved' }).where(eq(schema.trades.id, tradeId))
+  const terminal = await snapshot()
+  assert.equal(terminal.provider_execution.terminal_active_count, 1)
 })

@@ -398,6 +398,15 @@ test('leased provider attempt requires acceptance and correlates delivery', asyn
   const summary = 'Completed the leased code review with actionable findings.'
   assert.equal((await deliver(request(deliveryPath, sellerId, { summary, execution_attempt_id: attempt.id }), params)).status, 409)
   assert.equal((await startWorkOrder(request(`/api/trades/${trade.id}/work-order/start`, sellerId, {}), params)).status, 409)
+  // If the order transition fails after the attempt write, the transaction rolls back both.
+  await db.update(schema.service_orders).set({ execution_started_at: new Date() })
+    .where(eq(schema.service_orders.id, savedOrder.id))
+  assert.equal((await action(sellerId, attempt.id, 'accept')).status, 409)
+  const [rolledBack] = await db.select().from(schema.service_execution_attempts)
+    .where(eq(schema.service_execution_attempts.id, attempt.id))
+  assert.equal(rolledBack.state, 'queued')
+  await db.update(schema.service_orders).set({ execution_started_at: null })
+    .where(eq(schema.service_orders.id, savedOrder.id))
   const accepted = await Promise.all([action(sellerId, attempt.id, 'accept'), action(sellerId, attempt.id, 'accept')])
   assert.deepEqual(accepted.map((response) => response.status).sort(), [200, 201])
   const heartbeat = await action(sellerId, attempt.id, 'heartbeat')
@@ -439,6 +448,10 @@ test('expired provider lease preserves escrow and capacity without dispatching a
   await changeServiceExecutionAttempt(trade.id, sellerId, attempt.id, 'accept')
   await db.update(schema.service_execution_attempts).set({ lease_expires_at: new Date(Date.now() - 1_000) })
     .where(eq(schema.service_execution_attempts.id, attempt.id))
+  await assert.rejects(changeServiceExecutionAttempt(trade.id, sellerId, attempt.id, 'accept'),
+    (error: any) => error.code === 'WORK_ATTEMPT_LEASE_EXPIRED')
+  assert.equal((await cancelTrade(request(`/api/trades/${trade.id}/cancel`, buyerId, {}),
+    { params: Promise.resolve({ id: trade.id }) })).status, 409)
   assert.equal(await expireServiceExecutionAttempts(), 1)
   assert.equal(await expireServiceExecutionAttempts(), 0)
   const [expired] = await db.select().from(schema.service_execution_attempts)

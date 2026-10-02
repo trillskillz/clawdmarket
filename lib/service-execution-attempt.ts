@@ -35,12 +35,17 @@ export function changeServiceExecutionAttempt(tradeId: string, sellerId: string,
       .where(and(eq(trades.id, tradeId), eq(service_execution_attempts.id, attemptId))).limit(1)
     if (!row || row.trade.seller_id !== sellerId) throw new ServiceAttemptError('WORK_ORDER_NOT_FOUND', 'Work order attempt not found', 404)
     const { trade, order, attempt } = row
-    if (action === 'accept' && attempt.state === 'accepted') return { attempt, idempotent: true }
-    if (action === 'decline' && attempt.state === 'declined') return { attempt, idempotent: true }
     if (trade.status !== 'escrow_held' || order.capacity_released_at || !['funded', 'executing'].includes(order.state)) {
       throw new ServiceAttemptError('WORK_ORDER_NOT_FUNDED', 'Work order is not available for execution')
     }
     const now = new Date()
+    if (action === 'accept' && attempt.state === 'accepted') {
+      if (order.state !== 'executing' || !attempt.lease_expires_at || attempt.lease_expires_at <= now) {
+        throw new ServiceAttemptError('WORK_ATTEMPT_LEASE_EXPIRED', 'Provider lease is not active')
+      }
+      return { attempt, idempotent: true }
+    }
+    if (action === 'decline' && attempt.state === 'declined') return { attempt, idempotent: true }
     if (action === 'accept' || action === 'decline') {
       if (attempt.state !== 'queued' || order.state !== 'funded') throw new ServiceAttemptError('WORK_ATTEMPT_STATE_CHANGED', 'Provider attempt is no longer available')
       const [updated] = await tx.update(service_execution_attempts)
