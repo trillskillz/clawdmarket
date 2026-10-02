@@ -67,6 +67,13 @@ jobs:
         if: inputs.mode != 'recover-base-payment'
         run: node scripts/prod-payment-rails-preflight.mjs
 
+      - name: Inspect production route, worker, and settlement state
+        if: inputs.mode == 'route-preflight' || inputs.mode == 'run-routed-base'
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: node scripts/prod-route-operator-preflight.mjs
+
       - name: Run production payment canary
         if: inputs.mode != 'run-low-value-mpp' && inputs.mode != 'configure-seller-payout' && inputs.mode != 'recover-base-payment' && inputs.mode != 'route-preflight' && inputs.mode != 'run-routed-base'
         run: node scripts/prod-payment-canary.mjs

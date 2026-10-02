@@ -11,10 +11,10 @@ test('settlement monitoring counts failed and over-SLA transfers', async () => {
       id TEXT PRIMARY KEY, status TEXT NOT NULL, updated_at INTEGER NOT NULL
     )`)
     await client.batch([
-      { sql: 'INSERT INTO settlement_transfers VALUES (?, ?, ?)', args: ['stuck', 'pending', now - 31 * 60_000] },
-      { sql: 'INSERT INTO settlement_transfers VALUES (?, ?, ?)', args: ['recent', 'submitted', now - 10 * 60_000] },
-      { sql: 'INSERT INTO settlement_transfers VALUES (?, ?, ?)', args: ['failed', 'failed', now - 2 * 60_000] },
-      { sql: 'INSERT INTO settlement_transfers VALUES (?, ?, ?)', args: ['done', 'confirmed', now - 60 * 60_000] },
+      { sql: 'INSERT INTO settlement_transfers VALUES (?, ?, ?)', args: ['stuck', 'pending', Math.floor(now / 1_000) - 31 * 60] },
+      { sql: 'INSERT INTO settlement_transfers VALUES (?, ?, ?)', args: ['recent', 'submitted', Math.floor(now / 1_000) - 10 * 60] },
+      { sql: 'INSERT INTO settlement_transfers VALUES (?, ?, ?)', args: ['failed', 'failed', Math.floor(now / 1_000) - 2 * 60] },
+      { sql: 'INSERT INTO settlement_transfers VALUES (?, ?, ?)', args: ['done', 'confirmed', Math.floor(now / 1_000) - 60 * 60] },
     ])
 
     const health = await inspectSettlementHealth(client, { SETTLEMENT_STUCK_AFTER_MINUTES: '30' }, now)

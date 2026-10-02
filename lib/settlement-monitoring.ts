@@ -26,7 +26,7 @@ export async function inspectSettlementHealth(
   now = Date.now(),
 ): Promise<SettlementHealth> {
   const stuckAfterMinutes = settlementStuckMinutes(env)
-  const stuckBefore = now - stuckAfterMinutes * 60_000
+  const stuckBefore = Math.floor(now / 1_000) - stuckAfterMinutes * 60
   const result = await client.execute({
     sql: `SELECT
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_count,
@@ -39,14 +39,14 @@ export async function inspectSettlementHealth(
   const row = result.rows[0] as Record<string, unknown> | undefined
   const failedCount = Number(row?.failed_count || 0)
   const stuckCount = Number(row?.stuck_count || 0)
-  const oldestStuckMs = Number(row?.oldest_stuck_at)
+  const oldestStuckSeconds = Number(row?.oldest_stuck_at)
   return {
     healthy: failedCount === 0 && stuckCount === 0,
     failed_count: failedCount,
     stuck_count: stuckCount,
     stuck_after_minutes: stuckAfterMinutes,
-    oldest_stuck_at: Number.isFinite(oldestStuckMs) && oldestStuckMs > 0
-      ? new Date(oldestStuckMs).toISOString()
+    oldest_stuck_at: Number.isFinite(oldestStuckSeconds) && oldestStuckSeconds > 0
+      ? new Date(oldestStuckSeconds * 1_000).toISOString()
       : null,
   }
 }
