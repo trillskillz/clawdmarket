@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { listings, payment_receipts, service_orders, trades } from '@/lib/schema'
 import { advanceServiceOrder } from '@/lib/service-order-state'
 import { queueFundedWorkOrder } from '@/lib/service-order-dispatch'
+import { withKeyedWriteLock } from '@/lib/service-reservation-lock'
 
 export class TradeFundingError extends Error {
   constructor(message: string, public readonly status: number, public readonly code: string) {
@@ -16,17 +17,37 @@ export function paymentDeadlinePassed(trade: typeof trades.$inferSelect) {
   return Boolean(trade.payment_due_at && Date.parse(trade.payment_due_at) <= Date.now())
 }
 
+function sqliteBusy(error: unknown) {
+  let current = error
+  for (let depth = 0; current && typeof current === 'object' && depth < 6; depth += 1) {
+    const cause = current as { code?: string; message?: string; cause?: unknown }
+    if (cause.code === 'SQLITE_BUSY' || /SQLITE_BUSY|database is locked/i.test(cause.message || '')) return true
+    current = cause.cause
+  }
+  return false
+}
+
 export async function expireTradePayment(trade: typeof trades.$inferSelect) {
-  const [cancelled] = await db.transaction(async (tx) => {
-    const rows = await tx.update(trades).set({ status: 'cancelled' })
-      .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending'))).returning()
-    if (!rows[0]) return []
-    await advanceServiceOrder(tx, trade.id, 'cancelled')
-    const [serviceOrder] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, trade.id)).limit(1)
-    if (!serviceOrder) await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, trade.listing_id), eq(listings.status, 'sold')))
-    return rows
+  return withKeyedWriteLock(`trade-cancel:${trade.id}`, async () => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      try {
+        const [cancelled] = await db.transaction(async (tx) => {
+          const rows = await tx.update(trades).set({ status: 'cancelled' })
+            .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending'))).returning()
+          if (!rows[0]) return []
+          await advanceServiceOrder(tx, trade.id, 'cancelled')
+          const [serviceOrder] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, trade.id)).limit(1)
+          if (!serviceOrder) await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, trade.listing_id), eq(listings.status, 'sold')))
+          return rows
+        })
+        return cancelled || null
+      } catch (error) {
+        if (!sqliteBusy(error) || attempt === 5) throw error
+        await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
+      }
+    }
+    throw new Error('TRADE_CANCELLATION_UNAVAILABLE')
   })
-  return cancelled || null
 }
 
 export type ExternalFundingInput = {
@@ -99,7 +120,15 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
       return funded
     })
   } catch (error) {
-    if (error instanceof TradeFundingError) throw error
+    if (error instanceof TradeFundingError) {
+      if (error.code === 'TRADE_FUNDING_RACE') {
+        // Cancellation may have committed after the endpoint read a pending trade.
+        // Tell the caller to record this verified proof on the cancelled trade for refund.
+        const [current] = await db.select({ status: trades.status }).from(trades).where(eq(trades.id, input.trade.id)).limit(1)
+        if (current?.status === 'cancelled') throw new TradeFundingError('Trade was cancelled while payment was verified', 409, 'TRADE_NOT_AWAITING_PAYMENT')
+      }
+      throw error
+    }
     if (isUniqueProofConflict(error)) {
       throw new TradeFundingError('This payment proof is already attached to a trade', 409, 'PAYMENT_PROOF_REUSED')
     }
@@ -108,31 +137,40 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
 }
 
 export async function recordCancelledExternalFunding(input: ExternalFundingInput) {
-  const [existing] = await db.select().from(payment_receipts).where(eq(payment_receipts.trade_id, input.trade.id)).limit(1)
-  if (existing) {
+  const replay = async () => {
+    const [existing] = await db.select().from(payment_receipts).where(eq(payment_receipts.trade_id, input.trade.id)).limit(1)
+    if (!existing) return null
     const sameProof = existing.payment_rail === input.rail
       && existing.external_id === input.externalId
       && (existing.tx_hash || null) === input.txHash
     if (!sameProof) throw new TradeFundingError('Another payment proof is already attached to this trade', 409, 'PAYMENT_PROOF_REUSED')
-    return input.trade
+    const [current] = await db.select().from(trades).where(eq(trades.id, input.trade.id)).limit(1)
+    if (!current || current.status !== 'cancelled') throw new TradeFundingError('Trade is not a cancelled payment reservation', 409, 'TRADE_NOT_CANCELLED')
+    return current
   }
-  try {
-    const [updated] = await db.transaction(async (tx) => {
-      const rows = await tx.update(trades).set({
-        payout_status: 'processing',
-        fee_tx_hash: input.txHash,
-        funded_at: new Date().toISOString(),
-      }).where(and(eq(trades.id, input.trade.id), eq(trades.status, 'cancelled'))).returning()
-      if (!rows[0]) throw new TradeFundingError('Trade is not a cancelled payment reservation', 409, 'TRADE_NOT_CANCELLED')
-      await tx.insert(payment_receipts).values(paymentReceiptValues(input))
-      return rows
-    })
-    return updated
-  } catch (error) {
-    if (error instanceof TradeFundingError) throw error
-    if (isUniqueProofConflict(error)) {
-      throw new TradeFundingError('This payment proof is already attached to a trade', 409, 'PAYMENT_PROOF_REUSED')
+  return withKeyedWriteLock(`cancelled-payment:${input.trade.id}`, async () => {
+    const prior = await replay()
+    if (prior) return prior
+    try {
+      const [updated] = await db.transaction(async (tx) => {
+        const rows = await tx.update(trades).set({
+          payout_status: 'processing',
+          fee_tx_hash: input.txHash,
+          funded_at: new Date().toISOString(),
+        }).where(and(eq(trades.id, input.trade.id), eq(trades.status, 'cancelled'))).returning()
+        if (!rows[0]) throw new TradeFundingError('Trade is not a cancelled payment reservation', 409, 'TRADE_NOT_CANCELLED')
+        await tx.insert(payment_receipts).values(paymentReceiptValues(input))
+        return rows
+      })
+      return updated
+    } catch (error) {
+      if (error instanceof TradeFundingError) throw error
+      if (isUniqueProofConflict(error)) {
+        const raced = await replay()
+        if (raced) return raced
+        throw new TradeFundingError('This payment proof is already attached to a trade', 409, 'PAYMENT_PROOF_REUSED')
+      }
+      throw error
     }
-    throw error
-  }
+  })
 }
