@@ -76,6 +76,7 @@ let serviceId = null
 let routeId = null
 let tradeId = null
 let paymentHash = null
+let paymentSendStarted = false
 let funded = false
 try {
   const service = ok(await api('/api/services', { method: 'POST', headers: sellerHeaders, body: json({
@@ -111,6 +112,7 @@ try {
   const amount = parseUnits(checkout.amount_usd.toFixed(token.decimals), token.decimals)
   if (amount !== parseUnits('0.11', token.decimals)) throw new Error('Payment amount exceeds approved cap')
   const { request } = await client.simulateContract({ account, address: token.token_address, abi: erc20Abi, functionName: 'transfer', args: [config.treasury_wallet, amount] })
+  paymentSendStarted = true
   paymentHash = await wallet.writeContract(request)
   console.log(`Base payment transaction: ${paymentHash}`)
   const proof = { intent_id: intent.intent.id, chain_id: base.id, token_address: token.token_address, tx_hash: paymentHash, payer_address: account.address }
@@ -154,13 +156,18 @@ try {
   if (finalService.current_capacity !== 1) throw new Error('Service capacity was not released exactly once')
   console.log(`PASS: capped routed Base checkout, leased provider delivery, buyer review, and $0.10 seller payout; route ${routeId}; trade ${tradeId}; delivery ${submitted.delivery.id}`)
 } finally {
+  if (routeId && !paymentSendStarted) {
+    try {
+      const cancel = await api(`/api/routes/${routeId}`, { method: 'DELETE', headers: buyerHeaders }, true)
+      if (cancel.status !== 200) console.warn(`Unpaid route cleanup returned HTTP ${cancel.status}; inspect route ${routeId}`)
+    } catch { console.warn(`Unpaid route cleanup could not be confirmed; inspect route ${routeId}`) }
+  }
   if (serviceId) {
-    const cleanup = await api(`/api/services/${serviceId}`, { method: 'PATCH', headers: sellerHeaders, body: json({ status: 'archived' }) })
-    if (cleanup.status !== 200) console.warn(`Canary service cleanup returned HTTP ${cleanup.status}; inspect service ${serviceId}`)
+    try {
+      const cleanup = await api(`/api/services/${serviceId}`, { method: 'PATCH', headers: sellerHeaders, body: json({ status: 'archived' }) })
+      if (cleanup.status !== 200) console.warn(`Canary service cleanup returned HTTP ${cleanup.status}; inspect service ${serviceId}`)
+    } catch { console.warn(`Canary service cleanup could not be confirmed; inspect service ${serviceId}`) }
   }
   if (tradeId && paymentHash && !funded) console.warn(`Payment state uncertain for trade ${tradeId}, tx ${paymentHash}; do not run a second payment`)
-  if (routeId && !tradeId) {
-    const cancel = await api(`/api/routes/${routeId}`, { method: 'DELETE', headers: buyerHeaders }, true)
-    if (cancel.status !== 200) console.warn(`Unpaid route cleanup returned HTTP ${cancel.status}`)
-  }
+  if (tradeId && paymentSendStarted && !paymentHash) console.warn(`Payment send outcome uncertain for trade ${tradeId}; inspect chain and trade before any retry`)
 }

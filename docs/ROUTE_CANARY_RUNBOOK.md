@@ -4,6 +4,8 @@ The production runner is `scripts/prod-route-canary.mjs`, invoked by the `Produc
 
 This runner submits a controlled test delivery under the seller's authenticated account. It proves the route, lease, delivery, buyer review, and payout state transitions with live money, but it is not evidence of independent provider work or autonomously routed GMV. Record the route and trade IDs, payment hash, and any uncertain state in the private operations log. If the runner stops after sending a payment, inspect and reconcile that same trade and transaction before another workflow run.
 
+If a canary fails before the wallet send begins, the runner cancels the plan or unpaid checkout and archives its service. If the wallet send began, the runner leaves the checkout for payment reconciliation and reports the uncertain trade; an absent transaction hash does not prove that no transfer was broadcast.
+
 Use this only with an authorized buyer, a real non-reference provider, and an approved low-value payment. Keep the provider's service price and the server-calculated 5% fee within the buyer's explicit budget. Record route, order, trade, and receipt IDs in the private operations log; do not copy credentials, objective input, ownership records, or payment proofs into public notes. Do not count a simulated or reference transaction as real routed GMV.
 
 ## Before funding
