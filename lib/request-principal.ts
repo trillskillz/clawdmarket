@@ -78,7 +78,7 @@ export async function resolveRequestPrincipal(req: NextRequest): Promise<Request
   if (!payer) return null;
 
   const matchingAgents = await db
-    .select({ id: agents.id, name: agents.name })
+    .select({ id: agents.id, name: agents.name, status: agents.status, archivedAt: agents.archivedAt })
     .from(agents)
     .where(sql`LOWER(${agents.owner_address}) = ${payer}`)
     .limit(2);
@@ -86,6 +86,7 @@ export async function resolveRequestPrincipal(req: NextRequest): Promise<Request
   // agent identity for a payment credential that proves only wallet control.
   if (matchingAgents.length > 1) return null;
   const row = matchingAgents[0];
+  if (row && (row.status !== 'active' || row.archivedAt)) return null;
   if (!row) {
     const userId = `user_wallet_${payer.slice(2)}`;
     const nowIso = new Date().toISOString();
