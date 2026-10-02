@@ -52,13 +52,6 @@ export function hashAgentApiKey(apiKey: string): string {
     .digest('hex')
 }
 
-function legacyAgentApiKeyDigest(apiKey: string): string {
-  // Compatibility only: old releases stored SHA-256 digests of random 128-bit
-  // API keys. A successful legacy lookup is immediately upgraded to keyed HMAC.
-  // codeql[js/insufficient-password-hash]
-  return crypto.createHash('sha256').update(apiKey).digest('hex')
-}
-
 export function agentApiKeyPrefix(apiKey: string): string {
   return apiKey.slice(0, 12)
 }
@@ -94,15 +87,14 @@ async function resolveRegisteredAgentApiKey(
 
   const client = (db as any).$client
   const hashed = hashAgentApiKey(apiKey)
-  const legacyHashed = legacyAgentApiKeyDigest(apiKey)
   const primaryResult = await client.execute({
     sql: `SELECT id, name, status, api_key, api_key_prefix, api_key_revoked_at, archived_at,
                  previous_api_key, previous_api_key_prefix, previous_api_key_expires_at
           FROM agents
-          WHERE api_key IN (?, ?, ?)
+          WHERE api_key IN (?, ?)
              OR (previous_api_key = ? AND previous_api_key_expires_at > unixepoch())
           LIMIT 1`,
-    args: [hashed, legacyHashed, apiKey, hashed],
+    args: [hashed, apiKey, hashed],
   })
   let agent = primaryResult?.rows?.[0]
   let namedCredential: Record<string, unknown> | null = null
