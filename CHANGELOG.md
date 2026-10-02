@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Release security dependency patch
+- Update Next.js and its lint configuration to 16.3.6 for [GHSA-vcvr-r3jv-pc5j](https://github.com/vercel/next.js/security/advisories/GHSA-vcvr-r3jv-pc5j), discovered during the routing stack's release audit. Machine contract remains 1.62.
+
 ### Transactional route eligibility (contract 1.62)
 - Saved route capability, verification/source minimum, and latency/deadline checks inside reservation, with seller identity, capabilities, and nullable latency bound to the capacity write.
 - Rejection and bounded pre-checkout fallback for provider changes after preflight; malformed capability records are excluded from planning, and exact existing checkout replay retains its original economic order.
