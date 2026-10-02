@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { route_plans, service_definitions, service_orders, trades } from '@/lib/schema'
+import { route_plans, service_definitions, service_execution_attempts, service_orders, trades } from '@/lib/schema'
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 export type ServiceOrderState = typeof service_orders.$inferSelect.state
@@ -10,6 +10,16 @@ export async function advanceServiceOrder(tx: Transaction, tradeId: string, stat
   const terminal = state === 'completed' || state === 'cancelled' || state === 'resolved'
   const now = new Date()
   const [linkedOrder] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, tradeId)).limit(1)
+  if (linkedOrder && (state === 'disputed' || terminal)) {
+    // Preserve an already overdue provider failure; otherwise the trade transition ended the lease.
+    await tx.update(service_execution_attempts).set({ state: 'expired', completed_at: now, updated_at: now })
+      .where(and(eq(service_execution_attempts.order_id, linkedOrder.id), eq(service_execution_attempts.state, 'accepted'),
+        lte(service_execution_attempts.lease_expires_at, now)))
+    await tx.update(service_execution_attempts).set({ state: 'interrupted', completed_at: now, updated_at: now })
+      .where(and(eq(service_execution_attempts.order_id, linkedOrder.id),
+        or(eq(service_execution_attempts.state, 'queued'),
+          and(eq(service_execution_attempts.state, 'accepted'), gt(service_execution_attempts.lease_expires_at, now)))))
+  }
   if (terminal) {
     const [released] = await tx.update(service_orders)
       .set({ state, capacity_released_at: now, updated_at: now })

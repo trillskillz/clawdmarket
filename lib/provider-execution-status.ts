@@ -9,18 +9,17 @@ export function providerExecutionStatus(protocol: string, order: Order, trade: T
   if (protocol !== 'leased_v1') return null
   const fundedWork = trade.status === 'escrow_held' && !order.capacity_released_at
     && (order.state === 'funded' || order.state === 'executing')
-  const leaseOverdue = attempt?.state === 'accepted'
+  const leaseOverdue = fundedWork && attempt?.state === 'accepted'
     && !!attempt.lease_expires_at && attempt.lease_expires_at <= now
   const attentionReason = !fundedWork ? null
     : !attempt ? 'attempt_missing'
       : attempt.state === 'declined' ? 'provider_declined'
-        : attempt.state === 'expired' || leaseOverdue ? 'lease_expired' : null
-  const failedAttempt = !attempt || attempt.state === 'declined' || attempt.state === 'expired' || leaseOverdue
-  const reconciliation = !failedAttempt ? null
-    : attentionReason ? { state: 'dispute_available' as const,
-      action: { method: 'POST' as const, url: `/api/trades/${trade.id}/dispute` } }
-      : trade.status === 'disputed' ? { state: 'dispute_open' as const, action: null }
-        : trade.status === 'resolved' ? { state: 'resolved' as const, action: null } : null
+        : attempt.state === 'expired' || leaseOverdue ? 'lease_expired'
+          : attempt.state === 'interrupted' ? 'attempt_interrupted' : null
+  const reconciliation = trade.status === 'disputed' ? { state: 'dispute_open' as const, action: null }
+    : trade.status === 'resolved' ? { state: 'resolved' as const, action: null }
+      : attentionReason ? { state: 'dispute_available' as const,
+        action: { method: 'POST' as const, url: `/api/trades/${trade.id}/dispute` } } : null
   return {
     attempt_id: attempt?.id || null,
     state: attempt?.state || (fundedWork ? 'missing' : 'not_started'),

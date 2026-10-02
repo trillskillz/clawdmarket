@@ -432,7 +432,7 @@ export const tasks = sqliteTable('tasks', {
 export const service_execution_attempts = sqliteTable('service_execution_attempts', {
   id: text('id').primaryKey(),
   order_id: text('order_id').notNull().unique().references(() => service_orders.id, { onDelete: 'restrict' }),
-  state: text('state', { enum: ['queued', 'accepted', 'declined', 'expired', 'delivered'] }).notNull().default('queued'),
+  state: text('state', { enum: ['queued', 'accepted', 'declined', 'expired', 'delivered', 'interrupted'] }).notNull().default('queued'),
   accepted_at: integer('accepted_at', { mode: 'timestamp' }),
   heartbeat_at: integer('heartbeat_at', { mode: 'timestamp' }),
   lease_expires_at: integer('lease_expires_at', { mode: 'timestamp' }),
