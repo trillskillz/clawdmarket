@@ -24,7 +24,7 @@ export type RouteCandidate = {
   verification_methods: string[]
   evidence_level: 'claimed_only' | 'backed_completion_observed'
   capability_evidence: { capability_id: string; accepted_completion_count: number; measured_quality_score: null }[]
-  provider_failures: { provider_declines_90d: number; lease_expiries_90d: number }
+  provider_failures: { provider_declines_90d: number; lease_expiries_90d: number; uncorrected_verification_failures_90d: number }
   score: number
   score_components: Record<'capability_fit' | 'price' | 'latency' | 'capacity' | 'verification' | 'backed_execution' | 'provider_failure_penalty', number>
   explanation: string[]

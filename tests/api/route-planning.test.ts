@@ -473,9 +473,42 @@ test('planning separates provider claims from backed completion evidence without
   await recordFailure('declined', false, new Date())
   await recordFailure('declined', true, new Date(), sellerId)
   const penalized = await planFor()
-  assert.deepEqual(penalized.provider_failures, { provider_declines_90d: 1, lease_expiries_90d: 1 })
+  assert.deepEqual(penalized.provider_failures, { provider_declines_90d: 1, lease_expiries_90d: 1,
+    uncorrected_verification_failures_90d: 0 })
   assert.equal(penalized.score_components.provider_failure_penalty, 0.4)
   assert.ok(penalized.score < observed.score)
   assert.equal(penalized.evidence_level, 'backed_completion_observed')
   assert.match(penalized.explanation.at(-1), /penalty is capped/)
+
+  const [rejectedListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
+    title: 'Rejected translation', description: 'Translation awaiting a corrected submission.', price_bankr: 1,
+    status: 'sold' }).returning()
+  const [rejectedTrade] = await db.insert(schema.trades).values({ listing_id: rejectedListing.id,
+    buyer_id: 'other-buyer', seller_id: sellerId, amount: 1, fee: 0.05, status: 'escrow_held',
+    funded_at: new Date().toISOString(), payment_rail: 'evm' }).returning()
+  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: serviceId,
+    listing_id: rejectedListing.id, trade_id: rejectedTrade.id, buyer_id: 'other-buyer',
+    client_reference: crypto.randomUUID(), objective: 'Translate a document with valid output',
+    price_minor: 100, payment_rail: 'evm', state: 'funded' })
+  const rejectedHash = crypto.randomUUID()
+  await db.insert(schema.verification_results).values(['schema', 'source_urls'].map((method) => ({
+    id: crypto.randomUUID(), trade_id: rejectedTrade.id, content_hash: rejectedHash,
+    method, verifier: 'clawdmarket-deterministic-v1', version: '1', status: 'failed' as const,
+    failure: 'invalid_output', evidence_json: '{}',
+  })))
+  const awaitingCorrection = await planFor()
+  assert.equal(awaitingCorrection.provider_failures.uncorrected_verification_failures_90d, 1)
+  assert.equal(awaitingCorrection.score_components.provider_failure_penalty, 0.6)
+  assert.ok(awaitingCorrection.score < penalized.score)
+
+  await db.transaction(async (tx) => {
+    await tx.insert(schema.trade_deliveries).values({ trade_id: rejectedTrade.id, submitter_id: sellerId,
+      summary: 'Corrected the translation and supplied the required artifact.',
+      content_hash: crypto.randomUUID(), verification: '{}' })
+    await tx.update(schema.trades).set({ status: 'pending_release' }).where(eq(schema.trades.id, rejectedTrade.id))
+  })
+  const corrected = await planFor()
+  assert.equal(corrected.provider_failures.uncorrected_verification_failures_90d, 0)
+  assert.equal(corrected.score_components.provider_failure_penalty, 0.4)
+  assert.equal(corrected.score, penalized.score)
 })
