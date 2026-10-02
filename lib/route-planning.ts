@@ -1,9 +1,9 @@
 import 'server-only'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { normalizeCapability } from '@/lib/capabilities'
-import { service_definitions, route_plans } from '@/lib/schema'
+import { capability_performance_events, service_definitions, route_plans } from '@/lib/schema'
 import { jsonObject, money, servicePrice } from '@/lib/service-definitions'
 import { getPaymentReadiness } from '@/lib/payment-config'
 import { getNewPaymentControl } from '@/lib/payment-control'
@@ -44,9 +44,10 @@ export type RouteCandidate = {
   estimated_latency_seconds: number | null
   payment_rail: MarketplaceRail
   verification_methods: VerificationPolicy['methods']
-  evidence_level: 'claimed_only'
+  evidence_level: 'claimed_only' | 'backed_completion_observed'
+  capability_evidence: { capability_id: string; accepted_completion_count: number; measured_quality_score: null }[]
   score: number
-  score_components: { capability_fit: number; price: number; latency: number; capacity: number; verification: number }
+  score_components: { capability_fit: number; price: number; latency: number; capacity: number; verification: number; backed_execution: number }
   explanation: string[]
 }
 
@@ -61,6 +62,15 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       AND a.status = 'active' AND a.visibility = 'public' AND a.archived_at IS NULL))`,
   )).orderBy(service_definitions.id).limit(501)
   const truncated = rows.length > 500
+  const agentIds = [...new Set(rows.filter((row) => row.seller_id.startsWith('user_agent_'))
+    .map((row) => row.seller_id.slice('user_agent_'.length)))]
+  const performanceRows = agentIds.length ? await db.select({ agentId: capability_performance_events.seller_agent_id,
+    capabilityId: capability_performance_events.capability_id, count: sql<number>`COUNT(*)` })
+    .from(capability_performance_events)
+    .where(and(inArray(capability_performance_events.seller_agent_id, agentIds),
+      inArray(capability_performance_events.capability_id, capabilities)))
+    .groupBy(capability_performance_events.seller_agent_id, capability_performance_events.capability_id) : []
+  const backedCounts = new Map(performanceRows.map((row) => [`${row.agentId}:${row.capabilityId}`, Number(row.count)]))
   const readiness = getPaymentReadiness()
   const paymentControl = await getNewPaymentControl()
   const buyerPolicy = await loadBuyerSpendPolicy(buyerId)
@@ -103,15 +113,27 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       ? Math.max(0, 1 - service.estimated_latency_seconds / input.deadline_seconds)
       : 0.5
     const capacityScore = (service.max_concurrency - service.active_orders) / service.max_concurrency
-    const components = { capability_fit: 1, price: priceScore, latency: latencyScore, capacity: capacityScore, verification: 1 }
-    const score = Math.round((0.45 * components.capability_fit + 0.25 * priceScore + 0.15 * latencyScore + 0.1 * capacityScore + 0.05) * 10_000) / 10_000
+    const agentId = service.seller_id.startsWith('user_agent_') ? service.seller_id.slice('user_agent_'.length) : null
+    const capabilityEvidence = capabilities.map((capability) => ({ capability_id: capability,
+      accepted_completion_count: agentId ? backedCounts.get(`${agentId}:${capability}`) || 0 : 0,
+      measured_quality_score: null as null }))
+    const backedCount = Math.min(...capabilityEvidence.map((item) => item.accepted_completion_count))
+    const backedExecution = Math.min(backedCount, 5) / 5
+    const components = { capability_fit: 1, price: priceScore, latency: latencyScore, capacity: capacityScore,
+      verification: 1, backed_execution: backedExecution }
+    const score = Math.round((0.4 * components.capability_fit + 0.25 * priceScore + 0.15 * latencyScore
+      + 0.1 * capacityScore + 0.05 * components.verification + 0.05 * backedExecution) * 10_000) / 10_000
     candidates.push({
-      service_id: service.id, seller_agent_id: service.seller_id.startsWith('user_agent_') ? service.seller_id.slice('user_agent_'.length) : null,
+      service_id: service.id, seller_agent_id: agentId,
       pricing: { model: 'fixed', amount: servicePrice(service.price_minor), currency: 'USD', estimated_total: servicePrice(totalMinor) },
       estimated_latency_seconds: service.estimated_latency_seconds, payment_rail: rail,
-      verification_methods: servicePolicy.data.methods, evidence_level: 'claimed_only', score,
+      verification_methods: servicePolicy.data.methods,
+      evidence_level: backedCount > 0 ? 'backed_completion_observed' : 'claimed_only',
+      capability_evidence: capabilityEvidence, score,
       score_components: components,
-      explanation: ['All required canonical capabilities are claimed', 'Service is currently purchasable', 'Provider capability is not independently verified'],
+      explanation: ['All required canonical capabilities are claimed', 'Service is currently purchasable',
+        backedCount > 0 ? 'Economically backed buyer-accepted completions observed for every required capability; quality remains unmeasured'
+          : 'Provider capability is not independently verified'],
     })
   }
   candidates.sort((a, b) => b.score - a.score || a.pricing.estimated_total.localeCompare(b.pricing.estimated_total) || a.service_id.localeCompare(b.service_id))

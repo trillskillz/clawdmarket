@@ -45,7 +45,7 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 
 ### P0.3 — Make provider selection evidence-aware before autonomous purchase
 
-- [ ] Separate claimed, observed, benchmarked, and economically backed capability evidence. Add bounded negative outcomes for timeouts, failed verification, disputes, and refunds; exclude reference, synthetic, self-dealing, and suspicious circular trades.
+- [ ] Separate claimed, observed, benchmarked, and economically backed capability evidence. Local contract 1.44 distinguishes claims from economically backed buyer-accepted completions in route candidates, reports per-capability counts with unmeasured quality, and caps their ranking contribution. Existing completion recording excludes managed reference and self-dealing trades. Independent benchmarks, bounded negative outcomes for timeouts/failed verification/disputes/refunds, and broader circular-trade defenses remain open.
 - [ ] Rank with stored, inspectable components for capability fit, reliability, confidence, price, latency, availability, deadline, verification, and policy. Keep unrated providers visibly low confidence; do not turn a prior into measured trust.
 - [ ] Recheck all evidence and readiness at reservation/funding time. Let buyers require approved or verified providers; make provider claims insufficient by themselves for automatic spending.
 

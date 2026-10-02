@@ -402,3 +402,54 @@ test('max_attempts one does not reserve a fallback and a checking attempt resume
   assert.equal((await db.select().from(schema.route_attempts).where(eq(schema.route_attempts.route_id, route.id))).length, 1)
   assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, secondId))).length, 0)
 })
+
+test('planning separates provider claims from backed completion evidence without claiming measured quality', async () => {
+  const agentId = `evidence-seller-${crypto.randomUUID()}`
+  const buyerId = `evidence-buyer-${crypto.randomUUID()}`
+  const sellerId = `user_agent_${agentId}`
+  const serviceId = crypto.randomUUID()
+  await db.insert(schema.users).values({ id: buyerId, name: 'Evidence buyer', email: `${buyerId}@test.invalid`,
+    password_hash: 'unused', role: 'human' })
+  await db.insert(schema.users).values({ id: sellerId, name: 'Evidence seller', email: `${agentId}@test.invalid`,
+    password_hash: 'unused', role: 'agent' })
+  await db.insert(schema.agents).values({ id: agentId, name: 'Evidence seller', description: 'Independent provider',
+    capabilities: '["translation"]', endpoint: 'https://example.invalid', owner_address: '', api_key: 'unused' })
+  await db.insert(schema.payout_addresses).values({ user_id: sellerId, address: treasury.address })
+  await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: sellerId,
+    title: 'Document translation', description: 'Translate a document with a saved deliverable.',
+    capabilities: '["translation"]', price_minor: 100, status: 'active', estimated_latency_seconds: 120 })
+  const planFor = async () => {
+    const response = await planRoute(request('/api/routes/plan', buyerId, 'POST', {
+      client_reference: `evidence-plan-${crypto.randomUUID()}`, objective: 'Translate this document for review',
+      required_capabilities: ['translation'], max_budget: { amount: '2.00', currency: 'USD' },
+    }))
+    assert.equal(response.status, 201)
+    return (await response.json()).route.candidates.find((candidate: { service_id: string }) => candidate.service_id === serviceId)
+  }
+  const claimed = await planFor()
+  assert.equal(claimed.evidence_level, 'claimed_only')
+  assert.equal(claimed.score_components.backed_execution, 0)
+  assert.deepEqual(claimed.capability_evidence, [{ capability_id: 'translation', accepted_completion_count: 0, measured_quality_score: null }])
+
+  const [listing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
+    title: 'Historical translation', description: 'Completed translated document.', price_bankr: 1, status: 'sold' }).returning()
+  const [trade] = await db.insert(schema.trades).values({ listing_id: listing.id, buyer_id: 'other-buyer',
+    seller_id: sellerId, amount: 1, fee: 0.05, status: 'completed', payment_rail: 'ledger' }).returning()
+  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: serviceId,
+    listing_id: listing.id, trade_id: trade.id, buyer_id: 'other-buyer', client_reference: crypto.randomUUID(),
+    objective: 'Translate a historical document', price_minor: 100, payment_rail: 'ledger', state: 'completed' })
+  const [delivery] = await db.insert(schema.trade_deliveries).values({ trade_id: trade.id, submitter_id: sellerId,
+    summary: 'Translated the document.', content_hash: crypto.randomUUID(), verification: '{}' }).returning()
+  await db.insert(schema.verification_results).values({ id: crypto.randomUUID(), trade_id: trade.id,
+    delivery_id: delivery.id, content_hash: delivery.content_hash, method: 'buyer_review', verifier: 'buyer',
+    version: '1', status: 'passed', evidence_json: '{}' })
+  await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: trade.id })
+  const { recordCapabilityCompletion } = await import('@/lib/capability-performance')
+  await db.transaction((tx) => recordCapabilityCompletion(tx, trade))
+  const observed = await planFor()
+  assert.equal(observed.evidence_level, 'backed_completion_observed')
+  assert.deepEqual(observed.capability_evidence, [{ capability_id: 'translation', accepted_completion_count: 1, measured_quality_score: null }])
+  assert.equal(observed.score_components.backed_execution, 0.2)
+  assert.ok(observed.score > claimed.score)
+  assert.match(observed.explanation.at(-1), /quality remains unmeasured/)
+})

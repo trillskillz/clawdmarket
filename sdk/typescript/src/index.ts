@@ -22,9 +22,10 @@ export type RouteCandidate = {
   estimated_latency_seconds: number | null
   payment_rail: 'mpp' | 'evm'
   verification_methods: string[]
-  evidence_level: 'claimed_only'
+  evidence_level: 'claimed_only' | 'backed_completion_observed'
+  capability_evidence: { capability_id: string; accepted_completion_count: number; measured_quality_score: null }[]
   score: number
-  score_components: Record<'capability_fit' | 'price' | 'latency' | 'capacity' | 'verification', number>
+  score_components: Record<'capability_fit' | 'price' | 'latency' | 'capacity' | 'verification' | 'backed_execution', number>
   explanation: string[]
 }
 
