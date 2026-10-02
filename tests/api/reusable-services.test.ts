@@ -19,6 +19,8 @@ let getService: typeof import('@/app/api/services/[id]/route').GET
 let changeService: typeof import('@/app/api/services/[id]/route').PATCH
 let listServices: typeof import('@/app/api/services/route').GET
 let getWorkOrder: typeof import('@/app/api/trades/[id]/work-order/route').GET
+let getServiceOrder: typeof import('@/app/api/service-orders/[id]/route').GET
+let getRoute: typeof import('@/app/api/routes/[id]/route').GET
 let startWorkOrder: typeof import('@/app/api/trades/[id]/work-order/start/route').POST
 let listTrades: typeof import('@/app/api/trades/route').GET
 const sellerId = 'reusable-seller'
@@ -49,6 +51,8 @@ before(async () => {
   changeService = (await import('@/app/api/services/[id]/route')).PATCH
   listServices = (await import('@/app/api/services/route')).GET
   getWorkOrder = (await import('@/app/api/trades/[id]/work-order/route')).GET
+  getServiceOrder = (await import('@/app/api/service-orders/[id]/route')).GET
+  getRoute = (await import('@/app/api/routes/[id]/route')).GET
   startWorkOrder = (await import('@/app/api/trades/[id]/work-order/start/route')).POST
   listTrades = (await import('@/app/api/trades/route')).GET
   await db.insert(schema.users).values([
@@ -69,6 +73,12 @@ function request(path: string, userId: string, body: unknown) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token({ userId, email: `${userId}@test.invalid`, role: 'human' })}` },
     body: JSON.stringify(body),
+  })
+}
+
+function ownedRead(path: string, userId: string) {
+  return new NextRequest(`http://localhost${path}`, {
+    headers: { Authorization: `Bearer ${token({ userId, email: `${userId}@test.invalid`, role: 'human' })}` },
   })
 }
 
@@ -433,21 +443,48 @@ test('expired provider lease preserves escrow and capacity without dispatching a
   const created = await order(offered.id, `lease-silence-${crypto.randomUUID()}`)
   assert.equal(created.status, 201)
   const { trade, order: savedOrder } = await created.json()
+  const routeId = crypto.randomUUID()
+  await db.insert(schema.route_plans).values({ id: routeId, buyer_id: buyerId,
+    client_reference: `lease-route-${routeId}`, objective: 'Review a funded repository change',
+    required_capabilities: '["code-review"]', max_budget_minor: 1050, deadline_seconds: 600,
+    state: 'funded', service_order_id: savedOrder.id, expires_at: new Date(Date.now() + 300_000) })
+  const routeParams = { params: Promise.resolve({ id: routeId }) }
+  const orderParams = { params: Promise.resolve({ id: savedOrder.id as string }) }
+  const buyerRoute = () => getRoute(ownedRead(`/api/routes/${routeId}`, buyerId), routeParams)
+  const buyerOrder = () => getServiceOrder(ownedRead(`/api/service-orders/${savedOrder.id}`, buyerId), orderParams)
+  assert.equal((await getRoute(ownedRead(`/api/routes/${routeId}`, 'reusable-outsider'), routeParams)).status, 404)
+  assert.equal((await getServiceOrder(ownedRead(`/api/service-orders/${savedOrder.id}`, 'reusable-outsider'), orderParams)).status, 404)
   const { advanceServiceOrder } = await import('@/lib/service-order-state')
   const { queueFundedWorkOrder } = await import('@/lib/service-order-dispatch')
   await db.transaction(async (tx) => {
     await tx.update(schema.trades).set({ status: 'escrow_held', funded_at: new Date().toISOString() })
       .where(eq(schema.trades.id, trade.id))
     await advanceServiceOrder(tx, trade.id, 'funded')
+  })
+  const missing = await buyerRoute()
+  assert.equal(missing.status, 200)
+  assert.deepEqual((await missing.json()).provider_execution, {
+    attempt_id: null, state: 'missing', accepted_at: null, heartbeat_at: null,
+    lease_expires_at: null, completed_at: null, lease_overdue: false,
+    attention_required: true, attention_reason: 'attempt_missing',
+    reconciliation: { state: 'dispute_available', action: { method: 'POST', url: `/api/trades/${trade.id}/dispute` } },
+    automatic_retry_allowed: false,
+  })
+  await db.transaction(async (tx) => {
     await queueFundedWorkOrder(tx, trade.id, sellerId)
     await queueFundedWorkOrder(tx, trade.id, sellerId)
   })
   const [attempt] = await db.select().from(schema.service_execution_attempts)
     .where(eq(schema.service_execution_attempts.order_id, savedOrder.id))
+  assert.equal((await (await buyerOrder()).json()).provider_execution.state, 'queued')
   const { changeServiceExecutionAttempt, expireServiceExecutionAttempts } = await import('@/lib/service-execution-attempt')
   await changeServiceExecutionAttempt(trade.id, sellerId, attempt.id, 'accept')
   await db.update(schema.service_execution_attempts).set({ lease_expires_at: new Date(Date.now() - 1_000) })
     .where(eq(schema.service_execution_attempts.id, attempt.id))
+  const overdue = (await (await buyerRoute()).json()).provider_execution
+  assert.equal(overdue.state, 'accepted')
+  assert.equal(overdue.lease_overdue, true)
+  assert.equal(overdue.attention_reason, 'lease_expired')
   await assert.rejects(changeServiceExecutionAttempt(trade.id, sellerId, attempt.id, 'accept'),
     (error: any) => error.code === 'WORK_ATTEMPT_LEASE_EXPIRED')
   assert.equal((await cancelTrade(request(`/api/trades/${trade.id}/cancel`, buyerId, {}),
@@ -457,6 +494,19 @@ test('expired provider lease preserves escrow and capacity without dispatching a
   const [expired] = await db.select().from(schema.service_execution_attempts)
     .where(eq(schema.service_execution_attempts.id, attempt.id))
   assert.equal(expired.state, 'expired')
+  const expiredRoute = await buyerRoute()
+  assert.equal(expiredRoute.headers.get('cache-control'), 'no-store')
+  const routeSnapshot = await expiredRoute.json()
+  assert.equal(routeSnapshot.provider_execution.state, 'expired')
+  assert.equal(routeSnapshot.provider_execution.attention_required, true)
+  assert.equal(routeSnapshot.provider_execution.attention_reason, 'lease_expired')
+  assert.deepEqual(routeSnapshot.provider_execution.reconciliation,
+    { state: 'dispute_available', action: { method: 'POST', url: `/api/trades/${trade.id}/dispute` } })
+  assert.equal(routeSnapshot.provider_execution.automatic_retry_allowed, false)
+  assert.equal(routeSnapshot.payment_exposure.state, 'funded')
+  const orderSnapshot = await buyerOrder()
+  assert.equal(orderSnapshot.headers.get('cache-control'), 'no-store')
+  assert.equal((await orderSnapshot.json()).provider_execution.attention_reason, 'lease_expired')
   const [orderAfter] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
   const [tradeAfter] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
   const [definition] = await db.select().from(schema.service_definitions)
@@ -468,6 +518,26 @@ test('expired provider lease preserves escrow and capacity without dispatching a
     .where(eq(schema.service_execution_attempts.order_id, savedOrder.id))).length, 1)
   await assert.rejects(changeServiceExecutionAttempt(trade.id, sellerId, attempt.id, 'heartbeat'),
     (error: any) => error.code === 'WORK_ATTEMPT_LEASE_EXPIRED')
+  const { POST: dispute } = await import('@/app/api/trades/[id]/dispute/route')
+  const disputePath = `/api/trades/${trade.id}/dispute`
+  assert.equal((await dispute(request(disputePath, 'reusable-outsider', { reason: 'Provider lease expired' }),
+    { params: Promise.resolve({ id: trade.id }) })).status, 403)
+  const frozen = await dispute(request(disputePath, buyerId, { reason: 'Provider lease expired before delivery' }),
+    { params: Promise.resolve({ id: trade.id }) })
+  assert.equal(frozen.status, 200)
+  const [disputedOrder] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  const [disputedRoute] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, routeId))
+  const [disputedTrade] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  const [heldCapacity] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(disputedOrder.state, 'disputed')
+  assert.equal(disputedRoute.state, 'disputed')
+  assert.equal(disputedTrade.status, 'disputed')
+  assert.equal(heldCapacity.active_orders, 1)
+  assert.equal(disputedOrder.capacity_released_at, null)
+  const frozenSnapshot = await buyerRoute()
+  assert.equal((await frozenSnapshot.json()).provider_execution.reconciliation.state, 'dispute_open')
+  assert.equal((await dispute(request(disputePath, buyerId, { reason: 'Replayed dispute' }),
+    { params: Promise.resolve({ id: trade.id }) })).status, 400)
 })
 
 test('replayed work notice is suppressed after provider decline without changing funds', async () => {
@@ -506,6 +576,9 @@ test('replayed work notice is suppressed after provider decline without changing
 
   const { changeServiceExecutionAttempt } = await import('@/lib/service-execution-attempt')
   await changeServiceExecutionAttempt(trade.id, sellerId, attemptId, 'decline')
+  const declinedOrder = await getServiceOrder(ownedRead(`/api/service-orders/${savedOrder.id}`, buyerId),
+    { params: Promise.resolve({ id: savedOrder.id }) })
+  assert.equal((await declinedOrder.json()).provider_execution.attention_reason, 'provider_declined')
   const replayWebhookId = `late-work-hook-${crypto.randomUUID()}`
   await db.insert(schema.webhooks).values({ id: replayWebhookId, agent_id: sellerId,
     url: 'https://provider.example.invalid/late-work', secret_hash: 'test-hash',

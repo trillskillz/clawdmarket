@@ -1,9 +1,9 @@
 import 'server-only'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, gte, inArray, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { normalizeCapability } from '@/lib/capabilities'
-import { service_definitions, route_plans } from '@/lib/schema'
+import { capability_performance_events, route_plans, service_definitions, service_execution_attempts, service_orders, trades } from '@/lib/schema'
 import { jsonObject, money, servicePrice } from '@/lib/service-definitions'
 import { getPaymentReadiness } from '@/lib/payment-config'
 import { getNewPaymentControl } from '@/lib/payment-control'
@@ -44,9 +44,11 @@ export type RouteCandidate = {
   estimated_latency_seconds: number | null
   payment_rail: MarketplaceRail
   verification_methods: VerificationPolicy['methods']
-  evidence_level: 'claimed_only'
+  evidence_level: 'claimed_only' | 'backed_completion_observed'
+  capability_evidence: { capability_id: string; accepted_completion_count: number; measured_quality_score: null }[]
+  provider_failures: { provider_declines_90d: number; lease_expiries_90d: number }
   score: number
-  score_components: { capability_fit: number; price: number; latency: number; capacity: number; verification: number }
+  score_components: { capability_fit: number; price: number; latency: number; capacity: number; verification: number; backed_execution: number; provider_failure_penalty: number }
   explanation: string[]
 }
 
@@ -61,6 +63,30 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       AND a.status = 'active' AND a.visibility = 'public' AND a.archived_at IS NULL))`,
   )).orderBy(service_definitions.id).limit(501)
   const truncated = rows.length > 500
+  const agentIds = [...new Set(rows.filter((row) => row.seller_id.startsWith('user_agent_'))
+    .map((row) => row.seller_id.slice('user_agent_'.length)))]
+  const performanceRows = agentIds.length ? await db.select({ agentId: capability_performance_events.seller_agent_id,
+    capabilityId: capability_performance_events.capability_id, count: sql<number>`COUNT(*)` })
+    .from(capability_performance_events)
+    .where(and(inArray(capability_performance_events.seller_agent_id, agentIds),
+      inArray(capability_performance_events.capability_id, capabilities)))
+    .groupBy(capability_performance_events.seller_agent_id, capability_performance_events.capability_id) : []
+  const backedCounts = new Map(performanceRows.map((row) => [`${row.agentId}:${row.capabilityId}`, Number(row.count)]))
+  const cutoff = new Date(Date.now() - 90 * 24 * 3600_000)
+  const failureRows = rows.length ? await db.select({ serviceId: service_orders.service_id,
+    state: service_execution_attempts.state, count: sql<number>`COUNT(*)` })
+    .from(service_execution_attempts)
+    .innerJoin(service_orders, eq(service_orders.id, service_execution_attempts.order_id))
+    .innerJoin(trades, eq(trades.id, service_orders.trade_id))
+    .innerJoin(service_definitions, eq(service_definitions.id, service_orders.service_id))
+    .where(and(inArray(service_orders.service_id, rows.slice(0, 500).map((row) => row.id)),
+      inArray(service_execution_attempts.state, ['declined', 'expired']),
+      gte(service_execution_attempts.created_at, cutoff),
+      sql`${trades.funded_at} IS NOT NULL`,
+      ne(trades.buyer_id, trades.seller_id),
+      sql`${trades.id} NOT GLOB 'trade_reference_*'`))
+    .groupBy(service_orders.service_id, service_execution_attempts.state) : []
+  const failureCounts = new Map(failureRows.map((row) => [`${row.serviceId}:${row.state}`, Number(row.count)]))
   const readiness = getPaymentReadiness()
   const paymentControl = await getNewPaymentControl()
   const buyerPolicy = await loadBuyerSpendPolicy(buyerId)
@@ -103,15 +129,33 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       ? Math.max(0, 1 - service.estimated_latency_seconds / input.deadline_seconds)
       : 0.5
     const capacityScore = (service.max_concurrency - service.active_orders) / service.max_concurrency
-    const components = { capability_fit: 1, price: priceScore, latency: latencyScore, capacity: capacityScore, verification: 1 }
-    const score = Math.round((0.45 * components.capability_fit + 0.25 * priceScore + 0.15 * latencyScore + 0.1 * capacityScore + 0.05) * 10_000) / 10_000
+    const agentId = service.seller_id.startsWith('user_agent_') ? service.seller_id.slice('user_agent_'.length) : null
+    const capabilityEvidence = capabilities.map((capability) => ({ capability_id: capability,
+      accepted_completion_count: agentId ? backedCounts.get(`${agentId}:${capability}`) || 0 : 0,
+      measured_quality_score: null as null }))
+    const backedCount = Math.min(...capabilityEvidence.map((item) => item.accepted_completion_count))
+    const backedExecution = Math.min(backedCount, 5) / 5
+    const providerFailures = { provider_declines_90d: failureCounts.get(`${service.id}:declined`) || 0,
+      lease_expiries_90d: failureCounts.get(`${service.id}:expired`) || 0 }
+    const providerFailurePenalty = Math.min(providerFailures.provider_declines_90d + providerFailures.lease_expiries_90d, 5) / 5
+    const components = { capability_fit: 1, price: priceScore, latency: latencyScore, capacity: capacityScore,
+      verification: 1, backed_execution: backedExecution, provider_failure_penalty: providerFailurePenalty }
+    const score = Math.round((0.4 * components.capability_fit + 0.25 * priceScore + 0.15 * latencyScore
+      + 0.1 * capacityScore + 0.05 * components.verification + 0.05 * backedExecution
+      - 0.05 * providerFailurePenalty) * 10_000) / 10_000
     candidates.push({
-      service_id: service.id, seller_agent_id: service.seller_id.startsWith('user_agent_') ? service.seller_id.slice('user_agent_'.length) : null,
+      service_id: service.id, seller_agent_id: agentId,
       pricing: { model: 'fixed', amount: servicePrice(service.price_minor), currency: 'USD', estimated_total: servicePrice(totalMinor) },
       estimated_latency_seconds: service.estimated_latency_seconds, payment_rail: rail,
-      verification_methods: servicePolicy.data.methods, evidence_level: 'claimed_only', score,
+      verification_methods: servicePolicy.data.methods,
+      evidence_level: backedCount > 0 ? 'backed_completion_observed' : 'claimed_only',
+      capability_evidence: capabilityEvidence, provider_failures: providerFailures, score,
       score_components: components,
-      explanation: ['All required canonical capabilities are claimed', 'Service is currently purchasable', 'Provider capability is not independently verified'],
+      explanation: ['All required canonical capabilities are claimed', 'Service is currently purchasable',
+        backedCount > 0 ? 'Economically backed buyer-accepted completions observed for every required capability; quality remains unmeasured'
+          : 'Provider capability is not independently verified',
+        providerFailurePenalty > 0 ? 'Funded provider declines or lease expiries observed in the past 90 days; penalty is capped'
+          : 'No recent provider decline or lease expiry observed; reliability remains unmeasured'],
     })
   }
   candidates.sort((a, b) => b.score - a.score || a.pricing.estimated_total.localeCompare(b.pricing.estimated_total) || a.service_id.localeCompare(b.service_id))

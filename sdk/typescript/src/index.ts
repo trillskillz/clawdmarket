@@ -22,9 +22,11 @@ export type RouteCandidate = {
   estimated_latency_seconds: number | null
   payment_rail: 'mpp' | 'evm'
   verification_methods: string[]
-  evidence_level: 'claimed_only'
+  evidence_level: 'claimed_only' | 'backed_completion_observed'
+  capability_evidence: { capability_id: string; accepted_completion_count: number; measured_quality_score: null }[]
+  provider_failures: { provider_declines_90d: number; lease_expiries_90d: number }
   score: number
-  score_components: Record<'capability_fit' | 'price' | 'latency' | 'capacity' | 'verification', number>
+  score_components: Record<'capability_fit' | 'price' | 'latency' | 'capacity' | 'verification' | 'backed_execution' | 'provider_failure_penalty', number>
   explanation: string[]
 }
 
@@ -56,9 +58,24 @@ export type PaymentExposure = {
   retry_blocking_reason: string
 }
 
-export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null }
+export type ProviderExecution = {
+  attempt_id: string | null
+  state: 'not_started' | 'missing' | 'queued' | 'accepted' | 'declined' | 'expired' | 'delivered'
+  accepted_at: string | null
+  heartbeat_at: string | null
+  lease_expires_at: string | null
+  completed_at: string | null
+  lease_overdue: boolean
+  attention_required: boolean
+  attention_reason: 'attempt_missing' | 'provider_declined' | 'lease_expired' | null
+  reconciliation: { state: 'dispute_available'; action: { method: 'POST'; url: string } }
+    | { state: 'dispute_open' | 'resolved'; action: null } | null
+  automatic_retry_allowed: false
+}
+
+export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null; provider_execution: ProviderExecution | null }
 export type PlannedRoute = { route: RoutePlan; idempotent: boolean; planning?: { examined: number; truncated: boolean; candidate_count: number; funds_moved: false } }
-export type ExecutedRoute = RouteSnapshot & {
+export type ExecutedRoute = Pick<RouteSnapshot, 'route' | 'attempts' | 'payment_exposure'> & {
   order: { id: string; service_id: string; trade_id: string; [key: string]: unknown }
   trade: { id: string; status: string; payment_rail: string; [key: string]: unknown }
   checkout: Record<string, unknown> | null
