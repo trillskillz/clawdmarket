@@ -58,6 +58,7 @@ required_files=(
   "lib/provider-acknowledgment.ts"
   "migrations/2026-10-02-provider-acknowledgment-deadline.sql"
   "lib/route-planning.ts"
+  "lib/route-service-eligibility.ts"
   "lib/route-attempts.ts"
   "lib/route-payment-exposure.ts"
   "lib/route-inspection.ts"

@@ -57,6 +57,12 @@ The seller must accept or decline before the deadline. Late acknowledgment retur
 
 Acceptance keeps the separate ten-minute heartbeat lease; passing the original acknowledgment deadline does not expire accepted work. Timeout observation leaves the order and route funded, holds escrow and capacity, and advertises the existing buyer dispute action. A dispute interrupts a queued attempt before its deadline and preserves an already overdue acknowledgment as `acknowledgment_timed_out`. Conditional observer writes preserve acceptance or terminal state changes committed by another worker. Operator health exposes aggregate `acknowledgment_overdue_count` and `acknowledgment_timed_out_count` for funded work awaiting reconciliation. Acknowledgment timeouts are distinct from the existing lease-expiry ranking signal.
 
+## Reservation eligibility snapshot
+
+Contract 1.62 compares seller identity, capabilities, and estimated latency in the capacity update alongside price, execution mode, provider protocol, schemas, and verification policy. A change after validation returns `SERVICE_CAPACITY_OR_PRICE_CHANGED` (409) without creating an economic order. Nullable latency is compared in both directions. Exact existing checkout replay still recovers its original trade and seller after a definition changes.
+
+For routed orders, reservation checks the saved required capabilities, verification methods and source minimum, and latency/deadline inside the transaction. A provider identity change after route preflight or an incompatible route contract returns `ROUTE_STALE_PROVIDER`; another saved provider can be tried only before checkout exists. Malformed stored capability arrays are ineligible for planning and execution.
+
 ## Buyer reservation policy
 
 Contract 1.61 checks any saved spending policy by the authenticated buyer ID inside the capacity/order transaction, including account buyers without an agent identity. Direct service orders and saved route execution enforce provider, capability, payment rail, verification, approval, and per-execution/daily/monthly restrictions. Server totals include the fee; pending checkouts and cancelled external checkouts awaiting refund reconciliation count against the budget. A rejected reservation rolls back capacity and creates no listing, trade, or order.

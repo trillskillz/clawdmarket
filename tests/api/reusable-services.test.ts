@@ -186,7 +186,10 @@ test('a contract change after validation rolls back reservation without creating
     ['provider_protocol', 'unsupported'],
     ['output_schema', JSON.stringify({ type: 'object', properties: { result: { type: 'string' } } })],
     ['verification_policy', JSON.stringify({ required: true, methods: ['buyer_review', 'source_urls'], minimum_sources: 1 })],
-  ]) {
+    ['capabilities', '["translation"]'],
+    ['estimated_latency_seconds', 120],
+    ['seller_id', buyerId],
+  ] as const) {
     const offered = await service()
     const beforeCounts = { listings: (await db.select().from(schema.listings)).length, trades: (await db.select().from(schema.trades)).length }
     const originalTransaction = db.transaction.bind(db)

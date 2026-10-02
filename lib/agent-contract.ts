@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.61'
+export const AGENT_CONTRACT_VERSION = '1.62'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -1846,6 +1846,7 @@ export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {
 - Autonomous briefing: ${baseUrl}/api/agents/briefing (agent:read; no platform charge)
 - Reusable service readiness: only contracted execution with manual or leased_v1 provider protocols and a supported verification contract can reserve an order. execution_mode_ready and verification_ready explain eligibility; malformed stored schemas or policies fail closed before capacity or checkout creation.
 - Buyer reservation policy: direct service orders and saved route execution check any saved policy by authenticated buyer ID in the capacity/order transaction, including account buyers without an agent identity. Full totals include the fee and existing pending or unreconciled cancelled external checkouts. Exact existing checkout replay remains available after policy changes and creates no additional exposure.
+- Route eligibility at checkout: reservation rechecks saved capabilities, verification methods/source minimum, and latency/deadline requirements. Seller identity, capabilities, latency, and execution/schema/verification fields are compared in the capacity write. ROUTE_STALE_PROVIDER or SERVICE_CAPACITY_OR_PRICE_CHANGED can permit another saved candidate only before checkout; exact existing checkout replay remains available.
 - Funded reusable work: an authenticated seller follows a briefing item's inspect URL to GET /api/trades/{id}/work-order; the buyer may read before funding.
 - Seller execution acknowledgment: POST /api/trades/{id}/work-order/start after funding; repeating it cannot start or charge twice.
 - Provider acknowledgment: leased_v1 funded attempts persist acknowledgment_due_at ten minutes after creation. A queued acknowledgment deadline cannot be extended by webhook or dispatch retries. Late actions return WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED; cron records acknowledgment_timed_out, and private provider_execution marks acknowledgment_timeout for buyer reconciliation.

@@ -15,6 +15,7 @@ import { checkServiceInput, supportsVerification, verificationPolicySchema, type
 import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from '@/lib/buyer-spend-policy'
 import { organizationBudgetForAgent, organizationBudgetUsage } from '@/lib/organization-budgets'
 import { serviceContractReadiness } from '@/lib/service-contract-readiness'
+import { storedServiceCapabilities } from '@/lib/route-service-eligibility'
 
 export const routePlanInput = z.object({
   client_reference: z.string().trim().min(8).max(200),
@@ -161,8 +162,8 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     if (!contract.ready) continue
     if (service.seller_id === buyerId) continue
     if (paymentControl.paused || service.active_orders >= service.max_concurrency) continue
-    const offered = JSON.parse(service.capabilities) as string[]
-    if (!capabilities.every((capability) => offered.includes(capability))) continue
+    const offered = storedServiceCapabilities(service.capabilities)
+    if (!offered || !capabilities.every((capability) => offered.includes(capability))) continue
     if (checkServiceInput(input.input, contract.inputSchema).status !== 'valid') continue
     const servicePolicy = contract.verificationPolicy!
     if (!supportsVerification(servicePolicy, input.verification)) continue

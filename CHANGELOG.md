@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Transactional route eligibility (contract 1.62)
+- Saved route capability, verification/source minimum, and latency/deadline checks inside reservation, with seller identity, capabilities, and nullable latency bound to the capacity write.
+- Rejection and bounded pre-checkout fallback for provider changes after preflight; malformed capability records are excluded from planning, and exact existing checkout replay retains its original economic order.
+
 ### Account buyer reservation policy (contract 1.61)
 - Transactional enforcement of saved buyer policies for direct service orders and saved route execution when the authenticated buyer has no agent identity; agent deployment and organization checks retain their existing path.
 - Coverage for policy changes, full totals, concurrent service reservations, cross-worker retry exposure, cancelled checkout budgets, and exact checkout replay after policy changes.
