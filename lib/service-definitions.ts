@@ -37,6 +37,7 @@ export const serviceDefinitionInput = z.object({
   estimated_latency_seconds: z.number().int().min(1).max(30 * 24 * 3600).nullable().optional(),
   max_concurrency: z.number().int().min(1).max(1_000).default(1),
   execution_mode: z.literal('contracted').default('contracted'),
+  provider_protocol: z.enum(['manual', 'leased_v1']).default('manual'),
   verification_policy: verificationPolicySchema.default({ required: true, methods: ['buyer_review'] }),
   status: z.enum(['draft', 'active']).default('draft'),
 }).strict().superRefine((value, context) => {
@@ -85,6 +86,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   let inputSchema: unknown
   try { inputSchema = JSON.parse(service.input_schema) } catch { inputSchema = null }
   const inputReady = checkServiceInput({}, inputSchema).status !== 'unsupported'
+  const protocolReady = service.provider_protocol === 'manual' || service.provider_protocol === 'leased_v1'
   const parsedPolicy = verificationPolicySchema.safeParse(JSON.parse(service.verification_policy))
   const verificationReady = parsedPolicy.success && (!parsedPolicy.data.methods.includes('schema') || outputSchemaV1.safeParse(JSON.parse(service.output_schema)).success)
   const paymentReady = !paymentControl.paused && (rails.ledger.enabled || Boolean(payoutAddress && (rails.mpp.enabled || rails.evm.enabled)))
@@ -94,6 +96,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   if (!sellerVisible) reasons.push('SELLER_NOT_PUBLIC')
   if (!capacityAvailable) reasons.push('CAPACITY_FULL')
   if (!inputReady) reasons.push('INPUT_SCHEMA_UNSUPPORTED')
+  if (!protocolReady) reasons.push('PROVIDER_PROTOCOL_UNSUPPORTED')
   if (!verificationReady) reasons.push('VERIFICATION_UNSUPPORTED')
   if (paymentControl.paused) reasons.push('PAYMENTS_PAUSED')
   else if (!paymentReady) reasons.push(payoutAddress ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED')
@@ -110,6 +113,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
     max_concurrency: service.max_concurrency,
     current_capacity: Math.max(0, service.max_concurrency - service.active_orders),
     execution_mode: service.execution_mode,
+    provider_protocol: service.provider_protocol,
     verification_policy: JSON.parse(service.verification_policy),
     status: service.status,
     readiness: {
@@ -118,6 +122,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
       payment_ready: paymentReady,
       capacity_available: capacityAvailable,
       input_ready: inputReady,
+      provider_protocol_ready: protocolReady,
       verification_ready: verificationReady,
       blocking_reasons: reasons,
     },

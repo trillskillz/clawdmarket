@@ -336,6 +336,7 @@ export const service_definitions = sqliteTable('service_definitions', {
   max_concurrency: integer('max_concurrency').notNull().default(1),
   active_orders: integer('active_orders').notNull().default(0),
   execution_mode: text('execution_mode', { enum: ['contracted'] }).notNull().default('contracted'),
+  provider_protocol: text('provider_protocol', { enum: ['manual', 'leased_v1'] }).notNull().default('manual'),
   verification_policy: text('verification_policy').notNull().default('{}'),
   status: text('status', { enum: ['draft', 'active', 'paused', 'unavailable', 'archived'] }).notNull().default('draft'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
@@ -426,6 +427,21 @@ export const tasks = sqliteTable('tasks', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   expiresAt: text('expires_at').notNull().default(sql`(datetime('now', '+7 days'))`),
 });
+
+/** One provider execution attempt per funded service order; retries require a new economic order. */
+export const service_execution_attempts = sqliteTable('service_execution_attempts', {
+  id: text('id').primaryKey(),
+  order_id: text('order_id').notNull().unique().references(() => service_orders.id, { onDelete: 'restrict' }),
+  state: text('state', { enum: ['queued', 'accepted', 'declined', 'expired', 'delivered'] }).notNull().default('queued'),
+  accepted_at: integer('accepted_at', { mode: 'timestamp' }),
+  heartbeat_at: integer('heartbeat_at', { mode: 'timestamp' }),
+  lease_expires_at: integer('lease_expires_at', { mode: 'timestamp' }),
+  completed_at: integer('completed_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  index('service_execution_attempts_state_lease_idx').on(table.state, table.lease_expires_at),
+]);
 
 export const route_plans = sqliteTable('route_plans', {
   id: text('id').primaryKey(),
@@ -518,6 +534,15 @@ export const bids = sqliteTable('bids', {
   counterOfferMessage: text('counter_offer_message'),
   counterOfferStatus: text('counter_offer_status').notNull().default('none'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
+/** Last observed worker run, used only for operator health inspection. */
+export const worker_heartbeats = sqliteTable('worker_heartbeats', {
+  worker_name: text('worker_name').primaryKey(),
+  last_started_at: integer('last_started_at', { mode: 'timestamp' }),
+  last_succeeded_at: integer('last_succeeded_at', { mode: 'timestamp' }),
+  last_failed_at: integer('last_failed_at', { mode: 'timestamp' }),
+  last_outcome: text('last_outcome', { enum: ['success', 'failure'] }),
 });
 
 export const buyer_spend_policies = sqliteTable('buyer_spend_policies', {
@@ -775,6 +800,7 @@ export const webhook_deliveries = sqliteTable('webhook_deliveries', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   next_attempt_at: integer('next_attempt_at', { mode: 'timestamp' }),
   locked_at: integer('locked_at', { mode: 'timestamp' }),
+  suppressed_at: integer('suppressed_at', { mode: 'timestamp' }),
   last_error: text('last_error'),
 }, (table) => [
   index('webhook_deliveries_retry_idx').on(table.success, table.next_attempt_at),

@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { loadAgentTrust } from '@/lib/agent-trust'
 import { internalErrorResponse } from '@/lib/api-error'
 import { loadCapabilityPerformance } from '@/lib/capability-performance'
+import { canViewAgentProfile } from '@/lib/agent-profile-visibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,11 +14,14 @@ export async function GET(
   try {
     const { id } = await params
     const result = await (db as any).$client.execute({
-      sql: 'SELECT id, created_at, avg_rating, rating_count FROM agents WHERE id = ? LIMIT 1',
+      sql: 'SELECT id, created_at, avg_rating, rating_count, visibility, archived_at FROM agents WHERE id = ? LIMIT 1',
       args: [id],
     })
     const agent = result?.rows?.[0] as any
     if (!agent) {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+    if (!await canViewAgentProfile(req, id, String(agent.visibility || 'public'), agent.archived_at)) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
 

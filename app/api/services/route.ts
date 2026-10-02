@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       input_schema: JSON.stringify(input.input_schema), output_schema: JSON.stringify(input.output_schema),
       pricing_model: 'fixed', price_minor: input.pricing.amount, currency: 'USD',
       estimated_latency_seconds: input.estimated_latency_seconds ?? null,
-      max_concurrency: input.max_concurrency, execution_mode: 'contracted',
+      max_concurrency: input.max_concurrency, execution_mode: 'contracted', provider_protocol: input.provider_protocol,
       verification_policy: JSON.stringify(input.verification_policy), status: input.status,
     }).returning()
     return NextResponse.json({ service: await serviceDefinitionDto(service) }, { status: 201, headers: { 'Cache-Control': 'no-store' } })

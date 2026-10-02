@@ -25,6 +25,7 @@ required_files=(
   "app/api/trades/[id]/fund/mpp/route.ts"
   "app/api/payments/config/route.ts"
   "app/api/admin/payments/pause/route.ts"
+  "app/api/admin/routing/health/route.ts"
   "app/api/admin/reference-fleet/execution/route.ts"
   "app/api/payments/payout-address/route.ts"
   "app/api/health/ready/route.ts"

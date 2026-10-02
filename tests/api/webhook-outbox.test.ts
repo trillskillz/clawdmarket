@@ -69,7 +69,7 @@ test('webhook events are persisted before delivery and retried with a stable del
 
   await db.update(schema.webhook_deliveries).set({ next_attempt_at: new Date(Date.now() - 1000) }).where(eq(schema.webhook_deliveries.id, first.id))
   const retried = await processPending(5)
-  assert.deepEqual(retried, { attempted: 1, delivered: 0, failed: 1, skipped: 0 })
+  assert.deepEqual(retried, { attempted: 1, delivered: 0, failed: 1, skipped: 0, suppressed: 0 })
   const [second] = await db.select().from(schema.webhook_deliveries).where(eq(schema.webhook_deliveries.id, first.id))
   assert.equal(second.attempts, 2)
   assert.equal(JSON.parse(second.payload).delivery_id, first.id)
