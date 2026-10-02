@@ -429,7 +429,8 @@ test('planning separates provider claims from backed completion evidence without
   const claimed = await planFor()
   assert.equal(claimed.evidence_level, 'claimed_only')
   assert.equal(claimed.score_components.backed_execution, 0)
-  assert.deepEqual(claimed.capability_evidence, [{ capability_id: 'translation', accepted_completion_count: 0, measured_quality_score: null }])
+  assert.deepEqual(claimed.capability_evidence, [{ capability_id: 'translation', accepted_completion_count: 0,
+    distinct_buyer_count: 0, measured_quality_score: null }])
 
   const [listing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
     title: 'Historical translation', description: 'Completed translated document.', price_bankr: 1, status: 'sold' }).returning()
@@ -448,10 +449,65 @@ test('planning separates provider claims from backed completion evidence without
   await db.transaction((tx) => recordCapabilityCompletion(tx, trade))
   const observed = await planFor()
   assert.equal(observed.evidence_level, 'backed_completion_observed')
-  assert.deepEqual(observed.capability_evidence, [{ capability_id: 'translation', accepted_completion_count: 1, measured_quality_score: null }])
+  assert.deepEqual(observed.capability_evidence, [{ capability_id: 'translation', accepted_completion_count: 1,
+    distinct_buyer_count: 1, measured_quality_score: null }])
   assert.equal(observed.score_components.backed_execution, 0.2)
   assert.ok(observed.score > claimed.score)
   assert.ok(observed.explanation.some((item: string) => /quality remains unmeasured/.test(item)))
+
+  const recordAnotherCompletion = async (completionBuyer: string) => {
+    const [anotherListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
+      title: 'Another translation', description: 'Another completed translation.', price_bankr: 1,
+      status: 'sold' }).returning()
+    const [anotherTrade] = await db.insert(schema.trades).values({ listing_id: anotherListing.id,
+      buyer_id: completionBuyer, seller_id: sellerId, amount: 1, fee: 0.05, status: 'completed',
+      payment_rail: 'ledger' }).returning()
+    await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: serviceId,
+      listing_id: anotherListing.id, trade_id: anotherTrade.id, buyer_id: completionBuyer,
+      client_reference: crypto.randomUUID(), objective: 'Translate another completed document',
+      price_minor: 100, payment_rail: 'ledger', state: 'completed' })
+    const [anotherDelivery] = await db.insert(schema.trade_deliveries).values({ trade_id: anotherTrade.id,
+      submitter_id: sellerId, summary: 'Translated the next document.', content_hash: crypto.randomUUID(),
+      verification: '{}' }).returning()
+    await db.insert(schema.verification_results).values({ id: crypto.randomUUID(), trade_id: anotherTrade.id,
+      delivery_id: anotherDelivery.id, content_hash: anotherDelivery.content_hash,
+      method: 'buyer_review', verifier: 'buyer', version: '1', status: 'passed', evidence_json: '{}' })
+    await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: anotherTrade.id })
+    await db.transaction((tx) => recordCapabilityCompletion(tx, anotherTrade))
+  }
+  await recordAnotherCompletion('other-buyer')
+  const repeatBuyer = await planFor()
+  assert.equal(repeatBuyer.capability_evidence[0].accepted_completion_count, 2)
+  assert.equal(repeatBuyer.capability_evidence[0].distinct_buyer_count, 1)
+  assert.equal(repeatBuyer.score_components.backed_execution, observed.score_components.backed_execution)
+
+  const secondBuyerId = `second-evidence-buyer-${crypto.randomUUID()}`
+  await db.insert(schema.users).values({ id: secondBuyerId, name: 'Second buyer',
+    email: `${secondBuyerId}@test.invalid`, password_hash: 'unused', role: 'human' })
+  await recordAnotherCompletion(secondBuyerId)
+  const broaderEvidence = await planFor()
+  assert.equal(broaderEvidence.capability_evidence[0].accepted_completion_count, 3)
+  assert.equal(broaderEvidence.capability_evidence[0].distinct_buyer_count, 2)
+  assert.equal(broaderEvidence.score_components.backed_execution, 0.4)
+  const relatedBuyerAgentId = `related-evidence-buyer-${crypto.randomUUID()}`
+  const relatedBuyerId = `user_agent_${relatedBuyerAgentId}`
+  await db.insert(schema.users).values({ id: relatedBuyerId, name: 'Related agent buyer',
+    email: `${relatedBuyerAgentId}@test.invalid`, password_hash: 'unused', role: 'agent' })
+  await db.insert(schema.agents).values({ id: relatedBuyerAgentId, name: 'Related buyer',
+    description: 'Buyer agent', capabilities: '[]', endpoint: 'https://example.invalid',
+    owner_address: '', api_key: 'unused' })
+  await recordAnotherCompletion(relatedBuyerId)
+  const beforeOwnerLinks = await planFor()
+  assert.equal(beforeOwnerLinks.capability_evidence[0].distinct_buyer_count, 3)
+  await db.insert(schema.agent_owners).values({ agentId: relatedBuyerAgentId, userId: 'other-buyer',
+    establishedBy: 'test' })
+  await db.insert(schema.agent_owners).values({ agentId, userId: 'other-buyer', establishedBy: 'test' })
+  const ownerLinked = await planFor()
+  assert.equal(ownerLinked.capability_evidence[0].accepted_completion_count, 1)
+  assert.equal(ownerLinked.capability_evidence[0].distinct_buyer_count, 1)
+  assert.equal(ownerLinked.score_components.backed_execution, 0.2)
+  await db.delete(schema.agent_owners).where(eq(schema.agent_owners.agentId, agentId))
+  const postOwnershipBaseline = await planFor()
 
   const recordFailure = async (state: 'declined' | 'expired', funded: boolean, createdAt: Date, buyer = 'other-buyer') => {
     const [failedListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
@@ -476,7 +532,7 @@ test('planning separates provider claims from backed completion evidence without
   assert.deepEqual(penalized.provider_failures, { provider_declines_90d: 1, lease_expiries_90d: 1,
     uncorrected_verification_failures_90d: 0, buyer_refund_resolutions_90d: 0 })
   assert.equal(penalized.score_components.provider_failure_penalty, 0.4)
-  assert.ok(penalized.score < observed.score)
+  assert.ok(penalized.score < postOwnershipBaseline.score)
   assert.equal(penalized.evidence_level, 'backed_completion_observed')
   assert.match(penalized.explanation.at(-1) ?? '', /penalty is capped/)
 

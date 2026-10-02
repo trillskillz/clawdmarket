@@ -45,7 +45,7 @@ export type RouteCandidate = {
   payment_rail: MarketplaceRail
   verification_methods: VerificationPolicy['methods']
   evidence_level: 'claimed_only' | 'backed_completion_observed'
-  capability_evidence: { capability_id: string; accepted_completion_count: number; measured_quality_score: null }[]
+  capability_evidence: { capability_id: string; accepted_completion_count: number; distinct_buyer_count: number; measured_quality_score: null }[]
   provider_failures: { provider_declines_90d: number; lease_expiries_90d: number; uncorrected_verification_failures_90d: number; buyer_refund_resolutions_90d: number }
   score: number
   score_components: { capability_fit: number; price: number; latency: number; capacity: number; verification: number; backed_execution: number; provider_failure_penalty: number }
@@ -66,12 +66,23 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
   const agentIds = [...new Set(rows.filter((row) => row.seller_id.startsWith('user_agent_'))
     .map((row) => row.seller_id.slice('user_agent_'.length)))]
   const performanceRows = agentIds.length ? await db.select({ agentId: capability_performance_events.seller_agent_id,
-    capabilityId: capability_performance_events.capability_id, count: sql<number>`COUNT(*)` })
+    capabilityId: capability_performance_events.capability_id, count: sql<number>`COUNT(*)`,
+    buyerCount: sql<number>`COUNT(DISTINCT ${trades.buyer_id})` })
     .from(capability_performance_events)
+    .innerJoin(trades, eq(trades.id, capability_performance_events.trade_id))
     .where(and(inArray(capability_performance_events.seller_agent_id, agentIds),
-      inArray(capability_performance_events.capability_id, capabilities)))
+      inArray(capability_performance_events.capability_id, capabilities),
+      ne(trades.buyer_id, trades.seller_id),
+      sql`NOT EXISTS (SELECT 1 FROM agent_owners seller_owner
+        WHERE seller_owner.agent_id = ${capability_performance_events.seller_agent_id}
+        AND seller_owner.user_id = ${trades.buyer_id})`,
+      sql`NOT EXISTS (SELECT 1 FROM agent_owners seller_owner JOIN agent_owners buyer_owner
+        ON seller_owner.user_id = buyer_owner.user_id
+        WHERE seller_owner.agent_id = ${capability_performance_events.seller_agent_id}
+        AND ('user_agent_' || buyer_owner.agent_id) = ${trades.buyer_id})`))
     .groupBy(capability_performance_events.seller_agent_id, capability_performance_events.capability_id) : []
-  const backedCounts = new Map(performanceRows.map((row) => [`${row.agentId}:${row.capabilityId}`, Number(row.count)]))
+  const backedCounts = new Map(performanceRows.map((row) => [`${row.agentId}:${row.capabilityId}`,
+    { completions: Number(row.count), buyers: Number(row.buyerCount) }]))
   const cutoff = new Date(Date.now() - 90 * 24 * 3600_000)
   // A dispute becomes a refund signal only after the authoritative distribution is final.
   const confirmedBuyerRefund = sql`(${trades.status} = 'resolved' AND ${trades.resolution} = 'buyer'
@@ -168,11 +179,14 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       : 0.5
     const capacityScore = (service.max_concurrency - service.active_orders) / service.max_concurrency
     const agentId = service.seller_id.startsWith('user_agent_') ? service.seller_id.slice('user_agent_'.length) : null
-    const capabilityEvidence = capabilities.map((capability) => ({ capability_id: capability,
-      accepted_completion_count: agentId ? backedCounts.get(`${agentId}:${capability}`) || 0 : 0,
-      measured_quality_score: null as null }))
+    const capabilityEvidence = capabilities.map((capability) => {
+      const evidence = agentId ? backedCounts.get(`${agentId}:${capability}`) : null
+      return { capability_id: capability, accepted_completion_count: evidence?.completions || 0,
+        distinct_buyer_count: evidence?.buyers || 0, measured_quality_score: null as null }
+    })
     const backedCount = Math.min(...capabilityEvidence.map((item) => item.accepted_completion_count))
-    const backedExecution = Math.min(backedCount, 5) / 5
+    const buyerBreadth = Math.min(...capabilityEvidence.map((item) => item.distinct_buyer_count))
+    const backedExecution = Math.min(buyerBreadth, 5) / 5
     const providerFailures = { provider_declines_90d: failureCounts.get(`${service.id}:declined`) || 0,
       lease_expiries_90d: failureCounts.get(`${service.id}:expired`) || 0,
       uncorrected_verification_failures_90d: verificationFailureCounts.get(service.id) || 0,
@@ -194,7 +208,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       capability_evidence: capabilityEvidence, provider_failures: providerFailures, score,
       score_components: components,
       explanation: ['All required canonical capabilities are claimed', 'Service is currently purchasable',
-        backedCount > 0 ? 'Economically backed buyer-accepted completions observed for every required capability; quality remains unmeasured'
+        backedCount > 0 ? 'Economically backed buyer-accepted completions observed for every required capability; score uses distinct eligible buyer accounts and quality remains unmeasured'
           : 'Provider capability is not independently verified',
         providerFailurePenalty > 0 ? 'Recent funded provider declines, lease expiries, uncorrected deterministic verification failures, or finalized buyer refunds observed; penalty is capped'
           : 'No recent provider attempt, uncorrected verification failure, or finalized buyer refund observed; reliability remains unmeasured'],
