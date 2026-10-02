@@ -143,6 +143,96 @@ async function order(serviceId: string, reference: string) {
   return createOrder(request(`/api/services/${serviceId}/orders`, buyerId, { client_reference: reference, objective: 'Review the attached repository change', input: { revision: 'abc123' } }), { params: Promise.resolve({ id: serviceId }) })
 }
 
+test('unsupported stored execution and verification contracts cannot reserve economic work', async () => {
+  const cases = [
+    { field: 'execution_mode', value: 'instant', readiness: 'execution_mode_ready', code: 'EXECUTION_MODE_UNSUPPORTED' },
+    { field: 'verification_policy', value: '{broken', readiness: 'verification_ready', code: 'VERIFICATION_UNSUPPORTED' },
+    { field: 'verification_policy', value: JSON.stringify({ required: true, methods: ['model_judge'] }), readiness: 'verification_ready', code: 'VERIFICATION_UNSUPPORTED' },
+    { field: 'verification_policy', value: JSON.stringify({ required: true, methods: ['schema'] }), readiness: 'verification_ready', code: 'VERIFICATION_UNSUPPORTED' },
+    { field: 'output_schema', value: '{broken', readiness: 'verification_ready', code: 'VERIFICATION_UNSUPPORTED' },
+    { field: 'output_schema', value: '[]', readiness: 'verification_ready', code: 'VERIFICATION_UNSUPPORTED' },
+    { field: 'output_schema', value: JSON.stringify({ $ref: 'https://example.invalid/schema' }), readiness: 'verification_ready', code: 'VERIFICATION_UNSUPPORTED', schemaVerification: true },
+  ]
+  for (const item of cases) {
+    const offered = await service()
+    if (item.schemaVerification) await db.update(schema.service_definitions).set({
+      verification_policy: JSON.stringify({ required: true, methods: ['buyer_review', 'schema'] }),
+    }).where(eq(schema.service_definitions.id, offered.id))
+    await db.$client.execute({ sql: `UPDATE service_definitions SET ${item.field} = ? WHERE id = ?`, args: [item.value, offered.id] })
+    const read = await getService(new NextRequest(`http://localhost/api/services/${offered.id}`), { params: Promise.resolve({ id: offered.id }) })
+    assert.equal(read.status, 200, `${item.field}: ${item.value}`)
+    const readiness = (await read.json()).service.readiness
+    assert.equal(readiness[item.readiness], false)
+    assert.equal(readiness.purchasable, false)
+    assert.ok(readiness.blocking_reasons.includes(item.code))
+    const beforeCounts = { listings: (await db.select().from(schema.listings)).length, trades: (await db.select().from(schema.trades)).length }
+    const purchase = await order(offered.id, `bad-contract-${crypto.randomUUID()}`)
+    assert.equal(purchase.status, 409)
+    const body = await purchase.json()
+    assert.equal(body.error_code, item.code)
+    assert.equal(body.state, 'no_funds_moved')
+    assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, offered.id))).length, 0)
+    assert.equal((await db.select().from(schema.listings)).length, beforeCounts.listings)
+    assert.equal((await db.select().from(schema.trades)).length, beforeCounts.trades)
+    const [current] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+    assert.equal(current.active_orders, 0)
+    await db.update(schema.service_definitions).set({ status: 'archived' }).where(eq(schema.service_definitions.id, offered.id))
+  }
+})
+
+test('a contract change after validation rolls back reservation without creating economic work', async () => {
+  for (const [field, value] of [
+    ['execution_mode', 'instant'],
+    ['provider_protocol', 'unsupported'],
+    ['output_schema', JSON.stringify({ type: 'object', properties: { result: { type: 'string' } } })],
+    ['verification_policy', JSON.stringify({ required: true, methods: ['buyer_review', 'source_urls'], minimum_sources: 1 })],
+  ]) {
+    const offered = await service()
+    const beforeCounts = { listings: (await db.select().from(schema.listings)).length, trades: (await db.select().from(schema.trades)).length }
+    const originalTransaction = db.transaction.bind(db)
+    let changed = false
+    Reflect.set(db, 'transaction', async (callback: Parameters<typeof db.transaction>[0]) => {
+      if (!changed) {
+        changed = true
+        await db.$client.execute({ sql: `UPDATE service_definitions SET ${field} = ? WHERE id = ?`, args: [value, offered.id] })
+      }
+      return originalTransaction(callback)
+    })
+    try {
+      const purchase = await order(offered.id, `raced-contract-${crypto.randomUUID()}`)
+      assert.equal(purchase.status, 409, field)
+      assert.equal((await purchase.json()).error_code, 'SERVICE_CAPACITY_OR_PRICE_CHANGED')
+      assert.equal(changed, true)
+      assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, offered.id))).length, 0)
+      assert.equal((await db.select().from(schema.listings)).length, beforeCounts.listings)
+      assert.equal((await db.select().from(schema.trades)).length, beforeCounts.trades)
+      const [current] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+      assert.equal(current.active_orders, 0)
+    } finally {
+      Reflect.set(db, 'transaction', originalTransaction)
+      await db.update(schema.service_definitions).set({ status: 'archived' }).where(eq(schema.service_definitions.id, offered.id))
+    }
+  }
+})
+
+test('an existing checkout can replay after its definition becomes unsupported', async () => {
+  const offered = await service()
+  const reference = `saved-contract-${crypto.randomUUID()}`
+  const first = await order(offered.id, reference)
+  assert.equal(first.status, 201)
+  const original = await first.json()
+  await db.$client.execute({ sql: 'UPDATE service_definitions SET execution_mode = ?, verification_policy = ? WHERE id = ?', args: ['instant', '{broken', offered.id] })
+  const replay = await order(offered.id, reference)
+  assert.equal(replay.status, 200)
+  const saved = await replay.json()
+  assert.equal(saved.order.id, original.order.id)
+  assert.equal(saved.trade.id, original.trade.id)
+  assert.equal(saved.idempotent, true)
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, offered.id))).length, 1)
+  await cancelTrade(request(`/api/trades/${original.trade.id}/cancel`, buyerId, {}), { params: Promise.resolve({ id: original.trade.id }) })
+  await db.update(schema.service_definitions).set({ status: 'archived' }).where(eq(schema.service_definitions.id, offered.id))
+})
+
 test('a reusable definition creates independent orders and releases capacity on cancellation', async () => {
   const offered = await service()
   const first = await order(offered.id, `first-${crypto.randomUUID()}`)
