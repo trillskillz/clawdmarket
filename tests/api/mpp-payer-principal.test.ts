@@ -41,4 +41,6 @@ test('verified MPP payer resolves only an unambiguous registered agent', async (
   await db.insert(schema.agents).values({ id: 'mpp-agent-two', name: 'Two', description: 'Test agent',
     capabilities: '[]', endpoint: 'https://example.invalid', owner_address: payer.toUpperCase(), api_key: 'unused' })
   assert.equal(await resolveRequestPrincipal(paidRequest(payer)), null)
+  assert.equal(await resolveRequestPrincipal(paidRequest(`prefix:${payer}`)), null)
+  assert.equal(await resolveRequestPrincipal(paidRequest(`${payer}:suffix`)), null)
 })

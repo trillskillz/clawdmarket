@@ -14,8 +14,8 @@ function verifiedMppPayer(req: NextRequest): string | null {
   const receipt = (req as any).mppReceipt;
   const raw = receipt?.payer || receipt?.payerAddress || receipt?.from || receipt?.account;
   if (typeof raw !== 'string') return null;
-  const match = raw.match(/0x[a-fA-F0-9]{40}/);
-  return match ? match[0].toLowerCase() : null;
+  const payer = raw.trim();
+  return /^0x[a-fA-F0-9]{40}$/.test(payer) ? payer.toLowerCase() : null;
 }
 
 export type RequestPrincipal = {
