@@ -68,7 +68,7 @@ if (!live) {
   console.log('Route preflight passed; no service, route, or payment was created')
   process.exit(0)
 }
-if (docs.info?.['x-agent-contract-version'] !== '1.59') throw new Error('Contract 1.59 must be deployed before the funded canary')
+if (docs.info?.['x-agent-contract-version'] !== '1.60') throw new Error('Contract 1.60 must be deployed before the funded canary')
 if (buyerAuth.user.id !== process.env.ROUTE_CANARY_BUYER_ID || sellerAuth.user.id !== process.env.ROUTE_CANARY_SELLER_ID) throw new Error('Scoped canary IDs do not match authenticated identities')
 if (!/^\d+$/.test(process.env.GITHUB_RUN_ID || '')) throw new Error('Funded route canary requires a stable GitHub run ID')
 const suffix = `run-${process.env.GITHUB_RUN_ID}`

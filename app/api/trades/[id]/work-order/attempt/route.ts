@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic'
 const headers = { 'Cache-Control': 'private, no-store', Vary: 'Authorization, X-Agent-API-Key, X-ClawdMarket-Agent-Key' }
 const bodySchema = z.object({ attempt_id: z.uuid(), action: z.enum(['accept', 'decline', 'heartbeat']) }).strict()
 
-function failure(error_code: string, message: string, status: number) {
-  return NextResponse.json({ success: false, error_code, message, retryable: false, state: 'see_trade' }, { status, headers })
+function failure(error_code: string, message: string, status: number, retryable = false) {
+  return NextResponse.json({ success: false, error_code, message, retryable, state: 'see_trade' }, { status, headers })
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       lease_expires_at: result.attempt.lease_expires_at?.toISOString() || null,
     }, idempotent: result.idempotent, funds_state: 'see_trade' }, { status: result.idempotent ? 200 : 201, headers })
   } catch (error) {
-    if (error instanceof ServiceAttemptError) return failure(error.code, error.message, error.status)
+    if (error instanceof ServiceAttemptError) return failure(error.code, error.message, error.status, error.retryable)
     const response = internalErrorResponse('Work attempt transition failed', error)
     for (const [name, value] of Object.entries(headers)) response.headers.set(name, value)
     return response

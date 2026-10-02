@@ -10,7 +10,18 @@ type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 const LEASE_MS = 10 * 60_000
 
 export class ServiceAttemptError extends Error {
-  constructor(public readonly code: string, message: string, public readonly status = 409) { super(message) }
+  constructor(public readonly code: string, message: string, public readonly status = 409, public readonly retryable = false) { super(message) }
+}
+
+function sqliteBusy(error: unknown) {
+  let current = error
+  for (let depth = 0; current && depth < 6; depth += 1) {
+    if (current instanceof ServiceAttemptError) return false
+    if (typeof current === 'object' && ('code' in current && /^SQLITE_BUSY(?:_SNAPSHOT)?$/.test(String(current.code))
+      || 'message' in current && /SQLITE_BUSY|database is locked/i.test(String(current.message)))) return true
+    current = typeof current === 'object' && 'cause' in current ? current.cause : null
+  }
+  return false
 }
 
 /** Funding and the provider's attempt are committed together; retries reuse the same ID. */
@@ -31,7 +42,22 @@ export async function getServiceExecutionAttempt(orderId: string) {
 
 /** Seller-only state transitions; no escrow, capacity, or payment records are touched. */
 export function changeServiceExecutionAttempt(tradeId: string, sellerId: string, attemptId: string, action: 'accept' | 'decline' | 'heartbeat') {
-  return withKeyedWriteLock(`service-attempt:${tradeId}`, () => db.transaction(async (tx) => {
+  return withKeyedWriteLock(`service-attempt:${tradeId}`, async () => {
+    for (let retry = 0; retry < 6; retry += 1) {
+      try { return await changeServiceExecutionAttemptOnce(tradeId, sellerId, attemptId, action) }
+      catch (error) {
+        if (!sqliteBusy(error)) throw error
+        if (retry === 5) throw new ServiceAttemptError('WORK_ATTEMPT_UNAVAILABLE', 'Provider attempt is temporarily unavailable; retry the same request', 503, true)
+        await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** retry))
+      }
+    }
+    throw new ServiceAttemptError('WORK_ATTEMPT_UNAVAILABLE', 'Provider attempt is temporarily unavailable; retry the same request', 503, true)
+  })
+}
+
+/** Each retry reads current trade/attempt state and time inside a fresh transaction. */
+function changeServiceExecutionAttemptOnce(tradeId: string, sellerId: string, attemptId: string, action: 'accept' | 'decline' | 'heartbeat') {
+  return db.transaction(async (tx) => {
     const [row] = await tx.select({ trade: trades, order: service_orders, attempt: service_execution_attempts })
       .from(trades).innerJoin(service_orders, eq(service_orders.trade_id, trades.id))
       .innerJoin(service_execution_attempts, eq(service_execution_attempts.order_id, service_orders.id))
@@ -78,7 +104,7 @@ export function changeServiceExecutionAttempt(tradeId: string, sellerId: string,
       .where(and(eq(service_execution_attempts.id, attemptId), eq(service_execution_attempts.state, 'accepted'), gt(service_execution_attempts.lease_expires_at, now))).returning()
     if (!updated) throw new ServiceAttemptError('WORK_ATTEMPT_LEASE_EXPIRED', 'Provider lease expired concurrently')
     return { attempt: updated, idempotent: false }
-  }))
+  })
 }
 
 /** Observation only. Conditional writes cannot expire an attempt accepted by another worker. */

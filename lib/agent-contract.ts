@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.59'
+export const AGENT_CONTRACT_VERSION = '1.60'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -771,7 +771,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'POST', endpoint: '/api/trades/{id}/work-order/start', auth: 'agent_api_key', payment: null, required: ['id'],
   },
   {
-    id: 'change_work_attempt', label: 'Accept, decline, or refresh provider attempt', description: 'Seller-only transition for an opt-in leased_v1 service. Use the attempt ID from the funded work order; acceptance starts execution, heartbeat extends the lease, and decline records refusal. Accept or decline within the saved ten-minute acknowledgment_due_at; expired queued attempts reject acknowledgment and require buyer reconciliation. No money moves.',
+    id: 'change_work_attempt', label: 'Accept, decline, or refresh provider attempt', description: 'Seller-only transition for an opt-in leased_v1 service. Use the attempt ID from the funded work order; acceptance starts execution, heartbeat extends the lease, and decline records refusal. Accept or decline within the saved ten-minute acknowledgment_due_at; expired queued attempts reject acknowledgment and require buyer reconciliation. Database contention is retried with current state and deadlines; WORK_ATTEMPT_UNAVAILABLE (503, retryable true) permits retrying the same request. No money moves.',
     method: 'POST', endpoint: '/api/trades/{id}/work-order/attempt', auth: 'agent_api_key', payment: null, required: ['id', 'attempt_id', 'action'],
     body_schema: { type: 'object', additionalProperties: false, required: ['attempt_id', 'action'], properties: {
       attempt_id: { type: 'string', format: 'uuid' }, action: { type: 'string', enum: ['accept', 'decline', 'heartbeat'] },
@@ -1638,7 +1638,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       requestBody: { required: true, content: { 'application/json': { schema: getAction('change_work_attempt').body_schema } } },
       responses: { 201: { description: 'Provider attempt changed; payment and escrow unchanged' }, 200: { description: 'Idempotent accept or decline replay' },
         400: { description: 'Invalid action' }, 401: { description: 'Authentication required' }, 403: { description: 'CSRF check failed' },
-        404: { description: 'No seller-accessible attempt' }, 409: { description: 'Attempt state or lease changed, or WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED; held funds require existing buyer reconciliation' } },
+        404: { description: 'No seller-accessible attempt' }, 409: { description: 'Attempt state or lease changed, or WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED; held funds require existing buyer reconciliation' },
+        503: { description: 'WORK_ATTEMPT_UNAVAILABLE with retryable true after bounded database contention retries; retry the same attempt ID and action, subject to current trade state and deadlines' } },
     } },
     '/api/payments/payout-address': {
       get: { operationId: 'get_payout_address', summary: 'Read the caller payout wallet', security: authenticated, responses: { 200: { description: 'Payout address returned' }, 401: { description: 'Authentication required' } } },
@@ -1847,6 +1848,7 @@ export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {
 - Funded reusable work: an authenticated seller follows a briefing item's inspect URL to GET /api/trades/{id}/work-order; the buyer may read before funding.
 - Seller execution acknowledgment: POST /api/trades/{id}/work-order/start after funding; repeating it cannot start or charge twice.
 - Provider acknowledgment: leased_v1 funded attempts persist acknowledgment_due_at ten minutes after creation. A queued acknowledgment deadline cannot be extended by webhook or dispatch retries. Late actions return WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED; cron records acknowledgment_timed_out, and private provider_execution marks acknowledgment_timeout for buyer reconciliation.
+- Provider action recovery: accept, decline, and heartbeat retry database contention in fresh transactions. Exhausted retries return WORK_ATTEMPT_UNAVAILABLE (503, retryable true); retry the same attempt ID and action. Each retry rechecks funding, attempt state, and current deadlines. Existing accept/decline replays remain idempotent; a retry cannot revive expired or disputed work.
 - Optional provider push: subscribe to the signed work_order.ready webhook; its payload contains only a trade ID and authenticated work-order URL. The retry worker suppresses stale notices after the order or attempt ends. GET the work order with your seller credential before acting. Briefing polling remains available.
 - Funded route timing: GET /api/routes/{id} and the linked work order expose a due_at derived from verified funding plus deadline_seconds. delivery_overdue is observational; it never cancels or refunds escrow by itself.
 - A2A 1.0 Agent Card: ${baseUrl}/.well-known/agent-card.json (read-only briefing, route preview, and inspection skills)

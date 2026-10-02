@@ -250,3 +250,169 @@ test('a stale observer scan cannot overwrite acceptance committed by another con
     otherWorker.close()
   }
 })
+
+async function snapshot(fixture: Awaited<ReturnType<typeof fundedOrder>>) {
+  const [order] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, fixture.id))
+  const [route] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, fixture.id))
+  const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, fixture.trade.id))
+  const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, fixture.id))
+  return { attempt: await attempts.getServiceExecutionAttempt(fixture.id), order, route, trade, service }
+}
+
+async function act(fixture: Awaited<ReturnType<typeof fundedOrder>>, action: 'accept' | 'decline' | 'heartbeat') {
+  const { POST } = await import('@/app/api/trades/[id]/work-order/attempt/route')
+  return POST(request(`/api/trades/${fixture.trade.id}/work-order/attempt`, fixture.sellerId,
+    { attempt_id: fixture.attempt.id, action }), { params: Promise.resolve({ id: fixture.trade.id }) })
+}
+
+test('provider actions retry a rolled-back transaction without duplicating execution or renewing acknowledgment', async () => {
+  for (const action of ['accept', 'decline', 'heartbeat'] as const) {
+    const fixture = await fundedOrder()
+    if (action === 'heartbeat') await attempts.changeServiceExecutionAttempt(fixture.trade.id, fixture.sellerId, fixture.attempt.id, 'accept')
+    const before = await snapshot(fixture)
+    const originalTransaction = db.transaction.bind(db)
+    let writes = 0
+    Reflect.set(db, 'transaction', async (callback: Parameters<typeof db.transaction>[0]) => {
+      // Check the previous failed write actually rolled back every linked state.
+      if (writes > 0) assert.deepEqual(await snapshot(fixture), before)
+      return originalTransaction(async (tx) => {
+        const result = await callback(tx)
+        writes += 1
+        if (writes <= 2) throw new Error('Drizzle write failed', { cause: Object.assign(new Error('database is locked'), { code: 'SQLITE_BUSY' }) })
+        return result
+      })
+    })
+    let response: Response
+    try { response = await act(fixture, action) }
+    finally { Reflect.set(db, 'transaction', originalTransaction) }
+    assert.equal(writes, 3)
+    assert.equal(response.status, 201, JSON.stringify(await response.clone().json()))
+    const saved = await snapshot(fixture)
+    assert.equal(saved.attempt?.id, fixture.attempt.id)
+    assert.equal(saved.attempt?.acknowledgment_due_at?.getTime(), fixture.attempt.acknowledgment_due_at?.getTime())
+    assert.equal(saved.attempt?.state, action === 'decline' ? 'declined' : 'accepted')
+    assert.equal(saved.order.state, action === 'decline' ? 'funded' : 'executing')
+    assert.equal(saved.route.state, saved.order.state)
+    assert.deepEqual(saved.trade, before.trade)
+    assert.equal(saved.order.capacity_released_at, null)
+    assert.equal(saved.service.active_orders, 1)
+    if (action !== 'heartbeat') {
+      const replay = await act(fixture, action)
+      assert.equal(replay.status, 200)
+      assert.equal((await replay.json()).idempotent, true)
+      assert.deepEqual(await snapshot(fixture), saved)
+    }
+    const restarted = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      const persisted = await restarted.execute({ sql: 'SELECT state, acknowledgment_due_at FROM service_execution_attempts WHERE id = ?', args: [fixture.attempt.id] })
+      assert.equal(persisted.rows[0].state, saved.attempt?.state)
+      assert.equal(Number(persisted.rows[0].acknowledgment_due_at), fixture.attempt.acknowledgment_due_at!.getTime() / 1000)
+    } finally { restarted.close() }
+  }
+})
+
+test('exhausted provider contention returns a private retryable response and the same request recovers', async () => {
+  const fixture = await fundedOrder()
+  const before = await snapshot(fixture)
+  const originalTransaction = db.transaction.bind(db)
+  let writes = 0
+  Reflect.set(db, 'transaction', (callback: Parameters<typeof db.transaction>[0]) => originalTransaction(async (tx) => {
+    await callback(tx)
+    writes += 1
+    throw Object.assign(new Error('SQLITE_BUSY_SNAPSHOT: injected contention'), { code: 'SQLITE_BUSY_SNAPSHOT' })
+  }))
+  let response: Response
+  try { response = await act(fixture, 'accept') }
+  finally { Reflect.set(db, 'transaction', originalTransaction) }
+  assert.equal(writes, 6)
+  assert.equal(response.status, 503)
+  assert.equal(response.headers.get('cache-control'), 'private, no-store')
+  assert.match(response.headers.get('vary')!, /Authorization/)
+  const body = await response.json()
+  assert.equal(body.error_code, 'WORK_ATTEMPT_UNAVAILABLE')
+  assert.equal(body.retryable, true)
+  assert.equal(body.state, 'see_trade')
+  assert.equal(JSON.stringify(body).includes('injected contention'), false)
+  assert.deepEqual(await snapshot(fixture), before)
+  assert.equal((await act(fixture, 'accept')).status, 201)
+  assert.equal((await act(fixture, 'accept')).status, 200)
+  assert.equal((await db.select().from(schema.payment_receipts)).length, 0)
+  assert.equal((await db.select().from(schema.settlement_transfers)).length, 0)
+})
+
+test('a provider retry rereads another worker acceptance, decline, dispute, or expired deadline', async () => {
+  for (const outcome of ['accepted', 'declined', 'disputed', 'overdue', 'lease_overdue'] as const) {
+    const fixture = await fundedOrder()
+    if (outcome === 'lease_overdue') await attempts.changeServiceExecutionAttempt(fixture.trade.id, fixture.sellerId, fixture.attempt.id, 'accept')
+    const otherWorker = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    const originalTransaction = db.transaction.bind(db)
+    let transactions = 0
+    let winner: Awaited<ReturnType<typeof snapshot>> | null = null
+    Reflect.set(db, 'transaction', async (callback: Parameters<typeof db.transaction>[0]) => {
+      transactions += 1
+      if (transactions !== 1) return originalTransaction(callback)
+      try {
+        return await originalTransaction(async (tx) => {
+          await callback(tx)
+          throw Object.assign(new Error('SQLITE_BUSY: another worker won'), { code: 'SQLITE_BUSY' })
+        })
+      } catch (error) {
+        const now = Math.floor(Date.now() / 1000)
+        if (outcome === 'accepted') await otherWorker.batch([
+          { sql: "UPDATE service_execution_attempts SET state = 'accepted', accepted_at = ?, heartbeat_at = ?, lease_expires_at = ? WHERE id = ?", args: [now, now, now + 600, fixture.attempt.id] },
+          { sql: "UPDATE service_orders SET state = 'executing', execution_started_at = ? WHERE id = ?", args: [now, fixture.id] },
+          { sql: "UPDATE route_plans SET state = 'executing' WHERE id = ?", args: [fixture.id] },
+        ], 'write')
+        else if (outcome === 'disputed') await otherWorker.batch([
+          { sql: "UPDATE trades SET status = 'disputed' WHERE id = ?", args: [fixture.trade.id] },
+          { sql: "UPDATE service_orders SET state = 'disputed' WHERE id = ?", args: [fixture.id] },
+          { sql: "UPDATE route_plans SET state = 'disputed' WHERE id = ?", args: [fixture.id] },
+          { sql: "UPDATE service_execution_attempts SET state = 'interrupted', completed_at = ? WHERE id = ?", args: [now, fixture.attempt.id] },
+        ], 'write')
+        else if (outcome === 'declined') await otherWorker.execute({ sql: "UPDATE service_execution_attempts SET state = 'declined', completed_at = ? WHERE id = ?", args: [now, fixture.attempt.id] })
+        else if (outcome === 'lease_overdue') await otherWorker.execute({ sql: 'UPDATE service_execution_attempts SET lease_expires_at = ? WHERE id = ?', args: [now - 1, fixture.attempt.id] })
+        else await otherWorker.execute({ sql: 'UPDATE service_execution_attempts SET acknowledgment_due_at = ? WHERE id = ?', args: [now - 1, fixture.attempt.id] })
+        winner = await snapshot(fixture)
+        throw error
+      }
+    })
+    let response: Response
+    try { response = await act(fixture, outcome === 'lease_overdue' ? 'heartbeat' : 'accept') }
+    finally {
+      Reflect.set(db, 'transaction', originalTransaction)
+      otherWorker.close()
+    }
+    assert.equal(transactions, 2)
+    const body = await response.json()
+    if (outcome === 'accepted') {
+      assert.equal(response.status, 200)
+      assert.equal(body.idempotent, true)
+    } else {
+      assert.equal(response.status, 409)
+      assert.equal(body.error_code, outcome === 'disputed' ? 'WORK_ORDER_NOT_FUNDED'
+        : outcome === 'declined' ? 'WORK_ATTEMPT_STATE_CHANGED'
+          : outcome === 'lease_overdue' ? 'WORK_ATTEMPT_LEASE_EXPIRED' : 'WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED')
+      assert.equal(body.retryable, false)
+    }
+    assert.deepEqual(await snapshot(fixture), winner)
+  }
+})
+
+test('provider business errors and unrelated database failures are never retried', async () => {
+  const fixture = await fundedOrder()
+  const originalTransaction = db.transaction.bind(db)
+  let transactions = 0
+  Reflect.set(db, 'transaction', (callback: Parameters<typeof db.transaction>[0]) => {
+    transactions += 1
+    return originalTransaction(callback)
+  })
+  try {
+    await assert.rejects(attempts.changeServiceExecutionAttempt(fixture.trade.id, fixture.buyerId, fixture.attempt.id, 'accept'),
+      (error: unknown) => error instanceof attempts.ServiceAttemptError && error.code === 'WORK_ORDER_NOT_FOUND' && !error.retryable)
+    assert.equal(transactions, 1)
+    const failure = Object.assign(new Error('injected constraint failure'), { code: 'SQLITE_CONSTRAINT' })
+    Reflect.set(db, 'transaction', () => { transactions += 1; throw failure })
+    await assert.rejects(attempts.changeServiceExecutionAttempt(fixture.trade.id, fixture.sellerId, fixture.attempt.id, 'accept'), (error: unknown) => error === failure)
+    assert.equal(transactions, 2)
+  } finally { Reflect.set(db, 'transaction', originalTransaction) }
+})

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Provider action recovery (contract 1.60)
+- Bounded transaction retries for provider acceptance, decline, and heartbeat, with current-state and deadline checks on each retry and a private, retryable `WORK_ATTEMPT_UNAVAILABLE` response when contention persists.
+- Recovery coverage for atomic rollback, cross-worker acceptance/dispute races, acknowledgment expiry between retries, and unchanged financial exposure.
+
 ### Added
 - Up to ten independently revocable named agent credentials with explicit read, agent-write, marketplace-write, payment-write, and credential-management scopes, optional expiry, one-time secret display, and anti-escalation delegation checks.
 - Human recovery ownership for owner-claim and autonomous agents, destructive all-key recovery, and targeted 24-hour single-use ownership transfers for exact email or signed-wallet accounts.
