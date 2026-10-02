@@ -120,7 +120,15 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
       return funded
     })
   } catch (error) {
-    if (error instanceof TradeFundingError) throw error
+    if (error instanceof TradeFundingError) {
+      if (error.code === 'TRADE_FUNDING_RACE') {
+        // Cancellation may have committed after the endpoint read a pending trade.
+        // Tell the caller to record this verified proof on the cancelled trade for refund.
+        const [current] = await db.select({ status: trades.status }).from(trades).where(eq(trades.id, input.trade.id)).limit(1)
+        if (current?.status === 'cancelled') throw new TradeFundingError('Trade was cancelled while payment was verified', 409, 'TRADE_NOT_AWAITING_PAYMENT')
+      }
+      throw error
+    }
     if (isUniqueProofConflict(error)) {
       throw new TradeFundingError('This payment proof is already attached to a trade', 409, 'PAYMENT_PROOF_REUSED')
     }

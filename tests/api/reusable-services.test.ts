@@ -805,6 +805,36 @@ test('verified funding atomically queues one private provider work notice per su
   assert.equal(JSON.stringify(payload).includes('reusable-buyer@test.invalid'), false)
 })
 
+test('a verified payment racing cancellation enters cancelled-trade reconciliation', async () => {
+  const offered = await service()
+  const created = await order(offered.id, `late-proof-race-${crypto.randomUUID()}`)
+  assert.equal(created.status, 201)
+  const { trade, order: savedOrder } = await created.json()
+  const [stalePending] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  const { recordExternalTradeFunding, recordCancelledExternalFunding } = await import('@/lib/trade-funding')
+  const funding = { trade: stalePending, rail: 'evm' as const, txHash: `0x${'ac'.repeat(32)}`,
+    externalId: `late-proof-${crypto.randomUUID()}`, payerAddress: `0x${'11'.repeat(20)}`,
+    tokenAddress: `0x${'44'.repeat(20)}`, chainId: 8453, tokenSymbol: 'USDC',
+    tokenDecimals: 6, tokenAmount: BigInt(10_500_000), tokenUsdPrice: 1, usdValue: 10.5 }
+  const cancelled = await cancelTrade(request(`/api/trades/${trade.id}/cancel`, buyerId, {}),
+    { params: Promise.resolve({ id: trade.id }) })
+  assert.equal(cancelled.status, 200)
+  await assert.rejects(recordExternalTradeFunding(funding),
+    (error: any) => error.code === 'TRADE_NOT_AWAITING_PAYMENT')
+  const [cancelledTrade] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  const recorded = await recordCancelledExternalFunding({ ...funding, trade: cancelledTrade })
+  assert.equal(recorded.status, 'cancelled')
+  assert.equal(recorded.payout_status, 'processing')
+  const [receipt] = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, trade.id))
+  assert.equal(receipt.tx_hash, funding.txHash)
+  const [cancelledOrder] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, savedOrder.id))
+  const [definition] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, offered.id))
+  assert.equal(cancelledOrder.state, 'cancelled')
+  assert.equal(definition.active_orders, 0)
+  assert.equal((await db.select().from(schema.service_execution_attempts)
+    .where(eq(schema.service_execution_attempts.order_id, savedOrder.id))).length, 0)
+})
+
 test('operator reconciliation releases a terminal order left by an older worker exactly once', async () => {
   const offered = await service()
   const result = await order(offered.id, `legacy-worker-${crypto.randomUUID()}`)
