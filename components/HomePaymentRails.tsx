@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 
 type PaymentConfig = {
+  account_credit_enabled?: boolean
   ledger_enabled?: boolean
   ledger_redeemable?: boolean
   erc20_configured?: boolean
@@ -27,9 +28,7 @@ export default function HomePaymentRails({ className, initialConfig = null }: { 
     ? config.accepted_tokens.map((token) => `${token.symbol || 'Token'} on ${token.chain_name || 'EVM'}`).join(', ')
     : 'ERC-20 escrow'
   const rails = [
-    config?.ledger_enabled && !config.ledger_redeemable
-      ? 'Internal account credit / non-redeemable'
-      : `Account balance / ${status(config?.ledger_enabled)}`,
+    `USDC account credit / ${status(config?.account_credit_enabled)}`,
     `${tokenLabel} / ${status(config?.erc20_configured)}`,
     `MPP pathUSD on Tempo / ${status(config?.mpp_configured)}`,
   ]

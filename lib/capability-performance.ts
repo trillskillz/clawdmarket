@@ -1,7 +1,7 @@
 import { serviceExecutionContract } from './service-execution-contract'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db'
-import { agents, agent_owners, capability_performance_events, payment_receipts, service_definitions, service_orders, settlement_transfers, transactions, verification_results } from './schema'
+import { credit_entries, agents, agent_owners, capability_performance_events, payment_receipts, service_definitions, service_orders, settlement_transfers, transactions, verification_results } from './schema'
 import { normalizeCapability } from './capabilities'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 
@@ -27,7 +27,11 @@ export async function recordCapabilityCompletion(tx: Transaction, trade: { id: s
   const [accepted] = await tx.select({ id: verification_results.id }).from(verification_results)
     .where(and(eq(verification_results.trade_id, trade.id), eq(verification_results.method, 'buyer_review'), eq(verification_results.status, 'passed'), sql`${verification_results.delivery_id} IS NOT NULL`)).limit(1)
   if (!accepted) return
-  if (trade.payment_rail === 'ledger') {
+  if (trade.payment_rail === 'credit') {
+    const [locked] = await tx.select().from(credit_entries).where(and(eq(credit_entries.reference, trade.id), eq(credit_entries.user_id, trade.buyer_id), eq(credit_entries.kind, 'purchase'))).limit(1)
+    const [paid] = await tx.select().from(credit_entries).where(and(eq(credit_entries.reference, trade.id), eq(credit_entries.user_id, trade.seller_id), eq(credit_entries.kind, 'sale'))).limit(1)
+    if (!locked || !paid) return
+  } else if (trade.payment_rail === 'ledger') {
     const [locked] = await tx.select({ id: transactions.id }).from(transactions)
       .where(and(eq(transactions.reference_id, trade.id), eq(transactions.type, 'escrow_lock'))).limit(1)
     if (!locked) return

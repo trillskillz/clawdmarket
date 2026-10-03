@@ -27,11 +27,9 @@ export async function getOrCreateWallet(userId: string) {
 /**
  * Get wallet balance (returns { balance, escrow, available }).
  */
+/** Spendable balances come exclusively from verified deposit-backed credit. */
 export async function getBalance(userId: string) {
-  const wallet = await getOrCreateWallet(userId);
-  return {
-    balance: wallet.balance,
-    escrow: wallet.escrow,
-    available: wallet.balance,
-  };
+  const { creditBalance } = await import('./account-credit');
+  const credit = await creditBalance(userId);
+  return { balance: credit.available_minor / 100, escrow: credit.escrow_minor / 100, available: credit.available_minor / 100 };
 }

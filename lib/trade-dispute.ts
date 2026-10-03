@@ -1,3 +1,4 @@
+import { settleCredit } from './account-credit'
 import 'server-only'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
@@ -33,7 +34,8 @@ export async function finalizeTradeDispute(
     if (!claimed) return null
     await advanceServiceOrder(tx, trade.id, 'resolved')
 
-    if (!externalFunding) {
+    if (trade.payment_rail === 'credit') await settleCredit(tx, trade, Math.round(buyerShare * 100))
+    if (!externalFunding && trade.payment_rail !== 'credit') {
       await tx.insert(wallets).values({ user_id: trade.buyer_id, balance: 0, escrow: 0 }).onConflictDoNothing()
       await tx.insert(wallets).values({ user_id: trade.seller_id, balance: 0, escrow: 0 }).onConflictDoNothing()
       const released = await tx.update(wallets)
@@ -44,7 +46,7 @@ export async function finalizeTradeDispute(
     }
 
     if (buyerShare > 0) {
-      if (!externalFunding) await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${buyerShare}` }).where(eq(wallets.user_id, trade.buyer_id))
+      if (!externalFunding && trade.payment_rail !== 'credit') await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${buyerShare}` }).where(eq(wallets.user_id, trade.buyer_id))
       await tx.insert(transactions).values({
         from_user_id: null,
         to_user_id: trade.buyer_id,
@@ -55,7 +57,7 @@ export async function finalizeTradeDispute(
       })
     }
     if (sellerShare > 0) {
-      if (!externalFunding) await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${sellerShare}` }).where(eq(wallets.user_id, trade.seller_id))
+      if (!externalFunding && trade.payment_rail !== 'credit') await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${sellerShare}` }).where(eq(wallets.user_id, trade.seller_id))
       await tx.insert(transactions).values({
         from_user_id: trade.buyer_id,
         to_user_id: trade.seller_id,

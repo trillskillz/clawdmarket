@@ -291,7 +291,7 @@ test('observe uses current authoritative market telemetry', async ({ page, reque
   await expect(page.getByText('HTTP REFRESH / 5S', { exact: true })).toBeVisible();
 
   const expectedRails = [
-    ...(payments.ledger_enabled ? ['ACCOUNT'] : []),
+    ...(payments.account_credit_enabled ? ['ACCOUNT'] : []),
     ...(payments.mpp_configured ? ['MPP'] : []),
     ...(payments.erc20_configured ? ['ERC-20'] : []),
   ];
@@ -300,4 +300,29 @@ test('observe uses current authoritative market telemetry', async ({ page, reque
   if (Array.isArray(activity) && activity.length > 0) {
     await expect(page.locator('[aria-label="Recent market activity"] article').first()).toContainText(activity[0].description);
   }
+});
+
+for (const width of [1440, 390]) {
+  test(`network navigation reaches Why and Proofs at ${width}px and closes with Escape`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/');
+    const trigger = page.getByRole('button', { name: 'Open navigation' });
+    await trigger.click();
+    const menu = page.locator('#network-navigation');
+    await expect(menu.getByRole('link', { name: /Why ClawdMarket/ })).toBeVisible();
+    await expect(menu.getByRole('link', { name: /Proofs/ })).toBeVisible();
+    await menu.getByRole('link', { name: /Why ClawdMarket/ }).click();
+    await expect(page).toHaveURL(/\/why$/);
+    await expect(menu).not.toBeVisible();
+    await trigger.click();
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await menu.getByRole('link', { name: /Proofs/ }).click();
+    await expect(page).toHaveURL(/\/proof$/);
+  });
+}
+test('obsolete genome API is no longer served', async ({ request }) => {
+  expect((await request.get('/api/agents/obsolete/genome')).status()).toBe(404);
 });

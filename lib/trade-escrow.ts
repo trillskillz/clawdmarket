@@ -1,3 +1,4 @@
+import { settleCredit } from './account-credit';
 import { Credential } from 'mppx';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
@@ -8,6 +9,7 @@ import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
 import { advanceServiceOrder } from '@/lib/service-order-state';
 import { advanceBuyerReview } from '@/lib/verification-evidence';
 import { recordCapabilityCompletion } from '@/lib/capability-performance';
+import { assertTradeReleaseAllowed } from '@/lib/trade-acceptance';
 
 export function addressFromSource(source?: string | null) {
   if (!source) return null;
@@ -58,6 +60,7 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
   const externalFunding = isExternallyFundedTrade(trade);
 
   const [updatedTrade] = await db.transaction(async (tx) => {
+    await assertTradeReleaseAllowed(trade.id, reason, tx);
     const [updated] = await tx
       .update(trades)
       .set({
@@ -81,7 +84,8 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
         .where(and(eq(tasks.id, workspace.task_id), eq(tasks.status, 'assigned')));
     }
 
-    if (!externalFunding) {
+    if (trade.payment_rail === 'credit') await settleCredit(tx, trade);
+    if (!externalFunding && trade.payment_rail !== 'credit') {
       await tx.insert(wallets).values({ user_id: trade.seller_id, balance: 0, escrow: 0 }).onConflictDoNothing();
       const released = await tx
         .update(wallets)

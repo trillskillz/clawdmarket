@@ -171,9 +171,9 @@ export async function purgeExpiredArtifacts(limit = 100) {
 }
 
 /** Stop reading before parsing JSON, including streamed requests with no Content-Length. */
-export async function readBoundedJson(request: Request, maxBytes: number, timeoutMs = 10_000) {
+export async function readBoundedJson(request: Request, maxBytes: number, timeoutMs = 10_000, allowEmpty = false) {
   if (Number(request.headers.get('content-length')) > maxBytes) throw new ArtifactError('REQUEST_TOO_LARGE', 413)
-  if (!request.body) throw new ArtifactError('REQUEST_INVALID', 400)
+  if (!request.body) { if (allowEmpty) return {}; throw new ArtifactError('REQUEST_INVALID', 400) }
   const reader = request.body.getReader()
   const chunks: Uint8Array[] = []
   let size = 0
@@ -187,6 +187,7 @@ export async function readBoundedJson(request: Request, maxBytes: number, timeou
       if (size > maxBytes) throw new ArtifactError('REQUEST_TOO_LARGE', 413)
       chunks.push(part.value)
     }
+    if (size === 0 && allowEmpty) return {}
     try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { throw new ArtifactError('REQUEST_INVALID', 400) }
   } finally {
     clearTimeout(timer)

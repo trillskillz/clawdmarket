@@ -766,3 +766,28 @@ test('planning skips unsupported contracts and saved routes recheck them before 
     }
   }
 })
+
+test('structured verification terms filter planning and changed agreed rules block checkout', async () => {
+  const offered = await service('1.00')
+  const verification = { required: true, methods: ['buyer_review', 'assertions', 'source_evidence'],
+    assertions: { version: 1, rules: [{ id: 'status', field: 'status', op: 'equals', value: 'complete' }] },
+    source_evidence: { version: 1, minimum_sources: 2, max_age_days: 7, require_claim_links: true } }
+  await db.update(schema.service_definitions).set({ verification_policy: JSON.stringify(verification) }).where(eq(schema.service_definitions.id, offered.id))
+  const makePlan = (policy: unknown) => planRoute(request('/api/routes/plan', 'other-buyer', 'POST', {
+    client_reference: `structured-${crypto.randomUUID()}`, objective: 'Audit this repository using declared source evidence',
+    required_capabilities: ['security', 'code-review'], max_budget: { amount: '20.00', currency: 'USD' }, verification: policy,
+  }))
+  const stronger = await makePlan({ ...verification, source_evidence: { ...verification.source_evidence, max_age_days: 1 } })
+  assert.equal(stronger.status, 201)
+  assert.deepEqual((await stronger.json()).route.candidates, [])
+  const planned = await makePlan(verification)
+  assert.equal(planned.status, 201, await planned.clone().text())
+  const route = (await planned.json()).route
+  assert.equal(route.candidates.length, 1)
+  assert.equal(route.candidates[0].service_id, offered.id)
+  await db.update(schema.service_definitions).set({ verification_policy: JSON.stringify({ ...verification,
+    assertions: { version: 1, rules: [{ ...verification.assertions.rules[0], value: 'changed' }] } }) }).where(eq(schema.service_definitions.id, offered.id))
+  const execution = await executeRoute(request(`/api/routes/${route.id}/execute`, 'other-buyer', 'POST'), { params: Promise.resolve({ id: route.id }) })
+  assert.equal(execution.status, 409)
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, offered.id))).length, 0)
+})

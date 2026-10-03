@@ -1,7 +1,9 @@
 import { ArtifactError, loadDeliveryArtifacts } from './private-artifacts'
+import { verifyIsolatedDelivery } from './verification-jobs'
+import { sourceEvidenceUrls } from './structured-verification'
 import { serviceExecutionContract } from './service-execution-contract'
 import { createHash } from 'node:crypto'
-import { and, eq, gt } from 'drizzle-orm'
+import { and, eq, gt, isNull } from 'drizzle-orm'
 import { db } from './db'
 import { messages, service_definitions, service_execution_attempts, service_orders, task_workspaces, trade_deliveries, trades, verification_results, private_artifacts } from './schema'
 import { encryptMessage } from './chat-crypto'
@@ -88,30 +90,50 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
     structuredArtifact = value
   }
   const verificationInput = { ...parsed.data, artifact: structuredArtifact }
-  const outcomes = evaluateVerification({ policy: policy.data, outputSchema: service ? JSON.parse(service.output_schema) : {}, delivery: verificationInput, legacyRequirements: requirements })
-  if (parsed.data.verification_artifact_id) for (const outcome of outcomes) if (outcome.status === 'failed') outcome.failure = `${outcome.method}_validation_failed`
-  if (attachments.length) outcomes.push({ method: 'artifact_integrity', verifier: 'clawdmarket-deterministic-v1', version: '1', status: 'passed', score: 1,
-    evidence: { algorithm: 'sha256', artifacts: attachments.map(({ row }) => ({ id: row.id, sha256: row.sha256, size_bytes: row.size_bytes, media_type: row.media_type })),
-      verification_artifact_id: parsed.data.verification_artifact_id ?? null, urls_fetched: false, code_executed: false, provenance_verified: false }, failure: null })
-  const legacyVerification = verifyDelivery(verificationInput, requirements)
-  const failed = outcomes.some((outcome) => outcome.status === 'failed') || legacyVerification.status === 'failed'
-  const verification = { ...legacyVerification, status: failed ? 'failed' : outcomes.some((outcome) => outcome.status === 'passed') ? 'passed' : 'manual_review',
-    methods: outcomes.map(({ method, status, score }) => ({ method, status, score })),
-    categories: { delivery_received: !failed, structure_verified: !failed && outcomes.some((outcome) => ['structure', 'schema'].includes(outcome.method) && outcome.status === 'passed'), semantic_verified: false, buyer_accepted: false } }
-  const evidenceRows = (deliveryId: string | null) => outcomes.map((outcome: VerificationResult) => ({
+  const assess = async (source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) => {
+    const outcomes = evaluateVerification({ policy: policy.data, outputSchema: service ? JSON.parse(service.output_schema) : {}, delivery: verificationInput, legacyRequirements: requirements, now: new Date() })
+    const isolated = await verifyIsolatedDelivery(tradeId, parsed.data.artifact_ids || [], parsed.data.verification_job_id, policy.data, source)
+    if (isolated) outcomes.push(isolated)
+    if (parsed.data.verification_artifact_id) for (const outcome of outcomes) if (outcome.status === 'failed') outcome.failure = `${outcome.method}_validation_failed`
+    if (attachments.length) outcomes.push({ method: 'artifact_integrity', verifier: 'clawdmarket-deterministic-v1', version: '1', status: 'passed', score: 1,
+      evidence: { algorithm: 'sha256', artifacts: attachments.map(({ row }) => ({ id: row.id, sha256: row.sha256, size_bytes: row.size_bytes, media_type: row.media_type })),
+        verification_artifact_id: parsed.data.verification_artifact_id ?? null, urls_fetched: false, code_executed: false, provenance_verified: false }, failure: null })
+    const legacyInput = policy.data.source_evidence ? { ...verificationInput, artifact: sourceEvidenceUrls(structuredArtifact) } : verificationInput
+    const legacyVerification = verifyDelivery(legacyInput, requirements)
+    const failed = outcomes.some((outcome) => outcome.status === 'failed') || legacyVerification.status === 'failed'
+    const passed = (method: string) => !failed && outcomes.some((outcome) => outcome.method === method && outcome.status === 'passed')
+    const verification = { ...legacyVerification, status: failed ? 'failed' : outcomes.some((outcome) => outcome.status === 'passed') ? 'passed' : 'manual_review',
+      methods: outcomes.map(({ method, status, score }) => ({ method, status, score })),
+      categories: { delivery_received: !failed, structure_verified: passed('structure') || passed('schema'), assertions_verified: passed('assertions'),
+        declared_source_evidence_verified: passed('source_evidence'), semantic_verified: false, buyer_accepted: false } }
+    return { outcomes, failed, verification }
+  }
+  const evidenceRows = (outcomes: VerificationResult[], deliveryId: string | null) => outcomes.map((outcome) => ({
     id: crypto.randomUUID(), trade_id: tradeId, delivery_id: deliveryId, content_hash: contentHash,
     method: outcome.method, verifier: outcome.verifier, version: outcome.version,
     status: outcome.status, score: outcome.score, evidence_json: JSON.stringify(outcome.evidence), failure: outcome.failure,
   }))
-  if (failed) {
-    await db.insert(verification_results).values(evidenceRows(null).filter((row) => row.method !== 'buyer_review')).onConflictDoNothing()
-    throw new DeliveryError('Delivery failed required verification checks', 422, verification)
+  // A time-dependent rejection and later acceptance of the exact body retain separate evidence.
+  // New checks publish passing evidence only when the delivery transaction commits.
+  const recordFailure = async (assessment: Awaited<ReturnType<typeof assess>>) => {
+    const rows = evidenceRows(assessment.outcomes, null).filter((row) => row.method !== 'buyer_review'
+      && (!['assertions', 'source_evidence', 'isolated_checks'].includes(row.method) || row.status === 'failed'))
+      .map((row) => ['assertions', 'source_evidence', 'isolated_checks'].includes(row.method) ? { ...row, method: `${row.method}_failure` } : row)
+    if (rows.length) await db.insert(verification_results).values(rows).onConflictDoNothing()
   }
+  class RequiredCheckFailure extends DeliveryError {
+    constructor(public assessment: Awaited<ReturnType<typeof assess>>) { super('Delivery failed required verification checks', 422, assessment.verification) }
+  }
+  const initial = await assess()
+  if (initial.failed) { await recordFailure(initial); throw new RequiredCheckFailure(initial) }
   const encrypted = await encryptMessage(JSON.stringify({ type: 'task_complete', trade_id: tradeId, ...parsed.data, content_hash: contentHash }))
   const commit = () => db.transaction(async (tx) => {
     // Recheck immutable file bindings inside the same transaction that opens review.
     const fresh = await loadDeliveryArtifacts(tradeId, parsed.data.artifact_ids || [], trade.status, tx)
     if (fresh.some(({ row }, index) => row.sha256 !== attachments[index].row.sha256 || row.request_hash !== attachments[index].row.request_hash)) throw new ArtifactError('ARTIFACT_INTEGRITY_FAILED', 422)
+    const assessment = await assess(tx)
+    if (assessment.failed) throw new RequiredCheckFailure(assessment)
+    const { verification, outcomes } = assessment
     if (service?.provider_protocol === 'leased_v1') {
       const now = new Date()
       const [completed] = await tx.update(service_execution_attempts)
@@ -123,7 +145,7 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
         .returning({ id: service_execution_attempts.id })
       if (!completed) throw new DeliveryError('Execution attempt expired before delivery', 409)
     }
-    const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: new Date(Date.now() + 86400000).toISOString() })
+    const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: linkedService?.execution_contract_json != null && policy.data.acceptance ? null : new Date(Date.now() + 86400000).toISOString() })
       .where(and(eq(trades.id, tradeId), eq(trades.status, 'escrow_held'))).returning()
     if (!updated) throw new DeliveryError('Trade is not awaiting delivery', 409)
     await advanceServiceOrder(tx, tradeId, 'verifying')
@@ -134,7 +156,11 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
       content_hash: contentHash, verification: JSON.stringify(verification),
     }).returning()
     for (const { row } of fresh) await tx.update(private_artifacts).set({ delivery_id: delivery.id }).where(eq(private_artifacts.id, row.id))
-    await tx.insert(verification_results).values(evidenceRows(delivery.id)).onConflictDoNothing()
+    for (const row of evidenceRows(outcomes, delivery.id)) await tx.insert(verification_results).values(row).onConflictDoUpdate({
+      target: [verification_results.trade_id, verification_results.content_hash, verification_results.method, verification_results.version],
+      set: { delivery_id: delivery.id, evidence_json: row.evidence_json, updated_at: new Date() },
+      setWhere: and(isNull(verification_results.delivery_id), eq(verification_results.status, 'passed'), eq(verification_results.status, row.status)),
+    })
     const [message] = await tx.insert(messages).values({
       sender_id: sellerId, receiver_id: trade.buyer_id,
       encrypted_content: encrypted.encrypted_content, nonce: encrypted.nonce,
@@ -156,6 +182,7 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
       const raced = await replay()
       if (raced) return raced
       await recordIntegrityFailure(error)
+      if (error instanceof RequiredCheckFailure) await recordFailure(error.assessment)
       throw error
     }
   }

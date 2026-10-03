@@ -40,8 +40,8 @@ export function inspectRuntimeConfiguration(env: RuntimeEnvironment = process.en
 type PaymentReadinessSummary = {
   ready: boolean
   required: boolean
-  enabled_rails: Array<'ledger' | 'mpp' | 'evm'>
-  disabled_rails: Array<'ledger' | 'mpp' | 'evm'>
+  enabled_rails: Array<'ledger' | 'credit' | 'mpp' | 'evm'>
+  disabled_rails: Array<'ledger' | 'credit' | 'mpp' | 'evm'>
   rpc: RpcProbe[]
   error?: 'invalid_payment_configuration'
 }
@@ -107,6 +107,7 @@ async function computeRuntimeReadiness(): Promise<RuntimeReadiness> {
       enabledRails.push('ledger')
       if (readiness.ledger.redeemable) settlementReadyRails.push('ledger')
     }
+    if (readiness.credit.enabled) enabledRails.push('credit')
     if (readiness.mpp.enabled) {
       enabledRails.push('mpp')
       settlementReadyRails.push('mpp')
@@ -123,7 +124,7 @@ async function computeRuntimeReadiness(): Promise<RuntimeReadiness> {
     })
   }
 
-  const allRails: PaymentReadinessSummary['enabled_rails'] = ['ledger', 'mpp', 'evm']
+  const allRails: PaymentReadinessSummary['enabled_rails'] = ['ledger', 'credit', 'mpp', 'evm']
   const payments: PaymentReadinessSummary = {
     // A non-redeemable internal balance is useful for testing, but it is not a
     // production payment rail and must not make a deployment look payable.

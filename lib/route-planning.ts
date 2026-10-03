@@ -1,4 +1,5 @@
 import 'server-only'
+import { isolatedVerifierEligibility } from '@/lib/isolated-verifier-eligibility'
 import { and, eq, gte, inArray, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '@/lib/db'
@@ -155,6 +156,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     if (checkServiceInput(input.input, contract.inputSchema).status !== 'valid') continue
     const servicePolicy = contract.verificationPolicy!
     if (!supportsVerification(servicePolicy, input.verification)) continue
+    if (await isolatedVerifierEligibility(servicePolicy.isolated_checks, buyerId, service.seller_id)) continue
     const totalMinor = service.price_minor + Math.round(service.price_minor * 0.05)
     if (totalMinor > input.max_budget.amount) continue
     if (organizationBudget && (

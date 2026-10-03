@@ -1,6 +1,54 @@
 export type ProviderRequirements = { approved_providers?: string[]; minimum_accepted_completions?: number; minimum_distinct_buyers?: number }
 
 export type Money = { amount: string; currency: 'USD' }
+export type RouteMandateInput = { version: 1; client_reference: string; max_aggregate: string; max_per_execution: string; max_retry_budget: string; max_attempts: number;
+  approved_providers: string[]; max_latency_seconds: number; private_data: 'selected_provider_only'; expires_at: string;
+  payment: { rail: 'evm' | 'mpp'; chain_id: number; token_address: string; payer_address: string; treasury_address: string;
+    minimum_token_reserve_units: string; minimum_native_reserve_wei: string; max_gas_cost_wei: string } }
+export type RouteMandate = { id: string; route_id: string; buyer_id: string; client_reference: string; route_hash: string; terms_hash: string;
+  terms: Omit<RouteMandateInput, 'client_reference'> & { token_decimals: number; token_usd_price: number };
+  state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: false }
+export type RouteFundingStep = { id: string; mandate_id: string; route_id: string; order_id: string; trade_id: string; amount_minor: number; terms_hash: string;
+  state: 'reserved' | 'funded' | 'rejected'; created_at: string; updated_at: string }
+export type BuyerEvmPaymentClaimInput = { intent_id: string; mandate_id: string; serialized_transaction: string; payer_signature: string; buyer_operation_id?: string }
+export type BuyerEvmPaymentClaim = { intent_id: string; mandate_id: string; chain_id: number; payer_address: string; nonce: number; tx_hash: string;
+  terms_hash: string; maximum_execution_gas_cost_wei: string; state: 'claimed' | 'confirmed'; created_at: string }
+export type BuyerEvmPaymentClaimResult = { claim: BuyerEvmPaymentClaim; send_allowed: boolean; idempotent: boolean;
+  state: 'submit_exact_transaction' | 'recover_existing_payment' }
+export type BuyerEvmIntent = { id: string; trade_id: string; buyer_id: string; origin: string; buyer_operation_id: string | null;
+  payer_address: string; chain_id: number; token_address: string; treasury_address: string; token_amount: string; token_decimals: number;
+  token_symbol: string; token_usd_price: number; amount_usd: number; expires_at: string; created_at: string; tx_hash: string | null; payer_signature: string | null }
+export type BuyerEvmFundingProof = { intent_id: string; chain_id: number; token_address: string; payer_address: string; tx_hash: string; payer_signature?: string }
+
+export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'assertions' | 'source_evidence' | 'isolated_checks'
+export type IsolatedCheckPolicy = { version: 1; adapter: 'javascript_tests_v1' | 'javascript_static_v1'; verifier_agent_id: string; suite_sha256: string; max_runtime_seconds: number }
+export type IsolatedTestSuite = { version: 1; cases: Array<{ id: string; args: unknown[]; expected: unknown }> }
+export type IsolatedReport = {
+  version: 1; adapter: IsolatedCheckPolicy['adapter']; artifact_sha256: string; suite_sha256: string; status: 'passed' | 'failed'
+  total_checks: number; passed_checks: number; failed_checks: number; elapsed_ms: number
+  failure: 'checks_failed' | 'timeout' | 'sandbox_failed' | 'resource_limit' | null
+  isolation: { kind: 'bwrap-systemd-v1'; network_enabled: false; host_home_mounted: false; memory_limit_bytes: 134217728; task_limit: 32 }
+}
+export type VerificationJob = {
+  id: string; trade_id: string; verifier_agent_id: string; artifact_id: string; artifact_sha256: string; request_hash: string
+  policy: IsolatedCheckPolicy; state: 'pending' | 'passed' | 'failed' | 'cancelled' | 'expired'
+  created_at: string; expires_at: string; completed_at: string | null; report: IsolatedReport | null; report_hash: string | null
+  provenance: { kind: 'buyer_approved_authenticated_verifier'; isolation_observed_by_app: false; semantic_verified: false }
+}
+export type AssertionRule = { id: string; field: string } & (
+  | { op: 'equals'; value: string | number | boolean | null }
+  | { op: 'one_of'; values: Array<string | number | boolean | null> }
+  | { op: 'number_range' | 'length_range'; min?: number; max?: number }
+)
+export type VerificationPolicy = {
+  required?: true; methods?: VerificationMethod[]; minimum_sources?: number
+  assertions?: { version: 1; rules: AssertionRule[] }
+  source_evidence?: { version: 1; minimum_sources: number; max_age_days: number; require_claim_links?: boolean }
+  acceptance?: { version: 1; mode: 'explicit_buyer' }
+  isolated_checks?: IsolatedCheckPolicy
+}
+export type DeclaredSource = { id: string; url: string; published_at: string }
+export type SourceLinkedClaim = { id: string; statement: string; source_ids: string[] }
 
 export type RouteRequest = {
   provider_requirements?: ProviderRequirements
@@ -10,7 +58,7 @@ export type RouteRequest = {
   max_budget: Money
   input?: Record<string, unknown>
   deadline_seconds?: number
-  verification?: { required?: boolean; methods?: string[]; minimum_score?: number }
+  verification?: VerificationPolicy
   payment_policy?: { allowed_rails?: Array<'mpp' | 'evm' | 'ledger'> }
   retry_policy?: { max_attempts?: number }
 }
@@ -24,7 +72,7 @@ export type RouteCandidate = {
   pricing: { model: 'fixed'; amount: string; currency: 'USD'; estimated_total: string }
   estimated_latency_seconds: number | null
   payment_rail: 'mpp' | 'evm'
-  verification_methods: string[]
+  verification_methods: VerificationMethod[]
   eligibility: { requirements_satisfied: true; request: ProviderRequirements; saved_policy: ProviderRequirements; confidence: 'backed_completion_observed' | 'unmeasured'; buyer_independence: 'not_verified' }
   evidence_level: 'claimed_only' | 'backed_completion_observed'
   capability_evidence: { capability_id: string; accepted_completion_count: number; distinct_buyer_count: number; measured_quality_score: null }[]
@@ -79,7 +127,8 @@ export type ProviderExecution = {
   automatic_retry_allowed: false
 }
 
-export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null; provider_execution: ProviderExecution | null }
+export type AcceptanceStatus = { mode: 'legacy_settlement' | 'explicit_buyer'; auto_confirm_enabled: boolean; accepted: boolean; attention_required: boolean; error_code?: string }
+export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null; provider_execution: ProviderExecution | null; acceptance: AcceptanceStatus | null }
 export type PlannedRoute = { route: RoutePlan; idempotent: boolean; planning?: { examined: number; truncated: boolean; candidate_count: number; funds_moved: false } }
 export type ExecutedRoute = Pick<RouteSnapshot, 'route' | 'attempts' | 'payment_exposure'> & {
   order: { id: string; service_id: string; trade_id: string; [key: string]: unknown }
@@ -121,7 +170,7 @@ export type ArtifactUpload = {
   client_reference: string; name: string; media_type: 'application/json' | 'text/plain' | 'text/markdown' | 'application/pdf' | 'application/octet-stream'
   content_base64: string; sha256: string; provenance?: { description?: string; source_uri?: string }; execution_attempt_id?: string
 }
-export type TradeDelivery = { summary: string; delivery_url?: string; artifact?: Record<string, unknown>; execution_attempt_id?: string; artifact_ids?: string[]; verification_artifact_id?: string }
+export type TradeDelivery = { summary: string; delivery_url?: string; artifact?: Record<string, unknown>; execution_attempt_id?: string; artifact_ids?: string[]; verification_artifact_id?: string; verification_job_id?: string }
 
 export type ClientOptions = { apiKey: string; baseUrl?: string; fetch?: typeof fetch }
 export type RequestOptions = { signal?: AbortSignal }
@@ -149,6 +198,11 @@ function tradePath(tradeId: string) {
 function routePath(routeId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(routeId)) throw new TypeError('routeId must be a route UUID')
   return `/api/routes/${routeId}`
+}
+
+function verificationJobPath(id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new TypeError('verification job ID must be a UUID')
+  return `/api/verification-jobs/${id}`
 }
 
 function delay(ms: number, signal?: AbortSignal) {
@@ -195,6 +249,17 @@ export class ClawdMarketClient {
     return payload as T
   }
 
+  getAccountBalance(agentId?: string, options?: RequestOptions) { return this.request<{ account_id: string; available: number; escrow: number; credit: { available_minor: number; escrow_minor: number }; historical_credit: { spendable: false } }>('GET', `/api/wallet${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''}`, undefined, options) }
+  getConnectedWalletBalances(address: string, options?: RequestOptions) { return this.request<{ address: string; balances: Array<{ chain_id: number; symbol: string; status: 'available' | 'unavailable'; amount: string | null; amount_raw: string | null }> }>('GET', `/api/wallet/balances?address=${encodeURIComponent(address)}`, undefined, options) }
+  /** Persist client_reference before calling. Only a fresh created intent permits one transfer; this method never sends. */
+  createAccountDeposit(input: { amount_minor: number; payer: string; client_reference: string }, options?: RequestOptions) { return this.request<{ deposit: AccountDeposit }>('POST', '/api/wallet/deposits', input, options) }
+  getAccountDeposits(id?: string, options?: RequestOptions) { return this.request<{ deposits: AccountDeposit[] }>('GET', `/api/wallet/deposits${id ? `?id=${encodeURIComponent(id)}` : ''}`, undefined, options) }
+  /** Verify the original hash with its payer signature. Confirmation may return HTTP 202; never replace the transfer. */
+  confirmAccountDeposit(input: { id: string; tx_hash: string; signature: string }, options?: RequestOptions) { return this.request<{ deposit?: AccountDeposit; code?: string; error?: string }>('PUT', '/api/wallet/deposits', input, options) }
+  fundOwnedAgent(input: { agent_id: string; amount_minor: number; client_reference: string }, options?: RequestOptions) { return this.request<{ idempotent: boolean; balance: { available_minor: number; escrow_minor: number } }>('POST', '/api/wallet/transfers', input, options) }
+  buyWithAccountCredit(listingId: string, clientReference: string, options?: RequestOptions) { return this.request<{ trade: { id: string; status: string; payment_rail: 'credit' } }>('POST', '/api/trades', { listing_id: listingId, amount: 1, payment_rail: 'credit', client_reference: clientReference }, options) }
+  orderServiceWithAccountCredit(serviceId: string, input: { client_reference: string; objective: string; input?: Record<string, unknown>; max_total?: string; expected_price?: string }, options?: RequestOptions) { return this.request<{ order: Record<string, unknown>; trade: Record<string, unknown> }>('POST', `/api/services/${encodeURIComponent(serviceId)}/orders`, { ...input, payment_rail: 'credit' }, options) }
+
   /** Nonbinding persisted plan. Safe to replay with the same client_reference. */
   planRoute(input: RouteRequest, options?: RequestOptions) { return this.request<PlannedRoute>('POST', '/api/routes/plan', input, options) }
 
@@ -203,6 +268,37 @@ export class ClawdMarketClient {
 
   /** Reserves one unpaid service order and returns explicit checkout instructions. */
   executeRoute(routeId: string, options?: RequestOptions) { return this.request<ExecutedRoute>('POST', `${routePath(routeId)}/execute`, undefined, options) }
+
+  /** Owner account credential required; authorization creates no order or payment. */
+  createRouteMandate(routeId: string, input: RouteMandateInput, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; idempotent: boolean }>('POST', `${routePath(routeId)}/mandate`, input, options) }
+  getRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; funding_step: RouteFundingStep | null }>('GET', `${routePath(routeId)}/mandate`, undefined, options) }
+  revokeRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; idempotent: boolean }>('DELETE', `${routePath(routeId)}/mandate`, undefined, options) }
+  /** Atomically reserves one unpaid checkout and mandate exposure; does not sign or send. */
+  executeAuthorizedRoute(routeId: string, mandateId: string, options?: RequestOptions) { return this.request<ExecutedRoute>('POST', `${routePath(routeId)}/execute`, { mandate_id: mandateId }, options) }
+  /** Call only after fsync of the exact signed transaction; this never broadcasts. */
+  claimBuyerEvmPayment(tradeId: string, input: BuyerEvmPaymentClaimInput, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new Error('trade ID must be a UUID')
+    return this.request<BuyerEvmPaymentClaimResult>('POST', `/api/trades/${tradeId}/fund/evm/claim`, input, options)
+  }
+  /** Read-only verification of an already sent Tempo payment; never signs, broadcasts or replaces it. */
+  verifyBuyerMppFunding(tradeId: string, proof: { tx_hash: string; payer_address: string }, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
+    return this.request<{ ok: true; trade: { id: string; status: string }; status?: string; receipt?: { payment_reference: string } }>('POST', `/api/trades/${tradeId}/fund/mpp`, proof, options)
+  }
+
+  /** Persist buyer_operation_id privately first. This never signs or broadcasts. */
+  createBuyerEvmPaymentIntent(tradeId: string, input: { buyer_operation_id: string; chain_id: number; token_address: string; payer_address: string }, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new Error('trade ID must be a UUID')
+    return this.request<{ intent: BuyerEvmIntent; created: boolean; claim_required: true }>('POST', `/api/trades/${tradeId}/fund/evm/intent`, input, options)
+  }
+  getBuyerEvmPaymentIntent(tradeId: string, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new Error('trade ID must be a UUID')
+    return this.request<{ intent: BuyerEvmIntent | null; claim: BuyerEvmPaymentClaim | null; trade: { id: string; status: string; payout_status: string | null } }>('GET', `/api/trades/${tradeId}/fund/evm/intent`, undefined, options)
+  }
+  verifyBuyerEvmFunding(tradeId: string, proof: BuyerEvmFundingProof, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new Error('trade ID must be a UUID')
+    return this.request<{ ok: true; trade: { id: string; status: string; payout_status?: string | null }; status?: string; receipt?: { tx_hash: string } }>('POST', `/api/trades/${tradeId}/fund/evm`, proof, options)
+  }
 
   getRoute(routeId: string, options?: RequestOptions) { return this.request<RouteSnapshot>('GET', routePath(routeId), undefined, options) }
 
@@ -218,6 +314,18 @@ export class ClawdMarketClient {
   }
   deliverTrade(tradeId: string, input: TradeDelivery, options?: RequestOptions) {
     return this.request<{ delivery: { id: string; content_hash: string }; verification: Record<string, unknown>; idempotent: boolean }>('POST', `${tradePath(tradeId)}/delivery`, input, options)
+  }
+  createVerificationJob(tradeId: string, input: { client_reference: string; artifact_id: string; test_suite: IsolatedTestSuite }, options?: RequestOptions) {
+    return this.request<{ job: VerificationJob; idempotent: boolean }>('POST', `${tradePath(tradeId)}/verification-jobs`, input, options)
+  }
+  getVerificationJob(id: string, options?: RequestOptions) {
+    return this.request<{ job: VerificationJob; test_suite?: IsolatedTestSuite; artifact_path?: string; report_path?: string }>('GET', verificationJobPath(id), undefined, options)
+  }
+  submitVerificationReport(id: string, report: IsolatedReport, options?: RequestOptions) {
+    return this.request<{ job: VerificationJob; idempotent: boolean }>('POST', verificationJobPath(id), report, options)
+  }
+  cancelVerificationJob(id: string, options?: RequestOptions) {
+    return this.request<{ job: VerificationJob; idempotent: boolean }>('DELETE', verificationJobPath(id), undefined, options)
   }
   /** Returns bytes only after checking the authenticated download against the saved metadata. */
   async downloadArtifact(artifact: PrivateArtifact, options: RequestOptions = {}) {
@@ -263,4 +371,10 @@ export class ClawdMarketClient {
       await delay(Math.min(interval, Math.max(1, deadline - Date.now())), options.signal)
     }
   }
+}
+
+export type AccountDeposit = { id: string; user_id: string; client_reference: string; amount_minor: number; payer: string; treasury: string; token: string; chain_id: number; state: 'pending' | 'confirmed'; created: boolean; token_amount: string; tx_hash: string | null; expires_at: string; proof_message: string | null }
+/** Payer signature is specific to this immutable deposit and original hash. */
+export function accountDepositMessage(intent: AccountDeposit, hash: string) {
+  return ['ClawdMarket USDC account deposit v1', `Intent: ${intent.id}`, `Account: ${intent.user_id}`, `Chain: ${intent.chain_id}`, `Token: ${intent.token}`, `Treasury: ${intent.treasury}`, `Amount cents: ${intent.amount_minor}`, `Transaction: ${hash.toLowerCase()}`].join('\n')
 }

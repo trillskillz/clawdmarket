@@ -11,6 +11,10 @@ import { serviceContractReadiness } from './service-contract-readiness'
 import { serviceSupportsRoute, storedServiceCapabilities } from './route-service-eligibility'
 import { checkServiceInput } from './verification-policy'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
+import { isolatedVerifierEligibility } from './isolated-verifier-eligibility'
+import { mandateFundingEligibility } from './route-payment-mandate'
+import { agentFundingPolicyFailure } from './agent-spend-policy'
+import { organizationFundingBudgetFailure } from './organization-budgets'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -34,6 +38,12 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     .where(eq(service_orders.trade_id, trade.id)).limit(1)
   if (!linked) return null // Listing/task checkouts retain their existing contract.
   try {
+    const mandateReason = await mandateFundingEligibility(trade, source)
+    if (mandateReason) return mandateReason
+    const deploymentReason = await agentFundingPolicyFailure(trade, source)
+    if (deploymentReason) return deploymentReason
+    const organizationReason = await organizationFundingBudgetFailure(trade, source)
+    if (organizationReason) return organizationReason
     const { order, service } = linked
     if (!service) return 'SERVICE_UNAVAILABLE'
     const agreed = serviceExecutionContract(order, service)
@@ -49,6 +59,8 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     if (!offered || !capabilities.every((capability) => offered.includes(capability))) return 'SERVICE_CONTRACT_CHANGED'
     const contract = serviceContractReadiness(service)
     if (!contract.ready || checkServiceInput(JSON.parse(order.input_json), contract.inputSchema).status !== 'valid') return 'SERVICE_CONTRACT_CHANGED'
+    const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, trade.buyer_id, trade.seller_id, source)
+    if (verifierFailure) return verifierFailure
     if (trade.seller_id.startsWith('user_agent_')) {
       const visible = await source.all(sql`SELECT id FROM agents WHERE ('user_agent_' || id) = ${trade.seller_id}
         AND status = 'active' AND visibility = 'public' AND archived_at IS NULL AND instr(description, ${REFERENCE_FLEET_MARKER}) = 0 LIMIT 1`)

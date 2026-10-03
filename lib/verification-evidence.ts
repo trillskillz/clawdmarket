@@ -1,11 +1,13 @@
 import { and, eq, isNotNull } from 'drizzle-orm'
 import { db } from './db'
 import { verification_results } from './schema'
+import { assertReadyForBuyerAcceptance } from './trade-acceptance'
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 /** Call alongside the authoritative trade state transition when possible. */
 export async function advanceBuyerReview(tx: Transaction, tradeId: string, status: 'passed' | 'disputed' | 'skipped') {
+  if (status === 'passed') await assertReadyForBuyerAcceptance(tradeId, tx)
   const decision = status === 'passed' ? 'buyer_confirm' : status === 'skipped' ? 'auto_confirm' : 'trade_disputed'
   await tx.update(verification_results).set({
     status, score: status === 'passed' ? 1 : null,

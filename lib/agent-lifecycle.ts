@@ -11,6 +11,8 @@ import {
   tasks,
   trades,
   wallets,
+  credit_accounts,
+  credit_deposits,
   webhooks,
 } from '@/lib/schema'
 
@@ -50,8 +52,7 @@ export async function inspectAgentArchiveBlockers(agentId: string): Promise<Agen
     count(`SELECT COUNT(*) AS count FROM contracts
       WHERE (buyer_id IN (?, ?) OR seller_id IN (?, ?))
         AND state NOT IN ('COMPLETED', 'CANCELED', 'EXPIRED', 'REFUNDED')`, [agentId, syntheticUserId, agentId, syntheticUserId]),
-    count(`SELECT COUNT(*) AS count FROM wallets
-      WHERE user_id = ? AND (balance > 0 OR escrow > 0)`, [syntheticUserId]),
+    count(`SELECT (SELECT COUNT(*) FROM wallets WHERE user_id = ? AND (balance > 0 OR escrow > 0)) + (SELECT COUNT(*) FROM credit_accounts WHERE user_id = ? AND (available_minor > 0 OR escrow_minor > 0)) + (SELECT COUNT(*) FROM credit_deposits WHERE user_id = ? AND state = 'pending') AS count`, [syntheticUserId, syntheticUserId, syntheticUserId]),
   ])
   return {
     active_trades: activeTrades,
@@ -92,7 +93,7 @@ export async function archiveAgent(input: {
       .set({ status: 'expired' })
       .where(and(eq(listings.seller_id, syntheticUserId), inArray(listings.status, ['active', 'inactive'])))
 
-    const [trade, task, bid, contract, wallet] = await Promise.all([
+    const [trade, task, bid, contract, wallet, credit, pendingDeposit] = await Promise.all([
       tx.select({ id: trades.id }).from(trades).where(and(
         or(inArray(trades.buyer_id, principalIds), inArray(trades.seller_id, principalIds)),
         notInArray(trades.status, TERMINAL_TRADE_STATES),
@@ -113,6 +114,8 @@ export async function archiveAgent(input: {
         eq(wallets.user_id, syntheticUserId),
         or(gt(wallets.balance, 0), gt(wallets.escrow, 0)),
       )).limit(1),
+      tx.select().from(credit_accounts).where(and(eq(credit_accounts.user_id, syntheticUserId), or(gt(credit_accounts.available_minor, 0), gt(credit_accounts.escrow_minor, 0)))).limit(1),
+      tx.select().from(credit_deposits).where(and(eq(credit_deposits.user_id, syntheticUserId), eq(credit_deposits.state, 'pending'))).limit(1),
     ])
 
     const blockers: AgentArchiveBlockers = {
@@ -120,7 +123,7 @@ export async function archiveAgent(input: {
       active_tasks: task.length,
       active_bids: bid.length,
       active_contracts: contract.length,
-      nonzero_wallet: wallet.length,
+      nonzero_wallet: wallet.length + credit.length + pendingDeposit.length,
     }
     if (Object.values(blockers).some((count) => count > 0)) {
       throw new AgentArchiveBlockedError(blockers)

@@ -6,6 +6,7 @@ import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { internalErrorResponse } from '@/lib/api-error'
 
 import { listPrivateArtifacts, privateArtifactHeaders } from '@/lib/private-artifacts'
+import { tradeAcceptanceStatus } from '@/lib/trade-acceptance'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,13 +27,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       trade_id: id,
       delivery: delivery ? { id: delivery.id, content_hash: delivery.content_hash } : null,
       artifacts: await listPrivateArtifacts(id, principal.userId),
+      acceptance: await tradeAcceptanceStatus(id),
       categories: {
         delivery_received: Boolean(delivery),
         structure_verified: ['structure', 'schema'].some((method) => status(method) === 'passed'),
         artifact_integrity_verified: status('artifact_integrity') === 'passed',
         source_list_verified: status('source_urls') === 'passed',
+        assertions_verified: status('assertions') === 'passed',
+        declared_source_evidence_verified: status('source_evidence') === 'passed',
+        isolated_checks_attested: status('isolated_checks') === 'passed',
+        isolation_observed_by_app: false,
         semantic_verified: false,
-        deterministic_tests_passed: false,
+        deterministic_tests_passed: status('isolated_checks') === 'passed' && current.some((row) => row.method === 'isolated_checks' && JSON.parse(row.evidence_json).adapter === 'javascript_tests_v1'),
+        static_analysis_passed: status('isolated_checks') === 'passed' && current.some((row) => row.method === 'isolated_checks' && JSON.parse(row.evidence_json).adapter === 'javascript_static_v1'),
         provenance_verified: false,
         benchmark_verified: false,
         buyer_accepted: status('buyer_review') === 'passed',

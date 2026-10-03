@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { route_plans, service_definitions, service_orders, trades } from '@/lib/schema'
+import { route_payment_mandates, route_plans, service_definitions, service_orders, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { routePlanDto, type RouteCandidate } from '@/lib/route-planning'
@@ -16,11 +16,14 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { beginRouteAttempt, listRouteAttempts, markRouteAttemptIneligible } from '@/lib/route-attempts'
 import { routePaymentExposure } from '@/lib/route-payment-exposure'
 import { serviceSupportsRoute } from '@/lib/route-service-eligibility'
+import { RouteMandateError, validateRouteMandate } from '@/lib/route-payment-mandate'
+import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts'
+import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
-function failure(error_code: string, message: string, status: number, retryable = false) {
-  return NextResponse.json({ success: false, error_code, message, retryable, state: 'no_funds_moved' }, { status, headers: { 'Cache-Control': 'no-store' } })
+function failure(error_code: string, message: string, status: number, retryable = false, state = 'no_funds_moved') {
+  return NextResponse.json({ success: false, error_code, message, retryable, state }, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
 async function currentRoute(id: string, buyerId: string) {
@@ -44,8 +47,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (principal.usesCookieAuth && !validateCsrf(request)) return failure('CSRF_REJECTED', 'CSRF validation failed', 403)
   const { id } = await params
   try {
+    const body = await readBoundedJson(request, 1024, 10_000, true)
+    const parsed = z.object({ mandate_id: z.uuid().optional() }).strict().safeParse(body)
+    if (!parsed.success) return failure('INVALID_ROUTE_EXECUTION', 'Execution accepts only an optional mandate_id', 400)
+    const mandateId = parsed.data.mandate_id
     let plan = await currentRoute(id, principal.userId)
     if (!plan) return failure('ROUTE_NOT_FOUND', 'Route not found', 404)
+    const [savedMandate] = await db.select({ id: route_payment_mandates.id }).from(route_payment_mandates).where(eq(route_payment_mandates.route_id, id)).limit(1)
+    if (savedMandate && savedMandate.id !== mandateId) return failure('MANDATE_REQUIRED', 'Execution requires the saved buyer mandate', 409, false, plan.service_order_id ? 'see_trade' : 'no_funds_moved')
+    const mandate = mandateId ? await validateRouteMandate(mandateId, plan) : null
     const linked = await linkedResponse(plan, true)
     if (linked) return linked
     if (!routeExecutionEnabled(principal.userId)) return failure('ROUTE_EXECUTION_DISABLED', 'Route execution is not enabled', 503, true)
@@ -78,8 +88,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (raced?.service_order_id) return (await linkedResponse(raced, true))!
         throw new Error('ROUTE_ATTEMPT_ORDER_INVARIANT')
       }
-      if (candidate.payment_rail === 'ledger') {
+      if (candidate.payment_rail === 'ledger' || candidate.payment_rail === 'credit') {
         lastCode = 'ROUTE_EXTERNAL_PAYMENT_REQUIRED'
+        await markRouteAttemptIneligible(id, attemptNumber, lastCode)
+        continue
+      }
+      if (mandate && candidate.payment_rail !== mandate.payment.rail) {
+        lastCode = 'MANDATE_PAYMENT_RAIL_BLOCKED'
         await markRouteAttemptIneligible(id, attemptNumber, lastCode)
         continue
       }
@@ -95,7 +110,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         continue
       }
       try {
-        const result = await reserveServiceOrder({ serviceId: candidate.service_id, principal, routeId: id, attemptNumber, externalOnly: true, expectedSellerId: service.seller_id, request: {
+        const result = await reserveServiceOrder({ serviceId: candidate.service_id, principal, routeId: id, attemptNumber, externalOnly: true, expectedSellerId: service.seller_id, mandateId, request: {
           client_reference: `route:${id}:attempt:${attemptNumber}`, objective: plan.objective,
           provider_requirements: JSON.parse(plan.provider_requirements_json),
           input: JSON.parse(plan.input_json), payment_rail: candidate.payment_rail,
@@ -105,6 +120,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (!plan || plan.service_order_id !== result.order.id) throw new Error('ROUTE_ORDER_INVARIANT')
         return (await linkedResponse(plan, result.idempotent))!
       } catch (error) {
+        if (error instanceof RouteMandateError && ['MANDATE_PROVIDER_OR_RAIL_BLOCKED', 'MANDATE_LATENCY_EXCEEDED', 'MANDATE_BUDGET_EXCEEDED'].includes(error.code)) {
+          lastCode = error.code
+          await markRouteAttemptIneligible(id, attemptNumber, lastCode)
+          continue
+        }
         if (!(error instanceof ServiceOrderReservationError) || !providerFailures.has(error.code)) throw error
         lastCode = error.code
         await markRouteAttemptIneligible(id, attemptNumber, lastCode)
@@ -115,6 +135,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (exhausted?.service_order_id) return (await linkedResponse(exhausted, true))!
     return failure(lastCode, 'No saved provider remains eligible; create a new plan', 409)
   } catch (error) {
+    if (error instanceof RouteMandateError || error instanceof ArtifactError) {
+      const current = await currentRoute(id, principal.userId)
+      return failure(error.code, error.message, error.status, error.code === 'MANDATE_STORAGE_BUSY', current?.service_order_id ? 'see_trade' : 'no_funds_moved')
+    }
     const raced = await currentRoute(id, principal.userId)
     if (raced?.service_order_id) return (await linkedResponse(raced, true))!
     if (error instanceof ServiceOrderReservationError) {

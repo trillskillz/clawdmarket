@@ -1,8 +1,11 @@
+import { payoutAddressForUser } from '@/lib/external-settlement';
+import { creditBalance } from '@/lib/account-credit';
+import { accountOwnsAgent } from '@/lib/agent-owner-auth';
+import { credit_entries } from '@/lib/schema';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { transactions } from '@/lib/schema';
+import { transactions, wallets } from '@/lib/schema';
 import { logger } from '@/lib/logger';
-import { getBalance } from '@/lib/wallet';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { eq, or, desc } from 'drizzle-orm';
 import { envMeta } from '@/lib/agent-environment';
@@ -24,33 +27,43 @@ export async function GET(req: NextRequest) {
   const ip = getRequestIp(req);
   const rateLimitResult = await rateLimit(`wallet:${ip}`, { interval: 60 * 1000, maxRequests: 30 });
   if (!rateLimitResult.success) {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: getRateLimitHeaders(rateLimitResult) });
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { ...getRateLimitHeaders(rateLimitResult), 'Cache-Control': 'no-store' } });
   }
 
   try {
-    const balance = await getBalance(auth.userId);
+    const agentId = req.nextUrl.searchParams.get('agent_id');
+    if (agentId && auth.agentId !== agentId && (auth.kind !== 'account' || auth.agentId || !await accountOwnsAgent(auth.userId, agentId))) return NextResponse.json({ error: 'Agent not owned' }, { status: 403 });
+    const subject = agentId ? `user_agent_${agentId}` : auth.userId;
+    const credit = await creditBalance(subject);
+    const balance = { balance: credit.available_minor / 100, available: credit.available_minor / 100, escrow: credit.escrow_minor / 100 };
+    const [historicalWallet] = await db.select().from(wallets).where(eq(wallets.user_id, subject)).limit(1);
+    const historical = { balance: historicalWallet?.balance ?? 0, escrow: historicalWallet?.escrow ?? 0 };
+    const activity = await db.select().from(credit_entries).where(eq(credit_entries.user_id, subject)).orderBy(desc(credit_entries.created_at)).limit(30);
 
     const recentTx = await db
       .select()
       .from(transactions)
       .where(
         or(
-          eq(transactions.from_user_id, auth.userId),
-          eq(transactions.to_user_id, auth.userId),
+          eq(transactions.from_user_id, subject),
+          eq(transactions.to_user_id, subject),
         ),
       )
       .orderBy(desc(transactions.created_at))
       .limit(25);
 
     return NextResponse.json({
+      account_id: subject,
+      connected_wallet_address: await payoutAddressForUser(subject),
       ticker: 'USD_CREDIT',
       ...balance,
-      // This endpoint reports internal ledger credit only. Externally funded
-      // trades are accounted for in trade receipts, not in this balance.
-      available: Math.max(0, balance.balance),
+      total_credit: (credit.available_minor + credit.escrow_minor) / 100,
+      credit,
+      credit_activity: activity,
+      historical_credit: { ...historical, spendable: false },
       transactions: recentTx,
       ...envMeta('clawdmarket/api/wallet'),
-    }, { headers: getRateLimitHeaders(rateLimitResult) });
+    }, { headers: { ...getRateLimitHeaders(rateLimitResult), 'Cache-Control': 'no-store' } });
   } catch (error) {
     logger.error('Wallet fetch error', { err: String(error) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -6,6 +6,7 @@ import styles from './observe.module.css'
 
 type ConnState = 'connecting' | 'live' | 'reconnecting'
 type PaymentConfig = {
+  account_credit_enabled?: boolean
   ledger_enabled?: boolean
   mpp_configured?: boolean
   erc20_configured?: boolean
@@ -163,7 +164,7 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
   const improvementProgress = Math.min((improvementCount / 50) * 100, 100)
   const topAgent = leaderboard[0]
   const settlementRails = [
-    ...(paymentConfig.ledger_enabled ? ['ACCOUNT'] : []),
+    ...(paymentConfig.account_credit_enabled ? ['ACCOUNT'] : []),
     ...(paymentConfig.mpp_configured ? ['MPP'] : []),
     ...(paymentConfig.erc20_configured ? ['ERC-20'] : []),
   ]

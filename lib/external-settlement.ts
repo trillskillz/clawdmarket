@@ -21,6 +21,7 @@ import { getRpcUrl } from '@/lib/settlement'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { reportInternalError } from '@/lib/api-error'
 import { settlementAccount, settlementChain } from '@/lib/settlement-transaction'
+import { assertTradeReleaseAllowed } from '@/lib/trade-acceptance'
 
 const TRANSFER_EVENT = erc20Abi.find((entry) => entry.type === 'event' && entry.name === 'Transfer')!
 
@@ -187,6 +188,10 @@ export async function processSettlementTransfer(transferId: string, options: { w
   if (!transfer) throw new SettlementError('Settlement transfer not found', 'TRANSFER_NOT_FOUND', false)
   if (transfer.status === 'confirmed') return transfer
   if (transfer.status === 'failed') throw new SettlementError(transfer.last_error || 'Settlement transfer failed', 'TRANSFER_FAILED', false)
+  if (transfer.kind === 'seller_payout') {
+    const [trade] = await db.select().from(trades).where(eq(trades.id, transfer.trade_id)).limit(1)
+    if (trade?.status === 'pending_release') await assertTradeReleaseAllowed(trade.id, 'seller_payout')
+  }
 
   const rpcUrl = transfer.chain_id === TEMPO_CHAIN_ID
     ? getTempoRpcUrl()
@@ -250,6 +255,7 @@ export async function settleExternallyFundedTrade(
 ) {
   if (!['mpp', 'evm'].includes(trade.payment_rail)) return { complete: true, transfers: [] }
   if (sellerPercent < 0 || sellerPercent > 100) throw new SettlementError('Invalid seller distribution', 'INVALID_DISTRIBUTION', false)
+  if (trade.status === 'pending_release' && sellerPercent > 0) await assertTradeReleaseAllowed(trade.id, 'seller_payout')
   const sellerUsd = Math.round(trade.seller_amount * (sellerPercent / 100) * 100) / 100
   const buyerUsd = Math.round((trade.seller_amount - sellerUsd) * 100) / 100
   const queued: (typeof settlement_transfers.$inferSelect)[] = []

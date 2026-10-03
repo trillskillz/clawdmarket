@@ -5,6 +5,7 @@ export function getTradeSettlementReadiness() {
   return {
     mode: readiness.mode,
     ledger: readiness.ledger,
+    credit: readiness.credit,
     evm: {
       enabled: readiness.evm.enabled,
       treasury: readiness.evm.treasury,
@@ -44,7 +45,7 @@ export function isExternalTradePaymentRequested(body: unknown) {
   const rail = String(input.payment_rail || '').toLowerCase()
   // Treat every explicitly selected non-ledger rail as external. This avoids
   // silently downgrading a typo or a future rail name into a ledger charge.
-  return Boolean(mode && mode !== 'ledger') || Boolean(rail && rail !== 'ledger')
+  return Boolean(mode && mode !== 'ledger') || Boolean(rail && !['ledger', 'credit'].includes(rail))
 }
 
 export function isExternallyFundedTrade(trade: { payment_rail?: string | null; fee_tx_hash?: string | null }) {

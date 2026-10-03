@@ -4,6 +4,66 @@ import { ClawdMarketApiError, ClawdMarketClient, ClawdMarketTransportError } fro
 
 const routeId = '00000000-0000-4000-8000-000000000001'
 
+test('buyer payment claim SDK authenticates one canonical claim without signing or broadcasting', async () => {
+  const body = { intent_id: routeId, mandate_id: routeId, serialized_transaction: '0xaabb', payer_signature: `0x${'00'.repeat(65)}` }
+  const client = new ClawdMarketClient({ apiKey: 'dummy-payments-key', fetch: async (input, init) => {
+    assert.equal(new URL(String(input)).pathname, `/api/trades/${routeId}/fund/evm/claim`)
+    assert.equal(init?.method, 'POST'); assert.equal(init?.redirect, 'error')
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-payments-key')
+    assert.deepEqual(JSON.parse(String(init?.body)), body)
+    return Response.json({ claim: { tx_hash: 'dummy-hash' }, send_allowed: false, state: 'recover_existing_payment', idempotent: true })
+  } })
+  assert.equal((await client.claimBuyerEvmPayment(routeId, body)).send_allowed, false)
+  assert.throws(() => client.claimBuyerEvmPayment('../another', body), /trade ID must be a UUID/)
+})
+
+test('MPP SDK reconciles the exact known hash with buyer authentication and never requests another payment', async () => {
+  const proof = { tx_hash: `0x${'aa'.repeat(32)}`, payer_address: `0x${'11'.repeat(20)}` }, calls: string[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-mpp-buyer', fetch: async (input, init) => {
+    calls.push(new URL(String(input)).pathname)
+    assert.equal(init?.method, 'POST'); assert.deepEqual(JSON.parse(String(init?.body)), proof)
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-mpp-buyer')
+    assert.equal(new Headers(init?.headers).get('Payment-Authorization'), null)
+    return Response.json({ ok: true, trade: { id: routeId, status: 'escrow_held' }, receipt: { payment_reference: proof.tx_hash } })
+  } })
+  assert.equal((await client.verifyBuyerMppFunding(routeId, proof)).receipt?.payment_reference, proof.tx_hash)
+  assert.deepEqual(calls, [`/api/trades/${routeId}/fund/mpp`])
+  assert.throws(() => client.verifyBuyerMppFunding('../another', proof), /trade ID must be a UUID/)
+})
+
+test('buyer operation SDK preserves the same recovery reference and proof on canonical funding paths', async () => {
+  const calls: { path: string; method: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-buyer-key', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: String(init?.method), body: init?.body ? JSON.parse(String(init.body)) : null })
+    return Response.json({ intent: { id: routeId }, claim_required: true, created: false, ok: true })
+  } })
+  const intent = { buyer_operation_id: routeId, chain_id: 8453, token_address: `0x${'44'.repeat(20)}`, payer_address: `0x${'55'.repeat(20)}` }
+  const proof = { intent_id: routeId, chain_id: 8453, token_address: intent.token_address, payer_address: intent.payer_address, tx_hash: `0x${'aa'.repeat(32)}` }
+  assert.equal((await client.createBuyerEvmPaymentIntent(routeId, intent)).claim_required, true)
+  await client.getBuyerEvmPaymentIntent(routeId); await client.verifyBuyerEvmFunding(routeId, proof)
+  assert.deepEqual(calls, [{ method: 'POST', path: `/api/trades/${routeId}/fund/evm/intent`, body: intent },
+    { method: 'GET', path: `/api/trades/${routeId}/fund/evm/intent`, body: null }, { method: 'POST', path: `/api/trades/${routeId}/fund/evm`, body: proof }])
+})
+
+test('client uses canonical mandate paths and keeps authorization separate from reservation', async () => {
+  const calls: Array<{ path: string; method: string; body: unknown }> = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-owner-account-token', baseUrl: 'http://localhost', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : null })
+    assert.equal(init?.redirect, 'error')
+    return Response.json({ mandate: { id: routeId }, route: { id: routeId }, funding_step: null })
+  } })
+  const input = { version: 1 as const, client_reference: 'fixed-mandate-reference', max_aggregate: '1.00', max_per_execution: '1.00', max_retry_budget: '0.00', max_attempts: 1,
+    approved_providers: ['approved-seller'], max_latency_seconds: 30, private_data: 'selected_provider_only' as const, expires_at: '2027-01-01T00:00:00.000Z',
+    payment: { rail: 'evm' as const, chain_id: 8453, token_address: `0x${'44'.repeat(20)}`, payer_address: `0x${'11'.repeat(20)}`, treasury_address: `0x${'99'.repeat(20)}`,
+      minimum_token_reserve_units: '1000000', minimum_native_reserve_wei: '100000', max_gas_cost_wei: '20000' } }
+  await client.createRouteMandate(routeId, input)
+  await client.getRouteMandate(routeId)
+  await client.executeAuthorizedRoute(routeId, routeId)
+  await client.revokeRouteMandate(routeId)
+  assert.deepEqual(calls, [{ path: `/api/routes/${routeId}/mandate`, method: 'POST', body: input }, { path: `/api/routes/${routeId}/mandate`, method: 'GET', body: null },
+    { path: `/api/routes/${routeId}/execute`, method: 'POST', body: { mandate_id: routeId } }, { path: `/api/routes/${routeId}/mandate`, method: 'DELETE', body: null }])
+})
+
 test('client plans and reserves one unpaid route without issuing a funding request', async () => {
   const requests: Array<{ path: string; method: string; auth: string | null; body: unknown }> = []
   const responses = [
@@ -74,6 +134,22 @@ test('client requires a secure origin and a nonempty key', () => {
   assert.throws(() => new ClawdMarketClient({ apiKey: ' ' }), /apiKey is required/)
   const client = new ClawdMarketClient({ apiKey: 'x', fetch: async () => { throw new Error('should not fetch') } })
   assert.throws(() => client.getRoute('../other'), /route UUID/)
+})
+
+test('SDK verifier job operations keep approved suite and report on authenticated canonical paths', async () => {
+  const seen: { method: string; path: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'verifier-test-key', fetch: async (input, init) => {
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer verifier-test-key')
+    seen.push({ method: String(init?.method), path: new URL(String(input)).pathname, body: init?.body ? JSON.parse(String(init.body)) : null })
+    return Response.json({ job: { id: routeId }, idempotent: false })
+  } })
+  const input = { client_reference: 'suite-reference', artifact_id: routeId, test_suite: { version: 1 as const, cases: [{ id: 'echo', args: [1], expected: 1 }] } }
+  await client.createVerificationJob(routeId, input)
+  await client.getVerificationJob(routeId)
+  await client.cancelVerificationJob(routeId)
+  assert.deepEqual(seen.map((row) => `${row.method} ${row.path}`), [`POST /api/trades/${routeId}/verification-jobs`, `GET /api/verification-jobs/${routeId}`, `DELETE /api/verification-jobs/${routeId}`])
+  assert.deepEqual(seen[0].body, input)
+  assert.throws(() => client.getVerificationJob('../another'), /job ID must be a UUID/)
 })
 
 test('private artifact SDK authenticates relative downloads and independently verifies hash and bounded size', async () => {

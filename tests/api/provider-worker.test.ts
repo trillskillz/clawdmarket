@@ -306,3 +306,34 @@ test('the controlled production artifact handler delivers two verified files aga
   assert.equal(methods.find((row) => row.method === 'artifact_integrity')?.status, 'passed')
   assert.equal(methods.find((row) => row.method === 'buyer_review')?.status, 'pending')
 })
+
+test('provider uploads privately before verifier approval and preserves the selected job across exact delivery recovery', async () => {
+  const f = await fixture()
+  const text = 'export default (value) => value;'
+  const { createHash } = await import('node:crypto')
+  const { canonicalJSON } = await import('../../scripts/verifier-contract.mjs')
+  const sha = (value: string) => createHash('sha256').update(value).digest('hex')
+  const verifier = crypto.randomUUID(), owner = `verifier-owner-${verifier}`
+  await db.insert(schema.users).values([owner, `user_agent_${verifier}`].map((id) => ({ id, name: id, email: `${id}@test.invalid`, password_hash: 'unused', role: 'human' as const })))
+  await db.insert(schema.agents).values({ id: verifier, name: 'Worker verifier', description: 'Controlled worker verifier', capabilities: '[]', endpoint: 'https://example.invalid', owner_address: '', api_key: 'unused' })
+  await db.insert(schema.agent_owners).values({ agentId: verifier, userId: owner, establishedBy: 'verified-test' })
+  const suite = { version: 1, cases: [{ id: 'echo', args: [1], expected: 1 }] }
+  const config = { version: 1, adapter: 'javascript_tests_v1', verifier_agent_id: verifier, suite_sha256: sha(canonicalJSON(suite)), max_runtime_seconds: 5 }
+  const [service] = await db.update(schema.service_definitions).set({ verification_policy: JSON.stringify({ methods: ['buyer_review', 'isolated_checks'], isolated_checks: config, acceptance: { version: 1, mode: 'explicit_buyer' } }) }).where(eq(schema.service_definitions.id, f.serviceId)).returning()
+  const { captureServiceExecutionContract } = await import('@/lib/service-execution-contract')
+  await db.update(schema.service_orders).set({ execution_contract_json: captureServiceExecutionContract(service, []) }).where(eq(schema.service_orders.id, f.order.id))
+  let computed = 0
+  const handler = async () => { computed++; return { summary: 'Private code awaits approved verification before review.', files: [{ name: 'module.mjs', media_type: 'text/plain', content_base64: Buffer.from(text).toString('base64'), sha256: sha(text) }] } }
+  const prepared = await runProviderWork({ ...f, handler, uploadOnly: true })
+  assert.equal(prepared.state, 'awaiting_verifier'); assert.equal(prepared.artifact_ids.length, 1)
+  assert.equal((await db.select().from(schema.trade_deliveries).where(eq(schema.trade_deliveries.trade_id, f.trade.id))).length, 0)
+  const { createVerificationJob, submitVerificationReport } = await import('@/lib/verification-jobs')
+  const approved = await createVerificationJob(f.trade.id, f.buyerId, { client_reference: crypto.randomUUID(), artifact_id: prepared.artifact_ids[0], test_suite: suite })
+  await submitVerificationReport(approved.job.id, `user_agent_${verifier}`, { version: 1, adapter: config.adapter, artifact_sha256: sha(text), suite_sha256: config.suite_sha256, status: 'passed', total_checks: 1, passed_checks: 1, failed_checks: 0, elapsed_ms: 100, failure: null,
+    isolation: { kind: 'bwrap-systemd-v1', network_enabled: false, host_home_mounted: false, memory_limit_bytes: 134217728, task_limit: 32 } })
+  assert.equal((await runProviderWork({ ...f, handler, verificationJobId: approved.job.id })).state, 'delivered')
+  assert.equal((await runProviderWork({ ...f, handler, verificationJobId: approved.job.id })).idempotent, true)
+  assert.equal(computed, 1)
+  assert.equal(JSON.parse(JSON.parse(await readFile(f.stateFile, 'utf8')).delivery_body).verification_job_id, approved.job.id)
+  await assert.rejects(runProviderWork({ ...f, handler, verificationJobId: crypto.randomUUID() }), /PROVIDER_DELIVERY_ALREADY_BOUND/)
+})

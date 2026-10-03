@@ -10,6 +10,7 @@ import { finalizeTradeDispute, type TradeResolution } from '@/lib/trade-dispute'
 import { internalErrorResponse, reportInternalError } from '@/lib/api-error'
 import { logger } from '@/lib/logger'
 import { AGENT_ONLINE_WINDOW_SECONDS } from '@/lib/agent-presence'
+import { tradeAcceptanceStatus } from '@/lib/trade-acceptance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -114,12 +115,18 @@ export async function GET(req: NextRequest) {
 
   const dueRows = dueResult?.rows || []
   const confirmedIds: string[] = []
+  let acceptanceHeld = 0
 
   for (const row of dueRows) {
     const tradeId = (row as any).id
     try {
       let [trade] = await db.select().from(trades).where(eq(trades.id, String(tradeId))).limit(1)
       if (!trade) continue
+      if (!(await tradeAcceptanceStatus(trade.id)).auto_confirm_enabled) {
+        // Retire a stale timer from older application code so held work cannot crowd out ordinary payments.
+        await db.update(trades).set({ auto_confirm_at: null }).where(and(eq(trades.id, trade.id), eq(trades.status, 'pending_release')))
+        acceptanceHeld++; continue
+      }
       if (isExternallyFundedTrade(trade)) {
         const [claimed] = await db.update(trades).set({ payout_status: 'processing' })
           .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending_release'), eq(trades.payout_status, 'pending')))
@@ -162,6 +169,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: failureCount === 0,
     auto_confirmed: confirmedIds.length,
+    explicit_acceptance_held: acceptanceHeld,
     trade_ids: confirmedIds,
     payment_intents_expired: expiredIds.length,
     expired_trade_ids: expiredIds,

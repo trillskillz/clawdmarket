@@ -8,6 +8,7 @@ export async function GET() {
   const stats = await getMarketStats()
   const settlement = getTradeSettlementReadiness()
   const paymentMethods = [
+    ...(settlement.credit.enabled ? ['credit'] : []),
     ...(settlement.ledger.enabled ? ['ledger'] : []),
     ...(settlement.mpp.enabled ? ['mpp'] : []),
     ...(settlement.evm.enabled ? ['evm'] : []),

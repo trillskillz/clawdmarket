@@ -1,3 +1,4 @@
+import { inspectCreditHealth } from './credit-health.mjs'
 import 'server-only'
 import { db } from '@/lib/db'
 import { routeExecutionEnabled, routePlanningEnabled, reusableServiceWritesEnabled, routingCanaryConfigured, workflowPlanningEnabled } from '@/lib/routing-feature-flags'
@@ -5,6 +6,7 @@ import { inspectWebhookDeliveryHealth } from '@/lib/webhook-delivery'
 import { inspectSettlementHealth } from '@/lib/settlement-monitoring'
 import { inspectWorkerHeartbeat } from '@/lib/worker-heartbeats'
 import { PROVIDER_ACKNOWLEDGMENT_TIMEOUT_SECONDS } from '@/lib/provider-acknowledgment'
+import { inspectRouteFundingHealth } from './route-funding-health.mjs'
 
 function countByState(rows: readonly Record<string, unknown>[]) {
   return Object.fromEntries(rows.map((row) => [String(row.state), Number(row.count || 0)]))
@@ -13,7 +15,7 @@ function countByState(rows: readonly Record<string, unknown>[]) {
 /** Aggregate-only operator snapshot. No account, endpoint, payload, or credential values leave this function. */
 export async function getRoutingOperatorSnapshot() {
   const client = db.$client
-  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, overdueDeliveries, webhooks, settlement, cron] = await Promise.all([
+  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, overdueDeliveries, webhooks, settlement, cron, verificationHealth, fundingHealth, creditHealth] = await Promise.all([
     client.execute('SELECT id, applied_at FROM _clawdmarket_migrations ORDER BY applied_at DESC, id DESC LIMIT 8'),
     client.execute('SELECT status AS state, COUNT(*) AS count FROM service_definitions GROUP BY status'),
     client.execute('SELECT state, COUNT(*) AS count FROM route_plans GROUP BY state'),
@@ -45,6 +47,12 @@ export async function getRoutingOperatorSnapshot() {
     inspectWebhookDeliveryHealth(),
     inspectSettlementHealth(client),
     inspectWorkerHeartbeat('webhooks', 5),
+    client.execute(`SELECT COUNT(CASE WHEN state = 'pending' THEN 1 END) AS pending_count,
+      COUNT(CASE WHEN state = 'pending' AND expires_at <= unixepoch() THEN 1 END) AS overdue_count,
+      COUNT(CASE WHEN state != 'pending' AND (suite_ciphertext IS NOT NULL OR suite_nonce IS NOT NULL) THEN 1 END) AS retained_suite_anomaly_count
+      FROM verification_jobs`),
+    inspectRouteFundingHealth(client),
+    inspectCreditHealth(client),
   ])
   return {
     checked_at: new Date().toISOString(),
@@ -69,6 +77,10 @@ export async function getRoutingOperatorSnapshot() {
       delivery_deadline_overdue_count: Number(overdueDeliveries.rows[0]?.count || 0),
     },
     outboxes: { webhook: webhooks, settlement },
+    verification_jobs: { pending_count: Number(verificationHealth.rows[0]?.pending_count || 0), overdue_count: Number(verificationHealth.rows[0]?.overdue_count || 0),
+      retained_suite_anomaly_count: Number(verificationHealth.rows[0]?.retained_suite_anomaly_count || 0) },
     workers: { webhooks: cron },
+    route_funding: fundingHealth,
+    account_credit: creditHealth,
   }
 }

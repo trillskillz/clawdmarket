@@ -370,7 +370,7 @@ export const trades = sqliteTable('trades', {
   dev_wallet: text('dev_wallet'),
   fee_tx_hash: text('fee_tx_hash'),
   payout_status: text('payout_status', { enum: ['pending', 'processing', 'fee_sent', 'seller_paid', 'refunded', 'partial', 'complete'] }).notNull().default('pending'),
-  payment_rail: text('payment_rail', { enum: ['ledger', 'mpp', 'evm'] }).notNull().default('ledger'),
+  payment_rail: text('payment_rail', { enum: ['ledger', 'credit', 'mpp', 'evm'] }).notNull().default('ledger'),
   client_reference: text('client_reference').unique(),
   status: text('status', {
     enum: ['pending', 'escrow_held', 'pending_release', 'completed', 'complete', 'disputed', 'resolved', 'cancelled']
@@ -401,7 +401,7 @@ export const service_orders = sqliteTable('service_orders', {
   provider_requirements_json: text('provider_requirements_json').notNull().default('{}'),
   execution_contract_json: text('execution_contract_json'),
   price_minor: integer('price_minor').notNull(),
-  payment_rail: text('payment_rail', { enum: ['ledger', 'mpp', 'evm'] }).notNull(),
+  payment_rail: text('payment_rail', { enum: ['ledger', 'credit', 'mpp', 'evm'] }).notNull(),
   state: text('state', { enum: ['awaiting_funding', 'funded', 'executing', 'verifying', 'completed', 'cancelled', 'disputed', 'resolved'] }).notNull().default('awaiting_funding'),
   execution_started_at: integer('execution_started_at', { mode: 'timestamp' }),
   capacity_released_at: integer('capacity_released_at', { mode: 'timestamp' }),
@@ -474,6 +474,35 @@ export const route_plans = sqliteTable('route_plans', {
 ]);
 
 /** Durable pre-checkout candidate attempts. Only one may link an economic order. */
+export const route_payment_mandates = sqliteTable('route_payment_mandates', {
+  id: text('id').primaryKey(),
+  route_id: text('route_id').notNull().unique().references(() => route_plans.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(), route_hash: text('route_hash').notNull(),
+  terms_json: text('terms_json').notNull(),
+  max_aggregate_minor: integer('max_aggregate_minor').notNull(),
+  reserved_minor: integer('reserved_minor').notNull().default(0),
+  state: text('state', { enum: ['active', 'revoked'] }).notNull().default('active'),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  revoked_at: integer('revoked_at', { mode: 'timestamp' }),
+}, (table) => [uniqueIndex('route_payment_mandates_owner_reference_idx').on(table.owner_account_id, table.client_reference)]);
+
+/** Committed with the economic order, before any buyer wallet side effect. */
+export const route_funding_steps = sqliteTable('route_funding_steps', {
+  id: text('id').primaryKey(),
+  mandate_id: text('mandate_id').notNull().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  route_id: text('route_id').notNull().unique().references(() => route_plans.id, { onDelete: 'restrict' }),
+  order_id: text('order_id').notNull().references(() => service_orders.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  amount_minor: integer('amount_minor').notNull(), terms_hash: text('terms_hash').notNull(),
+  state: text('state', { enum: ['reserved', 'funded', 'rejected'] }).notNull().default('reserved'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 export const route_attempts = sqliteTable('route_attempts', {
   id: text('id').primaryKey(),
   route_id: text('route_id').notNull().references(() => route_plans.id, { onDelete: 'restrict' }),
@@ -640,6 +669,28 @@ export const private_artifact_payloads = sqliteTable('private_artifact_payloads'
   ciphertext: text('ciphertext').notNull(),
   nonce: text('nonce').notNull(),
 });
+
+export const verification_jobs = sqliteTable('verification_jobs', {
+  id: text('id').primaryKey(),
+  trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  verifier_agent_id: text('verifier_agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  artifact_id: text('artifact_id').notNull().references(() => private_artifacts.id, { onDelete: 'restrict' }),
+  artifact_sha256: text('artifact_sha256').notNull(),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(),
+  policy_json: text('policy_json').notNull(),
+  suite_ciphertext: text('suite_ciphertext'), suite_nonce: text('suite_nonce'),
+  case_count: integer('case_count').notNull(),
+  state: text('state', { enum: ['pending', 'passed', 'failed', 'cancelled', 'expired'] }).notNull().default('pending'),
+  report_json: text('report_json'), report_hash: text('report_hash'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  completed_at: integer('completed_at', { mode: 'timestamp' }),
+}, (table) => [
+  uniqueIndex('verification_jobs_trade_reference_idx').on(table.trade_id, table.client_reference),
+  index('verification_jobs_verifier_state_idx').on(table.verifier_agent_id, table.state, table.expires_at),
+]);
 
 export const agentVersions = sqliteTable('agent_versions', {
   id: text('id').primaryKey(),
@@ -1049,7 +1100,20 @@ export const evm_payment_intents = sqliteTable('evm_payment_intents', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   tx_hash: text('tx_hash'),
   payer_signature: text('payer_signature'),
-});
+  buyer_operation_id: text('buyer_operation_id'),
+}, (table) => [uniqueIndex('evm_payment_intents_buyer_operation_idx').on(table.buyer_operation_id)]);
+
+/** One immutable transaction claim per intent and chain/wallet nonce, before broadcast. */
+export const buyer_evm_payment_claims = sqliteTable('buyer_evm_payment_claims', {
+  intent_id: text('intent_id').primaryKey().references(() => evm_payment_intents.id, { onDelete: 'restrict' }),
+  mandate_id: text('mandate_id').notNull().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(),
+  nonce: integer('nonce').notNull(), tx_hash: text('tx_hash').notNull(),
+  terms_hash: text('terms_hash').notNull(), maximum_execution_gas_cost_wei: text('maximum_execution_gas_cost_wei').notNull(),
+  state: text('state', { enum: ['claimed', 'confirmed'] }).notNull().default('claimed'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [uniqueIndex('buyer_evm_payment_claims_wallet_nonce_idx').on(table.chain_id, table.payer_address, table.nonce),
+  uniqueIndex('buyer_evm_payment_claims_active_wallet_idx').on(table.chain_id, table.payer_address).where(sql`${table.state} = 'claimed'`)]);
 
 export const payment_controls = sqliteTable('payment_controls', {
   key: text('key').primaryKey(),
@@ -1280,3 +1344,29 @@ export const rate_limits = sqliteTable('rate_limits', {
   count: integer('count').notNull().default(0),
   reset_at: integer('reset_at').notNull(),
 });
+
+/** Verified USDC prepaid credit. Historical wallets are never imported here. */
+export const credit_accounts = sqliteTable('credit_accounts', {
+  user_id: text('user_id').primaryKey().references(() => users.id, { onDelete: 'restrict' }),
+  available_minor: integer('available_minor').notNull().default(0),
+  escrow_minor: integer('escrow_minor').notNull().default(0),
+}, (t) => [check('credit_accounts_nonnegative', sql`${t.available_minor} >= 0 AND ${t.escrow_minor} >= 0`)]);
+
+export const credit_entries = sqliteTable('credit_entries', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  user_id: text('user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  reference: text('reference').notNull(), kind: text('kind').notNull(),
+  available_delta: integer('available_delta').notNull(), escrow_delta: integer('escrow_delta').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (t) => [uniqueIndex('credit_entries_reference_idx').on(t.user_id, t.reference, t.kind)]);
+
+export const credit_deposits = sqliteTable('credit_deposits', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  user_id: text('user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), amount_minor: integer('amount_minor').notNull(),
+  payer: text('payer').notNull(), treasury: text('treasury').notNull(), token: text('token').notNull(),
+  chain_id: integer('chain_id').notNull(), tx_hash: text('tx_hash'), payer_signature: text('payer_signature'),
+  state: text('state', { enum: ['pending', 'confirmed'] }).notNull().default('pending'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+}, (t) => [uniqueIndex('credit_deposits_reference_idx').on(t.user_id, t.client_reference), uniqueIndex('credit_deposits_hash_idx').on(t.tx_hash), check('credit_deposits_positive', sql`${t.amount_minor} > 0`)]);

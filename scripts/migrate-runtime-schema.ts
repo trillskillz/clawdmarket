@@ -728,7 +728,76 @@ async function main() {
   ciphertext TEXT NOT NULL, nonce TEXT NOT NULL
 )`)
       } },
+      { id: '2026-10-03-private-verification-jobs-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS verification_jobs (
+  id TEXT PRIMARY KEY NOT NULL,
+  trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE RESTRICT,
+  buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  verifier_agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  artifact_id TEXT NOT NULL REFERENCES private_artifacts(id) ON DELETE RESTRICT,
+  artifact_sha256 TEXT NOT NULL, client_reference TEXT NOT NULL, request_hash TEXT NOT NULL,
+  policy_json TEXT NOT NULL, suite_ciphertext TEXT, suite_nonce TEXT, case_count INTEGER NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending', report_json TEXT, report_hash TEXT,
+  created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, completed_at INTEGER
+)`)
+        await database.execute(`CREATE UNIQUE INDEX IF NOT EXISTS verification_jobs_trade_reference_idx ON verification_jobs(trade_id, client_reference)`)
+        await database.execute(`CREATE INDEX IF NOT EXISTS verification_jobs_verifier_state_idx ON verification_jobs(verifier_agent_id, state, expires_at)`)
+      } },
+      { id: '2026-10-03-route-payment-mandates-v1', run: async (database: Client) => {
+        await database.execute(`CREATE TABLE IF NOT EXISTS route_payment_mandates (
+  id TEXT PRIMARY KEY NOT NULL,
+  route_id TEXT NOT NULL UNIQUE REFERENCES route_plans(id) ON DELETE RESTRICT,
+  buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  owner_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  client_reference TEXT NOT NULL, request_hash TEXT NOT NULL, route_hash TEXT NOT NULL,
+  terms_json TEXT NOT NULL, max_aggregate_minor INTEGER NOT NULL,
+  reserved_minor INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'active',
+  expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, revoked_at INTEGER
+)`)
+        await database.execute(`CREATE UNIQUE INDEX IF NOT EXISTS route_payment_mandates_owner_reference_idx ON route_payment_mandates(owner_account_id, client_reference)`)
+        await database.execute(`CREATE TABLE IF NOT EXISTS route_funding_steps (
+  id TEXT PRIMARY KEY NOT NULL,
+  mandate_id TEXT NOT NULL REFERENCES route_payment_mandates(id) ON DELETE RESTRICT,
+  route_id TEXT NOT NULL UNIQUE REFERENCES route_plans(id) ON DELETE RESTRICT,
+  order_id TEXT NOT NULL REFERENCES service_orders(id) ON DELETE RESTRICT,
+  trade_id TEXT NOT NULL UNIQUE REFERENCES trades(id) ON DELETE RESTRICT,
+  amount_minor INTEGER NOT NULL, terms_hash TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'reserved',
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+)`)
+      } },
     ]
+    migrations.push({ id: '2026-10-03-buyer-evm-payment-claims-v1', run: async (database: Client) => {
+      await database.execute(`CREATE TABLE IF NOT EXISTS buyer_evm_payment_claims (
+  intent_id TEXT PRIMARY KEY NOT NULL REFERENCES evm_payment_intents(id) ON DELETE RESTRICT,
+  mandate_id TEXT NOT NULL REFERENCES route_payment_mandates(id) ON DELETE RESTRICT,
+  chain_id INTEGER NOT NULL, payer_address TEXT NOT NULL, nonce INTEGER NOT NULL,
+  tx_hash TEXT NOT NULL, terms_hash TEXT NOT NULL, maximum_execution_gas_cost_wei TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'claimed', created_at INTEGER NOT NULL
+)`)
+      await database.execute(`CREATE UNIQUE INDEX IF NOT EXISTS buyer_evm_payment_claims_wallet_nonce_idx ON buyer_evm_payment_claims(chain_id, payer_address, nonce)`)
+      await database.execute(`CREATE UNIQUE INDEX IF NOT EXISTS buyer_evm_payment_claims_active_wallet_idx ON buyer_evm_payment_claims(chain_id, payer_address) WHERE state = 'claimed'`)
+    } })
+    migrations.push({ id: '2026-10-03-buyer-payment-operation-v1', run: async (database: Client) => {
+      await ensureColumns(database, 'evm_payment_intents', { buyer_operation_id: 'TEXT' })
+      await database.execute(`CREATE UNIQUE INDEX IF NOT EXISTS evm_payment_intents_buyer_operation_idx ON evm_payment_intents(buyer_operation_id)`)
+    } })
+    migrations.push({ id: '2026-10-03-backed-account-credit-v1', run: async (database: Client) => {
+      await database.execute(`CREATE TABLE IF NOT EXISTS credit_accounts (
+        user_id TEXT PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        available_minor INTEGER NOT NULL DEFAULT 0, escrow_minor INTEGER NOT NULL DEFAULT 0,
+        CONSTRAINT credit_accounts_nonnegative CHECK(available_minor >= 0 AND escrow_minor >= 0))`)
+      await database.execute(`CREATE TABLE IF NOT EXISTS credit_entries (
+        id TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        reference TEXT NOT NULL, kind TEXT NOT NULL, available_delta INTEGER NOT NULL, escrow_delta INTEGER NOT NULL, created_at INTEGER NOT NULL)`)
+      await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS credit_entries_reference_idx ON credit_entries(user_id, reference, kind)')
+      await database.execute(`CREATE TABLE IF NOT EXISTS credit_deposits (
+        id TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        client_reference TEXT NOT NULL, amount_minor INTEGER NOT NULL CHECK(amount_minor > 0),
+        payer TEXT NOT NULL, treasury TEXT NOT NULL, token TEXT NOT NULL, chain_id INTEGER NOT NULL,
+        tx_hash TEXT, payer_signature TEXT, state TEXT NOT NULL DEFAULT 'pending', created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`)
+      await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS credit_deposits_reference_idx ON credit_deposits(user_id, client_reference)')
+      await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS credit_deposits_hash_idx ON credit_deposits(tx_hash)')
+    } })
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',

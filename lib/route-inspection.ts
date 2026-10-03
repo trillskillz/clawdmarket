@@ -8,6 +8,7 @@ import { listRouteAttempts } from './route-attempts'
 import { linkedRoutePaymentExposure } from './route-payment-exposure'
 import { routeExecutionTiming } from './route-execution-timing'
 import { providerExecutionStatus } from './provider-execution-status'
+import { tradeAcceptanceStatus } from './trade-acceptance'
 
 /** Shared buyer-owned snapshot for REST and read-only A2A inspection. */
 export async function inspectOwnedRoute(routeId: string, buyerId: string) {
@@ -15,6 +16,7 @@ export async function inspectOwnedRoute(routeId: string, buyerId: string) {
   if (!plan) return null
   let executionTiming = null
   let providerExecution = null
+  let acceptance = null
   if (plan.service_order_id) {
     const [linked] = await db.select({ order: service_orders, trade: trades,
       provider_protocol: service_definitions.provider_protocol, attempt: service_execution_attempts }).from(service_orders)
@@ -26,6 +28,7 @@ export async function inspectOwnedRoute(routeId: string, buyerId: string) {
       const now = new Date()
       executionTiming = routeExecutionTiming(plan, linked.order, linked.trade, now)
       providerExecution = providerExecutionStatus(serviceExecutionContract(linked.order, linked).provider_protocol, linked.order, linked.trade, linked.attempt, executionTiming, now)
+      acceptance = await tradeAcceptanceStatus(linked.trade.id)
     }
   }
   return {
@@ -34,5 +37,6 @@ export async function inspectOwnedRoute(routeId: string, buyerId: string) {
     payment_exposure: plan.service_order_id ? await linkedRoutePaymentExposure(plan.service_order_id) : null,
     execution_timing: executionTiming,
     provider_execution: providerExecution,
+    acceptance,
   }
 }

@@ -60,7 +60,7 @@ export const serviceOrderInput = z.object({
   client_reference: z.string().trim().min(8).max(200),
   objective: z.string().trim().min(10).max(2_000),
   input: jsonObject.optional().default({}),
-  payment_rail: z.enum(['auto', 'mpp', 'evm', 'ledger']).default('auto'),
+  payment_rail: z.enum(['auto', 'mpp', 'evm', 'credit', 'ledger']).default('auto'),
   max_total: money.optional(),
   expected_price: money.optional(),
 }).strict()
@@ -87,7 +87,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   const rails = getPaymentReadiness()
   const capacityAvailable = service.active_orders < service.max_concurrency
   const contract = serviceContractReadiness(service)
-  const paymentReady = !paymentControl.paused && (rails.ledger.enabled || Boolean(payoutAddress && (rails.mpp.enabled || rails.evm.enabled)))
+  const paymentReady = !paymentControl.paused && (rails.credit.enabled || rails.ledger.enabled || Boolean(payoutAddress && (rails.mpp.enabled || rails.evm.enabled)))
   const reasons: string[] = []
   if (service.status !== 'active') reasons.push('SERVICE_NOT_ACTIVE')
   if (!reusableServiceReadinessEnabled(requesterId, service.seller_id)) reasons.push('REUSABLE_SERVICES_DISABLED')

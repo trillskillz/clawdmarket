@@ -1,3 +1,4 @@
+import { CreditError } from '@/lib/account-credit'
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -24,7 +25,7 @@ class FundingError extends Error {
 }
 
 const fundingSchema = z.object({
-  payment_rail: z.enum(['ledger', 'mpp', 'evm']),
+  payment_rail: z.enum(['ledger', 'credit', 'mpp', 'evm']),
   expected_total: z.number().finite().positive(),
   client_reference: z.string().trim().min(8).max(200).optional(),
 })
@@ -49,9 +50,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await ensureSyntheticAgentUser({ agentId: seller.id, name: seller.name, syntheticUserId: sellerId })
     const readiness = getPaymentReadiness()
     if (input.data.payment_rail === 'ledger' && !readiness.ledger.enabled) throw new FundingError('Account-balance settlement is not enabled', 503)
+    if (input.data.payment_rail === 'credit' && !readiness.credit.enabled) throw new FundingError('Account credit is not configured', 503)
     if (input.data.payment_rail === 'evm' && !readiness.evm.enabled) throw new FundingError('EVM settlement is not configured', 503)
     if (input.data.payment_rail === 'mpp' && !readiness.mpp.enabled) throw new FundingError('MPP settlement is not configured', 503)
-    if (input.data.payment_rail !== 'ledger' && !await payoutAddressForUser(sellerId)) {
+    if (!['ledger', 'credit'].includes(input.data.payment_rail) && !await payoutAddressForUser(sellerId)) {
       throw new FundingError('The assigned agent must configure a payout wallet before external funding', 409)
     }
     const feeRecipient = await ensureAdminFeeRecipient()
@@ -89,8 +91,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }).returning()
       let trade
       const clientReference = input.data.client_reference || request.headers.get('idempotency-key') || crypto.randomUUID()
-      if (input.data.payment_rail === 'ledger') {
-        trade = await createLedgerTrade(tx, listing, principal.userId, feeRecipient, { agentId: principal.agentId, clientReference })
+      if (['ledger', 'credit'].includes(input.data.payment_rail)) {
+        trade = await createLedgerTrade(tx, listing, principal.userId, feeRecipient, { rail: input.data.payment_rail as 'ledger' | 'credit', agentId: principal.agentId, clientReference })
       } else {
         if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: quote.totalCost, sellerId, paymentRail: input.data.payment_rail })
         await tx.update(listings).set({ status: 'sold' }).where(eq(listings.id, listing.id))
@@ -123,6 +125,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     ])
     return NextResponse.json({ ok: true, trade: result.trade, checkout: checkoutForTrade(result.trade), workspace_url: `/taskboard/${id}` }, { status: result.created ? 201 : 200 })
   } catch (error) {
+    if (error instanceof CreditError) return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status })
     if (error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     if (error instanceof FundingError) return NextResponse.json({ error: error.message }, { status: error.status })
     if (error instanceof AgentSpendPolicyError) return NextResponse.json({ error: error.message, code: error.code, spending_policy: error.policy }, { status: 409 })

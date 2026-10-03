@@ -16,14 +16,14 @@ type TaskDetail = {
     output_format: string; acceptance_criteria: string[]; required_json_keys: string[]; minimum_sources: number
     quote: { sellerAmount: number; platformFee: number; totalCost: number } | null
     funded: boolean; proof_url: string | null; checkout: Checkout | null
-    trade: { id: string; status: string; payment_rail: 'ledger' | 'mpp' | 'evm'; payout_status: string; auto_confirm_at: string | null } | null
+    trade: { id: string; status: string; payment_rail: 'ledger' | 'credit' | 'mpp' | 'evm'; payout_status: string; auto_confirm_at: string | null } | null
     delivery: { summary: string; delivery_url: string | null; artifact: unknown; content_hash: string; verification: { status: string; note: string; checks: { name: string; passed: boolean }[] } } | null
   }
 }
 
 type AcceptedToken = { chain_id: number; chain_name: string; token_address: `0x${string}`; symbol: string; decimals: number; fixed_usd_price: number }
 type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; treasury?: `0x${string}`; tokens?: AcceptedToken[]; expires_at?: string }
-type PaymentConfig = { ledger_enabled: boolean; mpp_configured: boolean; erc20_configured: boolean; new_payments_paused: boolean; payment_pause_reason: string | null }
+type PaymentConfig = { account_credit_enabled: boolean; ledger_enabled: boolean; mpp_configured: boolean; erc20_configured: boolean; new_payments_paused: boolean; payment_pause_reason: string | null }
 
 export default function TaskWorkspace({ taskId }: { taskId: string }) {
   const [task, setTask] = useState<TaskDetail | null>(null)
@@ -42,7 +42,7 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
   const [format, setFormat] = useState('text')
   const [jsonKeys, setJsonKeys] = useState('')
   const [sourceCount, setSourceCount] = useState(0)
-  const [paymentRail, setPaymentRail] = useState<'ledger' | 'mpp' | 'evm'>('evm')
+  const [paymentRail, setPaymentRail] = useState<'ledger' | 'credit' | 'mpp' | 'evm'>('evm')
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
   const [checkout, setCheckout] = useState<Checkout | null>(null)
   const base = `/api/tasks/${encodeURIComponent(taskId)}`
@@ -56,7 +56,7 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
         setPaymentConfig(config)
         if (config.erc20_configured) setPaymentRail('evm')
         else if (config.mpp_configured) setPaymentRail('mpp')
-        else if (config.ledger_enabled) setPaymentRail('ledger')
+        else if (config.account_credit_enabled) setPaymentRail('credit')
       })
       .catch(() => undefined)
     return () => controller.abort()
@@ -227,11 +227,11 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
             <p>Choose account balance, MPP on Tempo, or an enabled ERC-20 token. External settlement includes verified seller payouts and dispute refunds.</p>
             {workspace.quote && <dl><dt>Seller amount</dt><dd>${workspace.quote.sellerAmount.toFixed(2)}</dd><dt>Platform fee · 5%</dt><dd>${workspace.quote.platformFee.toFixed(2)}</dd><dt>Total</dt><dd>${workspace.quote.totalCost.toFixed(2)}</dd></dl>}
             {task.viewer.is_poster && task.status === 'assigned' && !trade && workspace.quote && <form onSubmit={(event) => { event.preventDefault(); void fundTask() }}>
-              <label htmlFor="task-payment-rail">Payment method</label><select id="task-payment-rail" value={paymentRail} onChange={(event) => setPaymentRail(event.target.value as typeof paymentRail)}><option value="evm" disabled={!paymentConfig?.erc20_configured}>ERC-20 wallet</option><option value="mpp" disabled={!paymentConfig?.mpp_configured}>MPP on Tempo</option><option value="ledger" disabled={!paymentConfig?.ledger_enabled}>Account balance</option></select>
-              <label className={styles.check}><input type="checkbox" required />I confirm the server-calculated total and authorize this payment.</label><button disabled={busy || !paymentConfig || (paymentRail === 'evm' ? !paymentConfig.erc20_configured : paymentRail === 'mpp' ? !paymentConfig.mpp_configured : !paymentConfig.ledger_enabled)}>Continue with ${workspace.quote.totalCost.toFixed(2)}</button>
+              <label htmlFor="task-payment-rail">Payment method</label><select id="task-payment-rail" value={paymentRail} onChange={(event) => setPaymentRail(event.target.value as typeof paymentRail)}><option value="evm" disabled={!paymentConfig?.erc20_configured}>ERC-20 wallet</option><option value="mpp" disabled={!paymentConfig?.mpp_configured}>MPP on Tempo</option><option value="credit" disabled={!paymentConfig?.account_credit_enabled}>Account balance</option></select>
+              <label className={styles.check}><input type="checkbox" required />I confirm the server-calculated total and authorize this payment.</label><button disabled={busy || !paymentConfig || (paymentRail === 'evm' ? !paymentConfig.erc20_configured : paymentRail === 'mpp' ? !paymentConfig.mpp_configured : !paymentConfig.account_credit_enabled)}>Continue with ${workspace.quote.totalCost.toFixed(2)}</button>
               {!paymentConfig && <p role="status">Checking available payment rails…</p>}
               {paymentConfig?.new_payments_paused && <p role="alert">New marketplace payments are temporarily paused. {paymentConfig.payment_pause_reason || 'Please try again later.'} Existing payments and refunds can still be recovered.</p>}
-              {paymentConfig && !paymentConfig.new_payments_paused && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && !paymentConfig.ledger_enabled && <p role="alert">No payment rail is currently available.</p>}
+              {paymentConfig && !paymentConfig.new_payments_paused && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && !paymentConfig.account_credit_enabled && <p role="alert">No payment rail is currently available.</p>}
             </form>}
             {trade && ['pending', 'cancelled'].includes(trade.status) && checkout && task.viewer.is_poster &&
               <ExternalTradeCheckout key={trade.id} tradeId={trade.id} checkout={checkout} apiKey={apiKey} onUpdated={async (result) => {

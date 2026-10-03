@@ -28,8 +28,8 @@ export const buyerSpendPolicyInput = z.object({
   blocked_capabilities: z.array(canonicalCapability).max(30).optional(),
   approved_providers: z.array(z.string().min(1).max(200)).max(100).optional(),
   blocked_providers: z.array(z.string().min(1).max(200)).max(100).optional(),
-  approved_payment_rails: z.array(z.enum(['ledger', 'mpp', 'evm'])).min(1).max(3).optional(),
-  required_verification_methods: z.array(z.enum(['buyer_review', 'schema', 'source_urls'])).min(1).max(3).optional(),
+  approved_payment_rails: z.array(z.enum(['ledger', 'credit', 'mpp', 'evm'])).min(1).max(4).optional(),
+  required_verification_methods: z.array(z.enum(['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence', 'isolated_checks'])).min(1).max(6).optional(),
 }).strict().superRefine((value, ctx) => {
   for (const field of ['allowed_capabilities', 'blocked_capabilities', 'approved_providers', 'blocked_providers', 'approved_payment_rails', 'required_verification_methods'] as const) {
     const items = value[field]
@@ -42,7 +42,7 @@ export type SpendContext = {
   totalMinor: number
   sellerId?: string
   capabilities?: string[]
-  paymentRail?: 'ledger' | 'mpp' | 'evm'
+  paymentRail?: 'ledger' | 'credit' | 'mpp' | 'evm'
   verificationMethods?: string[]
   retrySpendMinor?: number
 }

@@ -9,6 +9,7 @@ import { validateCsrf } from '@/lib/csrf';
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
 import { SettlementError, settleExternallyFundedTrade } from '@/lib/external-settlement';
 import { advanceBuyerReview, markBuyerReviewAccepted } from '@/lib/verification-evidence';
+import { AcceptanceError } from '@/lib/trade-acceptance';
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const updated = await finalizeTradeCompletion(tradeToFinalize, 'buyer_confirm');
     return NextResponse.json({ ok: true, trade: updated, status: 'completed' });
   } catch (error: any) {
+    if (error instanceof AcceptanceError) return NextResponse.json({ error: 'Required verification or explicit acceptance is missing', code: error.code, retryable: false }, { status: 409 });
     if (error instanceof SettlementError) {
       return NextResponse.json({ error: error.message, code: error.code, retryable: error.retryable }, { status: error.retryable ? 503 : 409 });
     }

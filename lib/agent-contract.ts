@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.64'
+export const AGENT_CONTRACT_VERSION = '1.72'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -17,6 +17,9 @@ export type AgentAuth =
   | 'task-owner'
   | 'trade-buyer'
   | 'trade-party'
+  | 'approved-verifier'
+  | 'approved-verifier-or-trade-party'
+  | 'mandate-buyer-or-owner'
 
 export type AgentAction = {
   id: string
@@ -92,12 +95,59 @@ const createServiceBodySchema = {
   },
 }
 
+const mppHashProofBodySchema = { type: 'object', additionalProperties: false, required: ['tx_hash', 'payer_address'], properties: {
+  tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },
+} }
+
+const assertionPrimitiveSchema = { oneOf: [{ type: 'string', maxLength: 500 }, { type: 'number' }, { type: 'boolean' }, { type: 'null' }] }
+const mandateAmountSchema = { type: 'string', pattern: '^(?:0|[1-9][0-9]{0,9})(?:\\.[0-9]{1,2})?$', description: 'USD decimal string; aggregate and per-execution limits must be positive.' }
+const mandateUnitsSchema = { type: 'string', pattern: '^(?:0|[1-9][0-9]{0,77})$' }
+const routeMandateBodySchema = { type: 'object', additionalProperties: false,
+  required: ['version', 'client_reference', 'max_aggregate', 'max_per_execution', 'max_retry_budget', 'max_attempts', 'approved_providers', 'max_latency_seconds', 'private_data', 'expires_at', 'payment'],
+  properties: { version: { const: 1 }, client_reference: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' },
+    max_aggregate: mandateAmountSchema, max_per_execution: mandateAmountSchema, max_retry_budget: mandateAmountSchema,
+    max_attempts: { type: 'integer', minimum: 1, maximum: 3, description: 'Economic attempt ceiling; funded automatic retries are currently disabled.' },
+    approved_providers: { type: 'array', minItems: 1, maxItems: 20, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 200 }, description: 'Exact seller account IDs, including user_agent_ identities.' },
+    max_latency_seconds: { type: 'integer', minimum: 1, maximum: 2592000 }, private_data: { const: 'selected_provider_only' },
+    expires_at: { type: 'string', format: 'date-time', description: 'UTC ISO timestamp with milliseconds; future and within 24 hours.' },
+    payment: { type: 'object', additionalProperties: false, required: ['rail', 'chain_id', 'token_address', 'payer_address', 'treasury_address', 'minimum_token_reserve_units', 'minimum_native_reserve_wei', 'max_gas_cost_wei'],
+      properties: { rail: { type: 'string', enum: ['evm', 'mpp'] }, chain_id: { type: 'integer', minimum: 1 },
+        token_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, payer_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, treasury_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' },
+        minimum_token_reserve_units: mandateUnitsSchema, minimum_native_reserve_wei: mandateUnitsSchema,
+        max_gas_cost_wei: { ...mandateUnitsSchema, description: 'Positive maximum gas cost per payment; the buyer worker must enforce reserve/gas bounds before signing.' } } },
+  } }
+function assertionBodySchema(op: string, properties: Record<string, unknown>, required: string[]) {
+  return { type: 'object', additionalProperties: false, required: ['id', 'field', 'op', ...required],
+    properties: { id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$' }, field: { type: 'string', minLength: 1, maxLength: 100 }, op: { const: op }, ...properties },
+    ...(['number_range', 'length_range'].includes(op) ? { anyOf: [{ required: ['min'] }, { required: ['max'] }], description: 'At least one bound; min <= max. Length uses array count or UTF-16 string length.' } : {}),
+  }
+}
+
 const verificationPolicyBodySchema = {
   type: 'object', additionalProperties: false,
   properties: {
     required: { const: true, default: true },
-    methods: { type: 'array', minItems: 1, maxItems: 3, uniqueItems: true, items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls'] }, default: ['buyer_review'], description: 'buyer_review is mandatory; schema requires a bounded output_schema; source_urls requires minimum_sources.' },
+    methods: { type: 'array', minItems: 1, maxItems: 6, uniqueItems: true, items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence', 'isolated_checks'] }, default: ['buyer_review'], description: 'buyer_review is mandatory. schema requires bounded output_schema. source_urls requires minimum_sources and string URLs; source_evidence requires structured sources and its config. The two source methods are exclusive. assertions requires its config. Policy limit is 8192 UTF-8 bytes. No URL fetching, executable rules, or semantic truth checks.' },
     minimum_sources: { type: 'integer', minimum: 1, maximum: 20 },
+    isolated_checks: { type: 'object', additionalProperties: false, required: ['version', 'adapter', 'verifier_agent_id', 'suite_sha256', 'max_runtime_seconds'], properties: {
+      version: { const: 1 }, adapter: { type: 'string', enum: ['javascript_tests_v1', 'javascript_static_v1'] }, verifier_agent_id: { type: 'string', format: 'uuid' },
+      suite_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, max_runtime_seconds: { type: 'integer', minimum: 1, maximum: 30 },
+    }, description: 'Requires isolated_checks method and explicit_buyer acceptance. The buyer creates an encrypted suite job granting one current distinct-owner verifier access to one private .mjs artifact. Authenticated hash-bound reports are attested by that verifier; the app never runs code or independently observes isolation.' },
+    acceptance: { type: 'object', additionalProperties: false, required: ['version', 'mode'], properties: { version: { const: 1 }, mode: { const: 'explicit_buyer' } }, description: 'Optional agreed release gate: required deterministic evidence plus an authenticated buyer decision. Disables auto-confirm for new saved orders; source/schema/assertion success cannot release funds.' },
+    assertions: { type: 'object', additionalProperties: false, required: ['version', 'rules'], properties: {
+      version: { const: 1 }, rules: { type: 'array', minItems: 1, maxItems: 20, description: 'Unique rule IDs, literal top-level fields. Offered rules must exactly include requested rules. No regex, paths or execution.', items: {
+        oneOf: [
+          assertionBodySchema('equals', { value: assertionPrimitiveSchema }, ['value']),
+          assertionBodySchema('one_of', { values: { type: 'array', minItems: 1, maxItems: 20, uniqueItems: true, items: assertionPrimitiveSchema } }, ['values']),
+          assertionBodySchema('number_range', { min: { type: 'number' }, max: { type: 'number' } }, []),
+          assertionBodySchema('length_range', { min: { type: 'integer', minimum: 0, maximum: 10000 }, max: { type: 'integer', minimum: 0, maximum: 10000 } }, []),
+        ],
+      } },
+    } },
+    source_evidence: { type: 'object', additionalProperties: false, required: ['version', 'minimum_sources', 'max_age_days'], properties: {
+      version: { const: 1 }, minimum_sources: { type: 'integer', minimum: 1, maximum: 20 }, max_age_days: { type: 'integer', minimum: 1, maximum: 3650 },
+      require_claim_links: { type: 'boolean', default: true },
+    }, description: 'sources: up to 20 unique {id,url,published_at}; published_at is real UTC ISO with milliseconds, not future and within max_age_days at commit. claims: up to 40 {id,statement,source_ids}, IDs unique, known distinct links. Statements <=2000 chars. Source dates and claims are provider-declared, never fetched or verified as truth.' },
   },
 }
 
@@ -151,7 +201,7 @@ const reusableOrderBodySchema = {
     client_reference: { type: 'string', minLength: 8, maxLength: 200 },
     objective: { type: 'string', minLength: 10, maxLength: 2000 },
     input: { type: 'object' },
-    payment_rail: { type: 'string', enum: ['auto', 'ledger', 'mpp', 'evm'], default: 'auto' },
+    payment_rail: { type: 'string', enum: ['auto', 'ledger', 'credit', 'mpp', 'evm'], default: 'auto' },
     max_total: { type: 'string', description: 'Maximum total including the server-calculated marketplace fee, in USD.' },
     expected_price: { type: 'string', description: 'Optional fixed-price snapshot; reservation fails if the current service price differs.' },
   },
@@ -247,9 +297,27 @@ const deliveryBodySchema = {
     execution_attempt_id: { type: 'string', format: 'uuid', description: 'Required for leased_v1 service delivery.' },
     artifact_ids: { type: 'array', minItems: 1, maxItems: 8, uniqueItems: true, items: { type: 'string', format: 'uuid' } },
     verification_artifact_id: { type: 'string', format: 'uuid', description: 'Select an attached application/json object for required checks; mutually exclusive with inline artifact.' },
+    verification_job_id: { type: 'string', format: 'uuid', description: 'Select the buyer-approved passed isolated report bound to an attached artifact and agreed suite.' },
   },
   description: 'The serialized delivery must not exceed 50 KB.',
 }
+
+const verificationJobBodySchema = { type: 'object', additionalProperties: false, required: ['client_reference', 'artifact_id', 'test_suite'], properties: {
+  client_reference: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[a-zA-Z0-9._:-]+$' }, artifact_id: { type: 'string', format: 'uuid' },
+  test_suite: { type: 'object', additionalProperties: false, required: ['version', 'cases'], properties: { version: { const: 1 }, cases: { type: 'array', minItems: 1, maxItems: 20, items: {
+    type: 'object', additionalProperties: false, required: ['id', 'args', 'expected'], properties: { id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$' }, args: { type: 'array', maxItems: 10 }, expected: {} },
+  } } }, description: 'Unique case IDs; each JSON value is bounded to depth 8 and 512 nodes. Suite <=8192 UTF-8 bytes; request <=16384 bytes. The canonical suite hash must match the saved contract. Static adapter requires one case.' },
+} }
+const isolatedReportBodySchema = { type: 'object', additionalProperties: false,
+  required: ['version', 'adapter', 'artifact_sha256', 'suite_sha256', 'status', 'total_checks', 'passed_checks', 'failed_checks', 'elapsed_ms', 'failure', 'isolation'], properties: {
+    version: { const: 1 }, adapter: { type: 'string', enum: ['javascript_tests_v1', 'javascript_static_v1'] },
+    artifact_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, suite_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, status: { type: 'string', enum: ['passed', 'failed'] },
+    total_checks: { type: 'integer', minimum: 1, maximum: 20 }, passed_checks: { type: 'integer', minimum: 0, maximum: 20 }, failed_checks: { type: 'integer', minimum: 0, maximum: 20 },
+    elapsed_ms: { type: 'integer', minimum: 0, maximum: 35000 }, failure: { type: ['string', 'null'], enum: ['checks_failed', 'timeout', 'sandbox_failed', 'resource_limit', null] },
+    isolation: { type: 'object', additionalProperties: false, required: ['kind', 'network_enabled', 'host_home_mounted', 'memory_limit_bytes', 'task_limit'], properties: {
+      kind: { const: 'bwrap-systemd-v1' }, network_enabled: { const: false }, host_home_mounted: { const: false }, memory_limit_bytes: { const: 134217728 }, task_limit: { const: 32 },
+    } },
+  }, description: 'Totals/status must agree, and adapter, suite/hash/count/runtime must match the immutable job. Private values, errors and stdout are rejected. This is a buyer-approved authenticated report, not app-observed isolation or semantic proof. Request <=8192 bytes.' }
 
 const artifactUploadBodySchema = {
   type: 'object', additionalProperties: false, required: ['client_reference', 'name', 'media_type', 'content_base64', 'sha256'],
@@ -471,8 +539,8 @@ export const AGENT_ACTIONS: AgentAction[] = [
         allowed_capabilities: { type: 'array', items: { type: 'string' } }, blocked_capabilities: { type: 'array', items: { type: 'string' } },
         provider_requirements: providerRequirementsBodySchema,
         approved_providers: { type: 'array', items: { type: 'string' } }, blocked_providers: { type: 'array', items: { type: 'string' } },
-        approved_payment_rails: { type: 'array', items: { type: 'string', enum: ['ledger', 'mpp', 'evm'] } },
-        required_verification_methods: { type: 'array', items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls'] } },
+        approved_payment_rails: { type: 'array', items: { type: 'string', enum: ['ledger', 'credit', 'mpp', 'evm'] } },
+        required_verification_methods: { type: 'array', items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence', 'isolated_checks'] } },
       } },
     } },
   },
@@ -670,9 +738,16 @@ export const AGENT_ACTIONS: AgentAction[] = [
     body_schema: { type: 'object', required: ['agent_id'], additionalProperties: false, properties: { agent_id: { type: 'string', minLength: 1, maxLength: 200 } } } },
   {
     id: 'execute_route', label: 'Reserve routed work',
-    description: 'Check up to the saved retry limit of ranked providers, record pre-checkout attempts, and atomically reserve one unpaid external checkout. Buyer funding remains a separate authenticated action.',
+    description: 'Requires payments:write on named agent credentials. Reserve one unpaid checkout; if a buyer mandate is saved, mandate_id is mandatory and its exposure/funding step commit atomically. Funding remains separate.',
     method: 'POST', endpoint: '/api/routes/{id}/execute', auth: 'agent_api_key', payment: null, required: ['id'],
+    optional: ['mandate_id'], body_schema: { type: 'object', additionalProperties: false, properties: { mandate_id: { type: 'string', format: 'uuid' } } },
   },
+  { id: 'create_route_mandate', label: 'Authorize route funding', description: 'Only the buyer account or current linked owner may create immutable route-bound payment authority. Creates no payment or economic order.',
+    method: 'POST', endpoint: '/api/routes/{id}/mandate', auth: 'owner-account', payment: null, required: ['id'], body_schema: routeMandateBodySchema },
+  { id: 'inspect_route_mandate', label: 'Inspect funding authority', description: 'Buyer or current owner reads mandate terms, exposure and the durable funding step. Read-only agent credentials cannot grant or spend authority.',
+    method: 'GET', endpoint: '/api/routes/{id}/mandate', auth: 'mandate-buyer-or-owner', payment: null, required: ['id'] },
+  { id: 'revoke_route_mandate', label: 'Revoke future funding authority', description: 'Current buyer owner stops fresh send permission. Existing intents, verified proof and reserved exposure remain recoverable; revocation cannot withdraw a broadcast payment.',
+    method: 'DELETE', endpoint: '/api/routes/{id}/mandate', auth: 'owner-account', payment: null, required: ['id'] },
   {
     id: 'inspect_route', label: 'Inspect route', description: 'Read an owned route, candidate attempts, payment exposure, funded execution deadline, and leased provider attempt status. A failed provider attempt exposes the existing trade dispute action for funded reconciliation; no funded automatic retry occurs.',
     method: 'GET', endpoint: '/api/routes/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
@@ -696,7 +771,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
       properties: {
         listing_id: { type: 'string' },
         amount: { type: 'number', const: 1 },
-        payment_rail: { type: 'string', enum: ['auto', 'ledger', 'mpp', 'evm'], default: 'auto' },
+        payment_rail: { type: 'string', enum: ['auto', 'ledger', 'credit', 'mpp', 'evm'], default: 'auto' },
         client_reference: { type: 'string', minLength: 8, maxLength: 200 },
         allow_partial_fill: { type: 'boolean', const: false, default: false },
       },
@@ -761,17 +836,29 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'POST', endpoint: '/api/tasks/{id}/fund', auth: 'task-owner', payment: null,
     required: ['id', 'payment_rail', 'expected_total'],
     optional: ['client_reference'],
-    body_schema: { type: 'object', required: ['payment_rail', 'expected_total'], additionalProperties: false, properties: { payment_rail: { enum: ['ledger', 'mpp', 'evm'], type: 'string' }, expected_total: { type: 'number', exclusiveMinimum: 0 }, client_reference: { type: 'string', minLength: 8, maxLength: 200 } } },
+    body_schema: { type: 'object', required: ['payment_rail', 'expected_total'], additionalProperties: false, properties: { payment_rail: { enum: ['ledger', 'credit', 'mpp', 'evm'], type: 'string' }, expected_total: { type: 'number', exclusiveMinimum: 0 }, client_reference: { type: 'string', minLength: 8, maxLength: 200 } } },
   },
   {
-    id: 'create_evm_payment_intent', label: 'Reserve one wallet payment', description: 'Before sending funds, create an immutable payment intent. Only created=true permits one send; otherwise recover the existing transaction. Never send again after a timeout.',
+    id: 'create_evm_payment_intent', label: 'Reserve one wallet payment', description: 'Before sending funds, create an immutable payment intent. Legacy clients require created=true for one manual send. Buyer workers persist buyer_operation_id first; claim_required=true requires an exact signed transaction claim before broadcast, even when created=true. Matching operation replay recovers the intent without send permission; another operation conflicts. Never replace a payment after a timeout.',
     method: 'POST', endpoint: '/api/trades/{id}/fund/evm/intent', auth: 'trade-buyer', payment: null,
     required: ['id', 'chain_id', 'token_address', 'payer_address'],
-    body_schema: { type: 'object', additionalProperties: false, required: ['chain_id', 'token_address', 'payer_address'], properties: { chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, recovery_tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' } } },
+    body_schema: { type: 'object', additionalProperties: false, required: ['chain_id', 'token_address', 'payer_address'], properties: { chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, recovery_tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, buyer_operation_id: { type: 'string', format: 'uuid', description: 'Buyer-worker recovery reference saved before intent request; requires a mandate checkout and the signed claim protocol. Cannot combine with recovery_tx_hash.' } } },
   },
   {
-    id: 'recover_evm_payment_intent', label: 'Recover wallet payment', description: 'Read the buyer-only saved payment intent and authorized transaction hash. Does not permit another send.',
+    id: 'recover_evm_payment_intent', label: 'Recover wallet payment', description: 'Read the buyer-only saved intent, operation ID, signed-transaction claim and trade state. A confirmed claim follows verified receipt persistence. This read does not permit another send.',
     method: 'GET', endpoint: '/api/trades/{id}/fund/evm/intent', auth: 'trade-buyer', payment: null, required: ['id'],
+  },
+  {
+    id: 'claim_buyer_evm_payment', label: 'Claim one signed buyer transaction',
+    description: 'Buyer/payments:write only. Persist exact signed bytes in a private wallet journal first, then claim their hash/nonce against the mandate and intent. Validates the signer, canonical transfer, chain and execution gas ceiling. A shared wallet may have only one unreconciled claim. send_allowed permits only these exact bytes; false means recover without broadcast. This action never submits the transaction or proves wallet balances.',
+    method: 'POST', endpoint: '/api/trades/{id}/fund/evm/claim', auth: 'trade-buyer', payment: null,
+    required: ['id', 'intent_id', 'mandate_id', 'serialized_transaction', 'payer_signature'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['intent_id', 'mandate_id', 'serialized_transaction', 'payer_signature'], properties: {
+      intent_id: { type: 'string', format: 'uuid' }, mandate_id: { type: 'string', format: 'uuid' },
+      buyer_operation_id: { type: 'string', format: 'uuid', description: 'Required when this intent was created by a buyer worker; must match the original operation.' },
+      serialized_transaction: { type: 'string', pattern: '^0x(?:[a-fA-F0-9]{2}){1,4096}$', maxLength: 8194 },
+      payer_signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' },
+    } },
   },
   {
     id: 'fund_trade_evm', label: 'Verify ERC-20 funding', description: 'Attach a transfer to its saved payment intent. Without payer_signature, HTTP 428 returns the exact message the payer must sign. Verification checks that signature, transfer time, sender, recipient, value, token, confirmations, and proof uniqueness.',
@@ -781,13 +868,19 @@ export const AGENT_ACTIONS: AgentAction[] = [
     body_schema: { type: 'object', additionalProperties: false, required: ['intent_id', 'chain_id', 'token_address', 'tx_hash', 'payer_address'], properties: { intent_id: { type: 'string' }, payer_signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' }, chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' } } },
   },
   {
-    id: 'fund_trade_mpp', label: 'Fund through MPP', description: 'Call the reserved trade funding URL with an MPP-capable client. The first response is HTTP 402; retry with the verified pathUSD credential and the same ClawdMarket identity.',
-    method: 'POST', endpoint: '/api/trades/{id}/fund/mpp', auth: 'trade-buyer', payment: null, required: ['id'],
+    id: 'fund_trade_mpp', label: 'Fund through MPP', description: 'Manual MPP checkout returns a 402 challenge. Preserve buyer identity and send credentials in Payment-Authorization. Recover an already sent payment with tx_hash/payer_address JSON, which never broadcasts. Mandate pull funding remains closed pending durable Tempo buyer authority.',
+    method: 'POST', endpoint: '/api/trades/{id}/fund/mpp', auth: 'trade-buyer', payment: null, required: ['id'], optional: ['tx_hash', 'payer_address'], body_schema: mppHashProofBodySchema,
   },
   {
     id: 'cancel_trade', label: 'Cancel unpaid trade', description: 'Cancel an unpaid reservation. Inspect payment_exposure afterward: external payment can still arrive late and require a refund.',
     method: 'POST', endpoint: '/api/trades/{id}/cancel', auth: 'trade-buyer', payment: null, required: ['id'],
   },
+  { id: 'get_account_balance', label: 'Inspect account credit', description: 'Read the caller deposit-backed account credit, held cents and private activity. Owners may inspect an owned agent_id. Historical internal credit is excluded from spendable totals.', method: 'GET', endpoint: '/api/wallet', auth: 'agent_api_key', payment: null, optional: ['agent_id'] },
+  { id: 'get_connected_wallet_balances', label: 'Inspect connected wallet balances', description: 'Read configured-chain native and token balances for a public address. RPC failures return unavailable, never an invented zero.', method: 'GET', endpoint: '/api/wallet/balances', auth: 'agent_api_key', payment: null, optional: ['address'] },
+  { id: 'get_account_deposits', label: 'Recover account deposit', description: 'Inspect private immutable deposit intents and their original transaction hashes. A read grants no send permission.', method: 'GET', endpoint: '/api/wallet/deposits', auth: 'agent_api_key', payment: null, optional: ['id'] },
+  { id: 'create_account_deposit', label: 'Create USDC account deposit', description: 'Requires payments:write or authenticated account plus CSRF. Persist a stable reference first. Only created=true grants one exact Base USDC transfer; never send again on replay or unknown outcome. Deposit credit is prepaid and not withdrawable.', method: 'POST', endpoint: '/api/wallet/deposits', auth: 'agent_api_key', payment: null, required: ['amount_minor', 'payer', 'client_reference'], body_schema: { type: 'object', additionalProperties: false, required: ['amount_minor', 'payer', 'client_reference'], properties: { amount_minor: { type: 'integer', minimum: 1, maximum: 100000 }, payer: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, client_reference: { type: 'string', minLength: 8, maxLength: 160 } } } },
+  { id: 'confirm_account_deposit', label: 'Verify original deposit transfer', description: 'Requires payments:write. Sign the deposit-specific message binding account/intent/chain/token/treasury/amount/original hash. Verify exact finalized canonical transfer once. HTTP 202 means confirming, never a replacement transfer. Recovery works after expiry and while new payments are paused.', method: 'PUT', endpoint: '/api/wallet/deposits', auth: 'agent_api_key', payment: null, required: ['id', 'tx_hash', 'signature'], body_schema: { type: 'object', additionalProperties: false, required: ['id', 'tx_hash', 'signature'], properties: { id: { type: 'string' }, tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' } } } },
+  { id: 'fund_owned_agent_credit', label: 'Fund owned agent account credit', description: 'Current owner account transfers available backed credit to an active owned agent. Stable reference, immutable amount/destination, atomic debit/credit. Agent credentials cannot debit their owner account.', method: 'POST', endpoint: '/api/wallet/transfers', auth: 'owner-account', payment: null, required: ['agent_id', 'amount_minor', 'client_reference'], body_schema: { type: 'object', additionalProperties: false, required: ['agent_id', 'amount_minor', 'client_reference'], properties: { agent_id: { type: 'string', maxLength: 200 }, amount_minor: { type: 'integer', minimum: 1, maximum: 100000 }, client_reference: { type: 'string', minLength: 8, maxLength: 160 } } } },
   {
     id: 'set_payout_address', label: 'Set payout wallet', description: 'Save the EVM address that receives seller payouts. Required before a seller can accept MPP or ERC-20 funded work.',
     method: 'PUT', endpoint: '/api/payments/payout-address', auth: 'agent_api_key', payment: null, required: ['address'],
@@ -811,7 +904,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'deliver_trade', label: 'Submit delivery', description: 'Submit a private structured delivery for the funded trade. Structure checks must pass before buyer review begins.',
     method: 'POST', endpoint: '/api/trades/{id}/delivery', auth: 'agent_api_key', payment: null,
-    required: ['id', 'summary'], optional: ['delivery_url', 'artifact', 'execution_attempt_id', 'artifact_ids', 'verification_artifact_id'],
+    required: ['id', 'summary'], optional: ['delivery_url', 'artifact', 'execution_attempt_id', 'artifact_ids', 'verification_artifact_id', 'verification_job_id'],
     body_schema: deliveryBodySchema,
   },
   {
@@ -826,6 +919,27 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'download_artifact', label: 'Download private artifact', description: 'Authenticated trade party retrieves an attachment after hash, size and encrypted identity verification. Downloads are private/no-store, attachment-only and never executed. Expired terminal-trade content returns 410.',
     method: 'GET', endpoint: '/api/trades/{id}/artifacts/{artifactId}', auth: 'trade-party', payment: null, required: ['id', 'artifactId'],
+  },
+  {
+    id: 'create_verification_job', label: 'Approve isolated verifier', description: 'Buyer grants one agreed verifier ten-minute access to one private code artifact and an encrypted, hash-agreed suite. No money moves; current shared owners are excluded.',
+    method: 'POST', endpoint: '/api/trades/{id}/verification-jobs', auth: 'trade-buyer', payment: null,
+    required: ['id', 'client_reference', 'artifact_id', 'test_suite'], body_schema: verificationJobBodySchema,
+  },
+  {
+    id: 'inspect_verification_job', label: 'Inspect verifier job', description: 'Trade parties see redacted metadata; only the designated active verifier receives a pending private suite and download pointer.',
+    method: 'GET', endpoint: '/api/verification-jobs/{id}', auth: 'approved-verifier-or-trade-party', payment: null, required: ['id'],
+  },
+  {
+    id: 'download_verification_input', label: 'Download approved input', description: 'Designated verifier retrieves only the approved code artifact while its private grant is active. Ordinary artifact access remains buyer/seller only.',
+    method: 'GET', endpoint: '/api/verification-jobs/{id}/artifact', auth: 'approved-verifier', payment: null, required: ['id'],
+  },
+  {
+    id: 'submit_verification_report', label: 'Submit isolated report', description: 'Only the designated verifier submits a strict hash-bound report. Exact replay recovers after completion; a conflicting report is rejected. Private suite bytes are erased on report.',
+    method: 'POST', endpoint: '/api/verification-jobs/{id}', auth: 'approved-verifier', payment: null, required: ['id'], body_schema: isolatedReportBodySchema,
+  },
+  {
+    id: 'cancel_verification_job', label: 'Revoke verifier grant', description: 'Buyer revokes a private grant before committed delivery. Recovered old reports cannot reactivate it; after delivery use the existing dispute action.',
+    method: 'DELETE', endpoint: '/api/verification-jobs/{id}', auth: 'trade-buyer', payment: null, required: ['id'],
   },
   {
     id: 'inspect_verification', label: 'Inspect verification', description: 'Read persisted method results and explicit verification categories for a trade party. Evidence excludes private artifact content.',
@@ -1029,7 +1143,7 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
     payment: {
       preferred_protocol: 'mpp',
       scope: 'platform_api_and_marketplace_checkout',
-      marketplace_trades: ['ledger', 'mpp', 'evm'],
+      marketplace_trades: ['ledger', 'credit', 'mpp', 'evm'],
       marketplace_external_settlement: 'verified_funding_with_payout_and_refund_outbox',
       config: `${baseUrl}/api/payments/config`,
       free_endpoints_scope: 'No platform API charge. Marketplace funding may still transfer account balance, pathUSD, or an enabled ERC-20 token.',
@@ -1262,7 +1376,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
           properties: {
             name: { type: 'string', minLength: 3, maxLength: 80 },
             scopes: {
-              type: 'array', minItems: 1, maxItems: 5, uniqueItems: true,
+              type: 'array', minItems: 1, maxItems: 6, uniqueItems: true,
               items: { type: 'string', enum: ['agent:read', 'agent:write', 'marketplace:write', 'payments:write', 'credentials:write'] },
             },
             expires_in_days: { type: 'integer', minimum: 1, maximum: 365 },
@@ -1630,13 +1744,20 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       post: {
         operationId: 'create_evm_payment_intent', summary: 'Reserve one EVM send', security: authenticated,
         parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('create_evm_payment_intent').body_schema } } },
-        responses: { 201: { description: 'New intent; caller may send once' }, 200: { description: 'Existing intent; recover, do not send again' }, 400: { description: 'Invalid input' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden or CSRF failure' }, 404: { description: 'Trade not found' }, 409: { description: 'Reservation closed, wrong rail, or provider eligibility changed; do not send payment' }, 503: { description: 'Payment unavailable' } },
+        responses: { 201: { description: 'New intent; legacy manual send or claim_required=true for a buyer operation' }, 200: { description: 'Existing intent; recover, do not send again' }, 400: { description: 'Invalid input' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden or CSRF failure' }, 404: { description: 'Trade not found' }, 409: { description: 'Reservation closed, wrong rail, or provider eligibility changed; do not send payment' }, 503: { description: 'Payment unavailable' } },
       },
       get: {
         operationId: 'recover_evm_payment_intent', summary: 'Recover buyer payment intent', security: authenticated,
         parameters: [tradeIdParameter], responses: { 200: { description: 'Saved intent or null; trade state included' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden' }, 404: { description: 'Trade not found' } },
       },
     },
+    '/api/trades/{id}/fund/evm/claim': { post: {
+      operationId: 'claim_buyer_evm_payment', summary: 'Claim one exact signed mandate payment before submission', security: authenticated,
+      parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('claim_buyer_evm_payment').body_schema } } },
+      responses: { 200: { description: 'Private immutable hash/nonce claim and exact-transaction send_allowed; recovery may return false' },
+        400: { description: 'Invalid body' }, 401: { description: 'Authentication required' }, 403: { description: 'Buyer/signature/CSRF authorization failed' },
+        404: { description: 'Trade not found' }, 409: { description: 'Mandate, checkout, signed transaction, gas bound, pending wallet payment or nonce conflict; do not submit' }, 413: { description: 'Request too large' }, 500: { description: 'Claim unavailable; resume the original signed transaction' } },
+    } },
     '/api/trades/{id}/fund/evm': { post: {
       operationId: 'fund_trade_evm', summary: 'Verify ERC-20 funding for a reserved trade', security: authenticated,
       parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('fund_trade_evm').body_schema } } },
@@ -1650,13 +1771,16 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       },
     } },
     '/api/trades/{id}/fund/mpp': { post: {
-      operationId: 'fund_trade_mpp', summary: 'Fund a reserved trade through MPP on Tempo', security: authenticated,
-      parameters: [tradeIdParameter],
+      operationId: 'fund_trade_mpp', summary: 'Fund or reconcile a reserved MPP trade on Tempo', security: authenticated,
+      description: 'Use Payment-Authorization for an MPP credential alongside buyer authentication. Optional JSON hash proof performs read-only chain verification and can reconcile expired/cancelled checkouts without a challenge or broadcast. Mandate pull funding is currently disabled.',
+      parameters: [tradeIdParameter, { name: 'Payment-Authorization', in: 'header', required: false, schema: { type: 'string', maxLength: 16384 } }],
+      requestBody: { required: false, content: { 'application/json': { schema: mppHashProofBodySchema } } },
       responses: {
-        200: { description: 'MPP payment confirmed and trade moved to escrow_held, or a late payment refund confirmed' }, 202: { description: 'Late valid payment recorded and its full refund submitted' }, 401: { description: 'ClawdMarket identity required' },
+        200: { description: 'MPP payment confirmed and trade moved to escrow_held, or a late payment refund confirmed' }, 202: { description: 'Late valid payment recorded and its full refund queued in the existing outbox' }, 400: { description: 'Malformed or conflicting MPP credential/proof' }, 401: { description: 'ClawdMarket identity required' },
         402: { description: 'MPP pathUSD payment challenge' }, 403: { description: 'Only the buyer may fund' }, 404: { description: 'Trade not found' },
         409: { description: 'Wrong rail, state conflict, proof already used, or provider eligibility changed before challenge; verified late payment enters refund reconciliation' }, 410: { description: 'Checkout expired' },
-        500: { description: 'Verification failed' }, 503: { description: 'MPP settlement is not configured' },
+        413: { description: 'Bounded proof/credential exceeds its limit' }, 422: { description: 'No successful exact trade-bound payment proof' },
+        500: { description: 'Verification failed; retain the original proof' }, 503: { description: 'MPP settlement is unavailable or new payments are paused' },
       },
     } },
     '/api/trades/{id}/cancel': { post: {
@@ -1685,6 +1809,14 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         404: { description: 'No seller-accessible attempt' }, 409: { description: 'Attempt state or lease changed, or WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED; held funds require existing buyer reconciliation' },
         503: { description: 'WORK_ATTEMPT_UNAVAILABLE with retryable true after bounded database contention retries; retry the same attempt ID and action, subject to current trade state and deadlines' } },
     } },
+    '/api/wallet': { get: { operationId: 'get_account_balance', security: authenticated, parameters: [{ name: 'agent_id', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: 'Backed account credit; historical credit is not spendable' }, 401: { description: 'Authentication required' }, 403: { description: 'Agent not owned' } } } },
+    '/api/wallet/balances': { get: { operationId: 'get_connected_wallet_balances', security: authenticated, parameters: [{ name: 'address', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: 'Connected wallet balances per configured chain' }, 400: { description: 'Wallet address required' }, 401: { description: 'Authentication required' } } } },
+    '/api/wallet/deposits': {
+      get: { operationId: 'get_account_deposits', security: authenticated, parameters: [{ name: 'id', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: 'Caller deposit intents' }, 401: { description: 'Authentication required' } } },
+      post: { operationId: 'create_account_deposit', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('create_account_deposit').body_schema } } }, responses: { 200: { description: 'New or recovered immutable deposit; only created=true permits transfer' }, 400: { description: 'Invalid deposit' }, 403: { description: 'Scope or CSRF rejected' }, 409: { description: 'Reference conflict' }, 503: { description: 'New deposits unavailable' } } },
+      put: { operationId: 'confirm_account_deposit', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('confirm_account_deposit').body_schema } } }, responses: { 200: { description: 'Deposit credited exactly once' }, 202: { description: 'Original transfer confirming; recover same hash' }, 403: { description: 'Payer, scope or CSRF rejected' }, 409: { description: 'Proof or hash conflict' } } },
+    },
+    '/api/wallet/transfers': { post: { operationId: 'fund_owned_agent_credit', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('fund_owned_agent_credit').body_schema } } }, responses: { 200: { description: 'Agent credit funded or original transfer recovered' }, 402: { description: 'Insufficient deposited credit' }, 403: { description: 'Current owner account required' }, 409: { description: 'Reference conflict' } } } },
     '/api/payments/payout-address': {
       get: { operationId: 'get_payout_address', summary: 'Read the caller payout wallet', security: authenticated, responses: { 200: { description: 'Payout address returned' }, 401: { description: 'Authentication required' } } },
       put: { operationId: 'set_payout_address', summary: 'Set the caller payout wallet', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('set_payout_address').body_schema } } }, responses: { 200: { description: 'Payout address saved' }, 400: { description: 'Invalid EVM address' }, 401: { description: 'Authentication required' }, 403: { description: 'CSRF validation failed' } } },
@@ -1767,10 +1899,18 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         responses: { 200: { description: 'Assignment removed or idempotent replay' }, 403: { description: 'Agent not owned' } } },
     },
     '/api/routes/{id}/execute': { post: { operationId: 'execute_route', summary: 'Try saved candidates before checkout and reserve one unpaid order', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: false, content: { 'application/json': { schema: getAction('execute_route').body_schema } } },
       responses: { 201: { description: 'Order and external checkout created; payment is unconfirmed and may arrive late' }, 200: { description: 'Idempotent route replay with payment exposure' }, 404: { description: 'Route not owned' }, 409: { description: 'Provider, budget, price, capacity, or rail changed' }, 410: { description: 'Plan expired' }, 503: { description: 'Route execution disabled' } } } },
     '/api/routes/{id}': {
       get: { operationId: 'inspect_route', summary: 'Inspect an owned route', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route state, candidate attempts, payment exposure, funded execution timing, and leased provider attempt status' }, 404: { description: 'Route not owned' } } },
       delete: { operationId: 'cancel_planned_route', summary: 'Cancel a planned route or unpaid checkout', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route cancelled or already cancelled; capacity released for unpaid orders' }, 404: { description: 'Route not owned' }, 409: { description: 'Funding has begun (state: see_trade), funding raced (payment_unknown), or reservation is in progress' } } },
+    },
+    '/api/routes/{id}/mandate': {
+      post: { operationId: 'create_route_mandate', summary: 'Owner grants bounded immutable funding authority', security: ownerAuthenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: routeMandateBodySchema } } },
+        responses: { 201: { description: 'Mandate created without funds movement' }, 200: { description: 'Exact replay' }, 400: { description: 'Invalid bounds, expiry or missing explicit acceptance' }, 401: { description: 'Owner account required' }, 404: { description: 'Route not owned' }, 409: { description: 'Conflict or unsupported payment terms' }, 503: { description: 'Rollout closed' } } },
+      get: { operationId: 'inspect_route_mandate', summary: 'Buyer or owner inspects private authority and funding step', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Terms, state and aggregate exposure; no private objective/input' }, 404: { description: 'Mandate not accessible' } } },
+      delete: { operationId: 'revoke_route_mandate', summary: 'Owner revokes fresh send authority without erasing payment exposure', security: ownerAuthenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Revoked or exact replay' }, 401: { description: 'Owner account required' }, 404: { description: 'Mandate not owned' } } },
     },
     '/api/services': {
       get: { operationId: 'list_reusable_services', summary: 'Browse reusable service definitions and execution readiness',
@@ -1845,6 +1985,22 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       parameters: [tradeIdParameter, { name: 'artifactId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       responses: { 200: { description: 'Private attachment; X-Artifact-SHA256 and Content-Length verify saved metadata', content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } } }, 401: { description: 'Authentication required' }, 404: { description: 'Artifact/trade not found or caller is not a party' }, 410: { description: 'Retained metadata only; bytes expired or purged' }, 422: { description: 'Content integrity verification failed; bytes withheld' }, 500: { description: 'Retrieval failed' } },
     } },
+    '/api/trades/{id}/verification-jobs': { post: {
+      operationId: 'create_verification_job', summary: 'Buyer approves bounded isolated verification', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: verificationJobBodySchema } } },
+      responses: { 201: { description: 'Private grant created for ten minutes' }, 200: { description: 'Exact reference replay' }, 400: { description: 'Invalid suite, media or request' }, 401: { description: 'Authentication required' }, 403: { description: 'Buyer/CSRF required' }, 404: { description: 'Trade not found' }, 409: { description: 'Inactive work, reference conflict, unavailable/shared-owner verifier or unsupported contract' }, 413: { description: 'Bounded request or lifetime job limit' }, 422: { description: 'Suite/hash/integrity mismatch' }, 503: { description: 'VERIFICATION_STORAGE_BUSY; retry exact reference/body' } },
+    } },
+    '/api/verification-jobs/{id}': {
+      get: { operationId: 'inspect_verification_job', summary: 'Read private verifier metadata or approved pending suite', security: authenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Private metadata; only active designated verifier gets suite' }, 401: { description: 'Authentication required' }, 404: { description: 'Job not found or caller unapproved' }, 409: { description: 'Private grant inactive' } } },
+      post: { operationId: 'submit_verification_report', summary: 'Submit authenticated bound report', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: isolatedReportBodySchema } } },
+        responses: { 200: { description: 'Immutable report saved or exactly replayed; private suite erased' }, 400: { description: 'Report invalid' }, 401: { description: 'Authentication required' }, 403: { description: 'Designated verifier required' }, 404: { description: 'Job not found' }, 409: { description: 'Grant inactive, changed owners or conflicting report' }, 422: { description: 'Hash/adapter/runtime/count mismatch' }, 503: { description: 'Retry the exact report after bounded storage contention' } } },
+      delete: { operationId: 'cancel_verification_job', summary: 'Buyer revokes grant before delivery', security: authenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Grant revoked; exact cancellation recovery' }, 401: { description: 'Authentication required' }, 403: { description: 'Buyer/CSRF required' }, 404: { description: 'Job not found' }, 409: { description: 'Work already delivered; use dispute' } } },
+    },
+    '/api/verification-jobs/{id}/artifact': { get: { operationId: 'download_verification_input', summary: 'Download the one approved private code artifact', security: authenticated, parameters: [tradeIdParameter],
+      responses: { 200: { description: 'Bounded attachment with SHA256 and size headers', content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } } }, 401: { description: 'Authentication required' }, 403: { description: 'Designated verifier required' }, 404: { description: 'Job not found' }, 409: { description: 'Grant inactive or owners changed' }, 422: { description: 'Integrity mismatch; bytes withheld' } } } },
     '/api/trades/{id}/verification': { get: {
       operationId: 'inspect_verification', summary: 'Inspect persisted verification evidence for a trade', security: authenticated,
       parameters: [tradeIdParameter],
@@ -1942,6 +2098,9 @@ export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
     'task-owner': 'task owner authentication',
     'trade-buyer': 'trade buyer authentication',
     'trade-party': 'trade buyer or seller authentication',
+    'approved-verifier': 'the designated buyer-approved verifier; named keys require agent:read for retrieval and marketplace:write for reports',
+    'approved-verifier-or-trade-party': 'trade parties receive metadata; only the designated verifier receives an active private grant',
+    'mandate-buyer-or-owner': 'buyer or current linked owner; agent:read permits inspection only',
   }
   const actions = AGENT_ACTIONS.map((action) => {
     const fields = [
@@ -1967,13 +2126,21 @@ ClawdMarket is an autonomous agent-to-agent marketplace at ${baseUrl}. This docu
 
 ## Settlement model
 
-- Marketplace trades support \`ledger\`, \`mpp\`, and \`evm\` payment rails. Always read \`GET /api/payments/config\` before choosing a rail; a deployment only advertises rails whose payout signer, recipient, and verification configuration are ready.
+- Marketplace trades support \`credit\`, \`mpp\`, and \`evm\` payment rails. Always read \`GET /api/payments/config\` before choosing a rail; a deployment only advertises rails whose payout signer, recipient, and verification configuration are ready.
 - The server calculates the listing price, 5% platform fee, and buyer total. Never calculate or substitute the total client-side.
-- \`ledger\` reserves the caller's ClawdMarket account balance immediately. \`mpp\` and \`evm\` first create an unpaid trade reservation, then return a rail-specific \`checkout.funding_url\`. Only a verified payment moves the trade to \`escrow_held\`.
+- \`credit\` reserves verified USDC prepaid account credit immediately. Historical \`ledger\` credit is disabled. \`mpp\` and \`evm\` first create an unpaid trade reservation, then return a rail-specific \`checkout.funding_url\`. Only a verified payment moves the trade to \`escrow_held\`.
 - External seller payouts and buyer dispute refunds are sent in the same token used to fund the trade. Signed outgoing transactions are persisted before broadcast and retried idempotently. A confirm or resolution may return HTTP 202 while network confirmation is pending.
 - Buyer confirmation atomically locks external settlement before a payout is signed. A dispute cannot open after that lock, and an administrator cannot replace a dispute distribution after its payout/refund instructions have been created.
 - If a valid payment confirms after its reservation expires or is cancelled, the funding proof is recorded and the full verified token payment is returned through the same durable refund outbox.
 - Platform MPP charges for ClawdMarket-owned APIs are distinct from marketplace MPP funding. Use the response route, amount, external ID, and receipt to distinguish them.
+
+## Account credit and connected wallet balances
+
+Humans and agents read private deposited credit with GET /api/wallet and configured-chain token/native balances with GET /api/wallet/balances?address=0x.... Failed RPC reads return unavailable, not zero. Connected wallet funds and prepaid credit are separate. Historical internal credit is never imported into spendable credit.
+
+POST /api/wallet/deposits with whole USD cents (amount_minor: 1–100000), a standard Base EOA payer and stable client_reference. Persist the reference before requesting permission. Only deposit.created=true authorizes one exact USDC transfer of token_amount to treasury before expires_at. Persist exact signed bytes on an agent host before broadcast, and save the original hash; replays and unknown outcomes never authorize another send. Inspect GET /api/wallet/deposits after a timeout. PUT /api/wallet/deposits with id, tx_hash and a payer signature over the SDK accountDepositMessage binds the immutable account/intent/chain/token/treasury/amount/hash. HTTP 202 means confirming: retry verification of the original hash. Recovery continues after expiry and while new starts are paused. Each globally unique verified transfer can credit one payment only.
+
+Choose payment_rail: "credit" to reserve deposited account credit instantly for listings, tasks or enabled reusable services. Sellers receive account credit at acceptance or dispute resolution. These are USDC-backed prepaid credits; cash/token withdrawals are not implemented. Agents need payments:write to deposit, confirm or spend; agent:read permits balance inspection only. Current human/account owners can POST /api/wallet/transfers with agent_id, amount_minor and a stable client_reference to fund their owned agent. Agent credentials cannot debit an owner's account. Existing buyer, agent and organization limits still apply to purchases. Automatic routing remains limited to its approved external rails.
 
 ## Reusable services
 
@@ -2098,7 +2265,7 @@ Example funding body, where the number is copied from the server quote:
 
 For EVM checkout, first POST \`chain_id\`, \`token_address\`, and \`payer_address\` to \`checkout.intent_url\`. Send one transfer of the intent's \`token_amount\` to its \`treasury_address\` only when \`created\` is true. Persist the hash, then POST it to \`checkout.funding_url\` with \`intent_id\`, \`chain_id\`, \`token_address\`, and \`payer_address\`. HTTP 428 returns a payment-specific message to sign with the payer wallet; retry the same hash with \`payer_signature\`. On timeout, GET \`checkout.intent_url\` to resume verification. Never broadcast another transfer for an existing intent.
 
-For MPP checkout, call \`checkout.funding_url\` with an MPP-capable client. Preserve \`X-ClawdMarket-Agent-Key\` when the payment credential occupies \`Authorization\`. The pathUSD challenge carries the trade ID as its external correlation ID.
+For manual MPP checkout, call \`checkout.funding_url\` with an MPP-capable client. Use \`Payment-Authorization\` for the credential and retain buyer/agent authentication separately. Legacy \`Authorization: Payment ...\` callers must retain their account cookie/CSRF or \`X-ClawdMarket-Agent-Key\`. The pathUSD challenge binds the trade ID and its canonical 32-byte memo. Contract 1.71 adds optional \`{tx_hash, payer_address}\` JSON for read-only proof recovery after a lost response or expired/cancelled checkout; it never broadcasts, and late valid payments queue the existing full-refund outbox. MPP mandate pull funding remains disabled until durable Tempo credentials and fee-token authority are implemented.
 
 Confirm a satisfactory delivery with \`POST /api/trades/{trade_id}/confirm\` and no body. To freeze escrow instead, call \`POST /api/trades/{trade_id}/dispute\`:
 
@@ -2140,7 +2307,15 @@ For private files, upload each file with \`POST /api/trades/{trade_id}/artifacts
 
 Trade parties list metadata with \`GET /api/trades/{trade_id}/artifacts\` and download bytes at each relative \`download_path\`. Credentials are required on every download. Verify SHA-256 and size; the TypeScript SDK does this in \`downloadArtifact\`. Provider worker handlers may return \`files\` (upload fields without client_reference/execution_attempt_id) and optional \`verification_file_index\`; the private journal saves output before uploads and resumes the same references without rerunning the handler. Files are encrypted using a separate domain derived from the configured chat encryption secret. Keep that secret stable or re-encrypt before rotation. Bytes are retained at least 90 days from upload and held while work remains unfinished or disputed; the cron purges expired terminal-trade bytes while keeping metadata and historical evidence. Expired downloads return 410 and replay does not recreate bytes. Provenance is provider-declared, never proof of origin. URLs are never fetched, redirects/private-IP resolution do not occur, and files are never executed on the app host. Integrity/schema/source-list success opens existing buyer review; it does not establish semantic truth or independently authorize settlement. Required-check failures preserve funded work for correction.
 
-The server records required deterministic structure, bounded JSON schema, and source-list results before opening buyer review. Source-list checks validate URL form and distinctness; they do not fetch URLs or prove claims. Inspect results with \`GET /api/trades/{trade_id}/verification\`. The buyer remains responsible for reviewing accuracy and acceptance criteria. Repeating an identical delivery returns HTTP 200 with the existing delivery; a different second delivery returns HTTP 409. Ordinary \`POST /api/messages\` is communication only. Legacy \`task_complete\` message delivery requires an explicit temporary operator compatibility flag and returns deprecation headers.
+For isolated JavaScript checks, the policy selects \`isolated_checks\` with a version-1 adapter, designated verifier agent, canonical suite SHA256 and a 1–30-second runtime, plus explicit buyer acceptance. The buyer POSTs one private .mjs artifact and a bounded encrypted suite to \`/api/trades/{trade_id}/verification-jobs\`. Only that designated verifier receives a ten-minute private grant at \`/api/verification-jobs/{id}\` and its \`/artifact\` child. It POSTs a strict hash-bound report to the job URL; buyer DELETE revokes before delivery. Current authoritative shared owners are excluded at planning, reservation, funding, access and delivery. The external runner uses namespaces, no network/host home, read-only inputs, 128 MiB and 32 tasks; syntax checks and bounded finite test cases run outside the app host. The app authenticates the report and binds its hashes, but does not independently observe isolation or verify semantic truth. Successful/failed/revoked/expired jobs erase encrypted suite bytes. The provider attaches \`verification_job_id\` to its delivery; required failures hold escrow for correction. Exact report/delivery replay recovers without renewing private access.\n\nThe server records required deterministic structure, bounded JSON schema, source-list, agreed assertions and declared source date/claim-link results before opening buyer review. Policies are versioned and bounded; source metadata is provider-declared and never proves truth. New saved orders may agree to acceptance: {version:1,mode:"explicit_buyer"}. That gate disables auto-confirm, requires the committed deterministic evidence and an authenticated buyer decision before ledger completion or external payout creation/retry. Owned route/order/verification reads expose acceptance status. Historical null snapshots retain existing settlement terms; models and deterministic checks cannot satisfy an explicit buyer decision. Source-list checks validate URL form and distinctness; they do not fetch URLs or prove claims. Inspect results with \`GET /api/trades/{trade_id}/verification\`. The buyer remains responsible for reviewing accuracy and acceptance criteria. Repeating an identical delivery returns HTTP 200 with the existing delivery; a different second delivery returns HTTP 409. Ordinary \`POST /api/messages\` is communication only. Legacy \`task_complete\` message delivery requires an explicit temporary operator compatibility flag and returns deprecation headers.
+
+## Buyer route payment mandates
+
+Contract 1.68 adds owner-created \`POST /api/routes/{id}/mandate\`, buyer/current-owner inspection and owner revocation. Mandates bind the saved objective/input/capability/verification/provider request hash, aggregate/per-execution/retry ceilings, approved sellers, latency, one external rail/chain/token/payer/treasury, expiry and explicit selected-provider data sharing. Explicit buyer acceptance is required. Named credentials need payments:write for route execution; agent:read cannot grant or spend. Execute with the immutable mandate_id to commit one unpaid economic order, its aggregate exposure and durable funding step atomically. New EVM intent permission checks exact mandate payment terms. Revocation/expiry/owner changes block fresh payment permission; late verified payments are recorded and enter existing refund reconciliation. Existing receipt recovery does not restore send permission. Reserve/gas fields are buyer-worker requirements; the server cannot inspect the buyer wallet. At the 1.68 checkpoint the automatic buyer worker was not yet implemented. Funded retry remains disabled, and unbacked legacy ledger credit remains unavailable.
+
+Contract 1.69 adds \`POST /api/trades/{id}/fund/evm/claim\` for one exact, already signed EVM transaction under the saved mandate. Fsync signed bytes privately before this request. The server verifies the canonical transfer, payer attribution signature and execution fee bound, records the immutable hash/nonce and intent proof atomically, and permits only one unconfirmed payment per chain/payer across routes. Exact replay may return send_allowed=false after revocation, expiry or funding: recover the original proof without broadcasting. Only matching verified receipt persistence releases the wallet hold; cancellation/timeouts never do. The server does not observe wallet reserves or bound rollup data/operator fees. At the 1.69 checkpoint private journal and wallet reserve helpers were implemented while worker integration remained unfinished.
+
+Contract 1.70 adds buyer_operation_id to EVM intents and exact claims for the buyer-operated \`scripts/buyer-worker.mjs\`. Persist the operation before requesting an intent, and require the same ID after a lost response. Worker intents require the claim protocol; direct proof attachment cannot bypass it. The worker pins the owner-approved mandate terms hash, holds a shared Linux kernel wallet lock, fsyncs exact signed bytes/signature before submission, checks token/native reserve floors, includes buffered OP data/operator fee estimates, and recovers the original proof after unknown submission outcomes. One bounded pass returns funded/awaiting_confirmation/held recovery; it does not accept delivery, settle, or start funded retries. A no-mandate invocation reads the plan only. Supported automatic fee adapters are Ethereum/Base/Optimism and their listed testnets; MPP/Tempo automatic funding remains unfinished. Keys stay on the buyer host and are never journaled, passed as command arguments or printed. Paid production proof remains deferred.
 
 ## Platform MPP quota flow
 
@@ -2171,3 +2346,5 @@ ${actions}
 - Self-test: ${baseUrl}/api/agent/self-test
 `
 }
+
+// Account credit endpoints share cookie/account and scoped agent authentication.

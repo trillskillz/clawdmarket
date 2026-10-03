@@ -1,5 +1,7 @@
+import { inspectCreditHealth } from '../lib/credit-health.mjs'
 import { createClient } from '@libsql/client'
 import { inspectLegacyOwnerValues } from '../lib/legacy-owner-classification.mjs'
+import { inspectRouteFundingHealth } from '../lib/route-funding-health.mjs'
 
 const url = process.env.TURSO_DATABASE_URL || ''
 const authToken = process.env.TURSO_AUTH_TOKEN || ''
@@ -7,7 +9,7 @@ if (!url.startsWith('libsql://') || !authToken) throw new Error('Production Turs
 const client = createClient({ url, authToken })
 try {
   const read = async (sql) => (await client.execute(sql)).rows
-  const [migrations, services, routes, orders, attempts, provider, missingAttempts, overdueDeliveries, webhooks, transfers, worker, legacyOwner, artifacts] = await Promise.all([
+  const [migrations, services, routes, orders, attempts, provider, missingAttempts, overdueDeliveries, webhooks, transfers, worker, legacyOwner, artifacts, verifierJobs, fundingHealth, creditHealth] = await Promise.all([
     read('SELECT COUNT(*) AS count FROM _clawdmarket_migrations'),
     read('SELECT status AS state, COUNT(*) AS count FROM service_definitions GROUP BY status'),
     read('SELECT state, COUNT(*) AS count FROM route_plans GROUP BY state'),
@@ -53,6 +55,12 @@ try {
         AND t.status IN ('completed', 'cancelled', 'resolved') THEN 1 END) AS overdue_purge_count
       FROM private_artifacts a JOIN trades t ON t.id = a.trade_id
       LEFT JOIN private_artifact_payloads p ON p.artifact_id = a.id`),
+    read(`SELECT COUNT(CASE WHEN state = 'pending' THEN 1 END) AS pending_count,
+      COUNT(CASE WHEN state = 'pending' AND expires_at <= unixepoch() THEN 1 END) AS overdue_count,
+      COUNT(CASE WHEN state != 'pending' AND (suite_ciphertext IS NOT NULL OR suite_nonce IS NOT NULL) THEN 1 END) AS retained_suite_anomaly_count
+      FROM verification_jobs`),
+    inspectRouteFundingHealth(client),
+    inspectCreditHealth(client),
   ])
   const states = (rows) => Object.fromEntries(rows.map((row) => [String(row.state), Number(row.count || 0)]))
   const workerRow = worker[0]
@@ -66,10 +74,15 @@ try {
     settlement_outbox: Object.fromEntries(Object.entries(transfers[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
     webhook_worker: { outcome: workerRow?.last_outcome || 'never_observed', age_minutes: workerAgeMinutes },
     legacy_owner_values: legacyOwner,
+    verification_jobs: Object.fromEntries(Object.entries(verifierJobs[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
+    route_funding: fundingHealth,
+    account_credit: creditHealth,
     private_artifacts: Object.fromEntries(Object.entries(artifacts[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
   }
   console.log(JSON.stringify(snapshot, null, 2))
-  if (snapshot.migrations < 35 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
+  if (!snapshot.account_credit.healthy || snapshot.migrations < 40 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
+    || snapshot.route_funding.exposure_anomaly_count || snapshot.route_funding.missing_step_count || snapshot.route_funding.proof_state_anomaly_count || snapshot.route_funding.payment_claim_anomaly_count
+    || snapshot.verification_jobs.overdue_count || snapshot.verification_jobs.retained_suite_anomaly_count
     || snapshot.private_artifacts.missing_live_payload_count || snapshot.private_artifacts.purged_with_payload_count || snapshot.private_artifacts.overdue_purge_count
     || snapshot.webhook_outbox.failed_count || snapshot.webhook_outbox.overdue_count
     || snapshot.settlement_outbox.failed_count || snapshot.settlement_outbox.stuck_count) {

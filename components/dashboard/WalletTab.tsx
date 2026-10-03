@@ -1,4 +1,5 @@
 'use client';
+import AccountCredit from './AccountCredit';
 
 import { FormEvent, useEffect, useState } from 'react';
 
@@ -12,6 +13,9 @@ interface Transaction {
 }
 
 interface WalletData {
+  account_id?: string;
+  connected_wallet_address?: string | null;
+  credit_activity?: Array<{ id: string; kind: string; available_delta: number; escrow_delta: number; created_at: string }>;
   balance: number;
   escrow: number;
   available: number;
@@ -34,8 +38,6 @@ export default function WalletTab({ wallet, loading, onPayoutSaved }: WalletTabP
   const [agentAddresses, setAgentAddresses] = useState<Record<string, string>>({});
   const [agentNotice, setAgentNotice] = useState<Record<string, string>>({});
   const [agentBusy, setAgentBusy] = useState<string | null>(null);
-  const [ledgerEnabled, setLedgerEnabled] = useState<boolean | null>(null);
-  const [ledgerRedeemable, setLedgerRedeemable] = useState<boolean | null>(null);
   const [newPaymentsPaused, setNewPaymentsPaused] = useState(false);
 
   useEffect(() => {
@@ -52,8 +54,6 @@ export default function WalletTab({ wallet, loading, onPayoutSaved }: WalletTabP
         setAgentAddresses(Object.fromEntries(payout.owned_agents.map((agent: OwnedAgentPayout) => [agent.agent_id, agent.address || ''])));
       }
       if (payment) {
-        setLedgerEnabled(Boolean(payment.ledger_enabled));
-        setLedgerRedeemable(Boolean(payment.ledger_redeemable));
         setNewPaymentsPaused(Boolean(payment.new_payments_paused));
       }
     }).catch(() => undefined);
@@ -111,23 +111,12 @@ export default function WalletTab({ wallet, loading, onPayoutSaved }: WalletTabP
 
   if (!wallet) return <div className="text-center py-12">Failed to load wallet data.</div>;
 
-  const ledgerTotal = wallet.available + wallet.escrow;
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-2">Credits and payouts</h2>
-      <p className="text-sm text-text-dim mb-3">
-        Internal account credit and your external seller payout wallet are separate. This page does not show the USDC or pathUSD held in your own wallet.
-      </p>
-      {ledgerRedeemable === false && <p className="mb-4 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">Internal credit is not redeemable for cash or tokens. External marketplace payments and seller payouts are tracked with each trade, not added to these credit totals.</p>}
-      {newPaymentsPaused && <p className="mb-4 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">New marketplace payments are temporarily paused. Existing payment recovery, refunds, and payouts continue.</p>}
-      {ledgerEnabled === false && !newPaymentsPaused && <p className="mb-6 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">Internal-credit payments are currently disabled. External seller payouts still settle to your configured address.</p>}
-
-      <div className="card mb-8">
-        <h3 className="text-lg font-semibold mb-2">Pay for a service from your own wallet</h3>
-        <p className="text-sm text-text-dim mb-3">No email or internal credit is needed. Choose a service, select ERC-20 wallet payment, and approve the transfer in your wallet. The site verifies that payment for the specific trade before work begins. Use the checkout flow: sending tokens directly to a marketplace address will not top up this balance or fund a trade.</p>
-        <a href="/marketplace" className="btn-primary inline-flex px-5 py-3">Browse payment-ready services</a>
-      </div>
+      <h2 className="text-2xl font-bold mb-2">Account balance and wallets</h2>
+      {newPaymentsPaused && <p role="status" className="mb-4">New marketplace payments are paused. Existing payments, deposit recovery, refunds and payouts can still be recovered.</p>}
+      <AccountCredit wallet={wallet} agents={ownedAgents} paused={newPaymentsPaused} onUpdated={onPayoutSaved} />
 
       <form onSubmit={savePayoutAddress} className="card mb-8">
         <label htmlFor="payout-address" className="block text-sm font-semibold mb-2">Your account&apos;s seller payout address</label>
@@ -157,86 +146,7 @@ export default function WalletTab({ wallet, loading, onPayoutSaved }: WalletTabP
         ))}</div>
       </section>}
 
-      {/* Balance Cards */}
-      <div className="grid md:grid-cols-3 gap-6 mb-12">
-        <div className="card border-l-4 border-l-accent bg-gradient-to-br from-surface to-surface/50">
-          <div className="text-sm text-text-dim uppercase tracking-wider font-semibold mb-2">Internal Credit Total</div>
-          <div className="text-4xl font-mono font-bold text-white">
-            ${ledgerTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-lg text-accent">USD</span>
-          </div>
-        </div>
-
-        <div className="card border-l-4 border-l-green-500 bg-gradient-to-br from-surface to-surface/50">
-          <div className="text-sm text-text-dim uppercase tracking-wider font-semibold mb-2">Available Credit</div>
-          <div className="text-4xl font-mono font-bold text-green-400">
-            ${wallet.available.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-lg text-green-500/70">USD</span>
-          </div>
-          <div className="text-xs text-text-dim mt-2">Spendable only if internal-credit payments are enabled</div>
-        </div>
-
-        <div className="card border-l-4 border-l-gold bg-gradient-to-br from-surface to-surface/50">
-          <div className="text-sm text-text-dim uppercase tracking-wider font-semibold mb-2">Internal Credit Held</div>
-          <div className="text-4xl font-mono font-bold text-gold">
-            ${wallet.escrow.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-lg text-gold/70">USD</span>
-          </div>
-          <div className="text-xs text-text-dim mt-2">Internal-credit trades only; external payments are excluded</div>
-        </div>
-      </div>
-
-      {/* Transactions */}
-      <h3 className="text-xl font-bold mb-4">Internal credit activity</h3>
-      <div className="bg-surface rounded-xl border border-border overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-bg border-b border-border">
-            <tr>
-              <th className="px-6 py-3 text-xs font-bold text-text-dim uppercase">Type</th>
-              <th className="px-6 py-3 text-xs font-bold text-text-dim uppercase">Amount</th>
-              <th className="px-6 py-3 text-xs font-bold text-text-dim uppercase">Details</th>
-              <th className="px-6 py-3 text-xs font-bold text-text-dim uppercase text-right">Date</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {wallet.transactions.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-text-dim">
-                  No transactions yet.
-                </td>
-              </tr>
-            ) : (
-              wallet.transactions.map((tx) => (
-                <tr key={tx.id} className="hover:bg-bg/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      tx.type === 'faucet' ? 'bg-blue-400/10 text-blue-400' :
-                      tx.type === 'escrow_lock' ? 'bg-gold/10 text-gold' :
-                      tx.type === 'escrow_release' ? 'bg-green-400/10 text-green-400' :
-                      tx.type === 'fee' || tx.type === 'adjustment' ? 'bg-red-400/10 text-red-400' :
-                      'bg-text-dim/10 text-text-dim'
-                    }`}>
-                      {tx.type.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className={`px-6 py-4 font-mono font-bold ${
-                    ['escrow_lock', 'fee', 'transfer', 'adjustment'].includes(tx.type) ? 'text-red-400' : 'text-green-400'
-                  }`}>
-                    {['escrow_lock', 'fee', 'transfer', 'adjustment'].includes(tx.type) ? '-' : '+'}{tx.amount}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-text-dim">
-                    {tx.memo || '-'}
-                    {tx.reference_id && (
-                      <span className="block text-xs font-mono text-text-dim/50 mt-1">Ref: {tx.reference_id.slice(0, 8)}...</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-text-dim text-right font-mono">
-                    {new Date(tx.created_at).toLocaleDateString()}
-                    <span className="block text-xs">{new Date(tx.created_at).toLocaleTimeString()}</span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <p className="text-xs text-text-dim">Historical internal credit is excluded from spendable balances. External trade payments and payouts remain in each trade&apos;s receipts.</p>
     </div>
   );
 }

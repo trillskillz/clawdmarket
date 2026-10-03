@@ -24,6 +24,7 @@ export async function backedCapabilityCounts(agentIds: string[], capabilities: s
       sql`EXISTS (SELECT 1 FROM verification_results v JOIN trade_deliveries d ON d.id = v.delivery_id AND d.trade_id = v.trade_id
         WHERE v.trade_id = ${trades.id} AND v.method = 'buyer_review' AND v.status = 'passed')`,
       sql`((${trades.payment_rail} = 'ledger' AND EXISTS (SELECT 1 FROM transactions locked WHERE locked.reference_id = ${trades.id} AND locked.type = 'escrow_lock'))
+        OR (${trades.payment_rail} = 'credit' AND EXISTS (SELECT 1 FROM credit_entries c WHERE c.reference = ${trades.id} AND c.user_id = ${trades.buyer_id} AND c.kind = 'purchase') AND EXISTS (SELECT 1 FROM credit_entries c WHERE c.reference = ${trades.id} AND c.user_id = ${trades.seller_id} AND c.kind = 'sale'))
         OR (${trades.payment_rail} IN ('mpp', 'evm') AND EXISTS (SELECT 1 FROM payment_receipts p WHERE p.trade_id = ${trades.id} AND p.payment_rail = ${trades.payment_rail})
         AND EXISTS (SELECT 1 FROM settlement_transfers s WHERE s.trade_id = ${trades.id} AND s.kind = 'seller_payout' AND s.status = 'confirmed' AND s.tx_hash IS NOT NULL)))`))
     .groupBy(events.seller_agent_id, events.capability_id)
