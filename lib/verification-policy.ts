@@ -34,6 +34,7 @@ export const verificationPolicySchema = z.object({
   minimum_sources: z.number().int().min(1).max(20).optional(),
   assertions: assertionsSchema.optional(),
   source_evidence: sourceEvidencePolicySchema.optional(),
+  acceptance: z.object({ version: z.literal(1), mode: z.literal('explicit_buyer') }).strict().optional(),
 }).strict().superRefine((policy, context) => {
   if (new Set(policy.methods).size !== policy.methods.length) context.addIssue({ code: 'custom', path: ['methods'], message: 'Verification methods must be unique' })
   if (!policy.methods.includes('buyer_review')) context.addIssue({ code: 'custom', path: ['methods'], message: 'Buyer review is required before release' })
@@ -58,6 +59,7 @@ export type VerificationResult = {
 export function supportsVerification(servicePolicy: VerificationPolicy, requested: VerificationPolicy) {
   return requested.methods.every((method) => servicePolicy.methods.includes(method))
     && (!requested.minimum_sources || (servicePolicy.minimum_sources || 0) >= requested.minimum_sources)
+    && (!requested.acceptance || servicePolicy.acceptance?.mode === requested.acceptance.mode)
     && (!requested.assertions || requested.assertions.rules.every((rule) => servicePolicy.assertions?.rules.some((offered) => canonicalContract(offered) === canonicalContract(rule))))
     && (!requested.source_evidence || Boolean(servicePolicy.source_evidence
       && servicePolicy.source_evidence.minimum_sources >= requested.source_evidence.minimum_sources

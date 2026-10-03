@@ -6,6 +6,7 @@ import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { internalErrorResponse } from '@/lib/api-error'
 
 import { listPrivateArtifacts, privateArtifactHeaders } from '@/lib/private-artifacts'
+import { tradeAcceptanceStatus } from '@/lib/trade-acceptance'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       trade_id: id,
       delivery: delivery ? { id: delivery.id, content_hash: delivery.content_hash } : null,
       artifacts: await listPrivateArtifacts(id, principal.userId),
+      acceptance: await tradeAcceptanceStatus(id),
       categories: {
         delivery_received: Boolean(delivery),
         structure_verified: ['structure', 'schema'].some((method) => status(method) === 'passed'),

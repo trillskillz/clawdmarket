@@ -12,6 +12,7 @@ export type VerificationPolicy = {
   required?: true; methods?: VerificationMethod[]; minimum_sources?: number
   assertions?: { version: 1; rules: AssertionRule[] }
   source_evidence?: { version: 1; minimum_sources: number; max_age_days: number; require_claim_links?: boolean }
+  acceptance?: { version: 1; mode: 'explicit_buyer' }
 }
 export type DeclaredSource = { id: string; url: string; published_at: string }
 export type SourceLinkedClaim = { id: string; statement: string; source_ids: string[] }
@@ -93,7 +94,8 @@ export type ProviderExecution = {
   automatic_retry_allowed: false
 }
 
-export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null; provider_execution: ProviderExecution | null }
+export type AcceptanceStatus = { mode: 'legacy_settlement' | 'explicit_buyer'; auto_confirm_enabled: boolean; accepted: boolean; attention_required: boolean; error_code?: string }
+export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null; provider_execution: ProviderExecution | null; acceptance: AcceptanceStatus | null }
 export type PlannedRoute = { route: RoutePlan; idempotent: boolean; planning?: { examined: number; truncated: boolean; candidate_count: number; funds_moved: false } }
 export type ExecutedRoute = Pick<RouteSnapshot, 'route' | 'attempts' | 'payment_exposure'> & {
   order: { id: string; service_id: string; trade_id: string; [key: string]: unknown }

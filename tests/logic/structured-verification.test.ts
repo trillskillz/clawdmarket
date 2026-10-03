@@ -70,3 +70,14 @@ test('policy configurations are strict, versioned, bounded and offered terms mus
   assert.equal(evaluated.some((row) => row.status === 'failed'), false)
   assert.equal(evaluated.find((row) => row.method === 'buyer_review')?.status, 'pending')
 })
+
+test('explicit acceptance is versioned and route requests cannot select a legacy release policy', () => {
+  const legacy = verificationPolicySchema.parse({ methods: ['buyer_review'] })
+  const explicit = verificationPolicySchema.parse({ ...legacy, acceptance: { version: 1, mode: 'explicit_buyer' } })
+  assert.equal(supportsVerification(legacy, explicit), false)
+  assert.equal(supportsVerification(explicit, legacy), true)
+  assert.equal(supportsVerification(explicit, explicit), true)
+  for (const acceptance of [{ version: 2, mode: 'explicit_buyer' }, { version: 1, mode: 'model_score' }, { version: 1, mode: 'explicit_buyer', auto_release: true }]) {
+    assert.equal(verificationPolicySchema.safeParse({ ...legacy, acceptance }).success, false)
+  }
+})

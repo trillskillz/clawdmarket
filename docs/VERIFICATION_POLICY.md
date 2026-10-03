@@ -65,3 +65,11 @@ Checks apply to inline JSON or the JSON attachment selected by `verification_art
 Categories `assertions_verified` and `declared_source_evidence_verified` describe these checks only. `semantic_verified` and `provenance_verified` remain false. Buyer confirmation records passed review; dispute records disputed review; legacy auto-confirm records skipped review, never passed. This part does not change legacy settlement behavior or introduce independent-verifier release authority.
 
 No database migration is needed beyond released migration 35. Isolated code/static-analysis adapters and explicit semantic acceptance contracts remain separate unfinished plan work.
+
+## Explicit buyer acceptance (local contract 1.66)
+
+Add `"acceptance": {"version": 1, "mode": "explicit_buyer"}` to an offered policy and the buyer's requested policy to require this release gate. An offered legacy policy cannot satisfy that request. New orders persist the gate in their original execution snapshot; later definition edits cannot remove it. Historical orders with null snapshots keep their existing settlement terms.
+
+Delivery still needs every required deterministic check, then enters review with no auto-confirm timer. `POST /api/trades/{id}/confirm` requires the authenticated buyer and current committed passing evidence before recording acceptance. Account-balance completion checks it in the release transaction. External payout creation and transfer retries check it before preparing/broadcasting a payout; merely setting payout processing or creating an outbox row grants no acceptance. Missing evidence/corrupt snapshots return 409 and hold funds. Once the buyer has accepted, delayed external settlement can use the existing durable recovery path. Explicit orders remain disputable through the existing dispute endpoint; operator resolution follows the existing resolution state machine.
+
+Owned route, service-order and verification views expose `acceptance` with mode, whether auto-confirm is enabled, whether review passed, and whether attention is required. The cron holds explicit review and removes any stale auto-confirm timer written by older code, so held work cannot repeatedly fill the ordinary confirmation batch. No evaluator or independent-verifier release authority is added here. Legacy auto-confirm still records skipped review rather than acceptance.

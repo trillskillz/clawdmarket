@@ -9,6 +9,7 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { serviceOrderDto } from '@/lib/service-definitions'
 import { providerExecutionStatus } from '@/lib/provider-execution-status'
 import { routeExecutionTiming } from '@/lib/route-execution-timing'
+import { tradeAcceptanceStatus } from '@/lib/trade-acceptance'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const executionTiming = route ? routeExecutionTiming(route, order, trade, now) : null
     return NextResponse.json({ order: serviceOrderDto(order), trade,
       execution_timing: executionTiming,
+      acceptance: await tradeAcceptanceStatus(trade.id),
       provider_execution: providerExecutionStatus(agreed?.provider_protocol || 'manual', order, trade, attempt || null, executionTiming, now),
       checkout: principal.userId === order.buyer_id ? checkoutForTrade(trade) : undefined }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

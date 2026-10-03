@@ -142,7 +142,7 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
         .returning({ id: service_execution_attempts.id })
       if (!completed) throw new DeliveryError('Execution attempt expired before delivery', 409)
     }
-    const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: new Date(Date.now() + 86400000).toISOString() })
+    const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: linkedService?.execution_contract_json != null && policy.data.acceptance ? null : new Date(Date.now() + 86400000).toISOString() })
       .where(and(eq(trades.id, tradeId), eq(trades.status, 'escrow_held'))).returning()
     if (!updated) throw new DeliveryError('Trade is not awaiting delivery', 409)
     await advanceServiceOrder(tx, tradeId, 'verifying')
