@@ -529,6 +529,22 @@ export const route_receipts = sqliteTable('route_receipts', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+/** Server-attributed origin is immutable; caller labels can only suppress eligibility. */
+export const route_origins = sqliteTable('route_origins', {
+  route_id: text('route_id').primaryKey().references(() => route_plans.id, { onDelete: 'restrict' }),
+  channel: text('channel', { enum: ['authenticated_agent', 'account', 'mpp_wallet'] }).notNull(),
+  cohort: text('cohort', { enum: ['production', 'canary', 'demo', 'reference', 'nonproduction'] }).notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+/** Written with the first accepted buyer decision; an after-the-fact observation cannot create automation evidence. */
+export const route_agent_decisions = sqliteTable('route_agent_decisions', {
+  trade_id: text('trade_id').primaryKey().references(() => trades.id, { onDelete: 'restrict' }),
+  route_id: text('route_id').notNull().references(() => route_plans.id, { onDelete: 'restrict' }),
+  delivery_hash: text('delivery_hash').notNull(),
+  decided_at: integer('decided_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 export const route_attempts = sqliteTable('route_attempts', {
   id: text('id').primaryKey(),
   route_id: text('route_id').notNull().references(() => route_plans.id, { onDelete: 'restrict' }),

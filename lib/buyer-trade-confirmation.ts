@@ -12,10 +12,11 @@ import { advanceBuyerReview, markBuyerReviewAccepted } from '@/lib/verification-
 import { AcceptanceError } from '@/lib/trade-acceptance';
 import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts';
 import { z } from 'zod';
+import { recordAgentRouteDecision } from './route-automation-evidence';
 
 const decision = z.object({ content_hash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict()
 
-export async function confirmBuyerTrade(req: NextRequest, { params }: { params: Promise<{ id: string }> }, options: { waitMs?: number } = {}) {
+export async function confirmBuyerTrade(req: NextRequest, { params }: { params: Promise<{ id: string }> }, options: { waitMs?: number; agentRouteId?: string } = {}) {
   const { id } = await params;
   if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid trade ID' }, { status: 400 });
 
@@ -41,7 +42,10 @@ export async function confirmBuyerTrade(req: NextRequest, { params }: { params: 
           .where(and(eq(trades.id, trade.id), eq(trades.status, 'pending_release'), eq(trades.payout_status, 'pending')))
           .returning();
         if (rows[0]) {
-          await advanceBuyerReview(tx, trade.id, 'passed', expectedHash);
+          const acceptedNow = await advanceBuyerReview(tx, trade.id, 'passed', expectedHash);
+          if (acceptedNow && expectedHash && options.agentRouteId && auth.kind === 'registered-agent') {
+            await recordAgentRouteDecision(tx, options.agentRouteId, trade.id, auth.userId, expectedHash)
+          }
           const [order] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, trade.id)).limit(1)
           if (order) await tx.update(route_plans).set({ state: 'settling', updated_at: new Date() }).where(eq(route_plans.service_order_id, order.id))
         }

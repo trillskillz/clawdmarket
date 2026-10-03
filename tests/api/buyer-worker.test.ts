@@ -131,11 +131,12 @@ after(async () => {
   db?.$client.close(); await rm(directory, { recursive: true, force: true })
 })
 
-async function fixture(reuseDummyKey?: `0x${string}`, retryLimits?: { maxAggregate?: string; maxRetry?: string; maxAttempts?: number }) {
-  const id = crypto.randomUUID(), buyerId = `buyer-${id}`, sellerId = `seller-${id}`, serviceId = crypto.randomUUID()
+async function fixture(reuseDummyKey?: `0x${string}`, retryLimits?: { maxAggregate?: string; maxRetry?: string; maxAttempts?: number }, agentParties = false) {
+  const id = crypto.randomUUID(), buyerId = agentParties ? `user_agent_${id}` : `buyer-${id}`, sellerId = agentParties ? `user_agent_seller_${id}` : `seller-${id}`, serviceId = crypto.randomUUID()
+  const ownerId = agentParties ? `owner-${id}` : buyerId, sellerOwnerId = `provider-owner-${id}`
   const dummyKey = reuseDummyKey ?? `0x${(++signerIndex).toString(16).padStart(64, '0')}` as `0x${string}`, account = privateKeyToAccount(dummyKey)
   if (!balances.has(account.address.toLowerCase())) balances.set(account.address.toLowerCase(), { token: 10_000_000n, native: 1_000_000_000_000_000n })
-  await db.insert(schema.users).values([buyerId, sellerId].map((userId) => ({ id: userId, name: userId, email: `${userId}@test.invalid`, password_hash: 'unused', role: 'human' as const })))
+  await db.insert(schema.users).values([...new Set([buyerId, sellerId, ownerId, ...(agentParties ? [sellerOwnerId] : [])])].map((userId) => ({ id: userId, name: userId, email: `${userId}@test.invalid`, password_hash: 'unused', role: 'human' as const })))
   await db.insert(schema.payout_addresses).values({ user_id: sellerId, address: treasury })
   const policy = { required: true, methods: ['buyer_review', 'schema'], acceptance: { version: 1, mode: 'explicit_buyer' } }
   await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: sellerId, title: 'Buyer worker fixture', description: 'Return a private structured review for explicit buyer acceptance.',
@@ -150,14 +151,24 @@ async function fixture(reuseDummyKey?: `0x${string}`, retryLimits?: { maxAggrega
       output_schema: '{"type":"object","properties":{"result":{"type":"string"}}}', verification_policy: JSON.stringify(policy) })
   }
   const approvedProviders = fallbackSellerId ? [sellerId, fallbackSellerId] : [sellerId]
-  const apiKey = jwt({ userId: buyerId, email: `${buyerId}@test.invalid`, role: 'human' })
+  let apiKey = jwt({ userId: buyerId, email: `${buyerId}@test.invalid`, role: 'human' })
+  if (agentParties) {
+    await db.insert(schema.agents).values([{ id, name: 'Dummy buyer agent', description: 'Private buyer integration fixture for evidence tests.', capabilities: '["code-review"]', endpoint: 'https://example.invalid', owner_address: '', api_key: 'unused-buyer' },
+      { id: `seller_${id}`, name: 'Dummy provider agent', description: 'Independent-owner provider integration fixture for evidence tests.', capabilities: '["code-review"]', endpoint: 'https://example.invalid', owner_address: '', api_key: 'unused-seller' }])
+    await db.insert(schema.agent_owners).values([{ agentId: id, userId: ownerId, establishedBy: 'test' }, { agentId: `seller_${id}`, userId: sellerOwnerId, establishedBy: 'test' }])
+    const key = await (await import('@/lib/agent-named-credentials')).createNamedAgentCredential({ agentId: id, name: 'Dummy buyer payments', scopes: ['agent:read', 'payments:write', 'marketplace:write'], actorCredentialId: null })
+    if (key.kind !== 'created') assert.fail('Dummy agent key unavailable')
+    apiKey = key.api_key
+  }
+  const ownerKey = jwt({ userId: ownerId, email: `${ownerId}@test.invalid`, role: 'human' })
   const request = (path: string, body: unknown) => new NextRequest(`${baseUrl}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const planned = await (await import('@/app/api/routes/plan/route')).POST(request('/api/routes/plan', { client_reference: `buyer-plan-${id}`, objective: 'Review private code with explicit buyer review',
     required_capabilities: ['code-review'], input: { private_text: 'fixture private source' }, max_budget: { amount: '5.00', currency: 'USD' }, verification: policy,
     provider_requirements: { approved_providers: approvedProviders }, payment_policy: { allowed_rails: ['evm'] },
     ...(retryLimits ? { retry_policy: { max_attempts: retryLimits.maxAttempts ?? 2 }, deadline_seconds: 300 } : {}) }))
   assert.equal(planned.status, 201); const routeId = (await planned.json()).route.id
-  const created = await (await import('@/app/api/routes/[id]/mandate/route')).POST(request(`/api/routes/${routeId}/mandate`, { version: 1, client_reference: `buyer-mandate-${id}`,
+  const mandateRequest = (path: string, body: unknown) => new NextRequest(`${baseUrl}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${ownerKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const created = await (await import('@/app/api/routes/[id]/mandate/route')).POST(mandateRequest(`/api/routes/${routeId}/mandate`, { version: 1, client_reference: `buyer-mandate-${id}`,
     max_aggregate: retryLimits?.maxAggregate ?? (retryLimits ? '3.50' : '2.00'), max_per_execution: '2.00', max_retry_budget: retryLimits?.maxRetry ?? (retryLimits ? '1.16' : '0.00'),
     max_attempts: retryLimits?.maxAttempts ?? (retryLimits ? 2 : 1), approved_providers: approvedProviders, max_latency_seconds: 60,
     private_data: 'selected_provider_only', expires_at: new Date(Date.now() + 600_000).toISOString(), payment: { rail: 'evm', chain_id: 8453, token_address: token,
@@ -165,7 +176,7 @@ async function fixture(reuseDummyKey?: `0x${string}`, retryLimits?: { maxAggrega
   assert.equal(created.status, 201); const mandate = (await created.json()).mandate
   const approval = { version: 1, origin: baseUrl, route_id: routeId, mandate_id: mandate.id, terms_hash: mandate.terms_hash, chain_id: 8453, rpc_url: rpcUrl }
   const stateDirectory = join(directory, `state-${id}`), adapter = createBuyerEvmAdapter({ chainId: 8453, rpcUrl, account })
-  return { approval, apiKey, stateDirectory, account, adapter, dummyKey, buyerId, sellerId, serviceId, fallbackSellerId, fallbackServiceId, mandate, routeId }
+  return { approval, apiKey, stateDirectory, account, adapter, dummyKey, buyerId, sellerId, serviceId, ownerId, sellerOwnerId, fallbackSellerId, fallbackServiceId, mandate, routeId }
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>
 async function journal(f: Fixture) {
@@ -539,10 +550,14 @@ test('a declined funded provider is fully reconciled before the buyer worker fun
   const health = await (await import('@/lib/route-funding-health.mjs')).inspectRouteFundingHealth(db.$client)
   assert.equal(health.exposure_anomaly_count, 0); assert.equal(health.missing_step_count, 0); assert.equal(health.payment_claim_anomaly_count, 0)
   assert.equal(health.funded_retry_anomaly_count, 0)
+  const getMetrics = (await import('@/lib/route-metrics')).getRouteMetrics
+  const metricsBefore = await getMetrics(); assert.ok(metricsBefore.economic_outcomes.confirmed_refunds >= 1); assert.ok(metricsBefore.retry.completed_attempts >= 1)
   const [refundRecord] = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))
   await db.update(schema.settlement_transfers).set({ to_address: treasury }).where(eq(schema.settlement_transfers.id, refundRecord.id))
   const corrupted = await (await import('@/lib/route-funding-health.mjs')).inspectRouteFundingHealth(db.$client)
   assert.equal(corrupted.funded_retry_anomaly_count, 1); assert.equal(JSON.stringify(corrupted).includes(f.account.address), false)
+  const metricsAfter = await getMetrics(); assert.equal(metricsAfter.economic_outcomes.confirmed_refunds, metricsBefore.economic_outcomes.confirmed_refunds - 1)
+  assert.equal(metricsAfter.economic_outcomes.refunds_awaiting_confirmation, metricsBefore.economic_outcomes.refunds_awaiting_confirmation + 1)
   await db.update(schema.settlement_transfers).set({ to_address: refundRecord.to_address }).where(eq(schema.settlement_transfers.id, refundRecord.id))
   const repeated = await runBuyerRoute(f); assert.deepEqual(repeated.receipt, result.receipt); assert.equal(broadcastCalls, count + 4)
 })
@@ -656,4 +671,52 @@ test('concurrent buyer route workers cannot replace the durable retry operation 
   const funded = await worker; assert.equal(funded.state, 'funded')
   assert.equal((await runBuyerRoute(f)).trade_id, funded.trade_id)
   assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 1)
+})
+
+test('first agent acceptance records durable automation evidence while nonproduction and retrospective manual decisions remain excluded', async () => {
+  const f = await fixture(undefined, undefined, true), { funded, delivery, decision } = await routeDelivery(f)
+  const [origin] = await db.select().from(schema.route_origins).where(eq(schema.route_origins.route_id, f.routeId))
+  assert.equal(origin.channel, 'authenticated_agent'); assert.equal(origin.cohort, 'nonproduction')
+  const metrics = (await import('@/lib/route-metrics')).getRouteMetrics
+  assert.equal((await metrics()).autonomously_routed_gmv, '0.00')
+  // Reclassify this disposable fixture before acceptance to exercise the production projection; this is not live proof.
+  await db.update(schema.route_origins).set({ cohort: 'production' }).where(eq(schema.route_origins.route_id, f.routeId))
+  const result = await runBuyerRoute({ ...f, decision }); assert.equal(result.state, 'completed', JSON.stringify(result))
+  const [agentDecision] = await db.select().from(schema.route_agent_decisions).where(eq(schema.route_agent_decisions.trade_id, funded.trade_id!))
+  assert.equal(agentDecision.delivery_hash, delivery.content_hash)
+  assert.equal(result.receipt!.receipt.automation.durable_buyer_funding, true)
+  assert.equal(result.receipt!.receipt.automation.authenticated_agent_decision, true)
+  const eligible = await metrics(); assert.equal(eligible.autonomously_routed_gmv, '1.00'); assert.equal(eligible.autonomously_settled_routes, 1)
+  assert.ok(eligible.funnel.backed_receipts >= 1)
+  const serialized = JSON.stringify(eligible)
+  for (const secret of [f.buyerId, f.sellerId, f.account.address, f.ownerId, f.apiKey, 'private-route-result']) assert.equal(serialized.includes(secret), false)
+  for (const cohort of ['canary', 'demo', 'reference', 'nonproduction'] as const) {
+    await db.update(schema.route_origins).set({ cohort }).where(eq(schema.route_origins.route_id, f.routeId))
+    assert.equal((await metrics()).autonomously_routed_gmv, '0.00')
+  }
+  await db.update(schema.route_origins).set({ cohort: 'production' }).where(eq(schema.route_origins.route_id, f.routeId))
+  await db.update(schema.agent_owners).set({ userId: f.ownerId }).where(eq(schema.agent_owners.agentId, f.sellerId.slice('user_agent_'.length)))
+  assert.equal((await metrics()).autonomously_routed_gmv, '0.00')
+  await db.update(schema.agent_owners).set({ userId: f.sellerOwnerId }).where(eq(schema.agent_owners.agentId, f.sellerId.slice('user_agent_'.length)))
+  const [payout] = (await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))).filter((row) => row.kind === 'seller_payout')
+  await db.update(schema.settlement_transfers).set({ status: 'submitted' }).where(eq(schema.settlement_transfers.id, payout.id))
+  assert.equal((await metrics()).autonomously_routed_gmv, '0.00')
+  await db.update(schema.settlement_transfers).set({ status: 'confirmed' }).where(eq(schema.settlement_transfers.id, payout.id))
+  const [receiptRow] = await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id, f.routeId))
+  const corrupt = JSON.parse(receiptRow.receipt_json); corrupt.automation.authenticated_agent_decision = false
+  await db.update(schema.route_receipts).set({ receipt_json: JSON.stringify(corrupt) }).where(eq(schema.route_receipts.route_id, f.routeId))
+  assert.equal((await metrics()).autonomously_routed_gmv, '0.00')
+  await db.update(schema.route_receipts).set({ receipt_json: receiptRow.receipt_json }).where(eq(schema.route_receipts.route_id, f.routeId))
+  await db.delete(schema.route_agent_decisions).where(eq(schema.route_agent_decisions.trade_id, funded.trade_id!))
+  const replay = await runBuyerRoute({ ...f, decision }); assert.equal(replay.state, 'completed')
+  assert.equal((await db.select().from(schema.route_agent_decisions).where(eq(schema.route_agent_decisions.trade_id, funded.trade_id!))).length, 0)
+  assert.equal((await metrics()).autonomously_routed_gmv, '0.00')
+})
+
+test('a nonproduction receipt cannot be retrospectively promoted by changing route origin', async () => {
+  const f = await fixture(undefined, undefined, true), { decision } = await routeDelivery(f)
+  const result = await runBuyerRoute({ ...f, decision }); assert.equal(result.state, 'completed')
+  assert.equal(result.receipt!.receipt.automation.origin.cohort, 'nonproduction')
+  await db.update(schema.route_origins).set({ cohort: 'production' }).where(eq(schema.route_origins.route_id, f.routeId))
+  assert.equal((await (await import('@/lib/route-metrics')).getRouteMetrics()).autonomously_routed_gmv, '0.00')
 })

@@ -2,6 +2,8 @@
 set -euo pipefail
 
 required_files=(
+  "lib/route-automation-evidence.ts"
+  "migrations/2026-10-03-route-automation-evidence-v1.sql"
   "lib/route-funded-retry.ts"
   "lib/route-retry-reconciliation.ts"
   "lib/route-funding-steps.ts"

@@ -39,7 +39,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // The existing confirmation API owns verification, buyer decision, payout outbox and completion.
       const confirmation = new NextRequest(new URL(`/api/trades/${original.trade_id}/confirm`, request.url), { method: 'POST',
         headers: request.headers, body: JSON.stringify({ content_hash: original.delivery!.content_hash }) })
-      const outcome = await confirmBuyerTrade(confirmation, { params: Promise.resolve({ id: original.trade_id }) }, { waitMs: 100 })
+      const outcome = await confirmBuyerTrade(confirmation, { params: Promise.resolve({ id: original.trade_id }) }, { waitMs: 100,
+        ...(input.action === 'accept' && principal.kind === 'registered-agent' ? { agentRouteId: id } : {}) })
       if (!outcome.ok) {
         const recovered = await inspectRouteLifecycle(id, actor)
         if (recovered.phase !== 'completed') {

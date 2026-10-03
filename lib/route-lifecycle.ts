@@ -1,3 +1,4 @@
+import { hasDurableBuyerFunding } from './route-automation-evidence'
 import { findTradeFundingStep } from './route-funding-steps'
 import { listRouteAttempts } from './route-attempts'
 import 'server-only'
@@ -5,7 +6,7 @@ import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { parseUnits } from 'viem'
 import { db } from './db'
-import { credit_entries, payment_receipts, private_artifacts, route_plans, route_receipts, service_execution_attempts,
+import { credit_entries, payment_receipts, private_artifacts, route_plans, route_receipts, route_origins, route_agent_decisions, service_execution_attempts,
   service_orders, settlement_transfers, trade_deliveries, trades, transactions, verification_results } from './schema'
 import { canonicalContract } from './structured-verification'
 import { tradeAcceptanceStatus } from './trade-acceptance'
@@ -82,6 +83,10 @@ export async function persistBackedRouteReceipt(routeId: string, buyerId: string
     const [provider] = await tx.select({ id: service_execution_attempts.id, state: service_execution_attempts.state }).from(service_execution_attempts).where(eq(service_execution_attempts.order_id, order.id)).limit(1)
     const authorityStep = await findTradeFundingStep(tx, trade.id)
     const authority = authorityStep ? { mandate_id: authorityStep.mandate_id, terms_hash: authorityStep.terms_hash, funding_step_id: authorityStep.id } : null
+    const [origin] = await tx.select({ channel: route_origins.channel, cohort: route_origins.cohort }).from(route_origins).where(eq(route_origins.route_id, routeId)).limit(1)
+    const [agentDecision] = await tx.select().from(route_agent_decisions).where(eq(route_agent_decisions.trade_id, trade.id)).limit(1)
+    const automation = { origin: origin || { channel: 'legacy_unknown', cohort: 'legacy_unknown' }, durable_buyer_funding: await hasDurableBuyerFunding(tx, trade.id),
+      authenticated_agent_decision: !!agentDecision && agentDecision.route_id === routeId && agentDecision.delivery_hash === delivery.content_hash }
     const grossMinor = attempts.reduce((sum, attempt) => sum + (attempt.economic?.amount_minor || 0), 0)
     const passed = (method: string) => checks.some((c) => c.method === method && c.status === 'passed')
     const receipt = { version: 1, route_id: routeId, order_id: order.id, trade_id: trade.id,
@@ -89,7 +94,7 @@ export async function persistBackedRouteReceipt(routeId: string, buyerId: string
       selected_provider: { service_id: order.service_id, protocol: order.execution_contract_json === null ? null : serviceExecutionContract(order, { provider_protocol: 'manual' as 'manual' | 'leased_v1' }).provider_protocol }, attempts, provider_attempt: provider || null,
       pricing: { currency: 'USD', item_amount: usd(trade.item_price || trade.amount), fee_amount: usd(trade.platform_fee || trade.fee), buyer_total: usd(trade.total_cost), seller_amount: usd(trade.seller_amount || trade.amount) },
       gross_attempt_total: (grossMinor / 100).toFixed(2),
-      payment_rail: trade.payment_rail, authority: authority || null, delivery,
+      payment_rail: trade.payment_rail, automation, authority: authority || null, delivery,
       result_hash: digest({ summary: delivered!.summary, artifact: delivered!.artifact_json ? JSON.parse(delivered!.artifact_json) : null, delivery_url: delivered!.delivery_url }), artifacts,
       verification: { checks: checks.map((c) => ({ method: c.method, version: c.version, status: c.status })),
         structure_verified: passed('structure') || passed('schema'), source_list_verified: passed('source_urls'), artifact_integrity_verified: passed('artifact_integrity'),

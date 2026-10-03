@@ -90,7 +90,7 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.76');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.77');
     expect(openApi.paths['/api/organizations/{id}/budget']?.put).toBeTruthy();
     expect(openApi.paths['/api/organizations/{id}/service-accounts']?.post).toBeTruthy();
     expect(openApi.paths['/api/spending-policy']?.put?.responses?.['200']).toBeTruthy();
@@ -106,7 +106,11 @@ test.describe('Core smoke matrix', () => {
     expect((await request.get('/api/organizations')).status()).toBe(401);
     const routeMetrics = await request.get('/api/routes/metrics');
     expect(routeMetrics.ok()).toBeTruthy();
-    expect((await routeMetrics.json()).autonomy_status).toBe('not_implemented');
+    const metrics = await routeMetrics.json();
+    expect(metrics.autonomy_status).toBe('evidence_gated');
+    expect(metrics.contract_version).toBe(2);
+    expect(metrics.autonomously_routed_gmv).toBe('0.00');
+    expect(metrics.latency_seconds.sample_count).toBe(0);
     expect(openApi.paths['/api/a2a']?.post).toBeTruthy();
     const mcpTools = await request.post('/api/mcp', { data: { jsonrpc: '2.0', id: 'tools', method: 'tools/list', params: {} } });
     expect(mcpTools.ok()).toBeTruthy();
@@ -124,7 +128,7 @@ test.describe('Core smoke matrix', () => {
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.76"');
+    expect(await skill.text()).toContain('contract-version: "1.77"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();

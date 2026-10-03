@@ -148,6 +148,17 @@ export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; paymen
 export type RouteResultArtifact = { id: string; sha256: string; size_bytes: number; media_type: string }
 export type PrivateRouteResult = { route_id: string; trade_id: string; delivery: { id: string; content_hash: string };
   content: { summary: string; artifact: Record<string, unknown> | null; delivery_url: string | null }; result_hash: string; artifacts: RouteResultArtifact[] }
+export type RouteOrigin = { channel: 'authenticated_agent' | 'account' | 'mpp_wallet' | 'legacy_unknown'; cohort: 'production' | 'canary' | 'demo' | 'reference' | 'nonproduction' | 'legacy_unknown' }
+export type RouteMetrics = { contract_version: 2; currency: 'USD'; plans: number; viable_plans: number; executions: number; cancelled: number; failed: number;
+  accepted_settled_routes: number; planning_to_execution_rate: number | null; execution_to_accepted_settlement_rate: number | null;
+  assisted_routed_gmv: string; autonomously_routed_gmv: string; autonomously_settled_routes: number; autonomy_status: 'evidence_gated';
+  funnel: { funded: number; dispatch_queued: number; provider_acknowledged: number; delivered: number; buyer_accepted: number; payout_confirmed: number; backed_receipts: number };
+  latency_seconds: { sample_count: number; funding_to_delivery_sample_count: number; mean_plan_to_settlement: number | null; max_plan_to_settlement: number | null; mean_funding_to_delivery: number | null };
+  provider_capacity: { active_services: number; total_slots: number; occupied_slots: number; available_slots: number; utilization_rate: number | null };
+  verification: { observations_by_method: Record<string, Record<string, number>>; semantic_verified: false; provenance_verified: false; benchmark_verified: false };
+  retry: { reserved_attempts: number; completed_attempts: number; disputed_attempts: number };
+  economic_outcomes: { attempts: number; disputed_attempts: number; buyer_resolutions: number; confirmed_refunds: number; refunds_awaiting_confirmation: number };
+  origins: Array<RouteOrigin & { plans: number; executions: number }>; definitions: Record<string, string>; updated_at: string }
 export type BackedRouteReceipt = { version: 1; route_id: string; trade_id: string; order_id: string; objective_hash: string; input_hash: string;
   selected_provider: { service_id: string; protocol: string | null }; authority: { mandate_id: string; terms_hash: string; funding_step_id: string } | null;
   attempts: RouteAttempt[];
@@ -155,6 +166,7 @@ export type BackedRouteReceipt = { version: 1; route_id: string; trade_id: strin
   gross_attempt_total: string; pricing: { currency: 'USD'; item_amount: string; fee_amount: string; buyer_total: string; seller_amount: string }; payment_rail: string;
   verification: { checks: Array<{ method: string; version: string; status: string }>; semantic_verified: false; isolation_observed_by_app: false; [key: string]: unknown };
   buyer_decision: { decision: 'accepted'; content_hash: string }; financial: { kind: 'confirmed_external' | 'backed_account_credit' | 'historical_ledger'; [key: string]: unknown };
+  automation?: { origin: RouteOrigin; durable_buyer_funding: boolean; authenticated_agent_decision: boolean };
   settlement_status: 'completed'; completed_at: string; capacity_released: true }
 export type RouteLifecycle = { route_id: string; order_id: string | null; trade_id: string | null; phase: string; next_action: string;
   funds_state: string; error_code: string | null; delivery: { id: string; content_hash: string } | null; acceptance: AcceptanceStatus | null;
@@ -347,6 +359,8 @@ export class ClawdMarketClient {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new Error('trade ID must be a UUID')
     return this.request<{ ok: true; trade: { id: string; status: string; payout_status?: string | null }; status?: string; receipt?: { tx_hash: string } }>('POST', `/api/trades/${tradeId}/fund/evm`, proof, options)
   }
+
+  getRouteMetrics(options?: RequestOptions) { return this.request<RouteMetrics>('GET', '/api/routes/metrics', undefined, options) }
 
   getRoute(routeId: string, options?: RequestOptions) { return this.request<RouteSnapshot>('GET', routePath(routeId), undefined, options) }
   inspectRouteRetry(routeId: string, options?: RequestOptions) { return this.request<RouteRetryInspection>('GET', `${routePath(routeId)}/retry`, undefined, options) }

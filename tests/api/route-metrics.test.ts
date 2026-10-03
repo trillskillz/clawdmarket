@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server'
 import test, { after, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -73,8 +74,33 @@ test('route metrics exclude unverified and unsettled work and do not overstate a
   assert.equal(body.accepted_settled_routes, 1)
   assert.equal(body.assisted_routed_gmv, '12.34')
   assert.equal(body.autonomously_routed_gmv, '0.00')
-  assert.equal(body.autonomy_status, 'not_implemented')
+  assert.equal(body.autonomy_status, 'evidence_gated')
   assert.equal(body.planning_to_execution_rate, 0.75)
   assert.equal(body.execution_to_accepted_settlement_rate, 0.3333)
   assert.ok(!JSON.stringify(body).includes('private@test.invalid'))
+})
+
+test('malformed origin labels collapse into one aggregate unknown bucket without leaking values', async () => {
+  const ids = [await plan('planned'), await plan('planned')]
+  for (let i = 0; i < ids.length; i++) await db.$client.execute({ sql: 'INSERT INTO route_origins(route_id, channel, cohort, created_at) VALUES (?, ?, ?, unixepoch())', args: [ids[i], `private-channel-${i}`, `private-cohort-${i}`] })
+  const body = await (await getMetrics()).json()
+  const unknown = body.origins.filter((entry: { channel: string; cohort: string }) => entry.channel === 'legacy_unknown' && entry.cohort === 'legacy_unknown')
+  assert.equal(unknown.length, 1); assert.equal(unknown[0].plans, body.plans)
+  assert.equal(JSON.stringify(body).includes('private-channel'), false); assert.equal(JSON.stringify(body).includes('private-cohort'), false)
+})
+
+test('run-kind headers only suppress server production attribution and account callers cannot label themselves agents', async () => {
+  const { attributeRouteOrigin } = await import('@/lib/route-automation-evidence')
+  const principal = { userId: 'metric-buyer', agentId: null, kind: 'account' as const, usesCookieAuth: false }
+  const original = process.env.VERCEL_ENV
+  try {
+    process.env.VERCEL_ENV = 'preview'
+    assert.deepEqual(attributeRouteOrigin(principal, new NextRequest('https://example.invalid', { headers: { 'X-ClawdMarket-Run-Kind': 'production' } }), 'ordinary'), { channel: 'account', cohort: 'nonproduction' })
+    process.env.VERCEL_ENV = 'production'
+    assert.equal(attributeRouteOrigin(principal, new NextRequest('http://localhost:3000'), 'ordinary').cohort, 'nonproduction')
+    const origin = attributeRouteOrigin(principal, new NextRequest('https://example.invalid'), 'ordinary')
+    assert.deepEqual(origin, { channel: 'account', cohort: 'production' })
+    for (const kind of ['canary', 'demo', 'reference', 'test']) assert.notEqual(attributeRouteOrigin(principal, new NextRequest('https://example.invalid', { headers: { 'X-ClawdMarket-Run-Kind': kind } }), 'ordinary').cohort, 'production')
+    assert.equal(attributeRouteOrigin(principal, new NextRequest('https://example.invalid'), 'route-canary-case').cohort, 'canary')
+  } finally { if (original == null) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = original }
 })

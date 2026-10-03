@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { route_plans } from '@/lib/schema'
+import { route_origins, route_plans } from '@/lib/schema'
+import { attributeRouteOrigin } from '@/lib/route-automation-evidence'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { normalizedCapabilities, planRoute, routePlanDto, routePlanInput, type NormalizedRouteRequest } from '@/lib/route-planning'
@@ -49,7 +50,8 @@ export async function POST(request: NextRequest) {
   try {
     const planned = await planRoute(input, principal.userId)
     const now = new Date()
-    const [row] = await db.insert(route_plans).values({
+    const row = await db.transaction(async (tx) => {
+      const [plannedRow] = await tx.insert(route_plans).values({
       id: crypto.randomUUID(), buyer_id: principal.userId, client_reference: input.client_reference,
       objective: input.objective, required_capabilities: JSON.stringify(capabilities), input_json: JSON.stringify(input.input),
       max_budget_minor: input.max_budget.amount, currency: 'USD', deadline_seconds: input.deadline_seconds ?? null,
@@ -57,7 +59,10 @@ export async function POST(request: NextRequest) {
       provider_requirements_json: JSON.stringify(input.provider_requirements),
       retry_policy: JSON.stringify(input.retry_policy), candidates_json: JSON.stringify(planned.candidates),
       state: 'planned', expires_at: new Date(now.getTime() + 5 * 60_000), created_at: now, updated_at: now,
-    }).returning()
+      }).returning()
+      await tx.insert(route_origins).values({ route_id: plannedRow.id, ...attributeRouteOrigin(principal, request, input.client_reference) })
+      return plannedRow
+    })
     return NextResponse.json({ route: routePlanDto(row), idempotent: false, planning: { examined: planned.examined, truncated: planned.truncated, candidate_count: planned.candidates.length, funds_moved: false } }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     const raced = await existing()
