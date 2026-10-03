@@ -12,9 +12,9 @@ export type RouteMandateInput = { version: 1; client_reference: string; max_aggr
   payment: RouteMandatePayment }
 export type RouteMandate = { id: string; route_id: string; buyer_id: string; client_reference: string; route_hash: string; terms_hash: string;
   terms: Omit<RouteMandateInput, 'client_reference' | 'payment'> & { payment: RouteMandatePayment | LegacyMppMandatePayment; token_decimals: number; token_usd_price: number; fee_token_decimals?: number };
-  state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: false }
+  state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: boolean }
 export type RouteFundingStep = { id: string; mandate_id: string; route_id: string; order_id: string; trade_id: string; amount_minor: number; terms_hash: string;
-  state: 'reserved' | 'funded' | 'rejected'; created_at: string; updated_at: string }
+  state: 'reserved' | 'funded' | 'rejected'; retry_operation_id?: string; previous_trade_id?: string; attempt_id?: string; created_at: string; updated_at: string }
 export type BuyerEvmPaymentClaimInput = { intent_id: string; mandate_id: string; serialized_transaction: string; payer_signature: string; buyer_operation_id?: string }
 export type BuyerEvmPaymentClaim = { intent_id: string; mandate_id: string; chain_id: number; payer_address: string; nonce: number; tx_hash: string;
   terms_hash: string; maximum_execution_gas_cost_wei: string; state: 'claimed' | 'confirmed'; created_at: string }
@@ -111,6 +111,8 @@ export type RouteAttempt = {
   service_id: string
   state: 'checking' | 'ineligible' | 'reserved'
   failure_code: string | null
+  failure_category: 'provider' | 'verification' | 'payment' | 'infrastructure' | 'buyer_policy' | null
+  economic: { trade_id: string; trade_status: string; payout_status: string; funding_step_id: string | null; mandate_id: string | null; terms_hash: string | null; amount_minor: number; funding_state: string | null; payment_intent_id: string | null; payment_receipt: { id: string; tx_hash: string | null; token_amount: string | null } | null; transfers: Array<{ id: string; kind: string; status: string; tx_hash: string | null; token_amount: string; confirmed_at: string | null }>; capacity_released_at: string | null } | null
   service_order_id: string | null
   created_at: string
   updated_at: string
@@ -148,15 +150,18 @@ export type PrivateRouteResult = { route_id: string; trade_id: string; delivery:
   content: { summary: string; artifact: Record<string, unknown> | null; delivery_url: string | null }; result_hash: string; artifacts: RouteResultArtifact[] }
 export type BackedRouteReceipt = { version: 1; route_id: string; trade_id: string; order_id: string; objective_hash: string; input_hash: string;
   selected_provider: { service_id: string; protocol: string | null }; authority: { mandate_id: string; terms_hash: string; funding_step_id: string } | null;
-  attempts: Array<Pick<RouteAttempt, 'id' | 'attempt_number' | 'service_id' | 'state' | 'failure_code'>>;
+  attempts: RouteAttempt[];
   delivery: { id: string; content_hash: string }; result_hash: string; artifacts: RouteResultArtifact[];
-  pricing: { currency: 'USD'; item_amount: string; fee_amount: string; buyer_total: string; seller_amount: string }; payment_rail: string;
+  gross_attempt_total: string; pricing: { currency: 'USD'; item_amount: string; fee_amount: string; buyer_total: string; seller_amount: string }; payment_rail: string;
   verification: { checks: Array<{ method: string; version: string; status: string }>; semantic_verified: false; isolation_observed_by_app: false; [key: string]: unknown };
   buyer_decision: { decision: 'accepted'; content_hash: string }; financial: { kind: 'confirmed_external' | 'backed_account_credit' | 'historical_ledger'; [key: string]: unknown };
   settlement_status: 'completed'; completed_at: string; capacity_released: true }
 export type RouteLifecycle = { route_id: string; order_id: string | null; trade_id: string | null; phase: string; next_action: string;
   funds_state: string; error_code: string | null; delivery: { id: string; content_hash: string } | null; acceptance: AcceptanceStatus | null;
   receipt: { receipt: BackedRouteReceipt; content_hash: string } | null; provider_protocol: string | null }
+export type RouteRetryCommand = { version: 1; mandate_id: string; previous_trade_id: string; retry_operation_id: string }
+export type RouteRetryInspection = { route_id: string; trade_id: string | null; reconciliation: { reconciled: boolean; blocking_reason: string | null; funds_state: string } | null; retry: { reconciliation_required: true; funds_state: string; blocking_reason: string | null } }
+export type RetriedRoute = { route: { id: string }; order: { id: string; service_id: string; trade_id: string }; trade: { id: string; payment_rail: string }; funding_step: RouteFundingStep; idempotent: boolean; funds_state: string }
 export type RouteAdvanceCommand = { version: 1; action: 'observe' } | { version: 1; action: 'accept'; content_hash: string }
 export type PlannedRoute = { route: RoutePlan; idempotent: boolean; planning?: { examined: number; truncated: boolean; candidate_count: number; funds_moved: false } }
 export type ExecutedRoute = Pick<RouteSnapshot, 'route' | 'attempts' | 'payment_exposure'> & {
@@ -300,7 +305,7 @@ export class ClawdMarketClient {
 
   /** Owner account credential required; authorization creates no order or payment. */
   createRouteMandate(routeId: string, input: RouteMandateInput, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; idempotent: boolean }>('POST', `${routePath(routeId)}/mandate`, input, options) }
-  getRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; funding_step: RouteFundingStep | null }>('GET', `${routePath(routeId)}/mandate`, undefined, options) }
+  getRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; funding_step: RouteFundingStep | null; funding_steps: RouteFundingStep[] }>('GET', `${routePath(routeId)}/mandate`, undefined, options) }
   revokeRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; idempotent: boolean }>('DELETE', `${routePath(routeId)}/mandate`, undefined, options) }
   /** Atomically reserves one unpaid checkout and mandate exposure; does not sign or send. */
   executeAuthorizedRoute(routeId: string, mandateId: string, options?: RequestOptions) { return this.request<ExecutedRoute>('POST', `${routePath(routeId)}/execute`, { mandate_id: mandateId }, options) }
@@ -344,6 +349,8 @@ export class ClawdMarketClient {
   }
 
   getRoute(routeId: string, options?: RequestOptions) { return this.request<RouteSnapshot>('GET', routePath(routeId), undefined, options) }
+  inspectRouteRetry(routeId: string, options?: RequestOptions) { return this.request<RouteRetryInspection>('GET', `${routePath(routeId)}/retry`, undefined, options) }
+  retryRoute(routeId: string, input: RouteRetryCommand, options?: RequestOptions) { return this.request<RetriedRoute>('POST', `${routePath(routeId)}/retry`, input, options) }
   inspectRouteLifecycle(routeId: string, options?: RequestOptions) { return this.request<RouteLifecycle>('GET', `${routePath(routeId)}/advance`, undefined, options) }
   /** Observe never creates acceptance; accept binds the explicit decision to the exact current delivery hash. */
   advanceRoute(routeId: string, command: RouteAdvanceCommand, options?: RequestOptions) { return this.request<RouteLifecycle>('POST', `${routePath(routeId)}/advance`, command, options) }

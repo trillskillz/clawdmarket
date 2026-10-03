@@ -41,6 +41,12 @@ export async function advanceServiceOrder(tx: Transaction, tradeId: string, stat
   }
   await tx.update(service_orders).set({ state, updated_at: now })
     .where(and(eq(service_orders.trade_id, tradeId), isNull(service_orders.capacity_released_at)))
+  if (linkedOrder && state === 'funded') await tx.update(route_plans).set({
+    execution_deadline_at: sql`CASE WHEN ${route_plans.deadline_seconds} IS NULL THEN NULL ELSE COALESCE(${route_plans.execution_deadline_at},
+      CAST(strftime('%s', (SELECT funded_at FROM trades WHERE id = ${tradeId})) AS INTEGER) * 1000
+      + CAST(substr(strftime('%f', (SELECT funded_at FROM trades WHERE id = ${tradeId})), 4, 3) AS INTEGER)
+      + ${route_plans.deadline_seconds} * 1000) END`,
+  }).where(eq(route_plans.service_order_id, linkedOrder.id))
   if (linkedOrder) await tx.update(route_plans).set({ state: state === 'verifying' ? 'awaiting_buyer' : state, updated_at: now })
     .where(eq(route_plans.service_order_id, linkedOrder.id))
 }

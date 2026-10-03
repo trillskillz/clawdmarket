@@ -87,12 +87,14 @@ export async function runBuyerFunding({ approval, apiKey, stateDirectory = undef
   }
   if (!uuid.test(approval.mandate_id) || !/^[a-f0-9]{64}$/.test(approval.terms_hash) || !stateDirectory
     || account?.type !== 'local' || typeof account.signMessage !== 'function') fail('BUYER_CONFIGURATION_INVALID')
+  if (approval.retry_operation_id !== undefined && (!uuid.test(approval.retry_operation_id) || !uuid.test(approval.previous_trade_id))
+    || approval.previous_trade_id !== undefined && !approval.retry_operation_id) fail('BUYER_CONFIGURATION_INVALID')
   const grant = await api('GET', `/api/routes/${approval.route_id}/mandate`)
   const payment = pinnedMandate(grant.mandate, approval)
   if (account.address.toLowerCase() !== payment.payer_address || adapter?.chainId !== payment.chain_id) fail('BUYER_WALLET_SCOPE_MISMATCH')
   return withBuyerWalletLock(stateDirectory, payment.chain_id, payment.payer_address, async (signal) => {
     lockSignal = signal
-    const reference = hash({ origin: base, route_id: approval.route_id, mandate_id: approval.mandate_id, terms_hash: approval.terms_hash })
+    const reference = hash({ origin: base, route_id: approval.route_id, mandate_id: approval.mandate_id, terms_hash: approval.terms_hash, ...(approval.retry_operation_id ? { retry_operation_id: approval.retry_operation_id, previous_trade_id: approval.previous_trade_id } : {}) })
     const directory = resolve(stateDirectory), wallet = buyerWalletReference(payment.chain_id, payment.payer_address)
     const stateFile = resolve(directory, `${reference}.json`), walletFile = resolve(directory, `${wallet}.json`)
     let journal = await readBuyerPaymentJournal(stateFile)
@@ -114,7 +116,8 @@ export async function runBuyerFunding({ approval, apiKey, stateDirectory = undef
     }
     const save = async () => { signal.throwIfAborted(); await saveBuyerPaymentJournal(stateFile, journal) }
     if (!journal.trade_id) {
-      const reserved = await api('POST', `/api/routes/${approval.route_id}/execute`, { mandate_id: approval.mandate_id })
+      const reserved = await api('POST', `/api/routes/${approval.route_id}/${approval.retry_operation_id ? 'retry' : 'execute'}`, approval.retry_operation_id
+        ? { version: 1, mandate_id: approval.mandate_id, retry_operation_id: approval.retry_operation_id, previous_trade_id: approval.previous_trade_id } : { mandate_id: approval.mandate_id })
       if (reserved.route?.id !== approval.route_id || !uuid.test(reserved.trade?.id) || reserved.trade.buyer_id !== grant.mandate.buyer_id || reserved.trade.payment_rail !== 'evm'
         || !uuid.test(reserved.order?.id) || reserved.order.trade_id !== reserved.trade.id) fail('BUYER_CHECKOUT_SCOPE_MISMATCH')
       journal.trade_id = reserved.trade.id; journal.order_id = reserved.order.id; journal.state = 'reserved'; await save()

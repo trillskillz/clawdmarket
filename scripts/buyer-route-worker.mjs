@@ -11,6 +11,7 @@ import { runBuyerFunding } from './buyer-worker.mjs'
 import { runBuyerMppFunding } from './buyer-mpp-worker.mjs'
 import { createBuyerEvmAdapter } from './buyer-evm-adapter.mjs'
 import { createBuyerTempoAdapter } from './buyer-tempo-adapter.mjs'
+import { withBuyerStateLock } from './buyer-wallet-lock.mjs'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const digest = (value) => createHash('sha256').update(canonicalJSON(value)).digest('hex')
@@ -20,15 +21,23 @@ function fail(code) { throw new Error(code) }
  * @param {{approval: any, apiKey: string, stateDirectory?: string, account?: any, adapter?: any, fetcher?: typeof fetch,
  * decision?: {version: number, route_id: string, decision: string, content_hash: string}}} options
  */
-export async function runBuyerRoute({ approval, apiKey, stateDirectory, account, adapter, fetcher = fetch, decision = undefined }) {
+export async function runBuyerRoute(options) {
+  if (!options.approval?.mandate_id || !options.stateDirectory) return runBuyerRoutePass(options)
+  const reference = digest({ origin: new URL(options.approval.origin).origin, route_id: options.approval.route_id, mandate_id: options.approval.mandate_id, terms_hash: options.approval.terms_hash })
+  return withBuyerStateLock(options.stateDirectory, `route-${reference}`, (routeSignal) => runBuyerRoutePass({ ...options, routeSignal }))
+}
+
+async function runBuyerRoutePass({ approval, apiKey, stateDirectory, account, adapter, fetcher = fetch, decision = undefined, routeSignal = undefined }) {
   if (!uuid.test(approval?.route_id) || approval.version !== 1 || !apiKey?.trim()) fail('BUYER_CONFIGURATION_INVALID')
   const url = new URL(approval.origin)
   if (url.username || url.password || url.search || url.hash || url.pathname !== '/'
     || url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) fail('BUYER_ORIGIN_INVALID')
+  const save = async (path, value) => { routeSignal?.throwIfAborted(); await saveBuyerPaymentJournal(path, value); routeSignal?.throwIfAborted() }
   const base = url.origin, routePath = `/api/routes/${approval.route_id}`
   const api = async (method, path, body) => {
+    routeSignal?.throwIfAborted()
     try {
-      const response = await fetcher(`${base}${path}`, { method, redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(10_000),
+      const response = await fetcher(`${base}${path}`, { method, redirect: 'error', credentials: 'omit', signal: AbortSignal.any([AbortSignal.timeout(10_000), ...(routeSignal ? [routeSignal] : [])]),
         headers: { Authorization: `Bearer ${apiKey.trim()}`, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {}) })
       const reader = response.body?.getReader(), chunks = []; let size = 0
@@ -39,6 +48,7 @@ export async function runBuyerRoute({ approval, apiKey, stateDirectory, account,
           if (size > 65_536) fail('BUYER_RESPONSE_TOO_LARGE'); chunks.push(Buffer.from(part.value)) }
         result = JSON.parse(Buffer.concat(chunks).toString('utf8'))
       } finally { await reader.cancel().catch(() => {}); reader.releaseLock() }
+      routeSignal?.throwIfAborted()
       if (!response.ok) fail(`BUYER_HTTP_${response.status}`)
       return result
     } catch (error) {
@@ -61,14 +71,15 @@ export async function runBuyerRoute({ approval, apiKey, stateDirectory, account,
     || journal.mandate_id !== approval.mandate_id || journal.terms_hash !== approval.terms_hash)) fail('BUYER_JOURNAL_SCOPE_MISMATCH')
   journal ||= { version: 1, reference, origin: base, route_id: approval.route_id, mandate_id: approval.mandate_id, terms_hash: approval.terms_hash, state: 'funding' }
   if (journal.decision && decision && canonicalJSON(journal.decision) !== canonicalJSON(decision)) fail('BUYER_DECISION_CONFLICT')
-  await saveBuyerPaymentJournal(stateFile, journal)
+  await save(stateFile, journal)
   if (!journal.trade_id) {
     const grant = await api('GET', `${routePath}/mandate`)
     if (grant.mandate?.id !== approval.mandate_id || grant.mandate.terms_hash !== approval.terms_hash) fail('BUYER_MANDATE_SCOPE_MISMATCH')
     const rail = grant.mandate.terms?.payment?.rail
-    const funding = await (rail === 'evm' ? runBuyerFunding : rail === 'mpp' ? runBuyerMppFunding : () => fail('BUYER_RAIL_UNSUPPORTED'))({ approval, apiKey, stateDirectory, account, adapter, fetcher })
-    if (funding.state !== 'funded') return funding
-    journal.trade_id = funding.trade_id; journal.state = 'funded'; await saveBuyerPaymentJournal(stateFile, journal)
+    const fundingApproval = journal.retry ? { ...approval, retry_operation_id: journal.retry.operation_id, previous_trade_id: journal.retry.previous_trade_id } : approval
+    const funding = await (rail === 'evm' ? runBuyerFunding : rail === 'mpp' ? runBuyerMppFunding : () => fail('BUYER_RAIL_UNSUPPORTED'))({ approval: fundingApproval, apiKey, stateDirectory, account, adapter, fetcher })
+    if (!['funded', 'refund_pending', 'refunded'].includes(funding.state) || !funding.trade_id) return funding
+    journal.trade_id = funding.trade_id; journal.state = funding.state; await save(stateFile, journal)
   }
   let lifecycle = await api('GET', `${routePath}/advance`)
   const validate = (value) => {
@@ -82,6 +93,26 @@ export async function runBuyerRoute({ approval, apiKey, stateDirectory, account,
     }
   }
   validate(lifecycle)
+  if (decision && !['awaiting_buyer', 'settling', 'completed'].includes(lifecycle.phase)) fail('BUYER_ROUTE_NOT_READY_FOR_DECISION')
+  if (['refunded', 'resolved'].includes(lifecycle.phase)) {
+    const grant = await api('GET', `${routePath}/mandate`)
+    if (grant.mandate?.id !== approval.mandate_id || grant.mandate.terms_hash !== approval.terms_hash) fail('BUYER_MANDATE_SCOPE_MISMATCH')
+    if (grant.mandate.automatic_funded_retry_enabled) {
+      const reconciliation = await api('GET', `${routePath}/retry`)
+      if (reconciliation.route_id !== approval.route_id || reconciliation.trade_id !== journal.trade_id) fail('BUYER_ROUTE_SCOPE_MISMATCH')
+      if (reconciliation.reconciliation?.reconciled === true) {
+        // Persist the next operation before reservation; the old trade and its decision remain archived.
+        journal.previous_attempts ||= []
+        journal.previous_attempts.push({ trade_id: journal.trade_id, decision: journal.decision || null, reconciliation: reconciliation.reconciliation })
+        journal.retry = { operation_id: crypto.randomUUID(), previous_trade_id: journal.trade_id }
+        journal.trade_id = null; journal.decision = null; journal.state = 'retry_funding'
+        await save(stateFile, journal)
+        return runBuyerRoutePass({ approval, apiKey, stateDirectory, account, adapter, fetcher, routeSignal })
+      }
+      return { state: lifecycle.phase, route_id: approval.route_id, trade_id: journal.trade_id, funds_state: reconciliation.retry.funds_state,
+        next_action: 'reconcile_original_attempt', error_code: reconciliation.retry.blocking_reason, receipt: null }
+    }
+  }
   let resultFile = null, artifactFiles = [], observedResult = null
   if (lifecycle.delivery) {
     const result = await api('GET', `${routePath}/result`)
@@ -94,7 +125,7 @@ export async function runBuyerRoute({ approval, apiKey, stateDirectory, account,
       || canonicalJSON(lifecycle.receipt.receipt.artifacts) !== canonicalJSON(result.artifacts))) fail('BUYER_ROUTE_RESULT_MISMATCH')
     observedResult = result
     resultFile = resolve(stateDirectory, `${reference}.${result.delivery.content_hash}.result.json`)
-    await saveBuyerPaymentJournal(resultFile, { version: 1, ...result })
+    await save(resultFile, { version: 1, ...result })
     for (const artifact of result.artifacts) {
       const path = resolve(stateDirectory, `${reference}.${artifact.id}.${artifact.sha256}.artifact`)
       let existing
@@ -106,10 +137,11 @@ export async function runBuyerRoute({ approval, apiKey, stateDirectory, account,
         } finally { await file.close() }
       } catch (error) { if (error.code !== 'ENOENT') fail('BUYER_PRIVATE_ARTIFACT_INVALID') }
       if (existing && createHash('sha256').update(existing).digest('hex') !== artifact.sha256) fail('BUYER_PRIVATE_ARTIFACT_INVALID')
+      routeSignal?.throwIfAborted()
       if (!existing) {
         let bytes
         try {
-          const response = await fetcher(`${base}/api/trades/${journal.trade_id}/artifacts/${artifact.id}`, { redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(10_000),
+          const response = await fetcher(`${base}/api/trades/${journal.trade_id}/artifacts/${artifact.id}`, { redirect: 'error', credentials: 'omit', signal: AbortSignal.any([AbortSignal.timeout(10_000), ...(routeSignal ? [routeSignal] : [])]),
             headers: { Authorization: `Bearer ${apiKey.trim()}`, Accept: 'application/octet-stream' } })
           if (!response.ok || response.headers.get('X-Artifact-SHA256') !== artifact.sha256) fail('BUYER_ARTIFACT_UNAVAILABLE')
           const reader = response.body?.getReader(), chunks = []; let size = 0
@@ -133,13 +165,13 @@ export async function runBuyerRoute({ approval, apiKey, stateDirectory, account,
     if (lifecycle.delivery?.content_hash !== decision.content_hash) fail('BUYER_DELIVERY_CHANGED')
     if (!['awaiting_buyer', 'settling', 'completed'].includes(lifecycle.phase)) fail('BUYER_ROUTE_NOT_READY_FOR_DECISION')
     // Fsync the checked explicit decision before any acceptance request; uncertainty replays it unchanged.
-    journal.decision = decision; await saveBuyerPaymentJournal(stateFile, journal)
+    journal.decision = decision; await save(stateFile, journal)
   }
   let command = { version: 1, action: 'observe' }
   if (journal.decision && ['awaiting_buyer', 'settling'].includes(lifecycle.phase)) {
     if (lifecycle.delivery?.content_hash !== journal.decision.content_hash) fail('BUYER_DELIVERY_CHANGED')
     command = { version: 1, action: 'accept', content_hash: journal.decision.content_hash }
-    journal.state = 'decision_submission_started'; await saveBuyerPaymentJournal(stateFile, journal)
+    journal.state = 'decision_submission_started'; await save(stateFile, journal)
   }
   lifecycle = await api('POST', `${routePath}/advance`, command)
   validate(lifecycle)
@@ -148,7 +180,8 @@ export async function runBuyerRoute({ approval, apiKey, stateDirectory, account,
     || canonicalJSON(lifecycle.receipt.receipt.artifacts) !== canonicalJSON(observedResult.artifacts)
     || journal.decision && lifecycle.receipt.receipt.buyer_decision.content_hash !== journal.decision.content_hash)) fail('BUYER_ROUTE_RESULT_MISMATCH')
   if (lifecycle.phase === 'completed' && !lifecycle.receipt) fail('BUYER_ROUTE_RECEIPT_REQUIRED')
-  journal.state = lifecycle.phase; journal.receipt = lifecycle.receipt; await saveBuyerPaymentJournal(stateFile, journal)
+  routeSignal?.throwIfAborted()
+  journal.state = lifecycle.phase; journal.receipt = lifecycle.receipt; await save(stateFile, journal)
   return { state: journal.state, route_id: approval.route_id, trade_id: journal.trade_id, next_action: lifecycle.next_action,
     funds_state: lifecycle.funds_state, delivery: lifecycle.delivery, result_file: resultFile, artifact_files: artifactFiles, receipt: lifecycle.receipt }
 }

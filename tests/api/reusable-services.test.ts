@@ -630,6 +630,8 @@ test('expired provider lease preserves escrow and capacity without dispatching a
   await changeServiceExecutionAttempt(trade.id, sellerId, attempt.id, 'accept')
   await db.update(schema.trades).set({ funded_at: new Date(Date.now() - 11 * 60_000).toISOString() })
     .where(eq(schema.trades.id, trade.id))
+  await db.update(schema.route_plans).set({ execution_deadline_at: new Date(Date.now() - 60_000) })
+    .where(eq(schema.route_plans.service_order_id, savedOrder.id))
   const deadlineRoute = (await (await buyerRoute()).json())
   assert.equal(deadlineRoute.execution_timing.delivery_overdue, true)
   assert.equal(deadlineRoute.provider_execution.attention_reason, 'delivery_deadline_overdue')

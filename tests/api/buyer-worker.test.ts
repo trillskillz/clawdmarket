@@ -68,10 +68,12 @@ before(async () => {
         if (!transactions.has(hash)) {
           assert.equal([...transactions.values()].some((t) => t.payer === payer && t.nonce === parsed.nonce), false)
           const [recipient, amount] = transfer.args! as [typeof token, bigint]
-          assert.equal(recipient.toLowerCase(), treasury)
+          if (payer.toLowerCase() !== treasury) assert.equal(recipient.toLowerCase(), treasury)
+          else assert.equal(balances.has(recipient.toLowerCase()), true)
           transactions.set(hash, { raw, payer, amount, recipient, nonce: parsed.nonce!, mined: payer.toLowerCase() !== treasury || minePayout, timestamp: Math.floor(Date.now() / 1000) + 1 })
           const balance = balances.get(payer.toLowerCase())!
           balance.token -= amount; balance.native -= parsed.gas! * parsed.maxFeePerGas! + l1Fee + operatorFee
+          if (payer.toLowerCase() === treasury && recipient.toLowerCase() !== treasury) balances.get(recipient.toLowerCase())!.token += amount
         }
         if (loseBroadcastReply) { loseBroadcastReply = false; outgoing.destroy(); return }
         result = hash
@@ -100,6 +102,7 @@ before(async () => {
   const mandate = await import('@/app/api/routes/[id]/mandate/route'), execute = await import('@/app/api/routes/[id]/execute/route'), getRoute = await import('@/app/api/routes/[id]/route')
   const intent = await import('@/app/api/trades/[id]/fund/evm/intent/route'), claim = await import('@/app/api/trades/[id]/fund/evm/claim/route'), fund = await import('@/app/api/trades/[id]/fund/evm/route')
   const advance = await import('@/app/api/routes/[id]/advance/route'), work = await import('@/app/api/trades/[id]/work-order/route')
+  const retry = await import('@/app/api/routes/[id]/retry/route')
   const attempt = await import('@/app/api/trades/[id]/work-order/attempt/route'), delivery = await import('@/app/api/trades/[id]/delivery/route')
   const result = await import('@/app/api/routes/[id]/result/route'), artifacts = await import('@/app/api/trades/[id]/artifacts/route')
   const download = await import('@/app/api/trades/[id]/artifacts/[artifactId]/route')
@@ -111,7 +114,7 @@ before(async () => {
       const request = new NextRequest(`${baseUrl}${path}`, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
       const id = path.split('/')[3], context = { params: Promise.resolve({ id, artifactId: path.split('/')[5] || '' }) }
       const handler = path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
-        : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST']
+        : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : path.endsWith('/retry') ? retry[incoming.method as 'GET' | 'POST'] : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST']
           : path.endsWith('/work-order') ? work.GET : path.endsWith('/attempt') ? attempt.POST : path.endsWith('/delivery') ? delivery.POST
             : path.endsWith('/result') ? result.GET : path.endsWith('/artifacts') ? artifacts.POST : path.includes('/artifacts/') ? download.GET : getRoute.GET
       const response = await handler(request, context)
@@ -128,7 +131,7 @@ after(async () => {
   db?.$client.close(); await rm(directory, { recursive: true, force: true })
 })
 
-async function fixture(reuseDummyKey?: `0x${string}`) {
+async function fixture(reuseDummyKey?: `0x${string}`, retryLimits?: { maxAggregate?: string; maxRetry?: string; maxAttempts?: number }) {
   const id = crypto.randomUUID(), buyerId = `buyer-${id}`, sellerId = `seller-${id}`, serviceId = crypto.randomUUID()
   const dummyKey = reuseDummyKey ?? `0x${(++signerIndex).toString(16).padStart(64, '0')}` as `0x${string}`, account = privateKeyToAccount(dummyKey)
   if (!balances.has(account.address.toLowerCase())) balances.set(account.address.toLowerCase(), { token: 10_000_000n, native: 1_000_000_000_000_000n })
@@ -138,20 +141,31 @@ async function fixture(reuseDummyKey?: `0x${string}`) {
   await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: sellerId, title: 'Buyer worker fixture', description: 'Return a private structured review for explicit buyer acceptance.',
     capabilities: '["code-review"]', price_minor: 100, status: 'active', estimated_latency_seconds: 30, max_concurrency: 1, provider_protocol: 'leased_v1',
     output_schema: '{"type":"object","properties":{"result":{"type":"string"}}}', verification_policy: JSON.stringify(policy) })
+  const fallbackSellerId = retryLimits ? `fallback-${id}` : undefined, fallbackServiceId = retryLimits ? crypto.randomUUID() : undefined
+  if (fallbackSellerId && fallbackServiceId) {
+    await db.insert(schema.users).values({ id: fallbackSellerId, name: fallbackSellerId, email: `${fallbackSellerId}@test.invalid`, password_hash: 'unused', role: 'human' })
+    await db.insert(schema.payout_addresses).values({ user_id: fallbackSellerId, address: treasury })
+    await db.insert(schema.service_definitions).values({ id: fallbackServiceId, seller_id: fallbackSellerId, title: 'Approved fallback fixture', description: 'Return the same agreed structured review after a fully reconciled provider failure.',
+      capabilities: '["code-review"]', price_minor: 110, status: 'active', estimated_latency_seconds: 30, max_concurrency: 1, provider_protocol: 'leased_v1',
+      output_schema: '{"type":"object","properties":{"result":{"type":"string"}}}', verification_policy: JSON.stringify(policy) })
+  }
+  const approvedProviders = fallbackSellerId ? [sellerId, fallbackSellerId] : [sellerId]
   const apiKey = jwt({ userId: buyerId, email: `${buyerId}@test.invalid`, role: 'human' })
   const request = (path: string, body: unknown) => new NextRequest(`${baseUrl}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const planned = await (await import('@/app/api/routes/plan/route')).POST(request('/api/routes/plan', { client_reference: `buyer-plan-${id}`, objective: 'Review private code with explicit buyer review',
     required_capabilities: ['code-review'], input: { private_text: 'fixture private source' }, max_budget: { amount: '5.00', currency: 'USD' }, verification: policy,
-    provider_requirements: { approved_providers: [sellerId] }, payment_policy: { allowed_rails: ['evm'] } }))
+    provider_requirements: { approved_providers: approvedProviders }, payment_policy: { allowed_rails: ['evm'] },
+    ...(retryLimits ? { retry_policy: { max_attempts: retryLimits.maxAttempts ?? 2 }, deadline_seconds: 300 } : {}) }))
   assert.equal(planned.status, 201); const routeId = (await planned.json()).route.id
   const created = await (await import('@/app/api/routes/[id]/mandate/route')).POST(request(`/api/routes/${routeId}/mandate`, { version: 1, client_reference: `buyer-mandate-${id}`,
-    max_aggregate: '2.00', max_per_execution: '2.00', max_retry_budget: '0.00', max_attempts: 1, approved_providers: [sellerId], max_latency_seconds: 60,
+    max_aggregate: retryLimits?.maxAggregate ?? (retryLimits ? '3.50' : '2.00'), max_per_execution: '2.00', max_retry_budget: retryLimits?.maxRetry ?? (retryLimits ? '1.16' : '0.00'),
+    max_attempts: retryLimits?.maxAttempts ?? (retryLimits ? 2 : 1), approved_providers: approvedProviders, max_latency_seconds: 60,
     private_data: 'selected_provider_only', expires_at: new Date(Date.now() + 600_000).toISOString(), payment: { rail: 'evm', chain_id: 8453, token_address: token,
       payer_address: account.address.toLowerCase(), treasury_address: treasury, minimum_token_reserve_units: '5000000', minimum_native_reserve_wei: '1000000', max_gas_cost_wei: '1000000000000' } }), { params: Promise.resolve({ id: routeId }) })
   assert.equal(created.status, 201); const mandate = (await created.json()).mandate
   const approval = { version: 1, origin: baseUrl, route_id: routeId, mandate_id: mandate.id, terms_hash: mandate.terms_hash, chain_id: 8453, rpc_url: rpcUrl }
   const stateDirectory = join(directory, `state-${id}`), adapter = createBuyerEvmAdapter({ chainId: 8453, rpcUrl, account })
-  return { approval, apiKey, stateDirectory, account, adapter, dummyKey, buyerId, sellerId, serviceId, mandate, routeId }
+  return { approval, apiKey, stateDirectory, account, adapter, dummyKey, buyerId, sellerId, serviceId, fallbackSellerId, fallbackServiceId, mandate, routeId }
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>
 async function journal(f: Fixture) {
@@ -474,4 +488,172 @@ test('completion flags without payout proof never produce a backed route receipt
   const result = await response.json(); assert.equal(result.phase, 'financial_uncertainty'); assert.equal(result.receipt, null)
   assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id, f.routeId))).length, 0)
   assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)))[0].active_orders, 1)
+})
+
+async function refundFailedProvider(f: Fixture, tradeId: string) {
+  const [order] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, tradeId))
+  const [attempt] = await db.select().from(schema.service_execution_attempts).where(eq(schema.service_execution_attempts.order_id, order.id))
+  const sellerKey = jwt({ userId: f.sellerId, email: `${f.sellerId}@test.invalid`, role: 'human' })
+  const decline = await fetch(`${baseUrl}/api/trades/${tradeId}/work-order/attempt`, { method: 'POST', headers: { Authorization: `Bearer ${sellerKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ attempt_id: attempt.id, action: 'decline' }) })
+  assert.equal(decline.status, 201)
+  const request = (path: string, body: unknown) => new NextRequest(`${baseUrl}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const disputed = await (await import('@/app/api/trades/[id]/dispute/route')).POST(request(`/api/trades/${tradeId}/dispute`, { reason: 'Provider explicitly declined this funded order.' }), { params: Promise.resolve({ id: tradeId }) })
+  assert.equal(disputed.status, 200)
+  process.env.ADMIN_USER_IDS = f.buyerId
+  try {
+    const resolved = await (await import('@/app/api/trades/[id]/resolve/route')).POST(request(`/api/trades/${tradeId}/resolve`, { resolution: 'buyer' }), { params: Promise.resolve({ id: tradeId }) })
+    assert.equal(resolved.status, 200, JSON.stringify(await resolved.json()))
+  } finally { delete process.env.ADMIN_USER_IDS }
+}
+async function retryCommand(f: Fixture, tradeId: string, operationId = crypto.randomUUID()) {
+  return fetch(`${baseUrl}/api/routes/${f.routeId}/retry`, { method: 'POST', headers: { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version: 1, mandate_id: f.approval.mandate_id, previous_trade_id: tradeId, retry_operation_id: operationId }) })
+}
+
+test('a declined funded provider is fully reconciled before the buyer worker funds an approved fallback and settles one final receipt', async () => {
+  const f = await fixture(undefined, {}), count = broadcastCalls
+  const funded = await runBuyerRoute(f)
+  const originalDeadline = (await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, f.routeId)))[0].execution_deadline_at
+  assert.ok(originalDeadline)
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, funded.trade_id!)))[0].service_id, f.serviceId)
+  const early = await retryCommand(f, funded.trade_id!); assert.equal(early.status, 409)
+  assert.equal((await early.json()).error_code, 'ROUTE_RETRY_RECONCILIATION_REQUIRED')
+  await refundFailedProvider(f, funded.trade_id!)
+  const fallback = await runBuyerRoute(f); assert.equal(fallback.state, 'funded', JSON.stringify(fallback)); assert.notEqual(fallback.trade_id, funded.trade_id)
+  assert.equal((await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, f.routeId)))[0].execution_deadline_at?.toISOString(), originalDeadline.toISOString())
+  const [fallbackOrder] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, fallback.trade_id!))
+  assert.equal(fallbackOrder.service_id, f.fallbackServiceId)
+  const providerKey = jwt({ userId: f.fallbackSellerId!, email: `${f.fallbackSellerId}@test.invalid`, role: 'human' })
+  const delivery = await runProviderWork({ baseUrl, apiKey: providerKey, tradeId: fallback.trade_id!, serviceId: f.fallbackServiceId!, stateFile: join(directory, `${f.routeId}.fallback.json`),
+    handler: async () => ({ summary: 'The approved fallback completed the original agreed objective.', artifact: { result: 'fallback-private-output' } }) })
+  const result = await runBuyerRoute({ ...f, decision: { version: 1, route_id: f.routeId, decision: 'accept', content_hash: delivery.content_hash } })
+  assert.equal(result.state, 'completed', JSON.stringify(result)); assert.equal(broadcastCalls, count + 4)
+  const attempts = result.receipt!.receipt.attempts
+  assert.equal(attempts.length, 2); assert.equal(attempts[0].failure_code, 'PROVIDER_DECLINED')
+  assert.equal(attempts[0].economic.transfers[0].kind, 'buyer_refund'); assert.equal(attempts[0].economic.transfers[0].status, 'confirmed')
+  assert.ok(attempts[0].economic.capacity_released_at); assert.ok(attempts[1].economic.capacity_released_at)
+  assert.equal((await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id, f.mandate.id)))[0].reserved_minor, 221)
+  assert.equal((await db.select().from(schema.route_funding_steps).where(eq(schema.route_funding_steps.route_id, f.routeId))).length, 1)
+  assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 1)
+  const health = await (await import('@/lib/route-funding-health.mjs')).inspectRouteFundingHealth(db.$client)
+  assert.equal(health.exposure_anomaly_count, 0); assert.equal(health.missing_step_count, 0); assert.equal(health.payment_claim_anomaly_count, 0)
+  assert.equal(health.funded_retry_anomaly_count, 0)
+  const [refundRecord] = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))
+  await db.update(schema.settlement_transfers).set({ to_address: treasury }).where(eq(schema.settlement_transfers.id, refundRecord.id))
+  const corrupted = await (await import('@/lib/route-funding-health.mjs')).inspectRouteFundingHealth(db.$client)
+  assert.equal(corrupted.funded_retry_anomaly_count, 1); assert.equal(JSON.stringify(corrupted).includes(f.account.address), false)
+  await db.update(schema.settlement_transfers).set({ to_address: refundRecord.to_address }).where(eq(schema.settlement_transfers.id, refundRecord.id))
+  const repeated = await runBuyerRoute(f); assert.deepEqual(repeated.receipt, result.receipt); assert.equal(broadcastCalls, count + 4)
+})
+
+test('concurrent retry operations reserve only one fallback and a lost response replays its original order', async () => {
+  const f = await fixture(undefined, {}), first = await runBuyerRoute(f); await refundFailedProvider(f, first.trade_id!)
+  const operation = crypto.randomUUID(), [left, right] = await Promise.all([retryCommand(f, first.trade_id!, operation), retryCommand(f, first.trade_id!, operation)])
+  assert.ok([200, 201].includes(left.status)); assert.ok([200, 201].includes(right.status))
+  const leftBody = await left.json(), rightBody = await right.json(); assert.equal(leftBody.trade.id, rightBody.trade.id)
+  const other = await retryCommand(f, first.trade_id!); assert.equal(other.status, 409)
+  assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 1)
+  const response = await retryCommand(f, first.trade_id!, operation); assert.equal(response.status, 200); assert.equal((await response.json()).trade.id, leftBody.trade.id)
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.fallbackServiceId!)))[0].active_orders, 1)
+})
+
+test('gross retry budget, remaining objective deadline and current buyer policy reject fallback without new exposure', async () => {
+  for (const scenario of ['retry', 'aggregate', 'deadline', 'policy'] as const) {
+    const f = await fixture(undefined, scenario === 'retry' ? { maxRetry: '1.15' } : scenario === 'aggregate' ? { maxAggregate: '2.20' } : {})
+    const first = await runBuyerRoute(f); await refundFailedProvider(f, first.trade_id!)
+    if (scenario === 'deadline') await db.update(schema.route_plans).set({ execution_deadline_at: new Date(Date.now() + 5_000) }).where(eq(schema.route_plans.id, f.routeId))
+    if (scenario === 'policy') await db.insert(schema.buyer_spend_policies).values({ buyer_id: f.buyerId, owner_account_id: f.buyerId, policy_json: JSON.stringify({ max_retry_budget: 115 }) })
+    const response = await retryCommand(f, first.trade_id!); assert.equal(response.status, 409)
+    const code = (await response.json()).error_code
+    assert.equal(code, scenario === 'retry' ? 'MANDATE_RETRY_BUDGET_EXCEEDED' : scenario === 'aggregate' ? 'MANDATE_BUDGET_EXCEEDED' : scenario === 'deadline' ? 'ROUTE_RETRY_DEADLINE_EXCEEDED' : 'BUYER_RETRY_BUDGET_EXCEEDED')
+    assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 0)
+    assert.equal((await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id, f.mandate.id)))[0].reserved_minor, 105)
+    assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.fallbackServiceId!)))[0].active_orders, 0)
+  }
+})
+
+test('late funding after cancelled checkout blocks fallback until its exact original refund confirms', async () => {
+  const f = await fixture(undefined, {}), prepared = await runBuyerFunding({ ...f, prepareOnly: true })
+  const saved = await journal(f)
+  const claimed = await fetch(`${baseUrl}/api/trades/${prepared.trade_id}/fund/evm/claim`, { method: 'POST', headers: { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ intent_id: saved.value.intent.id, mandate_id: f.mandate.id, buyer_operation_id: saved.value.operation_id,
+      serialized_transaction: saved.value.serialized_transaction, payer_signature: saved.value.payer_signature }) })
+  assert.ok(claimed.ok, JSON.stringify(await claimed.json()))
+  const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, prepared.trade_id!))
+  const { expireTradePayment } = await import('@/lib/trade-funding')
+  await expireTradePayment(trade)
+  const unknown = await retryCommand(f, trade.id); assert.equal(unknown.status, 409); assert.equal((await unknown.json()).error_code, 'ROUTE_RETRY_PAYMENT_UNKNOWN')
+  await f.adapter.broadcast(saved.value.serialized_transaction)
+  const proofBody = { intent_id: saved.value.intent.id, chain_id: 8453, token_address: token, payer_address: f.account.address,
+    tx_hash: saved.value.tx_hash, payer_signature: saved.value.payer_signature }
+  minePayout = false
+  let proof: Response
+  try { proof = await fetch(`${baseUrl}/api/trades/${trade.id}/fund/evm`, { method: 'POST', headers: { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(proofBody) }) }
+  finally { minePayout = true }
+  assert.ok([200, 202].includes(proof.status), JSON.stringify(await proof.json()))
+  const pending = await retryCommand(f, trade.id); assert.equal(pending.status, 409)
+  assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 0)
+  const { refundCancelledExternalTrade } = await import('@/lib/external-settlement')
+  const [pendingRefund] = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, trade.id))
+  transactions.get(pendingRefund.tx_hash!)!.mined = true
+  const [cancelled] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  const refunded = await refundCancelledExternalTrade(cancelled, { waitMs: 100 }); assert.equal(refunded.complete, true)
+  const retry = await retryCommand(f, trade.id); assert.equal(retry.status, 201)
+  const repeatedProof = await fetch(`${baseUrl}/api/trades/${trade.id}/fund/evm`, { method: 'POST', headers: { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(proofBody) })
+  assert.equal(repeatedProof.status, 200)
+  assert.equal((await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, trade.id))).length, 1)
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)))[0].active_orders, 0)
+})
+
+test('refund flags, wrong destination, pending confirmation and any seller payout cannot authorize funded fallback', async () => {
+  const f = await fixture(undefined, {}), first = await runBuyerRoute(f); await refundFailedProvider(f, first.trade_id!)
+  const [refund] = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, first.trade_id!))
+  for (const change of [{ status: 'submitted' as const, confirmed_at: null }, { to_address: treasury }, { token_amount: '1' }]) {
+    await db.update(schema.settlement_transfers).set(change).where(eq(schema.settlement_transfers.id, refund.id))
+    const response = await retryCommand(f, first.trade_id!); assert.equal(response.status, 409); assert.equal((await response.json()).error_code, 'ROUTE_RETRY_REFUND_EVIDENCE_MISSING')
+    await db.update(schema.settlement_transfers).set(refund).where(eq(schema.settlement_transfers.id, refund.id))
+  }
+  await db.insert(schema.settlement_transfers).values({ ...refund, id: crypto.randomUUID(), business_key: `${first.trade_id}:seller_payout`, kind: 'seller_payout', status: 'failed' })
+  const collided = await retryCommand(f, first.trade_id!); assert.equal(collided.status, 409); assert.equal((await collided.json()).error_code, 'ROUTE_RETRY_PAYOUT_CONFLICT')
+  assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 0)
+})
+
+test('a killed buyer process after retry reservation resumes the saved operation and never recreates the original failed order', async () => {
+  const f = await fixture(undefined, {}), first = await runBuyerRoute(f); await refundFailedProvider(f, first.trade_id!)
+  const approvalFile = join(directory, `${f.routeId}.retry-approval.json`); await writeFile(approvalFile, JSON.stringify(f.approval), { mode: 0o600 })
+  let ready!: () => void, release!: () => void
+  const committed = new Promise<void>((done) => { ready = done }), gate = new Promise<void>((done) => { release = done })
+  apiHook = async (path, response) => { if (path.endsWith('/retry') && response.status === 201) { ready(); await gate } return false }
+  const args = ['scripts/buyer-route-worker.mjs', approvalFile, f.stateDirectory], environment = { ...process.env,
+    CLAWDMARKET_BUYER_PRIVATE_KEY: f.dummyKey, CLAWDMARKET_BUYER_API_KEY: f.apiKey }
+  const child = spawn(process.execPath, args, { cwd: resolve('.'), env: environment, stdio: ['ignore', 'pipe', 'pipe'] })
+  let stderr = ''; child.stderr.on('data', (bytes) => { stderr += bytes.toString() })
+  const timer = setTimeout(() => { child.kill('SIGKILL'); release() }, 15_000)
+  try {
+    await Promise.race([committed, new Promise<never>((_, reject) => child.once('exit', () => reject(new Error(`Dummy retry worker exited: ${stderr}`))))])
+    const exited = new Promise<void>((done) => child.once('exit', () => done())); child.kill('SIGKILL'); await exited; apiHook = null; release()
+    const [saved] = await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))
+    const output = await promisify(execFile)(process.execPath, args, { cwd: resolve('.'), env: environment }), result = JSON.parse(output.stdout)
+    assert.equal(result.state, 'funded'); assert.equal(result.trade_id, saved.trade_id)
+    assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 1)
+    assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.buyer_id, f.buyerId))).length, 2)
+  } finally { clearTimeout(timer); apiHook = null; release(); child.kill('SIGKILL') }
+})
+
+test('concurrent buyer route workers cannot replace the durable retry operation in a shared journal', async () => {
+  const f = await fixture(undefined, {}), first = await runBuyerRoute(f); await refundFailedProvider(f, first.trade_id!)
+  let ready!: () => void, release!: () => void
+  const entered = new Promise<void>((done) => { ready = done }), gate = new Promise<void>((done) => { release = done })
+  let held = false
+  apiHook = async (path, response) => { if (!held && path.endsWith('/retry') && response.status === 200) { held = true; ready(); await gate } return false }
+  const worker = runBuyerRoute(f)
+  try {
+    await entered
+    await assert.rejects(() => runBuyerRoute(f), /BUYER_WALLET_IN_USE/)
+  } finally { apiHook = null; release() }
+  const funded = await worker; assert.equal(funded.state, 'funded')
+  assert.equal((await runBuyerRoute(f)).trade_id, funded.trade_id)
+  assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 1)
 })

@@ -44,7 +44,7 @@ export async function getRoutingOperatorSnapshot() {
       JOIN trades t ON t.id = o.trade_id
       WHERE t.status = 'escrow_held' AND o.state IN ('funded', 'executing')
         AND o.capacity_released_at IS NULL AND r.deadline_seconds IS NOT NULL
-        AND unixepoch(t.funded_at) + r.deadline_seconds <= unixepoch()`),
+        AND COALESCE(r.execution_deadline_at / 1000.0, unixepoch(t.funded_at) + r.deadline_seconds) <= unixepoch()`),
     inspectWebhookDeliveryHealth(),
     inspectSettlementHealth(client),
     inspectWorkerHeartbeat('webhooks', 5),

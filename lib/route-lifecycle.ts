@@ -1,9 +1,11 @@
+import { findTradeFundingStep } from './route-funding-steps'
+import { listRouteAttempts } from './route-attempts'
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { parseUnits } from 'viem'
 import { db } from './db'
-import { credit_entries, payment_receipts, private_artifacts, route_attempts, route_funding_steps, route_plans, route_receipts, service_execution_attempts,
+import { credit_entries, payment_receipts, private_artifacts, route_plans, route_receipts, service_execution_attempts,
   service_orders, settlement_transfers, trade_deliveries, trades, transactions, verification_results } from './schema'
 import { canonicalContract } from './structured-verification'
 import { tradeAcceptanceStatus } from './trade-acceptance'
@@ -76,16 +78,17 @@ export async function persistBackedRouteReceipt(routeId: string, buyerId: string
     const checks = await tx.select().from(verification_results).where(and(eq(verification_results.trade_id, trade.id), eq(verification_results.delivery_id, delivery.id), eq(verification_results.content_hash, delivery.content_hash))).orderBy(verification_results.method)
     const artifacts = await tx.select({ id: private_artifacts.id, sha256: private_artifacts.sha256, size_bytes: private_artifacts.size_bytes, media_type: private_artifacts.media_type })
       .from(private_artifacts).where(eq(private_artifacts.delivery_id, delivery.id)).orderBy(private_artifacts.id)
-    const attempts = await tx.select({ id: route_attempts.id, attempt_number: route_attempts.attempt_number, service_id: route_attempts.service_id, state: route_attempts.state, failure_code: route_attempts.failure_code })
-      .from(route_attempts).where(eq(route_attempts.route_id, routeId)).orderBy(route_attempts.attempt_number)
+    const attempts = await listRouteAttempts(routeId, tx)
     const [provider] = await tx.select({ id: service_execution_attempts.id, state: service_execution_attempts.state }).from(service_execution_attempts).where(eq(service_execution_attempts.order_id, order.id)).limit(1)
-    const [authority] = await tx.select({ mandate_id: route_funding_steps.mandate_id, terms_hash: route_funding_steps.terms_hash, funding_step_id: route_funding_steps.id })
-      .from(route_funding_steps).where(eq(route_funding_steps.trade_id, trade.id)).limit(1)
+    const authorityStep = await findTradeFundingStep(tx, trade.id)
+    const authority = authorityStep ? { mandate_id: authorityStep.mandate_id, terms_hash: authorityStep.terms_hash, funding_step_id: authorityStep.id } : null
+    const grossMinor = attempts.reduce((sum, attempt) => sum + (attempt.economic?.amount_minor || 0), 0)
     const passed = (method: string) => checks.some((c) => c.method === method && c.status === 'passed')
     const receipt = { version: 1, route_id: routeId, order_id: order.id, trade_id: trade.id,
       objective_hash: digest(route.objective), input_hash: digest(JSON.parse(route.input_json)),
       selected_provider: { service_id: order.service_id, protocol: order.execution_contract_json === null ? null : serviceExecutionContract(order, { provider_protocol: 'manual' as 'manual' | 'leased_v1' }).provider_protocol }, attempts, provider_attempt: provider || null,
       pricing: { currency: 'USD', item_amount: usd(trade.item_price || trade.amount), fee_amount: usd(trade.platform_fee || trade.fee), buyer_total: usd(trade.total_cost), seller_amount: usd(trade.seller_amount || trade.amount) },
+      gross_attempt_total: (grossMinor / 100).toFixed(2),
       payment_rail: trade.payment_rail, authority: authority || null, delivery,
       result_hash: digest({ summary: delivered!.summary, artifact: delivered!.artifact_json ? JSON.parse(delivered!.artifact_json) : null, delivery_url: delivered!.delivery_url }), artifacts,
       verification: { checks: checks.map((c) => ({ method: c.method, version: c.version, status: c.status })),

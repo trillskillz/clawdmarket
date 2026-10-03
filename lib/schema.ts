@@ -457,6 +457,7 @@ export const route_plans = sqliteTable('route_plans', {
   max_budget_minor: integer('max_budget_minor').notNull(),
   currency: text('currency', { enum: ['USD'] }).notNull().default('USD'),
   deadline_seconds: integer('deadline_seconds'),
+  execution_deadline_at: integer('execution_deadline_at', { mode: 'timestamp_ms' }),
   verification_policy: text('verification_policy').notNull().default('{}'),
   payment_policy: text('payment_policy').notNull().default('{}'),
   retry_policy: text('retry_policy').notNull().default('{}'),
@@ -502,6 +503,22 @@ export const route_funding_steps = sqliteTable('route_funding_steps', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
+
+/** Append-only retry funding records; the original one-step table and every original payment remain intact. */
+export const route_retry_funding_steps = sqliteTable('route_retry_funding_steps', {
+  id: text('id').primaryKey(),
+  mandate_id: text('mandate_id').notNull().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  route_id: text('route_id').notNull().references(() => route_plans.id, { onDelete: 'restrict' }),
+  order_id: text('order_id').notNull().unique().references(() => service_orders.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  amount_minor: integer('amount_minor').notNull(), terms_hash: text('terms_hash').notNull(),
+  state: text('state', { enum: ['reserved', 'funded', 'rejected'] }).notNull().default('reserved'),
+  retry_operation_id: text('retry_operation_id').notNull().unique(),
+  previous_trade_id: text('previous_trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  attempt_id: text('attempt_id').notNull().unique(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [index('route_retry_funding_steps_route_idx').on(table.route_id)]);
 
 /** Immutable private route outcome; written only after authoritative accepted settlement. */
 export const route_receipts = sqliteTable('route_receipts', {

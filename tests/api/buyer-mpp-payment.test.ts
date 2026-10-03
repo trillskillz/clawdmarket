@@ -159,5 +159,11 @@ test('lifecycle advancement requires payments scope and cookie CSRF while privat
   const cookie = jwt({ userId: f.buyerId, email: `${f.buyerId}@test.invalid`, role: 'human' })
   assert.equal((await lifecycle.POST(new NextRequest(url, { method: 'POST', headers: { Cookie: `auth-token=${cookie}`, 'Content-Type': 'application/json' }, body: '{"version":1,"action":"observe"}' }), context(f.routeId))).status, 403)
   assert.equal((await result.GET(request(`/api/routes/${f.routeId}/result`, f.sellerId, 'GET'), context(f.routeId))).status, 404)
+  const retry = await import('@/app/api/routes/[id]/retry/route'), retryURL = `http://localhost/api/routes/${f.routeId}/retry`
+  const retryBody = JSON.stringify({ version: 1, mandate_id: f.mandate.id, previous_trade_id: f.trade.id, retry_operation_id: crypto.randomUUID() })
+  assert.equal((await retry.GET(new NextRequest(retryURL, { headers }), context(f.routeId))).status, 200)
+  assert.equal((await retry.POST(new NextRequest(retryURL, { method: 'POST', headers, body: retryBody }), context(f.routeId))).status, 401)
+  assert.equal((await retry.POST(new NextRequest(retryURL, { method: 'POST', headers: { Cookie: `auth-token=${cookie}`, 'Content-Type': 'application/json' }, body: retryBody }), context(f.routeId))).status, 403)
+  assert.equal((await retry.GET(request(`/api/routes/${f.routeId}/retry`, f.sellerId, 'GET'), context(f.routeId))).status, 404)
   assert.equal((await db.select().from(schema.service_execution_attempts).where(eq(schema.service_execution_attempts.order_id, (await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, f.trade.id)))[0].id))).length, 0)
 })

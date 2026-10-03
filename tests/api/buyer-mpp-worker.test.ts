@@ -13,6 +13,8 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { Abis, Account, Transaction } from 'viem/tempo'
 import { createLocalTestSchema } from '../helpers/local-schema'
 import { runBuyerMppFunding } from '../../scripts/buyer-mpp-worker.mjs'
+import { runBuyerRoute } from '../../scripts/buyer-route-worker.mjs'
+import { runProviderWork } from '../../scripts/provider-worker.mjs'
 import { createBuyerTempoAdapter } from '../../scripts/buyer-tempo-adapter.mjs'
 
 let directory: string, baseUrl: string, rpcUrl: string
@@ -20,7 +22,7 @@ let db: typeof import('@/lib/db').db, schema: typeof import('@/lib/schema'), jwt
 const apiServer = createServer(), rpcServer = createServer()
 const token = '0x20c0000000000000000000000000000000000000' as const, treasury = privateKeyToAccount(`0x${'99'.repeat(32)}`).address.toLowerCase() as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex, methods: string[] = []
-const transactions = new Map<string, { raw: Hex; payer: Hex; amount: bigint; recipient: Hex; memo: Hex; mined: boolean; nonce: number; timestamp: number }>()
+const transactions = new Map<string, { raw: Hex; payer: Hex; amount: bigint; recipient: Hex; memo: Hex | null; mined: boolean; nonce: number; timestamp: number }>()
 const balances = new Map<string, bigint>()
 let signerIndex = 300, broadcastCalls = 0, loseBroadcastReply = false, mineOnSend = true, rpcChainId = 4217
 let simulationHook: (() => Promise<void>) | null = null
@@ -30,12 +32,14 @@ function receipt(hash: string) {
   return !t?.mined ? null : { transactionHash: hash, from: t.payer, to: token, blockHash, blockNumber: '0x64', transactionIndex: '0x0', status: '0x1',
     gasUsed: '0xc350', cumulativeGasUsed: '0xc350', effectiveGasPrice: '0x1', logsBloom: `0x${'00'.repeat(256)}`, contractAddress: null, type: '0x76',
     logs: [{ address: token, blockHash, blockNumber: '0x64', transactionHash: hash, transactionIndex: '0x0', logIndex: '0x0', removed: false,
-      topics: encodeEventTopics({ abi: Abis.tip20, eventName: 'TransferWithMemo', args: { from: t.payer, to: t.recipient, memo: t.memo } }),
+      topics: t.memo ? encodeEventTopics({ abi: Abis.tip20, eventName: 'TransferWithMemo', args: { from: t.payer, to: t.recipient, memo: t.memo } }) : encodeEventTopics({ abi: erc20Abi, eventName: 'Transfer', args: { from: t.payer, to: t.recipient } }),
       data: encodeAbiParameters([{ type: 'uint256' }], [t.amount]) }] }
 }
 before(async () => {
   directory = await mkdtemp(join(tmpdir(), 'clawdmarket-workspace-test-tempo-worker-'))
   process.env.TURSO_DATABASE_URL = `file:${join(directory, 'tempo.db')}`
+  balances.set(treasury, 10_000_000n)
+  process.env.CHAT_ENCRYPTION_KEY = 'dummy-tempo-route-worker-chat-tests-only'
   process.env.JWT_SECRET = 'dummy-tempo-worker-tests-only'; process.env.WEBHOOK_SECRET_KEY = 'dummy-webhook-tests-only'
   process.env.TREASURY_ADDRESS = treasury; process.env.MPP_RECIPIENT_ADDRESS = treasury
   process.env.EVM_SETTLEMENT_PRIVATE_KEY = `0x${'99'.repeat(32)}`; process.env.MPP_SECRET_KEY = 'dummy-tempo-worker-hmac-secret-for-tests-only'
@@ -64,16 +68,18 @@ before(async () => {
         if (parsed.type !== 'tempo') throw new Error('Expected dummy Tempo envelope')
         const payer = parsed.from!
         const transfer = decodeFunctionData({ abi: Abis.tip20, data: parsed.calls![0].data! })
-        assert.equal(transfer.functionName, 'transferWithMemo')
+        assert.ok(['transferWithMemo', 'transfer'].includes(transfer.functionName))
         const [recipient, amount, memo] = transfer.args! as [Hex, bigint, Hex]
         if (!transactions.has(hash)) {
           assert.equal([...transactions.values()].some((t) => t.payer.toLowerCase() === payer.toLowerCase() && t.nonce === parsed.nonce), false)
-          transactions.set(hash, { raw, payer, recipient, amount, memo, nonce: parsed.nonce!, mined: mineOnSend, timestamp: Math.floor(Date.now() / 1000) + 1 })
+          transactions.set(hash, { raw, payer, recipient, amount, memo: memo || null, nonce: parsed.nonce!, mined: mineOnSend, timestamp: Math.floor(Date.now() / 1000) + 1 })
           balances.set(payer.toLowerCase(), balances.get(payer.toLowerCase())! - amount - 1n)
+          if (payer.toLowerCase() === treasury && recipient.toLowerCase() !== treasury) balances.set(recipient.toLowerCase(), balances.get(recipient.toLowerCase())! + amount)
         }
         if (loseBroadcastReply || !mineOnSend) { loseBroadcastReply = false; outgoing.destroy(); return }
         result = input.method === 'eth_sendRawTransactionSync' ? receipt(hash) : hash
-      } else if (input.method === 'eth_getTransactionReceipt') result = receipt(p[0])
+      } else if (input.method === 'eth_blockNumber') result = '0x67'
+      else if (input.method === 'eth_getTransactionReceipt') result = receipt(p[0])
       else if (input.method === 'eth_getTransactionByHash') result = transactions.has(p[0]) ? { hash: p[0] } : null
       else if (input.method === 'eth_getBlockByNumber' || input.method === 'eth_getBlockByHash') result = { hash: blockHash, number: '0x64', timestamp: `0x${(Math.floor(Date.now() / 1000) + 1).toString(16)}`,
         baseFeePerGas: '0x1', gasLimit: '0x1c9c380', gasUsed: '0xc350', transactions: [] }
@@ -87,6 +93,8 @@ before(async () => {
   jwt = (await import('@/lib/auth')).generateJWT
   const mandate = await import('@/app/api/routes/[id]/mandate/route'), execute = await import('@/app/api/routes/[id]/execute/route'), getRoute = await import('@/app/api/routes/[id]/route')
   const intent = await import('@/app/api/trades/[id]/fund/mpp/intent/route'), claim = await import('@/app/api/trades/[id]/fund/mpp/claim/route'), fund = await import('@/app/api/trades/[id]/fund/mpp/route')
+  const retry = await import('@/app/api/routes/[id]/retry/route'), advance = await import('@/app/api/routes/[id]/advance/route'), result = await import('@/app/api/routes/[id]/result/route')
+  const work = await import('@/app/api/trades/[id]/work-order/route'), attempt = await import('@/app/api/trades/[id]/work-order/attempt/route'), delivery = await import('@/app/api/trades/[id]/delivery/route')
   apiServer.on('request', async (incoming, outgoing) => {
     try {
       const chunks = []; for await (const chunk of incoming) chunks.push(chunk)
@@ -94,7 +102,9 @@ before(async () => {
       const request = new NextRequest(`${baseUrl}${path}`, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
       const id = path.split('/')[3], context = { params: Promise.resolve({ id }) }
       const handler = path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
-        : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/mpp') ? fund.POST : getRoute.GET
+        : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/mpp') ? fund.POST : path.endsWith('/retry') ? retry[incoming.method as 'GET' | 'POST']
+          : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST'] : path.endsWith('/result') ? result.GET
+            : path.endsWith('/work-order') ? work.GET : path.endsWith('/attempt') ? attempt.POST : path.endsWith('/delivery') ? delivery.POST : getRoute.GET
       const response = await handler(request, context)
       if (apiHook && await apiHook(path, response, request)) { outgoing.destroy(); return }
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text())
@@ -108,7 +118,7 @@ after(async () => {
   db?.$client.close(); await rm(directory, { recursive: true, force: true })
 })
 
-async function fixture(reuseDummyKey?: `0x${string}`) {
+async function fixture(reuseDummyKey?: `0x${string}`, withRetry = false) {
   const id = crypto.randomUUID(), buyerId = `buyer-${id}`, sellerId = `seller-${id}`, serviceId = crypto.randomUUID()
   const dummyKey = reuseDummyKey ?? `0x${(++signerIndex).toString(16).padStart(64, '0')}` as `0x${string}`, account = Account.fromSecp256k1(dummyKey)
   if (!balances.has(account.address.toLowerCase())) balances.set(account.address.toLowerCase(), 10_000_000n)
@@ -118,20 +128,29 @@ async function fixture(reuseDummyKey?: `0x${string}`) {
   await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: sellerId, title: 'Buyer worker fixture', description: 'Return a private structured review for explicit buyer acceptance.',
     capabilities: '["code-review"]', price_minor: 100, status: 'active', estimated_latency_seconds: 30, max_concurrency: 1, provider_protocol: 'leased_v1',
     output_schema: '{"type":"object","properties":{"result":{"type":"string"}}}', verification_policy: JSON.stringify(policy) })
+  const fallbackSellerId = withRetry ? `fallback-${id}` : undefined, fallbackServiceId = withRetry ? crypto.randomUUID() : undefined
+  if (fallbackSellerId && fallbackServiceId) {
+    await db.insert(schema.users).values({ id: fallbackSellerId, name: fallbackSellerId, email: `${fallbackSellerId}@test.invalid`, password_hash: 'unused', role: 'human' })
+    await db.insert(schema.payout_addresses).values({ user_id: fallbackSellerId, address: treasury })
+    await db.insert(schema.service_definitions).values({ id: fallbackServiceId, seller_id: fallbackSellerId, title: 'Approved Tempo fallback', description: 'Return the same agreed review after confirmed original refund.',
+      capabilities: '["code-review"]', price_minor: 110, status: 'active', estimated_latency_seconds: 30, max_concurrency: 1, provider_protocol: 'leased_v1',
+      output_schema: '{"type":"object","properties":{"result":{"type":"string"}}}', verification_policy: JSON.stringify(policy) })
+  }
+  const approvedProviders = fallbackSellerId ? [sellerId, fallbackSellerId] : [sellerId]
   const apiKey = jwt({ userId: buyerId, email: `${buyerId}@test.invalid`, role: 'human' })
   const request = (path: string, body: unknown) => new NextRequest(`${baseUrl}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const planned = await (await import('@/app/api/routes/plan/route')).POST(request('/api/routes/plan', { client_reference: `buyer-plan-${id}`, objective: 'Review private code with explicit buyer review',
     required_capabilities: ['code-review'], input: { private_text: 'fixture private source' }, max_budget: { amount: '5.00', currency: 'USD' }, verification: policy,
-    provider_requirements: { approved_providers: [sellerId] }, payment_policy: { allowed_rails: ['mpp'] } }))
+    provider_requirements: { approved_providers: approvedProviders }, payment_policy: { allowed_rails: ['mpp'] }, ...(withRetry ? { retry_policy: { max_attempts: 2 }, deadline_seconds: 300 } : {}) }))
   assert.equal(planned.status, 201); const routeId = (await planned.json()).route.id
   const created = await (await import('@/app/api/routes/[id]/mandate/route')).POST(request(`/api/routes/${routeId}/mandate`, { version: 1, client_reference: `buyer-mandate-${id}`,
-    max_aggregate: '2.00', max_per_execution: '2.00', max_retry_budget: '0.00', max_attempts: 1, approved_providers: [sellerId], max_latency_seconds: 60,
+    max_aggregate: withRetry ? '3.50' : '2.00', max_per_execution: '2.00', max_retry_budget: withRetry ? '1.16' : '0.00', max_attempts: withRetry ? 2 : 1, approved_providers: approvedProviders, max_latency_seconds: 60,
     private_data: 'selected_provider_only', expires_at: new Date(Date.now() + 600_000).toISOString(), payment: { rail: 'mpp', chain_id: 4217, token_address: token,
       payer_address: account.address.toLowerCase(), treasury_address: treasury, minimum_token_reserve_units: '5000000', fee_token_address: token, minimum_fee_token_reserve_units: '5000000', max_fee_token_cost_units: '10000' } }), { params: Promise.resolve({ id: routeId }) })
   assert.equal(created.status, 201); const mandate = (await created.json()).mandate
   const approval = { version: 1, origin: baseUrl, route_id: routeId, mandate_id: mandate.id, terms_hash: mandate.terms_hash, chain_id: 4217, rpc_url: rpcUrl }
   const stateDirectory = join(directory, `state-${id}`), adapter = createBuyerTempoAdapter({ chainId: 4217, rpcUrl, account })
-  return { approval, apiKey, stateDirectory, account, adapter, dummyKey, buyerId, sellerId, serviceId, mandate, routeId }
+  return { approval, apiKey, stateDirectory, account, adapter, dummyKey, buyerId, sellerId, serviceId, fallbackSellerId, fallbackServiceId, mandate, routeId }
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>
 async function journal(f: Fixture) {
@@ -302,4 +321,32 @@ test('independent buyer processes with the same payer/nonce cannot claim and pay
   assert.equal(results.filter((r) => r.status === 'fulfilled' && r.value.state === 'funded').length, 1)
   assert.equal(results.filter((r) => r.status === 'rejected').length, 1); assert.equal(broadcastCalls, count + 1)
   assert.equal([...transactions.values()].filter((t) => t.payer.toLowerCase() === f.account.address.toLowerCase()).length, 1)
+})
+
+test('Tempo original refund, fresh retry intent and guarded pull settle one approved fallback receipt', async () => {
+  const f = await fixture(undefined, true), original = await runBuyerRoute(f)
+  const [order] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, original.trade_id!))
+  assert.equal(order.service_id, f.serviceId)
+  const [attempt] = await db.select().from(schema.service_execution_attempts).where(eq(schema.service_execution_attempts.order_id, order.id))
+  const sellerKey = jwt({ userId: f.sellerId, email: `${f.sellerId}@test.invalid`, role: 'human' })
+  const declined = await fetch(`${baseUrl}/api/trades/${original.trade_id}/work-order/attempt`, { method: 'POST', headers: { Authorization: `Bearer ${sellerKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ attempt_id: attempt.id, action: 'decline' }) }); assert.equal(declined.status, 201)
+  const request = (path: string, body: unknown) => new NextRequest(`${baseUrl}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const context = { params: Promise.resolve({ id: original.trade_id! }) }
+  const disputed = await (await import('@/app/api/trades/[id]/dispute/route')).POST(request(`/api/trades/${original.trade_id}/dispute`, { reason: 'Provider declined; require exact existing buyer refund.' }), context)
+  assert.equal(disputed.status, 200)
+  process.env.ADMIN_USER_IDS = f.buyerId
+  try {
+    const resolved = await (await import('@/app/api/trades/[id]/resolve/route')).POST(request(`/api/trades/${original.trade_id}/resolve`, { resolution: 'buyer' }), context)
+    assert.equal(resolved.status, 200, JSON.stringify(await resolved.json()))
+  } finally { delete process.env.ADMIN_USER_IDS }
+  const funded = await runBuyerRoute(f); assert.equal(funded.state, 'funded', JSON.stringify(funded)); assert.notEqual(funded.trade_id, original.trade_id)
+  const providerKey = jwt({ userId: f.fallbackSellerId!, email: `${f.fallbackSellerId}@test.invalid`, role: 'human' })
+  const delivered = await runProviderWork({ baseUrl, apiKey: providerKey, tradeId: funded.trade_id!, serviceId: f.fallbackServiceId!, stateFile: join(directory, `${f.routeId}.fallback.json`),
+    handler: async () => ({ summary: 'The approved Tempo fallback completed the original objective.', artifact: { result: 'private-tempo-fallback' } }) })
+  const result = await runBuyerRoute({ ...f, decision: { version: 1, route_id: f.routeId, decision: 'accept', content_hash: delivered.content_hash } })
+  assert.equal(result.state, 'completed', JSON.stringify(result)); assert.equal(result.receipt!.receipt.payment_rail, 'mpp')
+  assert.equal(result.receipt!.receipt.attempts.length, 2); assert.equal(result.receipt!.receipt.gross_attempt_total, '2.21')
+  assert.equal((await db.select().from(schema.buyer_mpp_payment_claims).where(eq(schema.buyer_mpp_payment_claims.mandate_id, f.mandate.id))).filter((entry) => entry.state === 'confirmed').length, 2)
+  assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 1)
 })

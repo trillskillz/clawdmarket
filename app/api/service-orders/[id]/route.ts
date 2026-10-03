@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const [attempt] = agreed?.provider_protocol === 'leased_v1'
       ? await db.select().from(service_execution_attempts).where(eq(service_execution_attempts.order_id, order.id)).limit(1)
       : [null]
-    const [route] = await db.select({ deadline_seconds: route_plans.deadline_seconds })
+    const [route] = await db.select({ deadline_seconds: route_plans.deadline_seconds, execution_deadline_at: route_plans.execution_deadline_at })
       .from(route_plans).where(eq(route_plans.service_order_id, order.id)).limit(1)
     const now = new Date()
     const executionTiming = route ? routeExecutionTiming(route, order, trade, now) : null

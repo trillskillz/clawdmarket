@@ -4,6 +4,7 @@ import { eq, sql } from 'drizzle-orm'
 import { db } from './db'
 import { route_plans, service_definitions, service_orders, trades } from './schema'
 import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from './buyer-spend-policy'
+import { findTradeFundingStep, listRouteFundingSteps } from './route-funding-steps'
 import { providerRequirementsSchema, providerRequirementFailure } from './provider-requirements'
 import { providerCapabilityEvidence } from './provider-evidence'
 import { serviceExecutionContract } from './service-execution-contract'
@@ -68,12 +69,17 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     }
     const [plan] = await source.select().from(route_plans).where(eq(route_plans.service_order_id, order.id)).limit(1)
     if (plan && !serviceSupportsRoute(service, plan)) return 'ROUTE_STALE_PROVIDER'
+    if (plan?.execution_deadline_at && trade.status === 'pending' && (!service.estimated_latency_seconds
+      || Date.now() + service.estimated_latency_seconds * 1000 > plan.execution_deadline_at.getTime())) return 'ROUTE_RETRY_DEADLINE_EXCEEDED'
     const reason = await checkProviderRequirements(source, trade.buyer_id, trade.seller_id, capabilities, order.provider_requirements_json)
     if (reason) return reason
     const policy = await loadBuyerSpendPolicy(trade.buyer_id, source)
     if (policy) {
+      const step = await findTradeFundingStep(source, trade.id)
+      const fundingSteps = step ? await listRouteFundingSteps(source, step.route_id) : []
+      const retrySpendMinor = step ? fundingSteps.slice(1).reduce((sum, entry) => sum + entry.amount_minor, 0) : undefined
       const constraint = checkBuyerPolicyConstraints(policy.policy, { totalMinor: Math.round(trade.total_cost * 100), sellerId: trade.seller_id,
-        capabilities, paymentRail: order.payment_rail, verificationMethods: contract.verificationPolicy!.methods })
+        capabilities, paymentRail: order.payment_rail, verificationMethods: contract.verificationPolicy!.methods, retrySpendMinor })
       if (constraint) return constraint
       const usage = await buyerPolicyUsage(trade.buyer_id, new Date(), source)
       // This reservation is already included: funding must not add its exposure twice.

@@ -211,3 +211,14 @@ test('SDK lifecycle observation, hash-bound acceptance and private result share 
     { path: `/api/routes/${routeId}/advance`, method: 'POST', body: decision }, { path: `/api/routes/${routeId}/result`, method: 'GET', body: null }])
   assert.throws(() => client.advanceRoute('../another', decision), /routeId must be a route UUID/)
 })
+
+test('SDK retry inspection and reservation preserve the original mandate, previous trade and stable operation', async () => {
+  const calls: { path: string; method: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-retry-key', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: String(init?.method), body: init?.body ? JSON.parse(String(init.body)) : null })
+    assert.equal(init?.redirect, 'error'); return Response.json({ idempotent: true })
+  } })
+  const command = { version: 1 as const, mandate_id: routeId, previous_trade_id: routeId, retry_operation_id: routeId }
+  await client.inspectRouteRetry(routeId); await client.retryRoute(routeId, command)
+  assert.deepEqual(calls, [{ path: `/api/routes/${routeId}/retry`, method: 'GET', body: null }, { path: `/api/routes/${routeId}/retry`, method: 'POST', body: command }])
+})

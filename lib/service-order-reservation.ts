@@ -33,10 +33,13 @@ export class ServiceOrderReservationError extends Error {
 import { checkProviderRequirements } from './service-funding-eligibility'
 import { captureServiceExecutionContract } from './service-execution-contract'
 import { reserveMandateExposure } from './route-payment-mandate'
+import { assertRouteRetryReconciled, RouteRetryError } from './route-retry-reconciliation'
+import { listRouteFundingSteps } from './route-funding-steps'
 
 type ParsedOrderRequest = z.output<typeof serviceOrderInput>
 type OrderRequest = Omit<ParsedOrderRequest, 'provider_requirements'> & { provider_requirements?: ParsedOrderRequest['provider_requirements'] }
-type ReservationArgs = { serviceId: string; principal: RequestPrincipal; request: OrderRequest; routeId?: string; attemptNumber?: number; externalOnly?: boolean; expectedSellerId?: string; mandateId?: string }
+type ReservationArgs = { serviceId: string; principal: RequestPrincipal; request: OrderRequest; routeId?: string; attemptNumber?: number; externalOnly?: boolean; expectedSellerId?: string; mandateId?: string;
+  retry?: { operationId: string; previousTradeId: string; attemptId: string } }
 
 function sqliteBusy(error: unknown) {
   let current = error
@@ -127,11 +130,32 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     const feeRecipient = internal ? await ensureAdminFeeRecipient() : null
     const reserveOnce = () => db.transaction(async (tx) => {
       const now = new Date()
+      let retrySpendMinor = 0
       let agreedCapabilities = storedServiceCapabilities(service.capabilities)
       if (!agreedCapabilities?.length) throw new ServiceOrderReservationError(routeId ? 'ROUTE_STALE_PROVIDER' : 'SERVICE_UNAVAILABLE', 'Service capabilities are invalid')
       if (routeId) {
         const [plan] = await tx.select().from(route_plans).where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId))).limit(1)
-        if (!plan || plan.state !== 'reserving' || plan.service_order_id) throw new ServiceOrderReservationError('ROUTE_STATE_CHANGED', 'Route is no longer available for reservation')
+        if (!plan || (args.retry ? !['cancelled', 'resolved'].includes(plan.state) || !plan.service_order_id : plan.state !== 'reserving' || plan.service_order_id)) throw new ServiceOrderReservationError('ROUTE_STATE_CHANGED', 'Route is no longer available for reservation')
+        if (args.retry) {
+          if (!args.mandateId || !attemptNumber) throw new RouteRetryError('MANDATE_REQUIRED')
+          const previous = await assertRouteRetryReconciled(tx, plan.id, args.retry.previousTradeId, principal.userId)
+          if (previous.order_id !== plan.service_order_id) throw new RouteRetryError('ROUTE_RETRY_PREVIOUS_TRADE_CHANGED')
+          const steps = await listRouteFundingSteps(tx, plan.id)
+          const priorTrades = await Promise.all(steps.map(async (step) => (await tx.select().from(trades).where(eq(trades.id, step.trade_id)).limit(1))[0]))
+          if (priorTrades.some((trade) => trade.seller_id === service.seller_id)) throw new RouteRetryError('ROUTE_RETRY_PROVIDER_EXCLUDED')
+          retrySpendMinor = steps.slice(1).reduce((sum, step) => sum + step.amount_minor, 0) + totalMinor
+          const [lastAttempt] = await tx.select().from(route_attempts).where(eq(route_attempts.service_order_id, previous.order_id!)).limit(1)
+          if (!lastAttempt) throw new RouteRetryError('ROUTE_RETRY_LINK_INVARIANT')
+          const attemptRows = await tx.select().from(route_attempts).where(eq(route_attempts.route_id, plan.id))
+          if (attemptNumber !== Math.max(...attemptRows.map((entry) => entry.attempt_number)) + 1
+            || attemptNumber > Number(JSON.parse(plan.retry_policy).max_attempts || 1)) throw new RouteRetryError('ROUTE_RETRY_ATTEMPTS_EXHAUSTED')
+          const firstFunded = priorTrades.map((trade) => trade.funded_at ? Date.parse(trade.funded_at) : NaN).filter(Number.isFinite)
+          const deadline = plan.execution_deadline_at ?? (plan.deadline_seconds && firstFunded.length ? new Date(Math.min(...firstFunded) + plan.deadline_seconds * 1000) : null)
+          if (deadline && (!service.estimated_latency_seconds || now.getTime() + service.estimated_latency_seconds * 1000 > deadline.getTime())) throw new RouteRetryError('ROUTE_RETRY_DEADLINE_EXCEEDED')
+          if (deadline && !plan.execution_deadline_at) await tx.update(route_plans).set({ execution_deadline_at: deadline }).where(eq(route_plans.id, plan.id))
+          await tx.update(route_attempts).set({ failure_code: previous.failure_code, updated_at: now }).where(eq(route_attempts.id, lastAttempt.id))
+          await tx.insert(route_attempts).values({ id: args.retry.attemptId, route_id: plan.id, attempt_number: attemptNumber, service_id: service.id, state: 'checking' })
+        }
         const [mandate] = await tx.select({ id: route_payment_mandates.id }).from(route_payment_mandates).where(eq(route_payment_mandates.route_id, routeId)).limit(1)
         if (mandate && mandate.id !== args.mandateId) throw new ServiceOrderReservationError('MANDATE_REQUIRED', 'This route requires its saved buyer mandate')
         if (plan.expires_at <= now) throw new ServiceOrderReservationError('ROUTE_PLAN_EXPIRED', 'Route plan expired before execution', 410)
@@ -161,7 +185,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, principal.userId, service.seller_id, tx)
       if (verifierFailure) throw new ServiceOrderReservationError(verifierFailure, 'Isolated verifier is unavailable or shares a trade-party owner')
       const spendContext = { sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: contract.verificationPolicy!.methods,
-        ...(args.mandateId ? { retrySpendMinor: 0 } : {}) }
+        ...(args.mandateId ? { retrySpendMinor } : {}) }
       if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100, ...spendContext })
       else await enforceBuyerSpendPolicy(tx, principal.userId, { totalMinor, ...spendContext }, now)
       const [listing] = await tx.insert(listings).values({ seller_id: service.seller_id, category: 'skills', title: service.title,
@@ -190,11 +214,13 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       if (args.mandateId) {
         const [plan] = routeId ? await tx.select().from(route_plans).where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId))).limit(1) : []
         if (!plan) throw new ServiceOrderReservationError('MANDATE_ROUTE_REQUIRED', 'A mandate must bind an owned route')
-        await reserveMandateExposure(tx, { mandateId: args.mandateId, plan, service, rail, totalMinor, orderId: order.id, tradeId: trade.id })
+        await reserveMandateExposure(tx, { mandateId: args.mandateId, plan, service, rail, totalMinor, orderId: order.id, tradeId: trade.id, retry: args.retry })
       }
       if (routeId) {
         const [linked] = await tx.update(route_plans).set({ state: 'awaiting_funding', service_order_id: order.id, updated_at: now })
-          .where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId), eq(route_plans.state, 'reserving'), sql`${route_plans.service_order_id} IS NULL`)).returning({ id: route_plans.id })
+          .where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId), args.retry
+            ? sql`${route_plans.state} IN ('cancelled','resolved') AND ${route_plans.service_order_id} = (SELECT id FROM service_orders WHERE trade_id = ${args.retry.previousTradeId})`
+            : sql`${route_plans.state} = 'reserving' AND ${route_plans.service_order_id} IS NULL`)).returning({ id: route_plans.id })
         if (!linked) throw new ServiceOrderReservationError('ROUTE_STATE_CHANGED', 'Route changed while reserving')
         if (attemptNumber !== undefined) {
           const [attempt] = await tx.update(route_attempts).set({ state: 'reserved', service_order_id: order.id, updated_at: now })

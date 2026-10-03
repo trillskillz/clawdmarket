@@ -34,7 +34,7 @@ try {
       JOIN service_orders o ON o.id = r.service_order_id JOIN trades t ON t.id = o.trade_id
       WHERE t.status = 'escrow_held' AND o.state IN ('funded', 'executing')
         AND o.capacity_released_at IS NULL AND r.deadline_seconds IS NOT NULL
-        AND unixepoch(t.funded_at) + r.deadline_seconds <= unixepoch()`),
+        AND COALESCE(r.execution_deadline_at / 1000.0, unixepoch(t.funded_at) + r.deadline_seconds) <= unixepoch()`),
     read(`SELECT
       SUM(CASE WHEN success = 0 AND suppressed_at IS NULL AND attempts < 8 THEN 1 ELSE 0 END) AS retrying_count,
       SUM(CASE WHEN success = 0 AND suppressed_at IS NULL AND attempts >= 8 THEN 1 ELSE 0 END) AS failed_count,
@@ -83,8 +83,8 @@ try {
     private_artifacts: Object.fromEntries(Object.entries(artifacts[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
   }
   console.log(JSON.stringify(snapshot, null, 2))
-  if (snapshot.route_receipts.receipt_anomaly_count || !snapshot.account_credit.healthy || snapshot.migrations < 42 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
-    || snapshot.route_funding.exposure_anomaly_count || snapshot.route_funding.missing_step_count || snapshot.route_funding.proof_state_anomaly_count || snapshot.route_funding.payment_claim_anomaly_count
+  if (snapshot.route_receipts.receipt_anomaly_count || !snapshot.account_credit.healthy || snapshot.migrations < 43 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
+    || snapshot.route_funding.funded_retry_anomaly_count || snapshot.route_funding.exposure_anomaly_count || snapshot.route_funding.missing_step_count || snapshot.route_funding.proof_state_anomaly_count || snapshot.route_funding.payment_claim_anomaly_count
     || snapshot.verification_jobs.overdue_count || snapshot.verification_jobs.retained_suite_anomaly_count
     || snapshot.private_artifacts.missing_live_payload_count || snapshot.private_artifacts.purged_with_payload_count || snapshot.private_artifacts.overdue_purge_count
     || snapshot.webhook_outbox.failed_count || snapshot.webhook_outbox.overdue_count

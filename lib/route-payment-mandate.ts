@@ -4,7 +4,8 @@ import { and, eq, gt, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { isAddress } from 'viem'
 import { db } from './db'
-import { agent_owners, buyer_evm_payment_claims, buyer_mpp_payment_claims, buyer_mpp_payment_intents, evm_payment_intents, payment_receipts, route_funding_steps, route_payment_mandates, route_plans, service_definitions, trades } from './schema'
+import { agent_owners, buyer_evm_payment_claims, buyer_mpp_payment_claims, buyer_mpp_payment_intents, evm_payment_intents, payment_receipts, route_funding_steps, route_retry_funding_steps, route_payment_mandates, route_plans, service_definitions, trades } from './schema'
+import { findTradeFundingStep, listRouteFundingSteps, updateTradeFundingStep } from './route-funding-steps'
 import { getPaymentReadiness, findAcceptedToken } from './payment-config'
 import { canonicalContract } from './structured-verification'
 import { verificationPolicySchema, supportsVerification } from './verification-policy'
@@ -96,7 +97,7 @@ export function mandateDto(row: Mandate) {
   return { id: row.id, route_id: row.route_id, buyer_id: row.buyer_id, client_reference: row.client_reference,
     route_hash: row.route_hash, terms_hash: hash(termsOf(row)), terms: publicTerms(termsOf(row)), state: row.state,
     reserved_amount: (row.reserved_minor / 100).toFixed(2), expires_at: row.expires_at, created_at: row.created_at, revoked_at: row.revoked_at,
-    automatic_funded_retry_enabled: false }
+    automatic_funded_retry_enabled: termsOf(row).max_attempts > 1 && termsOf(row).max_retry_budget > 0 }
 }
 
 function paymentContract(payment: Input['payment']) {
@@ -150,8 +151,9 @@ export async function createRouteMandate(routeId: string, ownerId: string, raw: 
 export async function inspectRouteMandate(routeId: string, userId: string) {
   const [row] = await db.select().from(route_payment_mandates).where(eq(route_payment_mandates.route_id, routeId)).limit(1)
   if (!row || userId !== row.buyer_id && !await ownerControlsBuyer(userId, row.buyer_id, db)) throw new RouteMandateError('MANDATE_NOT_FOUND', 404)
-  const [step] = await db.select().from(route_funding_steps).where(eq(route_funding_steps.route_id, routeId)).limit(1)
-  return { mandate: mandateDto(row), funding_step: step ?? null }
+  const steps = await listRouteFundingSteps(db, routeId)
+  const [plan] = await db.select().from(route_plans).where(eq(route_plans.id, routeId)).limit(1)
+  return { mandate: mandateDto(row), funding_step: steps.find((step) => step.order_id === plan?.service_order_id) ?? null, funding_steps: steps }
 }
 export async function revokeRouteMandate(routeId: string, ownerId: string) {
   return withKeyedWriteLock(`route-authority:${routeId}`, () => retryTransaction(() => db.transaction(async (tx) => {
@@ -179,17 +181,29 @@ export async function validateRouteMandate(mandateId: string, plan: Plan, source
     eq(route_payment_mandates.buyer_id, plan.buyer_id))).limit(1)
   if (!row) throw new RouteMandateError('MANDATE_NOT_FOUND', 404)
   if (plan.service_order_id) {
-    const [step] = await source.select().from(route_funding_steps).where(eq(route_funding_steps.route_id, plan.id)).limit(1)
+    const step = (await listRouteFundingSteps(source, plan.id)).find((value) => value.order_id === plan.service_order_id)
     if (!step || step.mandate_id !== row.id || step.order_id !== plan.service_order_id) throw new RouteMandateError('MANDATE_ORDER_CONFLICT')
     return termsOf(row) // Receipt recovery never grants fresh payment permission.
   }
   return activeMandate(source, row, plan)
 }
 
-export async function reserveMandateExposure(source: Source, input: { mandateId: string; plan: Plan; service: typeof service_definitions.$inferSelect; rail: string; totalMinor: number; orderId: string; tradeId: string }) {
+export async function freshRouteRetryTerms(mandateId: string, plan: Plan, source: Source = db) {
+  const [row] = await source.select().from(route_payment_mandates).where(and(eq(route_payment_mandates.id, mandateId), eq(route_payment_mandates.route_id, plan.id))).limit(1)
+  if (!row) throw new RouteMandateError('MANDATE_NOT_FOUND', 404)
+  return activeMandate(source, row, plan)
+}
+
+export async function reserveMandateExposure(source: Source, input: { mandateId: string; plan: Plan; service: typeof service_definitions.$inferSelect; rail: string; totalMinor: number; orderId: string; tradeId: string;
+  retry?: { operationId: string; previousTradeId: string; attemptId: string } }) {
   const [row] = await source.select().from(route_payment_mandates).where(and(eq(route_payment_mandates.id, input.mandateId), eq(route_payment_mandates.route_id, input.plan.id))).limit(1)
   if (!row) throw new RouteMandateError('MANDATE_NOT_FOUND', 404)
   const terms = await activeMandate(source, row, input.plan)
+  const previous = await listRouteFundingSteps(source, input.plan.id)
+  if (previous.length && !input.retry || !previous.length && input.retry) throw new RouteMandateError('MANDATE_ORDER_CONFLICT')
+  if (previous.length >= terms.max_attempts) throw new RouteMandateError('MANDATE_ATTEMPTS_EXHAUSTED')
+  const retryMinor = previous.slice(1).reduce((sum, step) => sum + step.amount_minor, 0) + (input.retry ? input.totalMinor : 0)
+  if (retryMinor > terms.max_retry_budget) throw new RouteMandateError('MANDATE_RETRY_BUDGET_EXCEEDED')
   if (terms.payment.rail !== input.rail || !terms.approved_providers.includes(input.service.seller_id)) throw new RouteMandateError('MANDATE_PROVIDER_OR_RAIL_BLOCKED')
   if (input.totalMinor > terms.max_per_execution || input.totalMinor > row.max_aggregate_minor - row.reserved_minor) throw new RouteMandateError('MANDATE_BUDGET_EXCEEDED')
   if (!input.service.estimated_latency_seconds || input.service.estimated_latency_seconds > terms.max_latency_seconds) throw new RouteMandateError('MANDATE_LATENCY_EXCEEDED')
@@ -199,13 +213,16 @@ export async function reserveMandateExposure(source: Source, input: { mandateId:
     .where(and(eq(route_payment_mandates.id, row.id), eq(route_payment_mandates.state, 'active'), gt(route_payment_mandates.expires_at, new Date()),
       sql`${route_payment_mandates.reserved_minor} + ${input.totalMinor} <= ${route_payment_mandates.max_aggregate_minor}`)).returning()
   if (!reserved) throw new RouteMandateError('MANDATE_BUDGET_OR_STATE_CHANGED')
-  await source.insert(route_funding_steps).values({ id: crypto.randomUUID(), mandate_id: row.id, route_id: input.plan.id,
-    order_id: input.orderId, trade_id: input.tradeId, amount_minor: input.totalMinor, terms_hash: hash(terms) })
+  const step = { id: crypto.randomUUID(), mandate_id: row.id, route_id: input.plan.id,
+    order_id: input.orderId, trade_id: input.tradeId, amount_minor: input.totalMinor, terms_hash: hash(terms) }
+  if (input.retry) await source.insert(route_retry_funding_steps).values({ ...step, retry_operation_id: input.retry.operationId,
+    previous_trade_id: input.retry.previousTradeId, attempt_id: input.retry.attemptId })
+  else await source.insert(route_funding_steps).values(step)
 }
 
 export async function mandateFundingEligibility(trade: typeof trades.$inferSelect, source: Source = db,
   actual?: { rail: string; chainId: number; tokenAddress: string; payerAddress: string; treasuryAddress?: string; txHash?: string | null }) {
-  const [step] = await source.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id, trade.id)).limit(1)
+  const step = await findTradeFundingStep(source, trade.id)
   if (!step) {
     const [plan] = await source.select({ mandate: route_payment_mandates.id }).from(route_plans)
       .innerJoin(route_payment_mandates, eq(route_payment_mandates.route_id, route_plans.id))
@@ -234,7 +251,7 @@ export async function mandateFundingEligibility(trade: typeof trades.$inferSelec
 }
 
 export async function recordMandateFunding(source: Source, tradeId: string, state: 'funded' | 'rejected') {
-  await source.update(route_funding_steps).set({ state, updated_at: new Date() }).where(eq(route_funding_steps.trade_id, tradeId))
+  await updateTradeFundingStep(source, tradeId, state)
   // Both transitions follow trusted receipt verification, including late/refunded transfers.
   // Plain cancellation, expiry and HTTP errors never release the wallet claim.
   const [intent] = await source.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, tradeId)).limit(1)

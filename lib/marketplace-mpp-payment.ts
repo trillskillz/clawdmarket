@@ -1,10 +1,11 @@
+import { findTradeFundingStep } from './route-funding-steps'
 import 'server-only'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { eq } from 'drizzle-orm'
 import { Credential, Errors } from 'mppx'
 import { createPublicClient, http, keccak256, toHex } from 'viem'
 import { db } from '@/lib/db'
-import { route_funding_steps, route_plans, service_orders, trades } from '@/lib/schema'
+import { route_plans, service_orders, trades } from '@/lib/schema'
 import { getNewPaymentControl } from '@/lib/payment-control'
 import { serviceFundingEligibility } from '@/lib/service-funding-eligibility'
 import { mandateFundingEligibility } from '@/lib/route-payment-mandate'
@@ -54,7 +55,7 @@ export async function assertMarketplaceMppPullAllowed(tradeId: string, payer?: s
     tokenAddress: ready.currency, payerAddress: payer, treasuryAddress: ready.recipient || '' } : undefined)
     || await serviceFundingEligibility(trade)
   if (reason) throw new TradeFundingError('Current checkout authority does not permit a new broadcast', 409, reason)
-  const [step] = await db.select({ id: route_funding_steps.id }).from(route_funding_steps).where(eq(route_funding_steps.trade_id, tradeId)).limit(1)
+  const step = await findTradeFundingStep(db, tradeId)
   if (step) {
     if (!pull) throw new TradeFundingError('MPP mandate pull funding requires the original claimed credential', 409, 'MPP_MANDATE_PULL_NOT_READY')
     if (markSubmission) {

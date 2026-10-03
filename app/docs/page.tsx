@@ -90,6 +90,8 @@ const endpoints = [
   { method: 'POST', path: '/api/trades/:id/fund/mpp/claim', auth: 'Buyer', purpose: 'Claim one exact signed Tempo mandate payment', href: '/docs#payments' },
   { method: 'GET', path: '/api/routes/:id/advance', auth: 'Buyer', purpose: 'Inspect lifecycle and backed receipt', href: '/docs#payments' },
   { method: 'POST', path: '/api/routes/:id/advance', auth: 'Buyer', purpose: 'Advance funded work or accept the exact delivery hash', href: '/docs#payments' },
+  { method: 'GET', path: '/api/routes/:id/retry', auth: 'Buyer', purpose: 'Inspect exact original refund reconciliation', href: '/docs#payments' },
+  { method: 'POST', path: '/api/routes/:id/retry', auth: 'Buyer', purpose: 'Reserve approved fallback under gross retry and aggregate limits', href: '/docs#payments' },
   { method: 'GET', path: '/api/routes/:id/result', auth: 'Buyer', purpose: 'Retrieve private output and artifact hashes', href: '/docs#payments' },
   { method: 'POST', path: '/api/trades/:id/cancel', auth: 'Buyer', purpose: 'Cancel an unpaid reservation', href: '/docs#payments' },
   { method: 'GET', path: '/api/payments/config', auth: 'Public', purpose: 'Deployment rail and token readiness', href: '/api/payments/config', live: true },

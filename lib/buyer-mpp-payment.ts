@@ -1,9 +1,10 @@
+import { findTradeFundingStep } from './route-funding-steps'
 import 'server-only'
 import { and, eq, isNull } from 'drizzle-orm'
 import { Challenge } from 'mppx'
 import { parseUnits } from 'viem'
 import { db } from './db'
-import { buyer_evm_payment_claims, buyer_mpp_payment_claims, buyer_mpp_payment_intents, route_funding_steps, route_payment_mandates, trades } from './schema'
+import { buyer_evm_payment_claims, buyer_mpp_payment_claims, buyer_mpp_payment_intents, route_payment_mandates, trades } from './schema'
 import { inspectSignedTempoPayment } from './buyer-tempo-transaction.mjs'
 import { mandateDto, mandateFundingEligibility } from './route-payment-mandate'
 import { serviceFundingEligibility } from './service-funding-eligibility'
@@ -49,7 +50,7 @@ async function ownedTrade(source: Source, tradeId: string, buyerId: string) {
   return trade
 }
 async function scope(source: Source, trade: Trade) {
-  const [step] = await source.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id, trade.id)).limit(1)
+  const step = await findTradeFundingStep(source, trade.id)
   const [row] = step ? await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id, step.mandate_id)).limit(1) : []
   if (!step || !row || row.buyer_id !== trade.buyer_id) fail('BUYER_PAYMENT_SCOPE_MISMATCH')
   const mandate = mandateDto(row), payment = mandate.terms.payment

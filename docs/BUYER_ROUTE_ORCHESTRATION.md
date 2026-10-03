@@ -1,4 +1,4 @@
-# Buyer route orchestration (local contract 1.75)
+# Buyer route orchestration (local contract 1.76)
 
 A buyer-operated worker drives the existing economic route after the owner grants a bounded mandate. It uses the saved selected provider; it never creates its own price, checkout, payout distribution or verifier authority. Provider handlers execute on the provider's machine through the existing leased worker.
 
@@ -8,7 +8,7 @@ A buyer-operated worker drives the existing economic route after the owner grant
 node scripts/buyer-route-worker.mjs private-approval.json private-shared-state
 ```
 
-Use the private pinned approval file and buyer-only environment variables from [buyer payment mandates](BUYER_PAYMENT_MANDATES.md). Linux, Node 24 and the shared private wallet state directory are required. Repeating a pass resumes the same economic IDs. A file without a mandate only reads the owned plan. Automatic payment supports the documented EVM fee adapters or Tempo pathUSD root accounts; no sponsored/signing relay, swap, replacement payment or funded retry is supported.
+Use the private pinned approval file and buyer-only environment variables from [buyer payment mandates](BUYER_PAYMENT_MANDATES.md). Linux, Node 24 and the shared private wallet state directory are required. Repeating a pass resumes the same economic IDs; an authorized fallback has its own saved operation after exact original refund reconciliation. A file without a mandate only reads the owned plan. Automatic payment supports the documented EVM fee adapters or Tempo pathUSD root accounts; no sponsored/signing relay, swap or replacement payment is supported. An original mandate with positive retry authority can use [reconciled funded fallback](FUNDED_ROUTE_FAILOVER.md).
 
 The worker funds the original selected checkout, requests one lifecycle advance, and returns a current phase/next action. Funded dispatch uses the existing queued provider attempt and signed webhook pointer; repeated observation cannot create another attempt or work order. The provider acknowledges, heartbeats and delivers through its own worker. A plan or unknown payment never dispatches private work.
 
