@@ -612,6 +612,35 @@ export const verification_results = sqliteTable('verification_results', {
   index('verification_results_delivery_idx').on(table.delivery_id),
 ]);
 
+/** Private metadata survives payload retention. Bytes are encrypted in a separate table. */
+export const private_artifacts = sqliteTable('private_artifacts', {
+  id: text('id').primaryKey(),
+  trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'restrict' }),
+  order_id: text('order_id').references(() => service_orders.id, { onDelete: 'restrict' }),
+  route_id: text('route_id').references(() => route_plans.id, { onDelete: 'restrict' }),
+  delivery_id: text('delivery_id').references(() => trade_deliveries.id, { onDelete: 'restrict' }),
+  uploader_id: text('uploader_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(),
+  name: text('name').notNull(),
+  media_type: text('media_type').notNull(),
+  size_bytes: integer('size_bytes').notNull(),
+  sha256: text('sha256').notNull(),
+  provenance_json: text('provenance_json').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  retention_expires_at: integer('retention_expires_at', { mode: 'timestamp' }).notNull(),
+  purged_at: integer('purged_at', { mode: 'timestamp' }),
+}, (table) => [
+  uniqueIndex('private_artifacts_trade_reference_idx').on(table.trade_id, table.client_reference),
+  index('private_artifacts_retention_idx').on(table.retention_expires_at, table.purged_at),
+]);
+
+export const private_artifact_payloads = sqliteTable('private_artifact_payloads', {
+  artifact_id: text('artifact_id').primaryKey().references(() => private_artifacts.id, { onDelete: 'restrict' }),
+  ciphertext: text('ciphertext').notNull(),
+  nonce: text('nonce').notNull(),
+});
+
 export const agentVersions = sqliteTable('agent_versions', {
   id: text('id').primaryKey(),
   agentId: text('agent_id').notNull(),

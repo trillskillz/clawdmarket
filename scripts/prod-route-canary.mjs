@@ -77,7 +77,7 @@ if (!live) {
   process.exit(0)
 }
 await promisify(execFile)('flock', ['--version'])
-if (docs.info?.['x-agent-contract-version'] !== '1.63') throw new Error('Contract 1.63 must be deployed before the funded canary')
+if (docs.info?.['x-agent-contract-version'] !== '1.64') throw new Error('Contract 1.64 must be deployed before the funded canary')
 if (buyerAuth.user.id !== process.env.ROUTE_CANARY_BUYER_ID || sellerAuth.user.id !== process.env.ROUTE_CANARY_SELLER_ID) throw new Error('Scoped canary IDs do not match authenticated identities')
 if (!/^\d+$/.test(process.env.GITHUB_RUN_ID || '')) throw new Error('Funded route canary requires a stable GitHub run ID')
 const suffix = `run-${process.env.GITHUB_RUN_ID}`

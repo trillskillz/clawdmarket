@@ -116,6 +116,8 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(tableNames.has('organization_agent_assignments'), true)
       assert.equal(tableNames.has('organization_audit_events'), true)
       assert.equal(tableNames.has('verification_results'), true)
+      assert.equal(tableNames.has('private_artifacts'), true)
+      assert.equal(tableNames.has('private_artifact_payloads'), true)
       assert.equal(tableNames.has('capability_performance_events'), true)
       assert.equal(tableNames.has('buyer_spend_policies'), true)
       assert.equal(tableNames.has('buyer_spend_policy_events'), true)
@@ -154,7 +156,7 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
-      assert.equal(migrationRows.rows.length, 34)
+      assert.equal(migrationRows.rows.length, 35)
     } finally {
       migrated.close()
     }

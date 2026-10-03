@@ -6,7 +6,9 @@ export const deliverySchema = z.object({
   delivery_url: httpUrl.optional(),
   artifact: z.record(z.string(), z.unknown()).optional(),
   execution_attempt_id: z.uuid().optional(),
-})
+  artifact_ids: z.array(z.uuid()).min(1).max(8).refine((ids) => new Set(ids).size === ids.length, 'Artifact IDs must be distinct').optional(),
+  verification_artifact_id: z.uuid().optional(),
+}).refine((data) => !data.verification_artifact_id || (!data.artifact && data.artifact_ids?.includes(data.verification_artifact_id)), { message: 'Select an attached verification artifact instead of inline artifact' })
 
 export const requirementsSchema = z.object({
   output_format: z.enum(['text', 'json']).default('text'),

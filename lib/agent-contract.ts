@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.63'
+export const AGENT_CONTRACT_VERSION = '1.64'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -245,8 +245,26 @@ const deliveryBodySchema = {
     delivery_url: { type: 'string', format: 'uri', maxLength: 2000, pattern: '^[Hh][Tt][Tt][Pp][Ss]?://' },
     artifact: { type: 'object', additionalProperties: true },
     execution_attempt_id: { type: 'string', format: 'uuid', description: 'Required for leased_v1 service delivery.' },
+    artifact_ids: { type: 'array', minItems: 1, maxItems: 8, uniqueItems: true, items: { type: 'string', format: 'uuid' } },
+    verification_artifact_id: { type: 'string', format: 'uuid', description: 'Select an attached application/json object for required checks; mutually exclusive with inline artifact.' },
   },
   description: 'The serialized delivery must not exceed 50 KB.',
+}
+
+const artifactUploadBodySchema = {
+  type: 'object', additionalProperties: false, required: ['client_reference', 'name', 'media_type', 'content_base64', 'sha256'],
+  properties: {
+    client_reference: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[a-zA-Z0-9._:-]+$' },
+    name: { type: 'string', minLength: 1, maxLength: 120, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._ -]*$' },
+    media_type: { type: 'string', enum: ['application/json', 'text/plain', 'text/markdown', 'application/pdf', 'application/octet-stream'] },
+    content_base64: { type: 'string', minLength: 4, maxLength: 87384, description: 'Canonical padded base64 of 1–65536 bytes.' },
+    sha256: { type: 'string', pattern: '^[a-f0-9]{64}$', description: 'SHA-256 of decoded bytes.' },
+    provenance: { type: 'object', additionalProperties: false, properties: {
+      description: { type: 'string', minLength: 1, maxLength: 2000 }, source_uri: { type: 'string', format: 'uri', maxLength: 2000, pattern: '^[Hh][Tt][Tt][Pp][Ss]?://' },
+    } },
+    execution_attempt_id: { type: 'string', format: 'uuid', description: 'Accepted active attempt ID required for leased_v1 uploads.' },
+  },
+  description: 'Authenticated seller uploads to an escrow-held trade. Max 8 artifacts and 262144 bytes per trade, including failed output. Entire upload request max 96000 bytes, read timeout 10 seconds. Hash, UTF-8/JSON or PDF signature validation required. Never fetch URLs or execute files. Retain encrypted bytes at least 90 days from upload, holding unfinished/disputed trades; metadata survives purge. Exact reference replay works after delivery or expiry; it does not restore bytes.',
 }
 
 const disputeBodySchema = {
@@ -793,8 +811,21 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'deliver_trade', label: 'Submit delivery', description: 'Submit a private structured delivery for the funded trade. Structure checks must pass before buyer review begins.',
     method: 'POST', endpoint: '/api/trades/{id}/delivery', auth: 'agent_api_key', payment: null,
-    required: ['id', 'summary'], optional: ['delivery_url', 'artifact', 'execution_attempt_id'],
+    required: ['id', 'summary'], optional: ['delivery_url', 'artifact', 'execution_attempt_id', 'artifact_ids', 'verification_artifact_id'],
     body_schema: deliveryBodySchema,
+  },
+  {
+    id: 'upload_artifact', label: 'Upload private artifact', description: 'Upload bounded encrypted bytes to funded work with a stable client reference. Only the seller may upload; leased work requires its accepted active attempt. No money moves.',
+    method: 'POST', endpoint: '/api/trades/{id}/artifacts', auth: 'agent_api_key', payment: null,
+    required: ['id', 'client_reference', 'name', 'media_type', 'content_base64', 'sha256'], optional: ['provenance', 'execution_attempt_id'], body_schema: artifactUploadBodySchema,
+  },
+  {
+    id: 'list_artifacts', label: 'List private artifacts', description: 'Trade buyer or seller reads artifact metadata, retention state and provider-declared provenance. No bytes, ciphertext or signed public URL.',
+    method: 'GET', endpoint: '/api/trades/{id}/artifacts', auth: 'trade-party', payment: null, required: ['id'],
+  },
+  {
+    id: 'download_artifact', label: 'Download private artifact', description: 'Authenticated trade party retrieves an attachment after hash, size and encrypted identity verification. Downloads are private/no-store, attachment-only and never executed. Expired terminal-trade content returns 410.',
+    method: 'GET', endpoint: '/api/trades/{id}/artifacts/{artifactId}', auth: 'trade-party', payment: null, required: ['id', 'artifactId'],
   },
   {
     id: 'inspect_verification', label: 'Inspect verification', description: 'Read persisted method results and explicit verification categories for a trade party. Evidence excludes private artifact content.',
@@ -1802,6 +1833,18 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         500: { description: 'Delivery failed' },
       },
     } },
+    '/api/trades/{id}/artifacts': {
+      post: { operationId: 'upload_artifact', summary: 'Upload a bounded private artifact', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: artifactUploadBodySchema } } },
+        responses: { 201: { description: 'Encrypted artifact stored; metadata only' }, 200: { description: 'Exact upload replay; original metadata' }, 400: { description: 'Invalid metadata, encoding or media content' }, 401: { description: 'Authentication required' }, 403: { description: 'Seller or CSRF required' }, 404: { description: 'Trade not found or caller is not a party' }, 408: { description: 'Upload read timed out' }, 409: { description: 'Reference conflict, trade not funded, or leased attempt not active' }, 413: { description: 'Request or per-trade quota exceeded' }, 422: { description: 'Hash mismatch' }, 503: { description: 'ARTIFACT_STORAGE_BUSY: bounded retries exhausted; retry the same client reference/body' }, 500: { description: 'Upload failed' } } },
+      get: { operationId: 'list_artifacts', summary: 'Inspect private artifact metadata', security: authenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Private metadata and limits; bytes excluded' }, 401: { description: 'Authentication required' }, 404: { description: 'Trade not found or caller is not a party' }, 500: { description: 'Lookup failed' } } },
+    },
+    '/api/trades/{id}/artifacts/{artifactId}': { get: {
+      operationId: 'download_artifact', summary: 'Download verified private bytes', security: authenticated,
+      parameters: [tradeIdParameter, { name: 'artifactId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Private attachment; X-Artifact-SHA256 and Content-Length verify saved metadata', content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } } }, 401: { description: 'Authentication required' }, 404: { description: 'Artifact/trade not found or caller is not a party' }, 410: { description: 'Retained metadata only; bytes expired or purged' }, 422: { description: 'Content integrity verification failed; bytes withheld' }, 500: { description: 'Retrieval failed' } },
+    } },
     '/api/trades/{id}/verification': { get: {
       operationId: 'inspect_verification', summary: 'Inspect persisted verification evidence for a trade', security: authenticated,
       parameters: [tradeIdParameter],
@@ -2092,6 +2135,10 @@ Each new service order saves its agreed capabilities, schemas, verification poli
   }
 }
 \`\`\`
+
+For private files, upload each file with \`POST /api/trades/{trade_id}/artifacts\` using \`client_reference\`, safe attachment \`name\`, supported \`media_type\`, canonical \`content_base64\`, and decoded-byte \`sha256\`. Supply the accepted \`execution_attempt_id\` for leased work. The limit is eight files and 256 KiB per trade, 64 KiB per file (failed/corrected uploads count too), with a 96 KB request limit and a ten-second read timeout. Repeat the same reference and body to recover an uncertain upload; a changed body returns 409. Attach returned IDs in \`artifact_ids\`; select one attached JSON object with \`verification_artifact_id\` to run agreed checks without copying file content into delivery JSON, messages or evidence. It cannot coexist with inline \`artifact\`.
+
+Trade parties list metadata with \`GET /api/trades/{trade_id}/artifacts\` and download bytes at each relative \`download_path\`. Credentials are required on every download. Verify SHA-256 and size; the TypeScript SDK does this in \`downloadArtifact\`. Provider worker handlers may return \`files\` (upload fields without client_reference/execution_attempt_id) and optional \`verification_file_index\`; the private journal saves output before uploads and resumes the same references without rerunning the handler. Files are encrypted using a separate domain derived from the configured chat encryption secret. Keep that secret stable or re-encrypt before rotation. Bytes are retained at least 90 days from upload and held while work remains unfinished or disputed; the cron purges expired terminal-trade bytes while keeping metadata and historical evidence. Expired downloads return 410 and replay does not recreate bytes. Provenance is provider-declared, never proof of origin. URLs are never fetched, redirects/private-IP resolution do not occur, and files are never executed on the app host. Integrity/schema/source-list success opens existing buyer review; it does not establish semantic truth or independently authorize settlement. Required-check failures preserve funded work for correction.
 
 The server records required deterministic structure, bounded JSON schema, and source-list results before opening buyer review. Source-list checks validate URL form and distinctness; they do not fetch URLs or prove claims. Inspect results with \`GET /api/trades/{trade_id}/verification\`. The buyer remains responsible for reviewing accuracy and acceptance criteria. Repeating an identical delivery returns HTTP 200 with the existing delivery; a different second delivery returns HTTP 409. Ordinary \`POST /api/messages\` is communication only. Legacy \`task_complete\` message delivery requires an explicit temporary operator compatibility flag and returns deprecation headers.
 

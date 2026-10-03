@@ -75,3 +75,30 @@ test('client requires a secure origin and a nonempty key', () => {
   const client = new ClawdMarketClient({ apiKey: 'x', fetch: async () => { throw new Error('should not fetch') } })
   assert.throws(() => client.getRoute('../other'), /route UUID/)
 })
+
+test('private artifact SDK authenticates relative downloads and independently verifies hash and bounded size', async () => {
+  const { createHash } = await import('node:crypto')
+  const content = 'Private SDK artifact bytes'
+  const artifact = { id: routeId, trade_id: routeId, order_id: null, route_id: null, delivery_id: null,
+    uploader_id: 'seller', name: 'result.txt', media_type: 'text/plain', size_bytes: Buffer.byteLength(content), sha256: createHash('sha256').update(content).digest('hex'),
+    provenance: { kind: 'provider_declared' as const, recorded_by: 'seller', verified: false as const }, created_at: '', retention_expires_at: '', retention_hold: true, purged_at: null,
+    download_path: 'https://attacker.invalid/do-not-follow' }
+  const seen: string[] = []
+  let corrupt = false
+  const client = new ClawdMarketClient({ apiKey: 'private-key', baseUrl: 'http://localhost:3000', fetch: async (input, init) => {
+    const url = new URL(String(input))
+    seen.push(`${init?.method} ${url.pathname}`)
+    assert.equal(url.origin, 'http://localhost:3000')
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer private-key')
+    assert.equal(init?.redirect, 'error')
+    if (url.pathname.endsWith(`/${routeId}`)) return new Response(corrupt ? 'x'.repeat(content.length) : content, { headers: { 'Content-Length': String(artifact.size_bytes), 'X-Artifact-SHA256': artifact.sha256 } })
+    if (init?.method === 'POST') return Response.json({ artifact, idempotent: false }, { status: 201 })
+    return Response.json({ artifacts: [artifact], limits: {} })
+  } })
+  await client.uploadArtifact(routeId, { client_reference: 'sdk-artifact', name: artifact.name, media_type: 'text/plain', content_base64: Buffer.from(content).toString('base64'), sha256: artifact.sha256 })
+  assert.equal((await client.listArtifacts(routeId)).artifacts.length, 1)
+  assert.equal(Buffer.from(await client.downloadArtifact(artifact)).toString(), content)
+  corrupt = true
+  await assert.rejects(client.downloadArtifact(artifact), /integrity check failed/)
+  assert.equal(seen.every((value) => value.includes('/artifacts')), true)
+})

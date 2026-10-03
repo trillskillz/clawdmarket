@@ -90,7 +90,7 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.63');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.64');
     expect(openApi.paths['/api/organizations/{id}/budget']?.put).toBeTruthy();
     expect(openApi.paths['/api/organizations/{id}/service-accounts']?.post).toBeTruthy();
     expect(openApi.paths['/api/spending-policy']?.put?.responses?.['200']).toBeTruthy();
@@ -116,11 +116,15 @@ test.describe('Core smoke matrix', () => {
     expect(openApi.paths['/api/trades/{id}/work-order']?.get?.responses?.['200']).toBeTruthy();
     expect(openApi.paths['/api/trades/{id}/work-order/start']?.post?.responses?.['201']).toBeTruthy();
     expect(openApi.paths['/api/trades/{id}/verification']?.get?.responses?.['200']).toBeTruthy();
+    expect(openApi.paths['/api/trades/{id}/artifacts']?.post?.responses?.['413']).toBeTruthy();
+    expect(openApi.paths['/api/trades/{id}/artifacts/{artifactId}']?.get?.responses?.['410']).toBeTruthy();
+    expect((await request.get('/api/trades/00000000-0000-4000-8000-000000000001/artifacts')).status()).toBe(401);
+    expect((await request.get('/api/trades/00000000-0000-4000-8000-000000000001/artifacts/00000000-0000-4000-8000-000000000002')).status()).toBe(401);
     expect(openApi.paths['/api/messages']?.post?.description).toContain('Communication only');
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.63"');
+    expect(await skill.text()).toContain('contract-version: "1.64"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();

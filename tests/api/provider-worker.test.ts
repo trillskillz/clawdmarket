@@ -30,6 +30,7 @@ before(async () => {
   const { GET: getWork } = await import('@/app/api/trades/[id]/work-order/route')
   const { POST: action } = await import('@/app/api/trades/[id]/work-order/attempt/route')
   const { POST: deliver } = await import('@/app/api/trades/[id]/delivery/route')
+  const { POST: uploadArtifact } = await import('@/app/api/trades/[id]/artifacts/route')
   server.on('request', async (incoming, outgoing) => {
     try {
       const chunks = []
@@ -38,7 +39,7 @@ before(async () => {
       const request = new NextRequest(`${baseUrl}${incoming.url}`, { method: incoming.method,
         headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
       const id = incoming.url!.split('/')[3]
-      const handler = incoming.url!.endsWith('/delivery') ? deliver : incoming.url!.endsWith('/attempt') ? action : getWork
+      const handler = incoming.url!.endsWith('/artifacts') ? uploadArtifact : incoming.url!.endsWith('/delivery') ? deliver : incoming.url!.endsWith('/attempt') ? action : getWork
       const response = await handler(request, { params: Promise.resolve({ id }) })
       outgoing.writeHead(response.status, Object.fromEntries(response.headers))
       outgoing.end(await response.text())
@@ -249,4 +250,40 @@ test('SIGKILL releases the process lock and an idempotent handler resumes the sa
   assert.equal(resumed.attempt_id, f.attempt.id)
   const [delivery] = await db.select().from(schema.trade_deliveries).where(eq(schema.trade_deliveries.trade_id, f.trade.id))
   assert.equal(JSON.parse(delivery.artifact_json!).key, f.attempt.id)
+})
+
+test('private files survive prepared restart and an uncertain upload without duplicate computation or attachments', async () => {
+  const { createHash } = await import('node:crypto')
+  const f = await fixture()
+  let computed = 0
+  const text = 'Confidential provider result in a separate encrypted attachment.'
+  const file = (content: string, name: string, media_type: string) => ({ name, media_type,
+    content_base64: Buffer.from(content).toString('base64'), sha256: createHash('sha256').update(content).digest('hex') })
+  const handler = async () => { computed++; return { summary: 'A private result prepared once for buyer verification.',
+    files: [file(JSON.stringify({ result: text }), 'result.json', 'application/json'), file(text, 'notes.txt', 'text/plain')], verification_file_index: 0 } }
+  assert.equal((await runProviderWork({ ...f, handler, prepareOnly: true })).state, 'prepared')
+  assert.equal((await db.select().from(schema.private_artifacts).where(eq(schema.private_artifacts.trade_id, f.trade.id))).length, 0)
+  let uncertain = true
+  const fetcher: typeof fetch = async (input, init) => {
+    const response = await fetch(input, init)
+    if (String(input).endsWith('/artifacts') && uncertain) { uncertain = false; throw new Error('lost upload response') }
+    return response
+  }
+  await assert.rejects(runProviderWork({ ...f, handler, fetcher }), /PROVIDER_REQUEST_UNCERTAIN_RESUME_SAME_TRADE/)
+  assert.equal((await db.select().from(schema.private_artifacts).where(eq(schema.private_artifacts.trade_id, f.trade.id))).length, 1)
+  assert.equal((await runProviderWork({ ...f, handler })).state, 'delivered')
+  assert.equal((await runProviderWork({ ...f, handler })).idempotent, true)
+  assert.equal(computed, 1)
+  const rows = await db.select().from(schema.private_artifacts).where(eq(schema.private_artifacts.trade_id, f.trade.id))
+  assert.equal(rows.length, 2)
+  assert.ok(rows.every((row) => row.delivery_id))
+  const [delivery] = await db.select().from(schema.trade_deliveries).where(eq(schema.trade_deliveries.trade_id, f.trade.id))
+  assert.equal(delivery.artifact_json, null)
+  const { downloadPrivateArtifact } = await import('@/lib/private-artifacts')
+  assert.equal((await downloadPrivateArtifact(f.trade.id, rows.find((row) => row.name === 'notes.txt')!.id, f.buyerId)).bytes.toString(), text)
+  const journal = JSON.parse(await readFile(f.stateFile, 'utf8'))
+  assert.equal(journal.artifact_uploads.length, 2)
+  assert.equal(journal.phase, 'delivered')
+  assert.equal((await stat(f.stateFile)).mode & 0o777, 0o600)
+  assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.id, f.trade.id)))[0].status, 'pending_release')
 })

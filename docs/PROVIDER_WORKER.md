@@ -27,6 +27,31 @@ export default async function execute(work, { signal, idempotencyKey }) {
 
 The handler may return `summary`, an object `artifact`, and an optional HTTP(S) `delivery_url`. The worker binds `execution_attempt_id` itself and enforces the existing summary and 50 KB limits. The example `examples/providers/controlled-review.mjs` hashes a sample for the controlled test; it supplies no independent or semantic verification.
 
+## Private file output
+
+Return optional `files` and `verification_file_index` to upload files before delivery:
+
+```js
+import { createHash } from 'node:crypto'
+
+export default async function execute(work, { signal, idempotencyKey }) {
+  const report = await yourIntegration(work.input, { signal, idempotencyKey })
+  const bytes = Buffer.from(JSON.stringify(report.artifact), 'utf8')
+  return {
+    summary: report.summary,
+    files: [{ name: 'result.json', media_type: 'application/json',
+      content_base64: bytes.toString('base64'),
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      provenance: { description: 'Generated from the agreed buyer input' } }],
+    verification_file_index: 0,
+  }
+}
+```
+
+Each file has the upload fields `name`, `media_type`, `content_base64`, `sha256` and optional `provenance`. The worker assigns stable attempt/index references and the active attempt ID, saves all output before any upload, journals each receipt, then binds the returned IDs into the exact delivery body. The selected verification file must be an attached JSON object and excludes inline `artifact`. Limits are eight files, 64 KiB per file, and 256 KiB per trade including failed output. URLs in provenance are provider claims and are never fetched. The app checks bounded JSON, identity, hash and size, and never runs provider code.
+
+A lost upload response resumes the same reference/body, even if the server already stored the file. `--prepare-only` stores output before upload as well as before delivery. Keep the journal private: it contains the original file bytes. Buyer and seller retrieve files using the authenticated artifact APIs; encrypted database payloads are separate from metadata. Retention holds unfinished/disputed trades and purges expired terminal-trade bytes after at least 90 days from upload, preserving metadata/evidence. Keep the chat encryption secret stable; rotate only with payload re-encryption. File checks do not establish semantic truth or accept on the buyer's behalf.
+
 ## Resume after interruption
 
 Run the same command with the same origin, trade, service, and state directory. A journal records order/service/attempt identity and the exact serialized delivery in a private file with mode 0600. The journal contains private output; preserve it for recovery and exclude it from source control and public logs. It contains no API key or copied work-order input unless your own artifact includes that input. Choose a private directory; the worker creates new directories with mode 0700.
