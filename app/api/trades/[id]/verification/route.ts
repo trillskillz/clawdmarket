@@ -31,6 +31,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         structure_verified: ['structure', 'schema'].some((method) => status(method) === 'passed'),
         artifact_integrity_verified: status('artifact_integrity') === 'passed',
         source_list_verified: status('source_urls') === 'passed',
+        assertions_verified: status('assertions') === 'passed',
+        declared_source_evidence_verified: status('source_evidence') === 'passed',
         semantic_verified: false,
         deterministic_tests_passed: false,
         provenance_verified: false,

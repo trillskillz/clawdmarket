@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.64'
+export const AGENT_CONTRACT_VERSION = '1.65'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -92,12 +92,34 @@ const createServiceBodySchema = {
   },
 }
 
+const assertionPrimitiveSchema = { oneOf: [{ type: 'string', maxLength: 500 }, { type: 'number' }, { type: 'boolean' }, { type: 'null' }] }
+function assertionBodySchema(op: string, properties: Record<string, unknown>, required: string[]) {
+  return { type: 'object', additionalProperties: false, required: ['id', 'field', 'op', ...required],
+    properties: { id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$' }, field: { type: 'string', minLength: 1, maxLength: 100 }, op: { const: op }, ...properties },
+    ...(['number_range', 'length_range'].includes(op) ? { anyOf: [{ required: ['min'] }, { required: ['max'] }], description: 'At least one bound; min <= max. Length uses array count or UTF-16 string length.' } : {}),
+  }
+}
+
 const verificationPolicyBodySchema = {
   type: 'object', additionalProperties: false,
   properties: {
     required: { const: true, default: true },
-    methods: { type: 'array', minItems: 1, maxItems: 3, uniqueItems: true, items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls'] }, default: ['buyer_review'], description: 'buyer_review is mandatory; schema requires a bounded output_schema; source_urls requires minimum_sources.' },
+    methods: { type: 'array', minItems: 1, maxItems: 5, uniqueItems: true, items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence'] }, default: ['buyer_review'], description: 'buyer_review is mandatory. schema requires bounded output_schema. source_urls requires minimum_sources and string URLs; source_evidence requires structured sources and its config. The two source methods are exclusive. assertions requires its config. Policy limit is 8192 UTF-8 bytes. No URL fetching, executable rules, or semantic truth checks.' },
     minimum_sources: { type: 'integer', minimum: 1, maximum: 20 },
+    assertions: { type: 'object', additionalProperties: false, required: ['version', 'rules'], properties: {
+      version: { const: 1 }, rules: { type: 'array', minItems: 1, maxItems: 20, description: 'Unique rule IDs, literal top-level fields. Offered rules must exactly include requested rules. No regex, paths or execution.', items: {
+        oneOf: [
+          assertionBodySchema('equals', { value: assertionPrimitiveSchema }, ['value']),
+          assertionBodySchema('one_of', { values: { type: 'array', minItems: 1, maxItems: 20, uniqueItems: true, items: assertionPrimitiveSchema } }, ['values']),
+          assertionBodySchema('number_range', { min: { type: 'number' }, max: { type: 'number' } }, []),
+          assertionBodySchema('length_range', { min: { type: 'integer', minimum: 0, maximum: 10000 }, max: { type: 'integer', minimum: 0, maximum: 10000 } }, []),
+        ],
+      } },
+    } },
+    source_evidence: { type: 'object', additionalProperties: false, required: ['version', 'minimum_sources', 'max_age_days'], properties: {
+      version: { const: 1 }, minimum_sources: { type: 'integer', minimum: 1, maximum: 20 }, max_age_days: { type: 'integer', minimum: 1, maximum: 3650 },
+      require_claim_links: { type: 'boolean', default: true },
+    }, description: 'sources: up to 20 unique {id,url,published_at}; published_at is real UTC ISO with milliseconds, not future and within max_age_days at commit. claims: up to 40 {id,statement,source_ids}, IDs unique, known distinct links. Statements <=2000 chars. Source dates and claims are provider-declared, never fetched or verified as truth.' },
   },
 }
 
@@ -472,7 +494,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
         provider_requirements: providerRequirementsBodySchema,
         approved_providers: { type: 'array', items: { type: 'string' } }, blocked_providers: { type: 'array', items: { type: 'string' } },
         approved_payment_rails: { type: 'array', items: { type: 'string', enum: ['ledger', 'mpp', 'evm'] } },
-        required_verification_methods: { type: 'array', items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls'] } },
+        required_verification_methods: { type: 'array', items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence'] } },
       } },
     } },
   },

@@ -69,6 +69,86 @@ async function fixture(leased = false, verified = false) {
 async function put(id: string, input: unknown) { return upload(request(`/api/trades/${id}/artifacts`, 'artifact-seller', input), params(id)) }
 async function get(id: string, artifactId: string, user = 'artifact-buyer') { return download(request(`/api/trades/${id}/artifacts/${artifactId}`, user), { params: Promise.resolve({ id, artifactId }) }) }
 
+const structuredPolicy = { required: true, methods: ['buyer_review', 'assertions', 'source_evidence'],
+  assertions: { version: 1, rules: [{ id: 'complete', field: 'status', op: 'equals', value: 'complete' }] },
+  source_evidence: { version: 1, minimum_sources: 1, max_age_days: 7, require_claim_links: true } }
+async function agreedStructuredFixture(leased = false) {
+  const f = await fixture(leased)
+  const [service] = await db.update(schema.service_definitions).set({ verification_policy: JSON.stringify(structuredPolicy) }).where(eq(schema.service_definitions.id, f.service.id)).returning()
+  const { captureServiceExecutionContract } = await import('@/lib/service-execution-contract')
+  await db.update(schema.service_orders).set({ execution_contract_json: captureServiceExecutionContract(service, []) }).where(eq(schema.service_orders.id, f.order.id))
+  return f
+}
+function declaredReport(publishedAt: string, status = 'complete') {
+  return { status, sources: [{ id: 'source', url: 'http://127.0.0.1:9/never-fetch-private', published_at: publishedAt }],
+    claims: [{ id: 'claim', statement: 'Confidential source-linked claim.', source_ids: ['source'] }] }
+}
+
+test('agreed assertions and source evidence fail, correct privately and settle once despite edited service terms', async () => {
+  const f = await agreedStructuredFixture(true)
+  await db.update(schema.service_definitions).set({ verification_policy: '{"required":true,"methods":["buyer_review"]}' }).where(eq(schema.service_definitions.id, f.service.id))
+  const send = async (report: unknown) => {
+    const response = await put(f.trade.id, body(JSON.stringify(report), { name: 'declared.json', media_type: 'application/json', execution_attempt_id: f.attemptId }))
+    assert.equal(response.status, 201, await response.clone().text())
+    const id = (await response.json()).artifact.id
+    return { summary: 'Private report with agreed assertions and source evidence.', execution_attempt_id: f.attemptId, artifact_ids: [id], verification_artifact_id: id }
+  }
+  const bad = await send(declaredReport(new Date().toISOString(), 'incomplete'))
+  assert.equal((await deliver(request('/api/unused', 'artifact-seller', bad), params(f.trade.id))).status, 422)
+  assert.equal((await db.select().from(schema.service_execution_attempts).where(eq(schema.service_execution_attempts.id, f.attemptId!)))[0].state, 'accepted')
+  assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.id, f.trade.id)))[0].status, 'escrow_held')
+  const good = await send(declaredReport(new Date().toISOString()))
+  const accepted = await deliver(request('/api/unused', 'artifact-seller', good), params(f.trade.id))
+  assert.equal(accepted.status, 201, await accepted.clone().text())
+  const receipt = await accepted.json()
+  assert.equal(receipt.delivery.artifact_json, null)
+  const evidence = await inspect(request('/api/unused', 'artifact-buyer'), params(f.trade.id)).then((response) => response.json())
+  assert.equal(evidence.categories.assertions_verified, true)
+  assert.equal(evidence.categories.declared_source_evidence_verified, true)
+  assert.equal(evidence.categories.semantic_verified, false)
+  assert.equal(evidence.categories.provenance_verified, false)
+  assert.equal(evidence.categories.buyer_accepted, false)
+  assert.equal(evidence.results.some((row: { method: string }) => row.method === 'assertions_failure'), true)
+  for (const privateValue of ['never-fetch-private', 'Confidential source-linked', 'incomplete']) assert.equal(JSON.stringify(evidence).includes(privateValue), false)
+  await db.insert(schema.wallets).values({ user_id: f.trade.buyer_id, balance: 0, escrow: 1 }).onConflictDoUpdate({ target: schema.wallets.user_id, set: { balance: 0, escrow: 1 } })
+  assert.equal((await confirm(request('/api/unused', 'artifact-buyer', {}), params(f.trade.id))).status, 200)
+  assert.equal((await deliver(request('/api/unused', 'artifact-seller', good), params(f.trade.id))).status, 200)
+  assert.equal((await db.select().from(schema.transactions).where(and(eq(schema.transactions.reference_id, f.trade.id), eq(schema.transactions.type, 'escrow_release')))).length, 1)
+})
+
+test('date checks rerun at commit and exact future-date recovery keeps failed and current evidence', async (context) => {
+  const now = Date.now()
+  const f = await agreedStructuredFixture()
+  context.mock.timers.enable({ apis: ['Date'], now })
+  const uploadReport = async (date: number) => {
+    const id = (await (await put(f.trade.id, body(JSON.stringify(declaredReport(new Date(date).toISOString())), { name: 'dated.json', media_type: 'application/json' }))).json()).artifact.id
+    return { summary: 'A private report with date-sensitive agreed verification.', artifact_ids: [id], verification_artifact_id: id }
+  }
+  const boundary = await uploadReport(now - 7 * 86400_000)
+  const original = db.transaction
+  db.transaction = ((...args: Parameters<typeof db.transaction>) => {
+    context.mock.timers.setTime(now + 1000)
+    return original.apply(db, args)
+  }) as typeof db.transaction
+  try {
+    assert.equal((await deliver(request('/api/unused', 'artifact-seller', boundary), params(f.trade.id))).status, 422)
+  } finally { db.transaction = original }
+  assert.equal((await db.select().from(schema.trade_deliveries).where(eq(schema.trade_deliveries.trade_id, f.trade.id))).length, 0)
+  assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.id, f.trade.id)))[0].status, 'escrow_held')
+  const future = await uploadReport(now + 2000)
+  assert.equal((await deliver(request('/api/unused', 'artifact-seller', future), params(f.trade.id))).status, 422)
+  context.mock.timers.setTime(now + 2000)
+  const result = await deliver(request('/api/unused', 'artifact-seller', future), params(f.trade.id))
+  assert.equal(result.status, 201, await result.clone().text())
+  const evidence = await inspect(request('/api/unused', 'artifact-buyer'), params(f.trade.id)).then((response) => response.json())
+  const hash = (await result.json()).delivery.content_hash
+  assert.equal(evidence.categories.declared_source_evidence_verified, true)
+  assert.equal(evidence.categories.artifact_integrity_verified, true)
+  assert.equal(evidence.results.some((row: { method: string; content_hash: string }) => row.method === 'source_evidence_failure' && row.content_hash === hash), true)
+  assert.equal(evidence.results.some((row: { method: string; content_hash: string; delivery_id: string | null }) => row.method === 'source_evidence' && row.content_hash === hash && row.delivery_id !== null), true)
+  context.mock.timers.reset()
+})
+
 test('encrypted private uploads, ownership, media/hash limits and exact recovery', async () => {
   const { trade, order, route } = await fixture()
   const secret = 'Private report payload must never appear in evidence or public metadata.'

@@ -2,6 +2,20 @@ export type ProviderRequirements = { approved_providers?: string[]; minimum_acce
 
 export type Money = { amount: string; currency: 'USD' }
 
+export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'assertions' | 'source_evidence'
+export type AssertionRule = { id: string; field: string } & (
+  | { op: 'equals'; value: string | number | boolean | null }
+  | { op: 'one_of'; values: Array<string | number | boolean | null> }
+  | { op: 'number_range' | 'length_range'; min?: number; max?: number }
+)
+export type VerificationPolicy = {
+  required?: true; methods?: VerificationMethod[]; minimum_sources?: number
+  assertions?: { version: 1; rules: AssertionRule[] }
+  source_evidence?: { version: 1; minimum_sources: number; max_age_days: number; require_claim_links?: boolean }
+}
+export type DeclaredSource = { id: string; url: string; published_at: string }
+export type SourceLinkedClaim = { id: string; statement: string; source_ids: string[] }
+
 export type RouteRequest = {
   provider_requirements?: ProviderRequirements
   client_reference: string
@@ -10,7 +24,7 @@ export type RouteRequest = {
   max_budget: Money
   input?: Record<string, unknown>
   deadline_seconds?: number
-  verification?: { required?: boolean; methods?: string[]; minimum_score?: number }
+  verification?: VerificationPolicy
   payment_policy?: { allowed_rails?: Array<'mpp' | 'evm' | 'ledger'> }
   retry_policy?: { max_attempts?: number }
 }
@@ -24,7 +38,7 @@ export type RouteCandidate = {
   pricing: { model: 'fixed'; amount: string; currency: 'USD'; estimated_total: string }
   estimated_latency_seconds: number | null
   payment_rail: 'mpp' | 'evm'
-  verification_methods: string[]
+  verification_methods: VerificationMethod[]
   eligibility: { requirements_satisfied: true; request: ProviderRequirements; saved_policy: ProviderRequirements; confidence: 'backed_completion_observed' | 'unmeasured'; buyer_independence: 'not_verified' }
   evidence_level: 'claimed_only' | 'backed_completion_observed'
   capability_evidence: { capability_id: string; accepted_completion_count: number; distinct_buyer_count: number; measured_quality_score: null }[]

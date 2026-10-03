@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { DeliveryInput, Requirements } from './delivery-validation'
+import { assertionsSchema, canonicalContract, sourceEvidencePolicySchema, sourceEvidenceUrls, verifyAssertions, verifySourceEvidence } from './structured-verification'
 
 const fieldSchema = z.object({ type: z.enum(['string', 'number', 'integer', 'boolean', 'object', 'array', 'null']) }).strict()
 
@@ -26,19 +27,24 @@ export function checkServiceInput(input: Record<string, unknown>, schemaInput: u
   return { status: result.status === 'passed' ? 'valid' : 'invalid', failure: result.failure }
 }
 
-const method = z.enum(['buyer_review', 'schema', 'source_urls'])
+export const verificationMethodSchema = z.enum(['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence'])
 export const verificationPolicySchema = z.object({
   required: z.literal(true).default(true),
-  methods: z.array(method).min(1).max(3).default(['buyer_review']),
+  methods: z.array(verificationMethodSchema).min(1).max(5).default(['buyer_review']),
   minimum_sources: z.number().int().min(1).max(20).optional(),
+  assertions: assertionsSchema.optional(),
+  source_evidence: sourceEvidencePolicySchema.optional(),
 }).strict().superRefine((policy, context) => {
   if (new Set(policy.methods).size !== policy.methods.length) context.addIssue({ code: 'custom', path: ['methods'], message: 'Verification methods must be unique' })
   if (!policy.methods.includes('buyer_review')) context.addIssue({ code: 'custom', path: ['methods'], message: 'Buyer review is required before release' })
   if (policy.methods.includes('source_urls') !== (policy.minimum_sources !== undefined)) context.addIssue({ code: 'custom', path: ['minimum_sources'], message: 'minimum_sources is required exactly when source_urls is selected' })
+  for (const config of ['assertions', 'source_evidence'] as const) if (policy.methods.includes(config) !== (policy[config] !== undefined)) context.addIssue({ code: 'custom', path: [config], message: `${config} configuration is required exactly when its method is selected` })
+  if (policy.methods.includes('source_urls') && policy.methods.includes('source_evidence')) context.addIssue({ code: 'custom', path: ['methods'], message: 'Choose string source_urls or structured source_evidence' })
+  if (Buffer.byteLength(JSON.stringify(policy), 'utf8') > 8192) context.addIssue({ code: 'custom', message: 'Verification policy exceeds 8 KiB' })
 })
 
 export type VerificationPolicy = z.output<typeof verificationPolicySchema>
-export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'structure' | 'artifact_integrity'
+export type VerificationMethod = z.output<typeof verificationMethodSchema> | 'structure' | 'artifact_integrity'
 export type VerificationResult = {
   method: VerificationMethod
   verifier: 'clawdmarket-deterministic-v1' | 'buyer'
@@ -52,6 +58,11 @@ export type VerificationResult = {
 export function supportsVerification(servicePolicy: VerificationPolicy, requested: VerificationPolicy) {
   return requested.methods.every((method) => servicePolicy.methods.includes(method))
     && (!requested.minimum_sources || (servicePolicy.minimum_sources || 0) >= requested.minimum_sources)
+    && (!requested.assertions || requested.assertions.rules.every((rule) => servicePolicy.assertions?.rules.some((offered) => canonicalContract(offered) === canonicalContract(rule))))
+    && (!requested.source_evidence || Boolean(servicePolicy.source_evidence
+      && servicePolicy.source_evidence.minimum_sources >= requested.source_evidence.minimum_sources
+      && servicePolicy.source_evidence.max_age_days <= requested.source_evidence.max_age_days
+      && (!requested.source_evidence.require_claim_links || servicePolicy.source_evidence.require_claim_links)))
 }
 
 function matchesType(value: unknown, type: z.infer<typeof fieldSchema>['type']) {
@@ -111,7 +122,7 @@ export function verifySourceList(artifact: Record<string, unknown> | undefined, 
   }
 }
 
-export function evaluateVerification(input: { policy: VerificationPolicy; outputSchema: unknown; delivery: DeliveryInput; legacyRequirements?: Requirements }) {
+export function evaluateVerification(input: { policy: VerificationPolicy; outputSchema: unknown; delivery: DeliveryInput; legacyRequirements?: Requirements; now?: Date }) {
   const results: VerificationResult[] = []
   if (input.legacyRequirements?.output_format === 'json') {
     const requirements = input.legacyRequirements
@@ -122,7 +133,9 @@ export function evaluateVerification(input: { policy: VerificationPolicy; output
   }
   if (input.policy.methods.includes('schema')) results.push(verifyOutputSchema(input.delivery.artifact, input.outputSchema))
   if (input.policy.methods.includes('source_urls')) results.push(verifySourceList(input.delivery.artifact, input.policy.minimum_sources!))
-  if (input.legacyRequirements?.minimum_sources && !input.policy.methods.includes('source_urls')) results.push(verifySourceList(input.delivery.artifact, input.legacyRequirements.minimum_sources))
+  if (input.policy.assertions) results.push(verifyAssertions(input.delivery.artifact, input.policy.assertions))
+  if (input.policy.source_evidence) results.push(verifySourceEvidence(input.delivery.artifact, input.policy.source_evidence, input.now ?? new Date()))
+  if (input.legacyRequirements?.minimum_sources && !input.policy.methods.includes('source_urls')) results.push(verifySourceList(input.policy.source_evidence ? sourceEvidenceUrls(input.delivery.artifact) : input.delivery.artifact, input.legacyRequirements.minimum_sources))
   results.push({ method: 'buyer_review', verifier: 'buyer', version: '1', status: 'pending', score: null, evidence: {}, failure: null })
   return results
 }
