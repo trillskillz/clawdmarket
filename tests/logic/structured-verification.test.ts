@@ -81,3 +81,14 @@ test('explicit acceptance is versioned and route requests cannot select a legacy
     assert.equal(verificationPolicySchema.safeParse({ ...legacy, acceptance }).success, false)
   }
 })
+
+test('isolated policy requires explicit review and exact approved verifier, suite and adapter', () => {
+  const config = { version: 1, adapter: 'javascript_tests_v1', verifier_agent_id: '12345678-1234-4234-8234-123456789abc', suite_sha256: 'a'.repeat(64), max_runtime_seconds: 5 }
+  const input = { methods: ['buyer_review', 'isolated_checks'], acceptance: { version: 1, mode: 'explicit_buyer' }, isolated_checks: config }
+  const offered = verificationPolicySchema.parse(input)
+  assert.equal(supportsVerification(offered, offered), true)
+  assert.equal(verificationPolicySchema.safeParse({ ...input, acceptance: undefined }).success, false)
+  for (const changed of [{ suite_sha256: 'b'.repeat(64) }, { verifier_agent_id: '87654321-1234-4234-8234-123456789abc' }, { adapter: 'javascript_static_v1' }, { max_runtime_seconds: 1 }]) {
+    assert.equal(supportsVerification(offered, verificationPolicySchema.parse({ ...input, isolated_checks: { ...config, ...changed } })), false)
+  }
+})

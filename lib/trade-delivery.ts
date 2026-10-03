@@ -1,4 +1,5 @@
 import { ArtifactError, loadDeliveryArtifacts } from './private-artifacts'
+import { verifyIsolatedDelivery } from './verification-jobs'
 import { sourceEvidenceUrls } from './structured-verification'
 import { serviceExecutionContract } from './service-execution-contract'
 import { createHash } from 'node:crypto'
@@ -89,8 +90,10 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
     structuredArtifact = value
   }
   const verificationInput = { ...parsed.data, artifact: structuredArtifact }
-  const assess = () => {
+  const assess = async (source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) => {
     const outcomes = evaluateVerification({ policy: policy.data, outputSchema: service ? JSON.parse(service.output_schema) : {}, delivery: verificationInput, legacyRequirements: requirements, now: new Date() })
+    const isolated = await verifyIsolatedDelivery(tradeId, parsed.data.artifact_ids || [], parsed.data.verification_job_id, policy.data, source)
+    if (isolated) outcomes.push(isolated)
     if (parsed.data.verification_artifact_id) for (const outcome of outcomes) if (outcome.status === 'failed') outcome.failure = `${outcome.method}_validation_failed`
     if (attachments.length) outcomes.push({ method: 'artifact_integrity', verifier: 'clawdmarket-deterministic-v1', version: '1', status: 'passed', score: 1,
       evidence: { algorithm: 'sha256', artifacts: attachments.map(({ row }) => ({ id: row.id, sha256: row.sha256, size_bytes: row.size_bytes, media_type: row.media_type })),
@@ -112,23 +115,23 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
   }))
   // A time-dependent rejection and later acceptance of the exact body retain separate evidence.
   // New checks publish passing evidence only when the delivery transaction commits.
-  const recordFailure = async (assessment: ReturnType<typeof assess>) => {
+  const recordFailure = async (assessment: Awaited<ReturnType<typeof assess>>) => {
     const rows = evidenceRows(assessment.outcomes, null).filter((row) => row.method !== 'buyer_review'
-      && (!['assertions', 'source_evidence'].includes(row.method) || row.status === 'failed'))
-      .map((row) => ['assertions', 'source_evidence'].includes(row.method) ? { ...row, method: `${row.method}_failure` } : row)
+      && (!['assertions', 'source_evidence', 'isolated_checks'].includes(row.method) || row.status === 'failed'))
+      .map((row) => ['assertions', 'source_evidence', 'isolated_checks'].includes(row.method) ? { ...row, method: `${row.method}_failure` } : row)
     if (rows.length) await db.insert(verification_results).values(rows).onConflictDoNothing()
   }
   class RequiredCheckFailure extends DeliveryError {
-    constructor(public assessment: ReturnType<typeof assess>) { super('Delivery failed required verification checks', 422, assessment.verification) }
+    constructor(public assessment: Awaited<ReturnType<typeof assess>>) { super('Delivery failed required verification checks', 422, assessment.verification) }
   }
-  const initial = assess()
+  const initial = await assess()
   if (initial.failed) { await recordFailure(initial); throw new RequiredCheckFailure(initial) }
   const encrypted = await encryptMessage(JSON.stringify({ type: 'task_complete', trade_id: tradeId, ...parsed.data, content_hash: contentHash }))
   const commit = () => db.transaction(async (tx) => {
     // Recheck immutable file bindings inside the same transaction that opens review.
     const fresh = await loadDeliveryArtifacts(tradeId, parsed.data.artifact_ids || [], trade.status, tx)
     if (fresh.some(({ row }, index) => row.sha256 !== attachments[index].row.sha256 || row.request_hash !== attachments[index].row.request_hash)) throw new ArtifactError('ARTIFACT_INTEGRITY_FAILED', 422)
-    const assessment = assess()
+    const assessment = await assess(tx)
     if (assessment.failed) throw new RequiredCheckFailure(assessment)
     const { verification, outcomes } = assessment
     if (service?.provider_protocol === 'leased_v1') {

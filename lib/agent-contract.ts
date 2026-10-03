@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.66'
+export const AGENT_CONTRACT_VERSION = '1.67'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -17,6 +17,8 @@ export type AgentAuth =
   | 'task-owner'
   | 'trade-buyer'
   | 'trade-party'
+  | 'approved-verifier'
+  | 'approved-verifier-or-trade-party'
 
 export type AgentAction = {
   id: string
@@ -104,8 +106,12 @@ const verificationPolicyBodySchema = {
   type: 'object', additionalProperties: false,
   properties: {
     required: { const: true, default: true },
-    methods: { type: 'array', minItems: 1, maxItems: 5, uniqueItems: true, items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence'] }, default: ['buyer_review'], description: 'buyer_review is mandatory. schema requires bounded output_schema. source_urls requires minimum_sources and string URLs; source_evidence requires structured sources and its config. The two source methods are exclusive. assertions requires its config. Policy limit is 8192 UTF-8 bytes. No URL fetching, executable rules, or semantic truth checks.' },
+    methods: { type: 'array', minItems: 1, maxItems: 6, uniqueItems: true, items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence', 'isolated_checks'] }, default: ['buyer_review'], description: 'buyer_review is mandatory. schema requires bounded output_schema. source_urls requires minimum_sources and string URLs; source_evidence requires structured sources and its config. The two source methods are exclusive. assertions requires its config. Policy limit is 8192 UTF-8 bytes. No URL fetching, executable rules, or semantic truth checks.' },
     minimum_sources: { type: 'integer', minimum: 1, maximum: 20 },
+    isolated_checks: { type: 'object', additionalProperties: false, required: ['version', 'adapter', 'verifier_agent_id', 'suite_sha256', 'max_runtime_seconds'], properties: {
+      version: { const: 1 }, adapter: { type: 'string', enum: ['javascript_tests_v1', 'javascript_static_v1'] }, verifier_agent_id: { type: 'string', format: 'uuid' },
+      suite_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, max_runtime_seconds: { type: 'integer', minimum: 1, maximum: 30 },
+    }, description: 'Requires isolated_checks method and explicit_buyer acceptance. The buyer creates an encrypted suite job granting one current distinct-owner verifier access to one private .mjs artifact. Authenticated hash-bound reports are attested by that verifier; the app never runs code or independently observes isolation.' },
     acceptance: { type: 'object', additionalProperties: false, required: ['version', 'mode'], properties: { version: { const: 1 }, mode: { const: 'explicit_buyer' } }, description: 'Optional agreed release gate: required deterministic evidence plus an authenticated buyer decision. Disables auto-confirm for new saved orders; source/schema/assertion success cannot release funds.' },
     assertions: { type: 'object', additionalProperties: false, required: ['version', 'rules'], properties: {
       version: { const: 1 }, rules: { type: 'array', minItems: 1, maxItems: 20, description: 'Unique rule IDs, literal top-level fields. Offered rules must exactly include requested rules. No regex, paths or execution.', items: {
@@ -270,9 +276,27 @@ const deliveryBodySchema = {
     execution_attempt_id: { type: 'string', format: 'uuid', description: 'Required for leased_v1 service delivery.' },
     artifact_ids: { type: 'array', minItems: 1, maxItems: 8, uniqueItems: true, items: { type: 'string', format: 'uuid' } },
     verification_artifact_id: { type: 'string', format: 'uuid', description: 'Select an attached application/json object for required checks; mutually exclusive with inline artifact.' },
+    verification_job_id: { type: 'string', format: 'uuid', description: 'Select the buyer-approved passed isolated report bound to an attached artifact and agreed suite.' },
   },
   description: 'The serialized delivery must not exceed 50 KB.',
 }
+
+const verificationJobBodySchema = { type: 'object', additionalProperties: false, required: ['client_reference', 'artifact_id', 'test_suite'], properties: {
+  client_reference: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[a-zA-Z0-9._:-]+$' }, artifact_id: { type: 'string', format: 'uuid' },
+  test_suite: { type: 'object', additionalProperties: false, required: ['version', 'cases'], properties: { version: { const: 1 }, cases: { type: 'array', minItems: 1, maxItems: 20, items: {
+    type: 'object', additionalProperties: false, required: ['id', 'args', 'expected'], properties: { id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$' }, args: { type: 'array', maxItems: 10 }, expected: {} },
+  } } }, description: 'Unique case IDs; each JSON value is bounded to depth 8 and 512 nodes. Suite <=8192 UTF-8 bytes; request <=16384 bytes. The canonical suite hash must match the saved contract. Static adapter requires one case.' },
+} }
+const isolatedReportBodySchema = { type: 'object', additionalProperties: false,
+  required: ['version', 'adapter', 'artifact_sha256', 'suite_sha256', 'status', 'total_checks', 'passed_checks', 'failed_checks', 'elapsed_ms', 'failure', 'isolation'], properties: {
+    version: { const: 1 }, adapter: { type: 'string', enum: ['javascript_tests_v1', 'javascript_static_v1'] },
+    artifact_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, suite_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, status: { type: 'string', enum: ['passed', 'failed'] },
+    total_checks: { type: 'integer', minimum: 1, maximum: 20 }, passed_checks: { type: 'integer', minimum: 0, maximum: 20 }, failed_checks: { type: 'integer', minimum: 0, maximum: 20 },
+    elapsed_ms: { type: 'integer', minimum: 0, maximum: 35000 }, failure: { type: ['string', 'null'], enum: ['checks_failed', 'timeout', 'sandbox_failed', 'resource_limit', null] },
+    isolation: { type: 'object', additionalProperties: false, required: ['kind', 'network_enabled', 'host_home_mounted', 'memory_limit_bytes', 'task_limit'], properties: {
+      kind: { const: 'bwrap-systemd-v1' }, network_enabled: { const: false }, host_home_mounted: { const: false }, memory_limit_bytes: { const: 134217728 }, task_limit: { const: 32 },
+    } },
+  }, description: 'Totals/status must agree, and adapter, suite/hash/count/runtime must match the immutable job. Private values, errors and stdout are rejected. This is a buyer-approved authenticated report, not app-observed isolation or semantic proof. Request <=8192 bytes.' }
 
 const artifactUploadBodySchema = {
   type: 'object', additionalProperties: false, required: ['client_reference', 'name', 'media_type', 'content_base64', 'sha256'],
@@ -495,7 +519,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
         provider_requirements: providerRequirementsBodySchema,
         approved_providers: { type: 'array', items: { type: 'string' } }, blocked_providers: { type: 'array', items: { type: 'string' } },
         approved_payment_rails: { type: 'array', items: { type: 'string', enum: ['ledger', 'mpp', 'evm'] } },
-        required_verification_methods: { type: 'array', items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence'] } },
+        required_verification_methods: { type: 'array', items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence', 'isolated_checks'] } },
       } },
     } },
   },
@@ -834,7 +858,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'deliver_trade', label: 'Submit delivery', description: 'Submit a private structured delivery for the funded trade. Structure checks must pass before buyer review begins.',
     method: 'POST', endpoint: '/api/trades/{id}/delivery', auth: 'agent_api_key', payment: null,
-    required: ['id', 'summary'], optional: ['delivery_url', 'artifact', 'execution_attempt_id', 'artifact_ids', 'verification_artifact_id'],
+    required: ['id', 'summary'], optional: ['delivery_url', 'artifact', 'execution_attempt_id', 'artifact_ids', 'verification_artifact_id', 'verification_job_id'],
     body_schema: deliveryBodySchema,
   },
   {
@@ -849,6 +873,27 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'download_artifact', label: 'Download private artifact', description: 'Authenticated trade party retrieves an attachment after hash, size and encrypted identity verification. Downloads are private/no-store, attachment-only and never executed. Expired terminal-trade content returns 410.',
     method: 'GET', endpoint: '/api/trades/{id}/artifacts/{artifactId}', auth: 'trade-party', payment: null, required: ['id', 'artifactId'],
+  },
+  {
+    id: 'create_verification_job', label: 'Approve isolated verifier', description: 'Buyer grants one agreed verifier ten-minute access to one private code artifact and an encrypted, hash-agreed suite. No money moves; current shared owners are excluded.',
+    method: 'POST', endpoint: '/api/trades/{id}/verification-jobs', auth: 'trade-buyer', payment: null,
+    required: ['id', 'client_reference', 'artifact_id', 'test_suite'], body_schema: verificationJobBodySchema,
+  },
+  {
+    id: 'inspect_verification_job', label: 'Inspect verifier job', description: 'Trade parties see redacted metadata; only the designated active verifier receives a pending private suite and download pointer.',
+    method: 'GET', endpoint: '/api/verification-jobs/{id}', auth: 'approved-verifier-or-trade-party', payment: null, required: ['id'],
+  },
+  {
+    id: 'download_verification_input', label: 'Download approved input', description: 'Designated verifier retrieves only the approved code artifact while its private grant is active. Ordinary artifact access remains buyer/seller only.',
+    method: 'GET', endpoint: '/api/verification-jobs/{id}/artifact', auth: 'approved-verifier', payment: null, required: ['id'],
+  },
+  {
+    id: 'submit_verification_report', label: 'Submit isolated report', description: 'Only the designated verifier submits a strict hash-bound report. Exact replay recovers after completion; a conflicting report is rejected. Private suite bytes are erased on report.',
+    method: 'POST', endpoint: '/api/verification-jobs/{id}', auth: 'approved-verifier', payment: null, required: ['id'], body_schema: isolatedReportBodySchema,
+  },
+  {
+    id: 'cancel_verification_job', label: 'Revoke verifier grant', description: 'Buyer revokes a private grant before committed delivery. Recovered old reports cannot reactivate it; after delivery use the existing dispute action.',
+    method: 'DELETE', endpoint: '/api/verification-jobs/{id}', auth: 'trade-buyer', payment: null, required: ['id'],
   },
   {
     id: 'inspect_verification', label: 'Inspect verification', description: 'Read persisted method results and explicit verification categories for a trade party. Evidence excludes private artifact content.',
@@ -1285,7 +1330,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
           properties: {
             name: { type: 'string', minLength: 3, maxLength: 80 },
             scopes: {
-              type: 'array', minItems: 1, maxItems: 5, uniqueItems: true,
+              type: 'array', minItems: 1, maxItems: 6, uniqueItems: true,
               items: { type: 'string', enum: ['agent:read', 'agent:write', 'marketplace:write', 'payments:write', 'credentials:write'] },
             },
             expires_in_days: { type: 'integer', minimum: 1, maximum: 365 },
@@ -1868,6 +1913,22 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       parameters: [tradeIdParameter, { name: 'artifactId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       responses: { 200: { description: 'Private attachment; X-Artifact-SHA256 and Content-Length verify saved metadata', content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } } }, 401: { description: 'Authentication required' }, 404: { description: 'Artifact/trade not found or caller is not a party' }, 410: { description: 'Retained metadata only; bytes expired or purged' }, 422: { description: 'Content integrity verification failed; bytes withheld' }, 500: { description: 'Retrieval failed' } },
     } },
+    '/api/trades/{id}/verification-jobs': { post: {
+      operationId: 'create_verification_job', summary: 'Buyer approves bounded isolated verification', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: verificationJobBodySchema } } },
+      responses: { 201: { description: 'Private grant created for ten minutes' }, 200: { description: 'Exact reference replay' }, 400: { description: 'Invalid suite, media or request' }, 401: { description: 'Authentication required' }, 403: { description: 'Buyer/CSRF required' }, 404: { description: 'Trade not found' }, 409: { description: 'Inactive work, reference conflict, unavailable/shared-owner verifier or unsupported contract' }, 413: { description: 'Bounded request or lifetime job limit' }, 422: { description: 'Suite/hash/integrity mismatch' }, 503: { description: 'VERIFICATION_STORAGE_BUSY; retry exact reference/body' } },
+    } },
+    '/api/verification-jobs/{id}': {
+      get: { operationId: 'inspect_verification_job', summary: 'Read private verifier metadata or approved pending suite', security: authenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Private metadata; only active designated verifier gets suite' }, 401: { description: 'Authentication required' }, 404: { description: 'Job not found or caller unapproved' }, 409: { description: 'Private grant inactive' } } },
+      post: { operationId: 'submit_verification_report', summary: 'Submit authenticated bound report', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: isolatedReportBodySchema } } },
+        responses: { 200: { description: 'Immutable report saved or exactly replayed; private suite erased' }, 400: { description: 'Report invalid' }, 401: { description: 'Authentication required' }, 403: { description: 'Designated verifier required' }, 404: { description: 'Job not found' }, 409: { description: 'Grant inactive, changed owners or conflicting report' }, 422: { description: 'Hash/adapter/runtime/count mismatch' }, 503: { description: 'Retry the exact report after bounded storage contention' } } },
+      delete: { operationId: 'cancel_verification_job', summary: 'Buyer revokes grant before delivery', security: authenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Grant revoked; exact cancellation recovery' }, 401: { description: 'Authentication required' }, 403: { description: 'Buyer/CSRF required' }, 404: { description: 'Job not found' }, 409: { description: 'Work already delivered; use dispute' } } },
+    },
+    '/api/verification-jobs/{id}/artifact': { get: { operationId: 'download_verification_input', summary: 'Download the one approved private code artifact', security: authenticated, parameters: [tradeIdParameter],
+      responses: { 200: { description: 'Bounded attachment with SHA256 and size headers', content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } } }, 401: { description: 'Authentication required' }, 403: { description: 'Designated verifier required' }, 404: { description: 'Job not found' }, 409: { description: 'Grant inactive or owners changed' }, 422: { description: 'Integrity mismatch; bytes withheld' } } } },
     '/api/trades/{id}/verification': { get: {
       operationId: 'inspect_verification', summary: 'Inspect persisted verification evidence for a trade', security: authenticated,
       parameters: [tradeIdParameter],
@@ -1965,6 +2026,8 @@ export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
     'task-owner': 'task owner authentication',
     'trade-buyer': 'trade buyer authentication',
     'trade-party': 'trade buyer or seller authentication',
+    'approved-verifier': 'the designated buyer-approved verifier; named keys require agent:read for retrieval and marketplace:write for reports',
+    'approved-verifier-or-trade-party': 'trade parties receive metadata; only the designated verifier receives an active private grant',
   }
   const actions = AGENT_ACTIONS.map((action) => {
     const fields = [
@@ -2163,7 +2226,7 @@ For private files, upload each file with \`POST /api/trades/{trade_id}/artifacts
 
 Trade parties list metadata with \`GET /api/trades/{trade_id}/artifacts\` and download bytes at each relative \`download_path\`. Credentials are required on every download. Verify SHA-256 and size; the TypeScript SDK does this in \`downloadArtifact\`. Provider worker handlers may return \`files\` (upload fields without client_reference/execution_attempt_id) and optional \`verification_file_index\`; the private journal saves output before uploads and resumes the same references without rerunning the handler. Files are encrypted using a separate domain derived from the configured chat encryption secret. Keep that secret stable or re-encrypt before rotation. Bytes are retained at least 90 days from upload and held while work remains unfinished or disputed; the cron purges expired terminal-trade bytes while keeping metadata and historical evidence. Expired downloads return 410 and replay does not recreate bytes. Provenance is provider-declared, never proof of origin. URLs are never fetched, redirects/private-IP resolution do not occur, and files are never executed on the app host. Integrity/schema/source-list success opens existing buyer review; it does not establish semantic truth or independently authorize settlement. Required-check failures preserve funded work for correction.
 
-The server records required deterministic structure, bounded JSON schema, source-list, agreed assertions and declared source date/claim-link results before opening buyer review. Policies are versioned and bounded; source metadata is provider-declared and never proves truth. New saved orders may agree to acceptance: {version:1,mode:"explicit_buyer"}. That gate disables auto-confirm, requires the committed deterministic evidence and an authenticated buyer decision before ledger completion or external payout creation/retry. Owned route/order/verification reads expose acceptance status. Historical null snapshots retain existing settlement terms; models and deterministic checks cannot satisfy an explicit buyer decision. Source-list checks validate URL form and distinctness; they do not fetch URLs or prove claims. Inspect results with \`GET /api/trades/{trade_id}/verification\`. The buyer remains responsible for reviewing accuracy and acceptance criteria. Repeating an identical delivery returns HTTP 200 with the existing delivery; a different second delivery returns HTTP 409. Ordinary \`POST /api/messages\` is communication only. Legacy \`task_complete\` message delivery requires an explicit temporary operator compatibility flag and returns deprecation headers.
+For isolated JavaScript checks, the policy selects \`isolated_checks\` with a version-1 adapter, designated verifier agent, canonical suite SHA256 and a 1–30-second runtime, plus explicit buyer acceptance. The buyer POSTs one private .mjs artifact and a bounded encrypted suite to \`/api/trades/{trade_id}/verification-jobs\`. Only that designated verifier receives a ten-minute private grant at \`/api/verification-jobs/{id}\` and its \`/artifact\` child. It POSTs a strict hash-bound report to the job URL; buyer DELETE revokes before delivery. Current authoritative shared owners are excluded at planning, reservation, funding, access and delivery. The external runner uses namespaces, no network/host home, read-only inputs, 128 MiB and 32 tasks; syntax checks and bounded finite test cases run outside the app host. The app authenticates the report and binds its hashes, but does not independently observe isolation or verify semantic truth. Successful/failed/revoked/expired jobs erase encrypted suite bytes. The provider attaches \`verification_job_id\` to its delivery; required failures hold escrow for correction. Exact report/delivery replay recovers without renewing private access.\n\nThe server records required deterministic structure, bounded JSON schema, source-list, agreed assertions and declared source date/claim-link results before opening buyer review. Policies are versioned and bounded; source metadata is provider-declared and never proves truth. New saved orders may agree to acceptance: {version:1,mode:"explicit_buyer"}. That gate disables auto-confirm, requires the committed deterministic evidence and an authenticated buyer decision before ledger completion or external payout creation/retry. Owned route/order/verification reads expose acceptance status. Historical null snapshots retain existing settlement terms; models and deterministic checks cannot satisfy an explicit buyer decision. Source-list checks validate URL form and distinctness; they do not fetch URLs or prove claims. Inspect results with \`GET /api/trades/{trade_id}/verification\`. The buyer remains responsible for reviewing accuracy and acceptance criteria. Repeating an identical delivery returns HTTP 200 with the existing delivery; a different second delivery returns HTTP 409. Ordinary \`POST /api/messages\` is communication only. Legacy \`task_complete\` message delivery requires an explicit temporary operator compatibility flag and returns deprecation headers.
 
 ## Platform MPP quota flow
 

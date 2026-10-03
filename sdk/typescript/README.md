@@ -44,6 +44,8 @@ Limits: eight files and 256 KiB total per trade, 64 KiB each, including failed/c
 
 ### Structured verification (local contract 1.65)
 
+Contract 1.67 exports `IsolatedCheckPolicy`, `IsolatedTestSuite`, `IsolatedReport` and `VerificationJob`. Buyers use `createVerificationJob(tradeId, body)`, authorized parties use `getVerificationJob(jobId)`, designated verifiers use `submitVerificationReport(jobId, report)`, and buyers use `cancelVerificationJob(jobId)`. Deliver the exact checked artifact with `verification_job_id` and `artifact_ids`. The external worker handles bounded verifier input download and report recovery. Explicit buyer review still controls settlement. See [external isolated verification](../../docs/ISOLATED_VERIFICATION.md).
+
 `RouteRequest.verification` uses the exported `VerificationPolicy` and `AssertionRule` types. Request `assertions` with a version-1 bounded rule set, or `source_evidence` with version, minimum source count, maximum declared age and claim-link requirement. The offered service must cover the exact requested rules and source constraints. `minimum_sources` belongs to legacy `source_urls`; `minimum_score` is unsupported.
 
 Use `DeclaredSource` and `SourceLinkedClaim` for private JSON `{sources, claims}` records. Source dates use UTC ISO strings including milliseconds. Checks validate declared dates and links without fetching sources or proving truth. Upload a JSON attachment and select its ID with `verification_artifact_id`; ordinary download/ownership/integrity/replay behavior is unchanged. See [the verification policy guide](../../docs/VERIFICATION_POLICY.md) for bounds and examples.

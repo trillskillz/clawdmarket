@@ -1,4 +1,5 @@
 import 'server-only'
+import { isolatedVerifierEligibility } from '@/lib/isolated-verifier-eligibility'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { db } from '@/lib/db'
@@ -153,6 +154,8 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       if (!claimed) throw new ServiceOrderReservationError('SERVICE_CAPACITY_OR_PRICE_CHANGED', 'Service capacity or price changed; re-plan before retrying')
       const requirementFailure = await checkProviderRequirements(tx, principal.userId, service.seller_id, agreedCapabilities, JSON.stringify(request.provider_requirements ?? {}))
       if (requirementFailure) throw new ServiceOrderReservationError(requirementFailure, 'Provider does not satisfy buyer evidence requirements')
+      const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, principal.userId, service.seller_id, tx)
+      if (verifierFailure) throw new ServiceOrderReservationError(verifierFailure, 'Isolated verifier is unavailable or shares a trade-party owner')
       const spendContext = { sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: contract.verificationPolicy!.methods }
       if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100, ...spendContext })
       else await enforceBuyerSpendPolicy(tx, principal.userId, { totalMinor, ...spendContext }, now)

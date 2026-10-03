@@ -76,6 +76,22 @@ test('client requires a secure origin and a nonempty key', () => {
   assert.throws(() => client.getRoute('../other'), /route UUID/)
 })
 
+test('SDK verifier job operations keep approved suite and report on authenticated canonical paths', async () => {
+  const seen: { method: string; path: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'verifier-test-key', fetch: async (input, init) => {
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer verifier-test-key')
+    seen.push({ method: String(init?.method), path: new URL(String(input)).pathname, body: init?.body ? JSON.parse(String(init.body)) : null })
+    return Response.json({ job: { id: routeId }, idempotent: false })
+  } })
+  const input = { client_reference: 'suite-reference', artifact_id: routeId, test_suite: { version: 1 as const, cases: [{ id: 'echo', args: [1], expected: 1 }] } }
+  await client.createVerificationJob(routeId, input)
+  await client.getVerificationJob(routeId)
+  await client.cancelVerificationJob(routeId)
+  assert.deepEqual(seen.map((row) => `${row.method} ${row.path}`), [`POST /api/trades/${routeId}/verification-jobs`, `GET /api/verification-jobs/${routeId}`, `DELETE /api/verification-jobs/${routeId}`])
+  assert.deepEqual(seen[0].body, input)
+  assert.throws(() => client.getVerificationJob('../another'), /job ID must be a UUID/)
+})
+
 test('private artifact SDK authenticates relative downloads and independently verifies hash and bounded size', async () => {
   const { createHash } = await import('node:crypto')
   const content = 'Private SDK artifact bytes'

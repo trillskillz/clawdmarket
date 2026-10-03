@@ -30,7 +30,7 @@ async function save(path, value) {
 
 function deliveryBody(output, attemptId) {
   if (!output || typeof output !== 'object' || Array.isArray(output)
-    || Object.keys(output).some((key) => !['summary', 'artifact', 'delivery_url', 'artifact_ids', 'verification_artifact_id'].includes(key))
+    || Object.keys(output).some((key) => !['summary', 'artifact', 'delivery_url', 'artifact_ids', 'verification_artifact_id', 'verification_job_id'].includes(key))
     || typeof output.summary !== 'string' || output.summary.trim().length < 10 || output.summary.trim().length > 8000
     || (output.artifact !== undefined && (!output.artifact || typeof output.artifact !== 'object' || Array.isArray(output.artifact)))
     || (output.delivery_url !== undefined && (typeof output.delivery_url !== 'string' || output.delivery_url.length > 2000
@@ -38,11 +38,13 @@ function deliveryBody(output, attemptId) {
   if (output.artifact_ids !== undefined && (!Array.isArray(output.artifact_ids) || output.artifact_ids.length < 1 || output.artifact_ids.length > 8
     || output.artifact_ids.some((id) => !uuid(id)) || new Set(output.artifact_ids).size !== output.artifact_ids.length)) fail('INVALID_PROVIDER_DELIVERY')
   if (output.verification_artifact_id !== undefined && (!uuid(output.verification_artifact_id) || output.artifact !== undefined || !output.artifact_ids?.includes(output.verification_artifact_id))) fail('INVALID_PROVIDER_DELIVERY')
+  if (output.verification_job_id !== undefined && !uuid(output.verification_job_id)) fail('INVALID_PROVIDER_DELIVERY')
   const body = JSON.stringify({ summary: output.summary.trim(),
     ...(output.delivery_url === undefined ? {} : { delivery_url: new URL(output.delivery_url).href }),
     ...(output.artifact === undefined ? {} : { artifact: output.artifact }), execution_attempt_id: attemptId,
     ...(output.artifact_ids === undefined ? {} : { artifact_ids: output.artifact_ids }),
-    ...(output.verification_artifact_id === undefined ? {} : { verification_artifact_id: output.verification_artifact_id }) })
+    ...(output.verification_artifact_id === undefined ? {} : { verification_artifact_id: output.verification_artifact_id }),
+    ...(output.verification_job_id === undefined ? {} : { verification_job_id: output.verification_job_id }) })
   if (Buffer.byteLength(body) > 50_000) fail('PROVIDER_DELIVERY_TOO_LARGE')
   return body
 }
@@ -51,10 +53,10 @@ function deliveryBody(output, attemptId) {
  * Execute on the provider's machine. Callers must serialize each journal; the CLI uses flock.
  * @param {{baseUrl?: string, apiKey: string, tradeId: string, serviceId?: string, stateFile: string,
  * handler: Function, fetcher?: typeof fetch, signal?: AbortSignal, heartbeatMs?: number,
- * timeoutMs?: number, prepareOnly?: boolean}} options
+ * timeoutMs?: number, prepareOnly?: boolean, uploadOnly?: boolean, verificationJobId?: string}} options
  */
 export async function runProviderWork({ baseUrl = 'https://www.clawdmkt.com', apiKey, tradeId, serviceId,
-  stateFile, handler, fetcher = fetch, signal, heartbeatMs = 15_000, timeoutMs = 240_000, prepareOnly = false }) {
+  stateFile, handler, fetcher = fetch, signal, heartbeatMs = 15_000, timeoutMs = 240_000, prepareOnly = false, uploadOnly = false, verificationJobId }) {
   const base = origin(baseUrl)
   if (!apiKey?.trim() || !uuid(tradeId) || (serviceId !== undefined && !uuid(serviceId)) || !stateFile
     || typeof handler !== 'function') fail('INVALID_PROVIDER_CONFIGURATION')
@@ -97,8 +99,26 @@ export async function runProviderWork({ baseUrl = 'https://www.clawdmkt.com', ap
     void unused
     if (deliveryBody(output, attempt.id) !== journal.delivery_body) fail('INVALID_PROVIDER_JOURNAL')
   }
+  const bindVerificationJob = async () => {
+    if (verificationJobId === undefined) return
+    if (!uuid(verificationJobId)) fail('INVALID_PROVIDER_VERIFICATION_JOB')
+    const body = JSON.parse(journal.delivery_body)
+    if (body.verification_job_id === verificationJobId) return
+    if (body.verification_job_id || journal.delivery_submission_started) fail('PROVIDER_DELIVERY_ALREADY_BOUND')
+    const { execution_attempt_id: unused, ...output } = body
+    void unused
+    journal.delivery_body = deliveryBody({ ...output, verification_job_id: verificationJobId }, attempt.id)
+    await save(stateFile, journal)
+  }
   const submit = async () => {
-    const submitted = await api('POST', 'delivery', journal.delivery_body)
+    journal.delivery_submission_started = true
+    await save(stateFile, journal)
+    let submitted
+    try { submitted = await api('POST', 'delivery', journal.delivery_body) }
+    catch (error) {
+      if (/^PROVIDER_HTTP_(400|422)$/.test(error.message)) { journal.delivery_submission_started = false; await save(stateFile, journal) }
+      throw error
+    }
     if (!uuid(submitted.delivery?.id) || submitted.delivery?.content_hash !== createHash('sha256').update(journal.delivery_body).digest('hex')) fail('INVALID_PROVIDER_RECEIPT')
     journal.phase = 'delivered'
     journal.receipt = { delivery_id: submitted.delivery.id, content_hash: submitted.delivery.content_hash }
@@ -108,6 +128,7 @@ export async function runProviderWork({ baseUrl = 'https://www.clawdmkt.com', ap
   // A lost delivery response can be recovered after buyer settlement through exact content replay.
   if (attempt.state === 'delivered') {
     if (!journal.delivery_body) fail('PROVIDER_DELIVERED_WITHOUT_LOCAL_OUTPUT')
+    if (verificationJobId && JSON.parse(journal.delivery_body).verification_job_id !== verificationJobId) fail('PROVIDER_DELIVERY_ALREADY_BOUND')
     return submit()
   }
   if (work.trade_status !== 'escrow_held' || !['funded', 'executing'].includes(work.state)
@@ -191,6 +212,12 @@ export async function runProviderWork({ baseUrl = 'https://www.clawdmkt.com', ap
   if (heartbeatError) throw heartbeatError
   combined.throwIfAborted()
   if (prepareOnly) return { state: 'prepared', attempt_id: attempt.id }
+  if (uploadOnly) {
+    const artifactIds = JSON.parse(journal.delivery_body).artifact_ids
+    if (!artifactIds?.length) fail('PROVIDER_ARTIFACTS_REQUIRED')
+    return { state: 'awaiting_verifier', attempt_id: attempt.id, artifact_ids: artifactIds }
+  }
+  await bindVerificationJob()
   // This authoritative action also detects dispute/expiry committed while the handler ran.
   await action('heartbeat')
   return submit()
@@ -202,7 +229,8 @@ async function cli() {
   for (let i = 0; i < args.length; i += 1) {
     const key = args[i]
     if (key === '--prepare-only') options.prepareOnly = true
-    else if (['--trade-id', '--service-id', '--handler', '--state-dir'].includes(key) && args[i + 1]) options[key.slice(2)] = args[++i]
+    else if (key === '--upload-only') options.uploadOnly = true
+    else if (['--trade-id', '--service-id', '--handler', '--state-dir', '--verification-job-id'].includes(key) && args[i + 1]) options[key.slice(2)] = args[++i]
     else fail('INVALID_PROVIDER_ARGUMENTS')
   }
   if (!uuid(options['trade-id']) || !options.handler || !options['state-dir']) fail('PROVIDER_TRADE_HANDLER_AND_STATE_DIR_REQUIRED')
@@ -225,7 +253,7 @@ async function cli() {
   const handlerModule = await import(pathToFileURL(resolve(options.handler)).href)
   const result = await runProviderWork({ baseUrl: base, apiKey: process.env.CLAWDMARKET_PROVIDER_API_KEY,
     tradeId: options['trade-id'], serviceId: options['service-id'], stateFile, handler: handlerModule.default,
-    prepareOnly: options.prepareOnly === true })
+    prepareOnly: options.prepareOnly === true, uploadOnly: options.uploadOnly === true, verificationJobId: options['verification-job-id'] })
   console.log(JSON.stringify(result))
 }
 

@@ -29,7 +29,7 @@ export const buyerSpendPolicyInput = z.object({
   approved_providers: z.array(z.string().min(1).max(200)).max(100).optional(),
   blocked_providers: z.array(z.string().min(1).max(200)).max(100).optional(),
   approved_payment_rails: z.array(z.enum(['ledger', 'mpp', 'evm'])).min(1).max(3).optional(),
-  required_verification_methods: z.array(z.enum(['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence'])).min(1).max(5).optional(),
+  required_verification_methods: z.array(z.enum(['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence', 'isolated_checks'])).min(1).max(6).optional(),
 }).strict().superRefine((value, ctx) => {
   for (const field of ['allowed_capabilities', 'blocked_capabilities', 'approved_providers', 'blocked_providers', 'approved_payment_rails', 'required_verification_methods'] as const) {
     const items = value[field]

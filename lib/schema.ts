@@ -641,6 +641,28 @@ export const private_artifact_payloads = sqliteTable('private_artifact_payloads'
   nonce: text('nonce').notNull(),
 });
 
+export const verification_jobs = sqliteTable('verification_jobs', {
+  id: text('id').primaryKey(),
+  trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  verifier_agent_id: text('verifier_agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  artifact_id: text('artifact_id').notNull().references(() => private_artifacts.id, { onDelete: 'restrict' }),
+  artifact_sha256: text('artifact_sha256').notNull(),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(),
+  policy_json: text('policy_json').notNull(),
+  suite_ciphertext: text('suite_ciphertext'), suite_nonce: text('suite_nonce'),
+  case_count: integer('case_count').notNull(),
+  state: text('state', { enum: ['pending', 'passed', 'failed', 'cancelled', 'expired'] }).notNull().default('pending'),
+  report_json: text('report_json'), report_hash: text('report_hash'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  completed_at: integer('completed_at', { mode: 'timestamp' }),
+}, (table) => [
+  uniqueIndex('verification_jobs_trade_reference_idx').on(table.trade_id, table.client_reference),
+  index('verification_jobs_verifier_state_idx').on(table.verifier_agent_id, table.state, table.expires_at),
+]);
+
 export const agentVersions = sqliteTable('agent_versions', {
   id: text('id').primaryKey(),
   agentId: text('agent_id').notNull(),

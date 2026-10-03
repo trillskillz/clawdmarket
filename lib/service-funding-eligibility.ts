@@ -11,6 +11,7 @@ import { serviceContractReadiness } from './service-contract-readiness'
 import { serviceSupportsRoute, storedServiceCapabilities } from './route-service-eligibility'
 import { checkServiceInput } from './verification-policy'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
+import { isolatedVerifierEligibility } from './isolated-verifier-eligibility'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -49,6 +50,8 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     if (!offered || !capabilities.every((capability) => offered.includes(capability))) return 'SERVICE_CONTRACT_CHANGED'
     const contract = serviceContractReadiness(service)
     if (!contract.ready || checkServiceInput(JSON.parse(order.input_json), contract.inputSchema).status !== 'valid') return 'SERVICE_CONTRACT_CHANGED'
+    const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, trade.buyer_id, trade.seller_id, source)
+    if (verifierFailure) return verifierFailure
     if (trade.seller_id.startsWith('user_agent_')) {
       const visible = await source.all(sql`SELECT id FROM agents WHERE ('user_agent_' || id) = ${trade.seller_id}
         AND status = 'active' AND visibility = 'public' AND archived_at IS NULL AND instr(description, ${REFERENCE_FLEET_MARKER}) = 0 LIMIT 1`)

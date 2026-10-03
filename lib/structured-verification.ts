@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { VerificationResult } from './verification-policy'
+import { canonicalJSON } from '../scripts/verifier-contract.mjs'
 
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
 const primitive = z.union([z.string().max(500), z.number().finite(), z.boolean(), z.null()])
@@ -23,9 +24,7 @@ export type SourceEvidencePolicy = z.output<typeof sourceEvidencePolicySchema>
 
 /** Canonical bounded contract fingerprint; private output is never hashed into evidence here. */
 export function canonicalContract(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalContract).join(',')}]`
-  if (value !== null && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalContract(entry)}`).join(',')}}`
-  return JSON.stringify(value)
+  return canonicalJSON(value)
 }
 function result(method: 'assertions' | 'source_evidence', contract: unknown, passed: boolean, evidence: Record<string, unknown>): VerificationResult {
   return { method, verifier: 'clawdmarket-deterministic-v1', version: '1', status: passed ? 'passed' : 'failed', score: passed ? 1 : 0,

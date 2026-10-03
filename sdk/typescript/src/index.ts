@@ -2,7 +2,21 @@ export type ProviderRequirements = { approved_providers?: string[]; minimum_acce
 
 export type Money = { amount: string; currency: 'USD' }
 
-export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'assertions' | 'source_evidence'
+export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'assertions' | 'source_evidence' | 'isolated_checks'
+export type IsolatedCheckPolicy = { version: 1; adapter: 'javascript_tests_v1' | 'javascript_static_v1'; verifier_agent_id: string; suite_sha256: string; max_runtime_seconds: number }
+export type IsolatedTestSuite = { version: 1; cases: Array<{ id: string; args: unknown[]; expected: unknown }> }
+export type IsolatedReport = {
+  version: 1; adapter: IsolatedCheckPolicy['adapter']; artifact_sha256: string; suite_sha256: string; status: 'passed' | 'failed'
+  total_checks: number; passed_checks: number; failed_checks: number; elapsed_ms: number
+  failure: 'checks_failed' | 'timeout' | 'sandbox_failed' | 'resource_limit' | null
+  isolation: { kind: 'bwrap-systemd-v1'; network_enabled: false; host_home_mounted: false; memory_limit_bytes: 134217728; task_limit: 32 }
+}
+export type VerificationJob = {
+  id: string; trade_id: string; verifier_agent_id: string; artifact_id: string; artifact_sha256: string; request_hash: string
+  policy: IsolatedCheckPolicy; state: 'pending' | 'passed' | 'failed' | 'cancelled' | 'expired'
+  created_at: string; expires_at: string; completed_at: string | null; report: IsolatedReport | null; report_hash: string | null
+  provenance: { kind: 'buyer_approved_authenticated_verifier'; isolation_observed_by_app: false; semantic_verified: false }
+}
 export type AssertionRule = { id: string; field: string } & (
   | { op: 'equals'; value: string | number | boolean | null }
   | { op: 'one_of'; values: Array<string | number | boolean | null> }
@@ -13,6 +27,7 @@ export type VerificationPolicy = {
   assertions?: { version: 1; rules: AssertionRule[] }
   source_evidence?: { version: 1; minimum_sources: number; max_age_days: number; require_claim_links?: boolean }
   acceptance?: { version: 1; mode: 'explicit_buyer' }
+  isolated_checks?: IsolatedCheckPolicy
 }
 export type DeclaredSource = { id: string; url: string; published_at: string }
 export type SourceLinkedClaim = { id: string; statement: string; source_ids: string[] }
@@ -137,7 +152,7 @@ export type ArtifactUpload = {
   client_reference: string; name: string; media_type: 'application/json' | 'text/plain' | 'text/markdown' | 'application/pdf' | 'application/octet-stream'
   content_base64: string; sha256: string; provenance?: { description?: string; source_uri?: string }; execution_attempt_id?: string
 }
-export type TradeDelivery = { summary: string; delivery_url?: string; artifact?: Record<string, unknown>; execution_attempt_id?: string; artifact_ids?: string[]; verification_artifact_id?: string }
+export type TradeDelivery = { summary: string; delivery_url?: string; artifact?: Record<string, unknown>; execution_attempt_id?: string; artifact_ids?: string[]; verification_artifact_id?: string; verification_job_id?: string }
 
 export type ClientOptions = { apiKey: string; baseUrl?: string; fetch?: typeof fetch }
 export type RequestOptions = { signal?: AbortSignal }
@@ -165,6 +180,11 @@ function tradePath(tradeId: string) {
 function routePath(routeId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(routeId)) throw new TypeError('routeId must be a route UUID')
   return `/api/routes/${routeId}`
+}
+
+function verificationJobPath(id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new TypeError('verification job ID must be a UUID')
+  return `/api/verification-jobs/${id}`
 }
 
 function delay(ms: number, signal?: AbortSignal) {
@@ -234,6 +254,18 @@ export class ClawdMarketClient {
   }
   deliverTrade(tradeId: string, input: TradeDelivery, options?: RequestOptions) {
     return this.request<{ delivery: { id: string; content_hash: string }; verification: Record<string, unknown>; idempotent: boolean }>('POST', `${tradePath(tradeId)}/delivery`, input, options)
+  }
+  createVerificationJob(tradeId: string, input: { client_reference: string; artifact_id: string; test_suite: IsolatedTestSuite }, options?: RequestOptions) {
+    return this.request<{ job: VerificationJob; idempotent: boolean }>('POST', `${tradePath(tradeId)}/verification-jobs`, input, options)
+  }
+  getVerificationJob(id: string, options?: RequestOptions) {
+    return this.request<{ job: VerificationJob; test_suite?: IsolatedTestSuite; artifact_path?: string; report_path?: string }>('GET', verificationJobPath(id), undefined, options)
+  }
+  submitVerificationReport(id: string, report: IsolatedReport, options?: RequestOptions) {
+    return this.request<{ job: VerificationJob; idempotent: boolean }>('POST', verificationJobPath(id), report, options)
+  }
+  cancelVerificationJob(id: string, options?: RequestOptions) {
+    return this.request<{ job: VerificationJob; idempotent: boolean }>('DELETE', verificationJobPath(id), undefined, options)
   }
   /** Returns bytes only after checking the authenticated download against the saved metadata. */
   async downloadArtifact(artifact: PrivateArtifact, options: RequestOptions = {}) {
