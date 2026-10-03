@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.70'
+export const AGENT_CONTRACT_VERSION = '1.71'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -94,6 +94,10 @@ const createServiceBodySchema = {
     price_bankr: { type: 'number', minimum: 0.01, maximum: 1000000000, deprecated: true, description: 'Compatibility alias for price_usd; still accepted during migration.' },
   },
 }
+
+const mppHashProofBodySchema = { type: 'object', additionalProperties: false, required: ['tx_hash', 'payer_address'], properties: {
+  tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },
+} }
 
 const assertionPrimitiveSchema = { oneOf: [{ type: 'string', maxLength: 500 }, { type: 'number' }, { type: 'boolean' }, { type: 'null' }] }
 const mandateAmountSchema = { type: 'string', pattern: '^(?:0|[1-9][0-9]{0,9})(?:\\.[0-9]{1,2})?$', description: 'USD decimal string; aggregate and per-execution limits must be positive.' }
@@ -864,8 +868,8 @@ export const AGENT_ACTIONS: AgentAction[] = [
     body_schema: { type: 'object', additionalProperties: false, required: ['intent_id', 'chain_id', 'token_address', 'tx_hash', 'payer_address'], properties: { intent_id: { type: 'string' }, payer_signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' }, chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' } } },
   },
   {
-    id: 'fund_trade_mpp', label: 'Fund through MPP', description: 'Call the reserved trade funding URL with an MPP-capable client. The first response is HTTP 402; retry with the verified pathUSD credential and the same ClawdMarket identity.',
-    method: 'POST', endpoint: '/api/trades/{id}/fund/mpp', auth: 'trade-buyer', payment: null, required: ['id'],
+    id: 'fund_trade_mpp', label: 'Fund through MPP', description: 'Manual MPP checkout returns a 402 challenge. Preserve buyer identity and send credentials in Payment-Authorization. Recover an already sent payment with tx_hash/payer_address JSON, which never broadcasts. Mandate pull funding remains closed pending durable Tempo buyer authority.',
+    method: 'POST', endpoint: '/api/trades/{id}/fund/mpp', auth: 'trade-buyer', payment: null, required: ['id'], optional: ['tx_hash', 'payer_address'], body_schema: mppHashProofBodySchema,
   },
   {
     id: 'cancel_trade', label: 'Cancel unpaid trade', description: 'Cancel an unpaid reservation. Inspect payment_exposure afterward: external payment can still arrive late and require a refund.',
@@ -1761,13 +1765,16 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       },
     } },
     '/api/trades/{id}/fund/mpp': { post: {
-      operationId: 'fund_trade_mpp', summary: 'Fund a reserved trade through MPP on Tempo', security: authenticated,
-      parameters: [tradeIdParameter],
+      operationId: 'fund_trade_mpp', summary: 'Fund or reconcile a reserved MPP trade on Tempo', security: authenticated,
+      description: 'Use Payment-Authorization for an MPP credential alongside buyer authentication. Optional JSON hash proof performs read-only chain verification and can reconcile expired/cancelled checkouts without a challenge or broadcast. Mandate pull funding is currently disabled.',
+      parameters: [tradeIdParameter, { name: 'Payment-Authorization', in: 'header', required: false, schema: { type: 'string', maxLength: 16384 } }],
+      requestBody: { required: false, content: { 'application/json': { schema: mppHashProofBodySchema } } },
       responses: {
-        200: { description: 'MPP payment confirmed and trade moved to escrow_held, or a late payment refund confirmed' }, 202: { description: 'Late valid payment recorded and its full refund submitted' }, 401: { description: 'ClawdMarket identity required' },
+        200: { description: 'MPP payment confirmed and trade moved to escrow_held, or a late payment refund confirmed' }, 202: { description: 'Late valid payment recorded and its full refund queued in the existing outbox' }, 400: { description: 'Malformed or conflicting MPP credential/proof' }, 401: { description: 'ClawdMarket identity required' },
         402: { description: 'MPP pathUSD payment challenge' }, 403: { description: 'Only the buyer may fund' }, 404: { description: 'Trade not found' },
         409: { description: 'Wrong rail, state conflict, proof already used, or provider eligibility changed before challenge; verified late payment enters refund reconciliation' }, 410: { description: 'Checkout expired' },
-        500: { description: 'Verification failed' }, 503: { description: 'MPP settlement is not configured' },
+        413: { description: 'Bounded proof/credential exceeds its limit' }, 422: { description: 'No successful exact trade-bound payment proof' },
+        500: { description: 'Verification failed; retain the original proof' }, 503: { description: 'MPP settlement is unavailable or new payments are paused' },
       },
     } },
     '/api/trades/{id}/cancel': { post: {
@@ -2236,7 +2243,7 @@ Example funding body, where the number is copied from the server quote:
 
 For EVM checkout, first POST \`chain_id\`, \`token_address\`, and \`payer_address\` to \`checkout.intent_url\`. Send one transfer of the intent's \`token_amount\` to its \`treasury_address\` only when \`created\` is true. Persist the hash, then POST it to \`checkout.funding_url\` with \`intent_id\`, \`chain_id\`, \`token_address\`, and \`payer_address\`. HTTP 428 returns a payment-specific message to sign with the payer wallet; retry the same hash with \`payer_signature\`. On timeout, GET \`checkout.intent_url\` to resume verification. Never broadcast another transfer for an existing intent.
 
-For MPP checkout, call \`checkout.funding_url\` with an MPP-capable client. Preserve \`X-ClawdMarket-Agent-Key\` when the payment credential occupies \`Authorization\`. The pathUSD challenge carries the trade ID as its external correlation ID.
+For manual MPP checkout, call \`checkout.funding_url\` with an MPP-capable client. Use \`Payment-Authorization\` for the credential and retain buyer/agent authentication separately. Legacy \`Authorization: Payment ...\` callers must retain their account cookie/CSRF or \`X-ClawdMarket-Agent-Key\`. The pathUSD challenge binds the trade ID and its canonical 32-byte memo. Contract 1.71 adds optional \`{tx_hash, payer_address}\` JSON for read-only proof recovery after a lost response or expired/cancelled checkout; it never broadcasts, and late valid payments queue the existing full-refund outbox. MPP mandate pull funding remains disabled until durable Tempo credentials and fee-token authority are implemented.
 
 Confirm a satisfactory delivery with \`POST /api/trades/{trade_id}/confirm\` and no body. To freeze escrow instead, call \`POST /api/trades/{trade_id}/dispute\`:
 

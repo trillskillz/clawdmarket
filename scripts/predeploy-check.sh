@@ -13,6 +13,8 @@ required_files=(
   "app/api/routes/[id]/execute/route.ts"
   "app/api/routes/[id]/mandate/route.ts"
   "lib/route-payment-mandate.ts"
+  "lib/marketplace-mpp-payment.ts"
+  "lib/mpp-payment-proof.ts"
   "migrations/2026-10-03-route-payment-mandates-v1.sql"
   "app/api/routes/[id]/route.ts"
   "app/api/spending-policy/route.ts"

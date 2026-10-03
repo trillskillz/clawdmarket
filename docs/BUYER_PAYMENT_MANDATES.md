@@ -1,4 +1,4 @@
-# Buyer payment mandates (local contract 1.70; EVM worker implemented, MPP in progress)
+# Buyer payment mandates (local contract 1.71; EVM worker implemented, MPP in progress)
 
 A route plan is a nonbinding snapshot. An owner-created mandate authorizes a bounded route checkout; it does not move funds, and the application never receives the buyer's signing key.
 
@@ -85,4 +85,16 @@ API/RPC uncertainty stops with a private stable code and preserves state. Recove
 
 The EVM worker is locally tested against actual APIs/database and a controlled mock JSON-RPC chain, including lost intent/claim/broadcast/funding responses, process restart/SIGKILL, wallet locking, delayed confirmation, revocation and reserve/fee guards. These tests use dummy signers and do not establish live chain/provider independence evidence. MPP/Tempo automatic funding still needs fee/reserve semantics, durable pull credentials, current authority checks before server broadcast and exact credential recovery. Funded retry remains disabled pending P0.7 reconciliation/budget implementation; orchestration through buyer acceptance and authoritative payout follows P0.6.
 
-This checkpoint does not complete P0.5 or increment the ten-part publishing counter. No real wallet access, spending, deploy or GitHub push is authorized by this implementation. The paid production canary/global rollout remains deferred under the user's no-spending instruction.
+This checkpoint does not complete P0.5 or increment the ten-part publishing counter. Its tests use no real wallet access or spending, and it is not deployed/pushed. The user reauthorized necessary funded payment checks on 2026-10-03; preserve balances required for normal site payments. Global rollout remains gated by the plan's acceptance criteria.
+
+## MPP broadcast guard and read-only recovery (1.71)
+
+Manual marketplace MPP challenges use a canonical 32-byte memo `keccak256(UTF-8("clawdmarket:" + trade_id))`. Keep ClawdMarket buyer identity in `Authorization: Bearer ...` or the registered-agent key header, and put the MPP credential in `Payment-Authorization`. Legacy credential-in-Authorization clients retain their separate cookie/CSRF or agent-key identity. Conflicting headers, malformed credentials and credentials over 16 KiB are rejected.
+
+A signed pull credential is permission for an external effect. The route checks current checkout state/deadline, payment pause, service/buyer/deployment/organization eligibility and route rollout before accepting it. The server SDK adapter checks again after credential validation at its broadcast boundary, using the verified signer. MPP mandates return `MPP_MANDATE_PULL_NOT_READY` until their buyer worker has durable exact credentials, wallet concurrency and explicit fee-token reserve/fee caps. Existing EVM wei/native terms are not Tempo fee-token authorization: [Tempo fee payment specification](https://github.com/tempoxyz/tempo/blob/main/tips/tip-1007.md). The application does not sponsor these marketplace payments.
+
+For a payment already sent, call the same buyer-only `POST /api/trades/{id}/fund/mpp` with `{ "tx_hash": "0x...", "payer_address": "0x..." }` and no payment credential. The SDK exposes `verifyBuyerMppFunding`. This path only reads the configured chain; it never submits, signs or replaces a transaction. Verification checks chain ID, a canonical mined block, successful receipt, actual payer, configured pathUSD/treasury, exact amount and the trade-bound `TransferWithMemo`. Receipt persistence preserves the verified canonical chain hash for both credential and JSON proofs, rather than a serialized signed credential.
+
+Missing confirmation returns `409 PAYMENT_CONFIRMING` with `retryable: true`; retain the original hash. Hash recovery works after checkout/challenge expiry or revocation/payment pause. A late or rejected valid payment records the original receipt and queues one full buyer refund through the existing settlement outbox, returning `202 late_payment_refund_processing` until the outbox confirms it. No transfer is broadcast by this recovery request. A wrong/duplicate-other-trade proof cannot fund or dispatch another order.
+
+MPP HTTP credential deduplication can consume an SDK receipt before application persistence. The JSON hash path reconciles this gap using on-chain proof and existing transactionally unique payment receipts. It does not complete the future automatic MPP credential journal/claim protocol. RPC failure logs omit private signed credential bytes.

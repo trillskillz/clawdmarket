@@ -17,6 +17,20 @@ test('buyer payment claim SDK authenticates one canonical claim without signing 
   assert.throws(() => client.claimBuyerEvmPayment('../another', body), /trade ID must be a UUID/)
 })
 
+test('MPP SDK reconciles the exact known hash with buyer authentication and never requests another payment', async () => {
+  const proof = { tx_hash: `0x${'aa'.repeat(32)}`, payer_address: `0x${'11'.repeat(20)}` }, calls: string[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-mpp-buyer', fetch: async (input, init) => {
+    calls.push(new URL(String(input)).pathname)
+    assert.equal(init?.method, 'POST'); assert.deepEqual(JSON.parse(String(init?.body)), proof)
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-mpp-buyer')
+    assert.equal(new Headers(init?.headers).get('Payment-Authorization'), null)
+    return Response.json({ ok: true, trade: { id: routeId, status: 'escrow_held' }, receipt: { payment_reference: proof.tx_hash } })
+  } })
+  assert.equal((await client.verifyBuyerMppFunding(routeId, proof)).receipt?.payment_reference, proof.tx_hash)
+  assert.deepEqual(calls, [`/api/trades/${routeId}/fund/mpp`])
+  assert.throws(() => client.verifyBuyerMppFunding('../another', proof), /trade ID must be a UUID/)
+})
+
 test('buyer operation SDK preserves the same recovery reference and proof on canonical funding paths', async () => {
   const calls: { path: string; method: string; body: unknown }[] = []
   const client = new ClawdMarketClient({ apiKey: 'dummy-buyer-key', fetch: async (input, init) => {

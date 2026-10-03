@@ -6,6 +6,7 @@ import { WALLETS } from './wallet-addresses'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from './constants'
 import { durableMppStore } from './mpp-store'
 import { getMppSecretKey, getTempoRpcUrl } from './payment-config'
+import { guardMarketplaceMppMethod } from './marketplace-mpp-payment'
 
 const recipient = WALLETS.mpp
 
@@ -77,7 +78,8 @@ export function getMarketplaceMppServer() {
  const secretKey = getMppSecretKey()
  if (!recipient || !rpcUrl || !secretKey) return null
  marketplaceServer = ServerMppx.create({
-  methods: [serverTempo.charge({
+  requiresAuth: true,
+  methods: [guardMarketplaceMppMethod(serverTempo.charge({
    currency: PATHUSD_ADDRESS,
    recipient: recipient as `0x${string}`,
    chainId: TEMPO_CHAIN_ID,
@@ -85,7 +87,7 @@ export function getMarketplaceMppServer() {
    getClient: () => createClient({ chain: tempoChain, transport: http(rpcUrl) }),
    store: durableMppStore,
    waitForConfirmation: true,
-  })],
+  }))],
   realm: process.env.MPP_REALM?.trim() || 'clawdmkt.com',
   secretKey,
  })

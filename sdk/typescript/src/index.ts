@@ -269,6 +269,12 @@ export class ClawdMarketClient {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new Error('trade ID must be a UUID')
     return this.request<BuyerEvmPaymentClaimResult>('POST', `/api/trades/${tradeId}/fund/evm/claim`, input, options)
   }
+  /** Read-only verification of an already sent Tempo payment; never signs, broadcasts or replaces it. */
+  verifyBuyerMppFunding(tradeId: string, proof: { tx_hash: string; payer_address: string }, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
+    return this.request<{ ok: true; trade: { id: string; status: string }; status?: string; receipt?: { payment_reference: string } }>('POST', `/api/trades/${tradeId}/fund/mpp`, proof, options)
+  }
+
   /** Persist buyer_operation_id privately first. This never signs or broadcasts. */
   createBuyerEvmPaymentIntent(tradeId: string, input: { buyer_operation_id: string; chain_id: number; token_address: string; payer_address: string }, options?: RequestOptions) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new Error('trade ID must be a UUID')

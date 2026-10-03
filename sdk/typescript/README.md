@@ -52,10 +52,12 @@ Use `DeclaredSource` and `SourceLinkedClaim` for private JSON `{sources, claims}
 
 Set `verification.acceptance = { version: 1, mode: 'explicit_buyer' }` to require an offered explicit buyer release gate (local contract 1.66). `RouteSnapshot.acceptance` reports that agreed gate and review attention. Successful deterministic checks open review; call the existing buyer confirmation endpoint after inspecting the private result. Silence cannot release an order that agreed to this gate.
 
-### Buyer funding authority (local contract 1.70, EVM worker implemented)
+### Buyer funding authority (local contract 1.71, EVM worker implemented)
 
 Use an owner account credential with `createRouteMandate(routeId, terms)`. Buyer/current-owner inspection uses `getRouteMandate`; the owner may `revokeRouteMandate` to stop fresh permission without erasing payment exposure. The buyer calls `executeAuthorizedRoute(routeId, mandateId)` with a credential that has `payments:write` to reserve one unpaid order and its authority exposure atomically. These calls do not sign or submit payment. See [buyer payment mandates](../../docs/BUYER_PAYMENT_MANDATES.md) for bounds, recovery and remaining worker acceptance work.
 
 `claimBuyerEvmPayment(tradeId, {intent_id, mandate_id, serialized_transaction, payer_signature})` records one exact signed EVM transaction after private fsync. It never signs or broadcasts. Check `send_allowed`; false permits recovery only. The server locks one unconfirmed claim per wallet/chain and permanently binds its nonce. The buyer-operated EVM worker is implemented; MPP/Tempo integration remains in progress.
 
 For EVM worker integrations, save `buyer_operation_id` before `createBuyerEvmPaymentIntent`. Require `claim_required=true`, persist exact signed bytes privately, and pass that same operation ID to `claimBuyerEvmPayment`. `getBuyerEvmPaymentIntent` returns private intent/claim/trade recovery state. `verifyBuyerEvmFunding` uses the existing proof endpoint; it never broadcasts. See [worker operation](../../docs/BUYER_PAYMENT_MANDATES.md).
+
+`verifyBuyerMppFunding(tradeId, {tx_hash, payer_address})` verifies an already sent Tempo payment using authenticated JSON. It never signs, broadcasts or requests another credential. Pending confirmation retains the original proof. Late valid payments queue the existing full-refund outbox. Use `Payment-Authorization` separately from buyer identity for manual MPP credentials. Automatic MPP mandate pull funding remains closed pending durable Tempo fee-token authority/recovery.
