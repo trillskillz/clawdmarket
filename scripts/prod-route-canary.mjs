@@ -77,7 +77,7 @@ if (!live) {
   process.exit(0)
 }
 await promisify(execFile)('flock', ['--version'])
-if (docs.info?.['x-agent-contract-version'] !== '1.62') throw new Error('Contract 1.62 must be deployed before the funded canary')
+if (docs.info?.['x-agent-contract-version'] !== '1.63') throw new Error('Contract 1.63 must be deployed before the funded canary')
 if (buyerAuth.user.id !== process.env.ROUTE_CANARY_BUYER_ID || sellerAuth.user.id !== process.env.ROUTE_CANARY_SELLER_ID) throw new Error('Scoped canary IDs do not match authenticated identities')
 if (!/^\d+$/.test(process.env.GITHUB_RUN_ID || '')) throw new Error('Funded route canary requires a stable GitHub run ID')
 const suffix = `run-${process.env.GITHUB_RUN_ID}`
@@ -103,9 +103,16 @@ try {
   if (!serviceId || !service.readiness?.purchasable || service.current_capacity !== 1) throw new Error('Canary service is not purchasable with capacity one')
   console.log(`Service: ${serviceId}`)
   const planBody = { client_reference: `route-canary-${suffix}`, objective: 'Review this controlled route canary sample for a valid completion.',
+    provider_requirements: { approved_providers: [sellerAuth.user.id] },
     required_capabilities: ['code-review'], input: { sample: 'Controlled production route canary input' },
     max_budget: { amount: checkoutCap, currency: 'USD' }, deadline_seconds: 300,
     verification: { required: true, methods: ['buyer_review', 'schema'] }, payment_policy: { allowed_rails: ['evm'] }, retry_policy: { max_attempts: 1 } }
+  const denied = await api(`/api/services/${serviceId}/orders`, { method: 'POST', headers: buyerHeaders, body: json({
+    client_reference: `route-evidence-denied-${suffix}`, objective: planBody.objective, input: planBody.input, payment_rail: 'evm',
+    provider_requirements: { minimum_accepted_completions: 100000, minimum_distinct_buyers: 100000 },
+  }) }, true)
+  if (denied.status !== 409 || denied.body?.error_code !== 'PROVIDER_EVIDENCE_REQUIRED' || denied.body?.state !== 'no_funds_moved') throw new Error('Unsatisfied provider evidence requirement did not reject before checkout')
+  console.log('Evidence threshold rejected without creating a checkout or moving funds')
   const route = ok(await api('/api/routes/plan', { method: 'POST', headers: buyerHeaders, body: json(planBody) }, true), 'Route plan', [201])
   routeId = route.route?.id
   if (!routeId || route.route.candidates?.length !== 1 || route.route.candidates[0].service_id !== serviceId || route.planning?.funds_moved !== false) throw new Error('Route did not select exactly the canary service without funding')
@@ -113,6 +120,8 @@ try {
   if (replayPlan.route?.id !== routeId || !replayPlan.idempotent) throw new Error('Route plan replay created a second route')
   const selected = ok(await api(`/api/routes/${routeId}/execute`, { method: 'POST', headers: buyerHeaders }, true), 'Route execute', [201])
   tradeId = selected.trade?.id
+  if (selected.order?.provider_requirements?.approved_providers?.[0] !== sellerAuth.user.id
+    || selected.order?.execution_contract?.provider_protocol !== 'leased_v1') throw new Error('Buyer requirements and agreed contract were not saved')
   const checkout = selected.checkout
   if (!tradeId || selected.order?.service_id !== serviceId || selected.trade.status !== 'pending' || checkout?.rail !== 'evm' || checkout.amount_usd !== Number(checkoutCap) || checkout.treasury?.toLowerCase() !== config.treasury_wallet.toLowerCase()) throw new Error(`Unpaid route checkout violates the $${checkoutCap} guard`)
   const replayExecute = ok(await api(`/api/routes/${routeId}/execute`, { method: 'POST', headers: buyerHeaders }, true), 'Route execute replay')
@@ -142,7 +151,7 @@ try {
   const work = ok(await api(`/api/trades/${tradeId}/work-order`, { headers: sellerHeaders }), 'Funded seller work order').work_order
   if ((await api(`/api/trades/${tradeId}/work-order`)).status !== 401) throw new Error('Unauthenticated work-order read was not denied')
   const attemptId = work?.execution_attempt?.id
-  if (work?.id !== selected.order.id || work?.trade_id !== tradeId || work?.provider_protocol !== 'leased_v1' || !attemptId || work.input?.sample !== planBody.input.sample) throw new Error('Seller work order did not match the funded route')
+  if (work?.id !== selected.order.id || work?.trade_id !== tradeId || work?.provider_protocol !== 'leased_v1' || work?.contract_source !== 'checkout_snapshot' || !attemptId || work.input?.sample !== planBody.input.sample) throw new Error('Seller work order did not match the funded route')
   const providerState = await mkdtemp(join(tmpdir(), 'clawdmarket-provider-canary-'))
   let submitted
   try {

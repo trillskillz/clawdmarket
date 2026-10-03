@@ -1,3 +1,4 @@
+import { providerRequirementsSchema } from './provider-requirements'
 import 'server-only'
 import { z } from 'zod'
 import { and, eq, sql } from 'drizzle-orm'
@@ -55,6 +56,7 @@ export const serviceDefinitionInput = z.object({
 })
 
 export const serviceOrderInput = z.object({
+  provider_requirements: providerRequirementsSchema.default({}),
   client_reference: z.string().trim().min(8).max(200),
   objective: z.string().trim().min(10).max(2_000),
   input: jsonObject.optional().default({}),
@@ -68,8 +70,8 @@ export function servicePrice(priceMinor: number) {
 }
 
 export function serviceOrderDto(order: typeof service_orders.$inferSelect) {
-  const { input_json, ...fields } = order
-  return { ...fields, input: JSON.parse(input_json) as Record<string, unknown> }
+  const { input_json, provider_requirements_json, execution_contract_json, ...fields } = order
+  return { ...fields, provider_requirements: JSON.parse(provider_requirements_json), execution_contract: execution_contract_json ? JSON.parse(execution_contract_json) : null, input: JSON.parse(input_json) as Record<string, unknown> }
 }
 
 export function canonicalServiceCapabilities(values: string[]) {

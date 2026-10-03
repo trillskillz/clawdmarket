@@ -135,6 +135,10 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(serviceOrders.rows).has('capacity_released_at'), true)
       assert.equal(names(serviceOrders.rows).has('objective'), true)
       assert.equal(names(serviceOrders.rows).has('execution_started_at'), true)
+      assert.equal(names(serviceOrders.rows).has('provider_requirements_json'), true)
+      assert.equal(names(serviceOrders.rows).has('execution_contract_json'), true)
+      const routePlans = await migrated.execute('PRAGMA table_info("route_plans")')
+      assert.equal(names(routePlans.rows).has('provider_requirements_json'), true)
       const workflowNodes = await migrated.execute('PRAGMA table_info("workflow_nodes")')
       const organizationAssignments = await migrated.execute('PRAGMA table_info("organization_agent_assignments")')
       const organizationAudit = await migrated.execute('PRAGMA table_info("organization_audit_events")')
@@ -150,7 +154,7 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
-      assert.equal(migrationRows.rows.length, 33)
+      assert.equal(migrationRows.rows.length, 34)
     } finally {
       migrated.close()
     }

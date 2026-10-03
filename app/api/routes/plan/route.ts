@@ -23,6 +23,7 @@ function matchesRequest(plan: typeof route_plans.$inferSelect, buyerId: string, 
     && plan.deadline_seconds === (input.deadline_seconds ?? null)
     && plan.verification_policy === JSON.stringify(input.verification)
     && plan.payment_policy === JSON.stringify(input.payment_policy)
+    && plan.provider_requirements_json === JSON.stringify(input.provider_requirements)
     && plan.retry_policy === JSON.stringify(input.retry_policy)
 }
 
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
       objective: input.objective, required_capabilities: JSON.stringify(capabilities), input_json: JSON.stringify(input.input),
       max_budget_minor: input.max_budget.amount, currency: 'USD', deadline_seconds: input.deadline_seconds ?? null,
       verification_policy: JSON.stringify(input.verification), payment_policy: JSON.stringify(input.payment_policy),
+      provider_requirements_json: JSON.stringify(input.provider_requirements),
       retry_policy: JSON.stringify(input.retry_policy), candidates_json: JSON.stringify(planned.candidates),
       state: 'planned', expires_at: new Date(now.getTime() + 5 * 60_000), created_at: now, updated_at: now,
     }).returning()

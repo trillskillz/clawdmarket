@@ -1,3 +1,4 @@
+import { serviceExecutionContract } from './service-execution-contract'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db'
 import { agents, agent_owners, capability_performance_events, payment_receipts, service_definitions, service_orders, settlement_transfers, transactions, verification_results } from './schema'
@@ -19,7 +20,7 @@ export async function recordCapabilityCompletion(tx: Transaction, trade: { id: s
       .where(eq(agent_owners.agentId, trade.buyer_id.slice('user_agent_'.length))).limit(1)
     if (buyerOwner?.userId === owner.userId) return
   }
-  const [order] = await tx.select({ id: service_orders.id, capabilities: service_definitions.capabilities })
+  const [order] = await tx.select({ id: service_orders.id, capabilities: service_definitions.capabilities, execution_contract_json: service_orders.execution_contract_json })
     .from(service_orders).innerJoin(service_definitions, eq(service_orders.service_id, service_definitions.id))
     .where(eq(service_orders.trade_id, trade.id)).limit(1)
   if (!order) return
@@ -38,7 +39,7 @@ export async function recordCapabilityCompletion(tx: Transaction, trade: { id: s
     if (!receipt || !payout) return
   } else return
   let declared: unknown
-  try { declared = JSON.parse(order.capabilities) } catch { return }
+  try { declared = JSON.parse(serviceExecutionContract(order, order).capabilities) } catch { return }
   if (!Array.isArray(declared)) return
   const capabilities = [...new Set(declared.filter((value): value is string => typeof value === 'string').map(normalizeCapability).filter((value): value is string => Boolean(value)))].slice(0, 20)
   for (const capability of capabilities) {

@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const maxAttempts = Math.max(1, Math.min(3, Number((JSON.parse(plan.retry_policy) as { max_attempts?: number }).max_attempts || 1)))
     let lastCode = 'ROUTE_NO_ELIGIBLE_PROVIDER'
-    const providerFailures = new Set(['ROUTE_STALE_PROVIDER', 'SERVICE_UNAVAILABLE', 'SERVICE_CAPACITY_OR_PRICE_CHANGED', 'SERVICE_PRICE_CHANGED', 'SERVICE_INPUT_INVALID', 'SERVICE_INPUT_SCHEMA_UNSUPPORTED', 'EXECUTION_MODE_UNSUPPORTED', 'PROVIDER_PROTOCOL_UNSUPPORTED', 'VERIFICATION_UNSUPPORTED', 'SELLER_PAYOUT_REQUIRED', 'PAYMENT_RAIL_UNAVAILABLE', 'REFERENCE_FLEET_PAID_SERVICES_LOCKED'])
+    const providerFailures = new Set(['PROVIDER_EVIDENCE_REQUIRED', 'PROVIDER_NOT_APPROVED', 'ROUTE_STALE_PROVIDER', 'SERVICE_UNAVAILABLE', 'SERVICE_CAPACITY_OR_PRICE_CHANGED', 'SERVICE_PRICE_CHANGED', 'SERVICE_INPUT_INVALID', 'SERVICE_INPUT_SCHEMA_UNSUPPORTED', 'EXECUTION_MODE_UNSUPPORTED', 'PROVIDER_PROTOCOL_UNSUPPORTED', 'VERIFICATION_UNSUPPORTED', 'SELLER_PAYOUT_REQUIRED', 'PAYMENT_RAIL_UNAVAILABLE', 'REFERENCE_FLEET_PAID_SERVICES_LOCKED'])
     for (let index = 0; index < Math.min(maxAttempts, candidates.length); index += 1) {
       const candidate = candidates[index]
       const attemptNumber = index + 1
@@ -97,6 +97,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       try {
         const result = await reserveServiceOrder({ serviceId: candidate.service_id, principal, routeId: id, attemptNumber, externalOnly: true, expectedSellerId: service.seller_id, request: {
           client_reference: `route:${id}:attempt:${attemptNumber}`, objective: plan.objective,
+          provider_requirements: JSON.parse(plan.provider_requirements_json),
           input: JSON.parse(plan.input_json), payment_rail: candidate.payment_rail,
           max_total: plan.max_budget_minor, expected_price: service.price_minor,
         } })

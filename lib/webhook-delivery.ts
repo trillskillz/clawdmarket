@@ -1,3 +1,4 @@
+import { serviceExecutionContract } from './service-execution-contract';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
@@ -25,7 +26,8 @@ async function workOrderNoticeActionable(payload: string): Promise<boolean> {
     tradeStatus: trades.status,
     orderState: service_orders.state,
     capacityReleasedAt: service_orders.capacity_released_at,
-    protocol: service_definitions.provider_protocol,
+    execution_contract_json: service_orders.execution_contract_json,
+    provider_protocol: service_definitions.provider_protocol,
     attemptId: service_execution_attempts.id,
     attemptState: service_execution_attempts.state,
     leaseExpiresAt: service_execution_attempts.lease_expires_at,
@@ -37,8 +39,9 @@ async function workOrderNoticeActionable(payload: string): Promise<boolean> {
     .leftJoin(service_execution_attempts, eq(service_execution_attempts.order_id, service_orders.id))
     .where(eq(trades.id, data.trade_id)).limit(1);
   if (!row || row.tradeStatus !== 'escrow_held' || row.capacityReleasedAt) return false;
-  if (row.protocol === 'manual') return ['funded', 'executing'].includes(row.orderState);
-  if (row.protocol !== 'leased_v1' || row.attemptId !== data.execution_attempt_id) return false;
+  const protocol = serviceExecutionContract(row, row).provider_protocol;
+  if (protocol === 'manual') return ['funded', 'executing'].includes(row.orderState);
+  if (protocol !== 'leased_v1' || row.attemptId !== data.execution_attempt_id) return false;
   if (row.attemptState === 'queued') {
     const dueAt = row.acknowledgmentDueAt || (row.attemptCreatedAt
       ? new Date(row.attemptCreatedAt.getTime() + PROVIDER_ACKNOWLEDGMENT_TIMEOUT_SECONDS * 1000) : null);

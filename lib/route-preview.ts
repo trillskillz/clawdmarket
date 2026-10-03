@@ -16,6 +16,7 @@ export async function previewRoute(input: NormalizedRouteRequest, buyerId: strin
       verification: input.verification,
       payment_policy: input.payment_policy,
       retry_policy: input.retry_policy,
+      provider_requirements: input.provider_requirements,
       candidates: planned.candidates,
     },
     planning: { examined: planned.examined, truncated: planned.truncated, candidate_count: planned.candidates.length },

@@ -1,3 +1,4 @@
+import { serviceExecutionContract } from './service-execution-contract'
 import 'server-only'
 import { and, eq } from 'drizzle-orm'
 import { db } from './db'
@@ -16,7 +17,7 @@ export async function inspectOwnedRoute(routeId: string, buyerId: string) {
   let providerExecution = null
   if (plan.service_order_id) {
     const [linked] = await db.select({ order: service_orders, trade: trades,
-      protocol: service_definitions.provider_protocol, attempt: service_execution_attempts }).from(service_orders)
+      provider_protocol: service_definitions.provider_protocol, attempt: service_execution_attempts }).from(service_orders)
       .innerJoin(trades, eq(trades.id, service_orders.trade_id))
       .innerJoin(service_definitions, eq(service_definitions.id, service_orders.service_id))
       .leftJoin(service_execution_attempts, eq(service_execution_attempts.order_id, service_orders.id))
@@ -24,7 +25,7 @@ export async function inspectOwnedRoute(routeId: string, buyerId: string) {
     if (linked) {
       const now = new Date()
       executionTiming = routeExecutionTiming(plan, linked.order, linked.trade, now)
-      providerExecution = providerExecutionStatus(linked.protocol, linked.order, linked.trade, linked.attempt, executionTiming, now)
+      providerExecution = providerExecutionStatus(serviceExecutionContract(linked.order, linked).provider_protocol, linked.order, linked.trade, linked.attempt, executionTiming, now)
     }
   }
   return {

@@ -1,3 +1,4 @@
+import { serviceExecutionContract } from './service-execution-contract'
 import { createHash } from 'node:crypto'
 import { and, eq, gt } from 'drizzle-orm'
 import { db } from './db'
@@ -51,10 +52,11 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
     acceptance_criteria: JSON.parse(workspace.acceptance_criteria),
     required_json_keys: JSON.parse(workspace.required_json_keys),
   } : {})
-  const [service] = await db.select({ policy: service_definitions.verification_policy, output_schema: service_definitions.output_schema,
-    provider_protocol: service_definitions.provider_protocol, order_id: service_orders.id })
+  const [linkedService] = await db.select({ verification_policy: service_definitions.verification_policy, output_schema: service_definitions.output_schema,
+    execution_contract_json: service_orders.execution_contract_json, provider_protocol: service_definitions.provider_protocol, order_id: service_orders.id })
     .from(service_orders).innerJoin(service_definitions, eq(service_orders.service_id, service_definitions.id))
     .where(eq(service_orders.trade_id, tradeId)).limit(1)
+  const service = linkedService ? serviceExecutionContract(linkedService, linkedService) : null
   if (service?.provider_protocol === 'leased_v1') {
     const [attempt] = await db.select().from(service_execution_attempts)
       .where(eq(service_execution_attempts.order_id, service.order_id)).limit(1)
@@ -63,7 +65,7 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
       throw new DeliveryError('An accepted, active execution attempt is required for delivery', 409)
     }
   }
-  const policy = verificationPolicySchema.safeParse(service ? JSON.parse(service.policy) : { required: true, methods: ['buyer_review'] })
+  const policy = verificationPolicySchema.safeParse(service ? JSON.parse(service.verification_policy) : { required: true, methods: ['buyer_review'] })
   if (!policy.success) throw new DeliveryError('Stored verification policy is unsupported', 409)
   if (service && policy.data.methods.includes('schema') && !outputSchemaV1.safeParse(JSON.parse(service.output_schema)).success) {
     throw new DeliveryError('Stored output schema is unsupported', 409)

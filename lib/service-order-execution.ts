@@ -1,3 +1,4 @@
+import { serviceExecutionContract } from './service-execution-contract'
 import 'server-only'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
@@ -34,9 +35,9 @@ export function startServiceOrderExecution(tradeId: string, sellerId: string) {
           if (!current || current.trade.seller_id !== sellerId) {
             throw new ServiceOrderStartError('WORK_ORDER_NOT_FOUND', 'Work order not found', 404)
           }
-          const [definition] = await tx.select({ protocol: service_definitions.provider_protocol }).from(service_definitions)
+          const [definition] = await tx.select({ provider_protocol: service_definitions.provider_protocol }).from(service_definitions)
             .where(eq(service_definitions.id, current.order.service_id)).limit(1)
-          if (definition?.protocol === 'leased_v1') throw new ServiceOrderStartError('WORK_ATTEMPT_REQUIRED', 'Use the provider attempt action for this service', 409)
+          if (definition && serviceExecutionContract(current.order, definition).provider_protocol === 'leased_v1') throw new ServiceOrderStartError('WORK_ATTEMPT_REQUIRED', 'Use the provider attempt action for this service', 409)
           if (current.order.execution_started_at) {
             return { order: current.order, trade_status: current.trade.status, idempotent: true }
           }

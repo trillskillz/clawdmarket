@@ -50,7 +50,7 @@ The additive `2026-09-30-route-plans-v1`, `2026-09-30-verification-results-v1`, 
 
 Contract 1.62 shares the route compatibility check between execution preflight and reservation. Reservation reads the saved required capabilities, verification policy/source minimum, and deadline in its transaction. A change between preflight and the reservation service read cannot bypass those requirements. The capacity write compares seller identity, capability array, and nullable estimated latency along with price, execution, protocol, input/output schema, and verification fields. A provider identity change after preflight is rejected even if the replacement seller is otherwise approved.
 
-Incompatible routes return `ROUTE_STALE_PROVIDER`; a changed capacity snapshot returns `SERVICE_CAPACITY_OR_PRICE_CHANGED`. These provider errors can use the next saved candidate within `max_attempts` only before checkout. Concurrent fallback creates one linked order, and exact existing checkout replay survives later provider contract changes without a new reservation. Malformed capability records are excluded instead of breaking planning or execution. This closes reservation races; independent evidence and funding-time eligibility remain separate gates.
+Incompatible routes return `ROUTE_STALE_PROVIDER`; a changed capacity snapshot returns `SERVICE_CAPACITY_OR_PRICE_CHANGED`. These provider errors can use the next saved candidate within `max_attempts` only before checkout. Concurrent fallback creates one linked order, and exact existing checkout replay survives later provider contract changes without a new reservation. Malformed capability records are excluded instead of breaking planning or execution. This closes reservation races; independent verification remains a separate gate; contract 1.63 adds the evidence and funding checks below.
 
 ## Buyer policy at reservation
 
@@ -59,3 +59,30 @@ Contract 1.61 rechecks any saved buyer policy inside service reservation for bot
 ## Provider acknowledgment timeout
 
 Contract 1.59 persists a ten-minute acknowledgment deadline on funded `leased_v1` attempts. Private route inspection exposes `provider_execution.acknowledgment_due_at` and `acknowledgment_overdue`; overdue queued work and persisted `acknowledgment_timed_out` attempts report `attention_reason: acknowledgment_timeout` with the existing buyer dispute action. A stale work notice is suppressed, and late seller acceptance is rejected. Accepted work continues under its separate heartbeat lease. The observer does not release funds or capacity, change the route's funded state, or authorize another checkout. Queued acknowledgment failure is kept distinct from accepted lease expiry in ranking evidence. Run the additive acknowledgment migration before deploying this contract.
+
+
+## Buyer provider requirements (contract 1.63)
+
+Routes, read-only MCP/A2A previews, and direct service orders accept:
+
+```json
+{
+  "provider_requirements": {
+    "approved_providers": ["user_agent_PROVIDER_ID"],
+    "minimum_accepted_completions": 3,
+    "minimum_distinct_buyers": 2
+  }
+}
+```
+
+Each field is optional. Provider IDs may be seller user IDs or bare agent IDs. Either backed threshold requires every requested capability to meet both minima; an unspecified minimum defaults to one. Direct orders require evidence for all offered capabilities. An empty or omitted object allows claims and confers no spending authority. Independent benchmarks and semantic quality remain unmeasured.
+
+A linked owner can save the same object in an agent's versioned spending policy. Request and saved policy requirements both apply; a request cannot relax policy. Candidate `eligibility` shows satisfied request/policy requirements, `confidence: unmeasured | backed_completion_observed`, and `buyer_independence: not_verified`. Distinct eligible buyer accounts are not verified independent people. Evidence reads revalidate completed economic proof, buyer-reviewed delivery, reference/self exclusions, and current ownership links. Repeated completions from one account do not increase breadth.
+
+Reservation rechecks evidence inside its transaction and returns `PROVIDER_EVIDENCE_REQUIRED` or `PROVIDER_NOT_APPROVED` with no economic writes on failure. Saved routes can use another permitted candidate only before checkout. New orders save provider requirements and a versioned execution contract with the agreed capabilities, input/output schemas, verification policy, title, latency and protocol. A route freezes only its requested capabilities. Future capability-completion events use the snapshot, so edits cannot attach new claims to completed work.
+
+New EVM intents and unpaid MPP challenges recheck current eligibility; an intent returns `PROVIDER_ELIGIBILITY_CHANGED` before permission to send. Existing intents remain recoverable and return `created: false`, never permission to pay again. Recovery-only intents and already paid credentials remain usable to reconcile the original proof. Verified funding checks current eligibility and buyer policy again in its transaction; daily/monthly exposure already includes this order and is not added twice.
+
+If verified payment arrives after eligibility changes, the payment receipt and cancellation commit together, capacity is released, no work is dispatched, and the existing refund outbox returns the full paid amount to the verified payer. A temporary refund preparation failure retains the proof and pending refund; resume verification of that same proof and inspect payment exposure. Never send another transfer. Once funded, work-order reads, dispatch, seller start, delivery checks and completion evidence use the saved contract despite later definition edits. Old orders explicitly report `legacy_current_definition`; migration retains null snapshots rather than fabricating historical terms. Malformed non-null snapshots fail closed.
+
+Apply `2026-10-02-buyer-provider-requirements.sql` through the idempotent runtime migrator before deploying 1.63. The migration is additive and does not modify historical payment or settlement records. Global rollout remains closed pending independent provider evidence and the remaining spending-authority gates.

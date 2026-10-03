@@ -21,7 +21,7 @@ import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-flee
 import { reusableServiceBuyerOrdersEnabled, reusableServiceSellerWritesEnabled } from '@/lib/routing-feature-flags'
 import { checkServiceInput } from '@/lib/verification-policy'
 import { serviceContractReadiness } from '@/lib/service-contract-readiness'
-import { serviceSupportsRoute } from '@/lib/route-service-eligibility'
+import { serviceSupportsRoute, storedServiceCapabilities } from '@/lib/route-service-eligibility'
 
 export class ServiceOrderReservationError extends Error {
   constructor(public readonly code: string, message: string, public readonly status = 409, public readonly retryable = false) {
@@ -29,7 +29,11 @@ export class ServiceOrderReservationError extends Error {
   }
 }
 
-type OrderRequest = z.output<typeof serviceOrderInput>
+import { checkProviderRequirements } from './service-funding-eligibility'
+import { captureServiceExecutionContract } from './service-execution-contract'
+
+type ParsedOrderRequest = z.output<typeof serviceOrderInput>
+type OrderRequest = Omit<ParsedOrderRequest, 'provider_requirements'> & { provider_requirements?: ParsedOrderRequest['provider_requirements'] }
 type ReservationArgs = { serviceId: string; principal: RequestPrincipal; request: OrderRequest; routeId?: string; attemptNumber?: number; externalOnly?: boolean; expectedSellerId?: string }
 
 function sqliteBusy(error: unknown) {
@@ -60,6 +64,7 @@ export async function existingServiceOrder(reference: string) {
 function sameRequest(prior: NonNullable<Awaited<ReturnType<typeof existingServiceOrder>>>, args: ReservationArgs) {
   const { request, principal, serviceId } = args
   return prior.order.buyer_id === principal.userId && prior.order.service_id === serviceId
+    && prior.order.provider_requirements_json === JSON.stringify(request.provider_requirements ?? {})
     && prior.order.objective === request.objective && prior.order.input_json === JSON.stringify(request.input)
     && (request.payment_rail === 'auto' || prior.order.payment_rail === request.payment_rail)
     && (request.expected_price === undefined || prior.order.price_minor === request.expected_price)
@@ -119,11 +124,15 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     const feeRecipient = rail === 'ledger' ? await ensureAdminFeeRecipient() : null
     const reserveOnce = () => db.transaction(async (tx) => {
       const now = new Date()
+      let agreedCapabilities = storedServiceCapabilities(service.capabilities)
+      if (!agreedCapabilities?.length) throw new ServiceOrderReservationError(routeId ? 'ROUTE_STALE_PROVIDER' : 'SERVICE_UNAVAILABLE', 'Service capabilities are invalid')
       if (routeId) {
         const [plan] = await tx.select().from(route_plans).where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId))).limit(1)
         if (!plan || plan.state !== 'reserving' || plan.service_order_id) throw new ServiceOrderReservationError('ROUTE_STATE_CHANGED', 'Route is no longer available for reservation')
         if (plan.expires_at <= now) throw new ServiceOrderReservationError('ROUTE_PLAN_EXPIRED', 'Route plan expired before execution', 410)
         if (totalMinor > plan.max_budget_minor) throw new ServiceOrderReservationError('BUDGET_EXCEEDED', 'Current total exceeds route budget')
+        if (plan.provider_requirements_json !== JSON.stringify(request.provider_requirements ?? {})) throw new ServiceOrderReservationError('ROUTE_STATE_CHANGED', 'Route requirements changed')
+        agreedCapabilities = JSON.parse(plan.required_capabilities) as string[]
         if (!serviceSupportsRoute(service, plan)) throw new ServiceOrderReservationError('ROUTE_STALE_PROVIDER', 'Service no longer satisfies the saved route requirements')
       }
       const [claimed] = await tx.update(service_definitions)
@@ -142,6 +151,8 @@ export async function reserveServiceOrder(args: ReservationArgs) {
           sql`${service_definitions.active_orders} < ${service_definitions.max_concurrency}`))
         .returning({ id: service_definitions.id })
       if (!claimed) throw new ServiceOrderReservationError('SERVICE_CAPACITY_OR_PRICE_CHANGED', 'Service capacity or price changed; re-plan before retrying')
+      const requirementFailure = await checkProviderRequirements(tx, principal.userId, service.seller_id, agreedCapabilities, JSON.stringify(request.provider_requirements ?? {}))
+      if (requirementFailure) throw new ServiceOrderReservationError(requirementFailure, 'Provider does not satisfy buyer evidence requirements')
       const spendContext = { sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: contract.verificationPolicy!.methods }
       if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100, ...spendContext })
       else await enforceBuyerSpendPolicy(tx, principal.userId, { totalMinor, ...spendContext }, now)
@@ -163,6 +174,8 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       const [order] = await tx.insert(service_orders).values({
         id: crypto.randomUUID(), service_id: id, listing_id: listing.id, trade_id: trade.id,
         buyer_id: principal.userId, client_reference: reference, objective: request.objective,
+        provider_requirements_json: JSON.stringify(request.provider_requirements ?? {}),
+        execution_contract_json: captureServiceExecutionContract(service, agreedCapabilities),
         input_json: JSON.stringify(request.input), price_minor: service.price_minor,
         payment_rail: rail, state: rail === 'ledger' ? 'funded' : 'awaiting_funding',
       }).returning()
