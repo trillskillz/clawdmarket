@@ -2,6 +2,11 @@
 set -euo pipefail
 
 required_files=(
+  "lib/account-credit.ts"
+  "app/api/wallet/deposits/route.ts"
+  "app/api/wallet/transfers/route.ts"
+  "app/api/wallet/balances/route.ts"
+  "migrations/2026-10-03-backed-account-credit-v1.sql"
   "app/api/agents/list/route.ts"
   "app/api/contracts/route.ts"
   "app/api/listings/route.ts"

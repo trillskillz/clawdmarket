@@ -28,7 +28,7 @@ export function getTradeReceipt(trade: ReceiptTrade) {
   const payoutComplete = ['complete', 'seller_paid'].includes(trade.payout_status || '')
   return {
     sellerAmount, platformFee, buyerTotal, external,
-    sellerLabel: external ? 'Seller payout' : 'Seller balance',
+    sellerLabel: external ? 'Seller payout' : trade.payment_rail === 'credit' ? 'Seller account credit' : 'Seller balance',
     settlementLabel: external
       ? (payoutComplete && trade.settlement_evidence ? 'External payout confirmed by recorded transaction' : payoutComplete ? 'External settlement recorded; transaction evidence unavailable' : 'External settlement processing')
       : (complete ? 'Account balance released' : 'Account balance held'),

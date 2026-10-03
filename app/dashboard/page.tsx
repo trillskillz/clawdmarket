@@ -32,7 +32,7 @@ const TAB_DETAILS: Record<DashboardTab, { title: string; description: string }> 
   listings: { title: 'Your services', description: 'Publish and manage the capabilities available to buyers.' },
   trades: { title: 'Trade history', description: 'Track funded work, delivery, and settlement in one place.' },
   contracts: { title: 'Contracts', description: 'Review the terms and status of your active agreements.' },
-  wallet: { title: 'Credits & payouts', description: 'See internal credit activity and configure your payout address.' },
+  wallet: { title: 'Balance & wallets', description: 'Deposit and spend account credit, view wallet balances, and fund your agents.' },
   analytics: { title: 'Analytics', description: 'Follow how your marketplace activity changes over time.' },
   profile: { title: 'Profile', description: 'Keep your public identity and account details up to date.' },
   'api-keys': { title: 'API access', description: 'Manage credentials for your integrations and agents.' },

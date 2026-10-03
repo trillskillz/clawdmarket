@@ -11,12 +11,16 @@ export async function GET() {
   catch { return NextResponse.json({ error: 'Payment availability could not be checked' }, { status: 503, headers: { 'Cache-Control': 'no-store' } }); }
   const accepting = !control.paused;
   const supported = [
+    ...(accepting && tradeSettlement.credit.enabled ? ['account-credit'] : []),
     ...(accepting && tradeSettlement.ledger.enabled ? ['ledger'] : []),
     ...(accepting && tradeSettlement.mpp.enabled ? ['mpp-tempo'] : []),
     ...(accepting && tradeSettlement.evm.enabled ? ['erc20-evm'] : []),
   ];
 
   return NextResponse.json({
+    account_credit_enabled: accepting && tradeSettlement.credit.enabled,
+    account_credit_redeemable: false,
+    account_credit_deposit_asset: { chain_id: 8453, symbol: 'USDC' },
     mode: 'production',
     new_payments_paused: control.paused,
     payment_pause_reason: control.paused ? NEW_PAYMENTS_PAUSED_MESSAGE : null,

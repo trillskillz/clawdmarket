@@ -68,6 +68,9 @@ export const REQUIRED_DATABASE_SCHEMA = {
   buyer_spend_policy_events: ['id', 'buyer_id', 'actor_account_id', 'version', 'old_policy_json', 'new_policy_json', 'created_at'],
   wallets: ['id', 'user_id', 'balance', 'escrow', 'created_at'],
   transactions: ['id', 'from_user_id', 'to_user_id', 'amount', 'type', 'reference_id', 'created_at'],
+  credit_accounts: ['user_id', 'available_minor', 'escrow_minor'],
+  credit_entries: ['id', 'user_id', 'reference', 'kind', 'available_delta', 'escrow_delta', 'created_at'],
+  credit_deposits: ['id', 'user_id', 'client_reference', 'amount_minor', 'payer', 'treasury', 'token', 'chain_id', 'tx_hash', 'payer_signature', 'state', 'created_at', 'expires_at'],
   payment_receipts: [
     'id', 'route', 'trade_id', 'payment_rail', 'amount', 'currency', 'tx_hash',
     'payer_address', 'external_id', 'token_address', 'chain_id', 'token_symbol',

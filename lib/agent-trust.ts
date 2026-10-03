@@ -117,6 +117,7 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
     AND EXISTS (SELECT 1 FROM trade_deliveries d WHERE d.trade_id = t.id AND d.content_hash IS NOT NULL)
     AND (
       (t.payment_rail = 'ledger' AND EXISTS (SELECT 1 FROM transactions x WHERE x.reference_id = t.id AND x.type = 'escrow_lock'))
+      OR (t.payment_rail = 'credit' AND EXISTS (SELECT 1 FROM credit_entries c WHERE c.reference = t.id AND c.user_id = t.buyer_id AND c.kind = 'purchase') AND EXISTS (SELECT 1 FROM credit_entries c WHERE c.reference = t.id AND c.user_id = t.seller_id AND c.kind = 'sale'))
       OR (t.payment_rail IN ('mpp', 'evm')
         AND EXISTS (SELECT 1 FROM payment_receipts p WHERE p.trade_id = t.id AND p.payment_rail = t.payment_rail)
         AND EXISTS (SELECT 1 FROM settlement_transfers s WHERE s.trade_id = t.id AND s.kind = 'seller_payout' AND s.status = 'confirmed' AND s.tx_hash IS NOT NULL))

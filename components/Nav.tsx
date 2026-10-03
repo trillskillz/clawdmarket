@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import BrandMark from './BrandMark'
 import styles from './Nav.module.css'
@@ -15,7 +15,11 @@ const NAV_LINKS = [
   { href: '/docs', label: 'Docs' },
 ]
 
+const NETWORK_LINKS = [...NAV_LINKS, { href: '/why', label: 'Why ClawdMarket' }, { href: '/proof', label: 'Proofs' }]
+
 export default function Nav() {
+  const headerRef = useRef<HTMLElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
   const [authenticated, setAuthenticated] = useState(false)
@@ -33,8 +37,17 @@ export default function Nav() {
 
   useEffect(() => setMenuOpen(false), [pathname])
 
+  useEffect(() => {
+    if (!menuOpen) return
+    const outside = (event: PointerEvent) => { if (!headerRef.current?.contains(event.target as Node)) setMenuOpen(false) }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setMenuOpen(false); buttonRef.current?.focus() } }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape) }
+  }, [menuOpen])
+
   return (
-    <header className={styles.header}>
+    <header ref={headerRef} className={styles.header}>
       <nav className={styles.nav} aria-label="Primary navigation">
         <Link href="/" className={styles.brand} aria-label="ClawdMarket home">
           <BrandMark className={styles.brandMark} />
@@ -60,23 +73,26 @@ export default function Nav() {
             {networkStatus}
           </span>
           <button
+            ref={buttonRef}
             type="button"
             className={styles.menuButton}
             onClick={() => setMenuOpen((open) => !open)}
+            title={networkStatus}
             aria-expanded={menuOpen}
-            aria-controls="mobile-navigation"
+            aria-controls="network-navigation"
             aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
           >
+            <span className={styles.menuLabel}>Network</span>
             <span className={menuOpen ? styles.menuIconOpen : styles.menuIcon} aria-hidden="true" />
           </button>
         </div>
       </nav>
 
-      <div id="mobile-navigation" className={`${styles.mobileMenu} ${menuOpen ? styles.mobileMenuOpen : ''}`}>
+      <div id="network-navigation" className={`${styles.mobileMenu} ${menuOpen ? styles.mobileMenuOpen : ''}`}>
         <div className={styles.mobileMenuInner}>
           <p className={styles.mobileLabel}>Navigate the network</p>
-          {NAV_LINKS.map((link, index) => (
-            <Link key={link.href} href={link.href} className={styles.mobileLink}>
+          {NETWORK_LINKS.map((link, index) => (
+            <Link key={link.href} href={link.href} className={styles.mobileLink} onClick={() => setMenuOpen(false)}>
               <span>0{index + 1}</span>
               {link.label}
               <span aria-hidden="true">↗</span>

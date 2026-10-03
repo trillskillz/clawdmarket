@@ -70,7 +70,7 @@ function sameRequest(prior: NonNullable<Awaited<ReturnType<typeof existingServic
     && prior.order.objective === request.objective && prior.order.input_json === JSON.stringify(request.input)
     && (request.payment_rail === 'auto' || prior.order.payment_rail === request.payment_rail)
     && (request.expected_price === undefined || prior.order.price_minor === request.expected_price)
-    && (!args.externalOnly || prior.order.payment_rail !== 'ledger')
+    && (!args.externalOnly || !['ledger', 'credit'].includes(prior.order.payment_rail))
 }
 
 async function replay(args: ReservationArgs) {
@@ -122,8 +122,9 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     const readiness = getPaymentReadiness()
     const sellerPayout = await payoutAddressForUser(service.seller_id)
     const rail = selectMarketplaceRail(request.payment_rail, readiness, Boolean(sellerPayout))
-    if (!rail || externalOnly && rail === 'ledger') throw new ServiceOrderReservationError(sellerPayout ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED', 'No eligible external payment rail for this seller')
-    const feeRecipient = rail === 'ledger' ? await ensureAdminFeeRecipient() : null
+    if (!rail || externalOnly && ['ledger', 'credit'].includes(rail)) throw new ServiceOrderReservationError(sellerPayout ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED', 'No eligible external payment rail for this seller')
+    const internal = rail === 'ledger' || rail === 'credit'
+    const feeRecipient = internal ? await ensureAdminFeeRecipient() : null
     const reserveOnce = () => db.transaction(async (tx) => {
       const now = new Date()
       let agreedCapabilities = storedServiceCapabilities(service.capabilities)
@@ -164,9 +165,9 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100, ...spendContext })
       else await enforceBuyerSpendPolicy(tx, principal.userId, { totalMinor, ...spendContext }, now)
       const [listing] = await tx.insert(listings).values({ seller_id: service.seller_id, category: 'skills', title: service.title,
-        description: service.description, price_bankr: service.price_minor / 100, status: rail === 'ledger' ? 'active' : 'sold' }).returning()
-      const trade = rail === 'ledger'
-        ? await createLedgerTrade(tx, listing, principal.userId, feeRecipient!, { agentId: principal.agentId, clientReference: reference, spendContext })
+        description: service.description, price_bankr: service.price_minor / 100, status: internal ? 'active' : 'sold' }).returning()
+      const trade = internal
+        ? await createLedgerTrade(tx, listing, principal.userId, feeRecipient!, { rail: rail as 'ledger' | 'credit', agentId: principal.agentId, clientReference: reference, spendContext })
         : (await tx.insert(trades).values({
             listing_id: listing.id, buyer_id: principal.userId, seller_id: service.seller_id,
             amount: service.price_minor / 100, fee: feeMinor / 100,
@@ -177,14 +178,14 @@ export async function reserveServiceOrder(args: ReservationArgs) {
             payment_due_at: new Date(Date.now() + 30 * 60_000).toISOString(), status: 'pending',
             auto_confirm_at: new Date(Date.now() + (30 * 60 + 259200) * 1000).toISOString(),
           }).returning())[0]
-      if (rail !== 'ledger') await attributeOrganizationTrade(tx, principal.agentId, trade, totalMinor, now)
+      if (!internal) await attributeOrganizationTrade(tx, principal.agentId, trade, totalMinor, now)
       const [order] = await tx.insert(service_orders).values({
         id: crypto.randomUUID(), service_id: id, listing_id: listing.id, trade_id: trade.id,
         buyer_id: principal.userId, client_reference: reference, objective: request.objective,
         provider_requirements_json: JSON.stringify(request.provider_requirements ?? {}),
         execution_contract_json: captureServiceExecutionContract(service, agreedCapabilities),
         input_json: JSON.stringify(request.input), price_minor: service.price_minor,
-        payment_rail: rail, state: rail === 'ledger' ? 'funded' : 'awaiting_funding',
+        payment_rail: rail, state: internal ? 'funded' : 'awaiting_funding',
       }).returning()
       if (args.mandateId) {
         const [plan] = routeId ? await tx.select().from(route_plans).where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId))).limit(1) : []
@@ -202,7 +203,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
           if (!attempt) throw new ServiceOrderReservationError('ROUTE_ATTEMPT_STATE_CHANGED', 'Route attempt changed while reserving')
         }
       }
-      if (rail === 'ledger') await queueFundedWorkOrder(tx, trade.id, service.seller_id)
+      if (internal) await queueFundedWorkOrder(tx, trade.id, service.seller_id)
       return { order, trade, idempotent: false }
     })
     return await withServiceReservationLock(id, () => withOrganizationBuyerLock(principal.agentId, principal.userId, async () => {

@@ -1,6 +1,7 @@
+import { CreditError } from '@/lib/account-credit';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users, wallets, fee_errors, ratings, service_orders } from '@/lib/schema';
+import { trades, listings, users, fee_errors, ratings, service_orders } from '@/lib/schema';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
@@ -238,50 +239,16 @@ async function createTradePost(req: NextRequest) {
       }, { status: 201, headers: getRateLimitHeaders(rateLimitResult) });
     }
 
-    if (!getPaymentReadiness().ledger.enabled) {
+    if (selectedRail === 'ledger' && !getPaymentReadiness().ledger.enabled) {
       return NextResponse.json({ error: 'Account-balance settlement is not enabled', code: 'PAYMENT_RAIL_NOT_CONFIGURED' }, { status: 503 });
     }
 
     // ─── INTERNAL LEDGER ESCROW ───
 
-    // 1. Check buyer balance
-    const [buyerWallet] = await db
-      .select()
-      .from(wallets)
-      .where(eq(wallets.user_id, auth.userId));
-
-    if (!buyerWallet) {
-      return NextResponse.json(
-        { error: 'Buyer wallet not found' },
-        { status: 404 }
-      );
-    }
-
-    if (buyerWallet.balance < totalCost) {
-      await logPaymentFailure({
-        buyer_id: auth.userId,
-        seller_id: listing.seller_id,
-        amount: totalCost,
-        token: 'ledger',
-        route: 'POST /api/trades',
-        listing_id: validated.listing_id,
-        error_code: 'INSUFFICIENT_FUNDS',
-        message: `Insufficient funds. Cost: ${totalCost}, Balance: ${buyerWallet.balance}`,
-        state: 'no_funds_moved',
-      });
-      return NextResponse.json(
-        {
-          ...paymentError('INSUFFICIENT_FUNDS', `Insufficient funds. Cost: ${totalCost}, Balance: ${buyerWallet.balance}`),
-          ...envMeta('clawdmarket/api/trades'),
-        },
-        { status: 402 } // Payment Required
-      );
-    }
-
     const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
 
     const newTrade = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction((tx) =>
-      createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { agentId: auth.agentId, clientReference })));
+      createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { rail: selectedRail, agentId: auth.agentId, clientReference })));
     // ─── ESCROW LOGIC END ───
 
     // Queue webhook records durably before returning the trade response.
@@ -294,7 +261,7 @@ async function createTradePost(req: NextRequest) {
 
     return NextResponse.json(
       {
-        message: 'Trade initiated successfully with ledger funds held in escrow.',
+        message: 'Trade initiated successfully with account credit held in escrow.',
         trade: newTrade,
         code: 'TRADE_CREATED',
         fee_info: {
@@ -333,6 +300,7 @@ async function createTradePost(req: NextRequest) {
       );
     }
 
+    if (error instanceof CreditError) return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status });
     if (error instanceof TradeRaceError) {
       const status = error.code === 'LISTING_ALREADY_CLAIMED' ? 409 : 402;
       await logPaymentFailure({

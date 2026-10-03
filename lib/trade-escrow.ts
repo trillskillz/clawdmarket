@@ -1,3 +1,4 @@
+import { settleCredit } from './account-credit';
 import { Credential } from 'mppx';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
@@ -83,7 +84,8 @@ export async function finalizeTradeCompletion(trade: typeof trades.$inferSelect,
         .where(and(eq(tasks.id, workspace.task_id), eq(tasks.status, 'assigned')));
     }
 
-    if (!externalFunding) {
+    if (trade.payment_rail === 'credit') await settleCredit(tx, trade);
+    if (!externalFunding && trade.payment_rail !== 'credit') {
       await tx.insert(wallets).values({ user_id: trade.seller_id, balance: 0, escrow: 0 }).onConflictDoNothing();
       const released = await tx
         .update(wallets)

@@ -95,6 +95,9 @@ export default async function ProofPage({ params }: Props) {
   const listingRows = await query('SELECT title, description FROM listings WHERE id = ?', [trade.listing_id])
   const task = taskRows[0] || listingRows[0] || null
 
+  const creditRows = trade.payment_rail === 'credit' ? await query("SELECT kind FROM credit_entries WHERE reference = ? AND ((kind = 'purchase' AND user_id = ? AND escrow_delta = ?) OR (kind = 'sale' AND user_id = ? AND available_delta = ?))", [trade_id, trade.buyer_id, Math.round(Number(trade.amount) * 100), trade.seller_id, Math.round(Number(trade.amount) * 100)]) : []
+  const creditReserved = creditRows.some((row: { kind: string }) => row.kind === 'purchase')
+  const creditReleased = creditRows.some((row: { kind: string }) => row.kind === 'sale')
   const settlementEvidence = Boolean(payment && payout?.tx_hash && payment.payment_rail === trade.payment_rail)
   const receipt = getTradeReceipt({ ...trade, settlement_evidence: settlementEvidence } as any)
   const rail = String(trade.payment_rail || 'ledger').toUpperCase()
@@ -104,7 +107,7 @@ export default async function ProofPage({ params }: Props) {
   const methodPassed = (method: string) => verificationRows.some((row: any) => row.method === method && row.status === 'passed')
   const categories = {
     identity_verified: false,
-    payment_verified: Boolean(payment),
+    payment_verified: Boolean(payment) || creditReserved,
     delivery_received: Boolean(delivery),
     structure_verified: methodPassed('schema') || methodPassed('structure') || verification?.status === 'passed',
     semantic_verified: false,
@@ -195,7 +198,7 @@ export default async function ProofPage({ params }: Props) {
                   ['Payment rail', rail],
                 ].map(([label, value]) => <div className={styles.paymentItem} key={label}><span>{label}</span><strong>{value}</strong></div>)}
               </div>
-              {settlementEvidence ? <div className={styles.artifact}>
+              {creditReserved && creditReleased ? <p className={styles.panelText}>Account-credit reservation and seller release recorded. This purchase used account credit; it has no separate external payout transaction.</p> : settlementEvidence ? <div className={styles.artifact}>
                 <p className={styles.panelText}>Payment reference: {String(payment.tx_hash || payment.external_id || 'recorded payment')}</p>
                 <p className={styles.panelText}>Seller payout transaction: {String(payout.tx_hash)}</p>
                 <p className={styles.panelText}>Chain: {String(payout.chain_id)}</p>

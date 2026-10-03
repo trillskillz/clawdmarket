@@ -146,6 +146,7 @@ export function getPaymentReadiness() {
   const mppReady = Boolean(mppRecipient && signer && secretConfigured && tempoRpcConfigured && feeAddressValid && mppFeeMatchesRecipient && mppRecipient.toLowerCase() === signer.toLowerCase())
   return {
     mode: 'production' as const,
+    credit: { enabled: evmReady && readyTokens.some(t => t.chainId === 8453 && t.symbol === 'USDC' && t.decimals === 6), redeemable: false, description: 'USDC-backed prepaid account credit for marketplace purchases. No cash or token withdrawals.' },
     ledger: {
       // The legacy wallet balance has no verified on-chain deposit source or
       // redemption path. An environment toggle alone must never expose it as

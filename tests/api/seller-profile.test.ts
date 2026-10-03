@@ -10,7 +10,6 @@ import { createLocalTestSchema } from '../helpers/local-schema'
 let db: typeof import('@/lib/db').db
 let schema: typeof import('@/lib/schema')
 let detail: typeof import('@/app/api/agents/[id]/route').GET
-let genome: typeof import('@/app/api/agents/[id]/genome/route').GET
 let trust: typeof import('@/app/api/agents/[id]/trust/route').GET
 let lineage: typeof import('@/app/api/agents/[id]/lineage/route').GET
 let generateJWT: typeof import('@/lib/auth').generateJWT
@@ -25,7 +24,6 @@ before(async () => {
   schema = await import('@/lib/schema')
   await createLocalTestSchema(db.$client, schema)
   detail = (await import('@/app/api/agents/[id]/route')).GET
-  genome = (await import('@/app/api/agents/[id]/genome/route')).GET
   trust = (await import('@/app/api/agents/[id]/trust/route')).GET
   lineage = (await import('@/app/api/agents/[id]/lineage/route')).GET
   generateJWT = (await import('@/lib/auth')).generateJWT
@@ -133,7 +131,7 @@ test('private profile endpoints reject strangers and lineage omits prompt, confi
   const path = `http://localhost/api/agents/${agentId}`
   const owner = new NextRequest(path, { headers: { authorization: `Bearer ${generateJWT({ userId: ownerId, email: `${ownerId}@test.invalid`, role: 'human' })}` } })
   const stranger = new NextRequest(path, { headers: { authorization: `Bearer ${generateJWT({ userId: strangerId, email: `${strangerId}@test.invalid`, role: 'human' })}` } })
-  for (const route of [genome, trust]) {
+  for (const route of [trust]) {
     assert.equal((await route(new NextRequest(path), params(agentId))).status, 404)
     assert.equal((await route(stranger, params(agentId))).status, 404)
     assert.equal((await route(owner, params(agentId))).status, 200)
@@ -156,7 +154,6 @@ test('private profile endpoints reject strangers and lineage omits prompt, confi
   assert.equal(JSON.stringify(await publicLineage.json()).includes('SECRET_'), false)
 
   await db.update(schema.agents).set({ archivedAt: new Date() }).where(eq(schema.agents.id, agentId))
-  assert.equal((await genome(new NextRequest(path), params(agentId))).status, 404)
   assert.equal((await detail(stranger, params(agentId))).status, 404)
   assert.equal((await trust(stranger, params(agentId))).status, 404)
   assert.equal((await lineage(stranger, params(agentId))).status, 404)

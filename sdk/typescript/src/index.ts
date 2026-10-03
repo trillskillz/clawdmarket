@@ -249,6 +249,17 @@ export class ClawdMarketClient {
     return payload as T
   }
 
+  getAccountBalance(agentId?: string, options?: RequestOptions) { return this.request<{ account_id: string; available: number; escrow: number; credit: { available_minor: number; escrow_minor: number }; historical_credit: { spendable: false } }>('GET', `/api/wallet${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''}`, undefined, options) }
+  getConnectedWalletBalances(address: string, options?: RequestOptions) { return this.request<{ address: string; balances: Array<{ chain_id: number; symbol: string; status: 'available' | 'unavailable'; amount: string | null; amount_raw: string | null }> }>('GET', `/api/wallet/balances?address=${encodeURIComponent(address)}`, undefined, options) }
+  /** Persist client_reference before calling. Only a fresh created intent permits one transfer; this method never sends. */
+  createAccountDeposit(input: { amount_minor: number; payer: string; client_reference: string }, options?: RequestOptions) { return this.request<{ deposit: AccountDeposit }>('POST', '/api/wallet/deposits', input, options) }
+  getAccountDeposits(id?: string, options?: RequestOptions) { return this.request<{ deposits: AccountDeposit[] }>('GET', `/api/wallet/deposits${id ? `?id=${encodeURIComponent(id)}` : ''}`, undefined, options) }
+  /** Verify the original hash with its payer signature. Confirmation may return HTTP 202; never replace the transfer. */
+  confirmAccountDeposit(input: { id: string; tx_hash: string; signature: string }, options?: RequestOptions) { return this.request<{ deposit?: AccountDeposit; code?: string; error?: string }>('PUT', '/api/wallet/deposits', input, options) }
+  fundOwnedAgent(input: { agent_id: string; amount_minor: number; client_reference: string }, options?: RequestOptions) { return this.request<{ idempotent: boolean; balance: { available_minor: number; escrow_minor: number } }>('POST', '/api/wallet/transfers', input, options) }
+  buyWithAccountCredit(listingId: string, clientReference: string, options?: RequestOptions) { return this.request<{ trade: { id: string; status: string; payment_rail: 'credit' } }>('POST', '/api/trades', { listing_id: listingId, amount: 1, payment_rail: 'credit', client_reference: clientReference }, options) }
+  orderServiceWithAccountCredit(serviceId: string, input: { client_reference: string; objective: string; input?: Record<string, unknown>; max_total?: string; expected_price?: string }, options?: RequestOptions) { return this.request<{ order: Record<string, unknown>; trade: Record<string, unknown> }>('POST', `/api/services/${encodeURIComponent(serviceId)}/orders`, { ...input, payment_rail: 'credit' }, options) }
+
   /** Nonbinding persisted plan. Safe to replay with the same client_reference. */
   planRoute(input: RouteRequest, options?: RequestOptions) { return this.request<PlannedRoute>('POST', '/api/routes/plan', input, options) }
 
@@ -360,4 +371,10 @@ export class ClawdMarketClient {
       await delay(Math.min(interval, Math.max(1, deadline - Date.now())), options.signal)
     }
   }
+}
+
+export type AccountDeposit = { id: string; user_id: string; client_reference: string; amount_minor: number; payer: string; treasury: string; token: string; chain_id: number; state: 'pending' | 'confirmed'; created: boolean; token_amount: string; tx_hash: string | null; expires_at: string; proof_message: string | null }
+/** Payer signature is specific to this immutable deposit and original hash. */
+export function accountDepositMessage(intent: AccountDeposit, hash: string) {
+  return ['ClawdMarket USDC account deposit v1', `Intent: ${intent.id}`, `Account: ${intent.user_id}`, `Chain: ${intent.chain_id}`, `Token: ${intent.token}`, `Treasury: ${intent.treasury}`, `Amount cents: ${intent.amount_minor}`, `Transaction: ${hash.toLowerCase()}`].join('\n')
 }

@@ -161,7 +161,9 @@ test.describe('API lifecycle matrix', () => {
     const walletResponse = await request.get('/api/wallet', { headers: { Authorization: `Bearer ${buyerToken}` } });
     expect(walletResponse.ok()).toBeTruthy();
     const wallet = await walletResponse.json();
-    expect(wallet.balance).toBe(100);
+    expect(wallet.balance).toBe(0);
+    expect(wallet.historical_credit.balance).toBe(100);
+    expect(wallet.historical_credit.spendable).toBe(false);
     expect(wallet.escrow).toBe(0);
   });
 

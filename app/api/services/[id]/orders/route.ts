@@ -1,3 +1,4 @@
+import { CreditError } from '@/lib/account-credit'
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const result = await reserveServiceOrder({ serviceId: id, principal, request: parsed.data })
     return NextResponse.json({ order: serviceOrderDto(result.order), trade: result.trade, checkout: checkoutForTrade(result.trade), idempotent: result.idempotent }, { status: result.idempotent ? 200 : 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
+    if (error instanceof CreditError) return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status })
     if (error instanceof ServiceOrderReservationError) return failure(error.code, error.message, error.status, error.retryable)
     if (error instanceof NewPaymentsPausedError) return failure(error.code, error.message, error.status, true)
     if (error instanceof AgentSpendPolicyError) return failure(error.code, error.message, 409)

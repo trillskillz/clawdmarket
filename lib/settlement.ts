@@ -1,3 +1,5 @@
+import { reserveCredit } from './account-credit';
+import { enforceBuyerSpendPolicy } from './buyer-spend-policy';
 import { db } from './db';
 import { users, wallets, mpp_sessions, listings, trades, transactions } from './schema';
 import { and, eq, sql } from 'drizzle-orm';
@@ -41,23 +43,29 @@ export async function createLedgerTrade(
   listing: typeof listings.$inferSelect,
   buyerId: string,
   feeRecipientId: string,
-  options: { agentId?: string | null; clientReference?: string | null; spendContext?: Omit<SpendContext, 'totalMinor'> } = {},
+  options: { rail?: 'ledger' | 'credit'; agentId?: string | null; clientReference?: string | null; spendContext?: Omit<SpendContext, 'totalMinor'> } = {},
 ) {
   if (listing.seller_id === buyerId) throw new Error('Cannot buy your own work');
   if (!Number.isFinite(listing.price_bankr) || listing.price_bankr <= 0) throw new Error('Invalid listing price');
   const { sellerAmount, platformFee, totalCost } = calculateTradeFinancials(listing.price_bankr);
+  const rail = options.rail ?? 'ledger';
+  if (rail === 'credit' && Math.abs(sellerAmount * 100 - Math.round(sellerAmount * 100)) > 0.000001) throw new Error('Account credit requires prices in whole cents');
+  if (rail === 'credit' && !options.agentId) await enforceBuyerSpendPolicy(tx, buyerId, { totalMinor: Math.round(totalCost * 100), sellerId: listing.seller_id, paymentRail: rail, ...options.spendContext });
   if (options.agentId) {
-    await enforceAgentSpendPolicy(tx, { agentId: options.agentId, buyerId, totalCost, sellerId: listing.seller_id, paymentRail: 'ledger', ...options.spendContext });
+    await enforceAgentSpendPolicy(tx, { agentId: options.agentId, buyerId, totalCost, sellerId: listing.seller_id, paymentRail: rail, ...options.spendContext });
   }
   const claimed = await tx.update(listings).set({ status: 'sold' })
     .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'))).returning({ id: listings.id });
   if (!claimed.length) throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
 
+  if (rail === 'ledger') {
   const debit = await tx.update(wallets).set({
     balance: sql`${wallets.balance} - ${totalCost}`,
     escrow: sql`${wallets.escrow} + ${sellerAmount}`,
   }).where(and(eq(wallets.user_id, buyerId), sql`${wallets.balance} >= ${totalCost}`)).returning({ id: wallets.user_id });
   if (!debit.length) throw new TradeRaceError('INSUFFICIENT_FUNDS_AT_COMMIT', `Insufficient account balance. Required ${totalCost}.`);
+
+  }
 
   const sessionId = await createEscrowSession(tx, buyerId, totalCost);
   const [trade] = await tx.insert(trades).values({
@@ -66,18 +74,19 @@ export async function createLedgerTrade(
     platform_fee: platformFee, total_cost: totalCost, seller_amount: sellerAmount,
     dev_amount: platformFee,
     dev_wallet: (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || '').trim() || null,
-    payout_status: platformFee > 0 ? 'fee_sent' : 'pending', payment_rail: 'ledger',
+    payout_status: platformFee > 0 ? 'fee_sent' : 'pending', payment_rail: rail,
     client_reference: options.clientReference || null,
     escrow_session_id: sessionId, status: 'escrow_held',
     auto_confirm_at: new Date(Date.now() + 259200 * 1000).toISOString(),
   }).returning();
+  if (rail === 'credit') await reserveCredit(tx, { id: trade.id, buyer: buyerId, feeRecipient: feeRecipientId, total: Math.round(totalCost * 100), seller: Math.round(sellerAmount * 100), fee: Math.round(platformFee * 100) });
   await attributeOrganizationTrade(tx, options.agentId, trade, Math.round(totalCost * 100));
   await tx.insert(transactions).values({
     from_user_id: buyerId, amount: sellerAmount, type: 'escrow_lock', reference_id: trade.id,
     memo: `Account-balance escrow lock for listing ${listing.id}`,
   });
   if (platformFee > 0) {
-    await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${platformFee}` }).where(eq(wallets.user_id, feeRecipientId));
+    if (rail === 'ledger') await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${platformFee}` }).where(eq(wallets.user_id, feeRecipientId));
     await tx.insert(transactions).values({
       from_user_id: buyerId, to_user_id: feeRecipientId, amount: platformFee,
       type: 'fee', reference_id: trade.id, memo: 'Marketplace fee (5%)',

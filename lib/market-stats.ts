@@ -7,6 +7,7 @@ import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility'
 
 type VolumeByRail = {
   ledger: number
+  credit: number
   mpp: number
   evm: number
 }
@@ -34,7 +35,7 @@ async function getPublicProfileCount(): Promise<number> {
 }
 
 async function getVolumeByRail(): Promise<VolumeByRail> {
-  const volume: VolumeByRail = { ledger: 0, mpp: 0, evm: 0 }
+  const volume: VolumeByRail = { ledger: 0, credit: 0, mpp: 0, evm: 0 }
   try {
     const rows = await db
       .select({
@@ -47,7 +48,7 @@ async function getVolumeByRail(): Promise<VolumeByRail> {
 
     for (const row of rows) {
       const rail = String(row.rail || '').toLowerCase()
-      if (rail === 'ledger' || rail === 'mpp' || rail === 'evm') {
+      if (rail === 'ledger' || rail === 'credit' || rail === 'mpp' || rail === 'evm') {
         volume[rail] = roundCurrency(row.amount)
       }
     }

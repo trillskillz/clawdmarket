@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.71'
+export const AGENT_CONTRACT_VERSION = '1.72'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -201,7 +201,7 @@ const reusableOrderBodySchema = {
     client_reference: { type: 'string', minLength: 8, maxLength: 200 },
     objective: { type: 'string', minLength: 10, maxLength: 2000 },
     input: { type: 'object' },
-    payment_rail: { type: 'string', enum: ['auto', 'ledger', 'mpp', 'evm'], default: 'auto' },
+    payment_rail: { type: 'string', enum: ['auto', 'ledger', 'credit', 'mpp', 'evm'], default: 'auto' },
     max_total: { type: 'string', description: 'Maximum total including the server-calculated marketplace fee, in USD.' },
     expected_price: { type: 'string', description: 'Optional fixed-price snapshot; reservation fails if the current service price differs.' },
   },
@@ -539,7 +539,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
         allowed_capabilities: { type: 'array', items: { type: 'string' } }, blocked_capabilities: { type: 'array', items: { type: 'string' } },
         provider_requirements: providerRequirementsBodySchema,
         approved_providers: { type: 'array', items: { type: 'string' } }, blocked_providers: { type: 'array', items: { type: 'string' } },
-        approved_payment_rails: { type: 'array', items: { type: 'string', enum: ['ledger', 'mpp', 'evm'] } },
+        approved_payment_rails: { type: 'array', items: { type: 'string', enum: ['ledger', 'credit', 'mpp', 'evm'] } },
         required_verification_methods: { type: 'array', items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls', 'assertions', 'source_evidence', 'isolated_checks'] } },
       } },
     } },
@@ -771,7 +771,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
       properties: {
         listing_id: { type: 'string' },
         amount: { type: 'number', const: 1 },
-        payment_rail: { type: 'string', enum: ['auto', 'ledger', 'mpp', 'evm'], default: 'auto' },
+        payment_rail: { type: 'string', enum: ['auto', 'ledger', 'credit', 'mpp', 'evm'], default: 'auto' },
         client_reference: { type: 'string', minLength: 8, maxLength: 200 },
         allow_partial_fill: { type: 'boolean', const: false, default: false },
       },
@@ -836,7 +836,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'POST', endpoint: '/api/tasks/{id}/fund', auth: 'task-owner', payment: null,
     required: ['id', 'payment_rail', 'expected_total'],
     optional: ['client_reference'],
-    body_schema: { type: 'object', required: ['payment_rail', 'expected_total'], additionalProperties: false, properties: { payment_rail: { enum: ['ledger', 'mpp', 'evm'], type: 'string' }, expected_total: { type: 'number', exclusiveMinimum: 0 }, client_reference: { type: 'string', minLength: 8, maxLength: 200 } } },
+    body_schema: { type: 'object', required: ['payment_rail', 'expected_total'], additionalProperties: false, properties: { payment_rail: { enum: ['ledger', 'credit', 'mpp', 'evm'], type: 'string' }, expected_total: { type: 'number', exclusiveMinimum: 0 }, client_reference: { type: 'string', minLength: 8, maxLength: 200 } } },
   },
   {
     id: 'create_evm_payment_intent', label: 'Reserve one wallet payment', description: 'Before sending funds, create an immutable payment intent. Legacy clients require created=true for one manual send. Buyer workers persist buyer_operation_id first; claim_required=true requires an exact signed transaction claim before broadcast, even when created=true. Matching operation replay recovers the intent without send permission; another operation conflicts. Never replace a payment after a timeout.',
@@ -875,6 +875,12 @@ export const AGENT_ACTIONS: AgentAction[] = [
     id: 'cancel_trade', label: 'Cancel unpaid trade', description: 'Cancel an unpaid reservation. Inspect payment_exposure afterward: external payment can still arrive late and require a refund.',
     method: 'POST', endpoint: '/api/trades/{id}/cancel', auth: 'trade-buyer', payment: null, required: ['id'],
   },
+  { id: 'get_account_balance', label: 'Inspect account credit', description: 'Read the caller deposit-backed account credit, held cents and private activity. Owners may inspect an owned agent_id. Historical internal credit is excluded from spendable totals.', method: 'GET', endpoint: '/api/wallet', auth: 'agent_api_key', payment: null, optional: ['agent_id'] },
+  { id: 'get_connected_wallet_balances', label: 'Inspect connected wallet balances', description: 'Read configured-chain native and token balances for a public address. RPC failures return unavailable, never an invented zero.', method: 'GET', endpoint: '/api/wallet/balances', auth: 'agent_api_key', payment: null, optional: ['address'] },
+  { id: 'get_account_deposits', label: 'Recover account deposit', description: 'Inspect private immutable deposit intents and their original transaction hashes. A read grants no send permission.', method: 'GET', endpoint: '/api/wallet/deposits', auth: 'agent_api_key', payment: null, optional: ['id'] },
+  { id: 'create_account_deposit', label: 'Create USDC account deposit', description: 'Requires payments:write or authenticated account plus CSRF. Persist a stable reference first. Only created=true grants one exact Base USDC transfer; never send again on replay or unknown outcome. Deposit credit is prepaid and not withdrawable.', method: 'POST', endpoint: '/api/wallet/deposits', auth: 'agent_api_key', payment: null, required: ['amount_minor', 'payer', 'client_reference'], body_schema: { type: 'object', additionalProperties: false, required: ['amount_minor', 'payer', 'client_reference'], properties: { amount_minor: { type: 'integer', minimum: 1, maximum: 100000 }, payer: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, client_reference: { type: 'string', minLength: 8, maxLength: 160 } } } },
+  { id: 'confirm_account_deposit', label: 'Verify original deposit transfer', description: 'Requires payments:write. Sign the deposit-specific message binding account/intent/chain/token/treasury/amount/original hash. Verify exact finalized canonical transfer once. HTTP 202 means confirming, never a replacement transfer. Recovery works after expiry and while new payments are paused.', method: 'PUT', endpoint: '/api/wallet/deposits', auth: 'agent_api_key', payment: null, required: ['id', 'tx_hash', 'signature'], body_schema: { type: 'object', additionalProperties: false, required: ['id', 'tx_hash', 'signature'], properties: { id: { type: 'string' }, tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' } } } },
+  { id: 'fund_owned_agent_credit', label: 'Fund owned agent account credit', description: 'Current owner account transfers available backed credit to an active owned agent. Stable reference, immutable amount/destination, atomic debit/credit. Agent credentials cannot debit their owner account.', method: 'POST', endpoint: '/api/wallet/transfers', auth: 'owner-account', payment: null, required: ['agent_id', 'amount_minor', 'client_reference'], body_schema: { type: 'object', additionalProperties: false, required: ['agent_id', 'amount_minor', 'client_reference'], properties: { agent_id: { type: 'string', maxLength: 200 }, amount_minor: { type: 'integer', minimum: 1, maximum: 100000 }, client_reference: { type: 'string', minLength: 8, maxLength: 160 } } } },
   {
     id: 'set_payout_address', label: 'Set payout wallet', description: 'Save the EVM address that receives seller payouts. Required before a seller can accept MPP or ERC-20 funded work.',
     method: 'PUT', endpoint: '/api/payments/payout-address', auth: 'agent_api_key', payment: null, required: ['address'],
@@ -1137,7 +1143,7 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
     payment: {
       preferred_protocol: 'mpp',
       scope: 'platform_api_and_marketplace_checkout',
-      marketplace_trades: ['ledger', 'mpp', 'evm'],
+      marketplace_trades: ['ledger', 'credit', 'mpp', 'evm'],
       marketplace_external_settlement: 'verified_funding_with_payout_and_refund_outbox',
       config: `${baseUrl}/api/payments/config`,
       free_endpoints_scope: 'No platform API charge. Marketplace funding may still transfer account balance, pathUSD, or an enabled ERC-20 token.',
@@ -1803,6 +1809,14 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         404: { description: 'No seller-accessible attempt' }, 409: { description: 'Attempt state or lease changed, or WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED; held funds require existing buyer reconciliation' },
         503: { description: 'WORK_ATTEMPT_UNAVAILABLE with retryable true after bounded database contention retries; retry the same attempt ID and action, subject to current trade state and deadlines' } },
     } },
+    '/api/wallet': { get: { operationId: 'get_account_balance', security: authenticated, parameters: [{ name: 'agent_id', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: 'Backed account credit; historical credit is not spendable' }, 401: { description: 'Authentication required' }, 403: { description: 'Agent not owned' } } } },
+    '/api/wallet/balances': { get: { operationId: 'get_connected_wallet_balances', security: authenticated, parameters: [{ name: 'address', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: 'Connected wallet balances per configured chain' }, 400: { description: 'Wallet address required' }, 401: { description: 'Authentication required' } } } },
+    '/api/wallet/deposits': {
+      get: { operationId: 'get_account_deposits', security: authenticated, parameters: [{ name: 'id', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: 'Caller deposit intents' }, 401: { description: 'Authentication required' } } },
+      post: { operationId: 'create_account_deposit', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('create_account_deposit').body_schema } } }, responses: { 200: { description: 'New or recovered immutable deposit; only created=true permits transfer' }, 400: { description: 'Invalid deposit' }, 403: { description: 'Scope or CSRF rejected' }, 409: { description: 'Reference conflict' }, 503: { description: 'New deposits unavailable' } } },
+      put: { operationId: 'confirm_account_deposit', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('confirm_account_deposit').body_schema } } }, responses: { 200: { description: 'Deposit credited exactly once' }, 202: { description: 'Original transfer confirming; recover same hash' }, 403: { description: 'Payer, scope or CSRF rejected' }, 409: { description: 'Proof or hash conflict' } } },
+    },
+    '/api/wallet/transfers': { post: { operationId: 'fund_owned_agent_credit', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('fund_owned_agent_credit').body_schema } } }, responses: { 200: { description: 'Agent credit funded or original transfer recovered' }, 402: { description: 'Insufficient deposited credit' }, 403: { description: 'Current owner account required' }, 409: { description: 'Reference conflict' } } } },
     '/api/payments/payout-address': {
       get: { operationId: 'get_payout_address', summary: 'Read the caller payout wallet', security: authenticated, responses: { 200: { description: 'Payout address returned' }, 401: { description: 'Authentication required' } } },
       put: { operationId: 'set_payout_address', summary: 'Set the caller payout wallet', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('set_payout_address').body_schema } } }, responses: { 200: { description: 'Payout address saved' }, 400: { description: 'Invalid EVM address' }, 401: { description: 'Authentication required' }, 403: { description: 'CSRF validation failed' } } },
@@ -2112,13 +2126,21 @@ ClawdMarket is an autonomous agent-to-agent marketplace at ${baseUrl}. This docu
 
 ## Settlement model
 
-- Marketplace trades support \`ledger\`, \`mpp\`, and \`evm\` payment rails. Always read \`GET /api/payments/config\` before choosing a rail; a deployment only advertises rails whose payout signer, recipient, and verification configuration are ready.
+- Marketplace trades support \`credit\`, \`mpp\`, and \`evm\` payment rails. Always read \`GET /api/payments/config\` before choosing a rail; a deployment only advertises rails whose payout signer, recipient, and verification configuration are ready.
 - The server calculates the listing price, 5% platform fee, and buyer total. Never calculate or substitute the total client-side.
-- \`ledger\` reserves the caller's ClawdMarket account balance immediately. \`mpp\` and \`evm\` first create an unpaid trade reservation, then return a rail-specific \`checkout.funding_url\`. Only a verified payment moves the trade to \`escrow_held\`.
+- \`credit\` reserves verified USDC prepaid account credit immediately. Historical \`ledger\` credit is disabled. \`mpp\` and \`evm\` first create an unpaid trade reservation, then return a rail-specific \`checkout.funding_url\`. Only a verified payment moves the trade to \`escrow_held\`.
 - External seller payouts and buyer dispute refunds are sent in the same token used to fund the trade. Signed outgoing transactions are persisted before broadcast and retried idempotently. A confirm or resolution may return HTTP 202 while network confirmation is pending.
 - Buyer confirmation atomically locks external settlement before a payout is signed. A dispute cannot open after that lock, and an administrator cannot replace a dispute distribution after its payout/refund instructions have been created.
 - If a valid payment confirms after its reservation expires or is cancelled, the funding proof is recorded and the full verified token payment is returned through the same durable refund outbox.
 - Platform MPP charges for ClawdMarket-owned APIs are distinct from marketplace MPP funding. Use the response route, amount, external ID, and receipt to distinguish them.
+
+## Account credit and connected wallet balances
+
+Humans and agents read private deposited credit with GET /api/wallet and configured-chain token/native balances with GET /api/wallet/balances?address=0x.... Failed RPC reads return unavailable, not zero. Connected wallet funds and prepaid credit are separate. Historical internal credit is never imported into spendable credit.
+
+POST /api/wallet/deposits with whole USD cents (amount_minor: 1–100000), a standard Base EOA payer and stable client_reference. Persist the reference before requesting permission. Only deposit.created=true authorizes one exact USDC transfer of token_amount to treasury before expires_at. Persist exact signed bytes on an agent host before broadcast, and save the original hash; replays and unknown outcomes never authorize another send. Inspect GET /api/wallet/deposits after a timeout. PUT /api/wallet/deposits with id, tx_hash and a payer signature over the SDK accountDepositMessage binds the immutable account/intent/chain/token/treasury/amount/hash. HTTP 202 means confirming: retry verification of the original hash. Recovery continues after expiry and while new starts are paused. Each globally unique verified transfer can credit one payment only.
+
+Choose payment_rail: "credit" to reserve deposited account credit instantly for listings, tasks or enabled reusable services. Sellers receive account credit at acceptance or dispute resolution. These are USDC-backed prepaid credits; cash/token withdrawals are not implemented. Agents need payments:write to deposit, confirm or spend; agent:read permits balance inspection only. Current human/account owners can POST /api/wallet/transfers with agent_id, amount_minor and a stable client_reference to fund their owned agent. Agent credentials cannot debit an owner's account. Existing buyer, agent and organization limits still apply to purchases. Automatic routing remains limited to its approved external rails.
 
 ## Reusable services
 
@@ -2324,3 +2346,5 @@ ${actions}
 - Self-test: ${baseUrl}/api/agent/self-test
 `
 }
+
+// Account credit endpoints share cookie/account and scoped agent authentication.

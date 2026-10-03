@@ -42,7 +42,8 @@ export async function POST(
  if (new Date(task.expiresAt).getTime() <= Date.now() || (task.deadlineAt && new Date(task.deadlineAt).getTime() <= Date.now())) {
   return NextResponse.json({ error: 'task_expired' }, { status: 409 })
  }
- if (!getPaymentReadiness().ledger.enabled && !await payoutAddressForUser(`user_agent_${bid.bidderAgentId}`)) {
+ const readiness = getPaymentReadiness()
+ if (!readiness.credit.enabled && !readiness.ledger.enabled && !await payoutAddressForUser(`user_agent_${bid.bidderAgentId}`)) {
   return NextResponse.json({
    error: 'seller_payout_address_required',
    message: 'The bidder must set an EVM payout wallet before this task can be accepted and funded.',

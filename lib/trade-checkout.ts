@@ -24,5 +24,5 @@ export function checkoutForTrade(trade: CheckoutTrade) {
       expires_at: trade.payment_due_at,
     }
   }
-  return { rail: 'ledger' as const, status: trade.status }
+  return { rail: trade.payment_rail === 'credit' ? 'credit' as const : 'ledger' as const, status: trade.status }
 }

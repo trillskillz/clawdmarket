@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (principal.usesCookieAuth && !validateCsrf(request)) return failure('CSRF_REJECTED', 'CSRF validation failed', 403)
   const { id } = await params
   try {
-    const body = request.body ? await readBoundedJson(request, 1024) : {}
+    const body = await readBoundedJson(request, 1024, 10_000, true)
     const parsed = z.object({ mandate_id: z.uuid().optional() }).strict().safeParse(body)
     if (!parsed.success) return failure('INVALID_ROUTE_EXECUTION', 'Execution accepts only an optional mandate_id', 400)
     const mandateId = parsed.data.mandate_id
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (raced?.service_order_id) return (await linkedResponse(raced, true))!
         throw new Error('ROUTE_ATTEMPT_ORDER_INVARIANT')
       }
-      if (candidate.payment_rail === 'ledger') {
+      if (candidate.payment_rail === 'ledger' || candidate.payment_rail === 'credit') {
         lastCode = 'ROUTE_EXTERNAL_PAYMENT_REQUIRED'
         await markRouteAttemptIneligible(id, attemptNumber, lastCode)
         continue

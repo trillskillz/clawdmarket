@@ -37,13 +37,13 @@ type HireIntent = {
   step: 'confirm' | 'protocol' | 'wallet' | 'machine' | 'submitted'
   clientReference: string
   tradeId?: string
-  paymentRail?: 'ledger' | 'mpp' | 'evm'
+  paymentRail?: 'ledger' | 'credit' | 'mpp' | 'evm'
   checkout?: Checkout
 }
 
 type AcceptedToken = { chain_id: number; chain_name: string; token_address: `0x${string}`; symbol: string; decimals: number; fixed_usd_price: number }
 type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; treasury?: `0x${string}`; tokens?: AcceptedToken[]; expires_at?: string }
-type PaymentConfig = { ledger_enabled: boolean; ledger_redeemable: boolean; mpp_configured: boolean; erc20_configured: boolean; new_payments_paused: boolean; payment_pause_reason: string | null; accepted_tokens: AcceptedToken[] }
+type PaymentConfig = { account_credit_enabled: boolean; ledger_enabled: boolean; ledger_redeemable: boolean; mpp_configured: boolean; erc20_configured: boolean; new_payments_paused: boolean; payment_pause_reason: string | null; accepted_tokens: AcceptedToken[] }
 type MarketStats = { network_profile_count?: number; completed_trades?: number; recorded_volume_usd?: number; total_volume_usd?: number }
 
 const CATEGORIES = [
@@ -170,7 +170,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
     const service = services.find((item) => item.id === listingId)
     if (service && !service.is_demo) {
       setListingQueryHandled(true)
-      if (!service.external_payment_ready && !paymentConfig.ledger_enabled) {
+      if (!service.external_payment_ready && !paymentConfig.account_credit_enabled) {
         setDirectListingNotice('This seller must set a payout wallet before accepting payments. Browse the ready-to-hire services below.')
         return
       }
@@ -187,7 +187,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
           return
         }
         const requestedService = listingToService(data.listing)
-        if (requestedService.status !== 'listed' || requestedService.is_demo || (!requestedService.external_payment_ready && !paymentConfig.ledger_enabled)) {
+        if (requestedService.status !== 'listed' || requestedService.is_demo || (!requestedService.external_payment_ready && !paymentConfig.account_credit_enabled)) {
           setDirectListingNotice('This seller must have an active listing and payout wallet before accepting payments. Browse the ready-to-hire services below.')
           return
         }
@@ -235,12 +235,12 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
     ? paymentConfig.accepted_tokens.map((token) => `${token.symbol} on ${token.chain_name}`).join(', ')
     : 'an enabled ERC-20 token'
   const enabledRailLabel = paymentConfig ? [
-    ...(paymentConfig.ledger_enabled ? [paymentConfig.ledger_redeemable ? 'account balance' : 'internal account credit'] : []),
+    ...(paymentConfig.account_credit_enabled ? [paymentConfig.ledger_redeemable ? 'account balance' : 'internal account credit'] : []),
     ...(paymentConfig.mpp_configured ? ['MPP on Tempo'] : []),
     ...(paymentConfig.erc20_configured ? [acceptedTokenLabel] : []),
   ].join(', ') || 'a rail when one becomes available' : 'an enabled production rail'
   const paymentServicesLive = Boolean(paymentConfig && !paymentConfig.new_payments_paused
-    && (paymentConfig.erc20_configured || paymentConfig.mpp_configured || paymentConfig.ledger_enabled))
+    && (paymentConfig.erc20_configured || paymentConfig.mpp_configured || paymentConfig.account_credit_enabled))
 
   const loadMoreServices = async () => {
     if (catalogLoadingMore || services.length >= catalogTotal) return
@@ -279,7 +279,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
   }
   const hireDialogRef = useModalFocus(Boolean(hireIntent), closeHire)
 
-  const createTrade = async (paymentRail: 'ledger' | 'mpp' | 'evm') => {
+  const createTrade = async (paymentRail: 'ledger' | 'credit' | 'mpp' | 'evm') => {
     if (!hireIntent) return
     setSubmitting(true)
     setTradeError(null)
@@ -306,11 +306,11 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
       }
       const tradeId = data.trade?.id
       const actualRail = data.trade?.payment_rail
-      if (!['ledger', 'mpp', 'evm'].includes(actualRail)) throw new Error('The server returned an unknown payment method.')
+      if (!['ledger', 'credit', 'mpp', 'evm'].includes(actualRail)) throw new Error('The server returned an unknown payment method.')
       if (['escrow_held', 'pending_release', 'completed', 'complete'].includes(data.trade?.status)) {
         setServices((current) => current.filter((service) => service.id !== hireIntent.service.id))
         setHireIntent({ ...hireIntent, step: 'submitted', tradeId, paymentRail: actualRail })
-      } else if (actualRail === 'ledger') {
+      } else if (actualRail === 'ledger' || actualRail === 'credit') {
         throw new Error('This trade is not funded. Open the dashboard to check its status.')
       } else {
         const checkout = data.checkout as Checkout
@@ -447,13 +447,13 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
                 <div><strong>${service.price_usd.toFixed(2)}</strong><span>per request</span></div>
                 <button
                   type="button"
-                  disabled={service.status !== 'listed' || service.is_demo || !paymentConfig || (!paymentConfig.ledger_enabled && (!service.external_payment_ready || (!paymentConfig.erc20_configured && !paymentConfig.mpp_configured)))}
+                  disabled={service.status !== 'listed' || service.is_demo || !paymentConfig || (!paymentConfig.account_credit_enabled && (!service.external_payment_ready || (!paymentConfig.erc20_configured && !paymentConfig.mpp_configured)))}
                   onClick={() => {
                     trackClientEvent('hire_started', { listing_id: service.id, category: service.category, source: 'catalog' })
                     setHireIntent({ service, step: 'confirm', clientReference: crypto.randomUUID() })
                   }}
                 >
-                  {service.is_demo ? 'Preview only' : !service.external_payment_ready && !paymentConfig?.ledger_enabled ? 'Payout setup pending' : 'Hire agent'} <span>↗</span>
+                  {service.is_demo ? 'Preview only' : !service.external_payment_ready && !paymentConfig?.account_credit_enabled ? 'Payout setup pending' : 'Hire agent'} <span>↗</span>
                 </button>
               </div>
             </article>
@@ -537,20 +537,20 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
                 <h3 id="hire-dialog-title">Choose how to fund escrow.</h3>
                 <p className={styles.settlementNotice}>The quoted total and 5% platform fee are fixed by the server. Pay directly from your wallet into this trade’s escrow; no email or account-credit deposit is required. External funds remain held until delivery is accepted or a dispute is resolved.</p>
                 <div className={styles.protocols}>
-                  {paymentConfig?.ledger_enabled && <button type="button" disabled={submitting} onClick={() => void createTrade('ledger').catch(() => undefined)}>
-                    <span>01</span><div><strong>{paymentConfig.ledger_redeemable ? 'Account balance' : 'Internal account credit'}</strong><small>{paymentConfig.ledger_redeemable ? 'Reserve available USD balance instantly and release it after approval.' : 'Reserve non-withdrawable account credit for marketplace activity.'}</small></div><i>→</i>
+                  {paymentConfig?.account_credit_enabled && <button type="button" disabled={submitting} onClick={() => void createTrade('credit').catch(() => undefined)}>
+                    <span>01</span><div><strong>Account credit</strong><small>Spend deposited USDC account credit. Work begins after the server reserves the total.</small></div><i>→</i>
                   </button>}
                   <button type="button" disabled={submitting || !paymentConfig?.erc20_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('evm').catch(() => undefined)}>
-                    <span>{paymentConfig?.ledger_enabled ? '02' : '01'}</span><div><strong>ERC-20 wallet</strong><small>Pay with {acceptedTokenLabel}.</small></div><i>→</i>
+                    <span>{paymentConfig?.account_credit_enabled ? '02' : '01'}</span><div><strong>ERC-20 wallet</strong><small>Pay with {acceptedTokenLabel}.</small></div><i>→</i>
                   </button>
                   <button type="button" disabled={submitting || !paymentConfig?.mpp_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('mpp').catch(() => undefined)}>
-                    <span>{paymentConfig?.ledger_enabled ? '03' : '02'}</span><div><strong>MPP on Tempo</strong><small>Let an authenticated machine client fund the trade in pathUSD.</small></div><i>→</i>
+                    <span>{paymentConfig?.account_credit_enabled ? '03' : '02'}</span><div><strong>MPP on Tempo</strong><small>Let an authenticated machine client fund the trade in pathUSD.</small></div><i>→</i>
                   </button>
                 </div>
                 {!paymentConfig && <p role="status">Checking available payment rails…</p>}
                 {!hireIntent.service.external_payment_ready && <p className={styles.settlementNotice}>This seller has not configured an external payout wallet. ERC-20 and MPP funding are unavailable for this service.</p>}
                 {paymentConfig?.new_payments_paused && <p role="alert">New marketplace payments are temporarily paused. {paymentConfig.payment_pause_reason || 'Please try again later.'} Existing payments and refunds can still be recovered from your trade.</p>}
-                {paymentConfig && !paymentConfig.new_payments_paused && !paymentConfig.ledger_enabled && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && <p role="alert">No payment rail is currently available. Please try again later.</p>}
+                {paymentConfig && !paymentConfig.new_payments_paused && !paymentConfig.account_credit_enabled && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && <p role="alert">No payment rail is currently available. Please try again later.</p>}
                 {submitting && <p>Creating escrow…</p>}
                 {tradeError && (
                   <div className={styles.tradeError} role="alert">

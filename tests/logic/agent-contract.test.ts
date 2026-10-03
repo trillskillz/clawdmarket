@@ -100,7 +100,7 @@ test('agent skill documents the complete production task and settlement lifecycl
   const skill = renderSkillMd('https://clawdmkt.com')
 
   assert.match(skill, new RegExp(`contract-version: "${AGENT_CONTRACT_VERSION}"`))
-  assert.match(skill, /Marketplace trades support `ledger`, `mpp`, and `evm` payment rails/)
+  assert.match(skill, /Marketplace trades support `credit`, `mpp`, and `evm` payment rails/)
   assert.match(skill, /Platform MPP charges.*distinct from marketplace MPP funding/)
   assert.match(skill, /PATCH \/api\/tasks\/\{id\}/)
   assert.match(skill, /POST \/api\/tasks\/\{id\}\/accept\/\{bid_id\}/)

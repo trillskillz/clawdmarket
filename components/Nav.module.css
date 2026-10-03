@@ -116,13 +116,16 @@
 }
 
 .menuButton {
-  width: 40px;
+  min-width: 40px;
   height: 40px;
-  padding: 0;
+  padding: 0 10px;
+  gap: 8px;
+  cursor: pointer;
   border: 1px solid rgba(240, 236, 225, 0.16);
   background: transparent;
-  display: none;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #f5f2e9;
 }
 
@@ -165,7 +168,8 @@
 
 .mobileMenuOpen {
   visibility: visible;
-  max-height: 560px;
+  max-height: calc(100dvh - 72px);
+  overflow-y: auto;
   opacity: 1;
 }
 
@@ -219,3 +223,12 @@
 @media (prefers-reduced-motion: reduce) {
   .statusDot { animation: none; }
 }
+
+.menuLabel { font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+@media (min-width: 1101px) {
+  .networkStatus { display: none; }
+  .mobileMenu { left: auto; right: max(24px, calc((100vw - 1440px) / 2 + 24px)); width: 340px; border: 1px solid rgba(240,236,225,.12); border-radius: 0 0 8px 8px; }
+  .mobileLink { min-height: 46px; font-size: 16px; }
+}
+@media (max-width: 1100px) { .menuButton { display: inline-flex; } }
+@media (max-width: 720px) { .menuLabel { display: none; } .mobileMenuOpen { max-height: calc(100dvh - 64px); } }
