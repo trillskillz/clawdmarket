@@ -24,6 +24,15 @@ export type BuyerEvmIntent = { id: string; trade_id: string; buyer_id: string; o
   payer_address: string; chain_id: number; token_address: string; treasury_address: string; token_amount: string; token_decimals: number;
   token_symbol: string; token_usd_price: number; amount_usd: number; expires_at: string; created_at: string; tx_hash: string | null; payer_signature: string | null }
 export type BuyerEvmFundingProof = { intent_id: string; chain_id: number; token_address: string; payer_address: string; tx_hash: string; payer_signature?: string }
+export type BuyerMppIntent = { id: string; trade_id: string; buyer_id: string; buyer_operation_id: string; mandate_id: string; origin: string;
+  terms_hash: string; chain_id: number; payer_address: string; token_address: string; treasury_address: string; token_amount: string;
+  token_decimals: number; amount_usd: number; challenge: Record<string, unknown>; expires_at: string; created_at: string }
+export type BuyerMppPaymentClaimInput = { intent_id: string; mandate_id: string; buyer_operation_id: string; serialized_transaction: string }
+export type BuyerMppPaymentClaim = { intent_id: string; mandate_id: string; chain_id: number; payer_address: string; nonce: number; tx_hash: string;
+  terms_hash: string; fee_token_address: string; maximum_fee_token_cost_units: string; valid_before: number;
+  state: 'claimed' | 'confirmed'; first_submission_at: string | null; created_at: string }
+export type BuyerMppPaymentClaimResult = { claim: BuyerMppPaymentClaim; send_allowed: boolean; idempotent: boolean;
+  state: 'submit_exact_credential' | 'recover_existing_payment' }
 
 export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'assertions' | 'source_evidence' | 'isolated_checks'
 export type IsolatedCheckPolicy = { version: 1; adapter: 'javascript_tests_v1' | 'javascript_static_v1'; verifier_agent_id: string; suite_sha256: string; max_runtime_seconds: number }
@@ -289,6 +298,20 @@ export class ClawdMarketClient {
   verifyBuyerMppFunding(tradeId: string, proof: { tx_hash: string; payer_address: string }, options?: RequestOptions) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
     return this.request<{ ok: true; trade: { id: string; status: string }; status?: string; receipt?: { payment_reference: string } }>('POST', `/api/trades/${tradeId}/fund/mpp`, proof, options)
+  }
+  /** Save the operation ID first; replay returns the original challenge, never a new payment. */
+  createBuyerMppPaymentIntent(tradeId: string, input: { buyer_operation_id: string }, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
+    return this.request<{ intent: BuyerMppIntent; created: boolean; claim_required: true }>('POST', `/api/trades/${tradeId}/fund/mpp/intent`, input, options)
+  }
+  getBuyerMppPaymentIntent(tradeId: string, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
+    return this.request<{ intent: BuyerMppIntent | null; claim: BuyerMppPaymentClaim | null; trade: { id: string; status: string; payout_status: string | null } }>('GET', `/api/trades/${tradeId}/fund/mpp/intent`, undefined, options)
+  }
+  /** Fsync exact signed bytes and their original credential before claiming; no submission occurs here. */
+  claimBuyerMppPayment(tradeId: string, input: BuyerMppPaymentClaimInput, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
+    return this.request<BuyerMppPaymentClaimResult>('POST', `/api/trades/${tradeId}/fund/mpp/claim`, input, options)
   }
 
   /** Persist buyer_operation_id privately first. This never signs or broadcasts. */

@@ -2,6 +2,12 @@
 set -euo pipefail
 
 required_files=(
+  "migrations/2026-10-03-buyer-mpp-payment-claims-v1.sql"
+  "lib/buyer-mpp-payment.ts"
+  "app/api/trades/[id]/fund/mpp/intent/route.ts"
+  "app/api/trades/[id]/fund/mpp/claim/route.ts"
+  "scripts/buyer-mpp-worker.mjs"
+  "scripts/buyer-tempo-adapter.mjs"
   "lib/account-credit.ts"
   "app/api/wallet/deposits/route.ts"
   "app/api/wallet/transfers/route.ts"

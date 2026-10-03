@@ -4,7 +4,7 @@ import { and, eq, gt, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { isAddress } from 'viem'
 import { db } from './db'
-import { agent_owners, buyer_evm_payment_claims, evm_payment_intents, payment_receipts, route_funding_steps, route_payment_mandates, route_plans, service_definitions, trades } from './schema'
+import { agent_owners, buyer_evm_payment_claims, buyer_mpp_payment_claims, buyer_mpp_payment_intents, evm_payment_intents, payment_receipts, route_funding_steps, route_payment_mandates, route_plans, service_definitions, trades } from './schema'
 import { getPaymentReadiness, findAcceptedToken } from './payment-config'
 import { canonicalContract } from './structured-verification'
 import { verificationPolicySchema, supportsVerification } from './verification-policy'
@@ -204,7 +204,7 @@ export async function reserveMandateExposure(source: Source, input: { mandateId:
 }
 
 export async function mandateFundingEligibility(trade: typeof trades.$inferSelect, source: Source = db,
-  actual?: { rail: string; chainId: number; tokenAddress: string; payerAddress: string; treasuryAddress?: string }) {
+  actual?: { rail: string; chainId: number; tokenAddress: string; payerAddress: string; treasuryAddress?: string; txHash?: string | null }) {
   const [step] = await source.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id, trade.id)).limit(1)
   if (!step) {
     const [plan] = await source.select({ mandate: route_payment_mandates.id }).from(route_plans)
@@ -222,6 +222,13 @@ export async function mandateFundingEligibility(trade: typeof trades.$inferSelec
     if (actual && (actual.rail !== terms.payment.rail || actual.chainId !== terms.payment.chain_id
       || actual.tokenAddress.toLowerCase() !== terms.payment.token_address || actual.payerAddress.toLowerCase() !== terms.payment.payer_address
       || actual.treasuryAddress && actual.treasuryAddress.toLowerCase() !== terms.payment.treasury_address)) return 'MANDATE_PAYMENT_TERMS_MISMATCH'
+    if (actual?.rail === 'mpp' && actual.txHash) {
+      const [intent] = await source.select().from(buyer_mpp_payment_intents).where(eq(buyer_mpp_payment_intents.trade_id, trade.id)).limit(1)
+      if (intent) {
+        const [claim] = await source.select().from(buyer_mpp_payment_claims).where(eq(buyer_mpp_payment_claims.intent_id, intent.id)).limit(1)
+        if (!claim || claim.tx_hash !== actual.txHash.toLowerCase() || claim.terms_hash !== step.terms_hash) return 'MANDATE_PAYMENT_CLAIM_MISMATCH'
+      }
+    }
     return null
   } catch (error) { return error instanceof RouteMandateError ? error.code : 'MANDATE_CONTRACT_INVALID' }
 }
@@ -235,4 +242,9 @@ export async function recordMandateFunding(source: Source, tradeId: string, stat
   if (intent?.tx_hash && receipt?.tx_hash === intent.tx_hash && receipt.payment_rail === 'evm'
     && receipt.chain_id === intent.chain_id && receipt.payer_address?.toLowerCase() === intent.payer_address) await source.update(buyer_evm_payment_claims).set({ state: 'confirmed' })
     .where(and(eq(buyer_evm_payment_claims.intent_id, intent.id), eq(buyer_evm_payment_claims.tx_hash, intent.tx_hash)))
+  const [mppIntent] = await source.select().from(buyer_mpp_payment_intents).where(eq(buyer_mpp_payment_intents.trade_id, tradeId)).limit(1)
+  if (mppIntent && receipt?.tx_hash && receipt.payment_rail === 'mpp' && receipt.chain_id === mppIntent.chain_id
+    && receipt.payer_address?.toLowerCase() === mppIntent.payer_address && receipt.token_address?.toLowerCase() === mppIntent.token_address
+    && receipt.token_amount === mppIntent.token_amount) await source.update(buyer_mpp_payment_claims).set({ state: 'confirmed' })
+    .where(and(eq(buyer_mpp_payment_claims.intent_id, mppIntent.id), eq(buyer_mpp_payment_claims.tx_hash, receipt.tx_hash)))
 }

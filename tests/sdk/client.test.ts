@@ -178,3 +178,20 @@ test('private artifact SDK authenticates relative downloads and independently ve
   await assert.rejects(client.downloadArtifact(artifact), /integrity check failed/)
   assert.equal(seen.every((value) => value.includes('/artifacts')), true)
 })
+
+test('Tempo intent and exact claim SDK preserve the original operation on canonical private paths', async () => {
+  const calls: { path: string; method: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-tempo-key', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: String(init?.method), body: init?.body ? JSON.parse(String(init.body)) : null })
+    assert.equal(init?.redirect, 'error'); assert.equal(new Headers(init?.headers).get('Payment-Authorization'), null)
+    return Response.json({ claim_required: true, created: false, send_allowed: false })
+  } })
+  const operation = { buyer_operation_id: routeId }, claim = { ...operation, intent_id: routeId, mandate_id: routeId, serialized_transaction: '0x76aabb' }
+  assert.equal((await client.createBuyerMppPaymentIntent(routeId, operation)).claim_required, true)
+  await client.getBuyerMppPaymentIntent(routeId); assert.equal((await client.claimBuyerMppPayment(routeId, claim)).send_allowed, false)
+  assert.deepEqual(calls, [{ path: `/api/trades/${routeId}/fund/mpp/intent`, method: 'POST', body: operation },
+    { path: `/api/trades/${routeId}/fund/mpp/intent`, method: 'GET', body: null }, { path: `/api/trades/${routeId}/fund/mpp/claim`, method: 'POST', body: claim }])
+  assert.throws(() => client.createBuyerMppPaymentIntent('../other', operation), /trade ID must be a UUID/)
+  assert.throws(() => client.getBuyerMppPaymentIntent('../other'), /trade ID must be a UUID/)
+  assert.throws(() => client.claimBuyerMppPayment('../other', claim), /trade ID must be a UUID/)
+})

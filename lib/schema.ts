@@ -1115,6 +1115,30 @@ export const buyer_evm_payment_claims = sqliteTable('buyer_evm_payment_claims', 
 }, (table) => [uniqueIndex('buyer_evm_payment_claims_wallet_nonce_idx').on(table.chain_id, table.payer_address, table.nonce),
   uniqueIndex('buyer_evm_payment_claims_active_wallet_idx').on(table.chain_id, table.payer_address).where(sql`${table.state} = 'claimed'`)]);
 
+/** Buyer-operated Tempo intent; original challenge and operation survive uncertain HTTP outcomes. */
+export const buyer_mpp_payment_intents = sqliteTable('buyer_mpp_payment_intents', {
+  id: text('id').primaryKey(), trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  buyer_operation_id: text('buyer_operation_id').notNull().unique(), mandate_id: text('mandate_id').notNull().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  origin: text('origin').notNull(), terms_hash: text('terms_hash').notNull(),
+  chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(),
+  token_address: text('token_address').notNull(), treasury_address: text('treasury_address').notNull(), token_amount: text('token_amount').notNull(),
+  token_decimals: integer('token_decimals').notNull(), amount_usd: real('amount_usd').notNull(),
+  challenge_json: text('challenge_json').notNull(), expires_at: text('expires_at').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+export const buyer_mpp_payment_claims = sqliteTable('buyer_mpp_payment_claims', {
+  intent_id: text('intent_id').primaryKey().references(() => buyer_mpp_payment_intents.id, { onDelete: 'restrict' }),
+  mandate_id: text('mandate_id').notNull().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(), nonce: integer('nonce').notNull(),
+  tx_hash: text('tx_hash').notNull().unique(), terms_hash: text('terms_hash').notNull(), fee_token_address: text('fee_token_address').notNull(),
+  maximum_fee_token_cost_units: text('maximum_fee_token_cost_units').notNull(), valid_before: integer('valid_before').notNull(),
+  state: text('state', { enum: ['claimed', 'confirmed'] }).notNull().default('claimed'),
+  first_submission_at: integer('first_submission_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [uniqueIndex('buyer_mpp_payment_claims_wallet_nonce_idx').on(table.chain_id, table.payer_address, table.nonce),
+  uniqueIndex('buyer_mpp_payment_claims_active_wallet_idx').on(table.chain_id, table.payer_address).where(sql`${table.state} = 'claimed'`)]);
+
 export const payment_controls = sqliteTable('payment_controls', {
   key: text('key').primaryKey(),
   paused: integer('paused').notNull().default(0),

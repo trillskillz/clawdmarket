@@ -15,6 +15,7 @@ export async function createLocalTestSchema(client: Client, tables: Record<strin
   for (const table of Object.values(tables)) {
     const config = getTableConfig(table)
     const columns = config.columns.map((column) => `${quote(column.name)} ${column.getSQLType()}${column.primary ? ' PRIMARY KEY' : ''}${column.notNull ? ' NOT NULL' : ''}${column.isUnique ? ' UNIQUE' : ''}${column.default !== undefined ? ` DEFAULT ${literal(column.default)}` : ''}`)
+    for (const key of config.primaryKeys) columns.push(`PRIMARY KEY (${key.columns.map((column) => quote(column.name)).join(', ')})`)
     for (const foreignKey of config.foreignKeys) {
       const reference = foreignKey.reference()
       columns.push(`FOREIGN KEY (${reference.columns.map((column) => quote(column.name)).join(', ')}) REFERENCES ${quote(getTableConfig(reference.foreignTable).name)} (${reference.foreignColumns.map((column) => quote(column.name)).join(', ')})`)

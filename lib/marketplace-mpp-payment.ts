@@ -1,15 +1,17 @@
 import 'server-only'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { eq } from 'drizzle-orm'
 import { Credential, Errors } from 'mppx'
-import { keccak256, toHex } from 'viem'
+import { createPublicClient, http, keccak256, toHex } from 'viem'
 import { db } from '@/lib/db'
 import { route_funding_steps, route_plans, service_orders, trades } from '@/lib/schema'
 import { getNewPaymentControl } from '@/lib/payment-control'
 import { serviceFundingEligibility } from '@/lib/service-funding-eligibility'
 import { mandateFundingEligibility } from '@/lib/route-payment-mandate'
 import { routeExecutionEnabled } from '@/lib/routing-feature-flags'
-import { getPaymentReadiness } from '@/lib/payment-config'
+import { getPaymentReadiness, getTempoRpcUrl } from '@/lib/payment-config'
 import { TradeFundingError } from '@/lib/trade-funding'
+import { assertBuyerMppPull, BuyerMppPaymentError } from '@/lib/buyer-mpp-payment'
 
 export function marketplaceMppMemo(tradeId: string) {
   return keccak256(toHex(`clawdmarket:${tradeId}`))
@@ -37,7 +39,8 @@ export function marketplaceMppCredential(request: Request) {
 }
 
 /** Permission for a new external effect, always checked from current database state. Hash proofs bypass this guard. */
-export async function assertMarketplaceMppPullAllowed(tradeId: string, payer?: string) {
+export async function assertMarketplaceMppPullAllowed(tradeId: string, payer?: string,
+  pull?: { serialized_transaction: string; challenge: unknown }, markSubmission = false) {
   const [trade] = await db.select().from(trades).where(eq(trades.id, tradeId)).limit(1)
   if (!trade || trade.payment_rail !== 'mpp' || trade.status !== 'pending' || !trade.payment_due_at || !(Date.parse(trade.payment_due_at) > Date.now())) {
     throw new TradeFundingError('Recover the existing payment by hash; no new broadcast is permitted', 409, 'MPP_BROADCAST_NOT_ALLOWED')
@@ -52,8 +55,21 @@ export async function assertMarketplaceMppPullAllowed(tradeId: string, payer?: s
     || await serviceFundingEligibility(trade)
   if (reason) throw new TradeFundingError('Current checkout authority does not permit a new broadcast', 409, reason)
   const [step] = await db.select({ id: route_funding_steps.id }).from(route_funding_steps).where(eq(route_funding_steps.trade_id, tradeId)).limit(1)
-  // Tempo fees use token units. EVM wei reserve terms and a credential timeout are insufficient automatic funding authority.
-  if (step) throw new TradeFundingError('MPP mandate pull funding requires the durable buyer protocol; recover an existing payment by hash', 409, 'MPP_MANDATE_PULL_NOT_READY')
+  if (step) {
+    if (!pull) throw new TradeFundingError('MPP mandate pull funding requires the original claimed credential', 409, 'MPP_MANDATE_PULL_NOT_READY')
+    if (markSubmission) {
+      const rpcUrl = getTempoRpcUrl()
+      try {
+        if (!rpcUrl || await createPublicClient({ transport: http(rpcUrl, { timeout: 10_000, retryCount: 0 }) }).getChainId() !== ready.chainId) {
+          throw new Error('Wrong chain')
+        }
+      } catch { throw new TradeFundingError('Configured Tempo chain could not be established', 503, 'MPP_CHAIN_UNAVAILABLE') }
+    }
+    try { await assertBuyerMppPull(tradeId, payer, pull, markSubmission) } catch (error) {
+      if (error instanceof BuyerMppPaymentError) throw new TradeFundingError('Original Tempo payment cannot be submitted; retain its hash for recovery', error.status, error.code)
+      throw error
+    }
+  }
 }
 
 class MppBroadcastDenied extends Errors.PaymentError {
@@ -69,6 +85,27 @@ function safeSdkError(error: unknown): never {
   throw new Errors.VerificationFailedError({ reason: 'Original payment verification did not complete; retain its hash for read-only recovery' })
 }
 
+const broadcastScope = new AsyncLocalStorage<{ tradeId: string; payer: string; pull: { serialized_transaction: string; challenge: unknown } }>()
+
+/** Check after every SDK simulation, immediately before the configured RPC accepts signed bytes. */
+export function marketplaceMppTransport(rpcUrl: string): ReturnType<typeof http> {
+  const transport = http(rpcUrl, { retryCount: 0, timeout: 10_000, fetchOptions: { redirect: 'error' } })
+  return (parameters) => {
+    const rpc = transport(parameters)
+    return { ...rpc, request: async (request, options) => {
+      if (/^eth_send/i.test(request.method)) {
+        const scope = broadcastScope.getStore()
+        if (!scope || !['eth_sendRawTransaction', 'eth_sendRawTransactionSync'].includes(request.method)
+          || !Array.isArray(request.params) || request.params[0] !== scope.pull.serialized_transaction) {
+          throw new TradeFundingError('Only the exact validated credential may be submitted', 409, 'MPP_CREDENTIAL_INVALID')
+        }
+        await assertMarketplaceMppPullAllowed(scope.tradeId, scope.payer, scope.pull, true)
+      }
+      return rpc.request(request, options)
+    } }
+  }
+}
+
 /** The SDK may simulate/validate before broadcast. Recheck permission at the method's actual mutation boundary. */
 export function guardMarketplaceMppMethod<T extends { validate?: (...args: any[]) => Promise<any>; broadcast?: (...args: any[]) => Promise<any> }>(method: T): T {
   const validate = method.validate, broadcast = method.broadcast
@@ -82,7 +119,11 @@ export function guardMarketplaceMppMethod<T extends { validate?: (...args: any[]
           const validated = await validate(...args)
           const tradeId = parameters.request.externalId
           if (typeof tradeId !== 'string' || !validated.details?.sender) throw new TradeFundingError('MPP payment scope is invalid', 409, 'MPP_CREDENTIAL_INVALID')
-          await assertMarketplaceMppPullAllowed(tradeId, validated.details.sender)
+          const pull = {
+            serialized_transaction: parameters.credential.payload.signature, challenge: parameters.credential.challenge,
+          }
+          await assertMarketplaceMppPullAllowed(tradeId, validated.details.sender, pull)
+          return await broadcastScope.run({ tradeId, payer: validated.details.sender, pull }, () => broadcast(...args))
         }
         return await broadcast(...args)
       } catch (error) { return safeSdkError(error) }

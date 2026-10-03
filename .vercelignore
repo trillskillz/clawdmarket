@@ -4,6 +4,8 @@
 !/scripts/provider-worker.mjs
 !/scripts/verifier-contract.mjs
 !/scripts/buyer-worker.mjs
+!/scripts/buyer-mpp-worker.mjs
+!/scripts/buyer-tempo-adapter.mjs
 !/scripts/buyer-evm-adapter.mjs
 !/scripts/buyer-payment-journal.mjs
 !/scripts/buyer-wallet-lock.mjs

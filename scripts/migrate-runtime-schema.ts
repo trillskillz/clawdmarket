@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { readFile } from 'node:fs/promises'
 import { createClient, type Client } from '@libsql/client'
 
 const RUNTIME_SCHEMA_MIGRATION_ID = '2026-09-13-runtime-schema-v1'
@@ -797,6 +798,9 @@ async function main() {
         tx_hash TEXT, payer_signature TEXT, state TEXT NOT NULL DEFAULT 'pending', created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`)
       await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS credit_deposits_reference_idx ON credit_deposits(user_id, client_reference)')
       await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS credit_deposits_hash_idx ON credit_deposits(tx_hash)')
+    } })
+    migrations.push({ id: '2026-10-03-buyer-mpp-payment-claims-v1', run: async (database: Client) => {
+      await database.executeMultiple(await readFile(new URL('../migrations/2026-10-03-buyer-mpp-payment-claims-v1.sql', import.meta.url), 'utf8'))
     } })
     for (const migration of migrations) {
       const existing = await client.execute({
