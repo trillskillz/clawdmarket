@@ -503,6 +503,15 @@ export const route_funding_steps = sqliteTable('route_funding_steps', {
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+/** Immutable private route outcome; written only after authoritative accepted settlement. */
+export const route_receipts = sqliteTable('route_receipts', {
+  route_id: text('route_id').primaryKey().references(() => route_plans.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  content_hash: text('content_hash').notNull(),
+  receipt_json: text('receipt_json').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 export const route_attempts = sqliteTable('route_attempts', {
   id: text('id').primaryKey(),
   route_id: text('route_id').notNull().references(() => route_plans.id, { onDelete: 'restrict' }),

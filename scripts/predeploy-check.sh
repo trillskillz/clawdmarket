@@ -2,6 +2,12 @@
 set -euo pipefail
 
 required_files=(
+  "lib/buyer-trade-confirmation.ts"
+  "lib/route-lifecycle.ts"
+  "app/api/routes/[id]/advance/route.ts"
+  "app/api/routes/[id]/result/route.ts"
+  "scripts/buyer-route-worker.mjs"
+  "migrations/2026-10-03-route-receipts-v1.sql"
   "migrations/2026-10-03-buyer-mpp-payment-claims-v1.sql"
   "lib/buyer-mpp-payment.ts"
   "app/api/trades/[id]/fund/mpp/intent/route.ts"

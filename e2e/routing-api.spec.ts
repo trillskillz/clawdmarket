@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-test('buyer can plan, inspect, and cancel work without moving funds', async ({ request }) => {
+test('buyer can plan, inspect, and cancel work without moving funds', async ({ request, playwright }) => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`
   const ipSegment = (Date.now() % 65535).toString(16)
   const email = `routing.${suffix}@example.com`
@@ -37,6 +37,16 @@ test('buyer can plan, inspect, and cancel work without moving funds', async ({ r
   expect((await execute.json()).error_code).toBe('ROUTE_NO_ELIGIBLE_PROVIDER')
   const inspect = await request.get(`/api/routes/${body.route.id}`, { headers: { Authorization: `Bearer ${token}` } })
   expect(inspect.status()).toBe(200)
+  const lifecyclePath = `/api/routes/${body.route.id}/advance`
+  const anonymous = await playwright.request.newContext({ baseURL: 'http://localhost:3000' })
+  try {
+    expect((await anonymous.get(lifecyclePath)).status()).toBe(401)
+    expect((await anonymous.get(`/api/routes/${body.route.id}/result`)).status()).toBe(401)
+  } finally { await anonymous.dispose() }
+  const observed = await request.post(lifecyclePath, { headers: { Authorization: `Bearer ${token}` }, data: { version: 1, action: 'observe' } })
+  expect(observed.status()).toBe(200)
+  expect(observed.headers()['cache-control']).toContain('private, no-store')
+  expect((await observed.json()).funds_state).toBe('no_funds_moved')
   const cancel = await request.delete(`/api/routes/${body.route.id}`, { headers: { Authorization: `Bearer ${token}` } })
   expect(cancel.status()).toBe(200)
   expect((await cancel.json()).route.state).toBe('cancelled')

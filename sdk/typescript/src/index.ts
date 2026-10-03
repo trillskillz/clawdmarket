@@ -143,6 +143,21 @@ export type ProviderExecution = {
 
 export type AcceptanceStatus = { mode: 'legacy_settlement' | 'explicit_buyer'; auto_confirm_enabled: boolean; accepted: boolean; attention_required: boolean; error_code?: string }
 export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null; provider_execution: ProviderExecution | null; acceptance: AcceptanceStatus | null }
+export type RouteResultArtifact = { id: string; sha256: string; size_bytes: number; media_type: string }
+export type PrivateRouteResult = { route_id: string; trade_id: string; delivery: { id: string; content_hash: string };
+  content: { summary: string; artifact: Record<string, unknown> | null; delivery_url: string | null }; result_hash: string; artifacts: RouteResultArtifact[] }
+export type BackedRouteReceipt = { version: 1; route_id: string; trade_id: string; order_id: string; objective_hash: string; input_hash: string;
+  selected_provider: { service_id: string; protocol: string | null }; authority: { mandate_id: string; terms_hash: string; funding_step_id: string } | null;
+  attempts: Array<Pick<RouteAttempt, 'id' | 'attempt_number' | 'service_id' | 'state' | 'failure_code'>>;
+  delivery: { id: string; content_hash: string }; result_hash: string; artifacts: RouteResultArtifact[];
+  pricing: { currency: 'USD'; item_amount: string; fee_amount: string; buyer_total: string; seller_amount: string }; payment_rail: string;
+  verification: { checks: Array<{ method: string; version: string; status: string }>; semantic_verified: false; isolation_observed_by_app: false; [key: string]: unknown };
+  buyer_decision: { decision: 'accepted'; content_hash: string }; financial: { kind: 'confirmed_external' | 'backed_account_credit' | 'historical_ledger'; [key: string]: unknown };
+  settlement_status: 'completed'; completed_at: string; capacity_released: true }
+export type RouteLifecycle = { route_id: string; order_id: string | null; trade_id: string | null; phase: string; next_action: string;
+  funds_state: string; error_code: string | null; delivery: { id: string; content_hash: string } | null; acceptance: AcceptanceStatus | null;
+  receipt: { receipt: BackedRouteReceipt; content_hash: string } | null; provider_protocol: string | null }
+export type RouteAdvanceCommand = { version: 1; action: 'observe' } | { version: 1; action: 'accept'; content_hash: string }
 export type PlannedRoute = { route: RoutePlan; idempotent: boolean; planning?: { examined: number; truncated: boolean; candidate_count: number; funds_moved: false } }
 export type ExecutedRoute = Pick<RouteSnapshot, 'route' | 'attempts' | 'payment_exposure'> & {
   order: { id: string; service_id: string; trade_id: string; [key: string]: unknown }
@@ -329,6 +344,10 @@ export class ClawdMarketClient {
   }
 
   getRoute(routeId: string, options?: RequestOptions) { return this.request<RouteSnapshot>('GET', routePath(routeId), undefined, options) }
+  inspectRouteLifecycle(routeId: string, options?: RequestOptions) { return this.request<RouteLifecycle>('GET', `${routePath(routeId)}/advance`, undefined, options) }
+  /** Observe never creates acceptance; accept binds the explicit decision to the exact current delivery hash. */
+  advanceRoute(routeId: string, command: RouteAdvanceCommand, options?: RequestOptions) { return this.request<RouteLifecycle>('POST', `${routePath(routeId)}/advance`, command, options) }
+  getRouteResult(routeId: string, options?: RequestOptions) { return this.request<PrivateRouteResult>('GET', `${routePath(routeId)}/result`, undefined, options) }
 
   cancelRoute(routeId: string, options?: RequestOptions) { return this.request<CancelledRoute>('DELETE', routePath(routeId), undefined, options) }
 

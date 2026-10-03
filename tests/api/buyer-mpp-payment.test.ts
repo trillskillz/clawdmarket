@@ -148,3 +148,16 @@ test('broadcast boundary pins the original challenge/hash and rechecks current p
   assert.equal((await inspectRouteFundingHealth(db.$client)).mpp_payment_claim_anomaly_count, 1)
   await db.update(schema.buyer_mpp_payment_claims).set({ state: 'confirmed' }).where(eq(schema.buyer_mpp_payment_claims.intent_id, intent.id))
 })
+
+test('lifecycle advancement requires payments scope and cookie CSRF while private reads remain buyer-only', async () => {
+  const f = await fixture(undefined, true), lifecycle = await import('@/app/api/routes/[id]/advance/route'), result = await import('@/app/api/routes/[id]/result/route')
+  const credential = await (await import('@/lib/agent-named-credentials')).createNamedAgentCredential({ agentId: f.id, name: 'Lifecycle read only', scopes: ['agent:read'], actorCredentialId: null })
+  if (credential.kind !== 'created') assert.fail('Read fixture unavailable')
+  const url = `http://localhost/api/routes/${f.routeId}/advance`, headers = { Authorization: `Bearer ${credential.api_key}`, 'Content-Type': 'application/json' }
+  assert.equal((await lifecycle.GET(new NextRequest(url, { headers }), context(f.routeId))).status, 200)
+  assert.equal((await lifecycle.POST(new NextRequest(url, { method: 'POST', headers, body: '{"version":1,"action":"observe"}' }), context(f.routeId))).status, 401)
+  const cookie = jwt({ userId: f.buyerId, email: `${f.buyerId}@test.invalid`, role: 'human' })
+  assert.equal((await lifecycle.POST(new NextRequest(url, { method: 'POST', headers: { Cookie: `auth-token=${cookie}`, 'Content-Type': 'application/json' }, body: '{"version":1,"action":"observe"}' }), context(f.routeId))).status, 403)
+  assert.equal((await result.GET(request(`/api/routes/${f.routeId}/result`, f.sellerId, 'GET'), context(f.routeId))).status, 404)
+  assert.equal((await db.select().from(schema.service_execution_attempts).where(eq(schema.service_execution_attempts.order_id, (await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, f.trade.id)))[0].id))).length, 0)
+})

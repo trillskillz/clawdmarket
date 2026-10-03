@@ -195,3 +195,19 @@ test('Tempo intent and exact claim SDK preserve the original operation on canoni
   assert.throws(() => client.getBuyerMppPaymentIntent('../other'), /trade ID must be a UUID/)
   assert.throws(() => client.claimBuyerMppPayment('../other', claim), /trade ID must be a UUID/)
 })
+
+test('SDK lifecycle observation, hash-bound acceptance and private result share canonical owned route paths', async () => {
+  const calls: { path: string; method: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-route-payments-key', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: String(init?.method), body: init?.body ? JSON.parse(String(init.body)) : null })
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-route-payments-key')
+    assert.equal(init?.redirect, 'error'); return Response.json({ phase: 'awaiting_buyer' })
+  } })
+  await client.inspectRouteLifecycle(routeId); await client.advanceRoute(routeId, { version: 1, action: 'observe' })
+  const decision = { version: 1 as const, action: 'accept' as const, content_hash: 'a'.repeat(64) }
+  await client.advanceRoute(routeId, decision); await client.getRouteResult(routeId)
+  assert.deepEqual(calls, [{ path: `/api/routes/${routeId}/advance`, method: 'GET', body: null },
+    { path: `/api/routes/${routeId}/advance`, method: 'POST', body: { version: 1, action: 'observe' } },
+    { path: `/api/routes/${routeId}/advance`, method: 'POST', body: decision }, { path: `/api/routes/${routeId}/result`, method: 'GET', body: null }])
+  assert.throws(() => client.advanceRoute('../another', decision), /routeId must be a route UUID/)
+})

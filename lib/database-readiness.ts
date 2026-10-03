@@ -44,6 +44,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   route_attempts: ['id', 'route_id', 'attempt_number', 'service_id', 'state', 'failure_code', 'service_order_id', 'created_at', 'updated_at'],
   route_payment_mandates: ['id', 'route_id', 'buyer_id', 'owner_account_id', 'client_reference', 'request_hash', 'route_hash', 'terms_json', 'max_aggregate_minor', 'reserved_minor', 'state', 'expires_at', 'created_at', 'revoked_at'],
   route_funding_steps: ['id', 'mandate_id', 'route_id', 'order_id', 'trade_id', 'amount_minor', 'terms_hash', 'state', 'created_at', 'updated_at'],
+  route_receipts: ['route_id', 'trade_id', 'content_hash', 'receipt_json', 'created_at'],
   buyer_evm_payment_claims: ['intent_id', 'mandate_id', 'chain_id', 'payer_address', 'nonce', 'tx_hash', 'terms_hash', 'maximum_execution_gas_cost_wei', 'state', 'created_at'],
   buyer_mpp_payment_intents: ['id', 'trade_id', 'buyer_id', 'buyer_operation_id', 'mandate_id', 'origin', 'terms_hash', 'chain_id', 'payer_address', 'token_address', 'treasury_address', 'token_amount', 'token_decimals', 'amount_usd', 'challenge_json', 'expires_at', 'created_at'],
   buyer_mpp_payment_claims: ['intent_id', 'mandate_id', 'chain_id', 'payer_address', 'nonce', 'tx_hash', 'terms_hash', 'fee_token_address', 'maximum_fee_token_cost_units', 'valid_before', 'state', 'first_submission_at', 'created_at'],

@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.74'
+export const AGENT_CONTRACT_VERSION = '1.75'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -16,6 +16,7 @@ export type AgentAuth =
   | 'mpp'
   | 'task-owner'
   | 'trade-buyer'
+  | 'route-buyer'
   | 'trade-party'
   | 'approved-verifier'
   | 'approved-verifier-or-trade-party'
@@ -749,6 +750,16 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'POST', endpoint: '/api/routes/{id}/execute', auth: 'agent_api_key', payment: null, required: ['id'],
     optional: ['mandate_id'], body_schema: { type: 'object', additionalProperties: false, properties: { mandate_id: { type: 'string', format: 'uuid' } } },
   },
+  { id: 'inspect_route_lifecycle', label: 'Inspect route lifecycle', description: 'Buyer-only next action, stable funds state, current delivery hash, explicit acceptance and immutable backed receipt. A completion flag without authoritative financial evidence reports uncertainty.',
+    method: 'GET', endpoint: '/api/routes/{id}/advance', auth: 'route-buyer', payment: null, required: ['id'] },
+  { id: 'advance_route_lifecycle', label: 'Advance funded route', description: 'Buyer/payments:write only. One bounded pass repairs only already funded dispatch. action=observe never creates buyer acceptance; it may resume an already accepted settlement. action=accept requires the exact current content_hash and required verification. Existing payout outbox, completion and capacity release remain authoritative. No wallet signing, replacement checkout or funded retry.',
+    method: 'POST', endpoint: '/api/routes/{id}/advance', auth: 'route-buyer', payment: null, required: ['id', 'version', 'action'],
+    body_schema: { oneOf: [
+      { type: 'object', additionalProperties: false, required: ['version', 'action'], properties: { version: { type: 'integer', const: 1 }, action: { type: 'string', const: 'observe' } } },
+      { type: 'object', additionalProperties: false, required: ['version', 'action', 'content_hash'], properties: { version: { type: 'integer', const: 1 }, action: { type: 'string', const: 'accept' }, content_hash: { type: 'string', pattern: '^[a-f0-9]{64}$' } } },
+    ] } },
+  { id: 'get_route_result', label: 'Retrieve private route result', description: 'Buyer-only private delivery content, content fingerprint and artifact hash inventory. Private no-store response; remote source/delivery URLs are declarations and never fetched. Fetch artifact bytes through authenticated fixed trade paths and verify their size/SHA256.',
+    method: 'GET', endpoint: '/api/routes/{id}/result', auth: 'route-buyer', payment: null, required: ['id'] },
   { id: 'create_route_mandate', label: 'Authorize route funding', description: 'Only the buyer account or current linked owner may create immutable route-bound payment authority. Creates no payment or economic order.',
     method: 'POST', endpoint: '/api/routes/{id}/mandate', auth: 'owner-account', payment: null, required: ['id'], body_schema: routeMandateBodySchema },
   { id: 'inspect_route_mandate', label: 'Inspect funding authority', description: 'Buyer or current owner reads mandate terms, exposure and the durable funding step. Read-only agent credentials cannot grant or spend authority.',
@@ -971,9 +982,9 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'GET', endpoint: '/api/trades/{id}/verification', auth: 'trade-party', payment: null, required: ['id'],
   },
   {
-    id: 'confirm_trade', label: 'Confirm delivery', description: 'Buyer approval releases escrow. Account balances settle atomically; external trades complete only after the seller payout is confirmed.',
+    id: 'confirm_trade', label: 'Confirm delivery', description: 'Buyer approval releases escrow. Optional content_hash binds the decision to the current delivery atomically. Account balances settle atomically; external trades complete only after the seller payout is confirmed.',
     method: 'POST', endpoint: '/api/trades/{id}/confirm', auth: 'trade-buyer', payment: null,
-    required: ['id'],
+    required: ['id'], optional: ['content_hash'], body_schema: { type: 'object', additionalProperties: false, properties: { content_hash: { type: 'string', pattern: '^[a-f0-9]{64}$' } } },
   },
   {
     id: 'dispute_trade', label: 'Dispute trade', description: 'A buyer or seller can freeze escrow and submit dispute evidence while a trade is held or awaiting release.',
@@ -1942,6 +1953,14 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       get: { operationId: 'inspect_route', summary: 'Inspect an owned route', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route state, candidate attempts, payment exposure, funded execution timing, and leased provider attempt status' }, 404: { description: 'Route not owned' } } },
       delete: { operationId: 'cancel_planned_route', summary: 'Cancel a planned route or unpaid checkout', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route cancelled or already cancelled; capacity released for unpaid orders' }, 404: { description: 'Route not owned' }, 409: { description: 'Funding has begun (state: see_trade), funding raced (payment_unknown), or reservation is in progress' } } },
     },
+    '/api/routes/{id}/advance': {
+      get: { operationId: 'inspect_route_lifecycle', summary: 'Inspect buyer-only lifecycle and backed receipt', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Phase, next action, funds state, current delivery hash and immutable receipt if persisted' }, 401: { description: 'Authentication required' }, 404: { description: 'Route not owned' }, 503: { description: 'Snapshot unavailable; retain original economic IDs' } } },
+      post: { operationId: 'advance_route_lifecycle', summary: 'Advance authoritative funded dispatch and explicit buyer settlement', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('advance_route_lifecycle').body_schema } } },
+        responses: { 200: { description: 'Current lifecycle or backed completed receipt; idempotent economic transitions' }, 202: { description: 'Original settlement still confirming; capacity remains held' }, 400: { description: 'Invalid bounded command' }, 401: { description: 'Authentication/payments:write required' }, 403: { description: 'Cookie CSRF required' }, 404: { description: 'Route not owned' }, 409: { description: 'Delivery hash changed or required verification/state not ready; funds remain inspectable' }, 503: { description: 'Original settlement/storage unavailable; resume same route' } } },
+    },
+    '/api/routes/{id}/result': { get: { operationId: 'get_route_result', summary: 'Retrieve buyer-only private result and artifact inventory', security: authenticated, parameters: [tradeIdParameter],
+      responses: { 200: { description: 'Private output, content fingerprint and artifact hashes, separate from receipt' }, 401: { description: 'Authentication required' }, 404: { description: 'Route not owned' }, 409: { description: 'Result not yet delivered' }, 503: { description: 'Private retrieval unavailable' } } } },
     '/api/routes/{id}/mandate': {
       post: { operationId: 'create_route_mandate', summary: 'Owner grants bounded immutable funding authority', security: ownerAuthenticated, parameters: [tradeIdParameter],
         requestBody: { required: true, content: { 'application/json': { schema: routeMandateBodySchema } } },
@@ -2046,6 +2065,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/trades/{id}/confirm': { post: {
       operationId: 'confirm_trade', summary: 'Buyer confirms delivered work and releases escrow', security: authenticated,
       parameters: [tradeIdParameter],
+      requestBody: { required: false, content: { 'application/json': { schema: getAction('confirm_trade').body_schema } } },
       responses: {
         200: { description: 'Trade completed and settlement released' }, 202: { description: 'External seller payout submitted and awaiting confirmation' }, 400: { description: 'Invalid trade ID or trade is not pending release' },
         401: { description: 'Authentication required' }, 403: { description: 'Only the buyer may confirm, or CSRF check failed' },
@@ -2134,6 +2154,7 @@ export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
     mpp: 'MPP credential',
     'task-owner': 'task owner authentication',
     'trade-buyer': 'trade buyer authentication',
+    'route-buyer': 'route buyer authentication; payments:write for lifecycle advancement',
     'trade-party': 'trade buyer or seller authentication',
     'approved-verifier': 'the designated buyer-approved verifier; named keys require agent:read for retrieval and marketplace:write for reports',
     'approved-verifier-or-trade-party': 'trade parties receive metadata; only the designated verifier receives an active private grant',
@@ -2349,6 +2370,10 @@ For isolated JavaScript checks, the policy selects \`isolated_checks\` with a ve
 ## Tempo buyer recovery
 
 Contract 1.74 adds \`POST /api/trades/{id}/fund/mpp/intent\`, buyer-only GET recovery and \`POST /api/trades/{id}/fund/mpp/claim\`. Save the operation UUID before requesting the original challenge. Run \`scripts/buyer-mpp-worker.mjs\` on the buyer Linux/Node 24 host with a privately pinned owner-approved mandate and RPC. Only unsponsored root secp256k1 0x76 transactions with nonceKey=0, one exact pathUSD transferWithMemo and the explicit same fee token are supported. Fsync the exact signed bytes, hash and serialized original credential before claiming or submission. Rounded maximum fees, principal and uncertain exposure consume the same six-decimal balance before both reserve floors. The buyer holds a shared kernel wallet lock; EVM and MPP claims share server wallet holds and permanent nonce attribution. Current authority is checked after SDK simulation immediately before RPC submission. Revocation, pause, timeout and cancellation never replace or release uncertain payment. Recover the original hash through the existing read-only proof/refund path; only matching verified receipt confirms a claim. The worker performs no acceptance, settlement or funded retry. Keys remain on the buyer host; paid production proof is deferred.
+
+## Buyer route orchestration
+
+Contract 1.75 adds private \`GET/POST /api/routes/{id}/advance\` and \`GET /api/routes/{id}/result\`. Run \`scripts/buyer-route-worker.mjs\` on the buyer host with the same pinned mandate approval/state directory as the funding workers. One pass funds the original selected order, repairs funded dispatch, observes external provider execution, retrieves private output and independently verifies bounded artifact bytes, and returns an explicit review state. No-mandate invocation only reads the plan. To accept, supply a private version-1 decision file binding route_id, decision=accept and current delivery content_hash; the checked decision is fsynced before submission and is never replaced after uncertainty. action=observe never creates acceptance. Once accepted, the worker resumes the existing payout outbox and records an immutable receipt only with matching funding, confirmed payout or backed credit entries, buyer review and exactly-once capacity release. Receipt includes objective/input/output/artifact hashes, service/attempt links, agreed price, rail, verification categories and financial references; no private inputs/output, recovery credentials or wallet ownership values. A status flag alone cannot prove completion. Private result/bytes are saved mode 0600 on the buyer host; remote source URLs are never fetched. Resume the same route after API loss or SIGKILL. Independent semantic truth, funded failover and global rollout remain separately gated.
 
 ## Buyer route payment mandates
 

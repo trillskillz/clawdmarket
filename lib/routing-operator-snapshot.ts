@@ -1,3 +1,4 @@
+import { inspectRouteReceiptHealth } from './route-receipt-health.mjs'
 import { inspectCreditHealth } from './credit-health.mjs'
 import 'server-only'
 import { db } from '@/lib/db'
@@ -15,7 +16,7 @@ function countByState(rows: readonly Record<string, unknown>[]) {
 /** Aggregate-only operator snapshot. No account, endpoint, payload, or credential values leave this function. */
 export async function getRoutingOperatorSnapshot() {
   const client = db.$client
-  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, overdueDeliveries, webhooks, settlement, cron, verificationHealth, fundingHealth, creditHealth] = await Promise.all([
+  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, overdueDeliveries, webhooks, settlement, cron, verificationHealth, fundingHealth, creditHealth, receiptHealth] = await Promise.all([
     client.execute('SELECT id, applied_at FROM _clawdmarket_migrations ORDER BY applied_at DESC, id DESC LIMIT 8'),
     client.execute('SELECT status AS state, COUNT(*) AS count FROM service_definitions GROUP BY status'),
     client.execute('SELECT state, COUNT(*) AS count FROM route_plans GROUP BY state'),
@@ -53,6 +54,7 @@ export async function getRoutingOperatorSnapshot() {
       FROM verification_jobs`),
     inspectRouteFundingHealth(client),
     inspectCreditHealth(client),
+    inspectRouteReceiptHealth(client),
   ])
   return {
     checked_at: new Date().toISOString(),
@@ -82,5 +84,6 @@ export async function getRoutingOperatorSnapshot() {
     workers: { webhooks: cron },
     route_funding: fundingHealth,
     account_credit: creditHealth,
+    route_receipts: receiptHealth,
   }
 }

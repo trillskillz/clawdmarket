@@ -1,7 +1,8 @@
 import test, { before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFile, spawn } from 'node:child_process'
@@ -14,6 +15,8 @@ import { createLocalTestSchema } from '../helpers/local-schema'
 import { runBuyerFunding } from '../../scripts/buyer-worker.mjs'
 import { createBuyerEvmAdapter } from '../../scripts/buyer-evm-adapter.mjs'
 import { buyerWalletReference, withBuyerWalletLock } from '../../scripts/buyer-wallet-lock.mjs'
+import { runBuyerRoute } from '../../scripts/buyer-route-worker.mjs'
+import { runProviderWork } from '../../scripts/provider-worker.mjs'
 
 let directory: string, baseUrl: string, rpcUrl: string
 let db: typeof import('@/lib/db').db, schema: typeof import('@/lib/schema'), jwt: typeof import('@/lib/auth').generateJWT
@@ -24,6 +27,7 @@ const transactions = new Map<string, { raw: `0x${string}`; payer: `0x${string}`;
 const balances = new Map<string, { token: bigint; native: bigint }>()
 let signerIndex = 100, broadcastCalls = 0, loseBroadcastReply = false
 let l1Fee = 10_000n, rpcChainId = 8453
+let minePayout = true
 const operatorFee = 2_000n
 let apiHook: ((path: string, response: Response) => Promise<boolean>) | null = null
 
@@ -33,6 +37,8 @@ before(async () => {
   process.env.JWT_SECRET = 'dummy-buyer-worker-tests-only'
   process.env.TREASURY_ADDRESS = treasury; process.env.EVM_SETTLEMENT_PRIVATE_KEY = `0x${'99'.repeat(32)}`
   process.env.WEBHOOK_SECRET_KEY = 'dummy-webhook-tests-only'
+  process.env.CHAT_ENCRYPTION_KEY = 'dummy-route-worker-private-chat-tests-only'
+  balances.set(treasury, { token: 10_000_000n, native: 1_000_000_000_000_000n })
   process.env.CLAWDMARKET_REUSABLE_SERVICES_ENABLED = 'true'
   process.env.CLAWDMARKET_ROUTE_PLANNING_ENABLED = 'true'
   process.env.CLAWDMARKET_ROUTE_EXECUTION_ENABLED = 'true'
@@ -63,7 +69,7 @@ before(async () => {
           assert.equal([...transactions.values()].some((t) => t.payer === payer && t.nonce === parsed.nonce), false)
           const [recipient, amount] = transfer.args! as [typeof token, bigint]
           assert.equal(recipient.toLowerCase(), treasury)
-          transactions.set(hash, { raw, payer, amount, recipient, nonce: parsed.nonce!, mined: true, timestamp: Math.floor(Date.now() / 1000) + 1 })
+          transactions.set(hash, { raw, payer, amount, recipient, nonce: parsed.nonce!, mined: payer.toLowerCase() !== treasury || minePayout, timestamp: Math.floor(Date.now() / 1000) + 1 })
           const balance = balances.get(payer.toLowerCase())!
           balance.token -= amount; balance.native -= parsed.gas! * parsed.maxFeePerGas! + l1Fee + operatorFee
         }
@@ -93,18 +99,24 @@ before(async () => {
   jwt = (await import('@/lib/auth')).generateJWT
   const mandate = await import('@/app/api/routes/[id]/mandate/route'), execute = await import('@/app/api/routes/[id]/execute/route'), getRoute = await import('@/app/api/routes/[id]/route')
   const intent = await import('@/app/api/trades/[id]/fund/evm/intent/route'), claim = await import('@/app/api/trades/[id]/fund/evm/claim/route'), fund = await import('@/app/api/trades/[id]/fund/evm/route')
+  const advance = await import('@/app/api/routes/[id]/advance/route'), work = await import('@/app/api/trades/[id]/work-order/route')
+  const attempt = await import('@/app/api/trades/[id]/work-order/attempt/route'), delivery = await import('@/app/api/trades/[id]/delivery/route')
+  const result = await import('@/app/api/routes/[id]/result/route'), artifacts = await import('@/app/api/trades/[id]/artifacts/route')
+  const download = await import('@/app/api/trades/[id]/artifacts/[artifactId]/route')
   apiServer.on('request', async (incoming, outgoing) => {
     try {
       const chunks = []; for await (const chunk of incoming) chunks.push(chunk)
       const body = Buffer.concat(chunks).toString(), path = incoming.url!
       requests.push(`${incoming.method} ${path}`)
       const request = new NextRequest(`${baseUrl}${path}`, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
-      const id = path.split('/')[3], context = { params: Promise.resolve({ id }) }
+      const id = path.split('/')[3], context = { params: Promise.resolve({ id, artifactId: path.split('/')[5] || '' }) }
       const handler = path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
-        : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : getRoute.GET
+        : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST']
+          : path.endsWith('/work-order') ? work.GET : path.endsWith('/attempt') ? attempt.POST : path.endsWith('/delivery') ? delivery.POST
+            : path.endsWith('/result') ? result.GET : path.endsWith('/artifacts') ? artifacts.POST : path.includes('/artifacts/') ? download.GET : getRoute.GET
       const response = await handler(request, context)
       if (apiHook && await apiHook(path, response)) { outgoing.destroy(); return }
-      outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text())
+      outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()))
     } catch { outgoing.statusCode = 500; outgoing.end('{}') }
   })
   await new Promise<void>((done) => apiServer.listen(0, '127.0.0.1', done))
@@ -348,4 +360,118 @@ test('shared wallet kernel lock rejects competitors and releases after SIGKILL w
   const reference = buyerWalletReference(8453, f.account.address)
   assert.equal((await readdir(f.stateDirectory)).includes(`${reference}.lock`), true)
   await assert.rejects(() => withBuyerWalletLock(f.stateDirectory, 8453, f.account.address, async () => { await runBuyerFunding(f) }), /BUYER_WALLET_IN_USE/)
+})
+
+test('buyer route worker drives authorized funding, provider delivery and explicit hash-bound settlement to one backed private receipt', async () => {
+  const f = await fixture(), count = broadcastCalls
+  const funded = await runBuyerRoute(f); assert.equal(funded.state, 'funded'); assert.equal(broadcastCalls, count + 1)
+  const providerKey = jwt({ userId: f.sellerId, email: `${f.sellerId}@test.invalid`, role: 'human' })
+  const privateBytes = Buffer.from('Private provider report; keep the contents off receipt and CLI output.')
+  const delivered = await runProviderWork({ baseUrl, apiKey: providerKey, tradeId: funded.trade_id!, serviceId: f.serviceId,
+    stateFile: join(directory, `${f.routeId}.provider.json`), handler: async () => ({ summary: 'Provider reviewed the private source for explicit acceptance.', artifact: { result: 'private-completed-output' },
+      files: [{ name: 'private-report.txt', media_type: 'text/plain', content_base64: privateBytes.toString('base64'), sha256: createHash('sha256').update(privateBytes).digest('hex') }] }) })
+  const decision = { version: 1, route_id: f.routeId, decision: 'accept', content_hash: delivered.content_hash }
+  await assert.rejects(() => runBuyerRoute({ ...f, decision, fetcher: async (input, init) => {
+    const response = await fetch(input, init)
+    return String(input).includes('/artifacts/') ? new Response(Buffer.alloc(privateBytes.length), { headers: response.headers }) : response
+  } }), /BUYER_ARTIFACT_INTEGRITY_FAILED/)
+  assert.equal((await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))).length, 0)
+  const waiting = await runBuyerRoute(f); assert.equal(waiting.state, 'awaiting_buyer'); assert.equal(broadcastCalls, count + 1)
+  assert.equal(waiting.delivery?.content_hash, delivered.content_hash); assert.equal(waiting.receipt, null)
+  assert.ok(waiting.result_file); assert.equal(waiting.artifact_files!.length, 1)
+  assert.deepEqual(await readFile(waiting.artifact_files![0].path), privateBytes)
+  assert.equal((await stat(waiting.artifact_files![0].path)).mode & 0o777, 0o600)
+  assert.equal(JSON.stringify(waiting).includes(privateBytes.toString()), false)
+  const wrong = { version: 1, route_id: f.routeId, decision: 'accept', content_hash: 'a'.repeat(64) }
+  await assert.rejects(() => runBuyerRoute({ ...f, decision: wrong }), /BUYER_DELIVERY_CHANGED/)
+  const outcome = await runBuyerRoute({ ...f, decision }); assert.equal(outcome.state, 'completed', JSON.stringify(outcome))
+  assert.equal(broadcastCalls, count + 2); assert.equal(outcome.receipt?.receipt.financial.kind, 'confirmed_external')
+  const receipt = outcome.receipt!.receipt
+  assert.equal(receipt.verification.semantic_verified, false); assert.equal(receipt.buyer_decision.content_hash, delivered.content_hash)
+  assert.equal(receipt.capacity_released, true)
+  for (const privateValue of [f.buyerId, f.sellerId, f.account.address.toLowerCase(), treasury, 'fixture private source', 'private-completed-output']) {
+    assert.equal(JSON.stringify(receipt).includes(privateValue), false)
+  }
+  const duplicate = await runBuyerRoute(f); assert.deepEqual(duplicate.receipt, outcome.receipt); assert.equal(broadcastCalls, count + 2)
+  const receipts = await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id, f.routeId)); assert.equal(receipts.length, 1)
+  const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)); assert.equal(service.active_orders, 0)
+  const { inspectRouteReceiptHealth } = await import('@/lib/route-receipt-health.mjs')
+  assert.equal((await inspectRouteReceiptHealth(db.$client)).receipt_anomaly_count, 0)
+  await db.update(schema.route_receipts).set({ receipt_json: '{"invalid":"dummy receipt corruption"}' }).where(eq(schema.route_receipts.route_id, f.routeId))
+  const health = await inspectRouteReceiptHealth(db.$client); assert.equal(health.receipt_anomaly_count, 1)
+  assert.equal(JSON.stringify(health).includes(f.buyerId), false); assert.equal(JSON.stringify(health).includes(f.account.address), false)
+  await db.update(schema.route_receipts).set({ receipt_json: receipts[0].receipt_json }).where(eq(schema.route_receipts.route_id, f.routeId))
+  assert.equal((await runProviderWork({ baseUrl, apiKey: providerKey, tradeId: funded.trade_id!, serviceId: f.serviceId,
+    stateFile: join(directory, `${f.routeId}.provider.json`), handler: async () => assert.fail('Must recover original provider output') })).idempotent, true)
+})
+
+async function routeDelivery(f: Fixture) {
+  const funded = await runBuyerRoute(f)
+  const providerKey = jwt({ userId: f.sellerId, email: `${f.sellerId}@test.invalid`, role: 'human' })
+  const delivery = await runProviderWork({ baseUrl, apiKey: providerKey, tradeId: funded.trade_id!, serviceId: f.serviceId,
+    stateFile: join(directory, `${f.routeId}.provider.json`), handler: async () => ({ summary: 'Provider delivered private results for explicit buyer review.', artifact: { result: 'private-route-result' } }) })
+  return { funded, delivery, decision: { version: 1, route_id: f.routeId, decision: 'accept', content_hash: delivery.content_hash } }
+}
+
+test('pending payout keeps capacity and cannot report completed; original outbox recovery settles once', async () => {
+  const f = await fixture(), { funded, decision } = await routeDelivery(f)
+  minePayout = false
+  let pending: Awaited<ReturnType<typeof runBuyerRoute>>
+  try { pending = await runBuyerRoute({ ...f, decision }) } finally { minePayout = true }
+  assert.equal(pending.state, 'settling'); assert.equal(pending.receipt, null)
+  const [plan] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, f.routeId)); assert.equal(plan.state, 'settling')
+  const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)); assert.equal(service.active_orders, 1)
+  const [outbox] = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))
+  assert.equal(outbox.status, 'submitted'); assert.ok(outbox.tx_hash); transactions.get(outbox.tx_hash!)!.mined = true
+  const result = await runBuyerRoute(f); assert.equal(result.state, 'completed'); assert.equal(result.receipt?.receipt.financial.payout.tx_hash, outbox.tx_hash)
+  assert.equal((await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))).length, 1)
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)))[0].active_orders, 0)
+})
+
+test('lost acceptance response replays the saved buyer decision without a new payout or receipt', async () => {
+  const f = await fixture(), { decision } = await routeDelivery(f), count = broadcastCalls; let lost = false
+  apiHook = async (path, response) => { if (!lost && path.endsWith('/advance') && response.ok && (await response.clone().json()).phase === 'completed') { lost = true; return true } return false }
+  try { await assert.rejects(() => runBuyerRoute({ ...f, decision }), /BUYER_REQUEST_UNCERTAIN_RESUME_SAME_ROUTE/) } finally { apiHook = null }
+  assert.equal(lost, true); assert.equal(broadcastCalls, count + 1)
+  const result = await runBuyerRoute(f); assert.equal(result.state, 'completed'); assert.equal(broadcastCalls, count + 1)
+  assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id, f.routeId))).length, 1)
+})
+
+test('a separate route worker process recovers SIGKILL after accepted settlement commit with the original decision', async () => {
+  const f = await fixture(), { decision } = await routeDelivery(f), approvalFile = join(directory, `${f.routeId}.route-approval.json`), decisionFile = join(directory, `${f.routeId}.decision.json`)
+  await writeFile(approvalFile, JSON.stringify(f.approval), { mode: 0o600 }); await writeFile(decisionFile, JSON.stringify(decision), { mode: 0o600 })
+  let ready!: () => void, release!: () => void
+  const settled = new Promise<void>((done) => { ready = done }), gate = new Promise<void>((done) => { release = done })
+  apiHook = async (path, response) => { if (path.endsWith('/advance') && response.ok && (await response.clone().json()).phase === 'completed') { ready(); await gate } return false }
+  const args = ['scripts/buyer-route-worker.mjs', approvalFile, f.stateDirectory, decisionFile], environment = { ...process.env,
+    CLAWDMARKET_BUYER_PRIVATE_KEY: f.dummyKey, CLAWDMARKET_BUYER_API_KEY: f.apiKey }, count = broadcastCalls
+  const child = spawn(process.execPath, args, { cwd: resolve('.'), env: environment, stdio: ['ignore', 'pipe', 'pipe'] })
+  let stderr = ''; child.stderr.on('data', (bytes) => { stderr += bytes.toString() })
+  const timer = setTimeout(() => { child.kill('SIGKILL'); release() }, 15_000)
+  try {
+    await Promise.race([settled, new Promise<never>((_, reject) => child.once('exit', () => reject(new Error(`Dummy route worker exited: ${stderr}`))))])
+    const exited = new Promise<void>((done) => child.once('exit', () => done())); child.kill('SIGKILL'); await exited
+    apiHook = null; release()
+    const output = await promisify(execFile)(process.execPath, args.slice(0, 3), { cwd: resolve('.'), env: environment }), result = JSON.parse(output.stdout)
+    assert.equal(result.state, 'completed'); assert.equal(result.receipt.receipt.buyer_decision.content_hash, decision.content_hash)
+    assert.equal(broadcastCalls, count + 1); assert.equal((output.stdout + output.stderr).includes(f.dummyKey), false)
+    assert.equal((output.stdout + output.stderr).includes(f.apiKey), false)
+  } finally { clearTimeout(timer); apiHook = null; release(); child.kill('SIGKILL') }
+})
+
+test('completion flags without payout proof never produce a backed route receipt; acceptance is buyer/hash scoped', async () => {
+  const f = await fixture(), { funded, delivery } = await routeDelivery(f)
+  const path = `${baseUrl}/api/routes/${f.routeId}/advance`, headers = { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' }
+  const invalid = await fetch(path, { method: 'POST', headers, body: JSON.stringify({ version: 1, action: 'accept', content_hash: 'b'.repeat(64) }) })
+  assert.equal(invalid.status, 409); assert.equal((await invalid.json()).code, 'DELIVERY_CHANGED')
+  assert.equal((await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 1, action: 'observe' }) })).status, 401)
+  const stranger = jwt({ userId: f.sellerId, email: `${f.sellerId}@test.invalid`, role: 'human' })
+  assert.equal((await fetch(path, { headers: { Authorization: `Bearer ${stranger}` } })).status, 404)
+  const { advanceBuyerReview } = await import('@/lib/verification-evidence')
+  await db.transaction((tx) => advanceBuyerReview(tx, funded.trade_id!, 'passed', delivery.content_hash))
+  await db.update(schema.trades).set({ status: 'completed', payout_status: 'complete', completed_at: new Date() }).where(eq(schema.trades.id, funded.trade_id!))
+  const response = await fetch(path, { method: 'POST', headers, body: JSON.stringify({ version: 1, action: 'observe' }) })
+  const result = await response.json(); assert.equal(result.phase, 'financial_uncertainty'); assert.equal(result.receipt, null)
+  assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id, f.routeId))).length, 0)
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)))[0].active_orders, 1)
 })
