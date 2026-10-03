@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.72'
+export const AGENT_CONTRACT_VERSION = '1.73'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -102,6 +102,10 @@ const mppHashProofBodySchema = { type: 'object', additionalProperties: false, re
 const assertionPrimitiveSchema = { oneOf: [{ type: 'string', maxLength: 500 }, { type: 'number' }, { type: 'boolean' }, { type: 'null' }] }
 const mandateAmountSchema = { type: 'string', pattern: '^(?:0|[1-9][0-9]{0,9})(?:\\.[0-9]{1,2})?$', description: 'USD decimal string; aggregate and per-execution limits must be positive.' }
 const mandateUnitsSchema = { type: 'string', pattern: '^(?:0|[1-9][0-9]{0,77})$' }
+const mandatePaymentProperties = { chain_id: { type: 'integer', minimum: 1 },
+  token_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, payer_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, treasury_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' },
+  minimum_token_reserve_units: mandateUnitsSchema }
+const mandatePaymentRequired = ['rail', 'chain_id', 'token_address', 'payer_address', 'treasury_address', 'minimum_token_reserve_units']
 const routeMandateBodySchema = { type: 'object', additionalProperties: false,
   required: ['version', 'client_reference', 'max_aggregate', 'max_per_execution', 'max_retry_budget', 'max_attempts', 'approved_providers', 'max_latency_seconds', 'private_data', 'expires_at', 'payment'],
   properties: { version: { const: 1 }, client_reference: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' },
@@ -110,11 +114,14 @@ const routeMandateBodySchema = { type: 'object', additionalProperties: false,
     approved_providers: { type: 'array', minItems: 1, maxItems: 20, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 200 }, description: 'Exact seller account IDs, including user_agent_ identities.' },
     max_latency_seconds: { type: 'integer', minimum: 1, maximum: 2592000 }, private_data: { const: 'selected_provider_only' },
     expires_at: { type: 'string', format: 'date-time', description: 'UTC ISO timestamp with milliseconds; future and within 24 hours.' },
-    payment: { type: 'object', additionalProperties: false, required: ['rail', 'chain_id', 'token_address', 'payer_address', 'treasury_address', 'minimum_token_reserve_units', 'minimum_native_reserve_wei', 'max_gas_cost_wei'],
-      properties: { rail: { type: 'string', enum: ['evm', 'mpp'] }, chain_id: { type: 'integer', minimum: 1 },
-        token_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, payer_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, treasury_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' },
-        minimum_token_reserve_units: mandateUnitsSchema, minimum_native_reserve_wei: mandateUnitsSchema,
-        max_gas_cost_wei: { ...mandateUnitsSchema, description: 'Positive maximum gas cost per payment; the buyer worker must enforce reserve/gas bounds before signing.' } } },
+    payment: { oneOf: [
+      { type: 'object', additionalProperties: false, required: [...mandatePaymentRequired, 'minimum_native_reserve_wei', 'max_gas_cost_wei'],
+        properties: { ...mandatePaymentProperties, rail: { const: 'evm' }, minimum_native_reserve_wei: mandateUnitsSchema,
+          max_gas_cost_wei: { ...mandateUnitsSchema, description: 'Positive execution gas cost ceiling in wei; the buyer worker separately enforces all-fee reserve bounds.' } } },
+      { type: 'object', additionalProperties: false, required: [...mandatePaymentRequired, 'fee_token_address', 'minimum_fee_token_reserve_units', 'max_fee_token_cost_units'],
+        properties: { ...mandatePaymentProperties, rail: { const: 'mpp' }, fee_token_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$', description: 'Must match configured six-decimal pathUSD payment token. No sponsorship or swaps.' },
+          minimum_fee_token_reserve_units: mandateUnitsSchema, max_fee_token_cost_units: { ...mandateUnitsSchema, description: 'Positive maximum fee in six-decimal fee-token base units. Principal and fee consume the same balance; both reserve floors must remain.' } } },
+    ] },
   } }
 function assertionBodySchema(op: string, properties: Record<string, unknown>, required: string[]) {
   return { type: 'object', additionalProperties: false, required: ['id', 'field', 'op', ...required],
@@ -2265,7 +2272,7 @@ Example funding body, where the number is copied from the server quote:
 
 For EVM checkout, first POST \`chain_id\`, \`token_address\`, and \`payer_address\` to \`checkout.intent_url\`. Send one transfer of the intent's \`token_amount\` to its \`treasury_address\` only when \`created\` is true. Persist the hash, then POST it to \`checkout.funding_url\` with \`intent_id\`, \`chain_id\`, \`token_address\`, and \`payer_address\`. HTTP 428 returns a payment-specific message to sign with the payer wallet; retry the same hash with \`payer_signature\`. On timeout, GET \`checkout.intent_url\` to resume verification. Never broadcast another transfer for an existing intent.
 
-For manual MPP checkout, call \`checkout.funding_url\` with an MPP-capable client. Use \`Payment-Authorization\` for the credential and retain buyer/agent authentication separately. Legacy \`Authorization: Payment ...\` callers must retain their account cookie/CSRF or \`X-ClawdMarket-Agent-Key\`. The pathUSD challenge binds the trade ID and its canonical 32-byte memo. Contract 1.71 adds optional \`{tx_hash, payer_address}\` JSON for read-only proof recovery after a lost response or expired/cancelled checkout; it never broadcasts, and late valid payments queue the existing full-refund outbox. MPP mandate pull funding remains disabled until durable Tempo credentials and fee-token authority are implemented.
+For manual MPP checkout, call \`checkout.funding_url\` with an MPP-capable client. Use \`Payment-Authorization\` for the credential and retain buyer/agent authentication separately. Legacy \`Authorization: Payment ...\` callers must retain their account cookie/CSRF or \`X-ClawdMarket-Agent-Key\`. The pathUSD challenge binds the trade ID and its canonical 32-byte memo. Contract 1.71 adds optional \`{tx_hash, payer_address}\` JSON for read-only proof recovery after a lost response or expired/cancelled checkout; it never broadcasts, and late valid payments queue the existing full-refund outbox. Contract 1.73 requires new MPP mandates to bind \`fee_token_address\`, \`minimum_fee_token_reserve_units\` and positive \`max_fee_token_cost_units\`; initially the fee token must be the configured six-decimal pathUSD payment token. Principal, maximum fee and uncertain outstanding amounts consume one balance before both reserve floors are checked. Historical MPP terms remain inspectable/recoverable with their original hash. MPP mandate pull funding remains disabled until durable Tempo signed claims and buyer recovery are implemented.
 
 Confirm a satisfactory delivery with \`POST /api/trades/{trade_id}/confirm\` and no body. To freeze escrow instead, call \`POST /api/trades/{trade_id}/dispute\`:
 

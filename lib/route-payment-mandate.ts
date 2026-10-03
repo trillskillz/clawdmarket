@@ -18,20 +18,30 @@ type Mandate = typeof route_payment_mandates.$inferSelect
 const hash = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
 const address = z.string().refine((value) => isAddress(value), 'Invalid EVM address').transform((value) => value.toLowerCase())
 const units = z.string().regex(/^(?:0|[1-9][0-9]{0,77})$/)
-export const routeMandateInput = z.object({ version: z.literal(1), client_reference: z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
+const paymentFields = { chain_id: z.number().int().positive(), token_address: address, payer_address: address,
+  treasury_address: address, minimum_token_reserve_units: units }
+const evmFeeFields = { minimum_native_reserve_wei: units, max_gas_cost_wei: units.refine((value) => BigInt(value) > 0n) }
+const paymentSchema = z.discriminatedUnion('rail', [
+  z.object({ ...paymentFields, rail: z.literal('evm'), ...evmFeeFields }).strict(),
+  z.object({ ...paymentFields, rail: z.literal('mpp'), fee_token_address: address,
+    minimum_fee_token_reserve_units: units, max_fee_token_cost_units: units.refine((value) => BigInt(value) > 0n) }).strict(),
+])
+// Historical MPP terms remain inspectable with their original fingerprint; they grant no automatic pull permission.
+const storedPaymentSchema = z.union([paymentSchema, z.object({ ...paymentFields, rail: z.literal('mpp'), ...evmFeeFields }).strict()])
+const storedMandateInput = z.object({ version: z.literal(1), client_reference: z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
   max_aggregate: money, max_per_execution: money, max_retry_budget: z.union([z.enum(['0', '0.00']).transform(() => 0), money]),
   max_attempts: z.number().int().min(1).max(3), approved_providers: z.array(z.string().min(1).max(200)).min(1).max(20),
   max_latency_seconds: z.number().int().min(1).max(30 * 24 * 3600),
   private_data: z.literal('selected_provider_only'), expires_at: z.iso.datetime({ precision: 3 }),
-  payment: z.object({ rail: z.enum(['evm', 'mpp']), chain_id: z.number().int().positive(), token_address: address, payer_address: address,
-    treasury_address: address, minimum_token_reserve_units: units, minimum_native_reserve_wei: units, max_gas_cost_wei: units.refine((value) => BigInt(value) > 0n),
-  }).strict(),
+  payment: storedPaymentSchema,
 }).strict().superRefine((value, context) => {
   if (new Set(value.approved_providers).size !== value.approved_providers.length) context.addIssue({ code: 'custom', path: ['approved_providers'], message: 'Duplicate providers' })
   if (value.max_per_execution > value.max_aggregate || value.max_retry_budget > value.max_aggregate) context.addIssue({ code: 'custom', message: 'Execution/retry budget exceeds aggregate mandate' })
 })
+export const routeMandateInput = storedMandateInput.refine((value) => value.payment.rail !== 'mpp' || 'fee_token_address' in value.payment,
+  { path: ['payment'], message: 'Tempo requires explicit fee-token reserve and cost limits' })
 type Input = z.output<typeof routeMandateInput>
-type Terms = Omit<Input, 'client_reference'> & { token_decimals: number; token_usd_price: number }
+type Terms = Omit<Input, 'client_reference'> & { token_decimals: number; token_usd_price: number; fee_token_decimals?: number }
 
 export class RouteMandateError extends Error {
   constructor(public code: string, public status = 409) { super(code) }
@@ -67,15 +77,17 @@ async function ownerControlsBuyer(ownerId: string, buyerId: string, source: Sour
 }
 function termsOf(row: Mandate): Terms {
   const value = JSON.parse(row.terms_json)
-  const { token_decimals, token_usd_price, ...rawTerms } = value
-  const parsed = routeMandateInput.parse({ ...rawTerms, client_reference: row.client_reference,
+  const { token_decimals, token_usd_price, fee_token_decimals, ...rawTerms } = value
+  const parsed = storedMandateInput.parse({ ...rawTerms, client_reference: row.client_reference,
     max_aggregate: (value.max_aggregate / 100).toFixed(2), max_per_execution: (value.max_per_execution / 100).toFixed(2), max_retry_budget: (value.max_retry_budget / 100).toFixed(2),
   })
   if (!Number.isInteger(token_decimals) || token_decimals < 0 || token_decimals > 36 || !Number.isFinite(token_usd_price) || token_usd_price <= 0) throw new RouteMandateError('MANDATE_CONTRACT_INVALID')
+  const tempoFees = parsed.payment.rail === 'mpp' && 'fee_token_address' in parsed.payment
+  if (tempoFees ? fee_token_decimals !== 6 : fee_token_decimals !== undefined) throw new RouteMandateError('MANDATE_CONTRACT_INVALID')
   if (parsed.max_aggregate !== row.max_aggregate_minor || Date.parse(parsed.expires_at) !== row.expires_at.getTime()
     || row.reserved_minor < 0 || row.reserved_minor > row.max_aggregate_minor) throw new RouteMandateError('MANDATE_CONTRACT_INVALID')
   const { client_reference: _, ...terms } = parsed
-  return { ...terms, token_decimals, token_usd_price }
+  return { ...terms, token_decimals, token_usd_price, ...(tempoFees ? { fee_token_decimals } : {}) }
 }
 function publicTerms(terms: Terms) {
   return { ...terms, max_aggregate: (terms.max_aggregate / 100).toFixed(2), max_per_execution: (terms.max_per_execution / 100).toFixed(2), max_retry_budget: (terms.max_retry_budget / 100).toFixed(2) }
@@ -96,6 +108,11 @@ function paymentContract(payment: Input['payment']) {
   }
   if (!ready.mpp.enabled || ready.mpp.chainId !== payment.chain_id || ready.mpp.currency.toLowerCase() !== payment.token_address
     || ready.mpp.recipient?.toLowerCase() !== payment.treasury_address) throw new RouteMandateError('MANDATE_PAYMENT_RAIL_UNAVAILABLE')
+  if ('fee_token_address' in payment) {
+    // Start with the configured six-decimal payment token; no swap, sponsor or mutable wallet fee preference.
+    if (payment.fee_token_address !== ready.mpp.currency.toLowerCase()) throw new RouteMandateError('MANDATE_FEE_TOKEN_UNAVAILABLE')
+    return { token_decimals: 6, token_usd_price: 1, fee_token_decimals: 6 }
+  }
   return { token_decimals: 6, token_usd_price: 1 }
 }
 
@@ -152,7 +169,8 @@ async function activeMandate(source: Source, row: Mandate, plan: Plan) {
   if (!await ownerControlsBuyer(row.owner_account_id, row.buyer_id, source)) throw new RouteMandateError('MANDATE_OWNER_CHANGED')
   if (row.buyer_id !== plan.buyer_id || row.route_hash !== routeAuthorityHash(plan)) throw new RouteMandateError('MANDATE_ROUTE_CHANGED')
   const terms = termsOf(row), current = paymentContract(terms.payment)
-  if (current.token_decimals !== terms.token_decimals || current.token_usd_price !== terms.token_usd_price) throw new RouteMandateError('MANDATE_TOKEN_TERMS_CHANGED')
+  if (current.token_decimals !== terms.token_decimals || current.token_usd_price !== terms.token_usd_price
+    || current.fee_token_decimals !== terms.fee_token_decimals) throw new RouteMandateError('MANDATE_TOKEN_TERMS_CHANGED')
   return terms
 }
 

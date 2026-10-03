@@ -1,12 +1,17 @@
 export type ProviderRequirements = { approved_providers?: string[]; minimum_accepted_completions?: number; minimum_distinct_buyers?: number }
 
 export type Money = { amount: string; currency: 'USD' }
+type RoutePaymentBase = { chain_id: number; token_address: string; payer_address: string; treasury_address: string; minimum_token_reserve_units: string }
+export type RouteMandatePayment = RoutePaymentBase & (
+  { rail: 'evm'; minimum_native_reserve_wei: string; max_gas_cost_wei: string }
+  | { rail: 'mpp'; fee_token_address: string; minimum_fee_token_reserve_units: string; max_fee_token_cost_units: string }
+)
+export type LegacyMppMandatePayment = RoutePaymentBase & { rail: 'mpp'; minimum_native_reserve_wei: string; max_gas_cost_wei: string }
 export type RouteMandateInput = { version: 1; client_reference: string; max_aggregate: string; max_per_execution: string; max_retry_budget: string; max_attempts: number;
   approved_providers: string[]; max_latency_seconds: number; private_data: 'selected_provider_only'; expires_at: string;
-  payment: { rail: 'evm' | 'mpp'; chain_id: number; token_address: string; payer_address: string; treasury_address: string;
-    minimum_token_reserve_units: string; minimum_native_reserve_wei: string; max_gas_cost_wei: string } }
+  payment: RouteMandatePayment }
 export type RouteMandate = { id: string; route_id: string; buyer_id: string; client_reference: string; route_hash: string; terms_hash: string;
-  terms: Omit<RouteMandateInput, 'client_reference'> & { token_decimals: number; token_usd_price: number };
+  terms: Omit<RouteMandateInput, 'client_reference' | 'payment'> & { payment: RouteMandatePayment | LegacyMppMandatePayment; token_decimals: number; token_usd_price: number; fee_token_decimals?: number };
   state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: false }
 export type RouteFundingStep = { id: string; mandate_id: string; route_id: string; order_id: string; trade_id: string; amount_minor: number; terms_hash: string;
   state: 'reserved' | 'funded' | 'rejected'; created_at: string; updated_at: string }
