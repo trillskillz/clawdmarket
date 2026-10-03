@@ -3,6 +3,13 @@
 /scripts/*
 !/scripts/provider-worker.mjs
 !/scripts/verifier-contract.mjs
+!/scripts/buyer-worker.mjs
+!/scripts/buyer-evm-adapter.mjs
+!/scripts/buyer-payment-journal.mjs
+!/scripts/buyer-wallet-lock.mjs
+!/scripts/isolated-verifier.mjs
+!/scripts/verification-worker.mjs
+!/scripts/verifier-sandbox-launcher.mjs
 /test/
 .git/
 node_modules/
