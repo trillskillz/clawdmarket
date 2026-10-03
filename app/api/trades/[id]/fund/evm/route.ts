@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { and, eq, isNull, or } from 'drizzle-orm'
 import { isAddress, type Address, type Hash } from 'viem'
 import { db } from '@/lib/db'
-import { evm_payment_intents, payment_receipts, trades } from '@/lib/schema'
+import { buyer_evm_payment_claims, evm_payment_intents, payment_receipts, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { getPaymentReadiness } from '@/lib/payment-config'
@@ -47,6 +47,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Payment proof does not match the reserved intent', code: 'PAYMENT_INTENT_MISMATCH' }, { status: 409 })
     }
     if (intent.tx_hash && intent.tx_hash !== txHash) return NextResponse.json({ error: 'This intent already has a transaction. Resume it; do not send another payment.', code: 'PAYMENT_TRANSACTION_CONFLICT' }, { status: 409 })
+    if (intent.buyer_operation_id) {
+      const [claim] = await db.select().from(buyer_evm_payment_claims).where(eq(buyer_evm_payment_claims.intent_id, intent.id)).limit(1)
+      if (!claim || claim.tx_hash !== txHash) return NextResponse.json({ error: 'Claim the saved signed transaction before submission', code: 'BUYER_PAYMENT_CLAIM_REQUIRED' }, { status: 409 })
+    }
     const signature = String(body.payer_signature || intent.payer_signature || '')
     if (!signature) return NextResponse.json({
       error: 'The payer must authorize this exact transfer for this trade', code: 'PAYER_AUTHORIZATION_REQUIRED',

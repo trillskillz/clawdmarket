@@ -17,6 +17,20 @@ test('buyer payment claim SDK authenticates one canonical claim without signing 
   assert.throws(() => client.claimBuyerEvmPayment('../another', body), /trade ID must be a UUID/)
 })
 
+test('buyer operation SDK preserves the same recovery reference and proof on canonical funding paths', async () => {
+  const calls: { path: string; method: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-buyer-key', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: String(init?.method), body: init?.body ? JSON.parse(String(init.body)) : null })
+    return Response.json({ intent: { id: routeId }, claim_required: true, created: false, ok: true })
+  } })
+  const intent = { buyer_operation_id: routeId, chain_id: 8453, token_address: `0x${'44'.repeat(20)}`, payer_address: `0x${'55'.repeat(20)}` }
+  const proof = { intent_id: routeId, chain_id: 8453, token_address: intent.token_address, payer_address: intent.payer_address, tx_hash: `0x${'aa'.repeat(32)}` }
+  assert.equal((await client.createBuyerEvmPaymentIntent(routeId, intent)).claim_required, true)
+  await client.getBuyerEvmPaymentIntent(routeId); await client.verifyBuyerEvmFunding(routeId, proof)
+  assert.deepEqual(calls, [{ method: 'POST', path: `/api/trades/${routeId}/fund/evm/intent`, body: intent },
+    { method: 'GET', path: `/api/trades/${routeId}/fund/evm/intent`, body: null }, { method: 'POST', path: `/api/trades/${routeId}/fund/evm`, body: proof }])
+})
+
 test('client uses canonical mandate paths and keeps authorization separate from reservation', async () => {
   const calls: Array<{ path: string; method: string; body: unknown }> = []
   const client = new ClawdMarketClient({ apiKey: 'dummy-owner-account-token', baseUrl: 'http://localhost', fetch: async (input, init) => {

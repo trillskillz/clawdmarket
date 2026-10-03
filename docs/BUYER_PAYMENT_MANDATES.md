@@ -1,4 +1,4 @@
-# Buyer payment mandates (local contract 1.69; funding worker in progress)
+# Buyer payment mandates (local contract 1.70; EVM worker implemented, MPP in progress)
 
 A route plan is a nonbinding snapshot. An owner-created mandate authorizes a bounded route checkout; it does not move funds, and the application never receives the buyer's signing key.
 
@@ -27,20 +27,62 @@ New EVM intent permission checks the exact approved chain/token/payer/treasury. 
 
 Migration 37 adds only mandate/funding-step records. Operator diagnostics report aggregate pending/inactive checkouts, exposure mismatches, missing funding steps and receipt/state anomalies, without wallet or account values.
 
-## Exact EVM transaction claim (worker integration in progress)
+## Exact EVM transaction claim
 
-`POST /api/trades/{id}/fund/evm/claim` requires buyer identity, `payments:write` on named keys, cookie CSRF where applicable, and a strict bounded body: `{intent_id, mandate_id, serialized_transaction, payer_signature}`. The attribution signature uses the existing immutable intent's `evmPaymentProofMessage(intent, keccak256(serialized_transaction))`. It binds the same hash for later proof recovery; it does not itself send funds.
+`POST /api/trades/{id}/fund/evm/claim` requires buyer identity, `payments:write` on named keys, cookie CSRF where applicable, and a strict bounded body: `{intent_id, mandate_id, serialized_transaction, payer_signature, buyer_operation_id?}`. Operation ID is mandatory when the intent belongs to a buyer worker. The attribution signature uses the existing immutable intent's `evmPaymentProofMessage(intent, keccak256(serialized_transaction))`. It binds the same hash for later proof recovery; it does not itself send funds.
 
 Before calling this endpoint, the buyer worker must fsync the exact signed bytes to private shared wallet state. The claim independently recovers the signer and verifies chain, nonce, token, treasury, zero native value, exact canonical ERC-20 transfer and amount. Only legacy/EIP-1559 transactions are supported. Its maximum execution gas cost must fit the mandate. The claim and the intent hash/signature commit atomically. Raw signed bytes and attribution signatures are omitted from the claim response; the endpoint never broadcasts.
 
-A database uniqueness guard permits one unconfirmed claim per chain/payer across routes and prevents a nonce from belonging to another intent. Current authority, checkout expiry, service/buyer/deployment/organization eligibility and the payment pause are checked before `send_allowed: true`. Exact replay allows only the identical transaction. After revocation, expiry or funding, an existing claim returns recovery state with `send_allowed: false`. Cancellation and timeouts retain the wallet hold. Only matching verified receipt persistence changes the claim to `confirmed`; the original nonce remains permanently bound. A claim whose signed bytes are lost requires recovery, never a replacement transfer. The SDK exposes `claimBuyerEvmPayment` without any signing/broadcast action.
+A database uniqueness guard permits one unconfirmed claim per chain/payer across routes and prevents a nonce from belonging to another intent. Current authority, production route-execution rollout permission, checkout expiry, service/buyer/deployment/organization eligibility and the payment pause are checked before `send_allowed: true`. Exact replay allows only the identical transaction. After rollout closure, revocation, expiry or funding, an existing claim returns recovery state with `send_allowed: false`. Cancellation and timeouts retain the wallet hold. Only matching verified receipt persistence changes the claim to `confirmed`; the original nonce remains permanently bound. A claim whose signed bytes are lost requires recovery, never a replacement transfer. The SDK exposes `claimBuyerEvmPayment` without any signing/broadcast action.
 
 Migration 38 adds these private claims. Operator diagnostics include aggregate pending claims and claim/intent/receipt mismatches; mismatches fail the release preflight. No wallet/account/hash appears in those aggregate diagnostics.
 
-`lib/buyer-signed-transaction.mjs` also checks reserve floors including outstanding uncertain authorizations. `scripts/buyer-payment-journal.mjs` provides bounded, owner-only, symlink-resistant reads and fsync/atomic replacement with directory sync. These are building blocks, not a runnable automatic funding worker. Its caller must hold a shared kernel wallet lock, validate journal scope, estimate all fees and recover exact bytes. On Base/OP, execution gas bidding does not cap data/operator fees; a preflight estimate cannot guarantee an immutable all-fee ceiling.
+`lib/buyer-signed-transaction.mjs` also checks reserve floors including outstanding uncertain authorizations. `scripts/buyer-payment-journal.mjs` provides bounded, owner-only, symlink-resistant reads and fsync/atomic replacement with directory sync. The EVM worker below integrates these helpers. On Base/OP, execution gas bidding does not cap data/operator fees; a preflight estimate cannot guarantee an immutable all-fee ceiling.
+
+## Buyer-operated EVM worker
+
+Run `scripts/buyer-worker.mjs` on the buyer's Linux/Node 24 host. A private approval file pins the already owner-approved mandate ID and canonical terms hash. It contains no signing key/API credential. Obtain these values from authenticated mandate creation/inspection and retain the owner's approved hash; do not refresh that pin automatically from a later server response.
+
+```json
+{
+  "version": 1,
+  "origin": "https://www.clawdmkt.com",
+  "route_id": "<saved route UUID>",
+  "mandate_id": "<owner-approved mandate UUID>",
+  "terms_hash": "<owner-approved canonical SHA-256>",
+  "chain_id": 8453,
+  "rpc_url": "<configured HTTPS Base RPC URL>"
+}
+```
+
+Keep approval and state files in directories owned by the buyer-worker user with mode `0700`; approval files must be `0600`. The API origin must be the app's configured canonical payment origin. HTTPS is required except localhost loopback for tests. HTTP redirects are denied. Use the same private state directory for every route/origin sharing a wallet; different state directories or independent manual wallet writers do not share the local reserve lock.
+
+Provide `CLAWDMARKET_BUYER_API_KEY` (buyer account credential or agent `payments:write` credential) and `CLAWDMARKET_BUYER_PRIVATE_KEY` through the buyer host's environment. `privateKeyToAccount` derives the local signer from this environment value; the function name is not a secret. The app never receives that key. The worker never writes it to a journal, passes it as a command argument, or prints it. Do not use application settlement signing credentials as buyer-worker configuration.
+
+```sh
+node scripts/buyer-worker.mjs /private/buyer/approval.json /private/buyer/state --prepare-only
+node scripts/buyer-worker.mjs /private/buyer/approval.json /private/buyer/state
+```
+
+`--prepare-only` saves the exact signed transfer and attribution signature privately and stops before the server claim or wallet broadcast. Normal execution commits one route order/exposure, claims its saved payment, submits the durable bytes and verifies the existing funding proof. Restart with the same approval and state directory. Never remove an unknown-payment journal, create another operation, change its nonce/fees or replace its signed bytes in response to a timeout. A bounded invocation can be run again by the buyer supervisor for confirmation/recovery. It does not execute provider code, accept delivery, settle or start another economic attempt.
+
+The worker independently recomputes the pinned mandate hash and binds the signer, chain, payment terms and intent. A Linux `flock` holds the wallet across routes/origins and releases after process death; a durable wallet marker retains unconfirmed work after the lock releases. It saves a UUID operation before requesting an intent. Matching operation replay recovers a lost response, while legacy/other-operation intents cannot be adopted. Additive migration 39 preserves that operation ID with a unique index. Operation intents require an exact claim; direct proof attachment cannot bypass it. Existing manual intent behavior remains compatible.
+
+Supported fee adapters are Ethereum (1), Sepolia (11155111), Base (8453), Base Sepolia (84532), Optimism (10) and Optimism Sepolia (11155420). They verify RPC chain ID, prepare/sign locally, and check pending token/native balances before claiming and again before broadcast. The gas limit uses 20% headroom. OP preflight includes the execution gas bid plus twice the current oracle data/operator fee estimates. Oracle errors/unsupported chains fail closed; the worker never substitutes execution-only fees for a missing rollup estimate. These are current preflight controls, not a guarantee against later fee changes or wallet activity outside the shared worker state.
+
+| Result | Meaning |
+| --- | --- |
+| `plan_only` | No mandate supplied; only the owned plan was read. No reservation/signing/payment. |
+| `prepared` | Exact bytes/signature saved privately; nothing submitted by this invocation. |
+| `funded` | Existing app proof verification recorded the matching receipt/confirmed claim and funded the original order. This does not mean seller payout or route completion. |
+| `awaiting_confirmation` | Recover the same transaction; RPC absence or incomplete confirmations do not prove payment failure. |
+| `held_recover_existing_payment` | New broadcast permission was removed; original proof recovery remains available. |
+| `refund_pending` / `refunded` | The original verified payment followed existing cancellation/refund reconciliation. |
+
+API/RPC uncertainty stops with a private stable code and preserves state. Recovery attempts funding verification first after any possible broadcast. A transaction already visible on chain is not submitted again; an invisible one may only be resubmitted as the same signed bytes/hash. A wallet remains held until its journal records matching verified receipt persistence, including a received late payment awaiting refund. Uncertain API results never create a replacement order/payment. Public/operator metrics do not consume these private journals as live economic evidence.
 
 ## Remaining acceptance work
 
-The server/SDK authority and persistence boundary is implemented and locally tested. The buyer-operated worker still needs to integrate the reserve/journal/claim building blocks, enforce a shared kernel wallet lock, handle full fee preflight, persist MPP credentials before submission, and prove uncertain-submission recovery using the original proof. EVM and MPP adapters must use existing intent/proof/receipt APIs and remain outside the application host. Tests must prove the complete authorized funding transition through worker restarts without a second payment.
+The EVM worker is locally tested against actual APIs/database and a controlled mock JSON-RPC chain, including lost intent/claim/broadcast/funding responses, process restart/SIGKILL, wallet locking, delayed confirmation, revocation and reserve/fee guards. These tests use dummy signers and do not establish live chain/provider independence evidence. MPP/Tempo automatic funding still needs fee/reserve semantics, durable pull credentials, current authority checks before server broadcast and exact credential recovery. Funded retry remains disabled pending P0.7 reconciliation/budget implementation; orchestration through buyer acceptance and authoritative payout follows P0.6.
 
 This checkpoint does not complete P0.5 or increment the ten-part publishing counter. No real wallet access, spending, deploy or GitHub push is authorized by this implementation. The paid production canary/global rollout remains deferred under the user's no-spending instruction.

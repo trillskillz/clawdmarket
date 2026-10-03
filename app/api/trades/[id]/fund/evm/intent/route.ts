@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { and, eq, isNull } from 'drizzle-orm'
 import { isAddress, parseUnits } from 'viem'
 import { db } from '@/lib/db'
-import { evm_payment_intents, trades } from '@/lib/schema'
+import { buyer_evm_payment_claims, evm_payment_intents, route_funding_steps, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { findAcceptedToken, getPaymentReadiness } from '@/lib/payment-config'
@@ -35,7 +35,8 @@ export async function GET(request: NextRequest, context: Context) {
   const auth = await authorize(request, context)
   if (auth.error) return auth.error
   const [intent] = await db.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, auth.trade.id)).limit(1)
-  return json({ intent: intent || null, trade: { status: auth.trade.status, payout_status: auth.trade.payout_status } })
+  const [claim] = intent ? await db.select().from(buyer_evm_payment_claims).where(eq(buyer_evm_payment_claims.intent_id, intent.id)).limit(1) : []
+  return json({ intent: intent || null, claim: claim || null, trade: { id: auth.trade.id, status: auth.trade.status, payout_status: auth.trade.payout_status } })
 }
 
 export async function POST(request: NextRequest, context: Context) {
@@ -43,12 +44,17 @@ export async function POST(request: NextRequest, context: Context) {
   if (auth.error) return auth.error
   const body = await request.json().catch(() => null)
   const chainId = Number(body?.chain_id)
+  const operationId = body?.buyer_operation_id
+  if (operationId !== undefined && (typeof operationId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationId)
+    || body?.recovery_tx_hash)) return json({ error: 'Invalid buyer operation', code: 'BUYER_OPERATION_INVALID' }, 400)
   if (!Number.isSafeInteger(chainId) || !isAddress(body?.token_address || '') || !isAddress(body?.payer_address || '')) {
     return json({ error: 'chain_id, token_address, and payer_address are required' }, 400)
   }
   const [existing] = await db.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, auth.trade.id)).limit(1)
   // Returning an existing intent NEVER grants permission to send again.
-  if (existing) return json({ intent: existing, created: false })
+  if (existing) return operationId && existing.buyer_operation_id !== operationId
+    ? json({ error: 'Recover the original buyer operation', code: 'BUYER_OPERATION_CONFLICT' }, 409)
+    : json({ intent: existing, created: false, claim_required: Boolean(existing.buyer_operation_id) })
   const recoveryHash = typeof body?.recovery_tx_hash === 'string' ? body.recovery_tx_hash.toLowerCase() : null
   if (recoveryHash && !PAYMENT_TX_HASH.test(recoveryHash)) return json({ error: 'A valid recovery transaction hash is required' }, 400)
   if (!recoveryHash) {
@@ -64,7 +70,14 @@ export async function POST(request: NextRequest, context: Context) {
       const [trade] = await tx.select().from(trades).where(eq(trades.id, auth.trade.id)).limit(1)
       if (!trade || trade.buyer_id !== auth.trade.buyer_id || trade.payment_rail !== 'evm') throw new TradeFundingError('Checkout changed', 409, 'CHECKOUT_CLOSED')
       const [prior] = await tx.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, trade.id)).limit(1)
-      if (prior) return json({ intent: prior, created: false })
+      if (prior) return operationId && prior.buyer_operation_id !== operationId
+        ? json({ error: 'Recover the original buyer operation', code: 'BUYER_OPERATION_CONFLICT' }, 409)
+        : json({ intent: prior, created: false, claim_required: Boolean(prior.buyer_operation_id) })
+      if (operationId) {
+        const [step] = await tx.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id, trade.id)).limit(1)
+        const [used] = await tx.select().from(evm_payment_intents).where(eq(evm_payment_intents.buyer_operation_id, operationId)).limit(1)
+        if (!step || used) throw new TradeFundingError('Buyer operation requires its original mandate checkout', 409, 'BUYER_OPERATION_CONFLICT')
+      }
       const sendAllowed = !recoveryHash && trade.status === 'pending' && Boolean(trade.payment_due_at) && Date.parse(trade.payment_due_at!) > Date.now()
       if (!sendAllowed && !(recoveryHash && ['pending', 'cancelled'].includes(trade.status))) {
         return json({ error: 'This reservation is closed. Do not send payment.', code: 'CHECKOUT_CLOSED' }, 409)
@@ -82,12 +95,13 @@ export async function POST(request: NextRequest, context: Context) {
         token_address: token.address.toLowerCase(), treasury_address: treasury.toLowerCase(),
         token_amount: tokenAmount.toString(), token_decimals: token.decimals, token_symbol: token.symbol,
         token_usd_price: token.fixedUsdPrice, amount_usd: trade.total_cost, expires_at: trade.payment_due_at || trade.created_at.toISOString(),
+        buyer_operation_id: operationId || null,
         // Older checkout clients could have sent before intent records existed.
         // A recovery-only intent never grants a second send.
         ...(recoveryHash ? { created_at: trade.created_at } : {}),
       }).onConflictDoNothing({ target: evm_payment_intents.trade_id }).returning()
       const [intent] = created ? [created] : await tx.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, trade.id)).limit(1)
-      return json({ intent, created: Boolean(created && sendAllowed) }, created && sendAllowed ? 201 : 200)
+      return json({ intent, created: Boolean(created && sendAllowed), claim_required: Boolean(intent.buyer_operation_id) }, created && sendAllowed ? 201 : 200)
     })
     return await withKeyedWriteLock(`payment-intent:${auth.trade.id}`, async () => {
       for (let attempt = 0; ; attempt += 1) {

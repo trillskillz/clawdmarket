@@ -77,7 +77,7 @@ try {
     private_artifacts: Object.fromEntries(Object.entries(artifacts[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
   }
   console.log(JSON.stringify(snapshot, null, 2))
-  if (snapshot.migrations < 38 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
+  if (snapshot.migrations < 39 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
     || snapshot.route_funding.exposure_anomaly_count || snapshot.route_funding.missing_step_count || snapshot.route_funding.proof_state_anomaly_count || snapshot.route_funding.payment_claim_anomaly_count
     || snapshot.verification_jobs.overdue_count || snapshot.verification_jobs.retained_suite_anomaly_count
     || snapshot.private_artifacts.missing_live_payload_count || snapshot.private_artifacts.purged_with_payload_count || snapshot.private_artifacts.overdue_purge_count

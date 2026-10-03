@@ -8,6 +8,7 @@ import { internalErrorResponse } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 const input = z.object({ intent_id: z.string().uuid(), mandate_id: z.string().uuid(),
+  buyer_operation_id: z.string().uuid().optional(),
   serialized_transaction: z.string().regex(/^0x(?:[a-fA-F0-9]{2}){1,4096}$/), payer_signature: z.string().regex(/^0x[a-fA-F0-9]{130}$/),
 }).strict()
 const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'private, no-store', Vary: 'Authorization, Cookie' } })

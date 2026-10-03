@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.69'
+export const AGENT_CONTRACT_VERSION = '1.70'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -835,13 +835,13 @@ export const AGENT_ACTIONS: AgentAction[] = [
     body_schema: { type: 'object', required: ['payment_rail', 'expected_total'], additionalProperties: false, properties: { payment_rail: { enum: ['ledger', 'mpp', 'evm'], type: 'string' }, expected_total: { type: 'number', exclusiveMinimum: 0 }, client_reference: { type: 'string', minLength: 8, maxLength: 200 } } },
   },
   {
-    id: 'create_evm_payment_intent', label: 'Reserve one wallet payment', description: 'Before sending funds, create an immutable payment intent. Only created=true permits one send; otherwise recover the existing transaction. Never send again after a timeout.',
+    id: 'create_evm_payment_intent', label: 'Reserve one wallet payment', description: 'Before sending funds, create an immutable payment intent. Legacy clients require created=true for one manual send. Buyer workers persist buyer_operation_id first; claim_required=true requires an exact signed transaction claim before broadcast, even when created=true. Matching operation replay recovers the intent without send permission; another operation conflicts. Never replace a payment after a timeout.',
     method: 'POST', endpoint: '/api/trades/{id}/fund/evm/intent', auth: 'trade-buyer', payment: null,
     required: ['id', 'chain_id', 'token_address', 'payer_address'],
-    body_schema: { type: 'object', additionalProperties: false, required: ['chain_id', 'token_address', 'payer_address'], properties: { chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, recovery_tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' } } },
+    body_schema: { type: 'object', additionalProperties: false, required: ['chain_id', 'token_address', 'payer_address'], properties: { chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, recovery_tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, buyer_operation_id: { type: 'string', format: 'uuid', description: 'Buyer-worker recovery reference saved before intent request; requires a mandate checkout and the signed claim protocol. Cannot combine with recovery_tx_hash.' } } },
   },
   {
-    id: 'recover_evm_payment_intent', label: 'Recover wallet payment', description: 'Read the buyer-only saved payment intent and authorized transaction hash. Does not permit another send.',
+    id: 'recover_evm_payment_intent', label: 'Recover wallet payment', description: 'Read the buyer-only saved intent, operation ID, signed-transaction claim and trade state. A confirmed claim follows verified receipt persistence. This read does not permit another send.',
     method: 'GET', endpoint: '/api/trades/{id}/fund/evm/intent', auth: 'trade-buyer', payment: null, required: ['id'],
   },
   {
@@ -851,6 +851,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     required: ['id', 'intent_id', 'mandate_id', 'serialized_transaction', 'payer_signature'],
     body_schema: { type: 'object', additionalProperties: false, required: ['intent_id', 'mandate_id', 'serialized_transaction', 'payer_signature'], properties: {
       intent_id: { type: 'string', format: 'uuid' }, mandate_id: { type: 'string', format: 'uuid' },
+      buyer_operation_id: { type: 'string', format: 'uuid', description: 'Required when this intent was created by a buyer worker; must match the original operation.' },
       serialized_transaction: { type: 'string', pattern: '^0x(?:[a-fA-F0-9]{2}){1,4096}$', maxLength: 8194 },
       payer_signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' },
     } },
@@ -1733,7 +1734,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       post: {
         operationId: 'create_evm_payment_intent', summary: 'Reserve one EVM send', security: authenticated,
         parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('create_evm_payment_intent').body_schema } } },
-        responses: { 201: { description: 'New intent; caller may send once' }, 200: { description: 'Existing intent; recover, do not send again' }, 400: { description: 'Invalid input' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden or CSRF failure' }, 404: { description: 'Trade not found' }, 409: { description: 'Reservation closed, wrong rail, or provider eligibility changed; do not send payment' }, 503: { description: 'Payment unavailable' } },
+        responses: { 201: { description: 'New intent; legacy manual send or claim_required=true for a buyer operation' }, 200: { description: 'Existing intent; recover, do not send again' }, 400: { description: 'Invalid input' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden or CSRF failure' }, 404: { description: 'Trade not found' }, 409: { description: 'Reservation closed, wrong rail, or provider eligibility changed; do not send payment' }, 503: { description: 'Payment unavailable' } },
       },
       get: {
         operationId: 'recover_evm_payment_intent', summary: 'Recover buyer payment intent', security: authenticated,
@@ -2281,9 +2282,11 @@ For isolated JavaScript checks, the policy selects \`isolated_checks\` with a ve
 
 ## Buyer route payment mandates
 
-Contract 1.68 adds owner-created \`POST /api/routes/{id}/mandate\`, buyer/current-owner inspection and owner revocation. Mandates bind the saved objective/input/capability/verification/provider request hash, aggregate/per-execution/retry ceilings, approved sellers, latency, one external rail/chain/token/payer/treasury, expiry and explicit selected-provider data sharing. Explicit buyer acceptance is required. Named credentials need payments:write for route execution; agent:read cannot grant or spend. Execute with the immutable mandate_id to commit one unpaid economic order, its aggregate exposure and durable funding step atomically. New EVM intent permission checks exact mandate payment terms. Revocation/expiry/owner changes block fresh payment permission; late verified payments are recorded and enter existing refund reconciliation. Existing receipt recovery does not restore send permission. Reserve/gas fields are buyer-worker requirements; the server cannot inspect the buyer wallet. The automatic buyer worker is not yet implemented at this checkpoint. Funded retry remains disabled, and unbacked legacy ledger credit remains unavailable.
+Contract 1.68 adds owner-created \`POST /api/routes/{id}/mandate\`, buyer/current-owner inspection and owner revocation. Mandates bind the saved objective/input/capability/verification/provider request hash, aggregate/per-execution/retry ceilings, approved sellers, latency, one external rail/chain/token/payer/treasury, expiry and explicit selected-provider data sharing. Explicit buyer acceptance is required. Named credentials need payments:write for route execution; agent:read cannot grant or spend. Execute with the immutable mandate_id to commit one unpaid economic order, its aggregate exposure and durable funding step atomically. New EVM intent permission checks exact mandate payment terms. Revocation/expiry/owner changes block fresh payment permission; late verified payments are recorded and enter existing refund reconciliation. Existing receipt recovery does not restore send permission. Reserve/gas fields are buyer-worker requirements; the server cannot inspect the buyer wallet. At the 1.68 checkpoint the automatic buyer worker was not yet implemented. Funded retry remains disabled, and unbacked legacy ledger credit remains unavailable.
 
-Contract 1.69 adds \`POST /api/trades/{id}/fund/evm/claim\` for one exact, already signed EVM transaction under the saved mandate. Fsync signed bytes privately before this request. The server verifies the canonical transfer, payer attribution signature and execution fee bound, records the immutable hash/nonce and intent proof atomically, and permits only one unconfirmed payment per chain/payer across routes. Exact replay may return send_allowed=false after revocation, expiry or funding: recover the original proof without broadcasting. Only matching verified receipt persistence releases the wallet hold; cancellation/timeouts never do. The server does not observe wallet reserves or bound rollup data/operator fees. Private journal and wallet reserve helpers are implemented; full EVM/MPP worker integration remains unfinished.
+Contract 1.69 adds \`POST /api/trades/{id}/fund/evm/claim\` for one exact, already signed EVM transaction under the saved mandate. Fsync signed bytes privately before this request. The server verifies the canonical transfer, payer attribution signature and execution fee bound, records the immutable hash/nonce and intent proof atomically, and permits only one unconfirmed payment per chain/payer across routes. Exact replay may return send_allowed=false after revocation, expiry or funding: recover the original proof without broadcasting. Only matching verified receipt persistence releases the wallet hold; cancellation/timeouts never do. The server does not observe wallet reserves or bound rollup data/operator fees. At the 1.69 checkpoint private journal and wallet reserve helpers were implemented while worker integration remained unfinished.
+
+Contract 1.70 adds buyer_operation_id to EVM intents and exact claims for the buyer-operated \`scripts/buyer-worker.mjs\`. Persist the operation before requesting an intent, and require the same ID after a lost response. Worker intents require the claim protocol; direct proof attachment cannot bypass it. The worker pins the owner-approved mandate terms hash, holds a shared Linux kernel wallet lock, fsyncs exact signed bytes/signature before submission, checks token/native reserve floors, includes buffered OP data/operator fee estimates, and recovers the original proof after unknown submission outcomes. One bounded pass returns funded/awaiting_confirmation/held recovery; it does not accept delivery, settle, or start funded retries. A no-mandate invocation reads the plan only. Supported automatic fee adapters are Ethereum/Base/Optimism and their listed testnets; MPP/Tempo automatic funding remains unfinished. Keys stay on the buyer host and are never journaled, passed as command arguments or printed. Paid production proof remains deferred.
 
 ## Platform MPP quota flow
 

@@ -1100,7 +1100,8 @@ export const evm_payment_intents = sqliteTable('evm_payment_intents', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   tx_hash: text('tx_hash'),
   payer_signature: text('payer_signature'),
-});
+  buyer_operation_id: text('buyer_operation_id'),
+}, (table) => [uniqueIndex('evm_payment_intents_buyer_operation_idx').on(table.buyer_operation_id)]);
 
 /** One immutable transaction claim per intent and chain/wallet nonce, before broadcast. */
 export const buyer_evm_payment_claims = sqliteTable('buyer_evm_payment_claims', {

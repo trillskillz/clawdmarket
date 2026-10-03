@@ -76,7 +76,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   payout_addresses: ['user_id', 'address', 'updated_at'],
   settlement_transfers: ['id', 'business_key', 'trade_id', 'kind', 'chain_id', 'token_address', 'from_address', 'to_address', 'token_amount', 'usd_amount', 'nonce', 'raw_transaction', 'tx_hash', 'status', 'attempts', 'last_error', 'created_at', 'updated_at', 'confirmed_at'],
   settlement_nonces: ['key', 'chain_id', 'wallet_address', 'next_nonce', 'updated_at'],
-  evm_payment_intents: ['id', 'trade_id', 'buyer_id', 'origin', 'payer_address', 'chain_id', 'token_address', 'treasury_address', 'token_amount', 'token_decimals', 'token_symbol', 'token_usd_price', 'amount_usd', 'expires_at', 'created_at', 'tx_hash', 'payer_signature'],
+  evm_payment_intents: ['id', 'trade_id', 'buyer_id', 'origin', 'payer_address', 'chain_id', 'token_address', 'treasury_address', 'token_amount', 'token_decimals', 'token_symbol', 'token_usd_price', 'amount_usd', 'expires_at', 'created_at', 'tx_hash', 'payer_signature', 'buyer_operation_id'],
   payment_controls: ['key', 'paused', 'reason', 'updated_by', 'updated_at'],
   payment_control_events: ['id', 'control_key', 'paused', 'reason', 'actor_user_id', 'created_at'],
   reference_fleet_controls: ['key', 'paused', 'reason', 'updated_by', 'updated_at'],

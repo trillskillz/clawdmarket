@@ -777,6 +777,10 @@ async function main() {
       await database.execute(`CREATE UNIQUE INDEX IF NOT EXISTS buyer_evm_payment_claims_wallet_nonce_idx ON buyer_evm_payment_claims(chain_id, payer_address, nonce)`)
       await database.execute(`CREATE UNIQUE INDEX IF NOT EXISTS buyer_evm_payment_claims_active_wallet_idx ON buyer_evm_payment_claims(chain_id, payer_address) WHERE state = 'claimed'`)
     } })
+    migrations.push({ id: '2026-10-03-buyer-payment-operation-v1', run: async (database: Client) => {
+      await ensureColumns(database, 'evm_payment_intents', { buyer_operation_id: 'TEXT' })
+      await database.execute(`CREATE UNIQUE INDEX IF NOT EXISTS evm_payment_intents_buyer_operation_idx ON evm_payment_intents(buyer_operation_id)`)
+    } })
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',

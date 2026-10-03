@@ -7,11 +7,12 @@ import { serviceFundingEligibility } from '@/lib/service-funding-eligibility'
 import { verifyEvmPaymentProof } from '@/lib/evm-payment-proof'
 import { getNewPaymentControl } from '@/lib/payment-control'
 import { withKeyedWriteLock } from '@/lib/service-reservation-lock'
+import { routeExecutionEnabled } from '@/lib/routing-feature-flags'
 
 export class BuyerPaymentClaimError extends Error {
   constructor(public code: string, public status = 409) { super(code) }
 }
-export type BuyerPaymentClaimInput = { intent_id: string; mandate_id: string; serialized_transaction: string; payer_signature: string }
+export type BuyerPaymentClaimInput = { intent_id: string; mandate_id: string; serialized_transaction: string; payer_signature: string; buyer_operation_id?: string }
 function fail(code: string, status = 409): never { throw new BuyerPaymentClaimError(code, status) }
 
 /** This records permission for exact bytes. It never signs, submits or reads the buyer wallet. */
@@ -26,6 +27,8 @@ export async function claimBuyerEvmPayment(tradeId: string, buyerId: string, inp
           const [intent] = await tx.select().from(evm_payment_intents).where(and(eq(evm_payment_intents.id, input.intent_id), eq(evm_payment_intents.trade_id, tradeId))).limit(1)
           const [step] = await tx.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id, tradeId)).limit(1)
           if (!intent || !step || step.mandate_id !== input.mandate_id || intent.buyer_id !== buyerId || trade.payment_rail !== 'evm') fail('BUYER_PAYMENT_SCOPE_MISMATCH')
+          if (intent.buyer_operation_id && intent.buyer_operation_id !== input.buyer_operation_id
+            || input.buyer_operation_id && input.buyer_operation_id !== intent.buyer_operation_id) fail('BUYER_OPERATION_CONFLICT')
           const [row] = await tx.select().from(route_payment_mandates).where(eq(route_payment_mandates.id, step.mandate_id)).limit(1)
           if (!row) fail('MANDATE_CONTRACT_INVALID')
           let mandate, checked
@@ -52,8 +55,9 @@ export async function claimBuyerEvmPayment(tradeId: string, buyerId: string, inp
             if (prior) return { claim: prior, send_allowed: false, idempotent: true, state: 'recover_existing_payment' }
             fail('CHECKOUT_CLOSED')
           }
-          const reason = await mandateFundingEligibility(trade, tx, { rail: 'evm', chainId: intent.chain_id, tokenAddress: intent.token_address,
-            payerAddress: intent.payer_address, treasuryAddress: intent.treasury_address }) || await serviceFundingEligibility(trade, tx)
+          const reason = !routeExecutionEnabled(trade.buyer_id) ? 'ROUTE_EXECUTION_DISABLED'
+            : await mandateFundingEligibility(trade, tx, { rail: 'evm', chainId: intent.chain_id, tokenAddress: intent.token_address,
+              payerAddress: intent.payer_address, treasuryAddress: intent.treasury_address }) || await serviceFundingEligibility(trade, tx)
           if (reason || (await getNewPaymentControl()).paused) {
             if (prior) return { claim: prior, send_allowed: false, idempotent: true, state: 'recover_existing_payment' }
             fail(reason || 'NEW_PAYMENTS_PAUSED')
