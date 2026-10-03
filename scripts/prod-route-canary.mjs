@@ -1,6 +1,14 @@
 import { createPublicClient, createWalletClient, erc20Abi, formatEther, formatUnits, getAddress, http, parseUnits } from 'viem'
 import { base } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
+import { execFile } from 'node:child_process'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
+
+const providerPrice = '0.02'
+const checkoutCap = '0.02' // Existing 5% fee rounds to zero cents for this approved small order.
 
 const live = process.env.CONFIRM_REAL_ROUTE_CANARY === 'RUN_CAPPED_REAL_ROUTE'
 const baseUrl = new URL(process.env.BASE_URL || 'https://www.clawdmkt.com').origin
@@ -59,7 +67,7 @@ const [eth, usdc] = await Promise.all([
 ])
 console.log(`Buyer Base ETH: ${formatEther(eth)}`)
 console.log(`Buyer Base USDC: ${formatUnits(usdc, token.decimals)}`)
-if (eth < 50_000_000_000_000n || usdc < parseUnits('0.11', token.decimals)) throw new Error('Canary buyer balance is below the $0.11 plus gas requirement')
+if (eth < 50_000_000_000_000n || usdc < parseUnits(checkoutCap, token.decimals)) throw new Error(`Canary buyer balance is below the $${checkoutCap} plus gas requirement`)
 const ready = ok(await api('/api/health/ready'), 'Production readiness')
 if (ready.status === 'error' || ready.ready === false) throw new Error('Production readiness is unhealthy')
 const docs = ok(await api('/api/docs'), 'Machine contract')
@@ -68,6 +76,7 @@ if (!live) {
   console.log('Route preflight passed; no service, route, or payment was created')
   process.exit(0)
 }
+await promisify(execFile)('flock', ['--version'])
 if (docs.info?.['x-agent-contract-version'] !== '1.62') throw new Error('Contract 1.62 must be deployed before the funded canary')
 if (buyerAuth.user.id !== process.env.ROUTE_CANARY_BUYER_ID || sellerAuth.user.id !== process.env.ROUTE_CANARY_SELLER_ID) throw new Error('Scoped canary IDs do not match authenticated identities')
 if (!/^\d+$/.test(process.env.GITHUB_RUN_ID || '')) throw new Error('Funded route canary requires a stable GitHub run ID')
@@ -81,19 +90,22 @@ let funded = false
 try {
   const service = ok(await api('/api/services', { method: 'POST', headers: sellerHeaders, body: json({
     title: `Controlled route canary ${suffix}`,
-    description: 'Controlled production service for a single authorized route and $0.11 Base checkout; delivery is a test artifact.',
+    description: `Controlled production service for one authorized $${checkoutCap} Base checkout and provider process restart; delivery is a test artifact.`,
     capabilities: ['code-review'], input_schema: { type: 'object', required: ['sample'], properties: { sample: { type: 'string' } }, additionalProperties: false },
-    output_schema: {}, pricing: { model: 'fixed', amount: '0.10', currency: 'USD' },
+    output_schema: { type: 'object', required: ['kind', 'sample_sha256', 'sample_bytes', 'execution_attempt_id', 'semantic_verified'],
+      properties: { kind: { type: 'string' }, sample_sha256: { type: 'string' }, sample_bytes: { type: 'integer' },
+        execution_attempt_id: { type: 'string' }, semantic_verified: { type: 'boolean' } }, additionalProperties: false },
+    pricing: { model: 'fixed', amount: providerPrice, currency: 'USD' },
     estimated_latency_seconds: 60, max_concurrency: 1, execution_mode: 'contracted', provider_protocol: 'leased_v1',
-    verification_policy: { required: true, methods: ['buyer_review'] }, status: 'active',
+    verification_policy: { required: true, methods: ['buyer_review', 'schema'] }, status: 'active',
   }) }), 'Service publication', [201]).service
   serviceId = service?.id
   if (!serviceId || !service.readiness?.purchasable || service.current_capacity !== 1) throw new Error('Canary service is not purchasable with capacity one')
   console.log(`Service: ${serviceId}`)
   const planBody = { client_reference: `route-canary-${suffix}`, objective: 'Review this controlled route canary sample for a valid completion.',
     required_capabilities: ['code-review'], input: { sample: 'Controlled production route canary input' },
-    max_budget: { amount: '0.11', currency: 'USD' }, deadline_seconds: 300,
-    verification: { required: true, methods: ['buyer_review'] }, payment_policy: { allowed_rails: ['evm'] }, retry_policy: { max_attempts: 1 } }
+    max_budget: { amount: checkoutCap, currency: 'USD' }, deadline_seconds: 300,
+    verification: { required: true, methods: ['buyer_review', 'schema'] }, payment_policy: { allowed_rails: ['evm'] }, retry_policy: { max_attempts: 1 } }
   const route = ok(await api('/api/routes/plan', { method: 'POST', headers: buyerHeaders, body: json(planBody) }, true), 'Route plan', [201])
   routeId = route.route?.id
   if (!routeId || route.route.candidates?.length !== 1 || route.route.candidates[0].service_id !== serviceId || route.planning?.funds_moved !== false) throw new Error('Route did not select exactly the canary service without funding')
@@ -102,7 +114,7 @@ try {
   const selected = ok(await api(`/api/routes/${routeId}/execute`, { method: 'POST', headers: buyerHeaders }, true), 'Route execute', [201])
   tradeId = selected.trade?.id
   const checkout = selected.checkout
-  if (!tradeId || selected.order?.service_id !== serviceId || selected.trade.status !== 'pending' || checkout?.rail !== 'evm' || checkout.amount_usd !== 0.11 || checkout.treasury?.toLowerCase() !== config.treasury_wallet.toLowerCase()) throw new Error('Unpaid route checkout violates the $0.11 guard')
+  if (!tradeId || selected.order?.service_id !== serviceId || selected.trade.status !== 'pending' || checkout?.rail !== 'evm' || checkout.amount_usd !== Number(checkoutCap) || checkout.treasury?.toLowerCase() !== config.treasury_wallet.toLowerCase()) throw new Error(`Unpaid route checkout violates the $${checkoutCap} guard`)
   const replayExecute = ok(await api(`/api/routes/${routeId}/execute`, { method: 'POST', headers: buyerHeaders }, true), 'Route execute replay')
   if (replayExecute.trade?.id !== tradeId || replayExecute.order?.id !== selected.order.id || !replayExecute.idempotent) throw new Error('Route execute replay created another order')
   console.log(`Route: ${routeId}; order: ${selected.order.id}; trade: ${tradeId}`)
@@ -110,7 +122,7 @@ try {
   const intent = ok(await api(checkout.intent_url, { method: 'POST', headers: buyerHeaders, body: json({ chain_id: base.id, token_address: token.token_address, payer_address: account.address }) }, true), 'Payment intent', [201])
   if (!intent.created || intent.intent?.treasury_address?.toLowerCase() !== config.treasury_wallet.toLowerCase()) throw new Error('Payment intent did not match the configured treasury')
   const amount = parseUnits(checkout.amount_usd.toFixed(token.decimals), token.decimals)
-  if (amount !== parseUnits('0.11', token.decimals)) throw new Error('Payment amount exceeds approved cap')
+  if (amount !== parseUnits(checkoutCap, token.decimals)) throw new Error('Payment amount exceeds approved cap')
   const { request } = await client.simulateContract({ account, address: token.token_address, abi: erc20Abi, functionName: 'transfer', args: [config.treasury_wallet, amount] })
   paymentSendStarted = true
   paymentHash = await wallet.writeContract(request)
@@ -131,14 +143,33 @@ try {
   if ((await api(`/api/trades/${tradeId}/work-order`)).status !== 401) throw new Error('Unauthenticated work-order read was not denied')
   const attemptId = work?.execution_attempt?.id
   if (work?.id !== selected.order.id || work?.trade_id !== tradeId || work?.provider_protocol !== 'leased_v1' || !attemptId || work.input?.sample !== planBody.input.sample) throw new Error('Seller work order did not match the funded route')
-  const action = { attempt_id: attemptId, action: 'accept' }
-  ok(await api(`/api/trades/${tradeId}/work-order/attempt`, { method: 'POST', headers: sellerHeaders, body: json(action) }), 'Provider acceptance', [201])
-  const replayAccept = ok(await api(`/api/trades/${tradeId}/work-order/attempt`, { method: 'POST', headers: sellerHeaders, body: json(action) }), 'Provider acceptance replay')
-  if (!replayAccept.idempotent) throw new Error('Provider acceptance replay was not idempotent')
-  const delivery = { summary: `Controlled canary review completed for route ${routeId}. This is a test artifact.`, execution_attempt_id: attemptId }
-  const submitted = ok(await api(`/api/trades/${tradeId}/delivery`, { method: 'POST', headers: sellerHeaders, body: json(delivery) }), 'Provider delivery', [201])
-  const replayDelivery = ok(await api(`/api/trades/${tradeId}/delivery`, { method: 'POST', headers: sellerHeaders, body: json(delivery) }), 'Provider delivery replay')
-  if (!submitted.delivery?.id || replayDelivery.delivery?.id !== submitted.delivery.id || !replayDelivery.idempotent) throw new Error('Delivery replay was not idempotent')
+  const providerState = await mkdtemp(join(tmpdir(), 'clawdmarket-provider-canary-'))
+  let submitted
+  try {
+    const runWorker = async (prepareOnly = false) => {
+      const { stdout } = await promisify(execFile)(process.execPath, ['scripts/provider-worker.mjs',
+        '--trade-id', tradeId, '--service-id', serviceId, '--handler', 'examples/providers/controlled-review.mjs',
+        '--state-dir', providerState, ...(prepareOnly ? ['--prepare-only'] : [])], {
+        timeout: 60_000, env: { ...process.env, BASE_URL: baseUrl, CLAWDMARKET_PROVIDER_API_KEY: sellerAuth.token },
+      })
+      return JSON.parse(stdout.trim())
+    }
+    const prepared = await runWorker(true)
+    if (prepared.state !== 'prepared' || prepared.attempt_id !== attemptId) throw new Error('Provider did not durably prepare the original attempt')
+    console.log('Provider process exited with prepared output; restarting against the same trade and journal')
+    submitted = await runWorker()
+    const replayDelivery = await runWorker()
+    if (submitted.state !== 'delivered' || submitted.attempt_id !== attemptId || !submitted.delivery_id
+      || replayDelivery.delivery_id !== submitted.delivery_id || !replayDelivery.idempotent) throw new Error('Provider restart/delivery replay was inconsistent')
+  } finally {
+    // The exact journal remains available for recovery if work or its delivery is uncertain.
+    if (submitted?.state === 'delivered') await rm(providerState, { recursive: true, force: true })
+    else console.warn(`Provider output retained privately at ${providerState}; resume this same trade before another action`)
+  }
+  const verification = ok(await api(`/api/trades/${tradeId}/verification`, { headers: buyerHeaders }, true), 'Buyer verification inspection')
+  if (verification.delivery?.id !== submitted.delivery_id || verification.delivery?.content_hash !== submitted.content_hash
+    || !verification.categories?.structure_verified || verification.categories?.semantic_verified
+    || verification.categories?.buyer_accepted) throw new Error('Provider delivery does not have the expected structural verification and pending buyer decision')
   let completed = null
   for (let index = 0; index < 12; index += 1) {
     const result = ok(await api(`/api/trades/${tradeId}/confirm`, { method: 'POST', headers: buyerHeaders }, true), 'Buyer confirmation', [200, 202])
@@ -147,14 +178,14 @@ try {
   }
   if (!completed) throw new Error('Seller settlement is still processing; inspect this trade before any new action')
   const sellerEnd = await client.readContract({ address: token.token_address, abi: erc20Abi, functionName: 'balanceOf', args: [expectedPayout] })
-  if (sellerEnd - sellerStart !== parseUnits('0.10', token.decimals)) throw new Error('Seller wallet did not receive exactly $0.10 USDC')
+  if (sellerEnd - sellerStart !== parseUnits(providerPrice, token.decimals)) throw new Error(`Seller wallet did not receive exactly $${providerPrice} USDC`)
   const owned = ok(await api(`/api/routes/${routeId}`, { headers: buyerHeaders }, true), 'Completed route inspection')
   if (owned.route?.id !== routeId || owned.route?.state !== 'completed' || owned.route?.service_order_id !== selected.order.id || owned.provider_execution?.state === 'missing') throw new Error('Completed route inspection is inconsistent')
   const finalOrder = ok(await api(`/api/service-orders/${selected.order.id}`, { headers: buyerHeaders }, true), 'Completed order inspection')
   if (finalOrder.order?.state !== 'completed' || !finalOrder.order.capacity_released_at || finalOrder.trade?.id !== tradeId || finalOrder.trade?.payout_status !== 'complete') throw new Error('Completed order or settlement state is inconsistent')
   const finalService = ok(await api(`/api/services/${serviceId}`, { headers: sellerHeaders }), 'Service capacity inspection').service
   if (finalService.current_capacity !== 1) throw new Error('Service capacity was not released exactly once')
-  console.log(`PASS: capped routed Base checkout, leased provider delivery, buyer review, and $0.10 seller payout; route ${routeId}; trade ${tradeId}; delivery ${submitted.delivery.id}`)
+  console.log(`PASS: $${checkoutCap} routed Base checkout, provider process restart and correlated delivery, buyer review, and $${providerPrice} seller payout; route ${routeId}; trade ${tradeId}; delivery ${submitted.delivery_id}`)
 } finally {
   if (routeId && !paymentSendStarted) {
     try {
