@@ -4,6 +4,19 @@ import { ClawdMarketApiError, ClawdMarketClient, ClawdMarketTransportError } fro
 
 const routeId = '00000000-0000-4000-8000-000000000001'
 
+test('buyer payment claim SDK authenticates one canonical claim without signing or broadcasting', async () => {
+  const body = { intent_id: routeId, mandate_id: routeId, serialized_transaction: '0xaabb', payer_signature: `0x${'00'.repeat(65)}` }
+  const client = new ClawdMarketClient({ apiKey: 'dummy-payments-key', fetch: async (input, init) => {
+    assert.equal(new URL(String(input)).pathname, `/api/trades/${routeId}/fund/evm/claim`)
+    assert.equal(init?.method, 'POST'); assert.equal(init?.redirect, 'error')
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-payments-key')
+    assert.deepEqual(JSON.parse(String(init?.body)), body)
+    return Response.json({ claim: { tx_hash: 'dummy-hash' }, send_allowed: false, state: 'recover_existing_payment', idempotent: true })
+  } })
+  assert.equal((await client.claimBuyerEvmPayment(routeId, body)).send_allowed, false)
+  assert.throws(() => client.claimBuyerEvmPayment('../another', body), /trade ID must be a UUID/)
+})
+
 test('client uses canonical mandate paths and keeps authorization separate from reservation', async () => {
   const calls: Array<{ path: string; method: string; body: unknown }> = []
   const client = new ClawdMarketClient({ apiKey: 'dummy-owner-account-token', baseUrl: 'http://localhost', fetch: async (input, init) => {

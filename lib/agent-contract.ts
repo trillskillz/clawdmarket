@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.68'
+export const AGENT_CONTRACT_VERSION = '1.69'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -843,6 +843,17 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'recover_evm_payment_intent', label: 'Recover wallet payment', description: 'Read the buyer-only saved payment intent and authorized transaction hash. Does not permit another send.',
     method: 'GET', endpoint: '/api/trades/{id}/fund/evm/intent', auth: 'trade-buyer', payment: null, required: ['id'],
+  },
+  {
+    id: 'claim_buyer_evm_payment', label: 'Claim one signed buyer transaction',
+    description: 'Buyer/payments:write only. Persist exact signed bytes in a private wallet journal first, then claim their hash/nonce against the mandate and intent. Validates the signer, canonical transfer, chain and execution gas ceiling. A shared wallet may have only one unreconciled claim. send_allowed permits only these exact bytes; false means recover without broadcast. This action never submits the transaction or proves wallet balances.',
+    method: 'POST', endpoint: '/api/trades/{id}/fund/evm/claim', auth: 'trade-buyer', payment: null,
+    required: ['id', 'intent_id', 'mandate_id', 'serialized_transaction', 'payer_signature'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['intent_id', 'mandate_id', 'serialized_transaction', 'payer_signature'], properties: {
+      intent_id: { type: 'string', format: 'uuid' }, mandate_id: { type: 'string', format: 'uuid' },
+      serialized_transaction: { type: 'string', pattern: '^0x(?:[a-fA-F0-9]{2}){1,4096}$', maxLength: 8194 },
+      payer_signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' },
+    } },
   },
   {
     id: 'fund_trade_evm', label: 'Verify ERC-20 funding', description: 'Attach a transfer to its saved payment intent. Without payer_signature, HTTP 428 returns the exact message the payer must sign. Verification checks that signature, transfer time, sender, recipient, value, token, confirmations, and proof uniqueness.',
@@ -1729,6 +1740,13 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         parameters: [tradeIdParameter], responses: { 200: { description: 'Saved intent or null; trade state included' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden' }, 404: { description: 'Trade not found' } },
       },
     },
+    '/api/trades/{id}/fund/evm/claim': { post: {
+      operationId: 'claim_buyer_evm_payment', summary: 'Claim one exact signed mandate payment before submission', security: authenticated,
+      parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('claim_buyer_evm_payment').body_schema } } },
+      responses: { 200: { description: 'Private immutable hash/nonce claim and exact-transaction send_allowed; recovery may return false' },
+        400: { description: 'Invalid body' }, 401: { description: 'Authentication required' }, 403: { description: 'Buyer/signature/CSRF authorization failed' },
+        404: { description: 'Trade not found' }, 409: { description: 'Mandate, checkout, signed transaction, gas bound, pending wallet payment or nonce conflict; do not submit' }, 413: { description: 'Request too large' }, 500: { description: 'Claim unavailable; resume the original signed transaction' } },
+    } },
     '/api/trades/{id}/fund/evm': { post: {
       operationId: 'fund_trade_evm', summary: 'Verify ERC-20 funding for a reserved trade', security: authenticated,
       parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('fund_trade_evm').body_schema } } },
@@ -2264,6 +2282,8 @@ For isolated JavaScript checks, the policy selects \`isolated_checks\` with a ve
 ## Buyer route payment mandates
 
 Contract 1.68 adds owner-created \`POST /api/routes/{id}/mandate\`, buyer/current-owner inspection and owner revocation. Mandates bind the saved objective/input/capability/verification/provider request hash, aggregate/per-execution/retry ceilings, approved sellers, latency, one external rail/chain/token/payer/treasury, expiry and explicit selected-provider data sharing. Explicit buyer acceptance is required. Named credentials need payments:write for route execution; agent:read cannot grant or spend. Execute with the immutable mandate_id to commit one unpaid economic order, its aggregate exposure and durable funding step atomically. New EVM intent permission checks exact mandate payment terms. Revocation/expiry/owner changes block fresh payment permission; late verified payments are recorded and enter existing refund reconciliation. Existing receipt recovery does not restore send permission. Reserve/gas fields are buyer-worker requirements; the server cannot inspect the buyer wallet. The automatic buyer worker is not yet implemented at this checkpoint. Funded retry remains disabled, and unbacked legacy ledger credit remains unavailable.
+
+Contract 1.69 adds \`POST /api/trades/{id}/fund/evm/claim\` for one exact, already signed EVM transaction under the saved mandate. Fsync signed bytes privately before this request. The server verifies the canonical transfer, payer attribution signature and execution fee bound, records the immutable hash/nonce and intent proof atomically, and permits only one unconfirmed payment per chain/payer across routes. Exact replay may return send_allowed=false after revocation, expiry or funding: recover the original proof without broadcasting. Only matching verified receipt persistence releases the wallet hold; cancellation/timeouts never do. The server does not observe wallet reserves or bound rollup data/operator fees. Private journal and wallet reserve helpers are implemented; full EVM/MPP worker integration remains unfinished.
 
 ## Platform MPP quota flow
 

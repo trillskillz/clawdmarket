@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { privateKeyToAccount } from 'viem/accounts'
+import { encodeFunctionData, erc20Abi, keccak256 } from 'viem'
 import { createLocalTestSchema } from '../helpers/local-schema'
 
 let directory: string
@@ -18,6 +19,7 @@ let intent: typeof import('@/app/api/trades/[id]/fund/evm/intent/route')
 // Fixed dummy signer fixtures; no configured wallet or network is used.
 const treasury = privateKeyToAccount(`0x${'99'.repeat(32)}`).address.toLowerCase()
 const payer = privateKeyToAccount(`0x${'11'.repeat(32)}`).address.toLowerCase()
+const dummySigner = privateKeyToAccount(`0x${'11'.repeat(32)}`)
 const tokenAddress = `0x${'44'.repeat(20)}`
 const policy = { required: true, methods: ['buyer_review', 'schema'], acceptance: { version: 1, mode: 'explicit_buyer' } }
 
@@ -79,6 +81,65 @@ async function authorize(f: Fixture, changes = {}) {
 const run = (f: Fixture, mandateId?: string) => execute(request(`/api/routes/${f.routeId}/execute`, f.buyerId, 'POST', mandateId ? { mandate_id: mandateId } : undefined), context(f.routeId))
 const intentRequest = (f: Fixture, tradeId: string, changes = {}) => intent.POST(request(`/api/trades/${tradeId}/fund/evm/intent`, f.buyerId, 'POST', { chain_id: 8453, token_address: tokenAddress, payer_address: payer, ...changes }), context(tradeId))
 
+test('signed transaction claims recover exact bytes, serialize a shared wallet and release only after verified proof', async () => {
+  const claimApi = (await import('@/app/api/trades/[id]/fund/evm/claim/route')).POST
+  const proofMessage = (await import('@/lib/evm-payment-proof')).evmPaymentProofMessage
+  async function checkout() {
+    const f = await fixture(), mandate = await authorize(f), { trade } = await (await run(f, mandate.id)).json()
+    const paymentIntent = (await (await intentRequest(f, trade.id)).json()).intent
+    return { f, mandate, trade, paymentIntent }
+  }
+  async function body(c: Awaited<ReturnType<typeof checkout>>, nonce: number, amount = 1050000n) {
+    const raw = await dummySigner.signTransaction({ chainId: 8453, nonce, to: tokenAddress as `0x${string}`,
+      data: encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [treasury as `0x${string}`, amount] }),
+      value: 0n, gas: 50000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, type: 'eip1559' })
+    return { intent_id: c.paymentIntent.id, mandate_id: c.mandate.id, serialized_transaction: raw,
+      payer_signature: await dummySigner.signMessage({ message: proofMessage(c.paymentIntent, keccak256(raw)) }) }
+  }
+  const post = (c: Awaited<ReturnType<typeof checkout>>, b: unknown, userId = c.f.buyerId) => claimApi(request(`/api/trades/${c.trade.id}/fund/evm/claim`, userId, 'POST', b), context(c.trade.id))
+  async function confirm(c: Awaited<ReturnType<typeof checkout>>, b: Awaited<ReturnType<typeof body>>) {
+    const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, c.trade.id))
+    const funding = { trade, rail: 'evm' as const, txHash: keccak256(b.serialized_transaction), externalId: keccak256(b.serialized_transaction),
+      payerAddress: payer, tokenAddress, chainId: 8453, tokenSymbol: 'USDC', tokenDecimals: 6, tokenAmount: 1050000n, tokenUsdPrice: 1, usdValue: 1.05 }
+    const persistence = await import('@/lib/trade-funding')
+    if (c === first) await assert.rejects(() => persistence.recordExternalTradeFunding(funding), (error: unknown) => (error as { code?: string }).code === 'PROVIDER_ELIGIBILITY_CHANGED')
+    else await persistence.recordExternalTradeFunding(funding)
+    const [claim] = await db.select().from(schema.buyer_evm_payment_claims).where(eq(schema.buyer_evm_payment_claims.intent_id, c.paymentIntent.id))
+    assert.equal(claim.state, 'confirmed')
+  }
+  const first = await checkout(), signed = await body(first, 1001)
+  assert.equal((await post(first, await body(first, 1001, 1050001n))).status, 409)
+  assert.equal((await post(first, { ...signed, payer_signature: `0x${'00'.repeat(65)}` })).status, 403)
+  assert.equal((await post(first, signed, first.f.sellerId)).status, 403)
+  const responses = await Promise.all([post(first, signed), post(first, signed), post(first, signed)])
+  const results = await Promise.all(responses.map((r) => r.json()))
+  for (const [i, result] of results.entries()) { assert.equal(responses[i].status, 200); assert.equal(result.send_allowed, true); assert.equal(result.claim.tx_hash, keccak256(signed.serialized_transaction)) }
+  assert.equal(results.filter((r) => !r.idempotent).length, 1)
+  assert.equal(JSON.stringify(results).includes(signed.serialized_transaction), false)
+  assert.equal((await post(first, await body(first, 1002))).status, 409)
+  assert.equal((await intent.DELETE(request(`/api/trades/${first.trade.id}/fund/evm/intent`, first.f.buyerId, 'DELETE', { intent_id: first.paymentIntent.id, reason: 'wallet_rejected' }), context(first.trade.id))).status, 200)
+  assert.equal((await db.select().from(schema.evm_payment_intents).where(eq(schema.evm_payment_intents.id, first.paymentIntent.id))).length, 1)
+  const second = await checkout(), secondBody = await body(second, 1002)
+  const blocked = await post(second, secondBody)
+  assert.equal(blocked.status, 409); assert.equal((await blocked.json()).code, 'BUYER_WALLET_PAYMENT_UNRECONCILED')
+  assert.equal((await db.select().from(schema.evm_payment_intents).where(eq(schema.evm_payment_intents.id, second.paymentIntent.id)))[0].tx_hash, null)
+  await mandateApi.DELETE(request(`/api/routes/${first.f.routeId}/mandate`, first.f.ownerId, 'DELETE'), context(first.f.routeId))
+  const revoked = await (await post(first, signed)).json(); assert.equal(revoked.send_allowed, false); assert.equal(revoked.claim.state, 'claimed')
+  assert.equal((await post(second, secondBody)).status, 409)
+  await confirm(first, signed) // Trusted mock-proof boundary, not a real chain transfer.
+  const afterProof = await post(second, secondBody)
+  assert.equal(afterProof.status, 200, JSON.stringify(await afterProof.clone().json()))
+  await confirm(second, secondBody)
+  const third = await checkout()
+  assert.equal((await post(third, await body(third, 1002))).status, 409) // Confirmed nonce never belongs to another intent.
+  const recovered = await (await post(second, secondBody)).json(); assert.equal(recovered.send_allowed, false); assert.equal(recovered.claim.state, 'confirmed')
+  const health = await import('@/lib/route-funding-health.mjs')
+  assert.equal((await health.inspectRouteFundingHealth(db.$client)).payment_claim_anomaly_count, 0)
+  await db.update(schema.buyer_evm_payment_claims).set({ state: 'claimed' }).where(eq(schema.buyer_evm_payment_claims.intent_id, first.paymentIntent.id))
+  assert.equal((await health.inspectRouteFundingHealth(db.$client)).payment_claim_anomaly_count, 1)
+  await db.update(schema.buyer_evm_payment_claims).set({ state: 'confirmed' }).where(eq(schema.buyer_evm_payment_claims.intent_id, first.paymentIntent.id))
+})
+
 test('only current buyer owner grants immutable bounded authority; scoped keys cannot mint mandates', async () => {
   const f = await fixture(true)
   assert.equal((await mandateApi.POST(request(`/api/routes/${f.routeId}/mandate`, f.buyerId, 'POST', f.body), context(f.routeId))).status, 401)
@@ -114,7 +175,7 @@ test('economic order, mandate exposure and durable funding step commit once befo
   assert.equal(allowed.status, 201); assert.equal((await allowed.json()).intent.token_amount, '1050000')
   const replay = await intentRequest(f, trades[0].id)
   assert.equal((await replay.json()).created, false)
-  assert.equal((await db.select().from(schema.payment_receipts)).length, 0)
+  assert.equal((await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, trades[0].id))).length, 0)
   const health = await (await import('@/lib/route-funding-health.mjs')).inspectRouteFundingHealth(db.$client)
   assert.equal(health.exposure_anomaly_count, 0); assert.equal(health.missing_step_count, 0); assert.equal(health.proof_state_anomaly_count, 0)
   await db.update(schema.route_payment_mandates).set({ reserved_minor: 0 }).where(eq(schema.route_payment_mandates.id, m.id))

@@ -39,6 +39,8 @@ required_files=(
   "migrations/2026-10-02-private-artifacts-v1.sql"
   "app/api/trades/[id]/fund/evm/route.ts"
   "app/api/trades/[id]/fund/evm/intent/route.ts"
+  "app/api/trades/[id]/fund/evm/claim/route.ts"
+  "migrations/2026-10-03-buyer-evm-payment-claims-v1.sql"
   "app/api/trades/[id]/fund/mpp/route.ts"
   "app/api/payments/config/route.ts"
   "app/api/admin/payments/pause/route.ts"

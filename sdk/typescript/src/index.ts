@@ -10,6 +10,11 @@ export type RouteMandate = { id: string; route_id: string; buyer_id: string; cli
   state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: false }
 export type RouteFundingStep = { id: string; mandate_id: string; route_id: string; order_id: string; trade_id: string; amount_minor: number; terms_hash: string;
   state: 'reserved' | 'funded' | 'rejected'; created_at: string; updated_at: string }
+export type BuyerEvmPaymentClaimInput = { intent_id: string; mandate_id: string; serialized_transaction: string; payer_signature: string }
+export type BuyerEvmPaymentClaim = { intent_id: string; mandate_id: string; chain_id: number; payer_address: string; nonce: number; tx_hash: string;
+  terms_hash: string; maximum_execution_gas_cost_wei: string; state: 'claimed' | 'confirmed'; created_at: string }
+export type BuyerEvmPaymentClaimResult = { claim: BuyerEvmPaymentClaim; send_allowed: boolean; idempotent: boolean;
+  state: 'submit_exact_transaction' | 'recover_existing_payment' }
 
 export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'assertions' | 'source_evidence' | 'isolated_checks'
 export type IsolatedCheckPolicy = { version: 1; adapter: 'javascript_tests_v1' | 'javascript_static_v1'; verifier_agent_id: string; suite_sha256: string; max_runtime_seconds: number }
@@ -255,6 +260,11 @@ export class ClawdMarketClient {
   revokeRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; idempotent: boolean }>('DELETE', `${routePath(routeId)}/mandate`, undefined, options) }
   /** Atomically reserves one unpaid checkout and mandate exposure; does not sign or send. */
   executeAuthorizedRoute(routeId: string, mandateId: string, options?: RequestOptions) { return this.request<ExecutedRoute>('POST', `${routePath(routeId)}/execute`, { mandate_id: mandateId }, options) }
+  /** Call only after fsync of the exact signed transaction; this never broadcasts. */
+  claimBuyerEvmPayment(tradeId: string, input: BuyerEvmPaymentClaimInput, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new Error('trade ID must be a UUID')
+    return this.request<BuyerEvmPaymentClaimResult>('POST', `/api/trades/${tradeId}/fund/evm/claim`, input, options)
+  }
 
   getRoute(routeId: string, options?: RequestOptions) { return this.request<RouteSnapshot>('GET', routePath(routeId), undefined, options) }
 

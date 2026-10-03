@@ -4,7 +4,7 @@ import { and, eq, gt, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { isAddress } from 'viem'
 import { db } from './db'
-import { agent_owners, route_funding_steps, route_payment_mandates, route_plans, service_definitions, trades } from './schema'
+import { agent_owners, buyer_evm_payment_claims, evm_payment_intents, payment_receipts, route_funding_steps, route_payment_mandates, route_plans, service_definitions, trades } from './schema'
 import { getPaymentReadiness, findAcceptedToken } from './payment-config'
 import { canonicalContract } from './structured-verification'
 import { verificationPolicySchema, supportsVerification } from './verification-policy'
@@ -210,4 +210,11 @@ export async function mandateFundingEligibility(trade: typeof trades.$inferSelec
 
 export async function recordMandateFunding(source: Source, tradeId: string, state: 'funded' | 'rejected') {
   await source.update(route_funding_steps).set({ state, updated_at: new Date() }).where(eq(route_funding_steps.trade_id, tradeId))
+  // Both transitions follow trusted receipt verification, including late/refunded transfers.
+  // Plain cancellation, expiry and HTTP errors never release the wallet claim.
+  const [intent] = await source.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, tradeId)).limit(1)
+  const [receipt] = await source.select().from(payment_receipts).where(eq(payment_receipts.trade_id, tradeId)).limit(1)
+  if (intent?.tx_hash && receipt?.tx_hash === intent.tx_hash && receipt.payment_rail === 'evm'
+    && receipt.chain_id === intent.chain_id && receipt.payer_address?.toLowerCase() === intent.payer_address) await source.update(buyer_evm_payment_claims).set({ state: 'confirmed' })
+    .where(and(eq(buyer_evm_payment_claims.intent_id, intent.id), eq(buyer_evm_payment_claims.tx_hash, intent.tx_hash)))
 }

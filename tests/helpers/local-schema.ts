@@ -22,7 +22,8 @@ export async function createLocalTestSchema(client: Client, tables: Record<strin
     await client.execute(`CREATE TABLE IF NOT EXISTS ${quote(config.name)} (${columns.join(', ')})`)
     for (const index of config.indexes) {
       const fields = index.config.columns.map((column) => is(column, SQL) ? dialect.sqlToQuery(column).sql : quote(column.name))
-      await client.execute(`CREATE ${index.config.unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS ${quote(index.config.name)} ON ${quote(config.name)} (${fields.join(', ')})`)
+      const where = index.config.where ? ` WHERE ${dialect.sqlToQuery(index.config.where).sql}` : ''
+      await client.execute(`CREATE ${index.config.unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS ${quote(index.config.name)} ON ${quote(config.name)} (${fields.join(', ')})${where}`)
     }
   }
 }

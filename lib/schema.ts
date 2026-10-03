@@ -1102,6 +1102,18 @@ export const evm_payment_intents = sqliteTable('evm_payment_intents', {
   payer_signature: text('payer_signature'),
 });
 
+/** One immutable transaction claim per intent and chain/wallet nonce, before broadcast. */
+export const buyer_evm_payment_claims = sqliteTable('buyer_evm_payment_claims', {
+  intent_id: text('intent_id').primaryKey().references(() => evm_payment_intents.id, { onDelete: 'restrict' }),
+  mandate_id: text('mandate_id').notNull().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(),
+  nonce: integer('nonce').notNull(), tx_hash: text('tx_hash').notNull(),
+  terms_hash: text('terms_hash').notNull(), maximum_execution_gas_cost_wei: text('maximum_execution_gas_cost_wei').notNull(),
+  state: text('state', { enum: ['claimed', 'confirmed'] }).notNull().default('claimed'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [uniqueIndex('buyer_evm_payment_claims_wallet_nonce_idx').on(table.chain_id, table.payer_address, table.nonce),
+  uniqueIndex('buyer_evm_payment_claims_active_wallet_idx').on(table.chain_id, table.payer_address).where(sql`${table.state} = 'claimed'`)]);
+
 export const payment_controls = sqliteTable('payment_controls', {
   key: text('key').primaryKey(),
   paused: integer('paused').notNull().default(0),
