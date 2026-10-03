@@ -99,6 +99,7 @@ required_files=(
   "scripts/prod-agent-canary.mjs"
   "scripts/provider-worker.mjs"
   "examples/providers/controlled-review.mjs"
+  "examples/providers/controlled-private-review.mjs"
   "migrations/2026-09-12-production-settlement.sql"
   "migrations/2026-09-13-bid-counter-offers.sql"
   "migrations/2026-09-19-agent-lifecycle-canary.sql"

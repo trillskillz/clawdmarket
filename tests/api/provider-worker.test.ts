@@ -287,3 +287,22 @@ test('private files survive prepared restart and an uncertain upload without dup
   assert.equal((await stat(f.stateFile)).mode & 0o777, 0o600)
   assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.id, f.trade.id)))[0].status, 'pending_release')
 })
+
+
+test('the controlled production artifact handler delivers two verified files against the agreed schema', async () => {
+  const { default: handler } = await import('../../examples/providers/controlled-private-review.mjs')
+  const f = await fixture()
+  await db.update(schema.service_definitions).set({ output_schema: JSON.stringify({ type: 'object', required: ['kind', 'sample_sha256', 'sample_bytes', 'execution_attempt_id', 'semantic_verified'], properties: { kind: { type: 'string' }, sample_sha256: { type: 'string' }, sample_bytes: { type: 'integer' }, execution_attempt_id: { type: 'string' }, semantic_verified: { type: 'boolean' } }, additionalProperties: false }), verification_policy: '{"required":true,"methods":["buyer_review","schema"]}' }).where(eq(schema.service_definitions.id, f.serviceId))
+  assert.equal((await runProviderWork({ ...f, handler, prepareOnly: true })).state, 'prepared')
+  assert.equal((await runProviderWork({ ...f, handler })).state, 'delivered')
+  const { downloadPrivateArtifact } = await import('@/lib/private-artifacts')
+  const files = await db.select().from(schema.private_artifacts).where(eq(schema.private_artifacts.trade_id, f.trade.id))
+  assert.equal(files.length, 2)
+  const result = JSON.parse((await downloadPrivateArtifact(f.trade.id, files.find((row) => row.name === 'result.json')!.id, f.buyerId)).bytes.toString())
+  assert.equal(result.kind, 'controlled_review'); assert.equal(result.semantic_verified, false)
+  assert.equal(result.execution_attempt_id, f.attempt.id)
+  const methods = await db.select().from(schema.verification_results).where(eq(schema.verification_results.trade_id, f.trade.id))
+  assert.equal(methods.find((row) => row.method === 'schema')?.status, 'passed')
+  assert.equal(methods.find((row) => row.method === 'artifact_integrity')?.status, 'passed')
+  assert.equal(methods.find((row) => row.method === 'buyer_review')?.status, 'pending')
+})
