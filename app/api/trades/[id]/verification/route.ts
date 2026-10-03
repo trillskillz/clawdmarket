@@ -5,6 +5,8 @@ import { trade_deliveries, trades, verification_results } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { internalErrorResponse } from '@/lib/api-error'
 
+import { listPrivateArtifacts, privateArtifactHeaders } from '@/lib/private-artifacts'
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -23,9 +25,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({
       trade_id: id,
       delivery: delivery ? { id: delivery.id, content_hash: delivery.content_hash } : null,
+      artifacts: await listPrivateArtifacts(id, principal.userId),
       categories: {
         delivery_received: Boolean(delivery),
         structure_verified: ['structure', 'schema'].some((method) => status(method) === 'passed'),
+        artifact_integrity_verified: status('artifact_integrity') === 'passed',
         source_list_verified: status('source_urls') === 'passed',
         semantic_verified: false,
         deterministic_tests_passed: false,
@@ -36,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       results: rows.map((row) => ({ id: row.id, delivery_id: row.delivery_id, content_hash: row.content_hash,
         method: row.method, verifier: row.verifier, version: row.version, status: row.status, score: row.score,
         evidence: JSON.parse(row.evidence_json), failure: row.failure, created_at: row.created_at, updated_at: row.updated_at })),
-    }, { headers: { 'Cache-Control': 'no-store' } })
+    }, { headers: privateArtifactHeaders })
   } catch (error) {
     return internalErrorResponse('Verification lookup failed', error)
   }

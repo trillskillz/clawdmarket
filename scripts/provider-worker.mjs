@@ -30,14 +30,19 @@ async function save(path, value) {
 
 function deliveryBody(output, attemptId) {
   if (!output || typeof output !== 'object' || Array.isArray(output)
-    || Object.keys(output).some((key) => !['summary', 'artifact', 'delivery_url'].includes(key))
+    || Object.keys(output).some((key) => !['summary', 'artifact', 'delivery_url', 'artifact_ids', 'verification_artifact_id'].includes(key))
     || typeof output.summary !== 'string' || output.summary.trim().length < 10 || output.summary.trim().length > 8000
     || (output.artifact !== undefined && (!output.artifact || typeof output.artifact !== 'object' || Array.isArray(output.artifact)))
     || (output.delivery_url !== undefined && (typeof output.delivery_url !== 'string' || output.delivery_url.length > 2000
       || !/^https?:\/\//i.test(output.delivery_url)))) fail('INVALID_PROVIDER_DELIVERY')
+  if (output.artifact_ids !== undefined && (!Array.isArray(output.artifact_ids) || output.artifact_ids.length < 1 || output.artifact_ids.length > 8
+    || output.artifact_ids.some((id) => !uuid(id)) || new Set(output.artifact_ids).size !== output.artifact_ids.length)) fail('INVALID_PROVIDER_DELIVERY')
+  if (output.verification_artifact_id !== undefined && (!uuid(output.verification_artifact_id) || output.artifact !== undefined || !output.artifact_ids?.includes(output.verification_artifact_id))) fail('INVALID_PROVIDER_DELIVERY')
   const body = JSON.stringify({ summary: output.summary.trim(),
     ...(output.delivery_url === undefined ? {} : { delivery_url: new URL(output.delivery_url).href }),
-    ...(output.artifact === undefined ? {} : { artifact: output.artifact }), execution_attempt_id: attemptId })
+    ...(output.artifact === undefined ? {} : { artifact: output.artifact }), execution_attempt_id: attemptId,
+    ...(output.artifact_ids === undefined ? {} : { artifact_ids: output.artifact_ids }),
+    ...(output.verification_artifact_id === undefined ? {} : { verification_artifact_id: output.verification_artifact_id }) })
   if (Buffer.byteLength(body) > 50_000) fail('PROVIDER_DELIVERY_TOO_LARGE')
   return body
 }
@@ -139,8 +144,43 @@ export async function runProviderWork({ baseUrl = 'https://www.clawdmkt.com', ap
       try { output = await Promise.race([handler(work, { signal: combined, idempotencyKey: attempt.id }), interrupted]) }
       finally { combined.removeEventListener('abort', abort) }
       combined.throwIfAborted()
-      journal.delivery_body = deliveryBody(output, attempt.id)
+      if (!output || typeof output !== 'object') fail('INVALID_PROVIDER_DELIVERY')
+      const { files, verification_file_index: verificationIndex, ...inline } = output
+      journal.delivery_body = deliveryBody(inline, attempt.id)
+      if (files !== undefined) {
+        if (!Array.isArray(files) || files.length < 1 || files.length > 8 || inline.artifact_ids !== undefined
+          || inline.verification_artifact_id !== undefined || (verificationIndex !== undefined && (inline.artifact !== undefined || !Number.isInteger(verificationIndex) || verificationIndex < 0 || verificationIndex >= files.length))) fail('INVALID_PROVIDER_ARTIFACTS')
+        let total = 0
+        journal.artifact_uploads = files.map((file, index) => {
+          if (!file || typeof file !== 'object' || Object.keys(file).some((key) => !['name', 'media_type', 'content_base64', 'sha256', 'provenance'].includes(key))
+            || typeof file.content_base64 !== 'string' || file.content_base64.length > 87_384) fail('INVALID_PROVIDER_ARTIFACTS')
+          const bytes = Buffer.from(file.content_base64, 'base64')
+          total += bytes.length
+          if (bytes.length < 1 || bytes.length > 65_536 || total > 262_144 || bytes.toString('base64') !== file.content_base64
+            || file.sha256 !== createHash('sha256').update(bytes).digest('hex')) fail('INVALID_PROVIDER_ARTIFACTS')
+          return { body: JSON.stringify({ ...file, client_reference: `attempt:${attempt.id}:${index}`, execution_attempt_id: attempt.id }), artifact_id: null }
+        })
+        journal.verification_file_index = verificationIndex ?? null
+      } else if (verificationIndex !== undefined) fail('INVALID_PROVIDER_ARTIFACTS')
       journal.phase = 'prepared'
+      await save(stateFile, journal)
+    }
+    if (!prepareOnly && journal.artifact_uploads) {
+      for (const upload of journal.artifact_uploads) {
+        if (upload.artifact_id) continue
+        const submitted = await api('POST', 'artifacts', upload.body)
+        const expected = JSON.parse(upload.body)
+        if (!uuid(submitted.artifact?.id) || submitted.artifact.sha256 !== expected.sha256
+          || submitted.artifact.trade_id !== tradeId) fail('INVALID_PROVIDER_ARTIFACT_RECEIPT')
+        upload.artifact_id = submitted.artifact.id
+        await save(stateFile, journal)
+      }
+      const previous = JSON.parse(journal.delivery_body)
+      const { execution_attempt_id: unused, ...output } = previous
+      void unused
+      output.artifact_ids = journal.artifact_uploads.map((upload) => upload.artifact_id)
+      if (journal.verification_file_index !== null) output.verification_artifact_id = output.artifact_ids[journal.verification_file_index]
+      journal.delivery_body = deliveryBody(output, attempt.id)
       await save(stateFile, journal)
     }
     if (heartbeatError) throw heartbeatError

@@ -111,6 +111,18 @@ export class ClawdMarketTimeoutError extends Error {
   }
 }
 
+export type PrivateArtifact = {
+  id: string; trade_id: string; order_id: string | null; route_id: string | null; delivery_id: string | null
+  uploader_id: string; name: string; media_type: string; size_bytes: number; sha256: string
+  provenance: { kind: 'provider_declared'; recorded_by: string; verified: false; description?: string; source_uri?: string }
+  created_at: string; retention_expires_at: string; retention_hold: boolean; purged_at: string | null; download_path: string
+}
+export type ArtifactUpload = {
+  client_reference: string; name: string; media_type: 'application/json' | 'text/plain' | 'text/markdown' | 'application/pdf' | 'application/octet-stream'
+  content_base64: string; sha256: string; provenance?: { description?: string; source_uri?: string }; execution_attempt_id?: string
+}
+export type TradeDelivery = { summary: string; delivery_url?: string; artifact?: Record<string, unknown>; execution_attempt_id?: string; artifact_ids?: string[]; verification_artifact_id?: string }
+
 export type ClientOptions = { apiKey: string; baseUrl?: string; fetch?: typeof fetch }
 export type RequestOptions = { signal?: AbortSignal }
 
@@ -128,6 +140,11 @@ function object(value: unknown): Record<string, unknown> {
 }
 
 function text(value: unknown, fallback: string) { return typeof value === 'string' && value ? value : fallback }
+
+function tradePath(tradeId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(tradeId)) throw new TypeError('tradeId must be a UUID')
+  return `/api/trades/${tradeId}`
+}
 
 function routePath(routeId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(routeId)) throw new TypeError('routeId must be a route UUID')
@@ -192,6 +209,46 @@ export class ClawdMarketClient {
   cancelRoute(routeId: string, options?: RequestOptions) { return this.request<CancelledRoute>('DELETE', routePath(routeId), undefined, options) }
 
   getSpendingPolicy(options?: RequestOptions) { return this.request<SpendingPolicySnapshot>('GET', '/api/spending-policy', undefined, options) }
+
+  uploadArtifact(tradeId: string, input: ArtifactUpload, options?: RequestOptions) {
+    return this.request<{ artifact: PrivateArtifact; idempotent: boolean }>('POST', `${tradePath(tradeId)}/artifacts`, input, options)
+  }
+  listArtifacts(tradeId: string, options?: RequestOptions) {
+    return this.request<{ artifacts: PrivateArtifact[]; limits: { max_bytes: number; max_trade_bytes: number; max_trade_artifacts: number; retention_days: number; request_bytes: number } }>('GET', `${tradePath(tradeId)}/artifacts`, undefined, options)
+  }
+  deliverTrade(tradeId: string, input: TradeDelivery, options?: RequestOptions) {
+    return this.request<{ delivery: { id: string; content_hash: string }; verification: Record<string, unknown>; idempotent: boolean }>('POST', `${tradePath(tradeId)}/delivery`, input, options)
+  }
+  /** Returns bytes only after checking the authenticated download against the saved metadata. */
+  async downloadArtifact(artifact: PrivateArtifact, options: RequestOptions = {}) {
+    if (!/^[0-9a-f-]{36}$/i.test(artifact.id)) throw new TypeError('artifact.id must be a UUID')
+    let response: Response
+    try {
+      response = await this.fetcher(new URL(`${tradePath(artifact.trade_id)}/artifacts/${artifact.id}`, this.base), {
+        method: 'GET', redirect: 'error', credentials: 'omit', signal: options.signal,
+        headers: { Authorization: `Bearer ${this.apiKey}`, Accept: 'application/octet-stream' },
+      })
+    } catch (cause) { throw new ClawdMarketTransportError('Private artifact download did not complete', cause) }
+    if (!response.ok) {
+      const data = object(await response.json().catch(() => null))
+      throw new ClawdMarketApiError(response.status, text(data.error_code, 'HTTP_ERROR'), text(data.message, 'Artifact download failed'), false, 'unchanged', data.details)
+    }
+    if (artifact.size_bytes < 1 || artifact.size_bytes > 65_536 || Number(response.headers.get('Content-Length')) !== artifact.size_bytes || !response.body) throw new ClawdMarketTransportError('Artifact size did not match', null)
+    const reader = response.body.getReader()
+    const bytes = new Uint8Array(artifact.size_bytes)
+    let offset = 0
+    try {
+      while (true) {
+        const part = await reader.read()
+        if (part.done) break
+        if (offset + part.value.byteLength > bytes.length) throw new ClawdMarketTransportError('Artifact size did not match', null)
+        bytes.set(part.value, offset); offset += part.value.byteLength
+      }
+    } finally { void reader.cancel().catch(() => {}) }
+    const digest = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))).map((value) => value.toString(16).padStart(2, '0')).join('')
+    if (offset !== bytes.length || digest !== artifact.sha256 || response.headers.get('X-Artifact-SHA256') !== digest) throw new ClawdMarketTransportError('Artifact integrity check failed', null)
+    return bytes
+  }
 
   async waitForRoute(routeId: string, options: RequestOptions & { states?: RouteState[]; pollIntervalMs?: number; timeoutMs?: number } = {}) {
     const states = options.states || ['completed', 'failed', 'cancelled', 'disputed', 'resolved']

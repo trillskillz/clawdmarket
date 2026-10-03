@@ -1,8 +1,9 @@
+import { ArtifactError, loadDeliveryArtifacts } from './private-artifacts'
 import { serviceExecutionContract } from './service-execution-contract'
 import { createHash } from 'node:crypto'
 import { and, eq, gt } from 'drizzle-orm'
 import { db } from './db'
-import { messages, service_definitions, service_execution_attempts, service_orders, task_workspaces, trade_deliveries, trades, verification_results } from './schema'
+import { messages, service_definitions, service_execution_attempts, service_orders, task_workspaces, trade_deliveries, trades, verification_results, private_artifacts } from './schema'
 import { encryptMessage } from './chat-crypto'
 import { deliverySchema, requirementsSchema, verifyDelivery } from './delivery-validation'
 import { deliverWebhookEvent } from './webhook-delivery'
@@ -70,8 +71,29 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
   if (service && policy.data.methods.includes('schema') && !outputSchemaV1.safeParse(JSON.parse(service.output_schema)).success) {
     throw new DeliveryError('Stored output schema is unsupported', 409)
   }
-  const outcomes = evaluateVerification({ policy: policy.data, outputSchema: service ? JSON.parse(service.output_schema) : {}, delivery: parsed.data, legacyRequirements: requirements })
-  const legacyVerification = verifyDelivery(parsed.data, requirements)
+  const recordIntegrityFailure = async (error: unknown) => {
+    if (error instanceof ArtifactError && error.code === 'ARTIFACT_INTEGRITY_FAILED') await db.insert(verification_results).values({
+      id: crypto.randomUUID(), trade_id: tradeId, delivery_id: null, content_hash: contentHash, method: 'artifact_integrity_failure',
+      verifier: 'clawdmarket-deterministic-v1', version: '1', status: 'failed', score: 0,
+      evidence_json: JSON.stringify({ artifact_ids: parsed.data.artifact_ids, algorithm: 'sha256', urls_fetched: false, code_executed: false }), failure: 'artifact_integrity_failed',
+    }).onConflictDoNothing()
+  }
+  const attachments = await loadDeliveryArtifacts(tradeId, parsed.data.artifact_ids || [], trade.status).catch(async (error) => { await recordIntegrityFailure(error); throw error })
+  let structuredArtifact = parsed.data.artifact
+  if (parsed.data.verification_artifact_id) {
+    const selected = attachments.find(({ row }) => row.id === parsed.data.verification_artifact_id)!
+    if (selected.row.media_type !== 'application/json') throw new DeliveryError('Verification artifact must be a JSON object', 400)
+    const value = JSON.parse(selected.bytes.toString('utf8'))
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new DeliveryError('Verification artifact must be a JSON object', 400)
+    structuredArtifact = value
+  }
+  const verificationInput = { ...parsed.data, artifact: structuredArtifact }
+  const outcomes = evaluateVerification({ policy: policy.data, outputSchema: service ? JSON.parse(service.output_schema) : {}, delivery: verificationInput, legacyRequirements: requirements })
+  if (parsed.data.verification_artifact_id) for (const outcome of outcomes) if (outcome.status === 'failed') outcome.failure = `${outcome.method}_validation_failed`
+  if (attachments.length) outcomes.push({ method: 'artifact_integrity', verifier: 'clawdmarket-deterministic-v1', version: '1', status: 'passed', score: 1,
+    evidence: { algorithm: 'sha256', artifacts: attachments.map(({ row }) => ({ id: row.id, sha256: row.sha256, size_bytes: row.size_bytes, media_type: row.media_type })),
+      verification_artifact_id: parsed.data.verification_artifact_id ?? null, urls_fetched: false, code_executed: false, provenance_verified: false }, failure: null })
+  const legacyVerification = verifyDelivery(verificationInput, requirements)
   const failed = outcomes.some((outcome) => outcome.status === 'failed') || legacyVerification.status === 'failed'
   const verification = { ...legacyVerification, status: failed ? 'failed' : outcomes.some((outcome) => outcome.status === 'passed') ? 'passed' : 'manual_review',
     methods: outcomes.map(({ method, status, score }) => ({ method, status, score })),
@@ -87,6 +109,9 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
   }
   const encrypted = await encryptMessage(JSON.stringify({ type: 'task_complete', trade_id: tradeId, ...parsed.data, content_hash: contentHash }))
   const commit = () => db.transaction(async (tx) => {
+    // Recheck immutable file bindings inside the same transaction that opens review.
+    const fresh = await loadDeliveryArtifacts(tradeId, parsed.data.artifact_ids || [], trade.status, tx)
+    if (fresh.some(({ row }, index) => row.sha256 !== attachments[index].row.sha256 || row.request_hash !== attachments[index].row.request_hash)) throw new ArtifactError('ARTIFACT_INTEGRITY_FAILED', 422)
     if (service?.provider_protocol === 'leased_v1') {
       const now = new Date()
       const [completed] = await tx.update(service_execution_attempts)
@@ -108,6 +133,7 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
       artifact_json: parsed.data.artifact ? JSON.stringify(parsed.data.artifact) : null,
       content_hash: contentHash, verification: JSON.stringify(verification),
     }).returning()
+    for (const { row } of fresh) await tx.update(private_artifacts).set({ delivery_id: delivery.id }).where(eq(private_artifacts.id, row.id))
     await tx.insert(verification_results).values(evidenceRows(delivery.id)).onConflictDoNothing()
     const [message] = await tx.insert(messages).values({
       sender_id: sellerId, receiver_id: trade.buyer_id,
@@ -129,6 +155,7 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
       }
       const raced = await replay()
       if (raced) return raced
+      await recordIntegrityFailure(error)
       throw error
     }
   }

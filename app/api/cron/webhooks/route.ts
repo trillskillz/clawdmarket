@@ -4,6 +4,8 @@ import { expireServiceAcknowledgmentAttempts, expireServiceExecutionAttempts } f
 import { recordWorkerHeartbeat } from '@/lib/worker-heartbeats'
 import { internalErrorResponse } from '@/lib/api-error'
 
+import { purgeExpiredArtifacts } from '@/lib/private-artifacts'
+
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
@@ -14,11 +16,12 @@ export async function GET(request: NextRequest) {
   }
   await recordWorkerHeartbeat('webhooks', 'started').catch((error) => console.error('[cron/webhooks/heartbeat-start]', error))
   try {
+    const purged_private_artifacts = await purgeExpiredArtifacts()
     const expired_provider_acknowledgments = await expireServiceAcknowledgmentAttempts(100)
     const outcomes = await processPendingWebhookDeliveries(25)
     const expired_provider_leases = await expireServiceExecutionAttempts(100)
     await recordWorkerHeartbeat('webhooks', 'succeeded').catch((error) => console.error('[cron/webhooks/heartbeat-success]', error))
-    return NextResponse.json({ ok: true, ...outcomes, expired_provider_leases, expired_provider_acknowledgments }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ ok: true, purged_private_artifacts, ...outcomes, expired_provider_leases, expired_provider_acknowledgments }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     await recordWorkerHeartbeat('webhooks', 'failed').catch((heartbeatError) => console.error('[cron/webhooks/heartbeat-failure]', heartbeatError))
     return internalErrorResponse('Webhook retry worker failed', error, {

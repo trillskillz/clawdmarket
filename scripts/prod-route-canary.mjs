@@ -1,6 +1,7 @@
 import { createPublicClient, createWalletClient, erc20Abi, formatEther, formatUnits, getAddress, http, parseUnits } from 'viem'
 import { base } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
+import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -77,7 +78,7 @@ if (!live) {
   process.exit(0)
 }
 await promisify(execFile)('flock', ['--version'])
-if (docs.info?.['x-agent-contract-version'] !== '1.63') throw new Error('Contract 1.63 must be deployed before the funded canary')
+if (docs.info?.['x-agent-contract-version'] !== '1.64') throw new Error('Contract 1.64 must be deployed before the funded canary')
 if (buyerAuth.user.id !== process.env.ROUTE_CANARY_BUYER_ID || sellerAuth.user.id !== process.env.ROUTE_CANARY_SELLER_ID) throw new Error('Scoped canary IDs do not match authenticated identities')
 if (!/^\d+$/.test(process.env.GITHUB_RUN_ID || '')) throw new Error('Funded route canary requires a stable GitHub run ID')
 const suffix = `run-${process.env.GITHUB_RUN_ID}`
@@ -157,7 +158,7 @@ try {
   try {
     const runWorker = async (prepareOnly = false) => {
       const { stdout } = await promisify(execFile)(process.execPath, ['scripts/provider-worker.mjs',
-        '--trade-id', tradeId, '--service-id', serviceId, '--handler', 'examples/providers/controlled-review.mjs',
+        '--trade-id', tradeId, '--service-id', serviceId, '--handler', 'examples/providers/controlled-private-review.mjs',
         '--state-dir', providerState, ...(prepareOnly ? ['--prepare-only'] : [])], {
         timeout: 60_000, env: { ...process.env, BASE_URL: baseUrl, CLAWDMARKET_PROVIDER_API_KEY: sellerAuth.token },
       })
@@ -179,6 +180,45 @@ try {
   if (verification.delivery?.id !== submitted.delivery_id || verification.delivery?.content_hash !== submitted.content_hash
     || !verification.categories?.structure_verified || verification.categories?.semantic_verified
     || verification.categories?.buyer_accepted) throw new Error('Provider delivery does not have the expected structural verification and pending buyer decision')
+  if (!verification.categories?.artifact_integrity_verified || verification.artifacts?.length !== 2
+    || json(verification).includes('sample_sha256')) throw new Error('Private artifact integrity or redaction check failed')
+  const inventory = ok(await api(`/api/trades/${tradeId}/artifacts`, { headers: buyerHeaders }, true), 'Buyer artifact inventory')
+  if (inventory.artifacts?.length !== 2 || inventory.limits?.max_bytes !== 65_536) throw new Error('Private artifact inventory mismatch')
+  for (const artifact of inventory.artifacts) {
+    if (artifact.trade_id !== tradeId || artifact.order_id !== selected.order.id || artifact.route_id !== routeId
+      || artifact.delivery_id !== submitted.delivery_id || artifact.provenance?.verified !== false
+      || artifact.size_bytes < 1 || artifact.size_bytes > 65_536 || !/^[0-9a-f]{64}$/.test(artifact.sha256)
+      || !/^[0-9a-f-]{36}$/.test(artifact.id)) throw new Error('Artifact private linkage/provenance mismatch')
+    const path = `/api/trades/${tradeId}/artifacts/${artifact.id}`
+    if ((await api(path)).status !== 401) throw new Error('Unauthenticated artifact download was not denied')
+    const response = await fetch(`${baseUrl}${path}`, { redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(10_000),
+      headers: { Cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join('; ') } })
+    if (!response.ok || response.headers.get('Cache-Control') !== 'private, no-store'
+      || !response.headers.get('Content-Disposition')?.startsWith('attachment;')
+      || Number(response.headers.get('Content-Length')) !== artifact.size_bytes
+      || response.headers.get('X-Artifact-SHA256') !== artifact.sha256 || !response.body) throw new Error('Private download headers mismatch')
+    const reader = response.body.getReader()
+    const chunks = []
+    let size = 0
+    try {
+      while (true) {
+        const part = await reader.read()
+        if (part.done) break
+        size += part.value.byteLength
+        if (size > artifact.size_bytes) throw new Error('Private artifact download exceeds saved size')
+        chunks.push(part.value)
+      }
+    } finally { void reader.cancel().catch(() => {}) }
+    const bytes = Buffer.concat(chunks)
+    if (size !== artifact.size_bytes || createHash('sha256').update(bytes).digest('hex') !== artifact.sha256) throw new Error('Private artifact download integrity mismatch')
+    if (artifact.name === 'result.json') {
+      const result = JSON.parse(bytes.toString('utf8'))
+      if (result.kind !== 'controlled_review' || result.sample_sha256 !== createHash('sha256').update(planBody.input.sample).digest('hex')
+        || result.sample_bytes !== Buffer.byteLength(planBody.input.sample) || result.execution_attempt_id !== attemptId
+        || result.semantic_verified !== false) throw new Error('Downloaded provider JSON did not match the agreed controlled input')
+    }
+  }
+  console.log('Two private attachments retrieved by the buyer with hash/size verification; anonymous download denied')
   let completed = null
   for (let index = 0; index < 12; index += 1) {
     const result = ok(await api(`/api/trades/${tradeId}/confirm`, { method: 'POST', headers: buyerHeaders }, true), 'Buyer confirmation', [200, 202])
@@ -194,7 +234,7 @@ try {
   if (finalOrder.order?.state !== 'completed' || !finalOrder.order.capacity_released_at || finalOrder.trade?.id !== tradeId || finalOrder.trade?.payout_status !== 'complete') throw new Error('Completed order or settlement state is inconsistent')
   const finalService = ok(await api(`/api/services/${serviceId}`, { headers: sellerHeaders }), 'Service capacity inspection').service
   if (finalService.current_capacity !== 1) throw new Error('Service capacity was not released exactly once')
-  console.log(`PASS: $${checkoutCap} routed Base checkout, provider process restart and correlated delivery, buyer review, and $${providerPrice} seller payout; route ${routeId}; trade ${tradeId}; delivery ${submitted.delivery_id}`)
+  console.log(`PASS: $${checkoutCap} routed Base checkout, provider process restart and two verified private attachments, buyer review, and $${providerPrice} seller payout; route ${routeId}; trade ${tradeId}; delivery ${submitted.delivery_id}`)
 } finally {
   if (routeId && !paymentSendStarted) {
     try {

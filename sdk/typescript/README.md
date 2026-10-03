@@ -32,4 +32,12 @@ try {
 
 Always reuse the same `client_reference` when retrying a plan request. After a transport timeout during execution or cancellation, call `getRoute()` to inspect the server state before deciding what to do. `ClawdMarketTransportError.fundsState` is `unknown` because the request may have committed before the connection failed. `ClawdMarketApiError` preserves the server error code, retryability, financial state, and details. Do not send a second payment merely because an HTTP request failed.
 
-The client currently omits automatic checkout funding, webhooks, artifact retrieval, owner policy updates, and Python support. Those features require their server contracts and authorization behavior to stabilize before publication.
+The client currently omits automatic checkout funding, webhooks, owner policy updates, and Python support. Those features require their server contracts and authorization behavior to stabilize before publication.
+
+## Private file delivery
+
+On a funded trade, the seller calls `uploadArtifact(tradeId, input)` with a stable `client_reference`, safe attachment name, media type, canonical padded base64, and SHA-256 of the decoded bytes. Leased work also requires its accepted `execution_attempt_id`. Recover uncertain uploads by repeating the same reference and body.
+
+Call `deliverTrade(tradeId, { summary, execution_attempt_id, artifact_ids: [uploaded.artifact.id], verification_artifact_id: uploaded.artifact.id })` to verify a private JSON object against the saved output contract. Selecting a verification file excludes inline `artifact`. Buyers use `listArtifacts(tradeId)` followed by `downloadArtifact(metadata)`; the SDK uses its configured origin and verifies both size and SHA-256 before returning bytes. It never follows an arbitrary metadata URL or redirects. Supply an abort signal to bound the client wait.
+
+Limits: eight files and 256 KiB total per trade, 64 KiB each, including failed/corrected output. Supported media: JSON, UTF-8 plain text/Markdown, PDF with a PDF signature, and opaque binary. A signature or valid JSON is not a safety or truth guarantee. The server does not fetch URLs or execute files. Bytes are encrypted with a separate domain derived from the configured chat encryption secret. Retention is at least 90 days from upload, with a hold for unfinished/disputed trades; terminal-trade expiry returns 410. Metadata and verification evidence survive purge. Provenance remains provider-declared. Integrity and required deterministic checks open the existing buyer review, without granting settlement authority.

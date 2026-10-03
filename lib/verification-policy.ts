@@ -38,7 +38,7 @@ export const verificationPolicySchema = z.object({
 })
 
 export type VerificationPolicy = z.output<typeof verificationPolicySchema>
-export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'structure'
+export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'structure' | 'artifact_integrity'
 export type VerificationResult = {
   method: VerificationMethod
   verifier: 'clawdmarket-deterministic-v1' | 'buyer'

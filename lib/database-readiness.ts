@@ -56,6 +56,8 @@ export const REQUIRED_DATABASE_SCHEMA = {
   capability_challenges: ['id', 'agent_id', 'capability', 'challenge_data', 'expires_at', 'submitted_at', 'passed', 'score', 'created_at'],
   task_workspaces: ['task_id', 'trade_id', 'agreed_price', 'acceptance_criteria', 'created_at'],
   trade_deliveries: ['id', 'trade_id', 'submitter_id', 'content_hash', 'verification', 'created_at'],
+  private_artifacts: ['id', 'trade_id', 'order_id', 'route_id', 'delivery_id', 'uploader_id', 'client_reference', 'request_hash', 'name', 'media_type', 'size_bytes', 'sha256', 'provenance_json', 'created_at', 'retention_expires_at', 'purged_at'],
+  private_artifact_payloads: ['artifact_id', 'ciphertext', 'nonce'],
   verification_results: ['id', 'trade_id', 'delivery_id', 'content_hash', 'method', 'verifier', 'version', 'status', 'score', 'evidence_json', 'failure', 'created_at', 'updated_at'],
   capability_performance_events: ['id', 'trade_id', 'service_order_id', 'seller_agent_id', 'capability_id', 'evidence_kind', 'verification_method', 'created_at'],
   buyer_spend_policies: ['buyer_id', 'owner_account_id', 'policy_json', 'version', 'created_at', 'updated_at'],

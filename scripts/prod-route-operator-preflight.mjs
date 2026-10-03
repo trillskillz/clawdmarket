@@ -7,7 +7,7 @@ if (!url.startsWith('libsql://') || !authToken) throw new Error('Production Turs
 const client = createClient({ url, authToken })
 try {
   const read = async (sql) => (await client.execute(sql)).rows
-  const [migrations, services, routes, orders, attempts, provider, missingAttempts, overdueDeliveries, webhooks, transfers, worker, legacyOwner] = await Promise.all([
+  const [migrations, services, routes, orders, attempts, provider, missingAttempts, overdueDeliveries, webhooks, transfers, worker, legacyOwner, artifacts] = await Promise.all([
     read('SELECT COUNT(*) AS count FROM _clawdmarket_migrations'),
     read('SELECT status AS state, COUNT(*) AS count FROM service_definitions GROUP BY status'),
     read('SELECT state, COUNT(*) AS count FROM route_plans GROUP BY state'),
@@ -43,6 +43,16 @@ try {
       FROM settlement_transfers`),
     read("SELECT last_outcome, last_succeeded_at FROM worker_heartbeats WHERE worker_name = 'webhooks' LIMIT 1"),
     inspectLegacyOwnerValues(client),
+    read(`SELECT COUNT(*) AS count, COALESCE(SUM(a.size_bytes), 0) AS declared_bytes,
+      COUNT(CASE WHEN a.delivery_id IS NOT NULL THEN 1 END) AS delivered_count,
+      COUNT(CASE WHEN a.purged_at IS NOT NULL THEN 1 END) AS purged_count,
+      COUNT(CASE WHEN a.purged_at IS NULL AND p.artifact_id IS NULL
+        AND (t.status NOT IN ('completed', 'cancelled', 'resolved') OR a.retention_expires_at > unixepoch()) THEN 1 END) AS missing_live_payload_count,
+      COUNT(CASE WHEN a.purged_at IS NOT NULL AND p.artifact_id IS NOT NULL THEN 1 END) AS purged_with_payload_count,
+      COUNT(CASE WHEN a.purged_at IS NULL AND p.artifact_id IS NOT NULL AND a.retention_expires_at < unixepoch() - 900
+        AND t.status IN ('completed', 'cancelled', 'resolved') THEN 1 END) AS overdue_purge_count
+      FROM private_artifacts a JOIN trades t ON t.id = a.trade_id
+      LEFT JOIN private_artifact_payloads p ON p.artifact_id = a.id`),
   ])
   const states = (rows) => Object.fromEntries(rows.map((row) => [String(row.state), Number(row.count || 0)]))
   const workerRow = worker[0]
@@ -56,9 +66,11 @@ try {
     settlement_outbox: Object.fromEntries(Object.entries(transfers[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
     webhook_worker: { outcome: workerRow?.last_outcome || 'never_observed', age_minutes: workerAgeMinutes },
     legacy_owner_values: legacyOwner,
+    private_artifacts: Object.fromEntries(Object.entries(artifacts[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
   }
   console.log(JSON.stringify(snapshot, null, 2))
-  if (snapshot.migrations < 34 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
+  if (snapshot.migrations < 35 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
+    || snapshot.private_artifacts.missing_live_payload_count || snapshot.private_artifacts.purged_with_payload_count || snapshot.private_artifacts.overdue_purge_count
     || snapshot.webhook_outbox.failed_count || snapshot.webhook_outbox.overdue_count
     || snapshot.settlement_outbox.failed_count || snapshot.settlement_outbox.stuck_count) {
     throw new Error('Production operator preflight found an unhealthy routing or payment state')
