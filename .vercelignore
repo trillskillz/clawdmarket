@@ -1,6 +1,7 @@
 # Ignore agent scripts
 /agents/
-/scripts/
+/scripts/*
+!/scripts/provider-worker.mjs
 /test/
 .git/
 node_modules/

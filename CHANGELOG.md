@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Provider completion across restart
+- Provider-operated Node worker with leased attempt acceptance, heartbeats, private durable delivery output, exact replay after restart or lost response, and process locking that releases on SIGKILL.
+- Controlled live route runner now uses separate provider processes and a $0.02 checkout/payout, schema checks, buyer review, and original receipt replay. Server APIs and machine contract remain 1.62.
+- Outcome-based milestone releases replace the five-change count; supporting tests, diagnostics, and documentation ship together.
+
 ### Release security dependency patch
 - Update Next.js and its lint configuration to 16.3.6 for [GHSA-vcvr-r3jv-pc5j](https://github.com/vercel/next.js/security/advisories/GHSA-vcvr-r3jv-pc5j), discovered during the routing stack's release audit. Machine contract remains 1.62.
 
