@@ -2,6 +2,8 @@
 
 User priority: deliver this release before resuming routing. Publishing to GitHub/Vercel is explicitly authorized; the earlier ten-part gate does not apply to this release.
 
+Release preview found a packaging omission: the shared canonical verifier module is now explicitly included in `.vercelignore`. A test RPC fixture also returns a generic failure instead of an exception string, resolving the review's error-detail finding.
+
 ## Delivered capability
 
 - Desktop/mobile Network menu includes Why ClawdMarket and Proofs, with Escape/outside-click closure.

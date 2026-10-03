@@ -2,6 +2,7 @@
 /agents/
 /scripts/*
 !/scripts/provider-worker.mjs
+!/scripts/verifier-contract.mjs
 /test/
 .git/
 node_modules/

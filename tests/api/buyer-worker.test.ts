@@ -84,7 +84,7 @@ before(async () => {
         baseFeePerGas: '0x1', gasLimit: '0x1c9c380', gasUsed: '0xc350', transactions: [] }
       else throw new Error(`Unexpected mock RPC method ${input.method}`)
       outgoing.setHeader('Content-Type', 'application/json'); outgoing.end(JSON.stringify({ jsonrpc: '2.0', id: input.id, result }))
-    } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ mock_error: String(error) })) }
+    } catch { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ mock_error: 'Mock RPC failed' })) }
   })
   await new Promise<void>((done) => rpcServer.listen(0, '127.0.0.1', done))
   rpcUrl = `http://127.0.0.1:${(rpcServer.address() as { port: number }).port}`
