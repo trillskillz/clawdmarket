@@ -1,3 +1,4 @@
+import { serviceExecutionContract } from '@/lib/service-execution-contract'
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       || row.order.state === 'awaiting_funding' || row.order.state === 'cancelled')) {
       return failure('WORK_ORDER_NOT_FUNDED', 'Work order is not funded', 409)
     }
+    row.service = serviceExecutionContract(row.order, row.service)
     const [linkedRoute] = await db.select({ deadline_seconds: route_plans.deadline_seconds })
       .from(route_plans).where(eq(route_plans.service_order_id, row.order.id)).limit(1)
     const attempt = row.service.provider_protocol === 'leased_v1' ? await getServiceExecutionAttempt(row.order.id) : null
@@ -51,6 +53,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       output_schema: JSON.parse(row.service.output_schema),
       verification_policy: JSON.parse(row.service.verification_policy),
       capabilities: JSON.parse(row.service.capabilities) as string[],
+      provider_requirements: JSON.parse(row.order.provider_requirements_json),
+      contract_source: row.order.execution_contract_json === null ? 'legacy_current_definition' : 'checkout_snapshot',
       provider_protocol: row.service.provider_protocol,
       execution_attempt: attempt ? { id: attempt.id, state: attempt.state,
         acknowledgment_due_at: providerAcknowledgmentDueAt(attempt).toISOString(),

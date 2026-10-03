@@ -1,6 +1,9 @@
+export type ProviderRequirements = { approved_providers?: string[]; minimum_accepted_completions?: number; minimum_distinct_buyers?: number }
+
 export type Money = { amount: string; currency: 'USD' }
 
 export type RouteRequest = {
+  provider_requirements?: ProviderRequirements
   client_reference: string
   objective: string
   required_capabilities: string[]
@@ -22,6 +25,7 @@ export type RouteCandidate = {
   estimated_latency_seconds: number | null
   payment_rail: 'mpp' | 'evm'
   verification_methods: string[]
+  eligibility: { requirements_satisfied: true; request: ProviderRequirements; saved_policy: ProviderRequirements; confidence: 'backed_completion_observed' | 'unmeasured'; buyer_independence: 'not_verified' }
   evidence_level: 'claimed_only' | 'backed_completion_observed'
   capability_evidence: { capability_id: string; accepted_completion_count: number; distinct_buyer_count: number; measured_quality_score: null }[]
   provider_failures: { provider_declines_90d: number; lease_expiries_90d: number; uncorrected_verification_failures_90d: number; buyer_refund_resolutions_90d: number }

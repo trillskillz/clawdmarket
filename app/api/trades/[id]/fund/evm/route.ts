@@ -81,13 +81,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
       funded = await recordExternalTradeFunding(funding)
     } catch (error) {
-      if (!(error instanceof TradeFundingError) || !['CHECKOUT_EXPIRED', 'TRADE_NOT_AWAITING_PAYMENT'].includes(error.code)) throw error
+      if (!(error instanceof TradeFundingError) || !['CHECKOUT_EXPIRED', 'TRADE_NOT_AWAITING_PAYMENT', 'PROVIDER_ELIGIBILITY_CHANGED'].includes(error.code)) throw error
       const [cancelled] = await db.select().from(trades).where(eq(trades.id, trade.id)).limit(1)
       if (!cancelled || cancelled.status !== 'cancelled') throw error
       await recordCancelledExternalFunding({ ...funding, trade: cancelled })
       const refund = await refundCancelledExternalTrade(cancelled)
       return NextResponse.json({
         ok: true,
+        rejection_code: error.code,
+        rejection_reason: error.message,
         status: refund.complete ? 'late_payment_refunded' : 'late_payment_refund_processing',
         trade: { ...cancelled, payout_status: refund.complete ? 'refunded' : 'processing' },
         transfers: refund.transfers.map(({ id, kind, status, tx_hash }) => ({ id, kind, status, tx_hash })),

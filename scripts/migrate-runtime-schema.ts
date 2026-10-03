@@ -708,6 +708,10 @@ async function main() {
         await database.execute('UPDATE service_execution_attempts SET acknowledgment_due_at = created_at + 600 WHERE acknowledgment_due_at IS NULL')
         await database.execute('CREATE INDEX IF NOT EXISTS service_execution_attempts_state_ack_idx ON service_execution_attempts(state, acknowledgment_due_at)')
       } },
+      { id: '2026-10-02-buyer-provider-requirements-v1', run: async (database: Client) => {
+        await ensureColumns(database, 'service_orders', { provider_requirements_json: "TEXT NOT NULL DEFAULT '{}'", execution_contract_json: 'TEXT' })
+        await ensureColumns(database, 'route_plans', { provider_requirements_json: "TEXT NOT NULL DEFAULT '{}'" })
+      } },
     ]
     for (const migration of migrations) {
       const existing = await client.execute({

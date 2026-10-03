@@ -1,3 +1,7 @@
+import { withKeyedWriteLock } from '@/lib/service-reservation-lock'
+import { serviceFundingEligibility } from '@/lib/service-funding-eligibility'
+import { TradeFundingError } from '@/lib/trade-funding'
+import { internalErrorResponse } from '@/lib/api-error'
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq, isNull } from 'drizzle-orm'
 import { isAddress, parseUnits } from 'viem'
@@ -53,25 +57,55 @@ export async function POST(request: NextRequest, context: Context) {
   const readiness = getPaymentReadiness()
   const token = findAcceptedToken(chainId, body.token_address)
   if (!readiness.evm.enabled || !readiness.evm.treasury || !token) return json({ error: 'Payment rail/token unavailable' }, 503)
-  const trade = auth.trade
-  const sendAllowed = !recoveryHash && trade.status === 'pending' && Boolean(trade.payment_due_at) && Date.parse(trade.payment_due_at!) > Date.now()
-  if (!sendAllowed && !(recoveryHash && ['pending', 'cancelled'].includes(trade.status))) {
-    return json({ error: 'This reservation is closed. Do not send payment.', code: 'CHECKOUT_CLOSED' }, 409)
+  const treasury = readiness.evm.treasury
+  try {
+    const create = () => db.transaction(async (tx) => {
+      const [trade] = await tx.select().from(trades).where(eq(trades.id, auth.trade.id)).limit(1)
+      if (!trade || trade.buyer_id !== auth.trade.buyer_id || trade.payment_rail !== 'evm') throw new TradeFundingError('Checkout changed', 409, 'CHECKOUT_CLOSED')
+      const [prior] = await tx.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, trade.id)).limit(1)
+      if (prior) return json({ intent: prior, created: false })
+      const sendAllowed = !recoveryHash && trade.status === 'pending' && Boolean(trade.payment_due_at) && Date.parse(trade.payment_due_at!) > Date.now()
+      if (!sendAllowed && !(recoveryHash && ['pending', 'cancelled'].includes(trade.status))) {
+        return json({ error: 'This reservation is closed. Do not send payment.', code: 'CHECKOUT_CLOSED' }, 409)
+      }
+      if (sendAllowed) {
+        const reason = await serviceFundingEligibility(trade, tx)
+        if (reason) throw new TradeFundingError(`Provider no longer satisfies checkout requirements: ${reason}; do not pay`, 409, 'PROVIDER_ELIGIBILITY_CHANGED')
+      }
+      const tokenAmount = parseUnits((trade.total_cost / token.fixedUsdPrice).toFixed(token.decimals), token.decimals)
+      if (tokenAmount <= 0n) return json({ error: 'Payment amount rounds to zero' }, 400)
+      const [created] = await tx.insert(evm_payment_intents).values({
+        trade_id: trade.id, buyer_id: trade.buyer_id, origin: walletAuthOrigin(request.nextUrl.origin),
+        payer_address: body.payer_address.toLowerCase(), chain_id: token.chainId,
+        token_address: token.address.toLowerCase(), treasury_address: treasury.toLowerCase(),
+        token_amount: tokenAmount.toString(), token_decimals: token.decimals, token_symbol: token.symbol,
+        token_usd_price: token.fixedUsdPrice, amount_usd: trade.total_cost, expires_at: trade.payment_due_at || trade.created_at.toISOString(),
+        // Older checkout clients could have sent before intent records existed.
+        // A recovery-only intent never grants a second send.
+        ...(recoveryHash ? { created_at: trade.created_at } : {}),
+      }).onConflictDoNothing({ target: evm_payment_intents.trade_id }).returning()
+      const [intent] = created ? [created] : await tx.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, trade.id)).limit(1)
+      return json({ intent, created: Boolean(created && sendAllowed) }, created && sendAllowed ? 201 : 200)
+    })
+    return await withKeyedWriteLock(`payment-intent:${auth.trade.id}`, async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        try { return await create() } catch (error) {
+          let cause: unknown = error
+          let busy = false
+          for (let depth = 0; cause && typeof cause === 'object' && depth < 6; depth += 1) {
+            const entry = cause as { message?: string; cause?: unknown }
+            busy ||= /SQLITE_BUSY|database is locked/i.test(entry.message || '')
+            cause = entry.cause
+          }
+          if (!busy || attempt >= 5) throw error
+          await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
+        }
+      }
+    })
+  } catch (error) {
+    if (error instanceof TradeFundingError) return json({ error: error.message, code: error.code }, error.status)
+    return internalErrorResponse('Payment intent creation failed', error)
   }
-  const tokenAmount = parseUnits((trade.total_cost / token.fixedUsdPrice).toFixed(token.decimals), token.decimals)
-  if (tokenAmount <= 0n) return json({ error: 'Payment amount rounds to zero' }, 400)
-  const [created] = await db.insert(evm_payment_intents).values({
-    trade_id: trade.id, buyer_id: trade.buyer_id, origin: walletAuthOrigin(request.nextUrl.origin),
-    payer_address: body.payer_address.toLowerCase(), chain_id: token.chainId,
-    token_address: token.address.toLowerCase(), treasury_address: readiness.evm.treasury.toLowerCase(),
-    token_amount: tokenAmount.toString(), token_decimals: token.decimals, token_symbol: token.symbol,
-    token_usd_price: token.fixedUsdPrice, amount_usd: trade.total_cost, expires_at: trade.payment_due_at || trade.created_at.toISOString(),
-    // Older checkout clients could have sent before intent records existed.
-    // A recovery-only intent never grants a second send.
-    ...(recoveryHash ? { created_at: trade.created_at } : {}),
-  }).onConflictDoNothing({ target: evm_payment_intents.trade_id }).returning()
-  const [intent] = created ? [created] : await db.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, trade.id)).limit(1)
-  return json({ intent, created: Boolean(created && sendAllowed) }, created && sendAllowed ? 201 : 200)
 }
 
 // Only clients with a definite wallet rejection should use this. A timeout or

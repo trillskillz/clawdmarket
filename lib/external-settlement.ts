@@ -31,8 +31,8 @@ export class SettlementError extends Error {
   }
 }
 
-export async function payoutAddressForUser(userId: string): Promise<Address | null> {
-  const [configured] = await db.select().from(payout_addresses).where(eq(payout_addresses.user_id, userId)).limit(1)
+export async function payoutAddressForUser(userId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db): Promise<Address | null> {
+  const [configured] = await source.select().from(payout_addresses).where(eq(payout_addresses.user_id, userId)).limit(1)
   if (configured && isAddress(configured.address)) return configured.address as Address
 
   const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1)

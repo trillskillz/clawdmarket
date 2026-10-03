@@ -1,3 +1,4 @@
+import { serviceFundingEligibility } from '@/lib/service-funding-eligibility'
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { Credential } from 'mppx'
@@ -38,11 +39,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'This payment reservation was cancelled', code: 'TRADE_NOT_AWAITING_PAYMENT' }, { status: 410 })
   }
   if (!['pending', 'cancelled'].includes(trade.status)) return NextResponse.json({ error: 'Trade is not awaiting payment' }, { status: 409 })
-  const readiness = getPaymentReadiness()
-  const mpp = getMarketplaceMppServer()
-  if (!readiness.mpp.enabled || !mpp) return NextResponse.json({ error: 'MPP settlement is not configured', code: 'PAYMENT_RAIL_NOT_CONFIGURED' }, { status: 503 })
 
   try {
+    if (!hasPaymentCredential) {
+      const reason = await serviceFundingEligibility(trade)
+      if (reason) return NextResponse.json({ error: 'Provider no longer satisfies checkout requirements; do not pay', code: 'PROVIDER_ELIGIBILITY_CHANGED', reason }, { status: 409, headers: { 'Cache-Control': 'no-store' } })
+    }
+    const readiness = getPaymentReadiness()
+    const mpp = getMarketplaceMppServer()
+    if (!readiness.mpp.enabled || !mpp) return NextResponse.json({ error: 'MPP settlement is not configured', code: 'PAYMENT_RAIL_NOT_CONFIGURED' }, { status: 503 })
+
     const payment = await mpp.charge({
       amount: trade.total_cost.toFixed(2),
       description: `Fund ClawdMarket trade ${trade.id}`,
@@ -76,13 +82,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
       funded = await recordExternalTradeFunding(funding)
     } catch (error) {
-      if (!(error instanceof TradeFundingError) || !['CHECKOUT_EXPIRED', 'TRADE_NOT_AWAITING_PAYMENT'].includes(error.code)) throw error
+      if (!(error instanceof TradeFundingError) || !['CHECKOUT_EXPIRED', 'TRADE_NOT_AWAITING_PAYMENT', 'PROVIDER_ELIGIBILITY_CHANGED'].includes(error.code)) throw error
       const [cancelled] = await db.select().from(trades).where(eq(trades.id, trade.id)).limit(1)
       if (!cancelled || cancelled.status !== 'cancelled') throw error
       await recordCancelledExternalFunding({ ...funding, trade: cancelled })
       const refund = await refundCancelledExternalTrade(cancelled)
       return payment.withReceipt(NextResponse.json({
         ok: true,
+        rejection_code: error.code,
+        rejection_reason: error.message,
         status: refund.complete ? 'late_payment_refunded' : 'late_payment_refund_processing',
         trade: { ...cancelled, payout_status: refund.complete ? 'refunded' : 'processing' },
         transfers: refund.transfers.map(({ id, kind, status, tx_hash }) => ({ id, kind, status, tx_hash })),

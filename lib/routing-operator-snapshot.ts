@@ -33,7 +33,8 @@ export async function getRoutingOperatorSnapshot() {
       JOIN service_definitions s ON s.id = o.service_id
       JOIN trades t ON t.id = o.trade_id
       LEFT JOIN service_execution_attempts a ON a.order_id = o.id
-      WHERE s.provider_protocol = 'leased_v1' AND t.status = 'escrow_held'
+      WHERE (CASE WHEN o.execution_contract_json IS NULL THEN s.provider_protocol
+        WHEN json_valid(o.execution_contract_json) THEN json_extract(o.execution_contract_json, '$.provider_protocol') END) = 'leased_v1' AND t.status = 'escrow_held'
         AND o.state IN ('funded', 'executing') AND o.capacity_released_at IS NULL AND a.id IS NULL`),
     client.execute(`SELECT COUNT(*) AS count FROM route_plans r
       JOIN service_orders o ON o.id = r.service_order_id

@@ -4,6 +4,8 @@ import { db } from './db'
 import { buyer_spend_policies, trades } from './schema'
 import { normalizeCapability } from './capabilities'
 
+import { providerRequirementsSchema, providerMatches } from './provider-requirements'
+
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 const cents = z.string().regex(/^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$/).transform((value) => {
   const [whole, fraction = ''] = value.split('.')
@@ -16,6 +18,7 @@ const canonicalCapability = z.string().min(1).max(80).transform((value, ctx) => 
 })
 
 export const buyerSpendPolicyInput = z.object({
+  provider_requirements: providerRequirementsSchema.optional(),
   max_per_execution: cents.optional(),
   max_daily: cents.optional(),
   max_monthly: cents.optional(),
@@ -62,9 +65,6 @@ export async function loadBuyerSpendPolicy(buyerId: string, source: Transaction 
   return row ? { row, policy: buyerSpendPolicyInput.parse(policyToPublic(JSON.parse(row.policy_json) as BuyerSpendPolicy)) } : null
 }
 
-function providerMatches(items: string[], sellerId: string) {
-  return items.includes(sellerId) || sellerId.startsWith('user_agent_') && items.includes(sellerId.slice('user_agent_'.length))
-}
 
 export function checkBuyerPolicyConstraints(policy: BuyerSpendPolicy, context: SpendContext): string | null {
   if (policy.max_per_execution !== undefined && context.totalMinor > policy.max_per_execution) return 'BUYER_PER_EXECUTION_LIMIT'

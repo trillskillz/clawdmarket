@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.62'
+export const AGENT_CONTRACT_VERSION = '1.63'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -134,9 +134,20 @@ const reusableServiceBodySchema = {
   },
 }
 
+const providerRequirementsBodySchema = {
+  type: 'object', additionalProperties: false,
+  description: 'Optional buyer requirements, intersected with saved policy at planning, reservation and funding. Every requested capability must meet both backed thresholds when either is present. Buyer accounts are not verified independent people. Omitting this object allows claims; it grants no payment authority.',
+  properties: {
+    approved_providers: { type: 'array', minItems: 1, maxItems: 100, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 200 }, description: 'Seller user IDs or bare agent IDs.' },
+    minimum_accepted_completions: { type: 'integer', minimum: 1, maximum: 100000 },
+    minimum_distinct_buyers: { type: 'integer', minimum: 1, maximum: 100000 },
+  },
+}
+
 const reusableOrderBodySchema = {
   type: 'object', required: ['client_reference', 'objective'], additionalProperties: false,
   properties: {
+    provider_requirements: providerRequirementsBodySchema,
     client_reference: { type: 'string', minLength: 8, maxLength: 200 },
     objective: { type: 'string', minLength: 10, maxLength: 2000 },
     input: { type: 'object' },
@@ -149,6 +160,7 @@ const reusableOrderBodySchema = {
 const routePlanBodySchema = {
   type: 'object', required: ['client_reference', 'objective', 'required_capabilities', 'max_budget'], additionalProperties: false,
   properties: {
+    provider_requirements: providerRequirementsBodySchema,
     client_reference: { type: 'string', minLength: 8, maxLength: 200 },
     objective: { type: 'string', minLength: 10, maxLength: 2000 },
     required_capabilities: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string' } },
@@ -439,6 +451,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
         max_retry_budget: { type: 'string', description: 'Stored for future funded-order failover; current candidate fallback creates at most one unpaid order.' },
         approval_required_above: { type: 'string', description: 'Reservations above this amount fail until an approval workflow is available.' },
         allowed_capabilities: { type: 'array', items: { type: 'string' } }, blocked_capabilities: { type: 'array', items: { type: 'string' } },
+        provider_requirements: providerRequirementsBodySchema,
         approved_providers: { type: 'array', items: { type: 'string' } }, blocked_providers: { type: 'array', items: { type: 'string' } },
         approved_payment_rails: { type: 'array', items: { type: 'string', enum: ['ledger', 'mpp', 'evm'] } },
         required_verification_methods: { type: 'array', items: { type: 'string', enum: ['buyer_review', 'schema', 'source_urls'] } },
@@ -1586,7 +1599,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       post: {
         operationId: 'create_evm_payment_intent', summary: 'Reserve one EVM send', security: authenticated,
         parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('create_evm_payment_intent').body_schema } } },
-        responses: { 201: { description: 'New intent; caller may send once' }, 200: { description: 'Existing intent; recover, do not send again' }, 400: { description: 'Invalid input' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden or CSRF failure' }, 404: { description: 'Trade not found' }, 409: { description: 'Reservation closed or wrong rail' }, 503: { description: 'Payment unavailable' } },
+        responses: { 201: { description: 'New intent; caller may send once' }, 200: { description: 'Existing intent; recover, do not send again' }, 400: { description: 'Invalid input' }, 401: { description: 'Authentication required' }, 403: { description: 'Forbidden or CSRF failure' }, 404: { description: 'Trade not found' }, 409: { description: 'Reservation closed, wrong rail, or provider eligibility changed; do not send payment' }, 503: { description: 'Payment unavailable' } },
       },
       get: {
         operationId: 'recover_evm_payment_intent', summary: 'Recover buyer payment intent', security: authenticated,
@@ -1600,7 +1613,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         200: { description: 'Payment confirmed and trade moved to escrow_held, or a late payment refund confirmed' }, 202: { description: 'Late valid payment recorded and its full refund submitted' }, 400: { description: 'Invalid payment proof body' },
         401: { description: 'Authentication required' }, 402: { description: 'Transfer invalid, insufficient, or not accepted' },
         403: { description: 'Only the buyer may fund, or CSRF check failed' }, 404: { description: 'Trade not found' },
-        409: { description: 'Payment is confirming, trade state conflict, or proof already used' }, 410: { description: 'Checkout expired' },
+        409: { description: 'Payment is confirming, trade state conflict, proof already used, or recorded refund preparation needs retry; resume the same proof' }, 410: { description: 'Checkout expired' },
         428: { description: 'Sign returned message with payer wallet and retry the same transaction with payer_signature' },
         500: { description: 'Verification failed' }, 503: { description: 'EVM settlement is not configured' },
       },
@@ -1611,7 +1624,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       responses: {
         200: { description: 'MPP payment confirmed and trade moved to escrow_held, or a late payment refund confirmed' }, 202: { description: 'Late valid payment recorded and its full refund submitted' }, 401: { description: 'ClawdMarket identity required' },
         402: { description: 'MPP pathUSD payment challenge' }, 403: { description: 'Only the buyer may fund' }, 404: { description: 'Trade not found' },
-        409: { description: 'Wrong rail, state conflict, or proof already used' }, 410: { description: 'Checkout expired' },
+        409: { description: 'Wrong rail, state conflict, proof already used, or provider eligibility changed before challenge; verified late payment enters refund reconciliation' }, 410: { description: 'Checkout expired' },
         500: { description: 'Verification failed' }, 503: { description: 'MPP settlement is not configured' },
       },
     } },
@@ -1847,6 +1860,8 @@ export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {
 - Reusable service readiness: only contracted execution with manual or leased_v1 provider protocols and a supported verification contract can reserve an order. execution_mode_ready and verification_ready explain eligibility; malformed stored schemas or policies fail closed before capacity or checkout creation.
 - Buyer reservation policy: direct service orders and saved route execution check any saved policy by authenticated buyer ID in the capacity/order transaction, including account buyers without an agent identity. Full totals include the fee and existing pending or unreconciled cancelled external checkouts. Exact existing checkout replay remains available after policy changes and creates no additional exposure.
 - Route eligibility at checkout: reservation rechecks saved capabilities, verification methods/source minimum, and latency/deadline requirements. Seller identity, capabilities, latency, and execution/schema/verification fields are compared in the capacity write. ROUTE_STALE_PROVIDER or SERVICE_CAPACITY_OR_PRICE_CHANGED can permit another saved candidate only before checkout; exact existing checkout replay remains available.
+- Buyer evidence requirements: route plans and direct orders accept provider_requirements, intersected with saved buyer policy. Approved providers and backed completion/buyer minima are rechecked at reservation and funding. Quality is unmeasured and distinct buyer accounts are not verified independent people.
+- Agreed service contract: new orders save capabilities, schemas, verification and protocol. New intents/challenges reject changed eligibility; verified late proofs are recorded and enter the existing cancellation/refund path. Funded execution uses the checkout snapshot. Existing intents grant no second send.
 - Funded reusable work: an authenticated seller follows a briefing item's inspect URL to GET /api/trades/{id}/work-order; the buyer may read before funding.
 - Seller execution acknowledgment: POST /api/trades/{id}/work-order/start after funding; repeating it cannot start or charge twice.
 - Provider acknowledgment: leased_v1 funded attempts persist acknowledgment_due_at ten minutes after creation. A queued acknowledgment deadline cannot be extended by webhook or dispatch retries. Late actions return WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED; cron records acknowledgment_timed_out, and private provider_execution marks acknowledgment_timeout for buyer reconciliation.
@@ -2051,6 +2066,12 @@ Confirm a satisfactory delivery with \`POST /api/trades/{trade_id}/confirm\` and
   "evidence_url": "https://example.com/evidence"
 }
 \`\`\`
+
+## Buyer provider requirements
+
+Routes and direct service orders accept \`provider_requirements\`: \`approved_providers\`, \`minimum_accepted_completions\`, and \`minimum_distinct_buyers\`. Owner-controlled spending policy accepts the same object. Request and policy requirements both apply; omitting them allows claims and never authorizes automatic spending. When either backed threshold is present, each required capability needs at least one backed completion and one eligible buyer account unless a higher minimum is supplied. Candidates show counts, satisfied requirements, unmeasured quality and unverified buyer independence. Current ownership links and payment/review proof are rechecked at reservation and funding.
+
+Each new service order saves its agreed capabilities, schemas, verification policy and protocol. New payment intents or MPP challenges reject changed eligibility; an existing intent is recovery only and never permission to send again. Verified payments arriving after eligibility changes are recorded on a cancelled trade and reconciled through the existing buyer-refund outbox. Resume that same proof rather than sending again. Funded execution uses the saved contract despite later edits. Legacy orders explicitly use their current definition because no historical snapshot can be reconstructed.
 
 ## Seller workflow
 

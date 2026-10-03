@@ -140,3 +140,17 @@ test('cancelled external checkout holds buyer budget until refund is confirmed',
   await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, ledger.id))
   assert.equal((await buyerPolicyUsage(buyerId)).reserved_or_spent_today_minor, 0)
 })
+
+
+test('owner policy exposes bounded evidence requirements and agent keys cannot relax them', async () => {
+  const [saved] = await db.select().from(schema.buyer_spend_policies).where(eq(schema.buyer_spend_policies.buyer_id, 'user_agent_policy-agent'))
+  const provider_requirements = { approved_providers: ['approved-agent'], minimum_accepted_completions: 3, minimum_distinct_buyers: 2 }
+  const update = { agent_id: 'policy-agent', expected_version: saved.version, policy: { provider_requirements } }
+  assert.equal((await route.PUT(request('policy-owner', 'PUT', update))).status, 200)
+  const read = await route.GET(request('user_agent_policy-agent', 'GET'))
+  assert.deepEqual((await read.json()).policy.provider_requirements, provider_requirements)
+  assert.equal((await route.PUT(request('user_agent_policy-agent', 'PUT', { ...update, expected_version: saved.version + 1, policy: {} }))).status, 401)
+  for (const requirements of [{ minimum_accepted_completions: 0 }, { minimum_distinct_buyers: 100001 }, { approved_providers: [] }, { benchmark_score: 1 }]) {
+    assert.equal((await route.PUT(request('policy-owner', 'PUT', { ...update, expected_version: saved.version + 1, policy: { provider_requirements: requirements } }))).status, 400)
+  }
+})
