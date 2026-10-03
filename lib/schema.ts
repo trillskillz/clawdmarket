@@ -474,6 +474,35 @@ export const route_plans = sqliteTable('route_plans', {
 ]);
 
 /** Durable pre-checkout candidate attempts. Only one may link an economic order. */
+export const route_payment_mandates = sqliteTable('route_payment_mandates', {
+  id: text('id').primaryKey(),
+  route_id: text('route_id').notNull().unique().references(() => route_plans.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(), route_hash: text('route_hash').notNull(),
+  terms_json: text('terms_json').notNull(),
+  max_aggregate_minor: integer('max_aggregate_minor').notNull(),
+  reserved_minor: integer('reserved_minor').notNull().default(0),
+  state: text('state', { enum: ['active', 'revoked'] }).notNull().default('active'),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  revoked_at: integer('revoked_at', { mode: 'timestamp' }),
+}, (table) => [uniqueIndex('route_payment_mandates_owner_reference_idx').on(table.owner_account_id, table.client_reference)]);
+
+/** Committed with the economic order, before any buyer wallet side effect. */
+export const route_funding_steps = sqliteTable('route_funding_steps', {
+  id: text('id').primaryKey(),
+  mandate_id: text('mandate_id').notNull().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  route_id: text('route_id').notNull().unique().references(() => route_plans.id, { onDelete: 'restrict' }),
+  order_id: text('order_id').notNull().references(() => service_orders.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  amount_minor: integer('amount_minor').notNull(), terms_hash: text('terms_hash').notNull(),
+  state: text('state', { enum: ['reserved', 'funded', 'rejected'] }).notNull().default('reserved'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 export const route_attempts = sqliteTable('route_attempts', {
   id: text('id').primaryKey(),
   route_id: text('route_id').notNull().references(() => route_plans.id, { onDelete: 'restrict' }),

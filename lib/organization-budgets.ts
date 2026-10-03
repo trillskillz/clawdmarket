@@ -143,6 +143,19 @@ export async function organizationBudgetForAgent(agentId: string) {
   return row || null
 }
 
+/** Honor the reservation's immutable cost attribution even if the agent was reassigned. */
+export async function organizationFundingBudgetFailure(trade: typeof trades.$inferSelect, source: Transaction | typeof db = db, now = new Date()) {
+  const [attribution] = await source.select().from(organization_trade_attributions).where(eq(organization_trade_attributions.trade_id, trade.id)).limit(1)
+  if (!attribution) return null
+  const [budget] = await source.select().from(organization_spend_budgets).where(eq(organization_spend_budgets.organization_id, attribution.organization_id)).limit(1)
+  if (!budget) return null
+  if (budget.max_per_execution_minor !== null && attribution.total_minor > budget.max_per_execution_minor) return 'ORGANIZATION_PER_EXECUTION_LIMIT'
+  const usage = await organizationBudgetUsage(attribution.organization_id, now, source)
+  if (budget.max_daily_minor !== null && usage.reserved_or_spent_today_minor > budget.max_daily_minor) return 'ORGANIZATION_DAILY_LIMIT'
+  if (budget.max_monthly_minor !== null && usage.reserved_or_spent_month_minor > budget.max_monthly_minor) return 'ORGANIZATION_MONTHLY_LIMIT'
+  return null
+}
+
 /** Local contention guard; the database transaction and budget check remain authoritative across workers. */
 export async function withOrganizationBuyerLock<T>(agentId: string | null | undefined, buyerId: string, operation: () => Promise<T>) {
   if (!agentId) return withKeyedWriteLock(`buyer-trade:${buyerId}`, operation)

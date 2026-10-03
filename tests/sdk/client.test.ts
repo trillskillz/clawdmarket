@@ -4,6 +4,25 @@ import { ClawdMarketApiError, ClawdMarketClient, ClawdMarketTransportError } fro
 
 const routeId = '00000000-0000-4000-8000-000000000001'
 
+test('client uses canonical mandate paths and keeps authorization separate from reservation', async () => {
+  const calls: Array<{ path: string; method: string; body: unknown }> = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-owner-account-token', baseUrl: 'http://localhost', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : null })
+    assert.equal(init?.redirect, 'error')
+    return Response.json({ mandate: { id: routeId }, route: { id: routeId }, funding_step: null })
+  } })
+  const input = { version: 1 as const, client_reference: 'fixed-mandate-reference', max_aggregate: '1.00', max_per_execution: '1.00', max_retry_budget: '0.00', max_attempts: 1,
+    approved_providers: ['approved-seller'], max_latency_seconds: 30, private_data: 'selected_provider_only' as const, expires_at: '2027-01-01T00:00:00.000Z',
+    payment: { rail: 'evm' as const, chain_id: 8453, token_address: `0x${'44'.repeat(20)}`, payer_address: `0x${'11'.repeat(20)}`, treasury_address: `0x${'99'.repeat(20)}`,
+      minimum_token_reserve_units: '1000000', minimum_native_reserve_wei: '100000', max_gas_cost_wei: '20000' } }
+  await client.createRouteMandate(routeId, input)
+  await client.getRouteMandate(routeId)
+  await client.executeAuthorizedRoute(routeId, routeId)
+  await client.revokeRouteMandate(routeId)
+  assert.deepEqual(calls, [{ path: `/api/routes/${routeId}/mandate`, method: 'POST', body: input }, { path: `/api/routes/${routeId}/mandate`, method: 'GET', body: null },
+    { path: `/api/routes/${routeId}/execute`, method: 'POST', body: { mandate_id: routeId } }, { path: `/api/routes/${routeId}/mandate`, method: 'DELETE', body: null }])
+})
+
 test('client plans and reserves one unpaid route without issuing a funding request', async () => {
   const requests: Array<{ path: string; method: string; auth: string | null; body: unknown }> = []
   const responses = [

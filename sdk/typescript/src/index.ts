@@ -1,6 +1,15 @@
 export type ProviderRequirements = { approved_providers?: string[]; minimum_accepted_completions?: number; minimum_distinct_buyers?: number }
 
 export type Money = { amount: string; currency: 'USD' }
+export type RouteMandateInput = { version: 1; client_reference: string; max_aggregate: string; max_per_execution: string; max_retry_budget: string; max_attempts: number;
+  approved_providers: string[]; max_latency_seconds: number; private_data: 'selected_provider_only'; expires_at: string;
+  payment: { rail: 'evm' | 'mpp'; chain_id: number; token_address: string; payer_address: string; treasury_address: string;
+    minimum_token_reserve_units: string; minimum_native_reserve_wei: string; max_gas_cost_wei: string } }
+export type RouteMandate = { id: string; route_id: string; buyer_id: string; client_reference: string; route_hash: string; terms_hash: string;
+  terms: Omit<RouteMandateInput, 'client_reference'> & { token_decimals: number; token_usd_price: number };
+  state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: false }
+export type RouteFundingStep = { id: string; mandate_id: string; route_id: string; order_id: string; trade_id: string; amount_minor: number; terms_hash: string;
+  state: 'reserved' | 'funded' | 'rejected'; created_at: string; updated_at: string }
 
 export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'assertions' | 'source_evidence' | 'isolated_checks'
 export type IsolatedCheckPolicy = { version: 1; adapter: 'javascript_tests_v1' | 'javascript_static_v1'; verifier_agent_id: string; suite_sha256: string; max_runtime_seconds: number }
@@ -239,6 +248,13 @@ export class ClawdMarketClient {
 
   /** Reserves one unpaid service order and returns explicit checkout instructions. */
   executeRoute(routeId: string, options?: RequestOptions) { return this.request<ExecutedRoute>('POST', `${routePath(routeId)}/execute`, undefined, options) }
+
+  /** Owner account credential required; authorization creates no order or payment. */
+  createRouteMandate(routeId: string, input: RouteMandateInput, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; idempotent: boolean }>('POST', `${routePath(routeId)}/mandate`, input, options) }
+  getRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; funding_step: RouteFundingStep | null }>('GET', `${routePath(routeId)}/mandate`, undefined, options) }
+  revokeRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; idempotent: boolean }>('DELETE', `${routePath(routeId)}/mandate`, undefined, options) }
+  /** Atomically reserves one unpaid checkout and mandate exposure; does not sign or send. */
+  executeAuthorizedRoute(routeId: string, mandateId: string, options?: RequestOptions) { return this.request<ExecutedRoute>('POST', `${routePath(routeId)}/execute`, { mandate_id: mandateId }, options) }
 
   getRoute(routeId: string, options?: RequestOptions) { return this.request<RouteSnapshot>('GET', routePath(routeId), undefined, options) }
 

@@ -42,6 +42,8 @@ export const REQUIRED_DATABASE_SCHEMA = {
   worker_heartbeats: ['worker_name', 'last_started_at', 'last_succeeded_at', 'last_failed_at', 'last_outcome'],
   route_plans: ['id', 'buyer_id', 'client_reference', 'objective', 'required_capabilities', 'input_json', 'max_budget_minor', 'currency', 'deadline_seconds', 'verification_policy', 'payment_policy', 'retry_policy', 'provider_requirements_json', 'candidates_json', 'state', 'service_order_id', 'created_at', 'expires_at', 'updated_at'],
   route_attempts: ['id', 'route_id', 'attempt_number', 'service_id', 'state', 'failure_code', 'service_order_id', 'created_at', 'updated_at'],
+  route_payment_mandates: ['id', 'route_id', 'buyer_id', 'owner_account_id', 'client_reference', 'request_hash', 'route_hash', 'terms_json', 'max_aggregate_minor', 'reserved_minor', 'state', 'expires_at', 'created_at', 'revoked_at'],
+  route_funding_steps: ['id', 'mandate_id', 'route_id', 'order_id', 'trade_id', 'amount_minor', 'terms_hash', 'state', 'created_at', 'updated_at'],
   workflows: ['id', 'buyer_id', 'client_reference', 'objective', 'plan_json', 'max_budget_minor', 'currency', 'deadline_seconds', 'state', 'created_at', 'updated_at'],
   workflow_nodes: ['id', 'workflow_id', 'node_key', 'objective', 'required_capabilities', 'depends_on', 'budget_minor', 'deadline_seconds', 'depth', 'state', 'route_id', 'created_at'],
   trades: [

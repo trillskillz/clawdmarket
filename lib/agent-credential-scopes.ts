@@ -52,6 +52,8 @@ export function requiredAgentCredentialScope(request: NextRequest): AgentCredent
     || /^\/api\/services\/[^/]+\/orders$/.test(pathname)
     || pathname.includes('/fund')
     || pathname.endsWith('/confirm')
+    || /^\/api\/routes\/[^/]+\/execute$/.test(pathname)
+    || /^\/api\/routes\/[^/]+\/mandate$/.test(pathname)
   ) {
     return 'payments:write'
   }

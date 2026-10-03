@@ -13,6 +13,7 @@ import { findAcceptedToken, getPaymentReadiness } from '@/lib/payment-config'
 import { walletAuthOrigin } from '@/lib/wallet-auth'
 import { PAYMENT_TX_HASH } from '@/lib/evm-payment-proof'
 import { getNewPaymentControl, NEW_PAYMENTS_PAUSED_MESSAGE } from '@/lib/payment-control'
+import { mandateFundingEligibility } from '@/lib/route-payment-mandate'
 
 export const dynamic = 'force-dynamic'
 type Context = { params: Promise<{ id: string }> }
@@ -69,7 +70,8 @@ export async function POST(request: NextRequest, context: Context) {
         return json({ error: 'This reservation is closed. Do not send payment.', code: 'CHECKOUT_CLOSED' }, 409)
       }
       if (sendAllowed) {
-        const reason = await serviceFundingEligibility(trade, tx)
+        const reason = await mandateFundingEligibility(trade, tx, { rail: 'evm', chainId, tokenAddress: body.token_address, payerAddress: body.payer_address, treasuryAddress: treasury })
+          || await serviceFundingEligibility(trade, tx)
         if (reason) throw new TradeFundingError(`Provider no longer satisfies checkout requirements: ${reason}; do not pay`, 409, 'PROVIDER_ELIGIBILITY_CHANGED')
       }
       const tokenAmount = parseUnits((trade.total_cost / token.fixedUsdPrice).toFixed(token.decimals), token.decimals)

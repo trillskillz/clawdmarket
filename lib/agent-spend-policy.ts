@@ -80,6 +80,15 @@ export async function getAgentSpendSnapshot(agentId: string, buyerId = `user_age
   };
 }
 
+/** The trade already counts in exposure; funding rechecks current deployment ceilings once. */
+export async function agentFundingPolicyFailure(trade: typeof trades.$inferSelect, source: Transaction | typeof db = db, now = new Date()) {
+  if (!trade.buyer_id.startsWith('user_agent_')) return null
+  const limits = getAgentSpendLimits()
+  if (trade.total_cost > limits.perTrade) return 'AGENT_PER_TRADE_LIMIT'
+  if (await spentSince(source, trade.buyer_id, windowStart(now)) > limits.daily) return 'AGENT_DAILY_SPEND_LIMIT'
+  return null
+}
+
 export async function enforceAgentSpendPolicy(
   tx: Transaction,
   input: { agentId: string; buyerId: string; totalCost: number; now?: Date } & Omit<SpendContext, 'totalMinor'>,

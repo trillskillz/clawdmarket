@@ -12,6 +12,9 @@ import { serviceSupportsRoute, storedServiceCapabilities } from './route-service
 import { checkServiceInput } from './verification-policy'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 import { isolatedVerifierEligibility } from './isolated-verifier-eligibility'
+import { mandateFundingEligibility } from './route-payment-mandate'
+import { agentFundingPolicyFailure } from './agent-spend-policy'
+import { organizationFundingBudgetFailure } from './organization-budgets'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -35,6 +38,12 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     .where(eq(service_orders.trade_id, trade.id)).limit(1)
   if (!linked) return null // Listing/task checkouts retain their existing contract.
   try {
+    const mandateReason = await mandateFundingEligibility(trade, source)
+    if (mandateReason) return mandateReason
+    const deploymentReason = await agentFundingPolicyFailure(trade, source)
+    if (deploymentReason) return deploymentReason
+    const organizationReason = await organizationFundingBudgetFailure(trade, source)
+    if (organizationReason) return organizationReason
     const { order, service } = linked
     if (!service) return 'SERVICE_UNAVAILABLE'
     const agreed = serviceExecutionContract(order, service)
