@@ -350,3 +350,7 @@ Next: explicit Tempo fee-token/reserve terms, privately pinned durable exact pul
 ## Protected payment reserve preflight — 2026-10-03
 
 Read-only run [37141148900](https://github.com/trillskillz/clawdmarket/actions/runs/37141148900) passed the settlement-gas-reserve step, then stopped before any wallet side effect: configured Base canary buyer has **0.005573 USDC**, below the **0.01 USDC** minimum, with **0.002753001248135033 ETH**. No funds were spent or moved. Save the new live deposit/credit purchase proof until a dedicated buyer has sufficient USDC beyond normal-site reserves; do not fund it from settlement/backing wallets. This follows the user's instruction to save an unfunded run for later.
+
+## Final local release gates
+
+Final production build passed. Complete Chromium browser/API matrix passed **39 tests, three retired legacy journeys skipped**. The matrix verifies actual HTTP empty-body route execution, exclusion of historical credit from spendable totals, desktop/mobile navigation, deposit recovery across a lost wallet response/reload with exactly one send, and existing onboarding/auth/dashboard/marketplace flows. Required predeploy remains **416 passed, eight skipped**; real isolation separately **2/2**. One capability PR contains the implementation, previous saved local work, native contract and migration. Global routing stays closed and P0.5 remains unfinished.
