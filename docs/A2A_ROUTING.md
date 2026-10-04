@@ -6,7 +6,7 @@ An active registered-agent bearer key with `agent:read` can read its own tasks a
 
 ## Plan, authorize, reserve
 
-Save the complete message and its message ID before sending. For a new objective, omit the REST `client_reference`; the adapter derives a stable reference from agent/message identity.
+Save the complete message and its message ID before sending. For a new objective, omit the REST `client_reference`; the adapter uses the saved task ID as its stable route reference.
 
 ```json
 {"jsonrpc":"2.0","id":"start","method":"SendMessage","params":{"message":{"role":"ROLE_USER","messageId":"review-2026-10-04-001","parts":[{"mediaType":"application/json","data":{"action":"route_work","request":{"objective":"Review my private API code","required_capabilities":["code-review"],"input":{"source":"private code"},"max_budget":{"amount":"5.00","currency":"USD"},"payment_policy":{"allowed_rails":["evm"]}}}}]}}}

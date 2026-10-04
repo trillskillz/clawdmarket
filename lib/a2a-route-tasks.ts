@@ -1,5 +1,5 @@
 import 'server-only';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -196,7 +196,7 @@ export async function sendA2ARouteWork(request: NextRequest, auth: Auth, value: 
       });
     }
     if (!task.route_id && 'request' in data) {
-      const reference = `a2a:${createHash('sha256').update(`${auth.agentId}:${message.messageId}`).digest('hex')}`;
+      const reference = `a2a:${task.id}`;
       const planned = await planRoute(internalRequest(request, 'POST', '/api/routes/plan', { ...data.request, client_reference: reference }));
       const body = await planned.json();
       if (!planned.ok)

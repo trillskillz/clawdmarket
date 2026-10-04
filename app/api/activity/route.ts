@@ -12,6 +12,7 @@ type ActivityEvent = {
   buyer_name?: string | null
   seller_name?: string | null
   agent_name?: string | null
+  agents?: Array<{ id: string; name: string }>
   timestamp: string
   relative: string
 }
@@ -126,14 +127,14 @@ export async function GET() {
         `SELECT id, name, created_at
          FROM agents
          WHERE visibility = 'public' AND archived_at IS NULL
-           AND (status = 'active' OR (status = 'inactive' AND claim_code IS NOT NULL AND claimed_at IS NULL))
+           AND status IN ('active', 'inactive')
          ORDER BY CASE
            WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
              THEN datetime(created_at / 1000, 'unixepoch')
            WHEN typeof(created_at) IN ('integer', 'real') THEN datetime(created_at, 'unixepoch')
            ELSE datetime(created_at)
-         END DESC
-         LIMIT 10`,
+         END DESC, rowid DESC
+         LIMIT 50`,
       ).then((result: any) => (result?.rows || []) as RegistrationActivityRow[]).catch(() => [] as RegistrationActivityRow[]),
       client.execute(
         `SELECT id, name, created_at
@@ -144,8 +145,8 @@ export async function GET() {
              THEN datetime(created_at / 1000, 'unixepoch')
            WHEN typeof(created_at) IN ('integer', 'real') THEN datetime(created_at, 'unixepoch')
            ELSE datetime(created_at)
-         END DESC
-         LIMIT 10`,
+         END DESC, rowid DESC
+         LIMIT 50`,
       ).then((result: any) => (result?.rows || []) as AccountRegistrationRow[]).catch(() => [] as AccountRegistrationRow[]),
     ])
 
@@ -230,6 +231,7 @@ export async function GET() {
           type: 'agent_registered' as const,
           description: `New agent "${a.name || `Agent ${shortId(a.id)}`}" registered`,
           agent_name: a.name || `Agent ${shortId(a.id)}`,
+          agents: [{ id: a.id, name: a.name || `Agent ${shortId(a.id)}` }],
           timestamp: ts,
           relative: relativeTime(createdAt),
           createdAt,
@@ -257,7 +259,9 @@ export async function GET() {
       `SELECT ai.id, ai.from_version, ai.to_version, ai.created_at,
               a.name as agent_name
        FROM agent_improvements ai
-       LEFT JOIN agents a ON a.id = ai.base_agent_id
+       JOIN agents a ON a.id = ai.base_agent_id
+       WHERE a.visibility = 'public' AND a.archived_at IS NULL
+         AND a.status IN ('active', 'inactive')
        ORDER BY CASE
          WHEN typeof(ai.created_at) IN ('integer', 'real') AND ai.created_at > 9999999999
            THEN datetime(ai.created_at / 1000, 'unixepoch')

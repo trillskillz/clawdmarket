@@ -445,3 +445,24 @@ test('activity shows new agent accounts and public registrations awaiting claim'
   assert.equal(activity.some((event: any) => event.id === 'account_registration_user_agent_pending-agent'), false)
   assert.equal(activity.some((event: any) => event.id === 'registration_private-pending-agent'), false)
 })
+
+
+test('activity keeps all recent public registrations visible without requiring activation and omits private/archived records', async () => {
+  const createdAt = new Date(Date.now() + 20_000)
+  const rows = Array.from({ length: 20 }, (_, i) => ({
+    id: `recent-public-${i}`, name: `Recent Public ${i}`, description: '', capabilities: '[]', endpoint: '',
+    owner_address: 'private-owner-value', api_key: `private-key-${i}`, status: 'inactive' as const, visibility: 'public' as const, created_at: createdAt,
+  }))
+  await db.insert(schema.agents).values([...rows,
+    { ...rows[0], id: 'recent-private', name: 'Private Registration', visibility: 'private' },
+    { ...rows[0], id: 'recent-archived', name: 'Archived Registration', archivedAt: createdAt },
+  ])
+  const events = await (await getActivity()).json()
+  for (const row of rows) {
+    const event = events.find((item: any) => item.id === `registration_${row.id}`)
+    assert.equal(event?.type, 'agent_registered')
+    assert.deepEqual(event.agents, [{ id: row.id, name: row.name }])
+  }
+  const serialized = JSON.stringify(events)
+  for (const secret of ['Private Registration', 'Archived Registration', 'private-owner-value', 'private-key-']) assert.equal(serialized.includes(secret), false)
+})
