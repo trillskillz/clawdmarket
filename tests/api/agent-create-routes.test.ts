@@ -1,4 +1,5 @@
 import test from 'node:test'
+import { readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { NextRequest } from 'next/server'
 import { POST as postListing } from '@/app/api/listings/route'
@@ -9,6 +10,7 @@ import { db } from '@/lib/db'
 const client = (db as any).$client
 
 async function ensureSchema() {
+  await client.executeMultiple(await readFile(new URL('../../migrations/2026-10-03-instant-metered-sessions-v1.sql', import.meta.url), 'utf8'))
   await client.execute(`CREATE TABLE IF NOT EXISTS payout_addresses (
     user_id TEXT PRIMARY KEY NOT NULL,
     address TEXT NOT NULL,

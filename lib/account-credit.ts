@@ -2,7 +2,7 @@ import { creditDepositMessage as depositMessage } from './credit-proof'
 import 'server-only'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db'
-import { credit_accounts, credit_deposits, credit_entries, payment_receipts, agent_owners, agents } from './schema'
+import { credit_accounts, credit_deposits, credit_entries, payment_receipts, agent_owners, agents, instant_sessions } from './schema'
 import { explicitRpcUrl, getPaymentReadiness } from './payment-config'
 import { SettlementError, verifyIncomingErc20Payment } from './external-settlement'
 import { createPublicClient, http, verifyMessage, type Address, type Hash, type Hex } from 'viem'
@@ -21,7 +21,7 @@ export async function creditBalance(userId: string, source: Tx | typeof db = db)
   const [account] = await source.select().from(credit_accounts).where(eq(credit_accounts.user_id, userId)).limit(1)
   return { available_minor: account?.available_minor ?? 0, escrow_minor: account?.escrow_minor ?? 0, currency: 'USD', rail: 'credit' }
 }
-async function change(tx: Tx, userId: string, reference: string, kind: string, available: number, escrow: number) {
+export async function changeCredit(tx: Tx, userId: string, reference: string, kind: string, available: number, escrow: number) {
   if (![available, escrow].every(Number.isSafeInteger)) throw new CreditError('INVALID_AMOUNT', 'Credit amounts must be whole cents')
   await tx.insert(credit_accounts).values({ user_id: userId }).onConflictDoNothing()
   const rows = await tx.update(credit_accounts).set({
@@ -31,6 +31,7 @@ async function change(tx: Tx, userId: string, reference: string, kind: string, a
   if (!rows.length) throw new CreditError('INSUFFICIENT_CREDIT', 'Insufficient deposited account credit', 402)
   await tx.insert(credit_entries).values({ user_id: userId, reference, kind, available_delta: available, escrow_delta: escrow })
 }
+const change = changeCredit
 export async function reserveCredit(tx: Tx, args: { id: string; buyer: string; feeRecipient: string; total: number; seller: number; fee: number }) {
   if (args.total !== args.seller + args.fee || args.seller <= 0 || args.fee < 0) throw new CreditError('INVALID_AMOUNT', 'Invalid credit reservation')
   await change(tx, args.buyer, args.id, 'purchase', -args.total, args.seller)
@@ -117,6 +118,11 @@ export async function fundOwnedAgent(userId: string, agentId: string, minor: num
   }))
 }
 export { SettlementError }
+
+export async function instantCreditBalance(userId: string, source: Tx | typeof db = db) {
+  const [row] = await source.select({ balance: sql<number>`COALESCE(SUM(${instant_sessions.balance_minor}), 0)`, held: sql<number>`COALESCE(SUM(${instant_sessions.held_minor}), 0)` }).from(instant_sessions).where(eq(instant_sessions.buyer_id, userId))
+  return { prepaid_minor: Number(row.balance), held_minor: Number(row.held), currency: 'USD' as const, rail: 'credit' as const }
+}
 
 async function creditWrite<T>(operation: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {

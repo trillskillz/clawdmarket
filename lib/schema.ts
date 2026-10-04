@@ -1450,3 +1450,46 @@ export const credit_deposits = sqliteTable('credit_deposits', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
 }, (t) => [uniqueIndex('credit_deposits_reference_idx').on(t.user_id, t.client_reference), uniqueIndex('credit_deposits_hash_idx').on(t.tx_hash), check('credit_deposits_positive', sql`${t.amount_minor} > 0`)]);
+
+/** Instant calls use prepaid session balances, never contracted trades or trade escrow. */
+export const instant_services = sqliteTable('instant_services', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  title: text('title').notNull(), capabilities: text('capabilities').notNull(),
+  input_schema: text('input_schema').notNull(), output_schema: text('output_schema').notNull(),
+  unit_price_minor: integer('unit_price_minor').notNull(), max_concurrency: integer('max_concurrency').notNull(),
+  deadline_seconds: integer('deadline_seconds').notNull(),
+  status: text('status', { enum: ['active', 'paused'] }).notNull().default('active'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, t => [check('instant_service_bounds', sql`${t.unit_price_minor} BETWEEN 1 AND 100 AND ${t.max_concurrency} BETWEEN 1 AND 100 AND ${t.deadline_seconds} BETWEEN 1 AND 60`)]);
+export const instant_sessions = sqliteTable('instant_sessions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  service_id: text('service_id').notNull().references(() => instant_services.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), contract_json: text('contract_json').notNull(),
+  budget_minor: integer('budget_minor').notNull(), balance_minor: integer('balance_minor').notNull(),
+  held_minor: integer('held_minor').notNull().default(0), spent_minor: integer('spent_minor').notNull().default(0),
+  refunded_minor: integer('refunded_minor').notNull().default(0),
+  status: text('status', { enum: ['open', 'closing', 'closed'] }).notNull().default('open'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  closed_at: integer('closed_at', { mode: 'timestamp' }),
+}, t => [uniqueIndex('instant_session_reference').on(t.buyer_id, t.client_reference),
+  index('instant_session_expiry').on(t.status, t.expires_at),
+  check('instant_session_conservation', sql`${t.budget_minor} BETWEEN 1 AND 10000 AND ${t.balance_minor} >= 0 AND ${t.held_minor} >= 0 AND ${t.held_minor} <= ${t.balance_minor} AND ${t.spent_minor} >= 0 AND ${t.refunded_minor} >= 0 AND ${t.budget_minor} = ${t.balance_minor} + ${t.spent_minor} + ${t.refunded_minor}`)]);
+export const instant_calls = sqliteTable('instant_calls', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  session_id: text('session_id').notNull().references(() => instant_sessions.id, { onDelete: 'restrict' }),
+  service_id: text('service_id').notNull().references(() => instant_services.id, { onDelete: 'restrict' }),
+  seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), input_json: text('input_json').notNull(),
+  input_hash: text('input_hash').notNull(), unit_price_minor: integer('unit_price_minor').notNull(),
+  state: text('state', { enum: ['pending', 'claimed', 'completed', 'failed'] }).notNull().default('pending'),
+  lease_token_hash: text('lease_token_hash'), output_json: text('output_json'), receipt_json: text('receipt_json'),
+  failure_code: text('failure_code'), created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  deadline_at: integer('deadline_at', { mode: 'timestamp' }).notNull(),
+  completed_at: integer('completed_at', { mode: 'timestamp' }),
+}, t => [uniqueIndex('instant_call_reference').on(t.session_id, t.client_reference),
+  index('instant_call_worker').on(t.seller_id, t.state, t.deadline_at),
+  index('instant_call_capacity').on(t.service_id, t.state),
+  check('instant_call_receipt', sql`(${t.state} = 'completed' AND ${t.receipt_json} IS NOT NULL AND ${t.output_json} IS NOT NULL) OR (${t.state} != 'completed' AND ${t.receipt_json} IS NULL AND ${t.output_json} IS NULL)`)]);

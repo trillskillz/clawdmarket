@@ -1,3 +1,8 @@
+export type InstantSessionRequest = { client_reference: string; budget_minor: number; expected_unit_price_minor: number; expires_in_seconds: number; acceptance: 'schema_v1'; payment_rail: 'credit' }
+export type InstantReceipt = { version: 1; id: string; call_id: string; session_id: string; service_id: string; buyer_id: string; seller_id: string; units: 1; amount_minor: number; currency: 'USD'; payment_rail: 'credit'; metering: 'one_successful_call'; verification: 'schema_v1'; input_sha256: string; output_sha256: string; settled_at: string }
+export type InstantSession = { id: string; service_id: string; buyer_id: string; budget_minor: number; balance_minor: number; held_minor: number; spent_minor: number; refunded_minor: number; available_budget_minor: number; status: 'open' | 'closing' | 'closed'; expires_at: string; contract: Record<string, unknown> }
+export type InstantCall = { id: string; session_id: string; state: 'pending' | 'claimed' | 'completed' | 'failed'; input: Record<string, unknown>; output: Record<string, unknown> | null; receipt: InstantReceipt | null; deadline_at: string; failure_code: string | null }
+
 export type ProviderRequirements = { approved_providers?: string[]; minimum_accepted_completions?: number; minimum_distinct_buyers?: number }
 
 export type Money = { amount: string; currency: 'USD' }
@@ -236,6 +241,11 @@ function object(value: unknown): Record<string, unknown> {
 
 function text(value: unknown, fallback: string) { return typeof value === 'string' && value ? value : fallback }
 
+function instantId(id: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new TypeError('instant ID must be a UUID')
+  return id
+}
+
 function tradePath(tradeId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(tradeId)) throw new TypeError('tradeId must be a UUID')
   return `/api/trades/${tradeId}`
@@ -260,7 +270,7 @@ function delay(ms: number, signal?: AbortSignal) {
   })
 }
 
-/** A route execution reserves one unpaid checkout. This client never sends payment automatically. */
+/** Route execution reserves an unpaid checkout; explicit instant funding spends deposited credit. The client never broadcasts wallet transfers. */
 export class ClawdMarketClient {
   private readonly base: URL
   private readonly fetcher: typeof fetch
@@ -295,7 +305,7 @@ export class ClawdMarketClient {
     return payload as T
   }
 
-  getAccountBalance(agentId?: string, options?: RequestOptions) { return this.request<{ account_id: string; available: number; escrow: number; credit: { available_minor: number; escrow_minor: number }; historical_credit: { spendable: false } }>('GET', `/api/wallet${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''}`, undefined, options) }
+  getAccountBalance(agentId?: string, options?: RequestOptions) { return this.request<{ account_id: string; available: number; escrow: number; credit: { available_minor: number; escrow_minor: number }; instant_credit: { prepaid_minor: number; held_minor: number }; historical_credit: { spendable: false } }>('GET', `/api/wallet${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''}`, undefined, options) }
   getConnectedWalletBalances(address: string, options?: RequestOptions) { return this.request<{ address: string; balances: Array<{ chain_id: number; symbol: string; status: 'available' | 'unavailable'; amount: string | null; amount_raw: string | null }> }>('GET', `/api/wallet/balances?address=${encodeURIComponent(address)}`, undefined, options) }
   /** Persist client_reference before calling. Only a fresh created intent permits one transfer; this method never sends. */
   createAccountDeposit(input: { amount_minor: number; payer: string; client_reference: string }, options?: RequestOptions) { return this.request<{ deposit: AccountDeposit }>('POST', '/api/wallet/deposits', input, options) }
@@ -305,6 +315,19 @@ export class ClawdMarketClient {
   fundOwnedAgent(input: { agent_id: string; amount_minor: number; client_reference: string }, options?: RequestOptions) { return this.request<{ idempotent: boolean; balance: { available_minor: number; escrow_minor: number } }>('POST', '/api/wallet/transfers', input, options) }
   buyWithAccountCredit(listingId: string, clientReference: string, options?: RequestOptions) { return this.request<{ trade: { id: string; status: string; payment_rail: 'credit' } }>('POST', '/api/trades', { listing_id: listingId, amount: 1, payment_rail: 'credit', client_reference: clientReference }, options) }
   orderServiceWithAccountCredit(serviceId: string, input: { client_reference: string; objective: string; input?: Record<string, unknown>; max_total?: string; expected_price?: string }, options?: RequestOptions) { return this.request<{ order: Record<string, unknown>; trade: Record<string, unknown> }>('POST', `/api/services/${encodeURIComponent(serviceId)}/orders`, { ...input, payment_rail: 'credit' }, options) }
+
+  listInstantServices(options?: RequestOptions) { return this.request<{ services: Record<string, unknown>[] }>('GET', '/api/instant/services', undefined, options) }
+  /** Spending action: persist the buyer reference and explicitly accept schema_v1 before funding. */
+  openInstantSession(serviceId: string, input: InstantSessionRequest, options?: RequestOptions) { return this.request<{ session: InstantSession; idempotent: boolean }>('POST', `/api/instant/services/${instantId(serviceId)}/sessions`, input, options) }
+  getInstantSession(sessionId: string, options?: RequestOptions) { return this.request<{ session: InstantSession }>('GET', `/api/instant/sessions/${instantId(sessionId)}`, undefined, options) }
+  closeInstantSession(sessionId: string, options?: RequestOptions) { return this.request<{ session: InstantSession }>('POST', `/api/instant/sessions/${instantId(sessionId)}`, { action: 'close' }, options) }
+  /** Reserves one unit only. A returned call can be pending, completed or terminally failed on replay. */
+  callInstantService(sessionId: string, input: { client_reference: string; input: Record<string, unknown> }, options?: RequestOptions) { return this.request<{ call: InstantCall; idempotent: boolean }>('POST', `/api/instant/sessions/${instantId(sessionId)}/calls`, input, options) }
+  getInstantCall(callId: string, options?: RequestOptions) { return this.request<{ call: InstantCall }>('GET', `/api/instant/calls/${instantId(callId)}`, undefined, options) }
+  listInstantProviderCalls(options?: RequestOptions) { return this.request<{ calls: Array<{ id: string; state: 'pending' | 'claimed'; deadline_at: string }> }>('GET', '/api/instant/calls', undefined, options) }
+  /** Save a random worker token before claiming; reuse exactly that token on recovery. */
+  claimInstantCall(callId: string, leaseToken: string, options?: RequestOptions) { return this.request<{ call: InstantCall }>('POST', `/api/instant/calls/${instantId(callId)}/claim`, { lease_token: leaseToken }, options) }
+  completeInstantCall(callId: string, input: { outcome: 'completed'; lease_token: string; output: Record<string, unknown> } | { outcome: 'failed'; lease_token: string }, options?: RequestOptions) { return this.request<{ call: InstantCall; idempotent: boolean }>('POST', `/api/instant/calls/${instantId(callId)}/result`, input, options) }
 
   /** Nonbinding persisted plan. Safe to replay with the same client_reference. */
   planRoute(input: RouteRequest, options?: RequestOptions) { return this.request<PlannedRoute>('POST', '/api/routes/plan', input, options) }

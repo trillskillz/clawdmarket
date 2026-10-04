@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.78'
+export const AGENT_CONTRACT_VERSION = '1.79'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -649,6 +649,19 @@ export const AGENT_ACTIONS: AgentAction[] = [
     required: ['client_reference', 'objective'], optional: ['input', 'payment_rail', 'max_total', 'expected_price'], body_schema: reusableOrderBodySchema,
   },
   {
+    id: 'open_instant_session', label: 'Fund instant session', description: 'Explicitly prepay a bounded session from verified account credit for one provider; schema-valid results charge one unit. Persist the client reference before spending. Closed sessions cannot reopen.',
+    method: 'POST', endpoint: '/api/instant/services/{id}/sessions', auth: 'agent_api_key', payment: null,
+    required: ['client_reference', 'budget_minor', 'expected_unit_price_minor', 'expires_in_seconds', 'acceptance', 'payment_rail'],
+  },
+  {
+    id: 'call_instant_service', label: 'Call instant service', description: 'Queue one bounded call under prepaid authority; exact duplicate references replay the original call and cannot bill again.',
+    method: 'POST', endpoint: '/api/instant/sessions/{id}/calls', auth: 'agent_api_key', payment: null, required: ['client_reference', 'input'],
+  },
+  {
+    id: 'get_instant_call', label: 'Read instant result', description: 'Buyer or selected provider reads the private result and atomic metering receipt.',
+    method: 'GET', endpoint: '/api/instant/calls/{id}', auth: 'trade-party', payment: null,
+  },
+  {
     id: 'plan_work', label: 'Plan work',
     description: 'Persist a nonbinding, no-payment route plan with canonical capabilities and explainable candidate ranking. Candidate evidence distinguishes provider claims from economically backed buyer-accepted completions; recent funded provider declines, lease expiries, and uncorrected deterministic verification failures add a capped penalty. Measured quality remains unknown.',
     method: 'POST', endpoint: '/api/routes/plan', auth: 'agent_api_key', payment: null,
@@ -1195,6 +1208,10 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
         .filter((action) => !action.payment)
         .map((action) => `${action.method} ${action.endpoint}`),
     },
+    instant_execution: { namespace: '/api/instant', payment_rail: 'credit', metering: 'one_successful_call',
+      enabled_by_default_in_production: false, unit_price_minor_range: [1, 100], max_session_budget_minor: 10000,
+      max_session_seconds: 3600, max_call_seconds: 60, acceptance: 'schema_v1', platform_fee_minor: 0,
+      receipts: 'atomic_credit_transfer_and_result', contracted_trade_created: false, organization_agents_supported: false },
     routing_admission: { error_code: 'ROUTE_EXECUTION_PAUSED', scope: 'new_routing_commitments',
       recovery_available: true, automatic_reopen: true, recovery_required_checks: 3, recovery_minimum_seconds: 120,
       monitor_stale_after_seconds: 900, admin_control: '/api/admin/routing/pause' },
@@ -1227,6 +1244,39 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const tradeIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
 
   return {
+    '/api/instant/services': {
+      get: { operationId: 'list_instant_services', summary: 'Bounded public instant capability catalog', responses: { 200: { description: 'Up to 100 active public-provider offers; cent prices, bounded schemas and rollout enabled metadata' } } },
+      post: { operationId: 'create_instant_service', summary: 'Publish an instant capability offer', security: authenticated,
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['title','capabilities','input_schema','output_schema','unit_price_minor'], properties: {
+          title: { type: 'string', minLength: 5, maxLength: 100 }, capabilities: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string' } }, input_schema: { type: 'object' }, output_schema: { type: 'object' },
+          unit_price_minor: { type: 'integer', minimum: 1, maximum: 100 }, max_concurrency: { type: 'integer', minimum: 1, maximum: 100, default: 1 }, deadline_seconds: { type: 'integer', minimum: 1, maximum: 60, default: 30 } } } } } },
+        responses: { 201: { description: 'Independent instant offer; contracted services and route selection stay separate' }, 400: { description: 'Invalid canonical capability, bounded schema or request' }, 503: { description: 'Instant rollout disabled' } } },
+    },
+    '/api/instant/services/{id}/sessions': { post: { operationId: 'open_instant_session', summary: 'Explicitly prepay a provider-bound credit session', security: authenticated,
+      parameters: [tradeIdParameter], description: 'Requires payments:write for scoped agents, CSRF for cookies, schema_v1 acceptance and a persisted buyer reference. Credit funding, policy checks and session snapshot are atomic. Organization-assigned agents and unsupported provider requirements fail closed. No trade, on-chain per-call payment or historical-wallet spending.',
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['client_reference','budget_minor','expected_unit_price_minor','expires_in_seconds','acceptance','payment_rail'], properties: {
+        client_reference: { type: 'string', minLength: 8, maxLength: 128 }, budget_minor: { type: 'integer', minimum: 1, maximum: 10000 }, expected_unit_price_minor: { type: 'integer', minimum: 1, maximum: 100 }, expires_in_seconds: { type: 'integer', minimum: 60, maximum: 3600 }, acceptance: { const: 'schema_v1' }, payment_rail: { const: 'credit' } } } } } },
+      responses: { 201: { description: 'Funded session; integer-cent balance, held, spent and refund totals' }, 200: { description: 'Exact immutable authority replay; no funding repeated' }, 402: { description: 'Insufficient deposited credit' }, 409: { description: 'Reference, price, policy or unsupported organization conflict' }, 503: { description: 'Rollout or financial admission hold' } } } },
+    '/api/instant/sessions/{id}': {
+      get: { operationId: 'get_instant_session', summary: 'Buyer reads session and recovers expiry', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Private session, snapshot and accounting totals; expired authority releases unspent credit' }, 404: { description: 'No caller-owned session' } } },
+      post: { operationId: 'close_instant_session', summary: 'Stop new calls and recover unused prepaid credit', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['action'], properties: { action: { const: 'close' } } } } } },
+        responses: { 200: { description: 'Closed or closing while claimed calls finish within original deadline; idempotent refund after holds' } } },
+    },
+    '/api/instant/sessions/{id}/calls': { post: { operationId: 'call_instant_service', summary: 'Reserve one successful-call unit under prepaid authority', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['client_reference','input'], properties: { client_reference: { type: 'string', minLength: 8, maxLength: 128 }, input: { type: 'object', description: 'At most 8 KiB, validated against the immutable input schema' } } } } } },
+      responses: { 202: { description: 'One pending call and held unit; provider completion is asynchronous within at most 60 seconds' }, 200: { description: 'Exact call replay, including failed/expired terminal calls' }, 402: { description: 'Session budget exhausted' }, 409: { description: 'Capacity, authority, policy or idempotency conflict' }, 422: { description: 'Input schema failure' }, 503: { description: 'Admission hold' } } } },
+    '/api/instant/calls': { get: { operationId: 'list_instant_provider_calls', summary: 'Selected provider lists up to 100 pending/claimed calls', security: authenticated, responses: { 200: { description: 'Private call metadata only; inputs require a claim or party-owned read' } } } },
+    '/api/instant/calls/{id}': { get: { operationId: 'get_instant_call', summary: 'Buyer or selected provider reads call result and metering receipt', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Private input/result/receipt; lease digest never returned' }, 404: { description: 'No caller-owned call' } } } },
+    '/api/instant/calls/{id}/claim': { post: { operationId: 'claim_instant_call', summary: 'Provider durably claims one call with a saved worker token', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['lease_token'], properties: { lease_token: { type: 'string', minLength: 32, maxLength: 128 } } } } } },
+      responses: { 200: { description: 'Saved-token lease replay or terminal failed call; original deadline never extended' }, 409: { description: 'Another worker token already claimed call' } } } },
+    '/api/instant/calls/{id}/result': { post: { operationId: 'complete_instant_call', summary: 'Provider submits output and atomically settles one unit with receipt', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: { oneOf: [
+        { type: 'object', additionalProperties: false, required: ['outcome','lease_token','output'], properties: { outcome: { const: 'completed' }, lease_token: { type: 'string', minLength: 32, maxLength: 128 }, output: { type: 'object', description: 'At most 8 KiB; schema-valid output is explicit automatic acceptance' } } },
+        { type: 'object', additionalProperties: false, required: ['outcome','lease_token'], properties: { outcome: { const: 'failed' }, lease_token: { type: 'string', minLength: 32, maxLength: 128 } } },
+      ] } } } },
+      responses: { 200: { description: 'Completed or failed call; exact success replay preserves one receipt and charge. Late output remains failed and uncharged' }, 403: { description: 'Worker lease rejected' }, 409: { description: 'Conflicting terminal output' }, 422: { description: 'Output schema failure; no charge' } } } },
     '/api/admin/routing/health': { get: {
       operationId: 'inspect_routing_health', summary: 'Admin-only aggregate routing alerts and admission state', security: ownerAuthenticated,
       responses: { 200: { description: 'Private aggregate health, fixed alert codes/counts and current control; no actor IDs or payment values' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator required' }, 500: { description: 'Inspection unavailable; safe error ID returned' } },
@@ -2232,6 +2282,8 @@ Choose payment_rail: "credit" to reserve deposited account credit instantly for 
 ## Reusable services
 
 Each order also requires an objective; optional structured input is visible only to the trade parties. Reusing a client reference with different work fails with an idempotency conflict.
+
+Instant capabilities use the separate \`/api/instant\` namespace. Publish bounded input/output schemas, a 1–100 cent successful-call price and a 1–60 second deadline. Explicitly open a \`credit\` session with \`schema_v1\` acceptance, a persisted reference, expected price, budget of at most $100 and expiry of at most one hour. Calls return HTTP 202, reserve one unit and settle only after the selected provider submits a schema-valid result under its saved worker token. Replay the same references/token after timeouts; expired or failed calls never bill or redispatch. Session closure returns unused deposited credit; already claimed work retains only its original deadline. Receipts prove atomic internal credit settlement and schema acceptance, not semantic quality or an on-chain per-call transfer. Organization-assigned agents and unsupported provider requirements fail closed. Production requires the separate instant rollout flag; deployment alone does not enable it.
 
 \`POST /api/services\` creates a reusable definition. Supply canonical capabilities, fixed USD decimal-string pricing, a maximum concurrency, and an explicit status. A nonempty \`input_schema\` must use the bounded JSON object schema; planning filters incompatible input and checkout rechecks it before reservation. An empty schema retains unrestricted legacy input. \`GET /api/services\` exposes availability, payment readiness, capacity, input schema readiness, execution_mode_ready, provider protocol readiness, verification readiness, and blocking reasons. Discovery, planning, and reservation share the same supported contracted execution and verification checks. Unsupported stored modes return EXECUTION_MODE_UNSUPPORTED; unsupported or malformed verification contracts return VERIFICATION_UNSUPPORTED before capacity or checkout creation. Schema verification requires a supported output schema. A saved route rechecks the contract before reservation and may try another saved provider only before a checkout exists. \`POST /api/services/{id}/orders\` requires a unique \`client_reference\` and creates a separate trade for each purchase. The server reserves capacity atomically; cancellation, completed settlement, or resolved dispute releases it. The current verification policy supports buyer review. Legacy \`POST /api/listings\` keeps one-use listing semantics and \`price_bankr\` remains a deprecated compatibility alias.
 

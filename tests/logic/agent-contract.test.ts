@@ -122,3 +122,14 @@ test('agent skill documents the complete production task and settlement lifecycl
   assert.match(skill, /Only the exact target email account or signed wallet can accept/)
   assert.match(skill, /HTTP 202 while network confirmation is pending/)
 })
+
+test('instant contract separates metered prepaid authority, asynchronous calls and atomic result receipts', () => {
+ const manifest=getAgentManifest();assert.equal(manifest.instant_execution.metering,'one_successful_call');assert.equal(manifest.instant_execution.contracted_trade_created,false);assert.equal(manifest.instant_execution.enabled_by_default_in_production,false)
+ const paths=getAgentOpenApiPaths() as Record<string, any>
+ const open=paths['/api/instant/services/{id}/sessions'].post
+ assert.equal(open.requestBody.content['application/json'].schema.properties.payment_rail.const,'credit')
+ assert.equal(open.requestBody.content['application/json'].schema.properties.acceptance.const,'schema_v1')
+ assert.equal(open.requestBody.content['application/json'].schema.properties.budget_minor.maximum,10000)
+ assert.ok(paths['/api/instant/sessions/{id}/calls'].post.responses[202])
+ assert.match(renderSkillMd(),/not semantic quality or an on-chain per-call transfer/)
+})

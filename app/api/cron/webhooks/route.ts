@@ -1,3 +1,4 @@
+import { reconcileInstantSessions } from '@/lib/instant-execution'
 import { monitorRouteAdmission } from '@/lib/route-control'
 import { NextRequest, NextResponse } from 'next/server'
 import { processPendingWebhookDeliveries } from '@/lib/webhook-delivery'
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
   }
   await recordWorkerHeartbeat('webhooks', 'started').catch((error) => console.error('[cron/webhooks/heartbeat-start]', error))
   try {
+    const instant_sessions = await reconcileInstantSessions().catch(() => ({ error_code: 'INSTANT_RECONCILIATION_UNAVAILABLE' }))
     const routing_admission = await monitorRouteAdmission()
     const purged_private_artifacts = await purgeExpiredArtifacts()
     const expired_verification_jobs = await expireVerificationJobs()
@@ -25,7 +27,7 @@ export async function GET(request: NextRequest) {
     const outcomes = await processPendingWebhookDeliveries(25)
     const expired_provider_leases = await expireServiceExecutionAttempts(100)
     await recordWorkerHeartbeat('webhooks', 'succeeded').catch((error) => console.error('[cron/webhooks/heartbeat-success]', error))
-    return NextResponse.json({ ok: true, routing_admission, purged_private_artifacts, expired_verification_jobs, ...outcomes, expired_provider_leases, expired_provider_acknowledgments }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ ok: true, instant_sessions, routing_admission, purged_private_artifacts, expired_verification_jobs, ...outcomes, expired_provider_leases, expired_provider_acknowledgments }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     await recordWorkerHeartbeat('webhooks', 'failed').catch((heartbeatError) => console.error('[cron/webhooks/heartbeat-failure]', heartbeatError))
     return internalErrorResponse('Webhook retry worker failed', error, {

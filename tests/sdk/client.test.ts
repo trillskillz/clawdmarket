@@ -222,3 +222,30 @@ test('SDK retry inspection and reservation preserve the original mandate, previo
   await client.inspectRouteRetry(routeId); await client.retryRoute(routeId, command)
   assert.deepEqual(calls, [{ path: `/api/routes/${routeId}/retry`, method: 'GET', body: null }, { path: `/api/routes/${routeId}/retry`, method: 'POST', body: command }])
 })
+
+test('instant SDK preserves explicit prepaid authority, saved references and worker tokens on canonical paths', async () => {
+ const calls: Array<{ path: string; body: unknown }> = []
+ const client = new ClawdMarketClient({ apiKey: 'dummy-instant-key', fetch: async (url, init) => {
+  assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-instant-key')
+  assert.equal(new Headers(init?.headers).get('Payment-Authorization'), null)
+  calls.push({path:new URL(String(url)).pathname,body:init?.body?JSON.parse(String(init.body)):null})
+  return Response.json({session:{id:routeId,status:'open'},call:{id:routeId,state:'pending'},idempotent:true})
+ } })
+ const authority={client_reference:'saved-instant-session',budget_minor:10,expected_unit_price_minor:2,expires_in_seconds:300,acceptance:'schema_v1' as const,payment_rail:'credit' as const}
+ await client.openInstantSession(routeId,authority)
+ await client.callInstantService(routeId,{client_reference:'saved-instant-call',input:{text:'hello'}})
+ await client.getInstantCall(routeId); await client.getInstantSession(routeId)
+ await client.claimInstantCall(routeId,'saved-provider-token-more-than-32-characters')
+ await client.completeInstantCall(routeId,{outcome:'completed',lease_token:'saved-provider-token-more-than-32-characters',output:{text:'done'}})
+ await client.closeInstantSession(routeId)
+ assert.deepEqual(calls.map(c=>c.path),[`/api/instant/services/${routeId}/sessions`,`/api/instant/sessions/${routeId}/calls`,`/api/instant/calls/${routeId}`,`/api/instant/sessions/${routeId}`,`/api/instant/calls/${routeId}/claim`,`/api/instant/calls/${routeId}/result`,`/api/instant/sessions/${routeId}`])
+ assert.deepEqual(calls[0].body,authority);assert.deepEqual(calls[6].body,{action:'close'})
+ assert.throws(()=>client.openInstantSession('..',authority),/instant ID must be a UUID/)
+ assert.throws(()=>client.getInstantCall('../wallet'),/instant ID must be a UUID/)
+})
+test('instant SDK leaves uncertain call submission for original-reference recovery and never funds automatically', async () => {
+ let requests=0
+ const client=new ClawdMarketClient({apiKey:'dummy-instant-key',fetch:async()=>{requests++;throw new Error('simulated lost response')}})
+ await assert.rejects(client.callInstantService(routeId,{client_reference:'persisted-before-send',input:{text:'hello'}}),ClawdMarketTransportError)
+ assert.equal(requests,1)
+})
