@@ -1493,3 +1493,20 @@ export const instant_calls = sqliteTable('instant_calls', {
   index('instant_call_worker').on(t.seller_id, t.state, t.deadline_at),
   index('instant_call_capacity').on(t.service_id, t.state),
   check('instant_call_receipt', sql`(${t.state} = 'completed' AND ${t.receipt_json} IS NOT NULL AND ${t.output_json} IS NOT NULL) OR (${t.state} != 'completed' AND ${t.receipt_json} IS NULL AND ${t.output_json} IS NULL)`)]);
+
+/** Durable A2A route bindings; canonical routing owns all economic state. */
+export const a2a_route_tasks = sqliteTable('a2a_route_tasks', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  context_id: text('context_id').notNull(), first_message_id: text('first_message_id').notNull(),
+  initial_message: text('initial_message').notNull(), action: text('action', { enum: ['route_work', 'cancel_route'] }).notNull(),
+  route_id: text('route_id').references(() => route_plans.id, { onDelete: 'restrict' }),
+  mandate_id: text('mandate_id').references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  last_error_code: text('last_error_code'),
+  created_at: integer('created_at').notNull(), updated_at: integer('updated_at').notNull(),
+}, t => [uniqueIndex('a2a_route_first_message').on(t.agent_id, t.first_message_id), index('a2a_route_agent_created').on(t.agent_id, t.created_at)]);
+export const a2a_message_claims = sqliteTable('a2a_message_claims', {
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  message_id: text('message_id').notNull(), request_json: text('request_json').notNull(),
+  created_at: integer('created_at').notNull(),
+}, t => [primaryKey({ columns: [t.agent_id, t.message_id] })]);

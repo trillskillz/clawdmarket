@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ClawdMarketApiError, ClawdMarketClient, ClawdMarketTransportError } from '../../sdk/typescript/src/index'
+import { ClawdMarketA2AError, ClawdMarketApiError, ClawdMarketClient, ClawdMarketTransportError } from '../../sdk/typescript/src/index'
 
 const routeId = '00000000-0000-4000-8000-000000000001'
 
@@ -248,4 +248,29 @@ test('instant SDK leaves uncertain call submission for original-reference recove
  const client=new ClawdMarketClient({apiKey:'dummy-instant-key',fetch:async()=>{requests++;throw new Error('simulated lost response')}})
  await assert.rejects(client.callInstantService(routeId,{client_reference:'persisted-before-send',input:{text:'hello'}}),ClawdMarketTransportError)
  assert.equal(requests,1)
+})
+
+
+test('A2A SDK preserves durable message identity and ErrorInfo task/funds state on HTTP and JSON-RPC errors', async () => {
+  const input = { role: 'ROLE_USER' as const, messageId: 'saved-operation', parts: [{ data: { action: 'route_work' as const, route_id: routeId, mandate_id: routeId } }] }
+  const calls: string[] = []
+  let reject = false, httpStatus = 409
+  const client = new ClawdMarketClient({ apiKey: 'dummy-agent-key', fetch: async (url, init) => {
+    assert.equal(new URL(String(url)).pathname, '/api/a2a'); assert.equal(init?.redirect, 'error')
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-agent-key')
+    const rpc = JSON.parse(String(init?.body)); calls.push(rpc.method)
+    if (rpc.method === 'SendMessage') assert.deepEqual(rpc.params.message, input)
+    return reject ? Response.json({ jsonrpc: '2.0', id: rpc.id, error: { code: -32002, message: 'Funded work cannot cancel', data: [{ reason: 'ROUTE_FUNDS_ALREADY_COMMITTED', metadata: { task_id: routeId, funds_state: 'escrow_held' } }] } }, { status: httpStatus })
+      : Response.json({ jsonrpc: '2.0', id: rpc.id, result: rpc.method === 'SendMessage' ? { task: { id: routeId } } : { id: routeId } })
+  } })
+  assert.equal((await client.sendA2AMessage(input)).task.id, routeId)
+  await client.getA2AExtendedCard(); await client.getA2ATask(routeId); await client.listA2ATasks(); await client.cancelA2ATask(routeId)
+  assert.deepEqual(calls, ['SendMessage', 'GetExtendedAgentCard', 'GetTask', 'ListTasks', 'CancelTask'])
+  reject = true
+  for (const status of [409, 200]) {
+    httpStatus = status
+    await assert.rejects(() => client.cancelA2ATask(routeId), (error: unknown) => {
+      assert.ok(error instanceof ClawdMarketA2AError); assert.equal(error.taskId, routeId); assert.equal(error.fundsState, 'escrow_held'); assert.equal(error.rpcCode, -32002); return true
+    })
+  }
 })

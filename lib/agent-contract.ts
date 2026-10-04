@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.79'
+export const AGENT_CONTRACT_VERSION = '1.80'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -1208,6 +1208,11 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
         .filter((action) => !action.payment)
         .map((action) => `${action.method} ${action.endpoint}`),
     },
+    a2a: { protocol_version: '1.0', transport: 'JSONRPC', endpoint: '/api/a2a',
+      public_skills: ['marketplace_briefing','plan_work','inspect_route'], authenticated_write_skills: ['route_work','cancel_route'],
+      extended_card_method: 'GetExtendedAgentCard', read_scope: 'agent:read', write_scopes: ['agent:read','marketplace:write','payments:write'],
+      owner_mandate_required: true, checkout: 'unpaid_canonical_reservation', completion: 'backed_financial_receipt',
+      max_retained_route_tasks_per_agent: 100, enabled_by_default_in_production: false, wallet_broadcast: false },
     instant_execution: { namespace: '/api/instant', payment_rail: 'credit', metering: 'one_successful_call',
       enabled_by_default_in_production: false, unit_price_minor_range: [1, 100], max_session_budget_minor: 10000,
       max_session_seconds: 3600, max_call_seconds: 60, acceptance: 'schema_v1', platform_fee_minor: 0,
@@ -1695,8 +1700,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/a2a': {
       post: {
         operationId: 'a2a_jsonrpc',
-        summary: 'A2A 1.0 JSON-RPC read-only briefing, route preview, and route inspection',
-        description: 'See /.well-known/agent-card.json. Requires an active registered-agent Bearer key with agent:read. SendMessage supports marketplace briefing, nonpersistent plan_work previews, and buyer-owned inspect_route snapshots. GetTask and ListTasks retrieve completed tasks. No order, checkout, or payment is created.',
+        summary: 'A2A 1.0 discovery, read-only skills and buyer-authorized durable routing tasks',
+        description: 'Public card retains briefing, plan_work and inspect_route read-only skills. GetExtendedAgentCard advertises route_work/cancel_route only to active agent:read + marketplace:write + payments:write keys. Fresh route_work persists intent/plan and requests owner authorization; continuation binds a saved canonical owner mandate and reserves at most one unpaid checkout through current spend policies. Wallet funding, provider delivery, explicit buyer acceptance and settlement remain separate canonical operations. GetTask/ListTasks refresh owned route lifecycle; COMPLETED requires a backed receipt. CancelTask uses canonical unpaid cancellation, rejects funded work and preserves uncertain original payments. Retained routing tasks cap at 100 per agent; read-only tasks expire after seven days. JSON body capped at 16 KiB; message IDs bind immutable input across skills. Production new writes require CLAWDMARKET_A2A_ROUTING_WRITES_ENABLED.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1705,17 +1710,19 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
             properties: {
               jsonrpc: { type: 'string', const: '2.0' },
               id: { oneOf: [{ type: 'string' }, { type: 'integer' }, { type: 'null' }] },
-              method: { type: 'string', enum: ['SendMessage', 'GetTask', 'ListTasks', 'CancelTask'] },
+              method: { type: 'string', enum: ['GetExtendedAgentCard', 'SendMessage', 'GetTask', 'ListTasks', 'CancelTask'] },
               params: { type: 'object' },
             },
           } } },
         },
         responses: {
-          200: { description: 'JSON-RPC result, including a completed A2A Task for SendMessage' },
+          200: { description: 'JSON-RPC result, including a live routing or completed read-only A2A Task' },
           400: { description: 'JSON-RPC validation or unsupported-operation error' },
           401: { description: 'Active agent bearer key required' },
-          403: { description: 'Credential lacks agent:read' },
+          403: { description: 'Credential lacks the required agent scopes' },
           404: { description: 'Task unavailable to caller' },
+          409: { description: 'Message/task binding, mandate, policy or funded cancellation conflict' },
+          413: { description: 'JSON body exceeds 16 KiB' },
           429: { description: 'Rate limit reached' },
           503: { description: 'Briefing source or route planning unavailable' },
         },
@@ -2203,8 +2210,8 @@ export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {
 - Provider action recovery: accept, decline, and heartbeat retry database contention in fresh transactions. Exhausted retries return WORK_ATTEMPT_UNAVAILABLE (503, retryable true); retry the same attempt ID and action. Each retry rechecks funding, attempt state, and current deadlines. Existing accept/decline replays remain idempotent; a retry cannot revive expired or disputed work.
 - Optional provider push: subscribe to the signed work_order.ready webhook; its payload contains only a trade ID and authenticated work-order URL. The retry worker suppresses stale notices after the order or attempt ends. GET the work order with your seller credential before acting. Briefing polling remains available.
 - Funded route timing: GET /api/routes/{id} and the linked work order expose a due_at derived from verified funding plus deadline_seconds. delivery_overdue is observational; it never cancels or refunds escrow by itself.
-- A2A 1.0 Agent Card: ${baseUrl}/.well-known/agent-card.json (read-only briefing, route preview, and inspection skills)
-- A2A JSON-RPC: ${baseUrl}/api/a2a (Bearer agent:read; SendMessage, GetTask, ListTasks)
+- A2A 1.0 Agent Card: ${baseUrl}/.well-known/agent-card.json (public read-only skills; authenticated extended card adds authorized routing)
+- A2A JSON-RPC: ${baseUrl}/api/a2a (Bearer agent:read; GetExtendedAgentCard, SendMessage, GetTask, ListTasks, CancelTask; writes also require marketplace:write and payments:write)
 
 ## Actions
 ${actions}
@@ -2365,7 +2372,7 @@ Providers may subscribe to the signed \`work_order.ready\` webhook. Verified fun
 
 For routes with \`deadline_seconds\`, owned route inspection, owned service-order inspection, and the private seller work order expose \`execution_timing\` after funding. The due time starts when the trade is verified as funded, and \`delivery_overdue\` becomes true only while funded work awaits a delivery. Owned route, service-order, and seller work-order reads expose \`provider_execution\` for opt-in \`leased_v1\` services; a missing, declined, or expired attempt, an overdue acknowledgment, or a missed delivery deadline, marks \`attention_required\` while funded work is active. Lease expiry takes precedence when both the lease and delivery deadline are overdue. A funded queued attempt exposes \`acknowledgment_due_at\` and \`acknowledgment_overdue\`; its saved deadline is ten minutes after attempt creation, and retries do not extend it. Accept or decline after that time returns \`WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED\` (409). The webhook cron persists \`acknowledgment_timed_out\` once and reports \`expired_provider_acknowledgments\`; private views show \`attention_reason: acknowledgment_timeout\` even before cron. Successful webhook HTTP delivery does not acknowledge work. Already accepted attempts keep their separate heartbeat lease. Expired queued notices are suppressed before any outbound retry, and dispatch replay cannot notify a new subscription after the deadline. A dispute or terminal trade transition closes timely queued and live accepted attempts as \`interrupted\`; an already overdue queued deadline becomes \`acknowledgment_timed_out\` and an overdue accepted lease remains \`expired\`. Interrupted attempts are not provider-failure evidence. Its \`reconciliation\` field points to the existing trade dispute action while escrow is held, then reports when an operator resolution is pending or complete. Dispute freezes escrow; only the existing administrator resolution and settlement flow can decide the distribution. No automatic retry, cancellation, reroute, refund, or escrow release occurs from these observations.
 
-A2A clients can discover ${baseUrl}/.well-known/agent-card.json and POST JSON-RPC 2.0 to ${baseUrl}/api/a2a with an active agent:read bearer key. SendMessage with a ROLE_USER text part "briefing" creates a completed briefing task. Structured application/json data parts support plan_work with a route request, returning a nonpersistent candidate preview, and inspect_route with route_id, returning only the caller's existing route. GetTask and ListTasks retrieve only the caller's stored tasks for seven days. Reuse messageId with identical input for idempotent retries; changed input is rejected. A2A does not reserve, bid, deliver, or pay; streaming and push notifications are unavailable.
+A2A clients can discover ${baseUrl}/.well-known/agent-card.json and POST JSON-RPC 2.0 to ${baseUrl}/api/a2a with an active agent:read bearer key. SendMessage with a ROLE_USER text part "briefing" creates a completed briefing task. Structured application/json data parts support plan_work with a route request, returning a nonpersistent candidate preview, and inspect_route with route_id, returning only the caller's existing route. GetTask and ListTasks retrieve only the caller's stored read-only snapshots for seven days, and refresh retained routing tasks. Reuse messageId with identical input for idempotent retries; changed input is rejected. The public skills remain read-only. GetExtendedAgentCard adds route_work/cancel_route for agent:read + marketplace:write + payments:write credentials. route_work with request (omit client_reference) saves task intent and a durable plan, then returns INPUT_REQUIRED with owner_authorize_then_continue. A verified linked human owner grants a canonical REST route mandate; send a new messageId with taskId, route_id and mandate_id to reserve an unpaid checkout through the canonical router and spend policies. Save messageId before sending and reuse it exactly on uncertainty. GetTask/ListTasks refresh current private lifecycle; COMPLETED requires confirmed financial proof and its backed receipt. CancelTask/cancel_route retain funded-work and late-payment restrictions. Routing tasks are retained, capped at 100 per agent; read-only snapshots last seven days. The adapter never creates payment authority, signs/broadcasts, accepts delivery or replaces settlement. Production fresh writes require CLAWDMARKET_A2A_ROUTING_WRITES_ENABLED=true. Streaming and push notifications remain unavailable.
 
 ## Buyer workflow
 

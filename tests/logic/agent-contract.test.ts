@@ -58,6 +58,7 @@ test('the OpenAPI document reports the serving origin and current contract versi
   assert.equal(document.paths['/api/agents/credentials/rotate'].post.operationId, 'rotate_agent_key')
   assert.equal(document.paths['/api/agents/briefing'].get.operationId, 'get_briefing')
   assert.equal(document.paths['/api/a2a'].post.operationId, 'a2a_jsonrpc')
+  assert.ok(document.paths['/api/a2a'].post.requestBody.content['application/json'].schema.properties.method.enum.includes('GetExtendedAgentCard'))
   assert.equal(document.paths['/api/routes/metrics'].get.operationId, 'inspect_route_metrics')
   assert.equal(document.paths['/api/workflows/plan'].post.operationId, 'plan_workflow')
   assert.equal(document.paths['/api/agents/credentials/previous'].delete.operationId, 'revoke_previous_agent_key')
@@ -82,6 +83,9 @@ test('machine manifest advertises the subscribed provider work event', () => {
   const manifest = getAgentManifest()
   assert.equal(manifest.version, AGENT_CONTRACT_VERSION)
   assert.ok(manifest.webhook_events.includes('work_order.ready'))
+  assert.equal(manifest.a2a.owner_mandate_required, true)
+  assert.equal(manifest.a2a.wallet_broadcast, false)
+  assert.deepEqual(manifest.a2a.authenticated_write_skills, ['route_work', 'cancel_route'])
 })
 
 test('request origin prefers reverse-proxy headers over an internal bind address', () => {

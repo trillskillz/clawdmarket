@@ -2,6 +2,10 @@
 set -euo pipefail
 
 required_files=(
+  "lib/a2a-route-tasks.ts"
+  "migrations/2026-10-04-a2a-routing-tasks-v1.sql"
+  "tests/api/a2a-routing-writes.test.ts"
+  "docs/A2A_ROUTING.md"
   "lib/route-control.ts"
   "lib/route-admission-health.mjs"
   "lib/routing-alerts.ts"

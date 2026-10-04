@@ -113,7 +113,7 @@ before(async () => {
       requests.push(`${incoming.method} ${path}`)
       const request = new NextRequest(`${baseUrl}${path}`, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
       const id = path.split('/')[3], context = { params: Promise.resolve({ id, artifactId: path.split('/')[5] || '' }) }
-      const handler = path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
+      const handler = path === '/api/a2a' ? (await import('@/app/api/a2a/route')).POST : path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
         : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : path.endsWith('/retry') ? retry[incoming.method as 'GET' | 'POST'] : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST']
           : path.endsWith('/work-order') ? work.GET : path.endsWith('/attempt') ? attempt.POST : path.endsWith('/delivery') ? delivery.POST
             : path.endsWith('/result') ? result.GET : path.endsWith('/artifacts') ? artifacts.POST : path.includes('/artifacts/') ? download.GET : getRoute.GET
@@ -784,4 +784,37 @@ test('routing hold allows the original refund but rejects a fresh funded fallbac
     assert.equal((await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id, f.mandate.id)))[0].reserved_minor, 105)
     assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.fallbackServiceId!)))[0].active_orders, 0)
   } finally { await clearRoutingHold() }
+})
+
+
+test('A2A task follows canonical funding and settlement, rejects funded cancellation and returns the original private backed receipt', async () => {
+  const f = await fixture(undefined, undefined, true), count = broadcastCalls
+  const input = { role: 'ROLE_USER', messageId: crypto.randomUUID(), parts: [{ data: { action: 'route_work', route_id: f.routeId, mandate_id: f.mandate.id }, mediaType: 'application/json' }] }
+  async function rpc(method: string, params: unknown) {
+    const response = await fetch(`${baseUrl}/api/a2a`, { method: 'POST', headers: { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })
+    return { status: response.status, body: await response.json() }
+  }
+  const started = await rpc('SendMessage', { message: input }); assert.equal(started.status, 200, JSON.stringify(started.body))
+  const task = started.body.result.task; assert.equal(task.status.state, 'TASK_STATE_INPUT_REQUIRED'); assert.equal(broadcastCalls, count)
+  const continuation = { ...input, messageId: crypto.randomUUID(), taskId: task.id, contextId: task.contextId }
+  assert.equal((await rpc('SendMessage', { message: continuation })).status, 200)
+  const { funded, decision } = await routeDelivery(f)
+  const live = await rpc('GetTask', { id: task.id }); assert.equal(live.body.result.status.state, 'TASK_STATE_INPUT_REQUIRED')
+  assert.equal(live.body.result.artifacts[0].parts[0].data.lifecycle.phase, 'awaiting_buyer')
+  const cancel = await rpc('CancelTask', { id: task.id }); assert.equal(cancel.status, 409); assert.equal(cancel.body.error.code, -32002)
+  const [held] = await db.select().from(schema.trades).where(eq(schema.trades.id, funded.trade_id!)); assert.equal(held.status, 'pending_release')
+  const outcome = await runBuyerRoute({ ...f, decision }); assert.equal(outcome.state, 'completed')
+  const completed = await rpc('GetTask', { id: task.id }); assert.equal(completed.body.result.status.state, 'TASK_STATE_COMPLETED')
+  const data = completed.body.result.artifacts[0].parts[0].data
+  assert.deepEqual(data.lifecycle.receipt, outcome.receipt); assert.equal(data.result.delivery.content_hash, decision.content_hash)
+  assert.equal(data.result.content.artifact.result, 'private-route-result')
+  const replay = await rpc('SendMessage', { message: input }); assert.equal(replay.body.result.task.id, task.id); assert.equal(replay.body.result.task.status.state, 'TASK_STATE_COMPLETED')
+  assert.equal((await rpc('SendMessage', { message: continuation })).body.result.task.status.state, 'TASK_STATE_COMPLETED')
+  assert.equal((await rpc('SendMessage', { message: { ...continuation, messageId: crypto.randomUUID() } })).status, 409)
+  assert.equal(broadcastCalls, count + 2)
+  assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id, f.routeId))).length, 1)
+  // Corrupted financial proof cannot be hidden by saved completion flags or the earlier A2A result.
+  await db.update(schema.settlement_transfers).set({ status: 'pending' }).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))
+  const uncertain = await rpc('GetTask', { id: task.id }); assert.notEqual(uncertain.body.result.status.state, 'TASK_STATE_COMPLETED')
+  assert.equal(uncertain.body.result.artifacts[0].parts[0].data.lifecycle.receipt, null)
 })

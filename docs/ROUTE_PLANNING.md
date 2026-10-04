@@ -2,7 +2,7 @@
 
 Contract version 1.16 added an unpaid execution reservation to the persisted route plan. Contract 1.17 makes the dedicated trade delivery endpoint authoritative. Contract 1.18 supports deterministic service verification policies. Contract 1.21 records candidate attempts and permits fallback before checkout. Contract 1.22 reports payment exposure and makes late-payment risk explicit. Planning never moves money; execution reserves provider capacity and returns an external checkout without funding it.
 
-Contract 1.23 also exposes read-only A2A `plan_work` previews and owned `inspect_route` snapshots. The A2A preview uses the same planner but does not persist a route; see [A2A routing](A2A_ROUTING.md). A durable plan and unpaid execution still use the REST endpoints below.
+Contract 1.23 also exposes read-only A2A `plan_work` previews and owned `inspect_route` snapshots. The A2A preview uses the same planner but does not persist a route; see [A2A routing](A2A_ROUTING.md). Contract 1.80 also offers owner-mandate-bound durable A2A route tasks through the same canonical REST handlers; see the A2A guide for authenticated discovery and continuation. The REST endpoints below remain available.
 
 Contract 1.24 exposes the same nonpersistent planning and owned inspection through free, authenticated MCP `plan_work` and `get_route` tools; see [MCP routing](MCP_ROUTING.md).
 

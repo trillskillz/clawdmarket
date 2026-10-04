@@ -1,3 +1,9 @@
+export type A2ATaskState = 'TASK_STATE_SUBMITTED' | 'TASK_STATE_WORKING' | 'TASK_STATE_COMPLETED' | 'TASK_STATE_FAILED' | 'TASK_STATE_CANCELED' | 'TASK_STATE_INPUT_REQUIRED'
+export type A2ARouteAction = { action: 'route_work'; request: Omit<RouteRequest, 'client_reference'> } | { action: 'route_work'; route_id: string; mandate_id: string } | { action: 'cancel_route'; route_id: string }
+export type A2AMessage = { role: 'ROLE_USER'; messageId: string; taskId?: string; contextId?: string; parts: Array<{ text: string } | { data: A2ARouteAction | Record<string, unknown>; mediaType?: 'application/json' }>; metadata?: Record<string, unknown> }
+export type A2ATask = { id: string; contextId: string; status: { state: A2ATaskState; timestamp: string }; artifacts?: Array<{ artifactId: string; name: string; parts: Array<{ data: Record<string, unknown>; mediaType: string }> }>; history?: A2AMessage[] }
+export type A2ATaskListOptions = { pageSize?: number; pageToken?: string; contextId?: string; status?: A2ATaskState; statusTimestampAfter?: string; historyLength?: number; includeArtifacts?: boolean }
+
 export type InstantSessionRequest = { client_reference: string; budget_minor: number; expected_unit_price_minor: number; expires_in_seconds: number; acceptance: 'schema_v1'; payment_rail: 'credit' }
 export type InstantReceipt = { version: 1; id: string; call_id: string; session_id: string; service_id: string; buyer_id: string; seller_id: string; units: 1; amount_minor: number; currency: 'USD'; payment_rail: 'credit'; metering: 'one_successful_call'; verification: 'schema_v1'; input_sha256: string; output_sha256: string; settled_at: string }
 export type InstantSession = { id: string; service_id: string; buyer_id: string; budget_minor: number; balance_minor: number; held_minor: number; spent_minor: number; refunded_minor: number; available_budget_minor: number; status: 'open' | 'closing' | 'closed'; expires_at: string; contract: Record<string, unknown> }
@@ -197,6 +203,13 @@ export class ClawdMarketApiError extends Error {
     readonly retryable: boolean, readonly fundsState: string, readonly details: unknown) { super(message) }
 }
 
+/** A2A ErrorInfo preserves the task handle and financial uncertainty on rejected writes. */
+export class ClawdMarketA2AError extends ClawdMarketApiError {
+  constructor(status: number, readonly rpcCode: number, reason: string, message: string, fundsState: string, readonly taskId: string | null, details: unknown) {
+    super(status, reason, message, status === 429 || status >= 500, fundsState, details)
+  }
+}
+
 export class ClawdMarketTransportError extends Error {
   readonly name = 'ClawdMarketTransportError'
   readonly retryable = true
@@ -295,6 +308,12 @@ export class ClawdMarketClient {
       throw new ClawdMarketTransportError('ClawdMarket request did not complete; inspect the route before retrying a mutation', cause)
     }
     const payload = await response.json().catch(() => null)
+    if (path === '/api/a2a' && object(payload).error) {
+      const rpcError = object(object(payload).error)
+      const info = Array.isArray(rpcError.data) ? object(rpcError.data[0]) : {}
+      const metadata = object(info.metadata)
+      throw new ClawdMarketA2AError(response.status, Number(rpcError.code), text(info.reason, 'A2A_ERROR'), text(rpcError.message, 'A2A request rejected'), text(metadata.funds_state, 'unknown'), typeof metadata.task_id === 'string' ? metadata.task_id : null, rpcError.data)
+    }
     if (!response.ok) {
       const data = object(payload)
       throw new ClawdMarketApiError(response.status, text(data.error_code ?? data.code, 'HTTP_ERROR'),
@@ -315,6 +334,19 @@ export class ClawdMarketClient {
   fundOwnedAgent(input: { agent_id: string; amount_minor: number; client_reference: string }, options?: RequestOptions) { return this.request<{ idempotent: boolean; balance: { available_minor: number; escrow_minor: number } }>('POST', '/api/wallet/transfers', input, options) }
   buyWithAccountCredit(listingId: string, clientReference: string, options?: RequestOptions) { return this.request<{ trade: { id: string; status: string; payment_rail: 'credit' } }>('POST', '/api/trades', { listing_id: listingId, amount: 1, payment_rail: 'credit', client_reference: clientReference }, options) }
   orderServiceWithAccountCredit(serviceId: string, input: { client_reference: string; objective: string; input?: Record<string, unknown>; max_total?: string; expected_price?: string }, options?: RequestOptions) { return this.request<{ order: Record<string, unknown>; trade: Record<string, unknown> }>('POST', `/api/services/${encodeURIComponent(serviceId)}/orders`, { ...input, payment_rail: 'credit' }, options) }
+
+  private async a2aRpc<T>(method: string, params: unknown, options?: RequestOptions): Promise<T> {
+    const envelope = await this.request<{ result: T }>('POST', '/api/a2a', { jsonrpc: '2.0', id: globalThis.crypto.randomUUID(), method, params }, options)
+    if (!('result' in envelope)) throw new ClawdMarketTransportError('A2A result was missing; recover using the saved messageId or task', null)
+    return envelope.result
+  }
+  getA2AExtendedCard(options?: RequestOptions) { return this.a2aRpc<Record<string, unknown>>('GetExtendedAgentCard', {}, options) }
+  /** Save messageId before sending. Uses canonical owner authority; never signs or broadcasts. */
+  sendA2AMessage(message: A2AMessage, options?: RequestOptions) { return this.a2aRpc<{ task: A2ATask }>('SendMessage', { message }, options) }
+  getA2ATask(taskId: string, historyLength = 0, options?: RequestOptions) { return this.a2aRpc<A2ATask>('GetTask', { id: instantId(taskId), historyLength }, options) }
+  listA2ATasks(input: A2ATaskListOptions = {}, options?: RequestOptions) { return this.a2aRpc<{ tasks: A2ATask[]; totalSize: number; pageSize: number; nextPageToken: string }>('ListTasks', input, options) }
+  /** Funded cancellation is rejected; an unpaid cancellation may still report payment_unknown. */
+  cancelA2ATask(taskId: string, options?: RequestOptions) { return this.a2aRpc<A2ATask>('CancelTask', { id: instantId(taskId) }, options) }
 
   listInstantServices(options?: RequestOptions) { return this.request<{ services: Record<string, unknown>[] }>('GET', '/api/instant/services', undefined, options) }
   /** Spending action: persist the buyer reference and explicitly accept schema_v1 before funding. */
