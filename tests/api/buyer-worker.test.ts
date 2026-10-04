@@ -720,3 +720,68 @@ test('a nonproduction receipt cannot be retrospectively promoted by changing rou
   await db.update(schema.route_origins).set({ cohort: 'production' }).where(eq(schema.route_origins.route_id, f.routeId))
   assert.equal((await (await import('@/lib/route-metrics')).getRouteMetrics()).autonomously_routed_gmv, '0.00')
 })
+
+
+async function routingHold() {
+  const control = await import('@/lib/route-control')
+  await control.setRouteControl({ paused: true, expectedRevision: (await control.getRouteControl()).revision, actorUserId: 'dummy-operator' })
+}
+async function clearRoutingHold() { await db.delete(schema.route_control_events); await db.delete(schema.route_controls) }
+
+test('routing hold rejects fresh EVM claims, removes saved send permission and recovers the exact pending on-chain payment', async () => {
+  const fresh = await fixture(), claimed = await fixture(), paid = await fixture()
+  await runBuyerFunding({ ...fresh, prepareOnly: true })
+  let lost = false
+  apiHook = async (path, reply) => { if (!lost && path.endsWith('/claim') && reply.ok) { lost = true; return true } return false }
+  try { await assert.rejects(() => runBuyerFunding(claimed), /BUYER_REQUEST_UNCERTAIN_RESUME_SAME_PAYMENT/) } finally { apiHook = null }
+  const pending = await runBuyerFunding({ ...paid, adapter: { ...paid.adapter, broadcast: async (raw: string, signal: AbortSignal) => {
+    const hash = await paid.adapter.broadcast(raw, signal); transactions.get(hash)!.mined = false; return hash
+  } } })
+  assert.equal(pending.state, 'awaiting_confirmation'); const count = broadcastCalls
+  await routingHold()
+  try {
+    let rejection: string | undefined
+    apiHook = async (path, reply) => { if (path.endsWith('/claim') && !reply.ok) rejection = (await reply.clone().json()).code; return false }
+    try { await assert.rejects(() => runBuyerFunding(fresh), /BUYER_HTTP_409/) } finally { apiHook = null }
+    assert.equal(rejection, 'ROUTE_EXECUTION_PAUSED')
+    assert.equal((await runBuyerFunding(claimed)).state, 'held_recover_existing_payment')
+    assert.equal(broadcastCalls, count)
+    transactions.get(pending.tx_hash!)!.mined = true
+    const recovered = await runBuyerFunding(paid)
+    assert.equal(recovered.state, 'funded'); assert.equal(recovered.tx_hash, pending.tx_hash)
+    assert.equal(broadcastCalls, count); await assertFundedOnce(paid, pending.tx_hash!)
+    assert.equal((await db.select().from(schema.buyer_evm_payment_claims).where(eq(schema.buyer_evm_payment_claims.mandate_id, fresh.mandate.id))).length, 0)
+  } finally { await clearRoutingHold() }
+})
+
+test('routing hold preserves provider delivery, explicit review, pending payout recovery and exactly-once capacity release', async () => {
+  const f = await fixture(), funded = await runBuyerRoute(f)
+  await routingHold()
+  try {
+    const providerKey = jwt({ userId: f.sellerId, email: `${f.sellerId}@test.invalid`, role: 'human' })
+    const delivery = await runProviderWork({ baseUrl, apiKey: providerKey, tradeId: funded.trade_id!, serviceId: f.serviceId,
+      stateFile: join(directory, `${f.routeId}.provider.json`), handler: async () => ({ summary: 'Delivery while new routes held', artifact: { result: 'private output' } }) })
+    minePayout = false
+    try { assert.equal((await runBuyerRoute({ ...f, decision: { version: 1, route_id: f.routeId, decision: 'accept', content_hash: delivery.content_hash } })).state, 'settling') }
+    finally { minePayout = true }
+    const [outbox] = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))
+    transactions.get(outbox.tx_hash!)!.mined = true
+    assert.equal((await runBuyerRoute(f)).state, 'completed')
+    assert.equal((await runBuyerRoute(f)).state, 'completed')
+    assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id, f.routeId))).length, 1)
+    assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)))[0].active_orders, 0)
+  } finally { await clearRoutingHold() }
+})
+
+test('routing hold allows the original refund but rejects a fresh funded fallback without adding exposure', async () => {
+  const f = await fixture(undefined, {}), first = await runBuyerRoute(f)
+  await routingHold()
+  try {
+    await refundFailedProvider(f, first.trade_id!)
+    const blocked = await retryCommand(f, first.trade_id!); assert.equal(blocked.status, 503, JSON.stringify(await blocked.clone().json()))
+    assert.equal((await blocked.json()).error_code, 'ROUTE_EXECUTION_PAUSED')
+    assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 0)
+    assert.equal((await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id, f.mandate.id)))[0].reserved_minor, 105)
+    assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.fallbackServiceId!)))[0].active_orders, 0)
+  } finally { await clearRoutingHold() }
+})

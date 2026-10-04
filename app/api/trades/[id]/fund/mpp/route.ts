@@ -60,6 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (!hasPaymentProof) {
       const reason = await serviceFundingEligibility(trade)
+      if (reason === 'ROUTE_EXECUTION_PAUSED') return json({ error: 'New route payment authority is paused; recover original payments', code: reason, retryable: true }, { status: 503 })
       if (reason) return json({ error: 'Provider no longer satisfies checkout requirements; do not pay', code: 'PROVIDER_ELIGIBILITY_CHANGED', reason }, { status: 409 })
     }
     if (!proof && (!credential || credential.payload?.type === 'transaction')) await assertMarketplaceMppPullAllowed(trade.id, undefined,

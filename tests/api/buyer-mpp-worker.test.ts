@@ -350,3 +350,39 @@ test('Tempo original refund, fresh retry intent and guarded pull settle one appr
   assert.equal((await db.select().from(schema.buyer_mpp_payment_claims).where(eq(schema.buyer_mpp_payment_claims.mandate_id, f.mandate.id))).filter((entry) => entry.state === 'confirmed').length, 2)
   assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, f.routeId))).length, 1)
 })
+
+
+test('routing hold during final Tempo simulation prevents RPC submission and preserves the original credential', async () => {
+  const f = await fixture(), count = broadcastCalls
+  await runBuyerMppFunding({ ...f, prepareOnly: true })
+  let simulations = 0
+  simulationHook = async () => {
+    if (++simulations === 5) {
+      const control = await import('@/lib/route-control')
+      await control.setRouteControl({ paused: true, expectedRevision: (await control.getRouteControl()).revision, actorUserId: 'dummy-operator' })
+    }
+  }
+  try {
+    await assert.rejects(() => runBuyerMppFunding(f), /BUYER_HTTP_/)
+    assert.equal(simulations, 5); assert.equal(broadcastCalls, count)
+    const original = (await journal(f)).value
+    assert.equal((await runBuyerMppFunding(f)).state, 'held_recover_existing_payment')
+    assert.equal((await journal(f)).value.credential, original.credential)
+    assert.equal((await db.select().from(schema.buyer_mpp_payment_claims).where(eq(schema.buyer_mpp_payment_claims.mandate_id, f.mandate.id)))[0].first_submission_at, null)
+  } finally { simulationHook = null; await db.delete(schema.route_control_events); await db.delete(schema.route_controls) }
+})
+
+test('routing hold still recovers a paid original Tempo hash without another SDK pull', async () => {
+  const f = await fixture(), count = broadcastCalls
+  mineOnSend = false
+  try { await assert.rejects(() => runBuyerMppFunding(f), /BUYER_HTTP_/) } finally { mineOnSend = true }
+  const original = (await journal(f)).value
+  transactions.get(original.tx_hash)!.mined = true
+  const control = await import('@/lib/route-control')
+  await control.setRouteControl({ paused: true, expectedRevision: (await control.getRouteControl()).revision, actorUserId: 'dummy-operator' })
+  try {
+    const result = await runBuyerMppFunding(f)
+    assert.equal(result.state, 'funded'); assert.equal(result.tx_hash, original.tx_hash)
+    assert.equal(broadcastCalls, count + 1); await assertFundedOnce(f, original.tx_hash)
+  } finally { await db.delete(schema.route_control_events); await db.delete(schema.route_controls) }
+})

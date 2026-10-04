@@ -167,3 +167,22 @@ test('lifecycle advancement requires payments scope and cookie CSRF while privat
   assert.equal((await retry.GET(request(`/api/routes/${f.routeId}/retry`, f.sellerId, 'GET'), context(f.routeId))).status, 404)
   assert.equal((await db.select().from(schema.service_execution_attempts).where(eq(schema.service_execution_attempts.order_id, (await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, f.trade.id)))[0].id))).length, 0)
 })
+
+
+test('stale original Tempo claims trigger a durable routing hold and their verified proof remains recoverable', async () => {
+  const f = await fixture(), intent = (await (await create(f)).json()).intent, body = await signed(f, intent)
+  await claim(f, body)
+  await db.update(schema.buyer_mpp_payment_claims).set({ created_at: new Date(Date.now() - 901_000) }).where(eq(schema.buyer_mpp_payment_claims.intent_id, intent.id))
+  const control = await import('@/lib/route-control')
+  try {
+    const financial = await control.inspectRouteFinancialHealth()
+    assert.ok(financial.alerts.some((alert) => alert.code === 'ROUTE_PAYMENT_UNCONFIRMED' && alert.count === 1))
+    assert.equal((await control.monitorRouteAdmission()).control.paused, true)
+    const held = await claim(f, body); assert.equal(held.status, 200); assert.equal((await held.json()).send_allowed, false)
+    assert.equal((await inspect(f)).status, 200)
+    await confirm(f, keccak256(body.serialized_transaction))
+    assert.equal((await db.select().from(schema.buyer_mpp_payment_claims).where(eq(schema.buyer_mpp_payment_claims.intent_id, intent.id)))[0].state, 'confirmed')
+    assert.equal((await control.inspectRouteFinancialHealth()).alerts.some((alert) => alert.code === 'ROUTE_PAYMENT_UNCONFIRMED'), false)
+    assert.equal((await control.monitorRouteAdmission()).control.paused, true, 'proof recovery cannot skip the healthy recovery window')
+  } finally { await db.delete(schema.route_control_events); await db.delete(schema.route_controls) }
+})

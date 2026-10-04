@@ -2,6 +2,11 @@
 set -euo pipefail
 
 required_files=(
+  "lib/route-control.ts"
+  "lib/route-admission-health.mjs"
+  "lib/routing-alerts.ts"
+  "app/api/admin/routing/pause/route.ts"
+  "migrations/2026-10-03-route-admission-control-v1.sql"
   "lib/route-automation-evidence.ts"
   "migrations/2026-10-03-route-automation-evidence-v1.sql"
   "lib/route-funded-retry.ts"

@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.77'
+export const AGENT_CONTRACT_VERSION = '1.78'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -1195,6 +1195,9 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
         .filter((action) => !action.payment)
         .map((action) => `${action.method} ${action.endpoint}`),
     },
+    routing_admission: { error_code: 'ROUTE_EXECUTION_PAUSED', scope: 'new_routing_commitments',
+      recovery_available: true, automatic_reopen: true, recovery_required_checks: 3, recovery_minimum_seconds: 120,
+      monitor_stale_after_seconds: 900, admin_control: '/api/admin/routing/pause' },
     actions: AGENT_ACTIONS,
     webhook_events: WEBHOOK_EVENT_TYPES,
     mcp_tools: AGENT_MCP_TOOLS.map((tool) => tool.name),
@@ -1224,6 +1227,19 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const tradeIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
 
   return {
+    '/api/admin/routing/health': { get: {
+      operationId: 'inspect_routing_health', summary: 'Admin-only aggregate routing alerts and admission state', security: ownerAuthenticated,
+      responses: { 200: { description: 'Private aggregate health, fixed alert codes/counts and current control; no actor IDs or payment values' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator required' }, 500: { description: 'Inspection unavailable; safe error ID returned' } },
+    } },
+    '/api/admin/routing/pause': {
+      get: { operationId: 'inspect_routing_admission', summary: 'Admin-only durable routing admission control', security: ownerAuthenticated,
+        responses: { 200: { description: 'Private no-store pause, allowlisted reason, revision, monitor freshness and automatic recovery window' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator required' }, 503: { description: 'Control unavailable' } } },
+      post: { operationId: 'set_routing_admission', summary: 'Admin-only revision-bound routing pause or healthy resume', security: ownerAuthenticated,
+        description: 'Cookie writes require CSRF; account bearer permitted. Only new routed reservations and payment authority are held. Original proofs, refunds and settlement continue. Automatic recovery requires three spaced healthy samples over at least 120 seconds; environment pause and rollout flags remain authoritative.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['paused', 'expected_revision'], properties: { paused: { type: 'boolean' }, expected_revision: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER } } } } } },
+        responses: { 200: { description: 'Updated control; resume includes aggregate financial health' }, 400: { description: 'Invalid bounded command' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator/CSRF required' }, 409: { description: 'Revision changed, financial uncertainty or environment pause' }, 429: { description: 'Rate limited' }, 503: { description: 'Control unavailable' } },
+      },
+    },
     '/api/payments/config': { get: {
       operationId: 'get_payment_config',
       summary: 'Get deployment payment readiness and accepted stablecoins',
@@ -2391,6 +2407,8 @@ Contract 1.75 adds private \`GET/POST /api/routes/{id}/advance\` and \`GET /api/
 Contract 1.76 adds buyer-only \`GET/POST /api/routes/{id}/retry\` and funded fallback recovery in the buyer route worker. The original owner mandate must allow multiple attempts and a positive retry budget; its full terms hash remains pinned. Every previous economic attempt must have exact original funding, a confirmed terminal full-buyer refund, released capacity and no seller-payout instruction. Missing proof, unpaid cancellation, late payment and unconfirmed refunds block another checkout. Buyer resolutions refund the seller principal under the existing distribution; retained platform fees remain accounted for. Gross aggregate and cumulative retry spend count every checkout, including refunded amounts; the economic attempt ceiling and the plan ceiling for saved candidate checks both apply, and the original funded objective deadline does not restart. Current buyer policy and mandate are checked again before wallet broadcast. Only saved eligible candidates with all requested capabilities, verification and provider approvals may be selected; prior economic sellers are excluded. Persist a retry operation before reservation; exact replay recovers its original order/hash after loss or SIGKILL. Decisions are archived with their original trade and never applied to the next provider. Receipts now link every economic intent, funding, refund, capacity release and failure category. No separate outstanding reserve or unproven payment absence is supported. Paid production proof/global rollout remains deferred.
 
 ## Route metrics and automation evidence
+
+Contract 1.78 adds durable routing-only admission control and fixed aggregate alerts. New initial/fallback reservations and EVM/Tempo intent, claim and broadcast authority fail closed with ROUTE_EXECUTION_PAUSED when control is paused, missing or the production financial monitor is older than 900 seconds. Existing checkout replay and original hash/receipt recovery bypass this hold; dispatch, delivery, explicit buyer acceptance, payout/refund reconciliation and ordinary marketplace payments continue. Authenticated webhook cron observes financial links/exposure/credit/receipt anomalies and uncertain claims/transfers. Automatic reopening requires three healthy samples at least 30 seconds apart over a continuous 120-second window; repeated rapid calls, new failure or stale monitoring cannot reopen. Environment pause and closed rollout flags still win. Admin account GET/POST /api/admin/routing/pause uses revision binding, bounded strict input, cookie CSRF and private no-store responses; unhealthy or environment-held manual resume is rejected. GET /api/admin/routing/health and the existing monitor expose only fixed alert codes/counts, provider/deadline/outbox/verification health and control metadata. No operator identity or financial payload enters alerts. Paid production proof remains deferred.
 
 Contract 1.77 adds metrics v2 at \`GET /api/routes/metrics\`. Routes persist their authenticated origin and production/canary/demo/reference/nonproduction cohort at creation. Client run-kind headers can suppress production classification but cannot grant it. Historical origins stay unknown. The first registered-agent acceptance records its delivery hash in the existing acceptance transaction only with a durable wallet claim and original funding. Private receipts carry this evidence; replay cannot retrospectively upgrade manual acceptance. Autonomous GMV requires matching immutable origin, receipt automation, confirmed funding/payout, provider completion, first agent decision and current distinct linked owners, and excludes controlled cohorts. It measures execution evidence, not independent identities or semantic truth. Separate aggregates report current route funnel, backed external latency, declared capacity, verification observations, retries, and exact confirmed refunds across all economic attempts. No IDs, addresses, objective/result content or arbitrary stored labels are public. Missing/contradictory evidence contributes zero. Paid production proof remains deferred.
 

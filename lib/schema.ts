@@ -529,6 +529,20 @@ export const route_receipts = sqliteTable('route_receipts', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+/** Independent of ordinary marketplace payment controls; recovery is always available. */
+export const route_controls = sqliteTable('route_controls', {
+  key: text('key').primaryKey(), paused: integer('paused').notNull().default(0), reason_code: text('reason_code'),
+  revision: integer('revision').notNull().default(0), last_checked_at: integer('last_checked_at', { mode: 'timestamp' }),
+  healthy_since_at: integer('healthy_since_at', { mode: 'timestamp' }), healthy_sampled_at: integer('healthy_sampled_at', { mode: 'timestamp' }),
+  healthy_check_count: integer('healthy_check_count').notNull().default(0),
+  updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+export const route_control_events = sqliteTable('route_control_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()), control_key: text('control_key').notNull().references(() => route_controls.key, { onDelete: 'restrict' }),
+  paused: integer('paused').notNull(), reason_code: text('reason_code').notNull(), revision: integer('revision').notNull(),
+  actor_user_id: text('actor_user_id'), created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 /** Server-attributed origin is immutable; caller labels can only suppress eligibility. */
 export const route_origins = sqliteTable('route_origins', {
   route_id: text('route_id').primaryKey().references(() => route_plans.id, { onDelete: 'restrict' }),

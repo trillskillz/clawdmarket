@@ -269,3 +269,16 @@ test('current deployment and immutable organization ceilings are rechecked at fu
   assert.equal((await intentRequest(f, trade.id)).status, 409)
   assert.equal((await db.select().from(schema.evm_payment_intents).where(eq(schema.evm_payment_intents.trade_id, trade.id))).length, 0)
 })
+
+
+test('routing hold rejects new EVM intent authority without creating an intent or changing checkout exposure', async () => {
+  const f = await fixture(), m = await authorize(f), { trade } = await (await run(f, m.id)).json()
+  const control = await import('@/lib/route-control')
+  await control.setRouteControl({ paused: true, expectedRevision: (await control.getRouteControl()).revision, actorUserId: f.ownerId })
+  try {
+    const blocked = await intentRequest(f, trade.id)
+    assert.equal(blocked.status, 503); assert.equal((await blocked.json()).code, 'ROUTE_EXECUTION_PAUSED')
+    assert.equal((await db.select().from(schema.evm_payment_intents).where(eq(schema.evm_payment_intents.trade_id, trade.id))).length, 0)
+    assert.equal((await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id, m.id)))[0].reserved_minor, 105)
+  } finally { await db.delete(schema.route_control_events); await db.delete(schema.route_controls) }
+})

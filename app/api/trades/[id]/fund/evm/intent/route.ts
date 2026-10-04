@@ -86,6 +86,7 @@ export async function POST(request: NextRequest, context: Context) {
       if (sendAllowed) {
         const reason = await mandateFundingEligibility(trade, tx, { rail: 'evm', chainId, tokenAddress: body.token_address, payerAddress: body.payer_address, treasuryAddress: treasury })
           || await serviceFundingEligibility(trade, tx)
+        if (reason === 'ROUTE_EXECUTION_PAUSED') throw new TradeFundingError('New route payment authority is paused; recover original payments', 503, reason)
         if (reason) throw new TradeFundingError(`Provider no longer satisfies checkout requirements: ${reason}; do not pay`, 409, 'PROVIDER_ELIGIBILITY_CHANGED')
       }
       const tokenAmount = parseUnits((trade.total_cost / token.fixedUsdPrice).toFixed(token.decimals), token.decimals)

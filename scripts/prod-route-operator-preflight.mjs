@@ -1,3 +1,4 @@
+import { inspectRouteAdmissionHealth } from '../lib/route-admission-health.mjs'
 import { inspectRouteReceiptHealth } from '../lib/route-receipt-health.mjs'
 import { inspectCreditHealth } from '../lib/credit-health.mjs'
 import { createClient } from '@libsql/client'
@@ -10,7 +11,7 @@ if (!url.startsWith('libsql://') || !authToken) throw new Error('Production Turs
 const client = createClient({ url, authToken })
 try {
   const read = async (sql) => (await client.execute(sql)).rows
-  const [migrations, services, routes, orders, attempts, provider, missingAttempts, overdueDeliveries, webhooks, transfers, worker, legacyOwner, artifacts, verifierJobs, fundingHealth, creditHealth, receiptHealth] = await Promise.all([
+  const [migrations, services, routes, orders, attempts, provider, missingAttempts, overdueDeliveries, webhooks, transfers, worker, legacyOwner, artifacts, verifierJobs, fundingHealth, creditHealth, receiptHealth, admissionHealth] = await Promise.all([
     read('SELECT COUNT(*) AS count FROM _clawdmarket_migrations'),
     read('SELECT status AS state, COUNT(*) AS count FROM service_definitions GROUP BY status'),
     read('SELECT state, COUNT(*) AS count FROM route_plans GROUP BY state'),
@@ -63,6 +64,7 @@ try {
     inspectRouteFundingHealth(client),
     inspectCreditHealth(client),
     inspectRouteReceiptHealth(client),
+    inspectRouteAdmissionHealth(client),
   ])
   const states = (rows) => Object.fromEntries(rows.map((row) => [String(row.state), Number(row.count || 0)]))
   const workerRow = worker[0]
@@ -80,10 +82,11 @@ try {
     route_funding: fundingHealth,
     account_credit: creditHealth,
     route_receipts: receiptHealth,
+    route_financial_health: admissionHealth,
     private_artifacts: Object.fromEntries(Object.entries(artifacts[0] || {}).map(([key, value]) => [key, Number(value || 0)])),
   }
   console.log(JSON.stringify(snapshot, null, 2))
-  if (snapshot.route_receipts.receipt_anomaly_count || !snapshot.account_credit.healthy || snapshot.migrations < 44 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
+  if (!snapshot.route_financial_health.healthy || snapshot.route_receipts.receipt_anomaly_count || !snapshot.account_credit.healthy || snapshot.migrations < 45 || snapshot.provider_execution.acknowledgment_overdue_count || snapshot.provider_execution.acknowledgment_timed_out_count || snapshot.provider_execution.overdue_lease_count || snapshot.provider_execution.terminal_active_count || snapshot.provider_execution.funded_without_attempt_count || snapshot.provider_execution.delivery_deadline_overdue_count
     || snapshot.route_funding.funded_retry_anomaly_count || snapshot.route_funding.exposure_anomaly_count || snapshot.route_funding.missing_step_count || snapshot.route_funding.proof_state_anomaly_count || snapshot.route_funding.payment_claim_anomaly_count
     || snapshot.verification_jobs.overdue_count || snapshot.verification_jobs.retained_suite_anomaly_count
     || snapshot.private_artifacts.missing_live_payload_count || snapshot.private_artifacts.purged_with_payload_count || snapshot.private_artifacts.overdue_purge_count

@@ -20,7 +20,9 @@ before(async () => {
   process.env.CRON_SECRET = 'routing-operator-cron-secret'
   process.env.ADMIN_USER_IDS = 'routing-admin'
   db = (await import('@/lib/db')).db
-  await createLocalTestSchema(db.$client, await import('@/lib/schema'))
+  const schema = await import('@/lib/schema')
+  await createLocalTestSchema(db.$client, schema)
+  await db.insert(schema.users).values({ id: 'routing-admin', name: 'Routing admin', email: 'routing-admin@test.invalid', password_hash: 'unused' })
   await db.$client.execute('CREATE TABLE _clawdmarket_migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL)')
   await db.$client.execute({ sql: 'INSERT INTO _clawdmarket_migrations VALUES (?, ?)', args: ['2026-10-01-service-provider-protocol-v1', '2026-10-01T00:00:00.000Z'] })
   token = (await import('@/lib/auth')).generateJWT
@@ -48,6 +50,8 @@ test('routing operator health is admin-only and exposes aggregates without priva
   assert.equal(beforeCron.headers.get('cache-control'), 'private, no-store')
   const beforeBody = await beforeCron.json()
   assert.equal(beforeBody.workers.webhooks.status, 'never_observed')
+  assert.ok(beforeBody.alerts.some((alert: { code: string }) => alert.code === 'ROUTING_WORKER_UNHEALTHY'))
+  assert.equal(beforeBody.financial_health.healthy, true)
   assert.deepEqual(beforeBody.migrations, [{ id: '2026-10-01-service-provider-protocol-v1', applied_at: '2026-10-01T00:00:00.000Z' }])
   assert.deepEqual(beforeBody.usage.services, {})
   assert.deepEqual(beforeBody.provider_execution, {
@@ -110,6 +114,7 @@ test('operator snapshot exposes aggregate missing, overdue, and terminal attempt
     state: 'queued', acknowledgment_due_at: new Date(Date.now() - 1000) })
   const queued = await snapshot()
   assert.equal(queued.provider_execution.acknowledgment_overdue_count, 1)
+  assert.ok(queued.alerts.some((alert: { code: string; count: number }) => alert.code === 'PROVIDER_ACKNOWLEDGMENT_OVERDUE' && alert.count === 1))
   assert.equal(queued.provider_execution.acknowledgment_timed_out_count, 0)
   const { expireServiceAcknowledgmentAttempts } = await import('@/lib/service-execution-attempt')
   assert.equal(await expireServiceAcknowledgmentAttempts(), 1)
@@ -131,5 +136,48 @@ test('operator snapshot exposes aggregate missing, overdue, and terminal attempt
   await db.update(schema.trades).set({ status: 'resolved' }).where(eq(schema.trades.id, tradeId))
   const terminal = await snapshot()
   assert.equal(terminal.provider_execution.terminal_active_count, 1)
+  assert.ok(terminal.alerts.some((alert: { code: string }) => alert.code === 'PROVIDER_TERMINAL_ATTEMPT'))
   assert.equal(terminal.provider_execution.delivery_deadline_overdue_count, 0)
+})
+
+
+test('monitor health returns fixed aggregate alerts when inspection is unavailable', async () => {
+  const { getRoutingMonitoringHealth } = await import('@/lib/routing-operator-snapshot')
+  await db.$client.execute('ALTER TABLE route_controls RENAME TO missing_route_controls')
+  try {
+    const outcome = await getRoutingMonitoringHealth()
+    assert.equal(outcome.healthy, false); assert.equal(outcome.admission.paused, true)
+    assert.deepEqual(outcome.alerts, [{ code: 'ROUTE_MONITOR_UNAVAILABLE', count: 1, severity: 'critical' }])
+    assert.equal(JSON.stringify(outcome).includes('missing_route_controls'), false)
+  } finally { await db.$client.execute('ALTER TABLE missing_route_controls RENAME TO route_controls') }
+})
+
+
+test('stuck unfunded reservations generate attention without becoming a financial pause', async () => {
+  const schema = await import('@/lib/schema')
+  const id = crypto.randomUUID()
+  await db.insert(schema.route_plans).values({ id, buyer_id: 'routing-admin', client_reference: `stuck-${id}`, objective: 'private stuck objective',
+    required_capabilities: '["code-review"]', max_budget_minor: 100, state: 'reserving', updated_at: new Date(Date.now() - 901_000), expires_at: new Date(Date.now() + 300_000) })
+  const snapshot = await (await inspect(request('/api/admin/routing/health', 'routing-admin'))).json()
+  assert.equal(snapshot.route_progress.reserving_overdue_count, 1)
+  assert.ok(snapshot.alerts.some((alert: { code: string; count: number }) => alert.code === 'ROUTE_RESERVATION_STUCK' && alert.count === 1))
+  assert.equal(snapshot.financial_health.healthy, true)
+  assert.equal(JSON.stringify(snapshot).includes(id), false); assert.equal(JSON.stringify(snapshot).includes('private stuck objective'), false)
+})
+
+
+test('hourly monitor includes routing attention while retaining ordinary settlement and RPC checks', async () => {
+  // Keep this integration entirely local and never contact a notification destination or configured rail.
+  delete process.env.MONITOR_WEBHOOK_URL
+  delete process.env.MPP_SECRET_KEY; delete process.env.MPP_SECRET_KEY_CURRENT
+  delete process.env.EVM_SETTLEMENT_PRIVATE_KEY; process.env.EVM_ACCEPTED_TOKENS = '[]'
+  const monitor = await import('@/app/api/cron/monitor/route')
+  const reply = await monitor.GET(new NextRequest('http://localhost/api/cron/monitor', { headers: { Authorization: 'Bearer routing-operator-cron-secret' } }))
+  assert.equal(reply.status, 200); assert.equal(reply.headers.get('Cache-Control'), 'private, no-store')
+  const body = await reply.json()
+  assert.equal(body.ok, false); assert.equal(body.routing_health.healthy, false)
+  assert.ok(body.routing_health.alerts.some((alert: { code: string }) => alert.code === 'ROUTE_RESERVATION_STUCK'))
+  assert.equal(typeof body.settlement_health.healthy, 'boolean'); assert.deepEqual(body.payment_rpc_health.endpoints, [])
+  assert.deepEqual(body.notification, { configured: false, delivered: false })
+  assert.equal(JSON.stringify(body.routing_health).includes('private stuck objective'), false)
 })

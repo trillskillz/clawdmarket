@@ -1,3 +1,4 @@
+import { routeAdmissionFailure } from './route-control'
 import 'server-only'
 import { isolatedVerifierEligibility } from '@/lib/isolated-verifier-eligibility'
 import { and, eq, isNull, sql } from 'drizzle-orm'
@@ -134,6 +135,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       let agreedCapabilities = storedServiceCapabilities(service.capabilities)
       if (!agreedCapabilities?.length) throw new ServiceOrderReservationError(routeId ? 'ROUTE_STALE_PROVIDER' : 'SERVICE_UNAVAILABLE', 'Service capabilities are invalid')
       if (routeId) {
+        if (await routeAdmissionFailure(tx)) throw new ServiceOrderReservationError('ROUTE_EXECUTION_PAUSED', 'New route commitments are paused; recover existing payments and refunds', 503, true)
         const [plan] = await tx.select().from(route_plans).where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId))).limit(1)
         if (!plan || (args.retry ? !['cancelled', 'resolved'].includes(plan.state) || !plan.service_order_id : plan.state !== 'reserving' || plan.service_order_id)) throw new ServiceOrderReservationError('ROUTE_STATE_CHANGED', 'Route is no longer available for reservation')
         if (args.retry) {
@@ -217,6 +219,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         await reserveMandateExposure(tx, { mandateId: args.mandateId, plan, service, rail, totalMinor, orderId: order.id, tradeId: trade.id, retry: args.retry })
       }
       if (routeId) {
+        if (await routeAdmissionFailure(tx)) throw new ServiceOrderReservationError('ROUTE_EXECUTION_PAUSED', 'New route commitments are paused; recover existing payments and refunds', 503, true)
         const [linked] = await tx.update(route_plans).set({ state: 'awaiting_funding', service_order_id: order.id, updated_at: now })
           .where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId), args.retry
             ? sql`${route_plans.state} IN ('cancelled','resolved') AND ${route_plans.service_order_id} = (SELECT id FROM service_orders WHERE trade_id = ${args.retry.previousTradeId})`

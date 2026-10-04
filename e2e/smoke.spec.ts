@@ -90,7 +90,11 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.77');
+    expect(openApi.info['x-agent-contract-version']).toBe('1.78');
+    expect(openApi.paths['/api/admin/routing/pause']?.post?.responses?.['409']).toBeTruthy();
+    const routingControl = await request.get('/api/admin/routing/pause');
+    expect(routingControl.status()).toBe(401);
+    expect(routingControl.headers()['cache-control']).toContain('private');
     expect(openApi.paths['/api/organizations/{id}/budget']?.put).toBeTruthy();
     expect(openApi.paths['/api/organizations/{id}/service-accounts']?.post).toBeTruthy();
     expect(openApi.paths['/api/spending-policy']?.put?.responses?.['200']).toBeTruthy();
@@ -128,7 +132,7 @@ test.describe('Core smoke matrix', () => {
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.77"');
+    expect(await skill.text()).toContain('contract-version: "1.78"');
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();

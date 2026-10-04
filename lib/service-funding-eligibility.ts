@@ -1,3 +1,4 @@
+import { routeAdmissionFailure } from './route-control'
 import { payoutAddressForUser } from './external-settlement'
 import { ZodError } from 'zod'
 import { eq, sql } from 'drizzle-orm'
@@ -33,12 +34,16 @@ export async function checkProviderRequirements(source: Source, buyerId: string,
 }
 
 /** New payment permission and verified funding share this check. Proof recovery is always allowed. */
-export async function serviceFundingEligibility(trade: typeof trades.$inferSelect, source: Source = db): Promise<string | null> {
+export async function serviceFundingEligibility(trade: typeof trades.$inferSelect, source: Source = db, mode: 'new_payment' | 'proof_recovery' = 'new_payment'): Promise<string | null> {
   const [linked] = await source.select({ order: service_orders, service: service_definitions }).from(service_orders)
     .leftJoin(service_definitions, eq(service_definitions.id, service_orders.service_id))
     .where(eq(service_orders.trade_id, trade.id)).limit(1)
   if (!linked) return null // Listing/task checkouts retain their existing contract.
   try {
+    if (mode === 'new_payment') {
+      const [route] = await source.select({ id: route_plans.id }).from(route_plans).where(eq(route_plans.service_order_id, linked.order.id)).limit(1)
+      if (route && await routeAdmissionFailure(source)) return 'ROUTE_EXECUTION_PAUSED'
+    }
     const mandateReason = await mandateFundingEligibility(trade, source)
     if (mandateReason) return mandateReason
     const deploymentReason = await agentFundingPolicyFailure(trade, source)
