@@ -51,7 +51,8 @@ async function spentSince(tx: Transaction | typeof db, buyerId: string, since: D
       gte(trades.created_at, since),
       sql`(${trades.status} <> 'cancelled' OR (${trades.payment_rail} <> 'ledger' AND ${trades.payout_status} <> 'refunded'))`,
     ));
-  return round2(Number(row?.spent || 0));
+  const [instant] = await tx.all<{ total: number }>(sql`SELECT COALESCE(SUM(budget_minor - refunded_minor), 0) AS total FROM instant_sessions WHERE buyer_id = ${buyerId} AND (status != 'closed' OR closed_at >= ${Math.floor(since.getTime()/1000)})`)
+  return round2(Number(row?.spent || 0) + Number(instant?.total || 0) / 100);
 }
 
 export class AgentSpendPolicyError extends Error {
@@ -65,9 +66,9 @@ export class AgentSpendPolicyError extends Error {
   }
 }
 
-export async function getAgentSpendSnapshot(agentId: string, buyerId = `user_agent_${agentId}`, now = new Date()): Promise<AgentSpendSnapshot> {
+export async function getAgentSpendSnapshot(agentId: string, buyerId = `user_agent_${agentId}`, now = new Date(), source: Transaction | typeof db = db): Promise<AgentSpendSnapshot> {
   const limits = getAgentSpendLimits();
-  const spentToday = await spentSince(db, buyerId, windowStart(now));
+  const spentToday = await spentSince(source, buyerId, windowStart(now));
   return {
     agent_id: agentId,
     unit: 'usd',

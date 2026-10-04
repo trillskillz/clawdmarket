@@ -110,7 +110,7 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
     const commit = () => db.transaction(async (tx) => {
       const [current] = await tx.select().from(trades).where(eq(trades.id, input.trade.id)).limit(1)
       if (!current || current.status !== 'pending') throw new TradeFundingError('Trade was funded or cancelled by another request', 409, 'TRADE_FUNDING_RACE')
-      const reason = paymentDeadlinePassed(current) ? 'CHECKOUT_EXPIRED' : await mandateFundingEligibility(current, tx, input) || await serviceFundingEligibility(current, tx)
+      const reason = paymentDeadlinePassed(current) ? 'CHECKOUT_EXPIRED' : await mandateFundingEligibility(current, tx, input) || await serviceFundingEligibility(current, tx, 'proof_recovery')
       if (reason) {
         const [cancelled] = await tx.update(trades).set({ status: 'cancelled', payout_status: 'processing', fee_tx_hash: input.txHash, funded_at: new Date().toISOString() })
           .where(and(eq(trades.id, current.id), eq(trades.status, 'pending'))).returning()

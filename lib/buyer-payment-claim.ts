@@ -1,6 +1,7 @@
+import { findTradeFundingStep } from './route-funding-steps'
 import { and, eq, isNull, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { buyer_evm_payment_claims, evm_payment_intents, route_funding_steps, route_payment_mandates, trades } from '@/lib/schema'
+import { buyer_evm_payment_claims, buyer_mpp_payment_claims, evm_payment_intents, route_payment_mandates, trades } from '@/lib/schema'
 import { inspectSignedEvmPayment } from '@/lib/buyer-signed-transaction.mjs'
 import { mandateDto, mandateFundingEligibility } from '@/lib/route-payment-mandate'
 import { serviceFundingEligibility } from '@/lib/service-funding-eligibility'
@@ -25,7 +26,7 @@ export async function claimBuyerEvmPayment(tradeId: string, buyerId: string, inp
           if (!trade) fail('TRADE_NOT_FOUND', 404)
           if (trade.buyer_id !== buyerId) fail('FORBIDDEN', 403)
           const [intent] = await tx.select().from(evm_payment_intents).where(and(eq(evm_payment_intents.id, input.intent_id), eq(evm_payment_intents.trade_id, tradeId))).limit(1)
-          const [step] = await tx.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id, tradeId)).limit(1)
+          const step = await findTradeFundingStep(tx, tradeId)
           if (!intent || !step || step.mandate_id !== input.mandate_id || intent.buyer_id !== buyerId || trade.payment_rail !== 'evm') fail('BUYER_PAYMENT_SCOPE_MISMATCH')
           if (intent.buyer_operation_id && intent.buyer_operation_id !== input.buyer_operation_id
             || input.buyer_operation_id && input.buyer_operation_id !== intent.buyer_operation_id) fail('BUYER_OPERATION_CONFLICT')
@@ -67,7 +68,12 @@ export async function claimBuyerEvmPayment(tradeId: string, buyerId: string, inp
           if (intent.tx_hash) fail('PAYMENT_ALREADY_SUBMITTED_RECOVER_ONLY')
           const [active] = await tx.select().from(buyer_evm_payment_claims).where(and(eq(buyer_evm_payment_claims.chain_id, checked.chain_id),
             eq(buyer_evm_payment_claims.payer_address, checked.payer_address), eq(buyer_evm_payment_claims.state, 'claimed'))).limit(1)
-          if (active) fail('BUYER_WALLET_PAYMENT_UNRECONCILED')
+          const [mppActive] = await tx.select({ id: buyer_mpp_payment_claims.intent_id }).from(buyer_mpp_payment_claims).where(and(
+            eq(buyer_mpp_payment_claims.chain_id, checked.chain_id), eq(buyer_mpp_payment_claims.payer_address, checked.payer_address), eq(buyer_mpp_payment_claims.state, 'claimed'))).limit(1)
+          if (active || mppActive) fail('BUYER_WALLET_PAYMENT_UNRECONCILED')
+          const [mppNonce] = await tx.select({ id: buyer_mpp_payment_claims.intent_id }).from(buyer_mpp_payment_claims).where(and(
+            eq(buyer_mpp_payment_claims.chain_id, checked.chain_id), eq(buyer_mpp_payment_claims.payer_address, checked.payer_address), eq(buyer_mpp_payment_claims.nonce, checked.nonce))).limit(1)
+          if (mppNonce) fail('BUYER_WALLET_NONCE_ALREADY_CLAIMED')
           const [claim] = await tx.insert(buyer_evm_payment_claims).values({ intent_id: intent.id, mandate_id: row.id,
             chain_id: checked.chain_id, payer_address: checked.payer_address, nonce: checked.nonce, tx_hash: checked.tx_hash,
             terms_hash: mandate.terms_hash, maximum_execution_gas_cost_wei: checked.maximum_execution_gas_cost_wei,

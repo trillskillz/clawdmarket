@@ -7,7 +7,7 @@ import { verificationPolicySchema } from './verification-policy'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 export class AcceptanceError extends Error {
-  constructor(public code: 'ACCEPTANCE_CONTRACT_INVALID' | 'REQUIRED_VERIFICATION_MISSING' | 'EXPLICIT_ACCEPTANCE_REQUIRED') { super(code) }
+  constructor(public code: 'ACCEPTANCE_CONTRACT_INVALID' | 'REQUIRED_VERIFICATION_MISSING' | 'EXPLICIT_ACCEPTANCE_REQUIRED' | 'DELIVERY_CHANGED') { super(code) }
 }
 
 async function agreedAcceptance(tradeId: string, source: Source) {
@@ -39,8 +39,12 @@ async function requiredChecks(tradeId: string, source: Source) {
 }
 
 /** Run before recording the authenticated buyer's acceptance, in its transaction. */
-export async function assertReadyForBuyerAcceptance(tradeId: string, source: Source = db) {
+export async function assertReadyForBuyerAcceptance(tradeId: string, source: Source = db, expectedHash?: string) {
   await requiredChecks(tradeId, source)
+  if (expectedHash !== undefined) {
+    const [delivery] = await source.select({ content_hash: trade_deliveries.content_hash }).from(trade_deliveries).where(eq(trade_deliveries.trade_id, tradeId)).limit(1)
+    if (!delivery || delivery.content_hash !== expectedHash) throw new AcceptanceError('DELIVERY_CHANGED')
+  }
 }
 
 /** Gate both account-balance completion and the external payout boundary. */

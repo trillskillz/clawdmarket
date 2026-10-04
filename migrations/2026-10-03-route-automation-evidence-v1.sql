@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS route_origins (
+  route_id TEXT PRIMARY KEY NOT NULL REFERENCES route_plans(id) ON DELETE RESTRICT,
+  channel TEXT NOT NULL, cohort TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS route_agent_decisions (
+  trade_id TEXT PRIMARY KEY NOT NULL REFERENCES trades(id) ON DELETE RESTRICT,
+  route_id TEXT NOT NULL REFERENCES route_plans(id) ON DELETE RESTRICT,
+  delivery_hash TEXT NOT NULL, decided_at INTEGER NOT NULL
+);

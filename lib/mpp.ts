@@ -6,7 +6,7 @@ import { WALLETS } from './wallet-addresses'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from './constants'
 import { durableMppStore } from './mpp-store'
 import { getMppSecretKey, getTempoRpcUrl } from './payment-config'
-import { guardMarketplaceMppMethod } from './marketplace-mpp-payment'
+import { guardMarketplaceMppMethod, marketplaceMppTransport } from './marketplace-mpp-payment'
 
 const recipient = WALLETS.mpp
 
@@ -84,7 +84,7 @@ export function getMarketplaceMppServer() {
    recipient: recipient as `0x${string}`,
    chainId: TEMPO_CHAIN_ID,
    testnet: false,
-   getClient: () => createClient({ chain: tempoChain, transport: http(rpcUrl) }),
+   getClient: () => createClient({ chain: tempoChain, transport: marketplaceMppTransport(rpcUrl) }),
    store: durableMppStore,
    waitForConfirmation: true,
   }))],

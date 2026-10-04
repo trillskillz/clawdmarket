@@ -24,3 +24,9 @@ test('unfunded work and routes without a deadline have no execution timing', () 
   assert.equal(routeExecutionTiming({ deadline_seconds: null }, { state: 'funded' }, funded), null)
   assert.equal(routeExecutionTiming(deadline, { state: 'funded' }, { funded_at: 'invalid', status: 'escrow_held' }), null)
 })
+
+test('fallback funding preserves the original objective deadline instead of restarting delivery time', () => {
+  const timing = routeExecutionTiming({ ...deadline, execution_deadline_at: new Date('2026-10-01T12:10:00.000Z') }, { state: 'executing' },
+    { ...funded, funded_at: '2026-10-01T12:08:00.000Z' }, new Date('2026-10-01T12:10:01.000Z'))
+  assert.equal(timing?.due_at, '2026-10-01T12:10:00.000Z'); assert.equal(timing?.delivery_overdue, true)
+})

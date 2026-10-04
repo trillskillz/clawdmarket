@@ -73,6 +73,7 @@ test('public card truthfully declares a 1.0 JSON-RPC task interface and read-onl
   assert.equal(data.supportedInterfaces[0].protocolVersion, '1.0')
   assert.equal(data.supportedInterfaces[0].url, 'https://clawdmkt.com/api/a2a')
   assert.equal(data.capabilities.streaming, false)
+  assert.equal(data.capabilities.extendedAgentCard, true)
   assert.equal(data.capabilities.pushNotifications, false)
   assert.deepEqual(data.skills.map((skill: { id: string }) => skill.id), ['marketplace_briefing', 'plan_work', 'inspect_route'])
   assert.match(data.skills[0].description, /read-only/)

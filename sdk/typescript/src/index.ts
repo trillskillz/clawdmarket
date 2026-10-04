@@ -1,15 +1,31 @@
+export type A2ATaskState = 'TASK_STATE_SUBMITTED' | 'TASK_STATE_WORKING' | 'TASK_STATE_COMPLETED' | 'TASK_STATE_FAILED' | 'TASK_STATE_CANCELED' | 'TASK_STATE_INPUT_REQUIRED'
+export type A2ARouteAction = { action: 'route_work'; request: Omit<RouteRequest, 'client_reference'> } | { action: 'route_work'; route_id: string; mandate_id: string } | { action: 'cancel_route'; route_id: string }
+export type A2AMessage = { role: 'ROLE_USER'; messageId: string; taskId?: string; contextId?: string; parts: Array<{ text: string } | { data: A2ARouteAction | Record<string, unknown>; mediaType?: 'application/json' }>; metadata?: Record<string, unknown> }
+export type A2ATask = { id: string; contextId: string; status: { state: A2ATaskState; timestamp: string }; artifacts?: Array<{ artifactId: string; name: string; parts: Array<{ data: Record<string, unknown>; mediaType: string }> }>; history?: A2AMessage[] }
+export type A2ATaskListOptions = { pageSize?: number; pageToken?: string; contextId?: string; status?: A2ATaskState; statusTimestampAfter?: string; historyLength?: number; includeArtifacts?: boolean }
+
+export type InstantSessionRequest = { client_reference: string; budget_minor: number; expected_unit_price_minor: number; expires_in_seconds: number; acceptance: 'schema_v1'; payment_rail: 'credit' }
+export type InstantReceipt = { version: 1; id: string; call_id: string; session_id: string; service_id: string; buyer_id: string; seller_id: string; units: 1; amount_minor: number; currency: 'USD'; payment_rail: 'credit'; metering: 'one_successful_call'; verification: 'schema_v1'; input_sha256: string; output_sha256: string; settled_at: string }
+export type InstantSession = { id: string; service_id: string; buyer_id: string; budget_minor: number; balance_minor: number; held_minor: number; spent_minor: number; refunded_minor: number; available_budget_minor: number; status: 'open' | 'closing' | 'closed'; expires_at: string; contract: Record<string, unknown> }
+export type InstantCall = { id: string; session_id: string; state: 'pending' | 'claimed' | 'completed' | 'failed'; input: Record<string, unknown>; output: Record<string, unknown> | null; receipt: InstantReceipt | null; deadline_at: string; failure_code: string | null }
+
 export type ProviderRequirements = { approved_providers?: string[]; minimum_accepted_completions?: number; minimum_distinct_buyers?: number }
 
 export type Money = { amount: string; currency: 'USD' }
+type RoutePaymentBase = { chain_id: number; token_address: string; payer_address: string; treasury_address: string; minimum_token_reserve_units: string }
+export type RouteMandatePayment = RoutePaymentBase & (
+  { rail: 'evm'; minimum_native_reserve_wei: string; max_gas_cost_wei: string }
+  | { rail: 'mpp'; fee_token_address: string; minimum_fee_token_reserve_units: string; max_fee_token_cost_units: string }
+)
+export type LegacyMppMandatePayment = RoutePaymentBase & { rail: 'mpp'; minimum_native_reserve_wei: string; max_gas_cost_wei: string }
 export type RouteMandateInput = { version: 1; client_reference: string; max_aggregate: string; max_per_execution: string; max_retry_budget: string; max_attempts: number;
   approved_providers: string[]; max_latency_seconds: number; private_data: 'selected_provider_only'; expires_at: string;
-  payment: { rail: 'evm' | 'mpp'; chain_id: number; token_address: string; payer_address: string; treasury_address: string;
-    minimum_token_reserve_units: string; minimum_native_reserve_wei: string; max_gas_cost_wei: string } }
+  payment: RouteMandatePayment }
 export type RouteMandate = { id: string; route_id: string; buyer_id: string; client_reference: string; route_hash: string; terms_hash: string;
-  terms: Omit<RouteMandateInput, 'client_reference'> & { token_decimals: number; token_usd_price: number };
-  state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: false }
+  terms: Omit<RouteMandateInput, 'client_reference' | 'payment'> & { payment: RouteMandatePayment | LegacyMppMandatePayment; token_decimals: number; token_usd_price: number; fee_token_decimals?: number };
+  state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: boolean }
 export type RouteFundingStep = { id: string; mandate_id: string; route_id: string; order_id: string; trade_id: string; amount_minor: number; terms_hash: string;
-  state: 'reserved' | 'funded' | 'rejected'; created_at: string; updated_at: string }
+  state: 'reserved' | 'funded' | 'rejected'; retry_operation_id?: string; previous_trade_id?: string; attempt_id?: string; created_at: string; updated_at: string }
 export type BuyerEvmPaymentClaimInput = { intent_id: string; mandate_id: string; serialized_transaction: string; payer_signature: string; buyer_operation_id?: string }
 export type BuyerEvmPaymentClaim = { intent_id: string; mandate_id: string; chain_id: number; payer_address: string; nonce: number; tx_hash: string;
   terms_hash: string; maximum_execution_gas_cost_wei: string; state: 'claimed' | 'confirmed'; created_at: string }
@@ -19,6 +35,15 @@ export type BuyerEvmIntent = { id: string; trade_id: string; buyer_id: string; o
   payer_address: string; chain_id: number; token_address: string; treasury_address: string; token_amount: string; token_decimals: number;
   token_symbol: string; token_usd_price: number; amount_usd: number; expires_at: string; created_at: string; tx_hash: string | null; payer_signature: string | null }
 export type BuyerEvmFundingProof = { intent_id: string; chain_id: number; token_address: string; payer_address: string; tx_hash: string; payer_signature?: string }
+export type BuyerMppIntent = { id: string; trade_id: string; buyer_id: string; buyer_operation_id: string; mandate_id: string; origin: string;
+  terms_hash: string; chain_id: number; payer_address: string; token_address: string; treasury_address: string; token_amount: string;
+  token_decimals: number; amount_usd: number; challenge: Record<string, unknown>; expires_at: string; created_at: string }
+export type BuyerMppPaymentClaimInput = { intent_id: string; mandate_id: string; buyer_operation_id: string; serialized_transaction: string }
+export type BuyerMppPaymentClaim = { intent_id: string; mandate_id: string; chain_id: number; payer_address: string; nonce: number; tx_hash: string;
+  terms_hash: string; fee_token_address: string; maximum_fee_token_cost_units: string; valid_before: number;
+  state: 'claimed' | 'confirmed'; first_submission_at: string | null; created_at: string }
+export type BuyerMppPaymentClaimResult = { claim: BuyerMppPaymentClaim; send_allowed: boolean; idempotent: boolean;
+  state: 'submit_exact_credential' | 'recover_existing_payment' }
 
 export type VerificationMethod = 'buyer_review' | 'schema' | 'source_urls' | 'assertions' | 'source_evidence' | 'isolated_checks'
 export type IsolatedCheckPolicy = { version: 1; adapter: 'javascript_tests_v1' | 'javascript_static_v1'; verifier_agent_id: string; suite_sha256: string; max_runtime_seconds: number }
@@ -97,6 +122,8 @@ export type RouteAttempt = {
   service_id: string
   state: 'checking' | 'ineligible' | 'reserved'
   failure_code: string | null
+  failure_category: 'provider' | 'verification' | 'payment' | 'infrastructure' | 'buyer_policy' | null
+  economic: { trade_id: string; trade_status: string; payout_status: string; funding_step_id: string | null; mandate_id: string | null; terms_hash: string | null; amount_minor: number; funding_state: string | null; payment_intent_id: string | null; payment_receipt: { id: string; tx_hash: string | null; token_amount: string | null } | null; transfers: Array<{ id: string; kind: string; status: string; tx_hash: string | null; token_amount: string; confirmed_at: string | null }>; capacity_released_at: string | null } | null
   service_order_id: string | null
   created_at: string
   updated_at: string
@@ -129,6 +156,36 @@ export type ProviderExecution = {
 
 export type AcceptanceStatus = { mode: 'legacy_settlement' | 'explicit_buyer'; auto_confirm_enabled: boolean; accepted: boolean; attention_required: boolean; error_code?: string }
 export type RouteSnapshot = { route: RoutePlan; attempts: RouteAttempt[]; payment_exposure: PaymentExposure | null; provider_execution: ProviderExecution | null; acceptance: AcceptanceStatus | null }
+export type RouteResultArtifact = { id: string; sha256: string; size_bytes: number; media_type: string }
+export type PrivateRouteResult = { route_id: string; trade_id: string; delivery: { id: string; content_hash: string };
+  content: { summary: string; artifact: Record<string, unknown> | null; delivery_url: string | null }; result_hash: string; artifacts: RouteResultArtifact[] }
+export type RouteOrigin = { channel: 'authenticated_agent' | 'account' | 'mpp_wallet' | 'legacy_unknown'; cohort: 'production' | 'canary' | 'demo' | 'reference' | 'nonproduction' | 'legacy_unknown' }
+export type RouteMetrics = { contract_version: 2; currency: 'USD'; plans: number; viable_plans: number; executions: number; cancelled: number; failed: number;
+  accepted_settled_routes: number; planning_to_execution_rate: number | null; execution_to_accepted_settlement_rate: number | null;
+  assisted_routed_gmv: string; autonomously_routed_gmv: string; autonomously_settled_routes: number; autonomy_status: 'evidence_gated';
+  funnel: { funded: number; dispatch_queued: number; provider_acknowledged: number; delivered: number; buyer_accepted: number; payout_confirmed: number; backed_receipts: number };
+  latency_seconds: { sample_count: number; funding_to_delivery_sample_count: number; mean_plan_to_settlement: number | null; max_plan_to_settlement: number | null; mean_funding_to_delivery: number | null };
+  provider_capacity: { active_services: number; total_slots: number; occupied_slots: number; available_slots: number; utilization_rate: number | null };
+  verification: { observations_by_method: Record<string, Record<string, number>>; semantic_verified: false; provenance_verified: false; benchmark_verified: false };
+  retry: { reserved_attempts: number; completed_attempts: number; disputed_attempts: number };
+  economic_outcomes: { attempts: number; disputed_attempts: number; buyer_resolutions: number; confirmed_refunds: number; refunds_awaiting_confirmation: number };
+  origins: Array<RouteOrigin & { plans: number; executions: number }>; definitions: Record<string, string>; updated_at: string }
+export type BackedRouteReceipt = { version: 1; route_id: string; trade_id: string; order_id: string; objective_hash: string; input_hash: string;
+  selected_provider: { service_id: string; protocol: string | null }; authority: { mandate_id: string; terms_hash: string; funding_step_id: string } | null;
+  attempts: RouteAttempt[];
+  delivery: { id: string; content_hash: string }; result_hash: string; artifacts: RouteResultArtifact[];
+  gross_attempt_total: string; pricing: { currency: 'USD'; item_amount: string; fee_amount: string; buyer_total: string; seller_amount: string }; payment_rail: string;
+  verification: { checks: Array<{ method: string; version: string; status: string }>; semantic_verified: false; isolation_observed_by_app: false; [key: string]: unknown };
+  buyer_decision: { decision: 'accepted'; content_hash: string }; financial: { kind: 'confirmed_external' | 'backed_account_credit' | 'historical_ledger'; [key: string]: unknown };
+  automation?: { origin: RouteOrigin; durable_buyer_funding: boolean; authenticated_agent_decision: boolean };
+  settlement_status: 'completed'; completed_at: string; capacity_released: true }
+export type RouteLifecycle = { route_id: string; order_id: string | null; trade_id: string | null; phase: string; next_action: string;
+  funds_state: string; error_code: string | null; delivery: { id: string; content_hash: string } | null; acceptance: AcceptanceStatus | null;
+  receipt: { receipt: BackedRouteReceipt; content_hash: string } | null; provider_protocol: string | null }
+export type RouteRetryCommand = { version: 1; mandate_id: string; previous_trade_id: string; retry_operation_id: string }
+export type RouteRetryInspection = { route_id: string; trade_id: string | null; reconciliation: { reconciled: boolean; blocking_reason: string | null; funds_state: string } | null; retry: { reconciliation_required: true; funds_state: string; blocking_reason: string | null } }
+export type RetriedRoute = { route: { id: string }; order: { id: string; service_id: string; trade_id: string }; trade: { id: string; payment_rail: string }; funding_step: RouteFundingStep; idempotent: boolean; funds_state: string }
+export type RouteAdvanceCommand = { version: 1; action: 'observe' } | { version: 1; action: 'accept'; content_hash: string }
 export type PlannedRoute = { route: RoutePlan; idempotent: boolean; planning?: { examined: number; truncated: boolean; candidate_count: number; funds_moved: false } }
 export type ExecutedRoute = Pick<RouteSnapshot, 'route' | 'attempts' | 'payment_exposure'> & {
   order: { id: string; service_id: string; trade_id: string; [key: string]: unknown }
@@ -144,6 +201,13 @@ export class ClawdMarketApiError extends Error {
   readonly name = 'ClawdMarketApiError'
   constructor(readonly status: number, readonly code: string, message: string,
     readonly retryable: boolean, readonly fundsState: string, readonly details: unknown) { super(message) }
+}
+
+/** A2A ErrorInfo preserves the task handle and financial uncertainty on rejected writes. */
+export class ClawdMarketA2AError extends ClawdMarketApiError {
+  constructor(status: number, readonly rpcCode: number, reason: string, message: string, fundsState: string, readonly taskId: string | null, details: unknown) {
+    super(status, reason, message, status === 429 || status >= 500, fundsState, details)
+  }
 }
 
 export class ClawdMarketTransportError extends Error {
@@ -190,6 +254,11 @@ function object(value: unknown): Record<string, unknown> {
 
 function text(value: unknown, fallback: string) { return typeof value === 'string' && value ? value : fallback }
 
+function instantId(id: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new TypeError('instant ID must be a UUID')
+  return id
+}
+
 function tradePath(tradeId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(tradeId)) throw new TypeError('tradeId must be a UUID')
   return `/api/trades/${tradeId}`
@@ -214,7 +283,7 @@ function delay(ms: number, signal?: AbortSignal) {
   })
 }
 
-/** A route execution reserves one unpaid checkout. This client never sends payment automatically. */
+/** Route execution reserves an unpaid checkout; explicit instant funding spends deposited credit. The client never broadcasts wallet transfers. */
 export class ClawdMarketClient {
   private readonly base: URL
   private readonly fetcher: typeof fetch
@@ -239,6 +308,12 @@ export class ClawdMarketClient {
       throw new ClawdMarketTransportError('ClawdMarket request did not complete; inspect the route before retrying a mutation', cause)
     }
     const payload = await response.json().catch(() => null)
+    if (path === '/api/a2a' && object(payload).error) {
+      const rpcError = object(object(payload).error)
+      const info = Array.isArray(rpcError.data) ? object(rpcError.data[0]) : {}
+      const metadata = object(info.metadata)
+      throw new ClawdMarketA2AError(response.status, Number(rpcError.code), text(info.reason, 'A2A_ERROR'), text(rpcError.message, 'A2A request rejected'), text(metadata.funds_state, 'unknown'), typeof metadata.task_id === 'string' ? metadata.task_id : null, rpcError.data)
+    }
     if (!response.ok) {
       const data = object(payload)
       throw new ClawdMarketApiError(response.status, text(data.error_code ?? data.code, 'HTTP_ERROR'),
@@ -249,7 +324,7 @@ export class ClawdMarketClient {
     return payload as T
   }
 
-  getAccountBalance(agentId?: string, options?: RequestOptions) { return this.request<{ account_id: string; available: number; escrow: number; credit: { available_minor: number; escrow_minor: number }; historical_credit: { spendable: false } }>('GET', `/api/wallet${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''}`, undefined, options) }
+  getAccountBalance(agentId?: string, options?: RequestOptions) { return this.request<{ account_id: string; available: number; escrow: number; credit: { available_minor: number; escrow_minor: number }; instant_credit: { prepaid_minor: number; held_minor: number }; historical_credit: { spendable: false } }>('GET', `/api/wallet${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''}`, undefined, options) }
   getConnectedWalletBalances(address: string, options?: RequestOptions) { return this.request<{ address: string; balances: Array<{ chain_id: number; symbol: string; status: 'available' | 'unavailable'; amount: string | null; amount_raw: string | null }> }>('GET', `/api/wallet/balances?address=${encodeURIComponent(address)}`, undefined, options) }
   /** Persist client_reference before calling. Only a fresh created intent permits one transfer; this method never sends. */
   createAccountDeposit(input: { amount_minor: number; payer: string; client_reference: string }, options?: RequestOptions) { return this.request<{ deposit: AccountDeposit }>('POST', '/api/wallet/deposits', input, options) }
@@ -259,6 +334,32 @@ export class ClawdMarketClient {
   fundOwnedAgent(input: { agent_id: string; amount_minor: number; client_reference: string }, options?: RequestOptions) { return this.request<{ idempotent: boolean; balance: { available_minor: number; escrow_minor: number } }>('POST', '/api/wallet/transfers', input, options) }
   buyWithAccountCredit(listingId: string, clientReference: string, options?: RequestOptions) { return this.request<{ trade: { id: string; status: string; payment_rail: 'credit' } }>('POST', '/api/trades', { listing_id: listingId, amount: 1, payment_rail: 'credit', client_reference: clientReference }, options) }
   orderServiceWithAccountCredit(serviceId: string, input: { client_reference: string; objective: string; input?: Record<string, unknown>; max_total?: string; expected_price?: string }, options?: RequestOptions) { return this.request<{ order: Record<string, unknown>; trade: Record<string, unknown> }>('POST', `/api/services/${encodeURIComponent(serviceId)}/orders`, { ...input, payment_rail: 'credit' }, options) }
+
+  private async a2aRpc<T>(method: string, params: unknown, options?: RequestOptions): Promise<T> {
+    const envelope = await this.request<{ result: T }>('POST', '/api/a2a', { jsonrpc: '2.0', id: globalThis.crypto.randomUUID(), method, params }, options)
+    if (!('result' in envelope)) throw new ClawdMarketTransportError('A2A result was missing; recover using the saved messageId or task', null)
+    return envelope.result
+  }
+  getA2AExtendedCard(options?: RequestOptions) { return this.a2aRpc<Record<string, unknown>>('GetExtendedAgentCard', {}, options) }
+  /** Save messageId before sending. Uses canonical owner authority; never signs or broadcasts. */
+  sendA2AMessage(message: A2AMessage, options?: RequestOptions) { return this.a2aRpc<{ task: A2ATask }>('SendMessage', { message }, options) }
+  getA2ATask(taskId: string, historyLength = 0, options?: RequestOptions) { return this.a2aRpc<A2ATask>('GetTask', { id: instantId(taskId), historyLength }, options) }
+  listA2ATasks(input: A2ATaskListOptions = {}, options?: RequestOptions) { return this.a2aRpc<{ tasks: A2ATask[]; totalSize: number; pageSize: number; nextPageToken: string }>('ListTasks', input, options) }
+  /** Funded cancellation is rejected; an unpaid cancellation may still report payment_unknown. */
+  cancelA2ATask(taskId: string, options?: RequestOptions) { return this.a2aRpc<A2ATask>('CancelTask', { id: instantId(taskId) }, options) }
+
+  listInstantServices(options?: RequestOptions) { return this.request<{ services: Record<string, unknown>[] }>('GET', '/api/instant/services', undefined, options) }
+  /** Spending action: persist the buyer reference and explicitly accept schema_v1 before funding. */
+  openInstantSession(serviceId: string, input: InstantSessionRequest, options?: RequestOptions) { return this.request<{ session: InstantSession; idempotent: boolean }>('POST', `/api/instant/services/${instantId(serviceId)}/sessions`, input, options) }
+  getInstantSession(sessionId: string, options?: RequestOptions) { return this.request<{ session: InstantSession }>('GET', `/api/instant/sessions/${instantId(sessionId)}`, undefined, options) }
+  closeInstantSession(sessionId: string, options?: RequestOptions) { return this.request<{ session: InstantSession }>('POST', `/api/instant/sessions/${instantId(sessionId)}`, { action: 'close' }, options) }
+  /** Reserves one unit only. A returned call can be pending, completed or terminally failed on replay. */
+  callInstantService(sessionId: string, input: { client_reference: string; input: Record<string, unknown> }, options?: RequestOptions) { return this.request<{ call: InstantCall; idempotent: boolean }>('POST', `/api/instant/sessions/${instantId(sessionId)}/calls`, input, options) }
+  getInstantCall(callId: string, options?: RequestOptions) { return this.request<{ call: InstantCall }>('GET', `/api/instant/calls/${instantId(callId)}`, undefined, options) }
+  listInstantProviderCalls(options?: RequestOptions) { return this.request<{ calls: Array<{ id: string; state: 'pending' | 'claimed'; deadline_at: string }> }>('GET', '/api/instant/calls', undefined, options) }
+  /** Save a random worker token before claiming; reuse exactly that token on recovery. */
+  claimInstantCall(callId: string, leaseToken: string, options?: RequestOptions) { return this.request<{ call: InstantCall }>('POST', `/api/instant/calls/${instantId(callId)}/claim`, { lease_token: leaseToken }, options) }
+  completeInstantCall(callId: string, input: { outcome: 'completed'; lease_token: string; output: Record<string, unknown> } | { outcome: 'failed'; lease_token: string }, options?: RequestOptions) { return this.request<{ call: InstantCall; idempotent: boolean }>('POST', `/api/instant/calls/${instantId(callId)}/result`, input, options) }
 
   /** Nonbinding persisted plan. Safe to replay with the same client_reference. */
   planRoute(input: RouteRequest, options?: RequestOptions) { return this.request<PlannedRoute>('POST', '/api/routes/plan', input, options) }
@@ -271,7 +372,7 @@ export class ClawdMarketClient {
 
   /** Owner account credential required; authorization creates no order or payment. */
   createRouteMandate(routeId: string, input: RouteMandateInput, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; idempotent: boolean }>('POST', `${routePath(routeId)}/mandate`, input, options) }
-  getRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; funding_step: RouteFundingStep | null }>('GET', `${routePath(routeId)}/mandate`, undefined, options) }
+  getRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; funding_step: RouteFundingStep | null; funding_steps: RouteFundingStep[] }>('GET', `${routePath(routeId)}/mandate`, undefined, options) }
   revokeRouteMandate(routeId: string, options?: RequestOptions) { return this.request<{ mandate: RouteMandate; idempotent: boolean }>('DELETE', `${routePath(routeId)}/mandate`, undefined, options) }
   /** Atomically reserves one unpaid checkout and mandate exposure; does not sign or send. */
   executeAuthorizedRoute(routeId: string, mandateId: string, options?: RequestOptions) { return this.request<ExecutedRoute>('POST', `${routePath(routeId)}/execute`, { mandate_id: mandateId }, options) }
@@ -284,6 +385,20 @@ export class ClawdMarketClient {
   verifyBuyerMppFunding(tradeId: string, proof: { tx_hash: string; payer_address: string }, options?: RequestOptions) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
     return this.request<{ ok: true; trade: { id: string; status: string }; status?: string; receipt?: { payment_reference: string } }>('POST', `/api/trades/${tradeId}/fund/mpp`, proof, options)
+  }
+  /** Save the operation ID first; replay returns the original challenge, never a new payment. */
+  createBuyerMppPaymentIntent(tradeId: string, input: { buyer_operation_id: string }, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
+    return this.request<{ intent: BuyerMppIntent; created: boolean; claim_required: true }>('POST', `/api/trades/${tradeId}/fund/mpp/intent`, input, options)
+  }
+  getBuyerMppPaymentIntent(tradeId: string, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
+    return this.request<{ intent: BuyerMppIntent | null; claim: BuyerMppPaymentClaim | null; trade: { id: string; status: string; payout_status: string | null } }>('GET', `/api/trades/${tradeId}/fund/mpp/intent`, undefined, options)
+  }
+  /** Fsync exact signed bytes and their original credential before claiming; no submission occurs here. */
+  claimBuyerMppPayment(tradeId: string, input: BuyerMppPaymentClaimInput, options?: RequestOptions) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
+    return this.request<BuyerMppPaymentClaimResult>('POST', `/api/trades/${tradeId}/fund/mpp/claim`, input, options)
   }
 
   /** Persist buyer_operation_id privately first. This never signs or broadcasts. */
@@ -300,7 +415,15 @@ export class ClawdMarketClient {
     return this.request<{ ok: true; trade: { id: string; status: string; payout_status?: string | null }; status?: string; receipt?: { tx_hash: string } }>('POST', `/api/trades/${tradeId}/fund/evm`, proof, options)
   }
 
+  getRouteMetrics(options?: RequestOptions) { return this.request<RouteMetrics>('GET', '/api/routes/metrics', undefined, options) }
+
   getRoute(routeId: string, options?: RequestOptions) { return this.request<RouteSnapshot>('GET', routePath(routeId), undefined, options) }
+  inspectRouteRetry(routeId: string, options?: RequestOptions) { return this.request<RouteRetryInspection>('GET', `${routePath(routeId)}/retry`, undefined, options) }
+  retryRoute(routeId: string, input: RouteRetryCommand, options?: RequestOptions) { return this.request<RetriedRoute>('POST', `${routePath(routeId)}/retry`, input, options) }
+  inspectRouteLifecycle(routeId: string, options?: RequestOptions) { return this.request<RouteLifecycle>('GET', `${routePath(routeId)}/advance`, undefined, options) }
+  /** Observe never creates acceptance; accept binds the explicit decision to the exact current delivery hash. */
+  advanceRoute(routeId: string, command: RouteAdvanceCommand, options?: RequestOptions) { return this.request<RouteLifecycle>('POST', `${routePath(routeId)}/advance`, command, options) }
+  getRouteResult(routeId: string, options?: RequestOptions) { return this.request<PrivateRouteResult>('GET', `${routePath(routeId)}/result`, undefined, options) }
 
   cancelRoute(routeId: string, options?: RequestOptions) { return this.request<CancelledRoute>('DELETE', routePath(routeId), undefined, options) }
 

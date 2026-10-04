@@ -10,6 +10,7 @@ import { reserveServiceOrder, ServiceOrderReservationError } from '@/lib/service
 import { checkoutForTrade } from '@/lib/trade-checkout'
 import { routeExecutionEnabled } from '@/lib/routing-feature-flags'
 import { NewPaymentsPausedError } from '@/lib/payment-control'
+import { routeAdmissionFailure } from '@/lib/route-control'
 import { AgentSpendPolicyError } from '@/lib/agent-spend-policy'
 import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy'
 import { internalErrorResponse } from '@/lib/api-error'
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const linked = await linkedResponse(plan, true)
     if (linked) return linked
     if (!routeExecutionEnabled(principal.userId)) return failure('ROUTE_EXECUTION_DISABLED', 'Route execution is not enabled', 503, true)
+    if (await routeAdmissionFailure()) return failure('ROUTE_EXECUTION_PAUSED', 'New route commitments are paused; recover existing payments and refunds', 503, true)
     if (plan.state !== 'planned' && plan.state !== 'reserving') return failure('ROUTE_NOT_EXECUTABLE', 'Route is not executable', 409)
     if (plan.expires_at <= new Date()) {
       await db.update(route_plans).set({ state: 'failed', updated_at: new Date() }).where(and(eq(route_plans.id, id), eq(route_plans.state, plan.state)))

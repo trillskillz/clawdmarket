@@ -1,3 +1,8 @@
+import { claimA2AMessage, sendA2ARouteWork, getA2ARouteTask, cancelA2ARouteTask, a2aRouteTaskView, listA2ARouteTaskRows, A2ARouteError, a2aRoutingWritesEnabled } from './a2a-route-tasks'
+import { GET as publicAgentCard } from '@/app/.well-known/agent-card.json/route'
+import { ArtifactError, readBoundedJson } from './private-artifacts'
+import { canonicalContract } from './structured-verification'
+import { RouteMandateError } from './route-payment-mandate'
 import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -24,11 +29,11 @@ function response(id: RpcId, body: JsonObject, status = 200, headers?: Record<st
   return NextResponse.json({ jsonrpc: '2.0', id, ...body }, { status, headers: { ...HEADERS, ...headers } })
 }
 
-function error(id: RpcId, code: number, message: string, status = 200, reason?: string) {
+function error(id: RpcId, code: number, message: string, status = 200, reason?: string, metadata?: Record<string, string>) {
   return response(id, {
     error: {
       code, message,
-      ...(reason ? { data: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason, domain: 'a2a-protocol.org' }] } : {}),
+      ...(reason ? { data: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason, domain: 'a2a-protocol.org', ...(metadata ? { metadata } : {}) }] } : {}),
     },
   }, status)
 }
@@ -108,17 +113,18 @@ export async function handleA2A(request: NextRequest) {
     if (version && version !== '1.0') return error(null, -32009, 'A2A protocol version not supported; use 1.0.', 400, 'VERSION_NOT_SUPPORTED')
     const contentType = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
     if (contentType !== 'application/json') return error(null, -32600, 'Content-Type must be application/json.', 415)
-    const bodyText = await request.text()
-    if (bodyText.length > 16_384) return error(null, -32600, 'Request payload too large.', 413)
     let body: unknown
-    try { body = JSON.parse(bodyText) } catch { return error(null, -32700, 'Invalid JSON payload.', 400) }
+    try { body = await readBoundedJson(request, 16_384) } catch (cause) {
+      if (cause instanceof ArtifactError) return error(null, cause.code === 'REQUEST_INVALID' ? -32700 : -32600, cause.code, cause.status)
+      throw cause
+    }
     if (!object(body) || body.jsonrpc !== '2.0' || typeof body.method !== 'string' || !('id' in body) || !(body.id === null || typeof body.id === 'string' || typeof body.id === 'number' && Number.isInteger(body.id))) {
       return error(null, -32600, 'Request payload validation error.', 400)
     }
     id = body.id as RpcId
     if (body.params != null && !object(body.params)) return error(id, -32602, 'Invalid parameters.', 400)
 
-    // The public card advertises bearer authentication and agent:read only.
+    // Public skills remain read-only. Authenticated routing writes require additional scopes and owner mandate.
     const auth = await resolveRegisteredAgentBearer(request.headers.get('authorization'))
     if (auth.kind !== 'agent') {
       if (auth.kind === 'forbidden') return error(id, -32004, 'Credential lacks agent:read.', 403)
@@ -136,12 +142,30 @@ export async function handleA2A(request: NextRequest) {
     }
     const quotaHeaders = getRateLimitHeaders(quota)
     const params = body.params || {}
+    if (body.method === 'GetExtendedAgentCard') {
+      if (!object(params) || Object.keys(params).some(key => key !== 'tenant') || params.tenant != null) return error(id, -32602, 'Invalid extended card parameters.', 400)
+      const card = await (await publicAgentCard(request)).json()
+      const writer = ['marketplace:write', 'payments:write'].every(scope => auth.scopes.includes(scope as 'marketplace:write' | 'payments:write'))
+      if (writer) {
+        card.description = 'Authenticated A2A routing assistant: durable owner-mandate-bound plans and unpaid reservations, live private lifecycle and safe canonical cancellation. Wallet funding and explicit acceptance remain separate.'
+        card.securitySchemes.agentBearer.httpAuthSecurityScheme.description = 'Active registered-agent bearer key with agent:read, marketplace:write and payments:write for routing writes; agent:read for private task reads.'
+      }
+      if (writer) card.skills.push({ id: 'route_work', name: 'Buyer-authorized routed work', description: 'Persist an objective as a durable route task; owner creates the canonical mandate before continuation can reserve an unpaid checkout. Requires agent:read, marketplace:write and payments:write. No wallet signing or payment authority creation.', tags: ['routing','authorized-write'], inputModes: ['application/json'], outputModes: ['application/json'] },
+        { id: 'cancel_route', name: 'Cancel owned unpaid routing', description: 'Stop an owned plan or unpaid reservation through canonical cancellation. Funded work and uncertain original payments retain their existing settlement/recovery rules.', tags: ['routing','authorized-write'], inputModes: ['application/json'], outputModes: ['application/json'] })
+      card.routing = { write_scopes: ['agent:read','marketplace:write','payments:write'], new_work_enabled: writer && a2aRoutingWritesEnabled(), owner_mandate_required: true, max_retained_route_tasks_per_agent: 100, wallets_broadcast: false }
+      return response(id, { result: card }, 200, quotaHeaders)
+    }
     if (isSend) {
       if (!object(params)) return error(id, -32602, 'Invalid parameters.', 400)
       if (params.tenant != null || params.configuration != null && !object(params.configuration)) return error(id, -32602, 'Invalid parameters.', 400)
       if (object(params.configuration)) {
         if (params.configuration.pushNotificationConfig != null) return error(id, -32003, 'Push notifications are not supported.', 400, 'PUSH_NOTIFICATION_NOT_SUPPORTED')
         if (params.configuration.acceptedOutputModes != null && (!Array.isArray(params.configuration.acceptedOutputModes) || !params.configuration.acceptedOutputModes.includes('application/json'))) return error(id, -32005, 'Only application/json output is supported.', 400, 'CONTENT_TYPE_NOT_SUPPORTED')
+      }
+      const data = object(params.message) && Array.isArray(params.message.parts) && params.message.parts.length === 1 && object(params.message.parts[0]) ? params.message.parts[0].data : null
+      if (object(data) && ['route_work', 'cancel_route'].includes(String(data.action))) {
+        const task = await sendA2ARouteWork(request, auth, params.message)
+        return response(id, { result: { task } }, 200, quotaHeaders)
       }
       if (object(params.message) && params.message.taskId != null) {
         if (typeof params.message.taskId !== 'string' || !params.message.taskId) return error(id, -32602, 'Invalid task id.', 400)
@@ -152,12 +176,13 @@ export async function handleA2A(request: NextRequest) {
       }
       const parsed = parseMessage(params.message)
       if (!parsed) return error(id, -32602, 'Supported input: briefing, plan_work, or inspect_route as described in the Agent Card.', 400)
+      await claimA2AMessage(auth.agentId, parsed.message)
       const existing = await db.$client.execute({
         sql: 'SELECT * FROM a2a_tasks WHERE agent_id = ? AND message_id = ? AND created_at >= ? LIMIT 1',
         args: [auth.agentId, String(parsed.message.messageId), Math.floor(Date.now() / 1000) - RETENTION_SECONDS],
       })
       if (existing.rows.length) {
-        if (String(existing.rows[0].request_message) !== JSON.stringify(parsed.message)) return error(id, -32602, 'Message ID was reused with different input.', 409)
+        if (canonicalContract(JSON.parse(String(existing.rows[0].request_message))) !== canonicalContract(parsed.message)) return error(id, -32602, 'Message ID was reused with different input.', 409)
         return response(id, { result: { task: taskFromRow(existing.rows[0] as JsonObject) } }, 200, quotaHeaders)
       }
       let artifact: unknown
@@ -183,13 +208,18 @@ export async function handleA2A(request: NextRequest) {
         args: [taskId, auth.agentId, contextId, String(parsed.message.messageId), JSON.stringify(parsed.message), JSON.stringify(artifact), now],
       })
       const saved = await db.$client.execute({ sql: 'SELECT * FROM a2a_tasks WHERE agent_id = ? AND message_id = ? LIMIT 1', args: [auth.agentId, String(parsed.message.messageId)] })
-      if (String(saved.rows[0]?.request_message) !== JSON.stringify(parsed.message)) return error(id, -32602, 'Message ID was reused with different input.', 409)
+      if (!saved.rows[0] || canonicalContract(JSON.parse(String(saved.rows[0].request_message))) !== canonicalContract(parsed.message)) return error(id, -32602, 'Message ID was reused with different input.', 409)
       const task = taskFromRow(saved.rows[0] as JsonObject)
       return response(id, { result: { task } }, 200, quotaHeaders)
     }
     if (body.method === 'GetTask' || body.method === 'CancelTask') {
       const query = taskQuery(params)
       if (!query) return error(id, -32602, 'A valid task id and non-negative historyLength are required.', 400)
+      const routed = await getA2ARouteTask(auth.agentId, query.id, query.historyLength)
+      if (routed) {
+        if (body.method === 'CancelTask') return response(id, { result: await cancelA2ARouteTask(request, auth, query.id) }, 200, quotaHeaders)
+        return response(id, { result: routed }, 200, quotaHeaders)
+      }
       const result = await db.$client.execute({
         sql: 'SELECT * FROM a2a_tasks WHERE id = ? AND agent_id = ? AND created_at >= ? LIMIT 1',
         args: [query.id, auth.agentId, Math.floor(Date.now() / 1000) - RETENTION_SECONDS],
@@ -205,6 +235,11 @@ export async function handleA2A(request: NextRequest) {
       const cursor = decodeCursor(params.pageToken)
       const after = params.statusTimestampAfter == null ? null : Date.parse(String(params.statusTimestampAfter))
       if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 || !Number.isInteger(historyLength) || historyLength < 0 || historyLength > 100 || !cursor || params.contextId != null && (typeof params.contextId !== 'string' || params.contextId.length > 128) || params.status != null && !TASK_STATES.has(String(params.status)) || params.includeArtifacts != null && typeof params.includeArtifacts !== 'boolean' || params.statusTimestampAfter != null && (typeof params.statusTimestampAfter !== 'string' || !Number.isFinite(after) || !/Z$/.test(params.statusTimestampAfter))) return error(id, -32602, 'Invalid task list parameters.', 400)
+      const routeRows = await listA2ARouteTaskRows(auth.agentId)
+      if (routeRows.length) {
+        const result = await mergedTaskList(auth.agentId, params, pageSize, historyLength, cursor, after, routeRows)
+        return response(id, { result }, 200, quotaHeaders)
+      }
       if (params.status && params.status !== 'TASK_STATE_COMPLETED') return response(id, { result: { tasks: [], totalSize: 0, pageSize, nextPageToken: '' } }, 200, quotaHeaders)
       const where = 'agent_id = ? AND created_at >= ?' + (params.contextId ? ' AND context_id = ?' : '') + (after != null ? ' AND created_at >= ?' : '')
       const args = [auth.agentId, Math.floor(Date.now() / 1000) - RETENTION_SECONDS, ...(params.contextId ? [params.contextId] : []), ...(after != null ? [Math.ceil(after / 1000)] : [])]
@@ -216,11 +251,34 @@ export async function handleA2A(request: NextRequest) {
       const page = rows.rows.slice(0, pageSize)
       return response(id, { result: { tasks: page.map(row => taskFromRow(row as JsonObject, historyLength, params.includeArtifacts === true)), totalSize, pageSize, nextPageToken: rows.rows.length > pageSize ? encodeCursor(page[page.length - 1] as JsonObject) : '' } }, 200, quotaHeaders)
     }
-    if (body.method === 'SendStreamingMessage' || body.method === 'SubscribeToTask' || body.method === 'GetExtendedAgentCard') return error(id, -32004, 'Operation not supported by this agent.', 400, 'UNSUPPORTED_OPERATION')
+    if (body.method === 'SendStreamingMessage' || body.method === 'SubscribeToTask') return error(id, -32004, 'Operation not supported by this agent.', 400, 'UNSUPPORTED_OPERATION')
     if (['CreateTaskPushNotificationConfig', 'GetTaskPushNotificationConfig', 'ListTaskPushNotificationConfigs', 'DeleteTaskPushNotificationConfig'].includes(body.method)) return error(id, -32003, 'Push notifications are not supported.', 400, 'PUSH_NOTIFICATION_NOT_SUPPORTED')
     return error(id, -32601, 'Method not found.', 404)
   } catch (cause) {
+    if (cause instanceof A2ARouteError) return error(id, cause.rpcCode ?? (cause.status === 404 ? -32001 : cause.reason === 'A2A_MESSAGE_CONFLICT' || cause.status === 400 ? -32602 : -32004), cause.reason, cause.status, cause.reason, { ...(cause.taskId ? { task_id: cause.taskId } : {}), funds_state: cause.fundsState })
+    if (cause instanceof RouteMandateError) return error(id, -32004, cause.code, cause.status, cause.code)
     console.error('[a2a] request failed', cause)
     return error(id, -32603, 'Internal error.', 500)
   }
+}
+
+
+async function mergedTaskList(agentId: string, params: JsonObject, pageSize: number, historyLength: number, cursor: { createdAt: number; id: string }, after: number | null, routeRows: Awaited<ReturnType<typeof listA2ARouteTaskRows>>) {
+  const selected = routeRows.filter(row => (!params.contextId || row.context_id === params.contextId))
+  const routeTasks: Array<{ row: JsonObject; task: Awaited<ReturnType<typeof a2aRouteTaskView>> }> = []
+  // Fixed cap of 100 retained route tasks bounds live canonical refresh and exact status-filter totals.
+  for (const row of selected) {
+    const task = await a2aRouteTaskView(row, historyLength, params.includeArtifacts === true)
+    if ((after === null || Date.parse(task.status.timestamp) >= after) && (!params.status || params.status === task.status.state)) routeTasks.push({ row: row as unknown as JsonObject, task })
+  }
+  const legacyAllowed = !params.status || params.status === 'TASK_STATE_COMPLETED'
+  const where = 'agent_id = ? AND created_at >= ?' + (params.contextId ? ' AND context_id = ?' : '') + (after != null ? ' AND created_at >= ?' : '')
+  const args = [agentId, Math.floor(Date.now()/1000) - RETENTION_SECONDS, ...(params.contextId ? [String(params.contextId)] : []), ...(after !== null ? [Math.ceil(after/1000)] : [])]
+  const count = legacyAllowed ? await db.$client.execute({sql:`SELECT COUNT(*) AS total FROM a2a_tasks WHERE ${where}`,args}) : null
+  const old = legacyAllowed ? await db.$client.execute({sql:`SELECT * FROM a2a_tasks WHERE ${where} AND (created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC,id DESC LIMIT ?`,args:[...args,cursor.createdAt,cursor.createdAt,cursor.id,pageSize+1]}) : null
+  const candidates = [...routeTasks.filter(({row}) => Number(row.created_at) < cursor.createdAt || Number(row.created_at) === cursor.createdAt && String(row.id) < cursor.id),
+    ...(old?.rows || []).map(row => ({row:row as JsonObject,task:taskFromRow(row as JsonObject,historyLength,params.includeArtifacts===true)}))]
+    .sort((a,b)=>Number(b.row.created_at)-Number(a.row.created_at)||(String(a.row.id)<String(b.row.id)?1:String(a.row.id)>String(b.row.id)?-1:0))
+  const page=candidates.slice(0,pageSize)
+  return {tasks:page.map(item=>item.task),totalSize:Number(count?.rows[0]?.total||0)+routeTasks.length,pageSize,nextPageToken:candidates.length>pageSize?encodeCursor(page[page.length-1].row):''}
 }

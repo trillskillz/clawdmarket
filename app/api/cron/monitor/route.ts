@@ -9,6 +9,7 @@ import { inspectSettlementHealth } from '@/lib/settlement-monitoring'
 import { inspectWebhookDeliveryHealth } from '@/lib/webhook-delivery'
 import { inspectReferenceFleetExecutionHealth } from '@/lib/reference-fleet-executor'
 import { inspectPaymentRpcHealth } from '@/lib/payment-rpc-health'
+import { getRoutingMonitoringHealth } from '@/lib/routing-operator-snapshot'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
  }
 
  try {
- const [agentCount, tradeCount, taskCount, benchmarkCount, settlementHealth, webhookHealth, executionHealth, paymentRpcHealth] = await Promise.all([
+ const [agentCount, tradeCount, taskCount, benchmarkCount, settlementHealth, webhookHealth, executionHealth, paymentRpcHealth, routingHealth] = await Promise.all([
  db.select({ count: sql<number>`COUNT(*)` }).from(agents)
   .where(and(eq(agents.status, 'active'), eq(agents.visibility, 'public'), isNull(agents.archivedAt))).get(),
  db.select({ count: sql<number>`COUNT(*)` }).from(trades).get(),
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
  inspectWebhookDeliveryHealth(),
  inspectReferenceFleetExecutionHealth(),
  inspectPaymentRpcHealth(),
+ getRoutingMonitoringHealth(),
  ])
  const paymentRpcHealthy = paymentRpcHealth.every((endpoint) => endpoint.healthy)
 
@@ -51,6 +53,7 @@ export async function GET(request: NextRequest) {
  payment_rpc_health: { healthy: paymentRpcHealthy, endpoints: paymentRpcHealth },
  webhook_health: webhookHealth,
  reference_fleet_execution_health: executionHealth,
+ routing_health: routingHealth,
  latest_agent: latestAgent || null,
  checked_at: new Date().toISOString(),
  }
@@ -61,13 +64,14 @@ export async function GET(request: NextRequest) {
  if (!paymentRpcHealthy) logger.warn('Marketplace payment RPC monitor detected unhealthy endpoints', { endpoints: paymentRpcHealth })
  if (!webhookHealth.healthy) logger.warn('Agent webhook monitor detected an unhealthy delivery backlog', webhookHealth)
  if (!executionHealth.healthy) logger.warn('Reference fleet execution monitor detected unhealthy delivery work', executionHealth)
+ if (!routingHealth.healthy) logger.warn('Routing monitor requires attention', { alerts: routingHealth.alerts })
 
  const webhookUrl = process.env.MONITOR_WEBHOOK_URL
  const notification: { configured: boolean; delivered: boolean; error_id?: string } = {
  configured: Boolean(webhookUrl),
  delivered: false,
  }
- const shouldNotify = !settlementHealth.healthy || !paymentRpcHealthy || !webhookHealth.healthy || !executionHealth.healthy || (stats.agent_count > 0 && Boolean(stats.latest_agent))
+ const shouldNotify = !routingHealth.healthy || !settlementHealth.healthy || !paymentRpcHealthy || !webhookHealth.healthy || !executionHealth.healthy || (stats.agent_count > 0 && Boolean(stats.latest_agent))
  if (webhookUrl && shouldNotify) {
  try {
  const caps = (() => {
@@ -80,7 +84,9 @@ export async function GET(request: NextRequest) {
  signal: AbortSignal.timeout(5_000),
  maxResponseBytes: 64 * 1024,
  body: JSON.stringify({
- content: !settlementHealth.healthy
+ content: [!routingHealth.healthy
+ ? `ClawdMarket routing alert: ${routingHealth.alerts.map(({ code, count }) => `${code}:${count}`).join(', ')}. Inspect /api/admin/routing/health; original payment recovery and settlement remain available.` : null,
+ !settlementHealth.healthy
  ? `🚨 ClawdMarket settlement alert: ${settlementHealth.stuck_count} transfer(s) exceed ${settlementHealth.stuck_after_minutes} minutes; ${settlementHealth.failed_count} failed. Oldest stuck: ${settlementHealth.oldest_stuck_at || 'unknown'}.`
  : !paymentRpcHealthy
  ? `🚨 ClawdMarket payment RPC alert: ${paymentRpcHealth.filter((endpoint) => !endpoint.healthy).map((endpoint) => `${endpoint.chain_id}:${endpoint.error || 'unhealthy'}`).join(', ')}. New payment checkout may be delayed; inspect /api/health/ready.`
@@ -88,9 +94,10 @@ export async function GET(request: NextRequest) {
  ? `🚨 ClawdMarket webhook alert: ${webhookHealth.failed_count} exhausted, ${webhookHealth.overdue_count} overdue, ${webhookHealth.retrying_count} retrying. Oldest pending: ${webhookHealth.oldest_pending_at || 'unknown'}.`
  : !executionHealth.healthy
  ? `🚨 ClawdMarket managed execution alert: ${executionHealth.untracked_funded_count} untracked funded, ${executionHealth.counts.dead_letter} dead-lettered, ${executionHealth.stale_lease_count} stale leases, ${executionHealth.overdue_retry_count} overdue retries. Oldest pending: ${executionHealth.oldest_pending_at || 'unknown'}.`
+ : !routingHealth.healthy ? null
  : stats.agent_count === 1
  ? `🚨 **FIRST AGENT ON CLAWDMARKET**\n\nID: ${(stats.latest_agent as any).id}\nName: ${(stats.latest_agent as any).name}\nCapabilities: ${caps}\nRegistry: https://clawdmkt.com/registry/${(stats.latest_agent as any).id}\n\nPost the X thread now.`
- : `📊 ClawdMarket: ${stats.agent_count} agents, ${stats.trade_count} trades, ${stats.task_count} tasks`,
+ : `📊 ClawdMarket: ${stats.agent_count} agents, ${stats.trade_count} trades, ${stats.task_count} tasks`].filter(Boolean).join('\n'),
  }),
  })
  if (!response.ok) throw new Error(`Monitor webhook returned HTTP ${response.status}`)
@@ -100,7 +107,7 @@ export async function GET(request: NextRequest) {
  }
  }
 
- return NextResponse.json({ ok: settlementHealth.healthy && paymentRpcHealthy && webhookHealth.healthy && executionHealth.healthy && (!notification.configured || notification.delivered || !shouldNotify), ...stats, notification })
+ return NextResponse.json({ ok: routingHealth.healthy && settlementHealth.healthy && paymentRpcHealthy && webhookHealth.healthy && executionHealth.healthy && (!notification.configured || notification.delivered || !shouldNotify), ...stats, notification }, { headers: { 'Cache-Control': 'private, no-store' } })
 
  } catch (err: any) {
  return internalErrorResponse('Marketplace monitor cron failed', err, {

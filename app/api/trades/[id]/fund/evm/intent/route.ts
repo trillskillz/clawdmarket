@@ -1,3 +1,4 @@
+import { findTradeFundingStep } from '@/lib/route-funding-steps'
 import { withKeyedWriteLock } from '@/lib/service-reservation-lock'
 import { serviceFundingEligibility } from '@/lib/service-funding-eligibility'
 import { TradeFundingError } from '@/lib/trade-funding'
@@ -6,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { and, eq, isNull } from 'drizzle-orm'
 import { isAddress, parseUnits } from 'viem'
 import { db } from '@/lib/db'
-import { buyer_evm_payment_claims, evm_payment_intents, route_funding_steps, trades } from '@/lib/schema'
+import { buyer_evm_payment_claims, evm_payment_intents, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { findAcceptedToken, getPaymentReadiness } from '@/lib/payment-config'
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest, context: Context) {
         ? json({ error: 'Recover the original buyer operation', code: 'BUYER_OPERATION_CONFLICT' }, 409)
         : json({ intent: prior, created: false, claim_required: Boolean(prior.buyer_operation_id) })
       if (operationId) {
-        const [step] = await tx.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id, trade.id)).limit(1)
+        const step = await findTradeFundingStep(tx, trade.id)
         const [used] = await tx.select().from(evm_payment_intents).where(eq(evm_payment_intents.buyer_operation_id, operationId)).limit(1)
         if (!step || used) throw new TradeFundingError('Buyer operation requires its original mandate checkout', 409, 'BUYER_OPERATION_CONFLICT')
       }
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest, context: Context) {
       if (sendAllowed) {
         const reason = await mandateFundingEligibility(trade, tx, { rail: 'evm', chainId, tokenAddress: body.token_address, payerAddress: body.payer_address, treasuryAddress: treasury })
           || await serviceFundingEligibility(trade, tx)
+        if (reason === 'ROUTE_EXECUTION_PAUSED') throw new TradeFundingError('New route payment authority is paused; recover original payments', 503, reason)
         if (reason) throw new TradeFundingError(`Provider no longer satisfies checkout requirements: ${reason}; do not pay`, 409, 'PROVIDER_ELIGIBILITY_CHANGED')
       }
       const tokenAmount = parseUnits((trade.total_cost / token.fixedUsdPrice).toFixed(token.decimals), token.decimals)

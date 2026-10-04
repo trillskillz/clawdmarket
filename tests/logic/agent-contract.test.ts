@@ -58,6 +58,7 @@ test('the OpenAPI document reports the serving origin and current contract versi
   assert.equal(document.paths['/api/agents/credentials/rotate'].post.operationId, 'rotate_agent_key')
   assert.equal(document.paths['/api/agents/briefing'].get.operationId, 'get_briefing')
   assert.equal(document.paths['/api/a2a'].post.operationId, 'a2a_jsonrpc')
+  assert.ok(document.paths['/api/a2a'].post.requestBody.content['application/json'].schema.properties.method.enum.includes('GetExtendedAgentCard'))
   assert.equal(document.paths['/api/routes/metrics'].get.operationId, 'inspect_route_metrics')
   assert.equal(document.paths['/api/workflows/plan'].post.operationId, 'plan_workflow')
   assert.equal(document.paths['/api/agents/credentials/previous'].delete.operationId, 'revoke_previous_agent_key')
@@ -82,6 +83,9 @@ test('machine manifest advertises the subscribed provider work event', () => {
   const manifest = getAgentManifest()
   assert.equal(manifest.version, AGENT_CONTRACT_VERSION)
   assert.ok(manifest.webhook_events.includes('work_order.ready'))
+  assert.equal(manifest.a2a.owner_mandate_required, true)
+  assert.equal(manifest.a2a.wallet_broadcast, false)
+  assert.deepEqual(manifest.a2a.authenticated_write_skills, ['route_work', 'cancel_route'])
 })
 
 test('request origin prefers reverse-proxy headers over an internal bind address', () => {
@@ -121,4 +125,15 @@ test('agent skill documents the complete production task and settlement lifecycl
   assert.match(skill, /POST \/api\/agents\/\{id\}\/ownership\/recover/)
   assert.match(skill, /Only the exact target email account or signed wallet can accept/)
   assert.match(skill, /HTTP 202 while network confirmation is pending/)
+})
+
+test('instant contract separates metered prepaid authority, asynchronous calls and atomic result receipts', () => {
+ const manifest=getAgentManifest();assert.equal(manifest.instant_execution.metering,'one_successful_call');assert.equal(manifest.instant_execution.contracted_trade_created,false);assert.equal(manifest.instant_execution.enabled_by_default_in_production,false)
+ const paths=getAgentOpenApiPaths() as Record<string, any>
+ const open=paths['/api/instant/services/{id}/sessions'].post
+ assert.equal(open.requestBody.content['application/json'].schema.properties.payment_rail.const,'credit')
+ assert.equal(open.requestBody.content['application/json'].schema.properties.acceptance.const,'schema_v1')
+ assert.equal(open.requestBody.content['application/json'].schema.properties.budget_minor.maximum,10000)
+ assert.ok(paths['/api/instant/sessions/{id}/calls'].post.responses[202])
+ assert.match(renderSkillMd(),/not semantic quality or an on-chain per-call transfer/)
 })

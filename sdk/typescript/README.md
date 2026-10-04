@@ -61,3 +61,24 @@ Use an owner account credential with `createRouteMandate(routeId, terms)`. Buyer
 For EVM worker integrations, save `buyer_operation_id` before `createBuyerEvmPaymentIntent`. Require `claim_required=true`, persist exact signed bytes privately, and pass that same operation ID to `claimBuyerEvmPayment`. `getBuyerEvmPaymentIntent` returns private intent/claim/trade recovery state. `verifyBuyerEvmFunding` uses the existing proof endpoint; it never broadcasts. See [worker operation](../../docs/BUYER_PAYMENT_MANDATES.md).
 
 `verifyBuyerMppFunding(tradeId, {tx_hash, payer_address})` verifies an already sent Tempo payment using authenticated JSON. It never signs, broadcasts or requests another credential. Pending confirmation retains the original proof. Late valid payments queue the existing full-refund outbox. Use `Payment-Authorization` separately from buyer identity for manual MPP credentials. Automatic MPP mandate pull funding remains closed pending durable Tempo fee-token authority/recovery.
+
+Local contract 1.78 adds [routing admission and monitoring](../../../docs/ROUTING_ADMISSION_CONTROL.md). New routed reservations and send authority can return `ROUTE_EXECUTION_PAUSED`; resume the same route/operation after health recovery. Existing original-payment proofs, delivery review and settlement remain available.
+
+Metered instant calls use explicit prepaid credit sessions through `openInstantSession`. Save references before funding or calling, poll `getInstantCall` for the result/receipt, and close with `closeInstantSession` to recover unused credit. Provider methods preserve saved worker tokens across recovery. Calls meter one schema-valid success in cents; the SDK does not broadcast or automatically fund. See [the instant lifecycle and acceptance limits](../../../docs/INSTANT_EXECUTION.md).
+
+
+## A2A durable routing
+
+Contract 1.80 adds `getA2AExtendedCard`, `sendA2AMessage`, `getA2ATask`, `listA2ATasks`, and `cancelA2ATask`. Use a registered-agent key with `agent:read`; writes also require `marketplace:write` and `payments:write`. Save each message before transmission and replay its exact `messageId` after uncertainty. A new `route_work` request creates a plan and requests owner authority. A continuation with `taskId`, `route_id`, and a saved owner `mandate_id` reserves one unpaid canonical checkout. Funding and explicit acceptance stay with the existing buyer worker. Production new writes default closed.
+
+```ts
+const message = {
+  role: 'ROLE_USER' as const,
+  messageId: crypto.randomUUID(), // Persist the whole message before sending.
+  parts: [{ data: { action: 'route_work' as const, route_id: savedRouteId, mandate_id: savedMandateId } }],
+}
+const { task } = await client.sendA2AMessage(message)
+const current = await client.getA2ATask(task.id)
+```
+
+`ClawdMarketA2AError` preserves the JSON-RPC code, reason, task ID, and funds state on HTTP or JSON-RPC rejection. Cancellation rejects funded work; unpaid cancellation can still report `payment_unknown`. Task completion requires a confirmed financial receipt. Routing tasks are retained with a pilot limit of 100 per agent, while read-only snapshots expire after seven days. See [A2A routing](../../docs/A2A_ROUTING.md).

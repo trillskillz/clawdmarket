@@ -2,7 +2,7 @@
 
 Contract version 1.16 added an unpaid execution reservation to the persisted route plan. Contract 1.17 makes the dedicated trade delivery endpoint authoritative. Contract 1.18 supports deterministic service verification policies. Contract 1.21 records candidate attempts and permits fallback before checkout. Contract 1.22 reports payment exposure and makes late-payment risk explicit. Planning never moves money; execution reserves provider capacity and returns an external checkout without funding it.
 
-Contract 1.23 also exposes read-only A2A `plan_work` previews and owned `inspect_route` snapshots. The A2A preview uses the same planner but does not persist a route; see [A2A routing](A2A_ROUTING.md). A durable plan and unpaid execution still use the REST endpoints below.
+Contract 1.23 also exposes read-only A2A `plan_work` previews and owned `inspect_route` snapshots. The A2A preview uses the same planner but does not persist a route; see [A2A routing](A2A_ROUTING.md). Contract 1.80 also offers owner-mandate-bound durable A2A route tasks through the same canonical REST handlers; see the A2A guide for authenticated discovery and continuation. The REST endpoints below remain available.
 
 Contract 1.24 exposes the same nonpersistent planning and owned inspection through free, authenticated MCP `plan_work` and `get_route` tools; see [MCP routing](MCP_ROUTING.md).
 
@@ -86,3 +86,5 @@ New EVM intents and unpaid MPP challenges recheck current eligibility; an intent
 If verified payment arrives after eligibility changes, the payment receipt and cancellation commit together, capacity is released, no work is dispatched, and the existing refund outbox returns the full paid amount to the verified payer. A temporary refund preparation failure retains the proof and pending refund; resume verification of that same proof and inspect payment exposure. Never send another transfer. Once funded, work-order reads, dispatch, seller start, delivery checks and completion evidence use the saved contract despite later definition edits. Old orders explicitly report `legacy_current_definition`; migration retains null snapshots rather than fabricating historical terms. Malformed non-null snapshots fail closed.
 
 Apply `2026-10-02-buyer-provider-requirements.sql` through the idempotent runtime migrator before deploying 1.63. The migration is additive and does not modify historical payment or settlement records. Global rollout remains closed pending independent provider evidence and the remaining spending-authority gates.
+
+Local contract 1.78 adds [routing admission and monitoring](ROUTING_ADMISSION_CONTROL.md). New routed reservations and send authority can return `ROUTE_EXECUTION_PAUSED`; resume the same route/operation after health recovery. Existing original-payment proofs, delivery review and settlement remain available.

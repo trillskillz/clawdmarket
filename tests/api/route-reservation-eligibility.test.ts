@@ -213,3 +213,38 @@ test('concurrent fallback creates one checkout and replay survives provider cont
   assert.equal(saved.attempts.length, 2)
   assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.buyer_id, f.buyerId))).length, 1)
 })
+
+
+test('routing pause blocks fresh reservation inside the transaction, preserves direct service orders and existing checkout replay', async () => {
+  const f = await fixture(), { setRouteControl, getRouteControl } = await import('@/lib/route-control')
+  const original = db.transaction.bind(db)
+  let changed = false
+  Reflect.set(db, 'transaction', async (callback: Parameters<typeof db.transaction>[0]) => {
+    if (!changed) {
+      changed = true
+      // A different connection commits the hold after route preflight.
+      const worker = createClient({ url: process.env.TURSO_DATABASE_URL! })
+      try { await worker.execute("INSERT INTO route_controls (key, paused, reason_code, revision, updated_at) VALUES ('new_routes', 1, 'OPERATOR_PAUSE', 1, unixepoch())") }
+      finally { worker.close() }
+    }
+    return original(callback)
+  })
+  try {
+    const blocked = await run(f)
+    assert.equal(blocked.status, 503); assert.equal((await blocked.json()).error_code, 'ROUTE_EXECUTION_PAUSED')
+  } finally { Reflect.set(db, 'transaction', original) }
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.buyer_id, f.buyerId))).length, 0)
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.firstId)))[0].active_orders, 0)
+  const { reserveServiceOrder } = await import('@/lib/service-order-reservation')
+  const direct = await reserveServiceOrder({ serviceId: f.secondId,
+    principal: { userId: f.buyerId, agentId: null, kind: 'account', usesCookieAuth: false },
+    request: { client_reference: `direct-pause-${f.routeId}`, objective: 'Direct service checkout while routing paused', input: {}, payment_rail: 'evm', expected_price: 200, max_total: 500 } })
+  assert.equal(direct.trade.status, 'pending')
+  await setRouteControl({ paused: false, expectedRevision: 1, actorUserId: f.buyerId })
+  const resumed = await run(f); assert.equal(resumed.status, 201)
+  const checkout = await resumed.json()
+  await setRouteControl({ paused: true, expectedRevision: (await getRouteControl()).revision, actorUserId: f.buyerId })
+  try {
+    const replay = await run(f); assert.equal(replay.status, 200); assert.equal((await replay.json()).trade.id, checkout.trade.id)
+  } finally { await db.delete(schema.route_control_events); await db.delete(schema.route_controls) }
+})

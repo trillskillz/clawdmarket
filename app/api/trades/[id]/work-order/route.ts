@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return failure('WORK_ORDER_NOT_FUNDED', 'Work order is not funded', 409)
     }
     row.service = serviceExecutionContract(row.order, row.service)
-    const [linkedRoute] = await db.select({ deadline_seconds: route_plans.deadline_seconds })
+    const [linkedRoute] = await db.select({ deadline_seconds: route_plans.deadline_seconds, execution_deadline_at: route_plans.execution_deadline_at })
       .from(route_plans).where(eq(route_plans.service_order_id, row.order.id)).limit(1)
     const attempt = row.service.provider_protocol === 'leased_v1' ? await getServiceExecutionAttempt(row.order.id) : null
     const now = new Date()

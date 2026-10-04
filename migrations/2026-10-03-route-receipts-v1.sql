@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS route_receipts (
+  route_id TEXT PRIMARY KEY NOT NULL REFERENCES route_plans(id) ON DELETE RESTRICT,
+  trade_id TEXT NOT NULL UNIQUE REFERENCES trades(id) ON DELETE RESTRICT,
+  content_hash TEXT NOT NULL,
+  receipt_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const credential = marketplaceMppCredential(request)
     let proof: z.infer<typeof hashProof> | undefined
     if (request.body) {
-      const body = await readBoundedJson(request, 1_024)
+      const body = await readBoundedJson(request, 1_024, 10_000, true)
       if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Invalid MPP proof body', code: 'MPP_PAYMENT_PROOF_INVALID' }, { status: 400 })
       if (Object.keys(body).length) {
         const parsed = hashProof.safeParse(body)
@@ -60,9 +60,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (!hasPaymentProof) {
       const reason = await serviceFundingEligibility(trade)
+      if (reason === 'ROUTE_EXECUTION_PAUSED') return json({ error: 'New route payment authority is paused; recover original payments', code: reason, retryable: true }, { status: 503 })
       if (reason) return json({ error: 'Provider no longer satisfies checkout requirements; do not pay', code: 'PROVIDER_ELIGIBILITY_CHANGED', reason }, { status: 409 })
     }
-    if (!proof && (!credential || credential.payload?.type === 'transaction')) await assertMarketplaceMppPullAllowed(trade.id)
+    if (!proof && (!credential || credential.payload?.type === 'transaction')) await assertMarketplaceMppPullAllowed(trade.id, undefined,
+      credential?.payload?.type === 'transaction' ? { serialized_transaction: credential.payload.signature, challenge: credential.challenge } : undefined)
     const readiness = getPaymentReadiness()
     if (!readiness.mpp.enabled) return json({ error: 'MPP settlement is not configured', code: 'PAYMENT_RAIL_NOT_CONFIGURED' }, { status: 503 })
     let payer: string, txHash: string, withReceipt = (response: Response): Response => response

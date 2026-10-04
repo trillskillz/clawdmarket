@@ -1,3 +1,6 @@
+import { getRouteControl, inspectRouteFinancialHealth } from './route-control'
+import { routingOperationalAlerts } from './routing-alerts'
+import { inspectRouteReceiptHealth } from './route-receipt-health.mjs'
 import { inspectCreditHealth } from './credit-health.mjs'
 import 'server-only'
 import { db } from '@/lib/db'
@@ -15,7 +18,7 @@ function countByState(rows: readonly Record<string, unknown>[]) {
 /** Aggregate-only operator snapshot. No account, endpoint, payload, or credential values leave this function. */
 export async function getRoutingOperatorSnapshot() {
   const client = db.$client
-  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, overdueDeliveries, webhooks, settlement, cron, verificationHealth, fundingHealth, creditHealth] = await Promise.all([
+  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, overdueDeliveries, webhooks, settlement, cron, verificationHealth, fundingHealth, creditHealth, receiptHealth, admissionControl, financialHealth, routeProgress] = await Promise.all([
     client.execute('SELECT id, applied_at FROM _clawdmarket_migrations ORDER BY applied_at DESC, id DESC LIMIT 8'),
     client.execute('SELECT status AS state, COUNT(*) AS count FROM service_definitions GROUP BY status'),
     client.execute('SELECT state, COUNT(*) AS count FROM route_plans GROUP BY state'),
@@ -43,7 +46,7 @@ export async function getRoutingOperatorSnapshot() {
       JOIN trades t ON t.id = o.trade_id
       WHERE t.status = 'escrow_held' AND o.state IN ('funded', 'executing')
         AND o.capacity_released_at IS NULL AND r.deadline_seconds IS NOT NULL
-        AND unixepoch(t.funded_at) + r.deadline_seconds <= unixepoch()`),
+        AND COALESCE(r.execution_deadline_at / 1000.0, unixepoch(t.funded_at) + r.deadline_seconds) <= unixepoch()`),
     inspectWebhookDeliveryHealth(),
     inspectSettlementHealth(client),
     inspectWorkerHeartbeat('webhooks', 5),
@@ -53,8 +56,14 @@ export async function getRoutingOperatorSnapshot() {
       FROM verification_jobs`),
     inspectRouteFundingHealth(client),
     inspectCreditHealth(client),
+    inspectRouteReceiptHealth(client),
+    getRouteControl(), inspectRouteFinancialHealth(),
+    client.execute(`SELECT
+      (SELECT COUNT(*) FROM route_plans WHERE state = 'reserving' AND service_order_id IS NULL AND updated_at < unixepoch() - 900) AS reserving_overdue_count,
+      (SELECT COUNT(*) FROM route_plans r JOIN service_orders o ON o.id = r.service_order_id JOIN trades t ON t.id = o.trade_id
+        WHERE t.status = 'pending' AND t.payment_due_at IS NOT NULL AND unixepoch(t.payment_due_at) <= unixepoch()) AS checkout_overdue_count`),
   ])
-  return {
+  const snapshot = {
     checked_at: new Date().toISOString(),
     flags: {
       reusable_service_writes: reusableServiceWritesEnabled(),
@@ -82,5 +91,22 @@ export async function getRoutingOperatorSnapshot() {
     workers: { webhooks: cron },
     route_funding: fundingHealth,
     account_credit: creditHealth,
+    route_receipts: receiptHealth,
+    admission: admissionControl, financial_health: financialHealth,
+    route_progress: { reserving_overdue_count: Number(routeProgress.rows[0]?.reserving_overdue_count || 0),
+      checkout_overdue_count: Number(routeProgress.rows[0]?.checkout_overdue_count || 0), inactive_mandate_checkout_count: fundingHealth.inactive_checkout_count },
+  }
+  const controlAlerts = admissionControl.paused ? [{ code: 'ROUTE_ADMISSION_PAUSED', count: 1, severity: 'attention' as const }] : []
+  return { ...snapshot, alerts: [...financialHealth.alerts, ...controlAlerts, ...routingOperationalAlerts(snapshot)] }
+}
+
+/** Monitoring failure is inspectable without stopping unrelated settlement/RPC checks. */
+export async function getRoutingMonitoringHealth() {
+  try {
+    const { admission, alerts } = await getRoutingOperatorSnapshot()
+    return { healthy: alerts.length === 0, admission, alerts }
+  } catch {
+    return { healthy: false, admission: { paused: true, reason_code: 'MONITOR_FAILURE' },
+      alerts: [{ code: 'ROUTE_MONITOR_UNAVAILABLE', count: 1, severity: 'critical' as const }] }
   }
 }

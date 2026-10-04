@@ -9,11 +9,17 @@ export const buyerWalletReference = (chainId, payer) => createHash('sha256').upd
 /** Linux kernel lock shared by all routes/origins using this wallet state directory. */
 export async function withBuyerWalletLock(directory, chainId, payer, operation) {
   if (!Number.isSafeInteger(chainId) || chainId <= 0 || !/^0x[a-fA-F0-9]{40}$/.test(payer)) throw new Error('BUYER_WALLET_LOCK_INVALID')
+  return withBuyerStateLock(directory, buyerWalletReference(chainId, payer), operation)
+}
+
+/** Protect a durable wallet or route journal across buyer processes. */
+export async function withBuyerStateLock(directory, reference, operation) {
+  if (!/^(?:route-)?[a-f0-9]{64}$/.test(reference)) throw new Error('BUYER_WALLET_LOCK_INVALID')
   directory = resolve(directory)
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const info = await lstat(directory)
   if (!info.isDirectory() || (info.mode & 0o077) !== 0 || info.uid !== process.getuid?.()) throw new Error('BUYER_PRIVATE_STATE_DIRECTORY_REQUIRED')
-  const file = await open(resolve(directory, `${buyerWalletReference(chainId, payer)}.lock`), constants.O_RDWR | constants.O_CREAT | constants.O_NOFOLLOW, 0o600)
+  const file = await open(resolve(directory, `${reference}.lock`), constants.O_RDWR | constants.O_CREAT | constants.O_NOFOLLOW, 0o600)
   let child
   const controller = new AbortController()
   try {

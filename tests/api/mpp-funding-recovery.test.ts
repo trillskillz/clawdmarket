@@ -186,11 +186,29 @@ test('MPP mandates fail closed for automatic pull, revoked authority cannot broa
     input: { private_text: 'dummy source' }, verification: policy, provider_requirements: { approved_providers: [f.sellerId] }, payment_policy: { allowed_rails: ['mpp'] } }))
   assert.equal(planned.status, 201); const routeId = (await planned.json()).route.id
   const mandateApi = await import('@/app/api/routes/[id]/mandate/route'), context = { params: Promise.resolve({ id: routeId }) }
-  const created = await mandateApi.POST(request(`/api/routes/${routeId}/mandate`, { version: 1, client_reference: `mpp-mandate-${serviceId}`,
+  const mandateBody = { version: 1, client_reference: `mpp-mandate-${serviceId}`,
     max_aggregate: '2.00', max_per_execution: '2.00', max_retry_budget: '0.00', max_attempts: 1, approved_providers: [f.sellerId], max_latency_seconds: 60,
     private_data: 'selected_provider_only', expires_at: new Date(Date.now() + 600_000).toISOString(), payment: { rail: 'mpp', chain_id: 4217, token_address: token,
-      payer_address: payer.address, treasury_address: treasury, minimum_token_reserve_units: '1000000', minimum_native_reserve_wei: '0', max_gas_cost_wei: '1' } }), context)
+      payer_address: payer.address, treasury_address: treasury, minimum_token_reserve_units: '1000000', fee_token_address: token,
+      minimum_fee_token_reserve_units: '2000000', max_fee_token_cost_units: '5000' } }
+  const submit = (body: unknown) => mandateApi.POST(request(`/api/routes/${routeId}/mandate`, body), context)
+  const { fee_token_address: _, minimum_fee_token_reserve_units: __, max_fee_token_cost_units: ___, ...legacyBase } = mandateBody.payment
+  assert.equal((await submit({ ...mandateBody, payment: { ...legacyBase, minimum_native_reserve_wei: '0', max_gas_cost_wei: '1' } })).status, 400)
+  assert.equal((await submit({ ...mandateBody, payment: { ...mandateBody.payment, max_fee_token_cost_units: '0' } })).status, 400)
+  assert.equal((await submit({ ...mandateBody, payment: { ...mandateBody.payment, max_gas_cost_wei: '1' } })).status, 400)
+  assert.equal((await submit({ ...mandateBody, payment: { ...mandateBody.payment, fee_token_address: treasury } })).status, 409)
+  const created = await submit(mandateBody)
   assert.equal(created.status, 201); const mandate = (await created.json()).mandate
+  assert.equal(mandate.terms.fee_token_decimals, 6); assert.equal(mandate.terms.payment.max_fee_token_cost_units, '5000')
+  assert.equal((await submit(mandateBody)).status, 200)
+  assert.equal((await submit({ ...mandateBody, payment: { ...mandateBody.payment, max_fee_token_cost_units: '5001' } })).status, 409)
+  const [stored] = await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id, mandate.id))
+  const oldTerms = JSON.parse(stored.terms_json); delete oldTerms.fee_token_decimals
+  oldTerms.payment = { ...legacyBase, rail: 'mpp', payer_address: payer.address.toLowerCase(), treasury_address: treasury.toLowerCase(), minimum_native_reserve_wei: '0', max_gas_cost_wei: '1' }
+  const historical = (await import('@/lib/route-payment-mandate')).mandateDto({ ...stored, terms_json: JSON.stringify(oldTerms) })
+  const { canonicalContract } = await import('@/lib/structured-verification'); const { createHash } = await import('node:crypto')
+  assert.equal(historical.terms_hash, createHash('sha256').update(canonicalContract(oldTerms)).digest('hex'))
+  assert.equal(historical.terms.fee_token_decimals, undefined)
   const executed = await (await import('@/app/api/routes/[id]/execute/route')).POST(request(`/api/routes/${routeId}/execute`, { mandate_id: mandate.id }), context)
   assert.equal(executed.status, 201); const reserved = await executed.json()
   const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, reserved.trade.id)), fundingContext = { params: Promise.resolve({ id: trade.id }) }

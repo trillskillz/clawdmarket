@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ClawdMarketApiError, ClawdMarketClient, ClawdMarketTransportError } from '../../sdk/typescript/src/index'
+import { ClawdMarketA2AError, ClawdMarketApiError, ClawdMarketClient, ClawdMarketTransportError } from '../../sdk/typescript/src/index'
 
 const routeId = '00000000-0000-4000-8000-000000000001'
 
@@ -177,4 +177,100 @@ test('private artifact SDK authenticates relative downloads and independently ve
   corrupt = true
   await assert.rejects(client.downloadArtifact(artifact), /integrity check failed/)
   assert.equal(seen.every((value) => value.includes('/artifacts')), true)
+})
+
+test('Tempo intent and exact claim SDK preserve the original operation on canonical private paths', async () => {
+  const calls: { path: string; method: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-tempo-key', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: String(init?.method), body: init?.body ? JSON.parse(String(init.body)) : null })
+    assert.equal(init?.redirect, 'error'); assert.equal(new Headers(init?.headers).get('Payment-Authorization'), null)
+    return Response.json({ claim_required: true, created: false, send_allowed: false })
+  } })
+  const operation = { buyer_operation_id: routeId }, claim = { ...operation, intent_id: routeId, mandate_id: routeId, serialized_transaction: '0x76aabb' }
+  assert.equal((await client.createBuyerMppPaymentIntent(routeId, operation)).claim_required, true)
+  await client.getBuyerMppPaymentIntent(routeId); assert.equal((await client.claimBuyerMppPayment(routeId, claim)).send_allowed, false)
+  assert.deepEqual(calls, [{ path: `/api/trades/${routeId}/fund/mpp/intent`, method: 'POST', body: operation },
+    { path: `/api/trades/${routeId}/fund/mpp/intent`, method: 'GET', body: null }, { path: `/api/trades/${routeId}/fund/mpp/claim`, method: 'POST', body: claim }])
+  assert.throws(() => client.createBuyerMppPaymentIntent('../other', operation), /trade ID must be a UUID/)
+  assert.throws(() => client.getBuyerMppPaymentIntent('../other'), /trade ID must be a UUID/)
+  assert.throws(() => client.claimBuyerMppPayment('../other', claim), /trade ID must be a UUID/)
+})
+
+test('SDK lifecycle observation, hash-bound acceptance and private result share canonical owned route paths', async () => {
+  const calls: { path: string; method: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-route-payments-key', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: String(init?.method), body: init?.body ? JSON.parse(String(init.body)) : null })
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-route-payments-key')
+    assert.equal(init?.redirect, 'error'); return Response.json({ phase: 'awaiting_buyer' })
+  } })
+  await client.inspectRouteLifecycle(routeId); await client.advanceRoute(routeId, { version: 1, action: 'observe' })
+  const decision = { version: 1 as const, action: 'accept' as const, content_hash: 'a'.repeat(64) }
+  await client.advanceRoute(routeId, decision); await client.getRouteResult(routeId)
+  assert.deepEqual(calls, [{ path: `/api/routes/${routeId}/advance`, method: 'GET', body: null },
+    { path: `/api/routes/${routeId}/advance`, method: 'POST', body: { version: 1, action: 'observe' } },
+    { path: `/api/routes/${routeId}/advance`, method: 'POST', body: decision }, { path: `/api/routes/${routeId}/result`, method: 'GET', body: null }])
+  assert.throws(() => client.advanceRoute('../another', decision), /routeId must be a route UUID/)
+})
+
+test('SDK retry inspection and reservation preserve the original mandate, previous trade and stable operation', async () => {
+  const calls: { path: string; method: string; body: unknown }[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-retry-key', fetch: async (input, init) => {
+    calls.push({ path: new URL(String(input)).pathname, method: String(init?.method), body: init?.body ? JSON.parse(String(init.body)) : null })
+    assert.equal(init?.redirect, 'error'); return Response.json({ idempotent: true })
+  } })
+  const command = { version: 1 as const, mandate_id: routeId, previous_trade_id: routeId, retry_operation_id: routeId }
+  await client.inspectRouteRetry(routeId); await client.retryRoute(routeId, command)
+  assert.deepEqual(calls, [{ path: `/api/routes/${routeId}/retry`, method: 'GET', body: null }, { path: `/api/routes/${routeId}/retry`, method: 'POST', body: command }])
+})
+
+test('instant SDK preserves explicit prepaid authority, saved references and worker tokens on canonical paths', async () => {
+ const calls: Array<{ path: string; body: unknown }> = []
+ const client = new ClawdMarketClient({ apiKey: 'dummy-instant-key', fetch: async (url, init) => {
+  assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-instant-key')
+  assert.equal(new Headers(init?.headers).get('Payment-Authorization'), null)
+  calls.push({path:new URL(String(url)).pathname,body:init?.body?JSON.parse(String(init.body)):null})
+  return Response.json({session:{id:routeId,status:'open'},call:{id:routeId,state:'pending'},idempotent:true})
+ } })
+ const authority={client_reference:'saved-instant-session',budget_minor:10,expected_unit_price_minor:2,expires_in_seconds:300,acceptance:'schema_v1' as const,payment_rail:'credit' as const}
+ await client.openInstantSession(routeId,authority)
+ await client.callInstantService(routeId,{client_reference:'saved-instant-call',input:{text:'hello'}})
+ await client.getInstantCall(routeId); await client.getInstantSession(routeId)
+ await client.claimInstantCall(routeId,'saved-provider-token-more-than-32-characters')
+ await client.completeInstantCall(routeId,{outcome:'completed',lease_token:'saved-provider-token-more-than-32-characters',output:{text:'done'}})
+ await client.closeInstantSession(routeId)
+ assert.deepEqual(calls.map(c=>c.path),[`/api/instant/services/${routeId}/sessions`,`/api/instant/sessions/${routeId}/calls`,`/api/instant/calls/${routeId}`,`/api/instant/sessions/${routeId}`,`/api/instant/calls/${routeId}/claim`,`/api/instant/calls/${routeId}/result`,`/api/instant/sessions/${routeId}`])
+ assert.deepEqual(calls[0].body,authority);assert.deepEqual(calls[6].body,{action:'close'})
+ assert.throws(()=>client.openInstantSession('..',authority),/instant ID must be a UUID/)
+ assert.throws(()=>client.getInstantCall('../wallet'),/instant ID must be a UUID/)
+})
+test('instant SDK leaves uncertain call submission for original-reference recovery and never funds automatically', async () => {
+ let requests=0
+ const client=new ClawdMarketClient({apiKey:'dummy-instant-key',fetch:async()=>{requests++;throw new Error('simulated lost response')}})
+ await assert.rejects(client.callInstantService(routeId,{client_reference:'persisted-before-send',input:{text:'hello'}}),ClawdMarketTransportError)
+ assert.equal(requests,1)
+})
+
+
+test('A2A SDK preserves durable message identity and ErrorInfo task/funds state on HTTP and JSON-RPC errors', async () => {
+  const input = { role: 'ROLE_USER' as const, messageId: 'saved-operation', parts: [{ data: { action: 'route_work' as const, route_id: routeId, mandate_id: routeId } }] }
+  const calls: string[] = []
+  let reject = false, httpStatus = 409
+  const client = new ClawdMarketClient({ apiKey: 'dummy-agent-key', fetch: async (url, init) => {
+    assert.equal(new URL(String(url)).pathname, '/api/a2a'); assert.equal(init?.redirect, 'error')
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer dummy-agent-key')
+    const rpc = JSON.parse(String(init?.body)); calls.push(rpc.method)
+    if (rpc.method === 'SendMessage') assert.deepEqual(rpc.params.message, input)
+    return reject ? Response.json({ jsonrpc: '2.0', id: rpc.id, error: { code: -32002, message: 'Funded work cannot cancel', data: [{ reason: 'ROUTE_FUNDS_ALREADY_COMMITTED', metadata: { task_id: routeId, funds_state: 'escrow_held' } }] } }, { status: httpStatus })
+      : Response.json({ jsonrpc: '2.0', id: rpc.id, result: rpc.method === 'SendMessage' ? { task: { id: routeId } } : { id: routeId } })
+  } })
+  assert.equal((await client.sendA2AMessage(input)).task.id, routeId)
+  await client.getA2AExtendedCard(); await client.getA2ATask(routeId); await client.listA2ATasks(); await client.cancelA2ATask(routeId)
+  assert.deepEqual(calls, ['SendMessage', 'GetExtendedAgentCard', 'GetTask', 'ListTasks', 'CancelTask'])
+  reject = true
+  for (const status of [409, 200]) {
+    httpStatus = status
+    await assert.rejects(() => client.cancelA2ATask(routeId), (error: unknown) => {
+      assert.ok(error instanceof ClawdMarketA2AError); assert.equal(error.taskId, routeId); assert.equal(error.fundsState, 'escrow_held'); assert.equal(error.rpcCode, -32002); return true
+    })
+  }
 })

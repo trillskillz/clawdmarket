@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.72'
+export const AGENT_CONTRACT_VERSION = '1.80'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -16,6 +16,7 @@ export type AgentAuth =
   | 'mpp'
   | 'task-owner'
   | 'trade-buyer'
+  | 'route-buyer'
   | 'trade-party'
   | 'approved-verifier'
   | 'approved-verifier-or-trade-party'
@@ -102,19 +103,26 @@ const mppHashProofBodySchema = { type: 'object', additionalProperties: false, re
 const assertionPrimitiveSchema = { oneOf: [{ type: 'string', maxLength: 500 }, { type: 'number' }, { type: 'boolean' }, { type: 'null' }] }
 const mandateAmountSchema = { type: 'string', pattern: '^(?:0|[1-9][0-9]{0,9})(?:\\.[0-9]{1,2})?$', description: 'USD decimal string; aggregate and per-execution limits must be positive.' }
 const mandateUnitsSchema = { type: 'string', pattern: '^(?:0|[1-9][0-9]{0,77})$' }
+const mandatePaymentProperties = { chain_id: { type: 'integer', minimum: 1 },
+  token_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, payer_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, treasury_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' },
+  minimum_token_reserve_units: mandateUnitsSchema }
+const mandatePaymentRequired = ['rail', 'chain_id', 'token_address', 'payer_address', 'treasury_address', 'minimum_token_reserve_units']
 const routeMandateBodySchema = { type: 'object', additionalProperties: false,
   required: ['version', 'client_reference', 'max_aggregate', 'max_per_execution', 'max_retry_budget', 'max_attempts', 'approved_providers', 'max_latency_seconds', 'private_data', 'expires_at', 'payment'],
   properties: { version: { const: 1 }, client_reference: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' },
     max_aggregate: mandateAmountSchema, max_per_execution: mandateAmountSchema, max_retry_budget: mandateAmountSchema,
-    max_attempts: { type: 'integer', minimum: 1, maximum: 3, description: 'Economic attempt ceiling; funded automatic retries are currently disabled.' },
+    max_attempts: { type: 'integer', minimum: 1, maximum: 3, description: 'Economic attempt ceiling. Funded retry additionally requires a positive retry budget and exact prior refund reconciliation.' },
     approved_providers: { type: 'array', minItems: 1, maxItems: 20, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 200 }, description: 'Exact seller account IDs, including user_agent_ identities.' },
     max_latency_seconds: { type: 'integer', minimum: 1, maximum: 2592000 }, private_data: { const: 'selected_provider_only' },
     expires_at: { type: 'string', format: 'date-time', description: 'UTC ISO timestamp with milliseconds; future and within 24 hours.' },
-    payment: { type: 'object', additionalProperties: false, required: ['rail', 'chain_id', 'token_address', 'payer_address', 'treasury_address', 'minimum_token_reserve_units', 'minimum_native_reserve_wei', 'max_gas_cost_wei'],
-      properties: { rail: { type: 'string', enum: ['evm', 'mpp'] }, chain_id: { type: 'integer', minimum: 1 },
-        token_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, payer_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' }, treasury_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' },
-        minimum_token_reserve_units: mandateUnitsSchema, minimum_native_reserve_wei: mandateUnitsSchema,
-        max_gas_cost_wei: { ...mandateUnitsSchema, description: 'Positive maximum gas cost per payment; the buyer worker must enforce reserve/gas bounds before signing.' } } },
+    payment: { oneOf: [
+      { type: 'object', additionalProperties: false, required: [...mandatePaymentRequired, 'minimum_native_reserve_wei', 'max_gas_cost_wei'],
+        properties: { ...mandatePaymentProperties, rail: { const: 'evm' }, minimum_native_reserve_wei: mandateUnitsSchema,
+          max_gas_cost_wei: { ...mandateUnitsSchema, description: 'Positive execution gas cost ceiling in wei; the buyer worker separately enforces all-fee reserve bounds.' } } },
+      { type: 'object', additionalProperties: false, required: [...mandatePaymentRequired, 'fee_token_address', 'minimum_fee_token_reserve_units', 'max_fee_token_cost_units'],
+        properties: { ...mandatePaymentProperties, rail: { const: 'mpp' }, fee_token_address: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$', description: 'Must match configured six-decimal pathUSD payment token. No sponsorship or swaps.' },
+          minimum_fee_token_reserve_units: mandateUnitsSchema, max_fee_token_cost_units: { ...mandateUnitsSchema, description: 'Positive maximum fee in six-decimal fee-token base units. Principal and fee consume the same balance; both reserve floors must remain.' } } },
+    ] },
   } }
 function assertionBodySchema(op: string, properties: Record<string, unknown>, required: string[]) {
   return { type: 'object', additionalProperties: false, required: ['id', 'field', 'op', ...required],
@@ -641,6 +649,19 @@ export const AGENT_ACTIONS: AgentAction[] = [
     required: ['client_reference', 'objective'], optional: ['input', 'payment_rail', 'max_total', 'expected_price'], body_schema: reusableOrderBodySchema,
   },
   {
+    id: 'open_instant_session', label: 'Fund instant session', description: 'Explicitly prepay a bounded session from verified account credit for one provider; schema-valid results charge one unit. Persist the client reference before spending. Closed sessions cannot reopen.',
+    method: 'POST', endpoint: '/api/instant/services/{id}/sessions', auth: 'agent_api_key', payment: null,
+    required: ['client_reference', 'budget_minor', 'expected_unit_price_minor', 'expires_in_seconds', 'acceptance', 'payment_rail'],
+  },
+  {
+    id: 'call_instant_service', label: 'Call instant service', description: 'Queue one bounded call under prepaid authority; exact duplicate references replay the original call and cannot bill again.',
+    method: 'POST', endpoint: '/api/instant/sessions/{id}/calls', auth: 'agent_api_key', payment: null, required: ['client_reference', 'input'],
+  },
+  {
+    id: 'get_instant_call', label: 'Read instant result', description: 'Buyer or selected provider reads the private result and atomic metering receipt.',
+    method: 'GET', endpoint: '/api/instant/calls/{id}', auth: 'trade-party', payment: null,
+  },
+  {
     id: 'plan_work', label: 'Plan work',
     description: 'Persist a nonbinding, no-payment route plan with canonical capabilities and explainable candidate ranking. Candidate evidence distinguishes provider claims from economically backed buyer-accepted completions; recent funded provider declines, lease expiries, and uncorrected deterministic verification failures add a capped penalty. Measured quality remains unknown.',
     method: 'POST', endpoint: '/api/routes/plan', auth: 'agent_api_key', payment: null,
@@ -742,6 +763,22 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'POST', endpoint: '/api/routes/{id}/execute', auth: 'agent_api_key', payment: null, required: ['id'],
     optional: ['mandate_id'], body_schema: { type: 'object', additionalProperties: false, properties: { mandate_id: { type: 'string', format: 'uuid' } } },
   },
+  { id: 'inspect_route_lifecycle', label: 'Inspect route lifecycle', description: 'Buyer-only next action, stable funds state, current delivery hash, explicit acceptance and immutable backed receipt. A completion flag without authoritative financial evidence reports uncertainty.',
+    method: 'GET', endpoint: '/api/routes/{id}/advance', auth: 'route-buyer', payment: null, required: ['id'] },
+  { id: 'advance_route_lifecycle', label: 'Advance funded route', description: 'Buyer/payments:write only. One bounded pass repairs only already funded dispatch. action=observe never creates buyer acceptance; it may resume an already accepted settlement. action=accept requires the exact current content_hash and required verification. Existing payout outbox, completion and capacity release remain authoritative. No wallet signing, replacement checkout or funded retry.',
+    method: 'POST', endpoint: '/api/routes/{id}/advance', auth: 'route-buyer', payment: null, required: ['id', 'version', 'action'],
+    body_schema: { oneOf: [
+      { type: 'object', additionalProperties: false, required: ['version', 'action'], properties: { version: { type: 'integer', const: 1 }, action: { type: 'string', const: 'observe' } } },
+      { type: 'object', additionalProperties: false, required: ['version', 'action', 'content_hash'], properties: { version: { type: 'integer', const: 1 }, action: { type: 'string', const: 'accept' }, content_hash: { type: 'string', pattern: '^[a-f0-9]{64}$' } } },
+    ] } },
+  { id: 'get_route_result', label: 'Retrieve private route result', description: 'Buyer-only private delivery content, content fingerprint and artifact hash inventory. Private no-store response; remote source/delivery URLs are declarations and never fetched. Fetch artifact bytes through authenticated fixed trade paths and verify their size/SHA256.',
+    method: 'GET', endpoint: '/api/routes/{id}/result', auth: 'route-buyer', payment: null, required: ['id'] },
+  { id: 'inspect_route_retry', label: 'Inspect retry reconciliation', description: 'Buyer-only original funding/refund/capacity reconciliation. Cancellation, missing receipts and timeouts never prove payment absent. A confirmed refund still requires current mandate, policy, aggregate/retry budget and deadline checks.',
+    method: 'GET', endpoint: '/api/routes/{id}/retry', auth: 'route-buyer', payment: null, required: ['id'] },
+  { id: 'retry_funded_route', label: 'Reserve reconciled fallback', description: 'Buyer/payments:write and cookie CSRF required. Stable retry_operation_id and previous_trade_id under the original mandate reserve one approved fallback only after all previous attempts have exact confirmed buyer refunds, no seller payout and released capacity. Gross aggregate and retry spend are never reset by refunds. Existing dispute/refund authority is unchanged.',
+    method: 'POST', endpoint: '/api/routes/{id}/retry', auth: 'route-buyer', payment: null, required: ['id'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['version', 'mandate_id', 'previous_trade_id', 'retry_operation_id'], properties: {
+      version: { const: 1 }, mandate_id: { type: 'string', format: 'uuid' }, previous_trade_id: { type: 'string', format: 'uuid' }, retry_operation_id: { type: 'string', format: 'uuid' } } } },
   { id: 'create_route_mandate', label: 'Authorize route funding', description: 'Only the buyer account or current linked owner may create immutable route-bound payment authority. Creates no payment or economic order.',
     method: 'POST', endpoint: '/api/routes/{id}/mandate', auth: 'owner-account', payment: null, required: ['id'], body_schema: routeMandateBodySchema },
   { id: 'inspect_route_mandate', label: 'Inspect funding authority', description: 'Buyer or current owner reads mandate terms, exposure and the durable funding step. Read-only agent credentials cannot grant or spend authority.',
@@ -868,7 +905,25 @@ export const AGENT_ACTIONS: AgentAction[] = [
     body_schema: { type: 'object', additionalProperties: false, required: ['intent_id', 'chain_id', 'token_address', 'tx_hash', 'payer_address'], properties: { intent_id: { type: 'string' }, payer_signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' }, chain_id: { type: 'integer', minimum: 1 }, token_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, payer_address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' } } },
   },
   {
-    id: 'fund_trade_mpp', label: 'Fund through MPP', description: 'Manual MPP checkout returns a 402 challenge. Preserve buyer identity and send credentials in Payment-Authorization. Recover an already sent payment with tx_hash/payer_address JSON, which never broadcasts. Mandate pull funding remains closed pending durable Tempo buyer authority.',
+    id: 'create_mpp_payment_intent', label: 'Reserve the original Tempo challenge', description: 'Buyer/payments:write only. Persist buyer_operation_id privately first; matching replay returns the same challenge and amount. Requires current mandate authority. claim_required=true never permits submission without the exact signed claim.',
+    method: 'POST', endpoint: '/api/trades/{id}/fund/mpp/intent', auth: 'trade-buyer', payment: null, required: ['id', 'buyer_operation_id'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['buyer_operation_id'], properties: { buyer_operation_id: { type: 'string', format: 'uuid' } } },
+  },
+  {
+    id: 'recover_mpp_payment_intent', label: 'Recover original Tempo payment', description: 'Buyer-only original challenge, operation, immutable claim and trade state. No send permission; retain the original hash across unknown outcomes.',
+    method: 'GET', endpoint: '/api/trades/{id}/fund/mpp/intent', auth: 'trade-buyer', payment: null, required: ['id'],
+  },
+  {
+    id: 'claim_buyer_mpp_payment', label: 'Claim one signed Tempo payment', description: 'Fsync the exact unsponsored root-key Tempo bytes and original challenge credential privately before this request. Binds one regular nonce, canonical transferWithMemo, payment/fee token and maximum fee to the owner-approved mandate. Shared EVM/MPP wallet holds remain until matching verified receipt. Only these exact bytes may be submitted; this claim never broadcasts.',
+    method: 'POST', endpoint: '/api/trades/{id}/fund/mpp/claim', auth: 'trade-buyer', payment: null,
+    required: ['id', 'intent_id', 'mandate_id', 'buyer_operation_id', 'serialized_transaction'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['intent_id', 'mandate_id', 'buyer_operation_id', 'serialized_transaction'], properties: {
+      intent_id: { type: 'string', format: 'uuid' }, mandate_id: { type: 'string', format: 'uuid' }, buyer_operation_id: { type: 'string', format: 'uuid' },
+      serialized_transaction: { type: 'string', pattern: '^0x76(?:[a-fA-F0-9]{2}){1,4095}$', maxLength: 8194 },
+    } },
+  },
+  {
+    id: 'fund_trade_mpp', label: 'Fund through MPP', description: 'Manual MPP checkout returns a 402 challenge. Preserve buyer identity and send credentials in Payment-Authorization. Recover an already sent payment with tx_hash/payer_address JSON, which never broadcasts. Mandate pull requires the original challenge and exact claimed signed transaction; current authority is checked immediately before RPC submission.',
     method: 'POST', endpoint: '/api/trades/{id}/fund/mpp', auth: 'trade-buyer', payment: null, required: ['id'], optional: ['tx_hash', 'payer_address'], body_schema: mppHashProofBodySchema,
   },
   {
@@ -946,9 +1001,9 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'GET', endpoint: '/api/trades/{id}/verification', auth: 'trade-party', payment: null, required: ['id'],
   },
   {
-    id: 'confirm_trade', label: 'Confirm delivery', description: 'Buyer approval releases escrow. Account balances settle atomically; external trades complete only after the seller payout is confirmed.',
+    id: 'confirm_trade', label: 'Confirm delivery', description: 'Buyer approval releases escrow. Optional content_hash binds the decision to the current delivery atomically. Account balances settle atomically; external trades complete only after the seller payout is confirmed.',
     method: 'POST', endpoint: '/api/trades/{id}/confirm', auth: 'trade-buyer', payment: null,
-    required: ['id'],
+    required: ['id'], optional: ['content_hash'], body_schema: { type: 'object', additionalProperties: false, properties: { content_hash: { type: 'string', pattern: '^[a-f0-9]{64}$' } } },
   },
   {
     id: 'dispute_trade', label: 'Dispute trade', description: 'A buyer or seller can freeze escrow and submit dispute evidence while a trade is held or awaiting release.',
@@ -1153,6 +1208,18 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
         .filter((action) => !action.payment)
         .map((action) => `${action.method} ${action.endpoint}`),
     },
+    a2a: { protocol_version: '1.0', transport: 'JSONRPC', endpoint: '/api/a2a',
+      public_skills: ['marketplace_briefing','plan_work','inspect_route'], authenticated_write_skills: ['route_work','cancel_route'],
+      extended_card_method: 'GetExtendedAgentCard', read_scope: 'agent:read', write_scopes: ['agent:read','marketplace:write','payments:write'],
+      owner_mandate_required: true, checkout: 'unpaid_canonical_reservation', completion: 'backed_financial_receipt',
+      max_retained_route_tasks_per_agent: 100, enabled_by_default_in_production: false, wallet_broadcast: false },
+    instant_execution: { namespace: '/api/instant', payment_rail: 'credit', metering: 'one_successful_call',
+      enabled_by_default_in_production: false, unit_price_minor_range: [1, 100], max_session_budget_minor: 10000,
+      max_session_seconds: 3600, max_call_seconds: 60, acceptance: 'schema_v1', platform_fee_minor: 0,
+      receipts: 'atomic_credit_transfer_and_result', contracted_trade_created: false, organization_agents_supported: false },
+    routing_admission: { error_code: 'ROUTE_EXECUTION_PAUSED', scope: 'new_routing_commitments',
+      recovery_available: true, automatic_reopen: true, recovery_required_checks: 3, recovery_minimum_seconds: 120,
+      monitor_stale_after_seconds: 900, admin_control: '/api/admin/routing/pause' },
     actions: AGENT_ACTIONS,
     webhook_events: WEBHOOK_EVENT_TYPES,
     mcp_tools: AGENT_MCP_TOOLS.map((tool) => tool.name),
@@ -1182,6 +1249,52 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const tradeIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
 
   return {
+    '/api/instant/services': {
+      get: { operationId: 'list_instant_services', summary: 'Bounded public instant capability catalog', responses: { 200: { description: 'Up to 100 active public-provider offers; cent prices, bounded schemas and rollout enabled metadata' } } },
+      post: { operationId: 'create_instant_service', summary: 'Publish an instant capability offer', security: authenticated,
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['title','capabilities','input_schema','output_schema','unit_price_minor'], properties: {
+          title: { type: 'string', minLength: 5, maxLength: 100 }, capabilities: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string' } }, input_schema: { type: 'object' }, output_schema: { type: 'object' },
+          unit_price_minor: { type: 'integer', minimum: 1, maximum: 100 }, max_concurrency: { type: 'integer', minimum: 1, maximum: 100, default: 1 }, deadline_seconds: { type: 'integer', minimum: 1, maximum: 60, default: 30 } } } } } },
+        responses: { 201: { description: 'Independent instant offer; contracted services and route selection stay separate' }, 400: { description: 'Invalid canonical capability, bounded schema or request' }, 503: { description: 'Instant rollout disabled' } } },
+    },
+    '/api/instant/services/{id}/sessions': { post: { operationId: 'open_instant_session', summary: 'Explicitly prepay a provider-bound credit session', security: authenticated,
+      parameters: [tradeIdParameter], description: 'Requires payments:write for scoped agents, CSRF for cookies, schema_v1 acceptance and a persisted buyer reference. Credit funding, policy checks and session snapshot are atomic. Organization-assigned agents and unsupported provider requirements fail closed. No trade, on-chain per-call payment or historical-wallet spending.',
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['client_reference','budget_minor','expected_unit_price_minor','expires_in_seconds','acceptance','payment_rail'], properties: {
+        client_reference: { type: 'string', minLength: 8, maxLength: 128 }, budget_minor: { type: 'integer', minimum: 1, maximum: 10000 }, expected_unit_price_minor: { type: 'integer', minimum: 1, maximum: 100 }, expires_in_seconds: { type: 'integer', minimum: 60, maximum: 3600 }, acceptance: { const: 'schema_v1' }, payment_rail: { const: 'credit' } } } } } },
+      responses: { 201: { description: 'Funded session; integer-cent balance, held, spent and refund totals' }, 200: { description: 'Exact immutable authority replay; no funding repeated' }, 402: { description: 'Insufficient deposited credit' }, 409: { description: 'Reference, price, policy or unsupported organization conflict' }, 503: { description: 'Rollout or financial admission hold' } } } },
+    '/api/instant/sessions/{id}': {
+      get: { operationId: 'get_instant_session', summary: 'Buyer reads session and recovers expiry', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Private session, snapshot and accounting totals; expired authority releases unspent credit' }, 404: { description: 'No caller-owned session' } } },
+      post: { operationId: 'close_instant_session', summary: 'Stop new calls and recover unused prepaid credit', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['action'], properties: { action: { const: 'close' } } } } } },
+        responses: { 200: { description: 'Closed or closing while claimed calls finish within original deadline; idempotent refund after holds' } } },
+    },
+    '/api/instant/sessions/{id}/calls': { post: { operationId: 'call_instant_service', summary: 'Reserve one successful-call unit under prepaid authority', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['client_reference','input'], properties: { client_reference: { type: 'string', minLength: 8, maxLength: 128 }, input: { type: 'object', description: 'At most 8 KiB, validated against the immutable input schema' } } } } } },
+      responses: { 202: { description: 'One pending call and held unit; provider completion is asynchronous within at most 60 seconds' }, 200: { description: 'Exact call replay, including failed/expired terminal calls' }, 402: { description: 'Session budget exhausted' }, 409: { description: 'Capacity, authority, policy or idempotency conflict' }, 422: { description: 'Input schema failure' }, 503: { description: 'Admission hold' } } } },
+    '/api/instant/calls': { get: { operationId: 'list_instant_provider_calls', summary: 'Selected provider lists up to 100 pending/claimed calls', security: authenticated, responses: { 200: { description: 'Private call metadata only; inputs require a claim or party-owned read' } } } },
+    '/api/instant/calls/{id}': { get: { operationId: 'get_instant_call', summary: 'Buyer or selected provider reads call result and metering receipt', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Private input/result/receipt; lease digest never returned' }, 404: { description: 'No caller-owned call' } } } },
+    '/api/instant/calls/{id}/claim': { post: { operationId: 'claim_instant_call', summary: 'Provider durably claims one call with a saved worker token', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['lease_token'], properties: { lease_token: { type: 'string', minLength: 32, maxLength: 128 } } } } } },
+      responses: { 200: { description: 'Saved-token lease replay or terminal failed call; original deadline never extended' }, 409: { description: 'Another worker token already claimed call' } } } },
+    '/api/instant/calls/{id}/result': { post: { operationId: 'complete_instant_call', summary: 'Provider submits output and atomically settles one unit with receipt', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: { oneOf: [
+        { type: 'object', additionalProperties: false, required: ['outcome','lease_token','output'], properties: { outcome: { const: 'completed' }, lease_token: { type: 'string', minLength: 32, maxLength: 128 }, output: { type: 'object', description: 'At most 8 KiB; schema-valid output is explicit automatic acceptance' } } },
+        { type: 'object', additionalProperties: false, required: ['outcome','lease_token'], properties: { outcome: { const: 'failed' }, lease_token: { type: 'string', minLength: 32, maxLength: 128 } } },
+      ] } } } },
+      responses: { 200: { description: 'Completed or failed call; exact success replay preserves one receipt and charge. Late output remains failed and uncharged' }, 403: { description: 'Worker lease rejected' }, 409: { description: 'Conflicting terminal output' }, 422: { description: 'Output schema failure; no charge' } } } },
+    '/api/admin/routing/health': { get: {
+      operationId: 'inspect_routing_health', summary: 'Admin-only aggregate routing alerts and admission state', security: ownerAuthenticated,
+      responses: { 200: { description: 'Private aggregate health, fixed alert codes/counts and current control; no actor IDs or payment values' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator required' }, 500: { description: 'Inspection unavailable; safe error ID returned' } },
+    } },
+    '/api/admin/routing/pause': {
+      get: { operationId: 'inspect_routing_admission', summary: 'Admin-only durable routing admission control', security: ownerAuthenticated,
+        responses: { 200: { description: 'Private no-store pause, allowlisted reason, revision, monitor freshness and automatic recovery window' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator required' }, 503: { description: 'Control unavailable' } } },
+      post: { operationId: 'set_routing_admission', summary: 'Admin-only revision-bound routing pause or healthy resume', security: ownerAuthenticated,
+        description: 'Cookie writes require CSRF; account bearer permitted. Only new routed reservations and payment authority are held. Original proofs, refunds and settlement continue. Automatic recovery requires three spaced healthy samples over at least 120 seconds; environment pause and rollout flags remain authoritative.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['paused', 'expected_revision'], properties: { paused: { type: 'boolean' }, expected_revision: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER } } } } } },
+        responses: { 200: { description: 'Updated control; resume includes aggregate financial health' }, 400: { description: 'Invalid bounded command' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator/CSRF required' }, 409: { description: 'Revision changed, financial uncertainty or environment pause' }, 429: { description: 'Rate limited' }, 503: { description: 'Control unavailable' } },
+      },
+    },
     '/api/payments/config': { get: {
       operationId: 'get_payment_config',
       summary: 'Get deployment payment readiness and accepted stablecoins',
@@ -1587,8 +1700,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/a2a': {
       post: {
         operationId: 'a2a_jsonrpc',
-        summary: 'A2A 1.0 JSON-RPC read-only briefing, route preview, and route inspection',
-        description: 'See /.well-known/agent-card.json. Requires an active registered-agent Bearer key with agent:read. SendMessage supports marketplace briefing, nonpersistent plan_work previews, and buyer-owned inspect_route snapshots. GetTask and ListTasks retrieve completed tasks. No order, checkout, or payment is created.',
+        summary: 'A2A 1.0 discovery, read-only skills and buyer-authorized durable routing tasks',
+        description: 'Public card retains briefing, plan_work and inspect_route read-only skills. GetExtendedAgentCard advertises route_work/cancel_route only to active agent:read + marketplace:write + payments:write keys. Fresh route_work persists intent/plan and requests owner authorization; continuation binds a saved canonical owner mandate and reserves at most one unpaid checkout through current spend policies. Wallet funding, provider delivery, explicit buyer acceptance and settlement remain separate canonical operations. GetTask/ListTasks refresh owned route lifecycle; COMPLETED requires a backed receipt. CancelTask uses canonical unpaid cancellation, rejects funded work and preserves uncertain original payments. Retained routing tasks cap at 100 per agent; read-only tasks expire after seven days. JSON body capped at 16 KiB; message IDs bind immutable input across skills. Production new writes require CLAWDMARKET_A2A_ROUTING_WRITES_ENABLED.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1597,17 +1710,19 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
             properties: {
               jsonrpc: { type: 'string', const: '2.0' },
               id: { oneOf: [{ type: 'string' }, { type: 'integer' }, { type: 'null' }] },
-              method: { type: 'string', enum: ['SendMessage', 'GetTask', 'ListTasks', 'CancelTask'] },
+              method: { type: 'string', enum: ['GetExtendedAgentCard', 'SendMessage', 'GetTask', 'ListTasks', 'CancelTask'] },
               params: { type: 'object' },
             },
           } } },
         },
         responses: {
-          200: { description: 'JSON-RPC result, including a completed A2A Task for SendMessage' },
+          200: { description: 'JSON-RPC result, including a live routing or completed read-only A2A Task' },
           400: { description: 'JSON-RPC validation or unsupported-operation error' },
           401: { description: 'Active agent bearer key required' },
-          403: { description: 'Credential lacks agent:read' },
+          403: { description: 'Credential lacks the required agent scopes' },
           404: { description: 'Task unavailable to caller' },
+          409: { description: 'Message/task binding, mandate, policy or funded cancellation conflict' },
+          413: { description: 'JSON body exceeds 16 KiB' },
           429: { description: 'Rate limit reached' },
           503: { description: 'Briefing source or route planning unavailable' },
         },
@@ -1770,9 +1885,21 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         500: { description: 'Verification failed' }, 503: { description: 'EVM settlement is not configured' },
       },
     } },
+    '/api/trades/{id}/fund/mpp/intent': {
+      post: { operationId: 'create_mpp_payment_intent', summary: 'Persist one original mandate-bound Tempo challenge', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('create_mpp_payment_intent').body_schema } } },
+        responses: { 201: { description: 'Original challenge saved; exact claim required' }, 200: { description: 'Same operation and challenge replay; no fresh send permission' }, 400: { description: 'Invalid operation' }, 401: { description: 'Authentication required' }, 403: { description: 'Buyer/CSRF authorization failed' }, 409: { description: 'Current authority, fee terms, checkout or operation conflict' }, 503: { description: 'Payment/storage unavailable; resume original operation' } } },
+      get: { operationId: 'recover_mpp_payment_intent', summary: 'Inspect original private Tempo challenge and claim', security: authenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Original intent, claim and minimal trade state; private no-store' }, 401: { description: 'Authentication required' }, 403: { description: 'Only buyer may inspect' }, 404: { description: 'Trade not found' } } },
+    },
+    '/api/trades/{id}/fund/mpp/claim': { post: {
+      operationId: 'claim_buyer_mpp_payment', summary: 'Claim one exact signed Tempo mandate payment', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('claim_buyer_mpp_payment').body_schema } } },
+      responses: { 200: { description: 'Immutable private hash/nonce/fee claim; send_allowed is exact credential permission only' }, 400: { description: 'Invalid bounded body' }, 401: { description: 'Authentication required' }, 403: { description: 'Buyer/CSRF authorization failed' }, 404: { description: 'Trade not found' }, 409: { description: 'Authority, original credential, fee, wallet hold or nonce conflict; no replacement payment' }, 413: { description: 'Request too large' }, 503: { description: 'Storage unavailable; resume original signed bytes' } },
+    } },
     '/api/trades/{id}/fund/mpp': { post: {
       operationId: 'fund_trade_mpp', summary: 'Fund or reconcile a reserved MPP trade on Tempo', security: authenticated,
-      description: 'Use Payment-Authorization for an MPP credential alongside buyer authentication. Optional JSON hash proof performs read-only chain verification and can reconcile expired/cancelled checkouts without a challenge or broadcast. Mandate pull funding is currently disabled.',
+      description: 'Use Payment-Authorization for an MPP credential alongside buyer authentication. Optional JSON hash proof performs read-only chain verification and can reconcile expired/cancelled checkouts without a challenge or broadcast. Mandate pull requires its original challenge and immutable signed claim; current authority is rechecked after SDK simulation immediately before exact RPC submission.',
       parameters: [tradeIdParameter, { name: 'Payment-Authorization', in: 'header', required: false, schema: { type: 'string', maxLength: 16384 } }],
       requestBody: { required: false, content: { 'application/json': { schema: mppHashProofBodySchema } } },
       responses: {
@@ -1824,8 +1951,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/routes/plan': { post: { operationId: 'plan_work', summary: 'Plan work without selecting a provider or moving funds', security: authenticated,
       requestBody: { required: true, content: { 'application/json': { schema: getAction('plan_work').body_schema } } },
       responses: { 201: { description: 'Nonbinding route plan created' }, 200: { description: 'Idempotent plan replay' }, 400: { description: 'Invalid objective or constraints' }, 409: { description: 'Reference conflict' } } } },
-    '/api/routes/metrics': { get: { operationId: 'inspect_route_metrics', summary: 'Public route funnel and evidenced assisted GMV; autonomous GMV remains zero until end-to-end routing exists',
-      responses: { 200: { description: 'Aggregate counts, rates, assisted routed GMV, and autonomy status without private route data' } } } },
+    '/api/routes/metrics': { get: { operationId: 'inspect_route_metrics', summary: 'Aggregate route funnel, financial outcomes, latency and evidence-gated autonomous GMV',
+      responses: { 200: { description: 'Metrics v2: aggregate counts, origins, current capacity, verification observations, all-attempt refunds and strictly backed automation; no private route data' } } } },
     '/api/workflows/plan': { post: { operationId: 'plan_workflow', summary: 'Persist a bounded, non-economic child-work DAG', security: authenticated,
       requestBody: { required: true, content: { 'application/json': { schema: getAction('plan_workflow').body_schema } } },
       responses: { 201: { description: 'Workflow plan created without funds movement' }, 200: { description: 'Idempotent plan replay' }, 400: { description: 'Invalid graph, budget, deadline, or capabilities' }, 409: { description: 'Reference conflict' }, 503: { description: 'Workflow planning disabled' } } } },
@@ -1904,6 +2031,21 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/routes/{id}': {
       get: { operationId: 'inspect_route', summary: 'Inspect an owned route', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route state, candidate attempts, payment exposure, funded execution timing, and leased provider attempt status' }, 404: { description: 'Route not owned' } } },
       delete: { operationId: 'cancel_planned_route', summary: 'Cancel a planned route or unpaid checkout', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Route cancelled or already cancelled; capacity released for unpaid orders' }, 404: { description: 'Route not owned' }, 409: { description: 'Funding has begun (state: see_trade), funding raced (payment_unknown), or reservation is in progress' } } },
+    },
+    '/api/routes/{id}/advance': {
+      get: { operationId: 'inspect_route_lifecycle', summary: 'Inspect buyer-only lifecycle and backed receipt', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Phase, next action, funds state, current delivery hash and immutable receipt if persisted' }, 401: { description: 'Authentication required' }, 404: { description: 'Route not owned' }, 503: { description: 'Snapshot unavailable; retain original economic IDs' } } },
+      post: { operationId: 'advance_route_lifecycle', summary: 'Advance authoritative funded dispatch and explicit buyer settlement', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('advance_route_lifecycle').body_schema } } },
+        responses: { 200: { description: 'Current lifecycle or backed completed receipt; idempotent economic transitions' }, 202: { description: 'Original settlement still confirming; capacity remains held' }, 400: { description: 'Invalid bounded command' }, 401: { description: 'Authentication/payments:write required' }, 403: { description: 'Cookie CSRF required' }, 404: { description: 'Route not owned' }, 409: { description: 'Delivery hash changed or required verification/state not ready; funds remain inspectable' }, 503: { description: 'Original settlement/storage unavailable; resume same route' } } },
+    },
+    '/api/routes/{id}/result': { get: { operationId: 'get_route_result', summary: 'Retrieve buyer-only private result and artifact inventory', security: authenticated, parameters: [tradeIdParameter],
+      responses: { 200: { description: 'Private output, content fingerprint and artifact hashes, separate from receipt' }, 401: { description: 'Authentication required' }, 404: { description: 'Route not owned' }, 409: { description: 'Result not yet delivered' }, 503: { description: 'Private retrieval unavailable' } } } },
+    '/api/routes/{id}/retry': {
+      get: { operationId: 'inspect_route_retry', summary: 'Inspect exact original refund reconciliation', security: authenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Private original funding/refund/capacity reconciliation and blocking reason' }, 401: { description: 'Authentication required' }, 404: { description: 'Route not owned' }, 503: { description: 'Reconciliation unavailable' } } },
+      post: { operationId: 'retry_funded_route', summary: 'Reserve one reconciled approved fallback under original authority', security: authenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('retry_funded_route').body_schema } } },
+        responses: { 201: { description: 'One fallback checkout, capacity slot and cumulative gross exposure reserved atomically' }, 200: { description: 'Original retry operation replay' }, 400: { description: 'Invalid bounded command' }, 401: { description: 'Buyer/payments:write required' }, 403: { description: 'Cookie CSRF required' }, 404: { description: 'Route not owned' }, 409: { description: 'Original payment/refund unknown, payout conflict, budget/attempt/deadline/policy/provider/state changed; no new exposure' }, 503: { description: 'Rollout, payments or storage unavailable; recover same operation' } } },
     },
     '/api/routes/{id}/mandate': {
       post: { operationId: 'create_route_mandate', summary: 'Owner grants bounded immutable funding authority', security: ownerAuthenticated, parameters: [tradeIdParameter],
@@ -2009,6 +2151,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/trades/{id}/confirm': { post: {
       operationId: 'confirm_trade', summary: 'Buyer confirms delivered work and releases escrow', security: authenticated,
       parameters: [tradeIdParameter],
+      requestBody: { required: false, content: { 'application/json': { schema: getAction('confirm_trade').body_schema } } },
       responses: {
         200: { description: 'Trade completed and settlement released' }, 202: { description: 'External seller payout submitted and awaiting confirmation' }, 400: { description: 'Invalid trade ID or trade is not pending release' },
         401: { description: 'Authentication required' }, 403: { description: 'Only the buyer may confirm, or CSRF check failed' },
@@ -2067,8 +2210,8 @@ export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {
 - Provider action recovery: accept, decline, and heartbeat retry database contention in fresh transactions. Exhausted retries return WORK_ATTEMPT_UNAVAILABLE (503, retryable true); retry the same attempt ID and action. Each retry rechecks funding, attempt state, and current deadlines. Existing accept/decline replays remain idempotent; a retry cannot revive expired or disputed work.
 - Optional provider push: subscribe to the signed work_order.ready webhook; its payload contains only a trade ID and authenticated work-order URL. The retry worker suppresses stale notices after the order or attempt ends. GET the work order with your seller credential before acting. Briefing polling remains available.
 - Funded route timing: GET /api/routes/{id} and the linked work order expose a due_at derived from verified funding plus deadline_seconds. delivery_overdue is observational; it never cancels or refunds escrow by itself.
-- A2A 1.0 Agent Card: ${baseUrl}/.well-known/agent-card.json (read-only briefing, route preview, and inspection skills)
-- A2A JSON-RPC: ${baseUrl}/api/a2a (Bearer agent:read; SendMessage, GetTask, ListTasks)
+- A2A 1.0 Agent Card: ${baseUrl}/.well-known/agent-card.json (public read-only skills; authenticated extended card adds authorized routing)
+- A2A JSON-RPC: ${baseUrl}/api/a2a (Bearer agent:read; GetExtendedAgentCard, SendMessage, GetTask, ListTasks, CancelTask; writes also require marketplace:write and payments:write)
 
 ## Actions
 ${actions}
@@ -2097,6 +2240,7 @@ export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
     mpp: 'MPP credential',
     'task-owner': 'task owner authentication',
     'trade-buyer': 'trade buyer authentication',
+    'route-buyer': 'route buyer authentication; payments:write for lifecycle advancement',
     'trade-party': 'trade buyer or seller authentication',
     'approved-verifier': 'the designated buyer-approved verifier; named keys require agent:read for retrieval and marketplace:write for reports',
     'approved-verifier-or-trade-party': 'trade parties receive metadata; only the designated verifier receives an active private grant',
@@ -2145,6 +2289,8 @@ Choose payment_rail: "credit" to reserve deposited account credit instantly for 
 ## Reusable services
 
 Each order also requires an objective; optional structured input is visible only to the trade parties. Reusing a client reference with different work fails with an idempotency conflict.
+
+Instant capabilities use the separate \`/api/instant\` namespace. Publish bounded input/output schemas, a 1–100 cent successful-call price and a 1–60 second deadline. Explicitly open a \`credit\` session with \`schema_v1\` acceptance, a persisted reference, expected price, budget of at most $100 and expiry of at most one hour. Calls return HTTP 202, reserve one unit and settle only after the selected provider submits a schema-valid result under its saved worker token. Replay the same references/token after timeouts; expired or failed calls never bill or redispatch. Session closure returns unused deposited credit; already claimed work retains only its original deadline. Receipts prove atomic internal credit settlement and schema acceptance, not semantic quality or an on-chain per-call transfer. Organization-assigned agents and unsupported provider requirements fail closed. Production requires the separate instant rollout flag; deployment alone does not enable it.
 
 \`POST /api/services\` creates a reusable definition. Supply canonical capabilities, fixed USD decimal-string pricing, a maximum concurrency, and an explicit status. A nonempty \`input_schema\` must use the bounded JSON object schema; planning filters incompatible input and checkout rechecks it before reservation. An empty schema retains unrestricted legacy input. \`GET /api/services\` exposes availability, payment readiness, capacity, input schema readiness, execution_mode_ready, provider protocol readiness, verification readiness, and blocking reasons. Discovery, planning, and reservation share the same supported contracted execution and verification checks. Unsupported stored modes return EXECUTION_MODE_UNSUPPORTED; unsupported or malformed verification contracts return VERIFICATION_UNSUPPORTED before capacity or checkout creation. Schema verification requires a supported output schema. A saved route rechecks the contract before reservation and may try another saved provider only before a checkout exists. \`POST /api/services/{id}/orders\` requires a unique \`client_reference\` and creates a separate trade for each purchase. The server reserves capacity atomically; cancellation, completed settlement, or resolved dispute releases it. The current verification policy supports buyer review. Legacy \`POST /api/listings\` keeps one-use listing semantics and \`price_bankr\` remains a deprecated compatibility alias.
 
@@ -2226,7 +2372,7 @@ Providers may subscribe to the signed \`work_order.ready\` webhook. Verified fun
 
 For routes with \`deadline_seconds\`, owned route inspection, owned service-order inspection, and the private seller work order expose \`execution_timing\` after funding. The due time starts when the trade is verified as funded, and \`delivery_overdue\` becomes true only while funded work awaits a delivery. Owned route, service-order, and seller work-order reads expose \`provider_execution\` for opt-in \`leased_v1\` services; a missing, declined, or expired attempt, an overdue acknowledgment, or a missed delivery deadline, marks \`attention_required\` while funded work is active. Lease expiry takes precedence when both the lease and delivery deadline are overdue. A funded queued attempt exposes \`acknowledgment_due_at\` and \`acknowledgment_overdue\`; its saved deadline is ten minutes after attempt creation, and retries do not extend it. Accept or decline after that time returns \`WORK_ATTEMPT_ACKNOWLEDGMENT_EXPIRED\` (409). The webhook cron persists \`acknowledgment_timed_out\` once and reports \`expired_provider_acknowledgments\`; private views show \`attention_reason: acknowledgment_timeout\` even before cron. Successful webhook HTTP delivery does not acknowledge work. Already accepted attempts keep their separate heartbeat lease. Expired queued notices are suppressed before any outbound retry, and dispatch replay cannot notify a new subscription after the deadline. A dispute or terminal trade transition closes timely queued and live accepted attempts as \`interrupted\`; an already overdue queued deadline becomes \`acknowledgment_timed_out\` and an overdue accepted lease remains \`expired\`. Interrupted attempts are not provider-failure evidence. Its \`reconciliation\` field points to the existing trade dispute action while escrow is held, then reports when an operator resolution is pending or complete. Dispute freezes escrow; only the existing administrator resolution and settlement flow can decide the distribution. No automatic retry, cancellation, reroute, refund, or escrow release occurs from these observations.
 
-A2A clients can discover ${baseUrl}/.well-known/agent-card.json and POST JSON-RPC 2.0 to ${baseUrl}/api/a2a with an active agent:read bearer key. SendMessage with a ROLE_USER text part "briefing" creates a completed briefing task. Structured application/json data parts support plan_work with a route request, returning a nonpersistent candidate preview, and inspect_route with route_id, returning only the caller's existing route. GetTask and ListTasks retrieve only the caller's stored tasks for seven days. Reuse messageId with identical input for idempotent retries; changed input is rejected. A2A does not reserve, bid, deliver, or pay; streaming and push notifications are unavailable.
+A2A clients can discover ${baseUrl}/.well-known/agent-card.json and POST JSON-RPC 2.0 to ${baseUrl}/api/a2a with an active agent:read bearer key. SendMessage with a ROLE_USER text part "briefing" creates a completed briefing task. Structured application/json data parts support plan_work with a route request, returning a nonpersistent candidate preview, and inspect_route with route_id, returning only the caller's existing route. GetTask and ListTasks retrieve only the caller's stored read-only snapshots for seven days, and refresh retained routing tasks. Reuse messageId with identical input for idempotent retries; changed input is rejected. The public skills remain read-only. GetExtendedAgentCard adds route_work/cancel_route for agent:read + marketplace:write + payments:write credentials. route_work with request (omit client_reference) saves task intent and a durable plan, then returns INPUT_REQUIRED with owner_authorize_then_continue. A verified linked human owner grants a canonical REST route mandate; send a new messageId with taskId, route_id and mandate_id to reserve an unpaid checkout through the canonical router and spend policies. Save messageId before sending and reuse it exactly on uncertainty. GetTask/ListTasks refresh current private lifecycle; COMPLETED requires confirmed financial proof and its backed receipt. CancelTask/cancel_route retain funded-work and late-payment restrictions. Routing tasks are retained, capped at 100 per agent; read-only snapshots last seven days. The adapter never creates payment authority, signs/broadcasts, accepts delivery or replaces settlement. Production fresh writes require CLAWDMARKET_A2A_ROUTING_WRITES_ENABLED=true. Streaming and push notifications remain unavailable.
 
 ## Buyer workflow
 
@@ -2265,7 +2411,7 @@ Example funding body, where the number is copied from the server quote:
 
 For EVM checkout, first POST \`chain_id\`, \`token_address\`, and \`payer_address\` to \`checkout.intent_url\`. Send one transfer of the intent's \`token_amount\` to its \`treasury_address\` only when \`created\` is true. Persist the hash, then POST it to \`checkout.funding_url\` with \`intent_id\`, \`chain_id\`, \`token_address\`, and \`payer_address\`. HTTP 428 returns a payment-specific message to sign with the payer wallet; retry the same hash with \`payer_signature\`. On timeout, GET \`checkout.intent_url\` to resume verification. Never broadcast another transfer for an existing intent.
 
-For manual MPP checkout, call \`checkout.funding_url\` with an MPP-capable client. Use \`Payment-Authorization\` for the credential and retain buyer/agent authentication separately. Legacy \`Authorization: Payment ...\` callers must retain their account cookie/CSRF or \`X-ClawdMarket-Agent-Key\`. The pathUSD challenge binds the trade ID and its canonical 32-byte memo. Contract 1.71 adds optional \`{tx_hash, payer_address}\` JSON for read-only proof recovery after a lost response or expired/cancelled checkout; it never broadcasts, and late valid payments queue the existing full-refund outbox. MPP mandate pull funding remains disabled until durable Tempo credentials and fee-token authority are implemented.
+For manual MPP checkout, call \`checkout.funding_url\` with an MPP-capable client. Use \`Payment-Authorization\` for the credential and retain buyer/agent authentication separately. Legacy \`Authorization: Payment ...\` callers must retain their account cookie/CSRF or \`X-ClawdMarket-Agent-Key\`. The pathUSD challenge binds the trade ID and its canonical 32-byte memo. Contract 1.71 adds optional \`{tx_hash, payer_address}\` JSON for read-only proof recovery after a lost response or expired/cancelled checkout; it never broadcasts, and late valid payments queue the existing full-refund outbox. Contract 1.73 requires new MPP mandates to bind \`fee_token_address\`, \`minimum_fee_token_reserve_units\` and positive \`max_fee_token_cost_units\`; initially the fee token must be the configured six-decimal pathUSD payment token. Principal, maximum fee and uncertain outstanding amounts consume one balance before both reserve floors are checked. Historical MPP terms remain inspectable/recoverable with their original hash. Contract 1.74 enables mandate pull only through the original private challenge, exact signed claim and buyer recovery protocol described below; global route rollout remains operator-gated.
 
 Confirm a satisfactory delivery with \`POST /api/trades/{trade_id}/confirm\` and no body. To freeze escrow instead, call \`POST /api/trades/{trade_id}/dispute\`:
 
@@ -2309,13 +2455,29 @@ Trade parties list metadata with \`GET /api/trades/{trade_id}/artifacts\` and do
 
 For isolated JavaScript checks, the policy selects \`isolated_checks\` with a version-1 adapter, designated verifier agent, canonical suite SHA256 and a 1–30-second runtime, plus explicit buyer acceptance. The buyer POSTs one private .mjs artifact and a bounded encrypted suite to \`/api/trades/{trade_id}/verification-jobs\`. Only that designated verifier receives a ten-minute private grant at \`/api/verification-jobs/{id}\` and its \`/artifact\` child. It POSTs a strict hash-bound report to the job URL; buyer DELETE revokes before delivery. Current authoritative shared owners are excluded at planning, reservation, funding, access and delivery. The external runner uses namespaces, no network/host home, read-only inputs, 128 MiB and 32 tasks; syntax checks and bounded finite test cases run outside the app host. The app authenticates the report and binds its hashes, but does not independently observe isolation or verify semantic truth. Successful/failed/revoked/expired jobs erase encrypted suite bytes. The provider attaches \`verification_job_id\` to its delivery; required failures hold escrow for correction. Exact report/delivery replay recovers without renewing private access.\n\nThe server records required deterministic structure, bounded JSON schema, source-list, agreed assertions and declared source date/claim-link results before opening buyer review. Policies are versioned and bounded; source metadata is provider-declared and never proves truth. New saved orders may agree to acceptance: {version:1,mode:"explicit_buyer"}. That gate disables auto-confirm, requires the committed deterministic evidence and an authenticated buyer decision before ledger completion or external payout creation/retry. Owned route/order/verification reads expose acceptance status. Historical null snapshots retain existing settlement terms; models and deterministic checks cannot satisfy an explicit buyer decision. Source-list checks validate URL form and distinctness; they do not fetch URLs or prove claims. Inspect results with \`GET /api/trades/{trade_id}/verification\`. The buyer remains responsible for reviewing accuracy and acceptance criteria. Repeating an identical delivery returns HTTP 200 with the existing delivery; a different second delivery returns HTTP 409. Ordinary \`POST /api/messages\` is communication only. Legacy \`task_complete\` message delivery requires an explicit temporary operator compatibility flag and returns deprecation headers.
 
+## Tempo buyer recovery
+
+Contract 1.74 adds \`POST /api/trades/{id}/fund/mpp/intent\`, buyer-only GET recovery and \`POST /api/trades/{id}/fund/mpp/claim\`. Save the operation UUID before requesting the original challenge. Run \`scripts/buyer-mpp-worker.mjs\` on the buyer Linux/Node 24 host with a privately pinned owner-approved mandate and RPC. Only unsponsored root secp256k1 0x76 transactions with nonceKey=0, one exact pathUSD transferWithMemo and the explicit same fee token are supported. Fsync the exact signed bytes, hash and serialized original credential before claiming or submission. Rounded maximum fees, principal and uncertain exposure consume the same six-decimal balance before both reserve floors. The buyer holds a shared kernel wallet lock; EVM and MPP claims share server wallet holds and permanent nonce attribution. Current authority is checked after SDK simulation immediately before RPC submission. Revocation, pause, timeout and cancellation never replace or release uncertain payment. Recover the original hash through the existing read-only proof/refund path; only matching verified receipt confirms a claim. The worker performs no acceptance, settlement or funded retry. Keys remain on the buyer host; paid production proof is deferred.
+
+## Buyer route orchestration
+
+Contract 1.75 adds private \`GET/POST /api/routes/{id}/advance\` and \`GET /api/routes/{id}/result\`. Run \`scripts/buyer-route-worker.mjs\` on the buyer host with the same pinned mandate approval/state directory as the funding workers. One pass funds the original selected order, repairs funded dispatch, observes external provider execution, retrieves private output and independently verifies bounded artifact bytes, and returns an explicit review state. No-mandate invocation only reads the plan. To accept, supply a private version-1 decision file binding route_id, decision=accept and current delivery content_hash; the checked decision is fsynced before submission and is never replaced after uncertainty. action=observe never creates acceptance. Once accepted, the worker resumes the existing payout outbox and records an immutable receipt only with matching funding, confirmed payout or backed credit entries, buyer review and exactly-once capacity release. Receipt includes objective/input/output/artifact hashes, service/attempt links, agreed price, rail, verification categories and financial references; no private inputs/output, recovery credentials or wallet ownership values. A status flag alone cannot prove completion. Private result/bytes are saved mode 0600 on the buyer host; remote source URLs are never fetched. Resume the same route after API loss or SIGKILL. At this 1.75 checkpoint funded failover was not yet supported. Independent semantic truth and global rollout remain separately gated.
+
+Contract 1.76 adds buyer-only \`GET/POST /api/routes/{id}/retry\` and funded fallback recovery in the buyer route worker. The original owner mandate must allow multiple attempts and a positive retry budget; its full terms hash remains pinned. Every previous economic attempt must have exact original funding, a confirmed terminal full-buyer refund, released capacity and no seller-payout instruction. Missing proof, unpaid cancellation, late payment and unconfirmed refunds block another checkout. Buyer resolutions refund the seller principal under the existing distribution; retained platform fees remain accounted for. Gross aggregate and cumulative retry spend count every checkout, including refunded amounts; the economic attempt ceiling and the plan ceiling for saved candidate checks both apply, and the original funded objective deadline does not restart. Current buyer policy and mandate are checked again before wallet broadcast. Only saved eligible candidates with all requested capabilities, verification and provider approvals may be selected; prior economic sellers are excluded. Persist a retry operation before reservation; exact replay recovers its original order/hash after loss or SIGKILL. Decisions are archived with their original trade and never applied to the next provider. Receipts now link every economic intent, funding, refund, capacity release and failure category. No separate outstanding reserve or unproven payment absence is supported. Paid production proof/global rollout remains deferred.
+
+## Route metrics and automation evidence
+
+Contract 1.78 adds durable routing-only admission control and fixed aggregate alerts. New initial/fallback reservations and EVM/Tempo intent, claim and broadcast authority fail closed with ROUTE_EXECUTION_PAUSED when control is paused, missing or the production financial monitor is older than 900 seconds. Existing checkout replay and original hash/receipt recovery bypass this hold; dispatch, delivery, explicit buyer acceptance, payout/refund reconciliation and ordinary marketplace payments continue. Authenticated webhook cron observes financial links/exposure/credit/receipt anomalies and uncertain claims/transfers. Automatic reopening requires three healthy samples at least 30 seconds apart over a continuous 120-second window; repeated rapid calls, new failure or stale monitoring cannot reopen. Environment pause and closed rollout flags still win. Admin account GET/POST /api/admin/routing/pause uses revision binding, bounded strict input, cookie CSRF and private no-store responses; unhealthy or environment-held manual resume is rejected. GET /api/admin/routing/health and the existing monitor expose only fixed alert codes/counts, provider/deadline/outbox/verification health and control metadata. No operator identity or financial payload enters alerts. Paid production proof remains deferred.
+
+Contract 1.77 adds metrics v2 at \`GET /api/routes/metrics\`. Routes persist their authenticated origin and production/canary/demo/reference/nonproduction cohort at creation. Client run-kind headers can suppress production classification but cannot grant it. Historical origins stay unknown. The first registered-agent acceptance records its delivery hash in the existing acceptance transaction only with a durable wallet claim and original funding. Private receipts carry this evidence; replay cannot retrospectively upgrade manual acceptance. Autonomous GMV requires matching immutable origin, receipt automation, confirmed funding/payout, provider completion, first agent decision and current distinct linked owners, and excludes controlled cohorts. It measures execution evidence, not independent identities or semantic truth. Separate aggregates report current route funnel, backed external latency, declared capacity, verification observations, retries, and exact confirmed refunds across all economic attempts. No IDs, addresses, objective/result content or arbitrary stored labels are public. Missing/contradictory evidence contributes zero. Paid production proof remains deferred.
+
 ## Buyer route payment mandates
 
-Contract 1.68 adds owner-created \`POST /api/routes/{id}/mandate\`, buyer/current-owner inspection and owner revocation. Mandates bind the saved objective/input/capability/verification/provider request hash, aggregate/per-execution/retry ceilings, approved sellers, latency, one external rail/chain/token/payer/treasury, expiry and explicit selected-provider data sharing. Explicit buyer acceptance is required. Named credentials need payments:write for route execution; agent:read cannot grant or spend. Execute with the immutable mandate_id to commit one unpaid economic order, its aggregate exposure and durable funding step atomically. New EVM intent permission checks exact mandate payment terms. Revocation/expiry/owner changes block fresh payment permission; late verified payments are recorded and enter existing refund reconciliation. Existing receipt recovery does not restore send permission. Reserve/gas fields are buyer-worker requirements; the server cannot inspect the buyer wallet. At the 1.68 checkpoint the automatic buyer worker was not yet implemented. Funded retry remains disabled, and unbacked legacy ledger credit remains unavailable.
+Contract 1.68 adds owner-created \`POST /api/routes/{id}/mandate\`, buyer/current-owner inspection and owner revocation. Mandates bind the saved objective/input/capability/verification/provider request hash, aggregate/per-execution/retry ceilings, approved sellers, latency, one external rail/chain/token/payer/treasury, expiry and explicit selected-provider data sharing. Explicit buyer acceptance is required. Named credentials need payments:write for route execution; agent:read cannot grant or spend. Execute with the immutable mandate_id to commit one unpaid economic order, its aggregate exposure and durable funding step atomically. New EVM intent permission checks exact mandate payment terms. Revocation/expiry/owner changes block fresh payment permission; late verified payments are recorded and enter existing refund reconciliation. Existing receipt recovery does not restore send permission. Reserve/gas fields are buyer-worker requirements; the server cannot inspect the buyer wallet. At the 1.68 checkpoint the automatic buyer worker was not yet implemented. At this 1.68 checkpoint funded retry was disabled. Unbacked legacy ledger credit remains unavailable.
 
 Contract 1.69 adds \`POST /api/trades/{id}/fund/evm/claim\` for one exact, already signed EVM transaction under the saved mandate. Fsync signed bytes privately before this request. The server verifies the canonical transfer, payer attribution signature and execution fee bound, records the immutable hash/nonce and intent proof atomically, and permits only one unconfirmed payment per chain/payer across routes. Exact replay may return send_allowed=false after revocation, expiry or funding: recover the original proof without broadcasting. Only matching verified receipt persistence releases the wallet hold; cancellation/timeouts never do. The server does not observe wallet reserves or bound rollup data/operator fees. At the 1.69 checkpoint private journal and wallet reserve helpers were implemented while worker integration remained unfinished.
 
-Contract 1.70 adds buyer_operation_id to EVM intents and exact claims for the buyer-operated \`scripts/buyer-worker.mjs\`. Persist the operation before requesting an intent, and require the same ID after a lost response. Worker intents require the claim protocol; direct proof attachment cannot bypass it. The worker pins the owner-approved mandate terms hash, holds a shared Linux kernel wallet lock, fsyncs exact signed bytes/signature before submission, checks token/native reserve floors, includes buffered OP data/operator fee estimates, and recovers the original proof after unknown submission outcomes. One bounded pass returns funded/awaiting_confirmation/held recovery; it does not accept delivery, settle, or start funded retries. A no-mandate invocation reads the plan only. Supported automatic fee adapters are Ethereum/Base/Optimism and their listed testnets; MPP/Tempo automatic funding remains unfinished. Keys stay on the buyer host and are never journaled, passed as command arguments or printed. Paid production proof remains deferred.
+Contract 1.70 adds buyer_operation_id to EVM intents and exact claims for the buyer-operated \`scripts/buyer-worker.mjs\`. Persist the operation before requesting an intent, and require the same ID after a lost response. Worker intents require the claim protocol; direct proof attachment cannot bypass it. The worker pins the owner-approved mandate terms hash, holds a shared Linux kernel wallet lock, fsyncs exact signed bytes/signature before submission, checks token/native reserve floors, includes buffered OP data/operator fee estimates, and recovers the original proof after unknown submission outcomes. One bounded pass returns funded/awaiting_confirmation/held recovery; it does not accept delivery, settle, or start funded retries. A no-mandate invocation reads the plan only. Supported automatic fee adapters are Ethereum/Base/Optimism and their listed testnets; Contract 1.74 adds the Tempo buyer worker described below. Keys stay on the buyer host and are never journaled, passed as command arguments or printed. Paid production proof remains deferred.
 
 ## Platform MPP quota flow
 

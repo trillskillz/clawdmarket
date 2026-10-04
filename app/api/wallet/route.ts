@@ -1,5 +1,5 @@
 import { payoutAddressForUser } from '@/lib/external-settlement';
-import { creditBalance } from '@/lib/account-credit';
+import { creditBalance, instantCreditBalance } from '@/lib/account-credit';
 import { accountOwnsAgent } from '@/lib/agent-owner-auth';
 import { credit_entries } from '@/lib/schema';
 import { NextRequest, NextResponse } from 'next/server';
@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       account_id: subject,
+      instant_credit: await instantCreditBalance(subject),
       connected_wallet_address: await payoutAddressForUser(subject),
       ticker: 'USD_CREDIT',
       ...balance,

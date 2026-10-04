@@ -1,9 +1,11 @@
+import { routeAdmissionFailure } from './route-control'
 import { payoutAddressForUser } from './external-settlement'
 import { ZodError } from 'zod'
 import { eq, sql } from 'drizzle-orm'
 import { db } from './db'
 import { route_plans, service_definitions, service_orders, trades } from './schema'
 import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from './buyer-spend-policy'
+import { findTradeFundingStep, listRouteFundingSteps } from './route-funding-steps'
 import { providerRequirementsSchema, providerRequirementFailure } from './provider-requirements'
 import { providerCapabilityEvidence } from './provider-evidence'
 import { serviceExecutionContract } from './service-execution-contract'
@@ -32,12 +34,16 @@ export async function checkProviderRequirements(source: Source, buyerId: string,
 }
 
 /** New payment permission and verified funding share this check. Proof recovery is always allowed. */
-export async function serviceFundingEligibility(trade: typeof trades.$inferSelect, source: Source = db): Promise<string | null> {
+export async function serviceFundingEligibility(trade: typeof trades.$inferSelect, source: Source = db, mode: 'new_payment' | 'proof_recovery' = 'new_payment'): Promise<string | null> {
   const [linked] = await source.select({ order: service_orders, service: service_definitions }).from(service_orders)
     .leftJoin(service_definitions, eq(service_definitions.id, service_orders.service_id))
     .where(eq(service_orders.trade_id, trade.id)).limit(1)
   if (!linked) return null // Listing/task checkouts retain their existing contract.
   try {
+    if (mode === 'new_payment') {
+      const [route] = await source.select({ id: route_plans.id }).from(route_plans).where(eq(route_plans.service_order_id, linked.order.id)).limit(1)
+      if (route && await routeAdmissionFailure(source)) return 'ROUTE_EXECUTION_PAUSED'
+    }
     const mandateReason = await mandateFundingEligibility(trade, source)
     if (mandateReason) return mandateReason
     const deploymentReason = await agentFundingPolicyFailure(trade, source)
@@ -68,12 +74,17 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     }
     const [plan] = await source.select().from(route_plans).where(eq(route_plans.service_order_id, order.id)).limit(1)
     if (plan && !serviceSupportsRoute(service, plan)) return 'ROUTE_STALE_PROVIDER'
+    if (plan?.execution_deadline_at && trade.status === 'pending' && (!service.estimated_latency_seconds
+      || Date.now() + service.estimated_latency_seconds * 1000 > plan.execution_deadline_at.getTime())) return 'ROUTE_RETRY_DEADLINE_EXCEEDED'
     const reason = await checkProviderRequirements(source, trade.buyer_id, trade.seller_id, capabilities, order.provider_requirements_json)
     if (reason) return reason
     const policy = await loadBuyerSpendPolicy(trade.buyer_id, source)
     if (policy) {
+      const step = await findTradeFundingStep(source, trade.id)
+      const fundingSteps = step ? await listRouteFundingSteps(source, step.route_id) : []
+      const retrySpendMinor = step ? fundingSteps.slice(1).reduce((sum, entry) => sum + entry.amount_minor, 0) : undefined
       const constraint = checkBuyerPolicyConstraints(policy.policy, { totalMinor: Math.round(trade.total_cost * 100), sellerId: trade.seller_id,
-        capabilities, paymentRail: order.payment_rail, verificationMethods: contract.verificationPolicy!.methods })
+        capabilities, paymentRail: order.payment_rail, verificationMethods: contract.verificationPolicy!.methods, retrySpendMinor })
       if (constraint) return constraint
       const usage = await buyerPolicyUsage(trade.buyer_id, new Date(), source)
       // This reservation is already included: funding must not add its exposure twice.

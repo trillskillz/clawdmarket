@@ -99,16 +99,13 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
   useEffect(() => {
     let cancelled = false
     let marketRefreshPending = false
+    let telemetryRefreshPending = false
 
     const refreshMarket = async () => {
       if (marketRefreshPending) return
       marketRefreshPending = true
       try {
-        const [events, currentStats, payments] = await Promise.all([
-          fetchJson('/api/activity'),
-          fetchJson('/api/stats'),
-          fetchJson('/api/payments/config'),
-        ])
+        const events = await fetchJson('/api/activity')
         if (cancelled) return
         setActivity(Array.isArray(events) ? events.slice(0, 50).map((event, index) => ({
           ...event,
@@ -116,8 +113,6 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
           type: event.type || 'trade_created',
           relative: timeAgo(event.timestamp),
         })) : [])
-        setStats(currentStats || {})
-        setPaymentConfig(payments || {})
         setLastSyncedAt(new Date())
         setConnState('live')
       } catch {
@@ -125,6 +120,19 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
       } finally {
         marketRefreshPending = false
       }
+    }
+
+    const refreshTelemetry = async () => {
+      if (telemetryRefreshPending) return
+      telemetryRefreshPending = true
+      try {
+        const [currentStats, payments] = await Promise.allSettled([
+          fetchJson('/api/stats'), fetchJson('/api/payments/config'),
+        ])
+        if (cancelled) return
+        if (currentStats.status === 'fulfilled') setStats(currentStats.value || {})
+        if (payments.status === 'fulfilled') setPaymentConfig(payments.value || {})
+      } finally { telemetryRefreshPending = false }
     }
 
     const refreshPanels = async () => {
@@ -142,12 +150,15 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
     }
 
     void refreshMarket()
+    void refreshTelemetry()
     void refreshPanels()
     const marketInterval = setInterval(refreshMarket, 5_000)
+    const telemetryInterval = setInterval(refreshTelemetry, 5_000)
     const panelInterval = setInterval(refreshPanels, 60_000)
     return () => {
       cancelled = true
       clearInterval(marketInterval)
+      clearInterval(telemetryInterval)
       clearInterval(panelInterval)
     }
   }, [])
@@ -204,12 +215,12 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
         <div className={styles.activityPanel} aria-label="Recent market activity">
           <div className={styles.panelHeader}>
             <div><span className={live ? styles.liveDot : styles.idleDot} /><strong>Live activity</strong></div>
-            <span>LAST 10 RECORDED / {connectionLabel.toUpperCase()}</span>
+            <span>LAST 50 RECORDED / {connectionLabel.toUpperCase()}</span>
           </div>
-          <div className={styles.activityList}>
-            {activity.slice(0, 10).length === 0 ? (
+          <div className={styles.activityList} role="log" aria-label="Live activity feed" aria-live="polite" aria-relevant="additions">
+            {activity.slice(0, 50).length === 0 ? (
               <div className={styles.emptyTape}><i>⌁</i><strong>No recorded activity yet.</strong><p>New registrations, trades, ratings, and improvements will appear here after they are stored.</p></div>
-            ) : activity.slice(0, 10).map((item, index) => (
+            ) : activity.slice(0, 50).map((item, index) => (
               <article className={styles.event} key={item.id || index}>
                 <span className={`${styles.eventMark} ${eventTone(item.type)}`} />
                 <span className={styles.eventIndex}>{String(index + 1).padStart(2, '0')}</span>

@@ -326,3 +326,23 @@ for (const width of [1440, 390]) {
 test('obsolete genome API is no longer served', async ({ request }) => {
   expect((await request.get('/api/agents/obsolete/genome')).status()).toBe(404);
 });
+
+
+test('live activity shows new owner-claim and autonomous registrations without reloading when telemetry fails', async ({ page, request }) => {
+  await page.route('**/api/stats', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"fixture_unavailable"}' }))
+  await page.route('**/api/payments/config', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"fixture_unavailable"}' }))
+  await page.goto('/observe')
+  const feed = page.getByRole('log', { name: 'Live activity feed' })
+  for (const [index, activation_mode] of ['owner_claim', 'autonomous'].entries()) {
+    const name = `Feed registration ${activation_mode} ${Date.now()}`
+    const registered = await request.post('/api/agents/register', {
+      headers: { 'x-forwarded-for': `2001:db8:${(Date.now() % 65535).toString(16)}:${index + 10}::a1` },
+      data: { name, description: 'Browser fixture registration for live activity', activation_mode },
+    })
+    expect(registered.status()).toBe(201)
+    const agent = (await registered.json()).agent
+    await expect(feed.getByRole('link', { name, exact: true })).toBeVisible({ timeout: 12_000 })
+    await expect(feed.getByRole('link', { name, exact: true })).toHaveAttribute('href', `/registry/${agent.id}`)
+    await expect(feed.getByText(`New agent "${name}" registered`)).toBeVisible()
+  }
+})
