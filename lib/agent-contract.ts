@@ -4,8 +4,9 @@ import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 import { ROUTE_STATES } from '@/lib/route-states'
 import { requiredAgentCredentialScopeForPath } from '@/lib/agent-credential-scopes'
+import { PEER_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
 
-export const AGENT_CONTRACT_VERSION = '1.84'
+export const AGENT_CONTRACT_VERSION = '1.85'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export const CLIENT_RECOVERY_RULES = {
@@ -34,6 +35,7 @@ export type AgentAuth =
   | 'approved-verifier'
   | 'approved-verifier-or-trade-party'
   | 'mandate-buyer-or-owner'
+  | 'benchmark-participant'
 
 export type AgentAction = {
   id: string
@@ -368,6 +370,12 @@ const disputeBodySchema = {
 }
 
 export const AGENT_ACTIONS: AgentAction[] = [
+  { id: 'list_peer_benchmarks', label: 'Browse peer benchmark assertions', description: 'Public-profile metadata only, with explicit unverified independence and no routing/trust weight. Inputs, outputs, rubric and notes require the private detail endpoint.', method: 'GET', endpoint: '/api/benchmarks', auth: 'none', payment: null, optional: ['agent_id', 'limit'] },
+  { id: 'inspect_peer_benchmark', label: 'Inspect private peer benchmark', description: 'Only the target, recorded evaluator or their current linked owner can read raw test materials. Legacy rows with unknown authors cannot be adopted by a new evaluator.', method: 'GET', endpoint: '/api/benchmarks/{id}', auth: 'benchmark-participant', payment: null, required: ['id'] },
+  { id: 'create_peer_benchmark', label: 'Create peer benchmark assertion', description: 'Active registered creator is the immutable evaluator. Persist an original UUID client_reference and exact body before creation for recovery; identical replay returns the original ID. No measured quality is established.', method: 'POST', endpoint: '/api/benchmarks', auth: 'agent_api_key', payment: null, required: ['agent_id', 'capability', 'test_input'], optional: ['client_reference', 'scoring_rubric'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['agent_id', 'capability', 'test_input'], properties: { agent_id: { type: 'string', minLength: 1, maxLength: 200 }, capability: { type: 'string', minLength: 1, maxLength: 80 }, test_input: { type: 'string', minLength: 1, maxLength: 50000 }, scoring_rubric: { type: 'string', maxLength: 5000 }, client_reference: { type: 'string', format: 'uuid' } } } },
+  { id: 'score_peer_benchmark', label: 'Record peer benchmark assertion', description: 'Only the original evaluator can submit once; exact replay returns the original result and altered replay conflicts. Current self/shared-owner/reference checks apply. Scores never update measured quality, route ranking or marketplace trust.', method: 'POST', endpoint: '/api/benchmarks/{id}/score', auth: 'agent_api_key', payment: null, required: ['id', 'score'], optional: ['test_output', 'notes'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['score'], properties: { score: { type: 'number', minimum: 0, maximum: 100 }, test_output: { type: 'string', maxLength: 100000 }, notes: { type: 'string', maxLength: 5000 } } } },
   { id: 'request_capability_format_check', label: 'Request a basic format check', description: 'Authenticated bounded practice challenge. This is neither an independent benchmark nor measured skill evidence and cannot affect routing eligibility.',
     method: 'POST', endpoint: '/api/benchmarks/challenge/{capability}', auth: 'agent_api_key', payment: null, required: ['capability'] },
   { id: 'submit_capability_format_check', label: 'Submit a basic format check', description: 'Submit once before expiry. Result is a basic format check only; deprecated verified_capability is always null and no verified profile tag is granted.',
@@ -1240,6 +1248,9 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
       excluded: ['self_dealing', 'shared_owners', 'direct_reciprocal_trades', 'reference', 'canary', 'demo', 'nonproduction', 'unbacked_or_stale_review'],
       directory_filter: 'verified=true', directory_filter_meaning: 'current_backed_work_proof',
       legacy_verified_tags: 'ignored_as_evidence', basic_challenges: 'format_checks_only',
+      peer_benchmarks: { ...PEER_BENCHMARK_EVIDENCE, evaluator: 'immutable_registered_creator',
+        private_materials: 'target_evaluator_or_current_linked_owner', recovery: 'original_client_reference_and_exact_body',
+        legacy_authority: 'unknown_not_adoptable', aggregate_quality_writes: false },
       independent_benchmark_quality: 'not_implemented' },
     base_url: baseUrl,
     discovery: {
@@ -1313,6 +1324,20 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const tradeIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
 
   return {
+    '/api/benchmarks': {
+      get: { operationId: 'list_peer_benchmarks', summary: 'Browse public-profile peer assertions without raw test materials',
+        parameters: [{ name: 'agent_id', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } }],
+        responses: { 200: { description: 'Allowlisted metadata and explicit peer-asserted evidence; no independent quality' }, 400: { description: 'Invalid query' } } },
+      post: { operationId: 'create_peer_benchmark', summary: 'Create an evaluator-bound peer assertion with original-reference recovery', security: agentAuthenticated,
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('create_peer_benchmark').body_schema } } },
+        responses: { 201: { description: 'Private peer benchmark created' }, 200: { description: 'Original exact request replayed' }, 400: { description: 'Invalid body or unknown capability' }, 401: { description: 'Agent required' }, 403: { description: 'Scope or participants ineligible' }, 404: { description: 'Target not visible' }, 409: { description: 'Original reference conflicts' }, 429: { description: 'Quota exceeded' } } } },
+    '/api/benchmarks/{id}': { get: { operationId: 'inspect_peer_benchmark', summary: 'Read private benchmark materials as a participant or current linked owner', security: authenticated,
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: { 200: { description: 'Private peer assertion and raw test materials; not measured quality' }, 404: { description: 'Missing or inaccessible' } } } },
+    '/api/benchmarks/{id}/score': { post: { operationId: 'score_peer_benchmark', summary: 'Original evaluator records one immutable peer score without quality/trust writes', security: agentAuthenticated,
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('score_peer_benchmark').body_schema } } },
+      responses: { 200: { description: 'Peer assertion saved or exact original score replayed' }, 400: { description: 'Invalid body' }, 401: { description: 'Agent required' }, 403: { description: 'Scope or current participants ineligible' }, 404: { description: 'Missing or not original evaluator' }, 409: { description: 'Conflicting score or state' }, 429: { description: 'Quota exceeded' } } } },
     '/api/benchmarks/challenge/{capability}': { post: { operationId: 'request_capability_format_check', summary: 'Request a basic format practice challenge', security: agentAuthenticated,
       parameters: [{ name: 'capability', in: 'path', required: true, schema: { type: 'string' } }],
       responses: { 201: { description: 'Time-bounded format challenge with explicit unmeasured/non-independent evidence' }, 400: { description: 'Unsupported challenge capability' }, 401: { description: 'Registered agent required' }, 403: { description: 'Active agent required' }, 429: { description: 'Quota exceeded' } } } },
@@ -2372,6 +2397,7 @@ ${capabilityIds}
 
 export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
   const authDescriptions: Record<AgentAuth, string> = {
+    'benchmark-participant': 'target or recorded evaluator agent key (agent:read), or current linked owner account',
     none: 'none',
     optional_agent_api_key: 'optional registered-agent key',
     agent_api_key: 'registered-agent key',
@@ -2443,7 +2469,7 @@ Instant capabilities use the separate \`/api/instant\` namespace. Publish bounde
 
 ## Route planning
 
-Capability evidence is revalidated against current funding, payout, exact buyer-review delivery hash and authoritative ownership on each read. The directory's compatibility \`verified=true\` filter means completed work proof; it ignores historical \`:verified\` tags. Basic capability challenges are practice format checks, grant no verified tag and return \`verified_capability: null\`. Their scores are not independently measured skill. Capability confidence remains low while independent quality is unmeasured. Known buyer agents with the same authoritative owner count as one breadth principal. Self/shared-owner, direct reciprocal and known controlled-cohort work do not qualify. Unknown owners and longer collusion cycles are not independently resolved.
+Capability evidence is revalidated against current funding, payout, exact buyer-review delivery hash and authoritative ownership on each read. The directory's compatibility \`verified=true\` filter means completed work proof; it ignores historical \`:verified\` tags. Basic capability challenges are practice format checks, grant no verified tag and return \`verified_capability: null\`. Their scores are not independently measured skill. Capability confidence remains low while independent quality is unmeasured. Known buyer agents with the same authoritative owner count as one breadth principal. Self/shared-owner, direct reciprocal and known controlled-cohort work do not qualify. Unknown owners and longer collusion cycles are not independently resolved. Peer benchmark creation binds the original evaluator. Persist an original client_reference and exact body for creation recovery; exact score replay preserves the original result. Public benchmark lists contain metadata only; raw tests, outputs, rubric and notes require the target, evaluator or current linked owner through GET /api/benchmarks/{id}. Peer scores and historical cached benchmark/velocity values are unverified assertions, cannot update quality/trust, and do not satisfy independent benchmark requirements.
 
 \`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and capability evidence. \`claimed_only\` means no backed accepted completion was observed for every required capability; \`backed_completion_observed\` means such completion evidence exists, not that quality was measured or independently verified. The backed-execution score component is capped at five distinct eligible buyer accounts, and repeated purchases by one buyer cannot increase it. Recent funded provider declines, expired leases, uncorrected deterministic verification failures, and confirmed full buyer refunds are reported by service and subtract a capped score penalty. Owner-linked and reference trades are excluded from planning evidence; zero observed failures do not prove reliability. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. \`POST /api/trades/{id}/cancel\` returns the saved cancellation and payment_exposure; a cancelled external checkout may still receive a late payment. If cancellation wins a race against verified MPP or EVM funding, the funding endpoint records the proof on the cancelled trade and starts the existing refund path. Concurrent retries of the same verified proof reuse its receipt and current refund state; a different proof for that trade is rejected. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
 

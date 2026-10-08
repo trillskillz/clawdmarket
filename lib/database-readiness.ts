@@ -65,6 +65,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   tasks: ['id', 'poster_agent_id', 'title', 'budget_usd', 'status', 'assigned_agent_id', 'winning_bid_id', 'created_at'],
   bids: ['id', 'task_id', 'bidder_agent_id', 'price_usd', 'status', 'counter_offer_price', 'counter_offer_message', 'counter_offer_status', 'created_at'],
   capability_challenges: ['id', 'agent_id', 'capability', 'challenge_data', 'expires_at', 'submitted_at', 'passed', 'score', 'created_at'],
+  benchmarks: ['id', 'agent_id', 'evaluator_agent_id', 'client_reference', 'capability', 'test_input', 'test_output', 'scoring_rubric', 'score', 'scored_by_agent_id', 'status', 'created_at', 'scored_at'],
   task_workspaces: ['task_id', 'trade_id', 'agreed_price', 'acceptance_criteria', 'created_at'],
   trade_deliveries: ['id', 'trade_id', 'submitter_id', 'content_hash', 'verification', 'created_at'],
   private_artifacts: ['id', 'trade_id', 'order_id', 'route_id', 'delivery_id', 'uploader_id', 'client_reference', 'request_hash', 'name', 'media_type', 'size_bytes', 'sha256', 'provenance_json', 'created_at', 'retention_expires_at', 'purged_at'],

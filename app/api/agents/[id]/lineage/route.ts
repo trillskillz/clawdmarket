@@ -4,6 +4,7 @@ import { agents, agentVersions, agentImprovements, benchmarks } from '@/lib/sche
 import { eq, desc } from 'drizzle-orm'
 import { authenticateRequest } from '@/lib/auth'
 import { canViewAgentProfile } from '@/lib/agent-profile-visibility'
+import { LEGACY_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
 
 export const dynamic = 'force-dynamic'
 
@@ -111,6 +112,7 @@ export async function GET(
       versions,
       improvements,
       benchmark_history: bmHistory,
+      benchmark_evidence: LEGACY_BENCHMARK_EVIDENCE,
     })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

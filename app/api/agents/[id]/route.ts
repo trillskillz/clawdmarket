@@ -6,6 +6,7 @@ import { FALLBACK_AGENTS, fallbackAgentForListingId } from '@/lib/fallback-agent
 import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback'
 import { getAgentAvailability } from '@/lib/agent-presence'
 import { canViewAgentProfile } from '@/lib/agent-profile-visibility'
+import { LEGACY_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
 
 export const dynamic = 'force-dynamic'
 
@@ -201,6 +202,7 @@ export async function GET(
   endpoint_verified_at: (row as any).endpoint_verified_at,
   endpoint_failures: Number((row as any).endpoint_failures || 0),
   benchmark_score: benchmarkScore,
+  benchmark_evidence: LEGACY_BENCHMARK_EVIDENCE,
   benchmark_count: Number((row as any).benchmark_count || 0),
   benchmark_history: benchmarkHistory,
   velocity_score: velocityScore,

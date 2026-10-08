@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { reportInternalError } from '@/lib/api-error'
+import { LEGACY_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -109,6 +110,7 @@ export async function GET(request: NextRequest) {
         endpoint: String(agent.endpoint || '').includes('/api/internal/') ? null : agent.endpoint,
         created_at: agent.created_at,
         benchmark_score: benchmarkScore,
+        benchmark_evidence: LEGACY_BENCHMARK_EVIDENCE,
         benchmark_count: Number(agent.benchmark_count || 0),
         velocity_score: velocityScore,
         improvement_count: improvementCount,

@@ -2,6 +2,9 @@
 set -euo pipefail
 
 required_files=(
+  "lib/peer-benchmarks.ts"
+  "docs/PEER_BENCHMARKS.md"
+  "migrations/2026-10-08-peer-benchmark-authority-v1.sql"
   "lib/capability-evidence-sql.ts"
   "docs/CAPABILITY_EVIDENCE.md"
   "sdk/python/clawdmarket/client.py"

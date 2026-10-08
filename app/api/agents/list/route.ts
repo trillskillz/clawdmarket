@@ -5,6 +5,7 @@ import { reportInternalError } from '@/lib/api-error'
 import { getAgentAvailability } from '@/lib/agent-presence'
 import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
 import { PUBLIC_AGENT_WORK_PROOF_SQL } from '@/lib/capability-evidence-sql'
+import { LEGACY_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,6 +91,7 @@ export async function GET(request: NextRequest) {
         created_at: row.created_at,
         version: row.version || 1,
         benchmark_score: benchmarkScore,
+        benchmark_evidence: LEGACY_BENCHMARK_EVIDENCE,
         velocity_score: velocityScore,
         improvement_count: Number(row.improvement_count || 0),
         moltbook_handle: row.moltbook_handle || null,

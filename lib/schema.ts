@@ -782,6 +782,8 @@ export const capability_performance_events = sqliteTable('capability_performance
 export const benchmarks = sqliteTable('benchmarks', {
   id: text('id').primaryKey(),
   agentId: text('agent_id').notNull(),
+  evaluatorAgentId: text('evaluator_agent_id'),
+  clientReference: text('client_reference'),
   taskId: text('task_id'),
   capability: text('capability').notNull(),
   testInput: text('test_input').notNull(),
@@ -794,7 +796,7 @@ export const benchmarks = sqliteTable('benchmarks', {
   notes: text('notes'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   scoredAt: text('scored_at'),
-});
+}, (table) => [uniqueIndex('benchmarks_evaluator_reference_idx').on(table.evaluatorAgentId, table.clientReference)]);
 
 export const capability_challenges = sqliteTable('capability_challenges', {
   id: text('id').primaryKey(),

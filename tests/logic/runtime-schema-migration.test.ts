@@ -24,6 +24,8 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       'CREATE TABLE bids (id TEXT PRIMARY KEY)',
       'CREATE TABLE webhooks (id TEXT PRIMARY KEY, url TEXT NOT NULL, events TEXT NOT NULL, created_at TEXT NOT NULL)',
       "INSERT INTO webhooks (id, url, events, created_at) VALUES ('legacy-webhook', 'https://example.com/hook', '[]', datetime('now'))",
+      "CREATE TABLE benchmarks (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, task_id TEXT, capability TEXT NOT NULL, test_input TEXT NOT NULL, test_output TEXT, scoring_rubric TEXT, score REAL, scored_by_agent_id TEXT, status TEXT NOT NULL DEFAULT 'pending', run_time_ms INTEGER, notes TEXT, created_at TEXT NOT NULL, scored_at TEXT)",
+      "INSERT INTO benchmarks (id, agent_id, capability, test_input, score, scored_by_agent_id, status, created_at) VALUES ('legacy-benchmark', 'legacy-agent', 'analysis', 'LEGACY_PRIVATE_TEST', 88, 'legacy-scorer', 'scored', '2026-09-01')",
     ]) await client.execute(statement)
     await client.execute(`CREATE TABLE service_execution_attempts (
       id TEXT PRIMARY KEY, order_id TEXT NOT NULL UNIQUE, state TEXT NOT NULL,
@@ -156,7 +158,16 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
-      assert.equal(migrationRows.rows.length, 49)
+      assert.equal(migrationRows.rows.length, 50)
+      const legacyBenchmark = (await migrated.execute("SELECT * FROM benchmarks WHERE id = 'legacy-benchmark'")).rows[0]
+      assert.equal(legacyBenchmark.test_input, 'LEGACY_PRIVATE_TEST')
+      assert.equal(legacyBenchmark.score, 88)
+      assert.equal(legacyBenchmark.scored_by_agent_id, 'legacy-scorer')
+      assert.equal(legacyBenchmark.evaluator_agent_id, null)
+      assert.equal(legacyBenchmark.client_reference, null)
+      const benchmarkIndexes = (await migrated.execute('PRAGMA index_list("benchmarks")')).rows
+      assert.equal(benchmarkIndexes.some((row) => row.name === 'benchmarks_evaluator_reference_idx' && row.unique === 1), true)
+      assert.equal((await migrated.execute('PRAGMA integrity_check')).rows[0].integrity_check, 'ok')
       const contractColumns = names((await migrated.execute('PRAGMA table_info("contracts")')).rows)
       for (const column of ['payment_rail', 'funded_at', 'organization_id']) assert.equal(contractColumns.has(column), true)
       for (const table of ['buyer_mpp_payment_intents', 'buyer_mpp_payment_claims', 'route_receipts', 'route_retry_funding_steps', 'route_origins', 'route_agent_decisions', 'route_controls', 'route_control_events']) assert.equal(tableNames.has(table), true)
