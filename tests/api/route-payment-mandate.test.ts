@@ -247,6 +247,29 @@ test('cookie grants require CSRF and malformed bounds cannot create authority', 
   assert.equal((await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.route_id, f.routeId))).length, 0)
 })
 
+test('a sibling capability cannot replace agreed work at funding or verified-proof persistence', async () => {
+  const f = await fixture(), m = await authorize(f), { trade } = await (await run(f, m.id)).json()
+  await db.update(schema.service_definitions).set({ capabilities: '["code-generation"]' }).where(eq(schema.service_definitions.id, f.serviceId))
+  assert.equal((await intentRequest(f, trade.id)).status, 409)
+  assert.equal((await db.select().from(schema.evm_payment_intents).where(eq(schema.evm_payment_intents.trade_id, trade.id))).length, 0)
+  const [current] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  const funding = await import('@/lib/trade-funding')
+  const proof = { trade: current, rail: 'evm' as const,
+    txHash: `0x${'bc'.repeat(32)}`, externalId: `0x${'bc'.repeat(32)}`, payerAddress: payer, tokenAddress,
+    chainId: 8453, tokenSymbol: 'USDC', tokenDecimals: 6, tokenAmount: 1050000n, tokenUsdPrice: 1, usdValue: 1.05 }
+  await assert.rejects(() => funding.recordExternalTradeFunding(proof),
+  (error: unknown) => (error as { code?: string }).code === 'PROVIDER_ELIGIBILITY_CHANGED')
+  const [cancelled] = await db.select().from(schema.trades).where(eq(schema.trades.id, trade.id))
+  assert.equal(cancelled.status, 'cancelled')
+  assert.equal(cancelled.payout_status, 'processing')
+  await funding.recordCancelledExternalFunding({ ...proof, trade: cancelled })
+  assert.equal((await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, trade.id))).length, 1)
+  const [order] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, trade.id))
+  assert.equal(order.state, 'cancelled')
+  assert.equal((await db.select().from(schema.service_execution_attempts).where(eq(schema.service_execution_attempts.order_id, order.id))).length, 0)
+  assert.equal((await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id, m.id)))[0].reserved_minor, 105)
+})
+
 test('changed buyer owner and expiry fail before fresh funding intent', async () => {
   for (const reason of ['owner', 'expiry']) {
     const f = await fixture(true), m = await authorize(f), { trade } = await (await run(f, m.id)).json()

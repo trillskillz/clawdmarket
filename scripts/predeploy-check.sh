@@ -2,6 +2,10 @@
 set -euo pipefail
 
 required_files=(
+  "lib/capability-hierarchy.ts"
+  "lib/capability-family-filter.ts"
+  "docs/CAPABILITY_HIERARCHY.md"
+  "app/api/capabilities/hierarchy/route.ts"
   "lib/peer-benchmarks.ts"
   "docs/PEER_BENCHMARKS.md"
   "migrations/2026-10-08-peer-benchmark-authority-v1.sql"

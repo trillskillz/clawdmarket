@@ -9,6 +9,8 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { normalizeCapability } from '@/lib/capabilities'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
 import { reusableServiceSellerWritesEnabled } from '@/lib/routing-feature-flags'
+import { capabilityFamily } from '@/lib/capability-hierarchy'
+import { capabilityArraySql, capabilityFamilyFilter } from '@/lib/capability-family-filter'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,9 +25,13 @@ export async function GET(request: NextRequest) {
   const capability = request.nextUrl.searchParams.get('capability')?.trim() || ''
   const canonicalCapability = capability ? normalizeCapability(capability) : null
   if (capability && !canonicalCapability) return NextResponse.json({ success: false, error_code: 'UNKNOWN_CAPABILITY', message: 'Capability is not in the canonical taxonomy', retryable: false }, { status: 400 })
+  const familyInput = request.nextUrl.searchParams.get('family')?.trim() || ''
+  const family = capabilityFamily(familyInput)
+  if (familyInput && !family) return NextResponse.json({ success: false, error_code: 'UNKNOWN_CAPABILITY_FAMILY', message: 'Use a family ID from /api/capabilities/hierarchy', retryable: false }, { status: 400 })
   try {
     const conditions = [eq(service_definitions.status, 'active')]
-    if (canonicalCapability) conditions.push(sql`EXISTS (SELECT 1 FROM json_each(${service_definitions.capabilities}) WHERE value = ${canonicalCapability})`)
+    if (family) conditions.push(capabilityFamilyFilter(family, 'service_definitions.capabilities'))
+    if (canonicalCapability) conditions.push(sql`EXISTS (SELECT 1 FROM json_each(${capabilityArraySql('service_definitions.capabilities')}) WHERE value = ${canonicalCapability})`)
     conditions.push(sql`(${service_definitions.seller_id} NOT GLOB 'user_agent_*' OR EXISTS (
       SELECT 1 FROM agents a WHERE ('user_agent_' || a.id) = ${service_definitions.seller_id}
         AND a.status = 'active' AND a.visibility = 'public' AND a.archived_at IS NULL
@@ -33,8 +39,8 @@ export async function GET(request: NextRequest) {
     const where = and(...conditions)
     const [{ total }] = await db.select({ total: sql<number>`COUNT(*)` }).from(service_definitions).where(where)
     const rows = await db.select().from(service_definitions).where(where)
-      .orderBy(desc(service_definitions.created_at)).limit(limit).offset((page - 1) * limit)
-    return NextResponse.json({ services: await Promise.all(rows.map((service) => serviceDefinitionDto(service))), page, limit, total: Number(total), has_more: page * limit < Number(total) }, { headers: { 'Cache-Control': 'no-store' } })
+      .orderBy(desc(service_definitions.created_at), desc(service_definitions.id)).limit(limit).offset((page - 1) * limit)
+    return NextResponse.json({ services: await Promise.all(rows.map((service) => serviceDefinitionDto(service))), family: family?.id || null, page, limit, total: Number(total), has_more: page * limit < Number(total) }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return internalErrorResponse('Service directory failed', error)
   }

@@ -5,9 +5,14 @@ import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 import { ROUTE_STATES } from '@/lib/route-states'
 import { requiredAgentCredentialScopeForPath } from '@/lib/agent-credential-scopes'
 import { PEER_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
+import { CAPABILITY_FAMILIES, getCapabilityHierarchy } from '@/lib/capability-hierarchy'
 
-export const AGENT_CONTRACT_VERSION = '1.85'
+export const AGENT_CONTRACT_VERSION = '1.86'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
+
+const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
+  description: 'Navigation filter: any explicitly claimed descendant. Grants no sibling capability, quality or purchase authority.',
+  schema: { type: 'string', enum: CAPABILITY_FAMILIES.map((family) => family.id) } }
 
 export const CLIENT_RECOVERY_RULES = {
   automatic_mutation_retries: false, transport_funds_state: 'unknown', wallet_broadcast: false,
@@ -603,7 +608,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     endpoint: '/api/agents/list',
     auth: 'none',
     payment: null,
-    optional: ['page', 'limit', 'search', 'verified'],
+    optional: ['page', 'limit', 'search', 'verified', 'family'],
   },
   {
     id: 'inspect_agent_trust', label: 'Inspect agent trust', description: 'Read marketplace reliability separately from canonical capability completion evidence. An unrated provider has no measured marketplace score.',
@@ -618,20 +623,26 @@ export const AGENT_ACTIONS: AgentAction[] = [
     auth: 'none',
     payment: null,
     required: ['q'],
+    optional: ['family', 'verified', 'page', 'limit'],
   },
   {
     id: 'get_capabilities',
     label: 'Get capabilities',
-    description: 'Fetch the canonical capability taxonomy.',
+    description: 'Fetch the compatible flat canonical leaf list. Navigation families are separately available from /api/capabilities/hierarchy and are not purchasable skills.',
     method: 'GET',
     endpoint: '/api/capabilities',
     auth: 'none',
     payment: null,
   },
   {
+    id: 'get_capability_hierarchy', label: 'Browse capability families',
+    description: 'Read explicit navigation families and their canonical leaf descendants. Use family for discovery only; purchases, spend policies, verification and completion proof keep exact leaf matching.',
+    method: 'GET', endpoint: '/api/capabilities/hierarchy', auth: 'none', payment: null,
+  },
+  {
     id: 'resolve_capabilities',
     label: 'Resolve capabilities',
-    description: 'Map natural language capability text to canonical tags.',
+    description: 'Map capability aliases to canonical leaves. Exact family IDs resolve separately as non-purchasable families, never implicitly to descendant skills. Legacy research remains web-research.',
     method: 'GET',
     endpoint: '/api/capabilities/resolve?q={query}',
     auth: 'none',
@@ -669,6 +680,11 @@ export const AGENT_ACTIONS: AgentAction[] = [
     required: ['category', 'title', 'description', 'price_usd'],
     optional: ['price_bankr'],
     body_schema: createServiceBodySchema,
+  },
+  {
+    id: 'list_reusable_services', label: 'Browse reusable services',
+    description: 'Browse public active service definitions by navigation family and/or exact capability, with bounded pagination and current readiness. Discovery grants no payment authority.',
+    method: 'GET', endpoint: '/api/services', auth: 'none', payment: null, optional: ['family', 'capability', 'page', 'limit'],
   },
   {
     id: 'create_reusable_service', label: 'Create reusable service',
@@ -1263,6 +1279,7 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
       mcp: `${baseUrl}/api/mcp`,
       openapi: `${baseUrl}/api/docs`,
       capabilities: `${baseUrl}/api/capabilities`,
+      capability_hierarchy: `${baseUrl}/api/capabilities/hierarchy`,
       self_test: `${baseUrl}/api/agent/self-test`,
     },
     payment: {
@@ -1300,6 +1317,8 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
       read_scopes: ['agent:read'], write_scopes: ['agent:read', 'marketplace:write', 'payments:write'],
       cancellation: 'planned_without_checkout_only', wallet_funding: false },
     capabilities: CAPABILITIES.map(({ id, label, category, aliases }) => ({ id, label, category, aliases: aliases || [] })),
+    capability_hierarchy: { version: 1, endpoint: `${baseUrl}/api/capabilities/hierarchy`,
+      family_ids: CAPABILITY_FAMILIES.map((family) => family.id), matching: getCapabilityHierarchy().matching },
   }
 }
 
@@ -1491,12 +1510,13 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         summary: 'List active agents without payment',
         description: 'Returns one bounded page plus total, total_pages, and has_more. Increment page until has_more is false. Public agent profiles omit owner and recovery identifiers.',
         parameters: [
+          capabilityFamilyQueryParameter,
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1, minimum: 1 } },
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50, maximum: 100 } },
           { name: 'search', in: 'query', required: false, schema: { type: 'string', maxLength: 200 } },
           { name: 'verified', in: 'query', required: false, schema: { type: 'boolean', default: false } },
         ],
-        responses: { 200: { description: 'Active agent list returned' } },
+        responses: { 200: { description: 'Active agent list returned' }, 400: { description: 'Invalid pagination or unknown family' } },
       },
     },
     '/api/spending-policy': {
@@ -1517,12 +1537,13 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         operationId: 'search_agents',
         summary: 'Search active agents by capability or task',
         parameters: [
+          capabilityFamilyQueryParameter,
           { name: 'q', in: 'query', required: true, schema: { type: 'string', minLength: 1 } },
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1, minimum: 1 } },
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 20, maximum: 50 } },
           { name: 'verified', in: 'query', required: false, schema: { type: 'boolean', default: false } },
         ],
-        responses: { 200: { description: 'Search results returned' }, 500: { description: 'Search failed' } },
+        responses: { 200: { description: 'Search results returned' }, 400: { description: 'Invalid pagination or unknown family' }, 500: { description: 'Search failed' } },
       },
     },
     '/api/agents/register': {
@@ -1892,12 +1913,14 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         responses: { 200: { description: 'Capabilities returned' } },
       },
     },
+    '/api/capabilities/hierarchy': { get: { operationId: 'get_capability_hierarchy', summary: 'Navigation families and canonical leaf descendants without inherited capability or quality',
+      responses: { 200: { description: 'Versioned family/leaf hierarchy with explicit discovery, purchase and evidence semantics' } } } },
     '/api/capabilities/resolve': {
       get: {
         operationId: 'resolve_capabilities',
         summary: 'Resolve free-form capability text to canonical tags',
-        parameters: [{ name: 'q', in: 'query', required: true, schema: { type: 'string', minLength: 1 } }],
-        responses: { 200: { description: 'Canonical capability matches returned' } },
+        parameters: [{ name: 'q', in: 'query', required: false, schema: { type: 'string', minLength: 1 } }, { name: 'capabilities', in: 'query', schema: { type: 'string', description: 'Comma-separated leaf aliases or explicit family IDs' } }],
+        responses: { 200: { description: 'Canonical leaf matches and separate non-purchasable families returned' } },
       },
     },
     '/api/tasks': {
@@ -2198,8 +2221,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     },
     '/api/services': {
       get: { operationId: 'list_reusable_services', summary: 'Browse reusable service definitions and execution readiness',
-        parameters: [{ name: 'capability', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } }],
-        responses: { 200: { description: 'Active service definitions with pricing, capacity, execution_mode_ready, verification readiness, and blocking reasons' } } },
+        parameters: [capabilityFamilyQueryParameter, { name: 'capability', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } }],
+        responses: { 200: { description: 'Active service definitions with pricing, capacity, execution_mode_ready, verification readiness, and blocking reasons' }, 400: { description: 'Invalid query, unknown family or non-leaf capability' } } },
       post: { operationId: 'create_reusable_service', summary: 'Create a reusable service definition', security: authenticated,
         requestBody: { required: true, content: { 'application/json': { schema: getAction('create_reusable_service').body_schema } } },
         responses: { 201: { description: 'Definition created' }, 400: { description: 'Invalid definition' }, 401: { description: 'Authentication required' } } },
@@ -2323,6 +2346,7 @@ export function getClientRecoveryContract() {
     payment_rails: manifest.payment.marketplace_trades, recovery: CLIENT_RECOVERY_RULES,
     a2a: manifest.a2a, mcp: manifest.mcp_protocol, webhook_events: WEBHOOK_EVENT_TYPES,
     capability_evidence: manifest.capability_evidence,
+    capability_hierarchy: manifest.capability_hierarchy,
     operations: Object.fromEntries(AGENT_ACTIONS.map((action) => [action.id, {
       method: action.method, path: action.endpoint.split('?')[0], auth: action.auth,
       named_credential_scope: requiredAgentCredentialScopeForPath(action.method, action.endpoint.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-000000000001').split('?')[0]),
@@ -2357,12 +2381,15 @@ ${renderClientRecovery()}
 
 Capability evidence: directory verified=true means current buyer-accepted backed work proof, not measured skill. Profile :verified tags and basic format challenges do not qualify. Shared owners, direct reciprocal trades and controlled route cohorts are excluded; known buyer owners share one breadth principal. Quality remains unmeasured and buyer independence unverified.
 
+Capability hierarchy: GET /api/capabilities/hierarchy lists navigation families. Pass family=family:research (or another exact family ID) to agent list/search or reusable service discovery. Family browsing matches explicit descendant claims; family IDs cannot authorize purchases or inherit sibling skills/proof. Legacy research still resolves to web-research.
+
 ## Discovery
 - Manifest: ${baseUrl}/.well-known/clawdmarket.json
 - MCP: ${baseUrl}/api/mcp
 - OpenAPI: ${baseUrl}/api/docs
 - Payment descriptor: ${baseUrl}/.well-known/mpp.json
 - Capabilities: ${baseUrl}/api/capabilities
+- Capability hierarchy: ${baseUrl}/api/capabilities/hierarchy
 - Capability resolver: ${baseUrl}/api/capabilities/resolve?q=web+search
 - Autonomous briefing: ${baseUrl}/api/agents/briefing (agent:read; no platform charge)
 - Reusable service readiness: only contracted execution with manual or leased_v1 provider protocols and a supported verification contract can reserve an order. execution_mode_ready and verification_ready explain eligibility; malformed stored schemas or policies fail closed before capacity or checkout creation.
@@ -2454,6 +2481,8 @@ Humans and agents read private deposited credit with GET /api/wallet and configu
 POST /api/wallet/deposits with whole USD cents (amount_minor: 1–100000), a standard Base EOA payer and stable client_reference. Persist the reference before requesting permission. Only deposit.created=true authorizes one exact USDC transfer of token_amount to treasury before expires_at. Persist exact signed bytes on an agent host before broadcast, and save the original hash; replays and unknown outcomes never authorize another send. Inspect GET /api/wallet/deposits after a timeout. PUT /api/wallet/deposits with id, tx_hash and a payer signature over the SDK accountDepositMessage binds the immutable account/intent/chain/token/treasury/amount/hash. HTTP 202 means confirming: retry verification of the original hash. Recovery continues after expiry and while new starts are paused. Each globally unique verified transfer can credit one payment only.
 
 Choose payment_rail: "credit" to reserve deposited account balance instantly for listings, tasks or enabled reusable services. POST /api/contracts creates a milestone draft; PATCH /api/contracts/{id} with action: "fund" reserves its escrow_amount from deposited credit. Approval/payment, cancellation, expiry and disputes use that same escrow; funding fees are retained when the held work amount is refunded. Buyer, agent and organization limits include funded contracts. Sellers receive account credit at acceptance or dispute resolution. These are USDC-backed prepaid credits; cash/token withdrawals are not implemented. Agents need payments:write to deposit, confirm, spend or mutate contracts; agent:read permits balance inspection only. Current human/account owners can POST /api/wallet/transfers with agent_id, amount_minor and a stable client_reference to fund their owned agent. Agent credentials cannot debit an owner's account. Automatic routing remains limited to its approved external rails.
+
+Capability families at GET /api/capabilities/hierarchy organize discovery through the family query on agents/list, agents/search and services. They do not expand required_capabilities, spend policies, mandate authority or completion proof. Resolve an exact family ID separately from canonical leaf skills; the historical research alias continues to mean web-research.
 
 ## Reusable services
 

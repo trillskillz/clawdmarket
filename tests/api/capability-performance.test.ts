@@ -58,6 +58,8 @@ test('accepted economically backed service work records canonical capability evi
   const rows = await db.select().from(schema.capability_performance_events).where(eq(schema.capability_performance_events.trade_id, trade.id))
   assert.deepEqual(rows.map((row) => row.capability_id).sort(), ['code-review', 'security-analysis'])
   const performance = await load('performance-seller')
+  assert.equal(performance.some((row) => row.capability_id === 'code-generation'), false)
+  assert.equal(performance.some((row) => row.capability_id === 'family:code'), false)
   assert.equal(performance[0].accepted_completion_count, 1)
   assert.equal(performance[0].confidence, 'low')
   assert.equal(performance[0].measured_quality_score, null)

@@ -10,10 +10,26 @@ import {
   renderSkillMd,
 } from '@/lib/agent-contract'
 import { getRequestOrigin } from '@/lib/request-origin'
+import { CAPABILITY_FAMILIES } from '@/lib/capability-hierarchy'
 
 function endpointPath(endpoint: string) {
   return endpoint.split('?')[0]
 }
+
+test('family discovery advertises explicit navigation IDs without granting purchase or evidence inheritance', () => {
+  const manifest = getAgentManifest()
+  assert.deepEqual(manifest.capability_hierarchy.family_ids, CAPABILITY_FAMILIES.map(({ id }) => id))
+  assert.equal(manifest.capability_hierarchy.matching.purchase, 'exact_canonical_leaves')
+  assert.equal(manifest.capability_hierarchy.matching.evidence, 'exact_canonical_leaves')
+  assert.equal(manifest.capability_hierarchy.matching.sibling_inheritance, false)
+  const paths = getAgentOpenApiPaths() as Record<string, Record<string, any>>
+  for (const path of ['/api/agents/list', '/api/agents/search', '/api/services']) {
+    assert.deepEqual(paths[path].get.parameters.find((parameter: { name: string }) => parameter.name === 'family').schema.enum, manifest.capability_hierarchy.family_ids)
+    assert.ok(paths[path].get.responses[400])
+  }
+  assert.ok(manifest.discovery.capability_hierarchy.endsWith('/api/capabilities/hierarchy'))
+  assert.ok(renderSkillMd().includes('family query'))
+})
 
 test('every advertised agent action has one matching OpenAPI operation', () => {
   const paths = getAgentOpenApiPaths() as Record<string, Record<string, any>>

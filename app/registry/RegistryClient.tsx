@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { publicTrustLabel } from '@/lib/trust-presentation'
+import { CAPABILITY_FAMILIES } from '@/lib/capability-hierarchy'
 import styles from './registry.module.css'
 
 const AGENT_PAGE_SIZE = 24
@@ -45,6 +46,7 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
   const [filter, setFilter] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [verifiedOnly, setVerifiedOnly] = useState(false)
+  const [family, setFamily] = useState('')
   const [lookupDomain, setLookupDomain] = useState('')
   const [lookupResult, setLookupResult] = useState<any>(null)
   const [lookupLoading, setLookupLoading] = useState(false)
@@ -59,6 +61,9 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
   const [semanticSearchMode, setSemanticSearchMode] = useState('')
   const [fetchKey, setFetchKey] = useState(0)
   const directoryTotalRef = useRef<number | null>(initialAgentTotal)
+  const loadMoreRequestRef = useRef<AbortController | null>(null)
+
+  useEffect(() => () => loadMoreRequestRef.current?.abort(), [filter, verifiedOnly, family, semanticMode, semanticQuery])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -84,7 +89,7 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
   }, [])
 
   useEffect(() => {
-    if (semanticMode) return
+    if (semanticMode) { setLoading(false); setError(null); return }
     setLoading(true)
     setError(null)
     setLoadMoreError(null)
@@ -95,15 +100,17 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
       const params = new URLSearchParams({ page: '1', limit: String(AGENT_PAGE_SIZE) })
       if (filter.trim()) params.set('search', filter.trim())
       if (verifiedOnly) params.set('verified', 'true')
+      if (family) params.set('family', family)
       fetch(`/api/agents/list?${params.toString()}`, { signal: controller.signal })
         .then(async (response) => {
           clearTimeout(timeout)
           const data = await response.json()
+          if (controller.signal.aborted) return
           if (!response.ok) throw new Error(data?.message || 'Registry request failed')
           setAgents(data.agents ?? [])
           setAgentTotal(Number(data.total || 0))
           setAgentPage(1)
-          if (!filter.trim() && !verifiedOnly) {
+          if (!filter.trim() && !verifiedOnly && !family) {
             directoryTotalRef.current = Number(data.total || 0)
             setDirectoryTotal(Number(data.total || 0))
           }
@@ -117,26 +124,31 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
         })
     }, delay)
     return () => { clearTimeout(debounce); clearTimeout(timeout); controller.abort() }
-  }, [fetchKey, filter, verifiedOnly, semanticMode])
+  }, [fetchKey, filter, verifiedOnly, family, semanticMode])
 
   useEffect(() => {
     if (!semanticMode || !semanticQuery.trim()) {
       setSemanticResults([])
       setSemanticTotal(0)
       setSemanticKeywords([])
+      setSemanticLoading(false)
       return
     }
+    const controller = new AbortController()
+    setSemanticLoading(true)
+    setLoadMoreError(null)
     const timer = setTimeout(() => {
-      setSemanticLoading(true)
       const params = new URLSearchParams({ q: semanticQuery.trim(), page: '1', limit: String(AGENT_PAGE_SIZE) })
       if (verifiedOnly) params.set('verified', 'true')
-      fetch(`/api/agents/search?${params.toString()}`)
+      if (family) params.set('family', family)
+      fetch(`/api/agents/search?${params.toString()}`, { signal: controller.signal })
         .then(async (response) => {
           const data = await response.json()
           if (!response.ok) throw new Error(data?.message || 'Search request failed')
           return data
         })
         .then((data) => {
+          if (controller.signal.aborted) return
           setSemanticResults(data.agents ?? [])
           setSemanticTotal(Number(data.total || 0))
           setSemanticPage(1)
@@ -144,27 +156,32 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
           setSemanticSearchMode(data.mode || 'keyword')
           setSemanticLoading(false)
         })
-        .catch(() => { setSemanticResults([]); setSemanticLoading(false) })
+        .catch(() => { if (!controller.signal.aborted) { setSemanticResults([]); setSemanticLoading(false) } })
     }, 500)
-    return () => clearTimeout(timer)
-  }, [semanticMode, semanticQuery, verifiedOnly])
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [semanticMode, semanticQuery, verifiedOnly, family])
 
   const displayedAgents = semanticMode ? semanticResults : agents
   const resultCount = semanticMode ? semanticTotal : agentTotal
+  const resultsLoading = semanticMode ? semanticLoading : loading
 
   const loadMoreAgents = async () => {
-    if (loadingMore || displayedAgents.length >= resultCount) return
+    if (loadingMore || resultsLoading || displayedAgents.length >= resultCount) return
     const nextPage = (semanticMode ? semanticPage : agentPage) + 1
     const params = new URLSearchParams({ page: String(nextPage), limit: String(AGENT_PAGE_SIZE) })
     if (verifiedOnly) params.set('verified', 'true')
+    if (family) params.set('family', family)
     if (semanticMode) params.set('q', semanticQuery.trim())
     else if (filter.trim()) params.set('search', filter.trim())
     setLoadingMore(true)
     setLoadMoreError(null)
+    const controller = new AbortController()
+    loadMoreRequestRef.current = controller
     try {
       const endpoint = semanticMode ? '/api/agents/search' : '/api/agents/list'
-      const response = await fetch(`${endpoint}?${params.toString()}`)
+      const response = await fetch(`${endpoint}?${params.toString()}`, { signal: controller.signal })
       const data = await response.json()
+      if (controller.signal.aborted) return
       if (!response.ok) throw new Error(data?.message || 'More agents could not be loaded')
       const nextAgents = data.agents ?? []
       if (semanticMode) {
@@ -183,9 +200,10 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
         setAgentPage(nextPage)
       }
     } catch {
-      setLoadMoreError('More agents could not be loaded. Try again.')
+      if (!controller.signal.aborted) setLoadMoreError('More agents could not be loaded. Try again.')
     } finally {
       setLoadingMore(false)
+      if (loadMoreRequestRef.current === controller) loadMoreRequestRef.current = null
     }
   }
 
@@ -253,6 +271,13 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
             </button>
             <span>{semanticMode ? 'Natural-language capability matching' : 'Exact name and capability matching'}</span>
           </div>
+          <label className={styles.familyPicker}>
+            <span>Capability family</span>
+            <select value={family} onChange={(event) => setFamily(event.target.value)}>
+              <option value="">All capability families</option>
+              {CAPABILITY_FAMILIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </label>
           {semanticMode && semanticKeywords.length > 0 && (
             <div className={styles.keywords}>
               <span>{semanticSearchMode === 'semantic' ? 'INTERPRETED AS' : 'MATCHED TERMS'}</span>
@@ -293,28 +318,28 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
           <Link href="/skill.md">Register an agent <span>↗</span></Link>
         </div>
 
-        {loading && (
+        {resultsLoading && (
           <div className={styles.loadingGrid} aria-label="Loading agents">
             {[0, 1, 2].map((item) => <div key={item}><i /><span /><span /><span /></div>)}
           </div>
         )}
 
-        {!loading && error && (
+        {!resultsLoading && error && (
           <div className={styles.emptyState}>
             <span>CONNECTION ERROR</span><h3>Registry unavailable.</h3><p>{error}</p>
             <button type="button" onClick={() => setFetchKey((value) => value + 1)}>Retry connection →</button>
           </div>
         )}
 
-        {!loading && !error && directoryTotal === 0 && !filter && !verifiedOnly && (
+        {!resultsLoading && !error && directoryTotal === 0 && !filter && !verifiedOnly && !family && (
           <div className={styles.emptyState}><span>EMPTY NETWORK</span><h3>Be the first agent listed.</h3><p>The registry is ready for its first capability provider.</p><Link href="/docs">Read the docs →</Link></div>
         )}
 
-        {!loading && !error && (directoryTotal > 0 || filter || verifiedOnly || semanticMode) && displayedAgents.length === 0 && (
+        {!resultsLoading && !error && (directoryTotal > 0 || filter || verifiedOnly || family || semanticMode) && displayedAgents.length === 0 && (
           <div className={styles.emptyState}><span>NO MATCH</span><h3>Try a broader capability.</h3><p>No active agents match the current search.</p></div>
         )}
 
-        {!loading && !error && displayedAgents.length > 0 && (
+        {!resultsLoading && !error && displayedAgents.length > 0 && (
           <>
             <div className={styles.agentGrid}>
               {displayedAgents.map((agent, index) => (

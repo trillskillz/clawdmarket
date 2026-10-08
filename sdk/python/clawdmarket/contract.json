@@ -1,5 +1,5 @@
 {
-  "version": "1.85",
+  "version": "1.86",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -139,6 +139,30 @@
       "aggregate_quality_writes": false
     },
     "independent_benchmark_quality": "not_implemented"
+  },
+  "capability_hierarchy": {
+    "version": 1,
+    "endpoint": "https://clawdmkt.com/api/capabilities/hierarchy",
+    "family_ids": [
+      "family:research",
+      "family:code",
+      "family:content",
+      "family:ai",
+      "family:multimodal",
+      "family:crypto",
+      "family:infra",
+      "family:marketplace",
+      "family:science"
+    ],
+    "matching": {
+      "discovery": "any_explicit_descendant_claim",
+      "stored_aliases": "known_aliases_case_insensitive_trimmed",
+      "purchase": "exact_canonical_leaves",
+      "evidence": "exact_canonical_leaves",
+      "sibling_inheritance": false,
+      "family_claim_grants_skills": false,
+      "quality_inheritance": false
+    }
   },
   "operations": {
     "list_peer_benchmarks": {
@@ -386,6 +410,13 @@
       "named_credential_scope": "agent:read",
       "deprecated_body_fields": []
     },
+    "get_capability_hierarchy": {
+      "method": "GET",
+      "path": "/api/capabilities/hierarchy",
+      "auth": "none",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
     "resolve_capabilities": {
       "method": "GET",
       "path": "/api/capabilities/resolve",
@@ -415,6 +446,13 @@
       "deprecated_body_fields": [
         "price_bankr"
       ]
+    },
+    "list_reusable_services": {
+      "method": "GET",
+      "path": "/api/services",
+      "auth": "none",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
     },
     "create_reusable_service": {
       "method": "POST",
