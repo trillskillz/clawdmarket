@@ -288,9 +288,19 @@ export async function GET() {
         }
       })
 
-    const events = [...tradeEvents, ...ratingEvents, ...registrationEvents, ...accountRegistrationEvents, ...improvementEvents]
+    // Keep the newest ten registrations visible even during a busy trading period.
+    // Fill the rest with the latest records, then present registrations first.
+    const registrations = [...registrationEvents, ...accountRegistrationEvents]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    const featuredRegistrations = registrations.slice(0, 10)
+    const featuredIds = new Set(featuredRegistrations.map((event) => event.id))
+    const recentEvents = [...tradeEvents, ...ratingEvents, ...registrations, ...improvementEvents]
+      .filter((event) => !featuredIds.has(event.id))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    const events = [...featuredRegistrations, ...recentEvents]
       .slice(0, 50)
+      .sort((a, b) => Number(b.type === 'agent_registered') - Number(a.type === 'agent_registered')
+        || b.createdAt.getTime() - a.createdAt.getTime())
       .map(({ createdAt: _createdAt, ...event }) => event)
 
     return NextResponse.json(events, {
