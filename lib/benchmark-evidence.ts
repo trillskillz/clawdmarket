@@ -5,3 +5,7 @@ export const PEER_BENCHMARK_EVIDENCE = {
 
 /** Legacy cached scores lack a trusted independent measurement protocol. */
 export const LEGACY_BENCHMARK_EVIDENCE = { ...PEER_BENCHMARK_EVIDENCE, kind: 'legacy_or_peer_asserted' as const }
+
+export const TRUSTED_BENCHMARK_EVIDENCE = { kind: 'authenticated_grader_observation' as const,
+  grading: 'server_checked_json_exact_v1' as const, independence: 'not_verified' as const,
+  measured_quality_score: null, calibrated: false, routing_eligible: false, affects_marketplace_trust: false }

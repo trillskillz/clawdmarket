@@ -832,6 +832,9 @@ async function main() {
       await ensureColumns(database, 'benchmarks', { evaluator_agent_id: 'TEXT', client_reference: 'TEXT' })
       await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS benchmarks_evaluator_reference_idx ON benchmarks(evaluator_agent_id, client_reference)')
     } })
+    migrations.push({ id: '2026-10-08-trusted-benchmarks-v1', run: async (database: Client) => {
+      await database.executeMultiple(await readFile(new URL('../migrations/2026-10-08-trusted-benchmarks-v1.sql', import.meta.url), 'utf8'))
+    } })
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',

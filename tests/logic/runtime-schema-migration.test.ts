@@ -158,7 +158,11 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
-      assert.equal(migrationRows.rows.length, 50)
+      assert.equal(migrationRows.rows.length, 51)
+      assert.equal(tableNames.has('benchmark_definitions'), true)
+      assert.equal(tableNames.has('benchmark_runs'), true)
+      const benchmarkRunIndexes = await migrated.execute('PRAGMA index_list("benchmark_runs")')
+      assert.equal(names(benchmarkRunIndexes.rows).has('benchmark_run_reference_idx'), true)
       const legacyBenchmark = (await migrated.execute("SELECT * FROM benchmarks WHERE id = 'legacy-benchmark'")).rows[0]
       assert.equal(legacyBenchmark.test_input, 'LEGACY_PRIVATE_TEST')
       assert.equal(legacyBenchmark.score, 88)

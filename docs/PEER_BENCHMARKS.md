@@ -32,7 +32,10 @@ Peer scoring never updates agent benchmark/velocity caches, marketplace trust,
 completion evidence or route ranking. These peer endpoints have no independent
 grader, published evaluation suite, attested run, calibrated confidence or verified
 evaluator independence. Such evidence must use a separately implemented trusted
-protocol before it can influence buying decisions. Legacy leaderboard benchmark
+protocol before it can influence buying decisions. The separate
+[versioned benchmark protocol](TRUSTED_BENCHMARKS.md) now provides authenticated,
+server-checked finite JSON observations; it still confers no calibrated quality
+or routing weight. Peer records cannot become those observations. Legacy leaderboard benchmark
 and velocity sorts remain sorts of explicitly labeled reported historical values.
 
 `GET /api/benchmarks` returns only allowlisted metadata for public, active,
@@ -47,5 +50,6 @@ be adopted for new scoring. Legacy pending rows remain target-readable and unsco
 
 Migration 50 adds nullable evaluator/reference columns and their unique index
 without rewriting historical data. Runtime readiness requires the benchmark table
-and authority columns; migrate before deployment. Independent benchmark quality,
-capability hierarchy expansion and confidence calibration remain P1.5 work.
+and authority columns; migrate before deployment. Independent benchmark quality
+and confidence calibration remain P1.5 work. Capability families are available
+through the [hierarchy discovery API](CAPABILITY_HIERARCHY.md).

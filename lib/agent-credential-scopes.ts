@@ -70,6 +70,7 @@ export function requiredAgentCredentialScopeForPath(method: string, pathname: st
   }
   if (
     pathname.startsWith('/api/benchmarks')
+    || pathname.startsWith('/api/benchmark-runs')
     || pathname.startsWith('/api/webhooks')
     || pathname === '/api/agents/register'
     || pathname.endsWith('/heartbeat')

@@ -66,6 +66,8 @@ export const REQUIRED_DATABASE_SCHEMA = {
   bids: ['id', 'task_id', 'bidder_agent_id', 'price_usd', 'status', 'counter_offer_price', 'counter_offer_message', 'counter_offer_status', 'created_at'],
   capability_challenges: ['id', 'agent_id', 'capability', 'challenge_data', 'expires_at', 'submitted_at', 'passed', 'score', 'created_at'],
   benchmarks: ['id', 'agent_id', 'evaluator_agent_id', 'client_reference', 'capability', 'test_input', 'test_output', 'scoring_rubric', 'score', 'scored_by_agent_id', 'status', 'created_at', 'scored_at'],
+  benchmark_definitions: ['id', 'suite_key', 'version', 'title', 'capability_id', 'grader_agent_id', 'definition_hash', 'request_hash', 'ciphertext', 'nonce', 'case_count', 'status', 'created_by', 'retired_by', 'retired_at', 'created_at'],
+  benchmark_runs: ['id', 'definition_id', 'definition_hash', 'target_agent_id', 'grader_agent_id', 'client_reference', 'request_hash', 'participants_hash', 'state', 'submission_hash', 'submission_ciphertext', 'submission_nonce', 'report_hash', 'report_json', 'passed_count', 'created_at', 'expires_at', 'completed_at'],
   task_workspaces: ['task_id', 'trade_id', 'agreed_price', 'acceptance_criteria', 'created_at'],
   trade_deliveries: ['id', 'trade_id', 'submitter_id', 'content_hash', 'verification', 'created_at'],
   private_artifacts: ['id', 'trade_id', 'order_id', 'route_id', 'delivery_id', 'uploader_id', 'client_reference', 'request_hash', 'name', 'media_type', 'size_bytes', 'sha256', 'provenance_json', 'created_at', 'retention_expires_at', 'purged_at'],

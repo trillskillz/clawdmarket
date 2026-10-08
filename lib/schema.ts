@@ -798,6 +798,31 @@ export const benchmarks = sqliteTable('benchmarks', {
   scoredAt: text('scored_at'),
 }, (table) => [uniqueIndex('benchmarks_evaluator_reference_idx').on(table.evaluatorAgentId, table.clientReference)]);
 
+/** Immutable benchmark versions; expected answers are private encrypted materials. */
+export const benchmark_definitions = sqliteTable('benchmark_definitions', {
+  id: text('id').primaryKey(), suite_key: text('suite_key').notNull(), version: integer('version').notNull(),
+  title: text('title').notNull(), capability_id: text('capability_id').notNull(), grader_agent_id: text('grader_agent_id').notNull(),
+  definition_hash: text('definition_hash').notNull(), request_hash: text('request_hash').notNull(),
+  ciphertext: text('ciphertext').notNull(), nonce: text('nonce').notNull(), case_count: integer('case_count').notNull(),
+  status: text('status', { enum: ['active', 'retired'] }).notNull().default('active'), created_by: text('created_by').notNull(),
+  retired_by: text('retired_by'), retired_at: integer('retired_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [uniqueIndex('benchmark_definition_version_idx').on(table.suite_key, table.version)]);
+
+export const benchmark_runs = sqliteTable('benchmark_runs', {
+  id: text('id').primaryKey(), definition_id: text('definition_id').notNull().references(() => benchmark_definitions.id),
+  definition_hash: text('definition_hash').notNull(), target_agent_id: text('target_agent_id').notNull(),
+  grader_agent_id: text('grader_agent_id').notNull(), client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(), participants_hash: text('participants_hash').notNull(),
+  state: text('state', { enum: ['awaiting_submission', 'awaiting_grading', 'graded', 'cancelled', 'expired'] }).notNull().default('awaiting_submission'),
+  submission_hash: text('submission_hash'), submission_ciphertext: text('submission_ciphertext'), submission_nonce: text('submission_nonce'),
+  report_hash: text('report_hash'), report_json: text('report_json'), passed_count: integer('passed_count'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(), completed_at: integer('completed_at', { mode: 'timestamp' }),
+}, (table) => [uniqueIndex('benchmark_run_reference_idx').on(table.target_agent_id, table.client_reference),
+  index('benchmark_run_target_definition_idx').on(table.target_agent_id, table.definition_id),
+  index('benchmark_run_expiry_idx').on(table.state, table.expires_at)]);
+
 export const capability_challenges = sqliteTable('capability_challenges', {
   id: text('id').primaryKey(),
   agent_id: text('agent_id'),

@@ -7,6 +7,7 @@ import {
   AGENT_CONTRACT_VERSION,
   getAgentManifest,
   getAgentOpenApiPaths,
+  getClientRecoveryContract,
   renderSkillMd,
 } from '@/lib/agent-contract'
 import { getRequestOrigin } from '@/lib/request-origin'
@@ -15,6 +16,22 @@ import { CAPABILITY_FAMILIES } from '@/lib/capability-hierarchy'
 function endpointPath(endpoint: string) {
   return endpoint.split('?')[0]
 }
+
+test('versioned observations advertise finite grading and scopes without measured quality or inherited authority', () => {
+  const benchmark = getAgentManifest().trusted_benchmarks
+  assert.equal(benchmark.adapter, 'json_exact_v1')
+  assert.equal(benchmark.grader_authority, 'allowlisted_registered_agent')
+  assert.equal(benchmark.grant_seconds, 600)
+  assert.equal(benchmark.evidence.measured_quality_score, null)
+  assert.equal(benchmark.evidence.independence, 'not_verified')
+  assert.equal(benchmark.evidence.calibrated, false)
+  assert.equal(benchmark.evidence.routing_eligible, false)
+  const operations = getClientRecoveryContract().operations
+  assert.equal(operations.publish_benchmark_definition.named_credential_scope, null)
+  assert.equal(operations.retire_benchmark_definition.named_credential_scope, null)
+  for (const operation of ['create_benchmark_run', 'submit_benchmark_outputs', 'report_benchmark_run', 'cancel_benchmark_run']) assert.equal(operations[operation].named_credential_scope, 'agent:write')
+  assert.equal(operations.inspect_benchmark_run.named_credential_scope, 'agent:read')
+})
 
 test('family discovery advertises explicit navigation IDs without granting purchase or evidence inheritance', () => {
   const manifest = getAgentManifest()

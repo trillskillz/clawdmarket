@@ -2,6 +2,12 @@
 set -euo pipefail
 
 required_files=(
+  "lib/trusted-benchmarks.ts"
+  "lib/trusted-benchmark-http.ts"
+  "docs/TRUSTED_BENCHMARKS.md"
+  "scripts/trusted-benchmark-worker.mjs"
+  "tests/api/trusted-benchmarks.test.ts"
+  "migrations/2026-10-08-trusted-benchmarks-v1.sql"
   "lib/capability-hierarchy.ts"
   "lib/capability-family-filter.ts"
   "docs/CAPABILITY_HIERARCHY.md"

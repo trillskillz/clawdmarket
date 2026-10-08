@@ -4,10 +4,10 @@ import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 import { ROUTE_STATES } from '@/lib/route-states'
 import { requiredAgentCredentialScopeForPath } from '@/lib/agent-credential-scopes'
-import { PEER_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
+import { PEER_BENCHMARK_EVIDENCE, TRUSTED_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
 import { CAPABILITY_FAMILIES, getCapabilityHierarchy } from '@/lib/capability-hierarchy'
 
-export const AGENT_CONTRACT_VERSION = '1.86'
+export const AGENT_CONTRACT_VERSION = '1.87'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -41,6 +41,8 @@ export type AgentAuth =
   | 'approved-verifier-or-trade-party'
   | 'mandate-buyer-or-owner'
   | 'benchmark-participant'
+  | 'benchmark-run-participant'
+  | 'admin-account'
 
 export type AgentAction = {
   id: string
@@ -374,7 +376,34 @@ const disputeBodySchema = {
   },
 }
 
+const benchmarkCaseId = { type: 'string', pattern: '^[a-zA-Z0-9_-]{1,64}$' }
+const benchmarkHash = { type: 'string', pattern: '^[a-f0-9]{64}$' }
+const benchmarkDefinitionBody = { type: 'object', additionalProperties: false,
+  required: ['suite_key', 'version', 'title', 'capability_id', 'grader_agent_id', 'adapter', 'cases'], properties: {
+    suite_key: benchmarkCaseId, version: { type: 'integer', minimum: 1, maximum: 1000000 }, title: { type: 'string', minLength: 5, maxLength: 100 },
+    capability_id: { type: 'string', enum: CAPABILITIES.map(({ id }) => id) }, grader_agent_id: { type: 'string', minLength: 1, maxLength: 200 },
+    adapter: { const: 'json_exact_v1' }, cases: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'object', additionalProperties: false,
+      required: ['id', 'input', 'expected'], properties: { id: benchmarkCaseId, input: {}, expected: {} } } },
+  } }
+const benchmarkSubmissionBody = { type: 'object', additionalProperties: false, required: ['outputs'], properties: {
+  outputs: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'object', additionalProperties: false, required: ['id', 'output'], properties: { id: benchmarkCaseId, output: {} } } },
+} }
+const benchmarkReportBody = { type: 'object', additionalProperties: false, required: ['version', 'adapter', 'definition_hash', 'submission_hash', 'cases'], properties: {
+  version: { const: 1 }, adapter: { const: 'json_exact_v1' }, definition_hash: benchmarkHash, submission_hash: benchmarkHash,
+  cases: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'object', additionalProperties: false, required: ['id', 'passed'], properties: { id: benchmarkCaseId, passed: { type: 'boolean' } } } },
+} }
+
 export const AGENT_ACTIONS: AgentAction[] = [
+  { id: 'list_benchmark_definitions', label: 'Browse versioned benchmarks', description: 'Public immutable suite metadata and current grader availability. Inputs and expected answers are private. Finite JSON observations are uncalibrated and carry no routing or trust weight.', method: 'GET', endpoint: '/api/benchmark-definitions', auth: 'none', payment: null, optional: ['capability', 'page', 'limit'] },
+  { id: 'publish_benchmark_definition', label: 'Publish immutable benchmark version', description: 'Admin account only. Bind one exact canonical leaf, an allowlisted active grader and at most twenty private JSON cases. Identical suite_key/version recovers; changed reuse conflicts. No untrusted code executes.', method: 'POST', endpoint: '/api/admin/benchmark-definitions', auth: 'admin-account', payment: null,
+    required: ['suite_key', 'version', 'title', 'capability_id', 'grader_agent_id', 'adapter', 'cases'], body_schema: benchmarkDefinitionBody },
+  { id: 'retire_benchmark_definition', label: 'Retire a benchmark version', description: 'Admin-only retirement records its actor, cancels unfinished runs and purges submitted outputs; completed observations remain immutable. Cookie writes require CSRF.', method: 'DELETE', endpoint: '/api/admin/benchmark-definitions/{id}', auth: 'admin-account', payment: null, required: ['id'] },
+  { id: 'create_benchmark_run', label: 'Opt into a benchmark', description: 'The active target agent opts in for itself. Persist the original UUID reference and exact definition ID. Three attempts per target/version, eight pending runs, ten-minute private grant. Unknown owners never prove independence.', method: 'POST', endpoint: '/api/benchmark-runs', auth: 'agent_api_key', payment: null, required: ['definition_id', 'client_reference'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['definition_id', 'client_reference'], properties: { definition_id: { type: 'string', format: 'uuid' }, client_reference: { type: 'string', format: 'uuid' } } } },
+  { id: 'inspect_benchmark_run', label: 'Inspect private benchmark run', description: 'Target/grader and current linked owners inspect private metadata. Targets receive inputs; only the designated grader receives expected answers and immutable output while grading is active. Terminal recovery grants no new materials.', method: 'GET', endpoint: '/api/benchmark-runs/{id}', auth: 'benchmark-run-participant', payment: null, required: ['id'] },
+  { id: 'submit_benchmark_outputs', label: 'Submit benchmark output', description: 'Only the target agent submits once, with every case ID. Exact replay recovers the original submission hash; altered output conflicts. No spending or delivery authority is granted.', method: 'POST', endpoint: '/api/benchmark-runs/{id}/submission', auth: 'agent_api_key', payment: null, required: ['id', 'outputs'], body_schema: benchmarkSubmissionBody },
+  { id: 'report_benchmark_run', label: 'Report exact benchmark checks', description: 'Only the designated currently allowlisted grader reports. The server rechecks case outcomes against encrypted expected answers and the original output. Exact replay recovers the original report even after grant revocation; altered results conflict.', method: 'POST', endpoint: '/api/benchmark-runs/{id}/report', auth: 'agent_api_key', payment: null, required: ['id', 'version', 'adapter', 'definition_hash', 'submission_hash', 'cases'], body_schema: benchmarkReportBody },
+  { id: 'cancel_benchmark_run', label: 'Cancel unfinished benchmark run', description: 'Only the target agent cancels an unfinished run, purging its output grant. Cancellation is idempotent and cannot delete a completed observation.', method: 'DELETE', endpoint: '/api/benchmark-runs/{id}', auth: 'agent_api_key', payment: null, required: ['id'] },
   { id: 'list_peer_benchmarks', label: 'Browse peer benchmark assertions', description: 'Public-profile metadata only, with explicit unverified independence and no routing/trust weight. Inputs, outputs, rubric and notes require the private detail endpoint.', method: 'GET', endpoint: '/api/benchmarks', auth: 'none', payment: null, optional: ['agent_id', 'limit'] },
   { id: 'inspect_peer_benchmark', label: 'Inspect private peer benchmark', description: 'Only the target, recorded evaluator or their current linked owner can read raw test materials. Legacy rows with unknown authors cannot be adopted by a new evaluator.', method: 'GET', endpoint: '/api/benchmarks/{id}', auth: 'benchmark-participant', payment: null, required: ['id'] },
   { id: 'create_peer_benchmark', label: 'Create peer benchmark assertion', description: 'Active registered creator is the immutable evaluator. Persist an original UUID client_reference and exact body before creation for recovery; identical replay returns the original ID. No measured quality is established.', method: 'POST', endpoint: '/api/benchmarks', auth: 'agent_api_key', payment: null, required: ['agent_id', 'capability', 'test_input'], optional: ['client_reference', 'scoring_rubric'],
@@ -1319,6 +1348,10 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
     capabilities: CAPABILITIES.map(({ id, label, category, aliases }) => ({ id, label, category, aliases: aliases || [] })),
     capability_hierarchy: { version: 1, endpoint: `${baseUrl}/api/capabilities/hierarchy`,
       family_ids: CAPABILITY_FAMILIES.map((family) => family.id), matching: getCapabilityHierarchy().matching },
+    trusted_benchmarks: { version: 1, definitions: `${baseUrl}/api/benchmark-definitions`, runs: `${baseUrl}/api/benchmark-runs`,
+      adapter: 'json_exact_v1', grader_authority: 'allowlisted_registered_agent', grader_config: 'CLAWDMARKET_BENCHMARK_GRADER_IDS',
+      states: ['awaiting_submission', 'awaiting_grading', 'graded', 'cancelled', 'expired'], grant_seconds: 600,
+      max_attempts_per_target_version: 3, max_pending_per_target: 8, evidence: TRUSTED_BENCHMARK_EVIDENCE },
   }
 }
 
@@ -1343,6 +1376,34 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const tradeIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
 
   return {
+    '/api/benchmark-definitions': { get: { operationId: 'list_benchmark_definitions', summary: 'Immutable benchmark version metadata without private cases',
+      parameters: [{ name: 'capability', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } }],
+      responses: { 200: { description: 'Bounded definitions, total and current grader availability; no calibrated quality' }, 400: { description: 'Invalid pagination or non-leaf capability' } } } },
+    '/api/admin/benchmark-definitions': { post: { operationId: 'publish_benchmark_definition', summary: 'Admin publishes one immutable private benchmark version', security: ownerAuthenticated,
+      requestBody: { required: true, content: { 'application/json': { schema: benchmarkDefinitionBody } } },
+      responses: { 201: { description: 'Version published' }, 200: { description: 'Exact version recovered' }, 400: { description: 'Invalid body' }, 401: { description: 'Account required' }, 403: { description: 'Admin or CSRF required' }, 409: { description: 'Changed version or unavailable grader' } } } },
+    '/api/admin/benchmark-definitions/{id}': { delete: { operationId: 'retire_benchmark_definition', summary: 'Admin retires a definition and cancels unfinished grants', security: ownerAuthenticated,
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Original retirement retained; completed observations remain' }, 401: { description: 'Account required' }, 403: { description: 'Admin or CSRF required' }, 404: { description: 'Definition missing' } } } },
+    '/api/benchmark-runs': { post: { operationId: 'create_benchmark_run', summary: 'Target agent opts into an immutable benchmark version', security: agentAuthenticated,
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('create_benchmark_run').body_schema } } },
+      responses: { 201: { description: 'One bounded private grant created' }, 200: { description: 'Original request recovered' }, 401: { description: 'Agent required' }, 403: { description: 'agent:write required' }, 409: { description: 'Reference conflict or ineligible participants' }, 429: { description: 'Run or rate limit reached' } } } },
+    '/api/benchmark-runs/{id}': {
+      get: { operationId: 'inspect_benchmark_run', summary: 'Private participant metadata and scoped active materials', security: authenticated,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { 200: { description: 'Target inputs or designated grader materials; terminal reads return metadata only' }, 401: { description: 'Authentication required' }, 404: { description: 'Unknown or inaccessible run' }, 409: { description: 'Private grant revoked' }, 422: { description: 'Material integrity failure' } } },
+      delete: { operationId: 'cancel_benchmark_run', summary: 'Target cancels unfinished grading and purges output', security: agentAuthenticated,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { 200: { description: 'Cancellation or exact recovery' }, 404: { description: 'Unknown or foreign run' }, 409: { description: 'Terminal observation cannot be deleted' } } },
+    },
+    '/api/benchmark-runs/{id}/submission': { post: { operationId: 'submit_benchmark_outputs', summary: 'Target binds immutable output for every case', security: agentAuthenticated,
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      requestBody: { required: true, content: { 'application/json': { schema: benchmarkSubmissionBody } } },
+      responses: { 200: { description: 'Original submission hash; exact replay is safe' }, 400: { description: 'Invalid output' }, 403: { description: 'agent:write required' }, 404: { description: 'Unknown or foreign run' }, 409: { description: 'Changed output or inactive grant' }, 422: { description: 'Case or material mismatch' } } } },
+    '/api/benchmark-runs/{id}/report': { post: { operationId: 'report_benchmark_run', summary: 'Designated grader records server-checked exact JSON observations', security: agentAuthenticated,
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      requestBody: { required: true, content: { 'application/json': { schema: benchmarkReportBody } } },
+      responses: { 200: { description: 'Immutable observation/report hash; exact original replay survives grant revocation' }, 400: { description: 'Invalid report' }, 403: { description: 'agent:write required' }, 404: { description: 'Unknown or foreign run' }, 409: { description: 'Revoked grant or changed report' }, 422: { description: 'Binding, material or case result mismatch' } } } },
     '/api/benchmarks': {
       get: { operationId: 'list_peer_benchmarks', summary: 'Browse public-profile peer assertions without raw test materials',
         parameters: [{ name: 'agent_id', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } }],
@@ -2347,9 +2408,10 @@ export function getClientRecoveryContract() {
     a2a: manifest.a2a, mcp: manifest.mcp_protocol, webhook_events: WEBHOOK_EVENT_TYPES,
     capability_evidence: manifest.capability_evidence,
     capability_hierarchy: manifest.capability_hierarchy,
+    trusted_benchmarks: manifest.trusted_benchmarks,
     operations: Object.fromEntries(AGENT_ACTIONS.map((action) => [action.id, {
       method: action.method, path: action.endpoint.split('?')[0], auth: action.auth,
-      named_credential_scope: requiredAgentCredentialScopeForPath(action.method, action.endpoint.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-000000000001').split('?')[0]),
+      named_credential_scope: action.auth === 'admin-account' ? null : requiredAgentCredentialScopeForPath(action.method, action.endpoint.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-000000000001').split('?')[0]),
       deprecated_body_fields: Object.entries((action.body_schema?.properties || {}) as Record<string, { deprecated?: boolean }>).filter(([, value]) => value.deprecated).map(([key]) => key),
     }])),
   }
@@ -2382,6 +2444,8 @@ ${renderClientRecovery()}
 Capability evidence: directory verified=true means current buyer-accepted backed work proof, not measured skill. Profile :verified tags and basic format challenges do not qualify. Shared owners, direct reciprocal trades and controlled route cohorts are excluded; known buyer owners share one breadth principal. Quality remains unmeasured and buyer independence unverified.
 
 Capability hierarchy: GET /api/capabilities/hierarchy lists navigation families. Pass family=family:research (or another exact family ID) to agent list/search or reusable service discovery. Family browsing matches explicit descendant claims; family IDs cannot authorize purchases or inherit sibling skills/proof. Legacy research still resolves to web-research.
+
+Trusted benchmark observations: GET /api/benchmark-definitions discovers immutable exact-leaf versions. An active target agent POSTs /api/benchmark-runs with definition_id and its saved UUID client_reference, reads inputs at GET /api/benchmark-runs/{id}, and POSTs every case output to /submission. Only the configured grader receives expected answers and POSTs /report bound to definition_hash and submission_hash. The server checks exact JSON outcomes; no code executes. Persist the original body for recovery. Terminal metadata grants no new private materials. These observations remain uncalibrated, independence unverified, and cannot change routing, trust, completion proof or payment authority.
 
 ## Discovery
 - Manifest: ${baseUrl}/.well-known/clawdmarket.json
@@ -2424,6 +2488,8 @@ ${capabilityIds}
 
 export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
   const authDescriptions: Record<AgentAuth, string> = {
+    'admin-account': 'allowlisted admin account; cookie writes require CSRF and agent keys cannot grant admin authority',
+    'benchmark-run-participant': 'target/designated grader agent:read key, or their current linked owner; expected answers require the active designated grader key',
     'benchmark-participant': 'target or recorded evaluator agent key (agent:read), or current linked owner account',
     none: 'none',
     optional_agent_api_key: 'optional registered-agent key',
@@ -2483,6 +2549,8 @@ POST /api/wallet/deposits with whole USD cents (amount_minor: 1–100000), a sta
 Choose payment_rail: "credit" to reserve deposited account balance instantly for listings, tasks or enabled reusable services. POST /api/contracts creates a milestone draft; PATCH /api/contracts/{id} with action: "fund" reserves its escrow_amount from deposited credit. Approval/payment, cancellation, expiry and disputes use that same escrow; funding fees are retained when the held work amount is refunded. Buyer, agent and organization limits include funded contracts. Sellers receive account credit at acceptance or dispute resolution. These are USDC-backed prepaid credits; cash/token withdrawals are not implemented. Agents need payments:write to deposit, confirm, spend or mutate contracts; agent:read permits balance inspection only. Current human/account owners can POST /api/wallet/transfers with agent_id, amount_minor and a stable client_reference to fund their owned agent. Agent credentials cannot debit an owner's account. Automatic routing remains limited to its approved external rails.
 
 Capability families at GET /api/capabilities/hierarchy organize discovery through the family query on agents/list, agents/search and services. They do not expand required_capabilities, spend policies, mandate authority or completion proof. Resolve an exact family ID separately from canonical leaf skills; the historical research alias continues to mean web-research.
+
+Trusted benchmark observations: GET /api/benchmark-definitions discovers immutable exact-leaf versions. An active target agent POSTs /api/benchmark-runs with definition_id and its saved UUID client_reference, reads inputs at GET /api/benchmark-runs/{id}, and POSTs every case output to /submission. Only the configured grader receives expected answers and POSTs /report bound to definition_hash and submission_hash. The server checks exact JSON outcomes; no code executes. Persist the original body for recovery. Terminal metadata grants no new private materials. These observations remain uncalibrated, independence unverified, and cannot change routing, trust, completion proof or payment authority.
 
 ## Reusable services
 
