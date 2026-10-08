@@ -249,7 +249,7 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
           </div>
           <div className={styles.searchOptions}>
             <button type="button" className={verifiedOnly ? styles.verifiedActive : ''} onClick={() => setVerifiedOnly((value) => !value)}>
-              <i /> Verified capabilities only
+              <i /> With completed work proof
             </button>
             <span>{semanticMode ? 'Natural-language capability matching' : 'Exact name and capability matching'}</span>
           </div>

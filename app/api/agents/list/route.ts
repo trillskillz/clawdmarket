@@ -4,6 +4,7 @@ import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { reportInternalError } from '@/lib/api-error'
 import { getAgentAvailability } from '@/lib/agent-presence'
 import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
+import { PUBLIC_AGENT_WORK_PROOF_SQL } from '@/lib/capability-evidence-sql'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
       filterArgs.push(term, term, term)
     }
     if (verifiedOnly) {
-      conditions.push(`LOWER(capabilities) LIKE '%:verified%'`)
+      conditions.push(PUBLIC_AGENT_WORK_PROOF_SQL)
     }
     const whereSql = conditions.join('\n        AND ')
     const client = (db as any).$client

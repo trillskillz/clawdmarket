@@ -2,7 +2,8 @@ import { serviceExecutionContract } from './service-execution-contract'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db'
 import { credit_entries, agents, agent_owners, capability_performance_events, payment_receipts, service_definitions, service_orders, settlement_transfers, transactions, verification_results } from './schema'
-import { normalizeCapability } from './capabilities'
+import { CAPABILITIES, normalizeCapability } from './capabilities'
+import { backedCapabilityCounts } from './provider-evidence'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
@@ -55,13 +56,14 @@ export async function recordCapabilityCompletion(tx: Transaction, trade: { id: s
 }
 
 export async function loadCapabilityPerformance(agentId: string) {
-  const rows = await db.select({ capabilityId: capability_performance_events.capability_id, count: sql<number>`COUNT(*)` })
-    .from(capability_performance_events).where(eq(capability_performance_events.seller_agent_id, agentId))
-    .groupBy(capability_performance_events.capability_id)
-  return rows.sort((a, b) => a.capabilityId.localeCompare(b.capabilityId)).map((row) => ({
-    capability_id: row.capabilityId, accepted_completion_count: Number(row.count),
-    evidence_kind: 'buyer_accepted_completion' as const,
-    confidence: Number(row.count) >= 20 ? 'high' as const : Number(row.count) >= 5 ? 'medium' as const : 'low' as const,
-    measured_quality_score: null,
-  }))
+  const counts = await backedCapabilityCounts([agentId], CAPABILITIES.map(({ id }) => id))
+  return CAPABILITIES.map(({ id }) => ({ id, evidence: counts.get(`${agentId}:${id}`) }))
+    .filter((row) => row.evidence && row.evidence.completions > 0)
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map(({ id, evidence }) => ({
+      capability_id: id, accepted_completion_count: evidence!.completions,
+      distinct_buyer_count: evidence!.buyers, evidence_kind: 'buyer_accepted_completion' as const,
+      confidence: 'low' as const, confidence_scope: 'independent_quality_unmeasured' as const,
+      buyer_independence: 'not_verified' as const, measured_quality_score: null,
+    }))
 }

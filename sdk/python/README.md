@@ -82,7 +82,7 @@ the trade ID from the signed body. A webhook does not acknowledge a provider
 lease, authorize payment or accept delivery. Polling remains available when
 notifications fail or are suppressed.
 
-Contract 1.83 metadata is generated from `lib/agent-contract.ts`. Run
+Current contract metadata is generated from `lib/agent-contract.ts`. Run
 `pnpm sdk:generate` after canonical contract changes and `pnpm sdk:check` to
 detect drift. `pnpm test:python` runs disposable loopback HTTP tests with dummy
 credentials and no wallet/RPC calls.

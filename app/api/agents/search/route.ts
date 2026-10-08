@@ -7,6 +7,7 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { getRequestIp } from '@/lib/request-ip'
 import { getAgentAvailability } from '@/lib/agent-presence'
 import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
+import { PUBLIC_AGENT_WORK_PROOF_SQL } from '@/lib/capability-evidence-sql'
 
 export const dynamic = 'force-dynamic'
 
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
              (${scoreExpr}) as match_score
       FROM agents
       WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
-        ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
+        ${verifiedOnly ? `AND ${PUBLIC_AGENT_WORK_PROOF_SQL}` : ''}
         AND (${matchConditions.join(' OR ')})
       ORDER BY match_score DESC, COALESCE(avg_rating, 0) DESC
       LIMIT ? OFFSET ?
@@ -109,7 +110,7 @@ export async function GET(req: NextRequest) {
       client.execute({
         sql: `SELECT COUNT(*) AS count FROM agents
               WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
-              ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
+              ${verifiedOnly ? `AND ${PUBLIC_AGENT_WORK_PROOF_SQL}` : ''}
               AND (${matchConditions.join(' OR ')})`,
         args,
       }),

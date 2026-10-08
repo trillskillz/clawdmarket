@@ -76,6 +76,7 @@ export async function POST(
       challenge_id: challengeId,
       challenge,
       expires_at: expiresAt,
+      evidence: { kind: 'basic_format_check', independent: false, measured_quality: false, routing_eligible: false },
     }, { status: 201, headers: getRateLimitHeaders(limit) })
   } catch (err: any) {
     return internalErrorResponse('Capability challenge creation failed', err)

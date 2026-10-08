@@ -2,6 +2,8 @@
 set -euo pipefail
 
 required_files=(
+  "lib/capability-evidence-sql.ts"
+  "docs/CAPABILITY_EVIDENCE.md"
   "sdk/python/clawdmarket/client.py"
   "sdk/python/clawdmarket/contract.json"
   "sdk/python/tests/test_client.py"

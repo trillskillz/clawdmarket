@@ -3,8 +3,11 @@ import { db } from '@/lib/db'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { internalErrorResponse } from '@/lib/api-error'
+import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
+const bodySchema = z.object({ challenge_id: z.uuid(), response: z.record(z.string(), z.unknown()) }).strict()
+const evidence = { kind: 'basic_format_check', independent: false, measured_quality: false, routing_eligible: false } as const
 
 function validateResponse(capability: string, response: any): { passed: boolean; score: number } {
   switch (capability) {
@@ -25,7 +28,8 @@ function validateResponse(capability: string, response: any): { passed: boolean;
     }
     case 'summarization': {
       const summaryOk = typeof response.summary === 'string' && response.summary.length > 0
-      const wcOk = typeof response.word_count === 'number' && response.word_count <= 20
+      const actualWordCount = typeof response.summary === 'string' ? response.summary.trim().split(/\s+/).filter(Boolean).length : 0
+      const wcOk = Number.isInteger(response.word_count) && response.word_count === actualWordCount && actualWordCount > 0 && actualWordCount <= 20
       if (summaryOk && wcOk) return { passed: true, score: 100 }
       if (summaryOk) return { passed: false, score: 50 }
       return { passed: false, score: 0 }
@@ -65,12 +69,11 @@ export async function POST(
     if (!limit.success) {
       return NextResponse.json({ error: 'rate_limit_exceeded' }, { status: 429, headers: getRateLimitHeaders(limit) })
     }
-    const body = await req.json()
-    const { challenge_id, response } = body
-
-    if (!challenge_id || !response) {
+    const body = bodySchema.safeParse(await req.json().catch(() => null))
+    if (!body.success) {
       return NextResponse.json({ error: 'challenge_id and response are required' }, { status: 400 })
     }
+    const { challenge_id, response } = body.data
 
     const client = (db as any).$client
     const nowUnix = Math.floor(Date.now() / 1000)
@@ -108,35 +111,12 @@ export async function POST(
     })
     if (!claimed.rowsAffected) return NextResponse.json({ error: 'Challenge already submitted or expired' }, { status: 409 })
 
-    // If passed, add verified tag to agent capabilities
-    let verifiedCapability: string | null = null
-    if (passed) {
-      const verifiedTag = `${capability}:verified`
-      const agentId = challenge.agent_id
-      const agentRes = await client.execute({
-        sql: `SELECT capabilities FROM agents WHERE id = ?`,
-        args: [agentId],
-      })
-      if (agentRes?.rows?.length) {
-        const caps: string[] = (() => {
-          try { return JSON.parse(String((agentRes.rows[0] as any).capabilities || '[]')) } catch { return [] }
-        })()
-        if (!caps.includes(verifiedTag)) {
-          caps.push(verifiedTag)
-          await client.execute({
-            sql: `UPDATE agents SET capabilities = ? WHERE id = ?`,
-            args: [JSON.stringify(caps), agentId],
-          })
-        }
-        verifiedCapability = verifiedTag
-      }
-    }
-
     return NextResponse.json({
       passed,
       score,
-      verified_capability: verifiedCapability,
-    }, { headers: getRateLimitHeaders(limit) })
+      verified_capability: null, // Deprecated compatibility field; format checks never prove skill.
+      evidence,
+    }, { headers: { ...getRateLimitHeaders(limit), 'Cache-Control': 'private, no-store' } })
   } catch (err: any) {
     return internalErrorResponse('Capability challenge submission failed', err)
   }
