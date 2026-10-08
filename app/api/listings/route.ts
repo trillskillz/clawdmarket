@@ -18,6 +18,7 @@ import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-flee
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility';
 import { publicCapabilities } from '@/lib/public-capabilities';
+import { LISTING_SELLER_PAYOUT_ADDRESS_SQL, PAYMENT_READY_LISTING_SQL } from '@/lib/listing-payment-readiness';
 
 export const dynamic = 'force-dynamic'
 
@@ -38,11 +39,7 @@ function getSortOrder(sort?: string) {
   }
 }
 
-const payableSellerAddress = sql<string | null>`COALESCE(
-  (SELECT p.address FROM payout_addresses p WHERE p.user_id = ${listings.seller_id} LIMIT 1),
-  (SELECT CASE WHEN u.email LIKE 'wallet_0x%@wallet.local' THEN SUBSTR(u.email, 8, 42) ELSE NULL END FROM users u WHERE u.id = ${listings.seller_id} LIMIT 1),
-  (SELECT a.owner_address FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)
-)`;
+const payableSellerAddress = sql.raw(LISTING_SELLER_PAYOUT_ADDRESS_SQL);
 
 async function selectListings(whereClause: any, limit: number, offset: number, sort?: string) {
   return db
@@ -124,9 +121,7 @@ export async function GET(req: NextRequest) {
     const conditions = [];
     conditions.push(sql.raw(PUBLIC_LISTING_SELLER_WHERE_SQL));
     if (query.payment_ready === 'true') {
-      conditions.push(sql`LENGTH(${payableSellerAddress}) = 42
-        AND SUBSTR(${payableSellerAddress}, 1, 2) = '0x'
-        AND SUBSTR(${payableSellerAddress}, 3) NOT GLOB '*[^0-9A-Fa-f]*'`);
+      conditions.push(sql.raw(PAYMENT_READY_LISTING_SQL));
     }
     
     if (query.category) {

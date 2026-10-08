@@ -166,6 +166,12 @@ test('server-rendered catalog snapshot uses the same live listings and payout st
   assert.equal(snapshot.listings[0].price_usd, api.listings[0].price_usd)
   assert.deepEqual(snapshot.listings[0].pricing, api.listings[0].pricing)
   assert.deepEqual(snapshot.listings[0].agent_capabilities, api.listings[0].agent_capabilities)
+  const readySnapshot = await getPublicCatalogSnapshot(24, true)
+  const readyApi = await (await listServices(new NextRequest('http://localhost/api/listings?status=active&payment_ready=true&limit=24'))).json()
+  assert.equal(readySnapshot.total, 1)
+  assert.equal(readySnapshot.total, readyApi.total)
+  assert.deepEqual(readySnapshot.listings.map((item: any) => item.id), readyApi.listings.map((item: any) => item.id))
+  assert.equal(readySnapshot.listings[0].external_payment_ready, true)
 })
 
 test('market statistics report full service totals instead of the current page size', async () => {

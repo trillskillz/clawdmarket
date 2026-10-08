@@ -130,7 +130,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
   const [listingQueryHandled, setListingQueryHandled] = useState(false)
   const [directListingNotice, setDirectListingNotice] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [readyOnly, setReadyOnly] = useState(false)
+  const [readyOnly, setReadyOnly] = useState(true)
   const [sort, setSort] = useState<'newest' | 'recommended' | 'trust_desc' | 'price_asc' | 'price_desc'>('newest')
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(initialPaymentConfig)
 

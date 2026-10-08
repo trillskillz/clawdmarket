@@ -622,10 +622,17 @@ capability-build-final.log, capability-browser.log and capability-browser-final.
 (all with the clawdmarket prefix). No production mutation, wallet spending, push,
 PR, deployment or rollout change.
 
-**Publishing counter: 4/10.** Finish the latest user priority: default the marketplace
-to “Hireable with payout wallet”, including its server-rendered first page and
-client pagination. This small default change is not a separate substantive part.
-Then continue P1.5: audit existing peer benchmark authorization/provenance before
+**Publishing counter: 4/10.** The latest user priority is complete locally: the
+marketplace defaults to “Hireable with payout wallet”, including its server-rendered
+first page, client filtering and pagination. “All listed services” remains selectable.
+The API and first-render rows/counts share their payout-readiness predicate. This
+small default change is not a separate substantive part. Thirteen catalog/payout
+integration cases, focused lint, production build and five actual Chromium/HTTP
+checks passed, including a newly created listing excluded before payout setup,
+visible after opting into all listings, and visible by default after payout setup.
+MPP proof and backed-balance checks passed at 1440/390 px. Logs are under
+/tmp/clawdmarket-ready-default-{tests-final,build,browser}.log. No publishing.
+Continue P1.5: audit existing peer benchmark authorization/provenance before
 adding independent benchmark quality. Hierarchy, independently evidenced benchmark
 results, calibration and verifier adapters remain unfinished; no audit or label
 alone counts as another completed capability.

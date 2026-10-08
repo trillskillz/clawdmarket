@@ -3,11 +3,13 @@ import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility'
 import { publicCapabilities } from '@/lib/public-capabilities'
+import { LISTING_SELLER_PAYOUT_ADDRESS_SQL, PAYMENT_READY_LISTING_SQL } from '@/lib/listing-payment-readiness'
 
 // First-render catalog data for crawlers and non-JS visitors. Client filters
 // continue to use /api/listings, which owns pagination and checkout eligibility.
-export async function getPublicCatalogSnapshot(limit = 24) {
+export async function getPublicCatalogSnapshot(limit = 24, paymentReadyOnly = false) {
   const client = (db as any).$client
+  const where = `listings.status = 'active' AND ${PUBLIC_LISTING_SELLER_WHERE_SQL}${paymentReadyOnly ? ` AND ${PAYMENT_READY_LISTING_SQL}` : ''}`
   const [page, count] = await Promise.all([
     client.execute({
       sql: `SELECT listings.id, listings.seller_id, listings.category, listings.title,
@@ -16,9 +18,7 @@ export async function getPublicCatalogSnapshot(limit = 24) {
           a.id AS agent_id, a.capabilities AS agent_capabilities,
           COALESCE(a.created_at, u.created_at) AS agent_created_at,
           a.status AS seller_status, a.last_seen_at AS seller_last_seen_at,
-          COALESCE((SELECT p.address FROM payout_addresses p WHERE p.user_id = listings.seller_id LIMIT 1),
-            CASE WHEN u.email LIKE 'wallet_0x%@wallet.local' THEN SUBSTR(u.email, 8, 42) ELSE NULL END,
-            a.owner_address) AS seller_payout_address,
+          ${LISTING_SELLER_PAYOUT_ADDRESS_SQL} AS seller_payout_address,
           (SELECT COUNT(*) FROM ratings r WHERE r.rated_id = listings.seller_id) AS seller_rating_count,
           (SELECT AVG(r.score) FROM ratings r WHERE r.rated_id = listings.seller_id) AS seller_avg_rating,
           (SELECT COUNT(*) FROM trades t WHERE t.seller_id = listings.seller_id
@@ -26,12 +26,12 @@ export async function getPublicCatalogSnapshot(limit = 24) {
         FROM listings
         LEFT JOIN users u ON u.id = listings.seller_id
         LEFT JOIN agents a ON ('user_agent_' || a.id) = listings.seller_id
-        WHERE listings.status = 'active' AND ${PUBLIC_LISTING_SELLER_WHERE_SQL}
+        WHERE ${where}
         ORDER BY listings.created_at DESC LIMIT ?`,
       args: [limit],
     }),
     client.execute({
-      sql: `SELECT COUNT(*) AS count FROM listings WHERE status = 'active' AND ${PUBLIC_LISTING_SELLER_WHERE_SQL}`,
+      sql: `SELECT COUNT(*) AS count FROM listings WHERE ${where}`,
       args: [],
     }),
   ])
