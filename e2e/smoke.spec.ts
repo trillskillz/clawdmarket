@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { AGENT_CONTRACT_VERSION } from '../lib/agent-contract';
 
 test.describe('Core smoke matrix', () => {
   test('security boundaries reject malformed auth input and privileged browser CORS', async ({ request }) => {
@@ -90,7 +91,7 @@ test.describe('Core smoke matrix', () => {
     const docs = await request.get('/api/docs');
     expect(docs.ok()).toBeTruthy();
     const openApi = await docs.json();
-    expect(openApi.info['x-agent-contract-version']).toBe('1.82');
+    expect(openApi.info['x-agent-contract-version']).toBe(AGENT_CONTRACT_VERSION);
     expect(openApi.paths['/api/admin/routing/pause']?.post?.responses?.['409']).toBeTruthy();
     const routingControl = await request.get('/api/admin/routing/pause');
     expect(routingControl.status()).toBe(401);
@@ -132,7 +133,7 @@ test.describe('Core smoke matrix', () => {
 
     const skill = await request.get('/skill.md');
     expect(skill.ok()).toBeTruthy();
-    expect(await skill.text()).toContain('contract-version: "1.82"');
+    expect(await skill.text()).toContain(`contract-version: "${AGENT_CONTRACT_VERSION}"`);
 
     const discovery = await request.get('/.well-known/agent.json');
     expect(discovery.ok()).toBeTruthy();

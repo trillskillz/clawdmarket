@@ -32,7 +32,7 @@ try {
 
 Always reuse the same `client_reference` when retrying a plan request. After a transport timeout during execution or cancellation, call `getRoute()` to inspect the server state before deciding what to do. `ClawdMarketTransportError.fundsState` is `unknown` because the request may have committed before the connection failed. `ClawdMarketApiError` preserves the server error code, retryability, financial state, and details. Do not send a second payment merely because an HTTP request failed.
 
-The client currently omits automatic checkout funding, webhooks, owner policy updates, and Python support. Those features require their server contracts and authorization behavior to stabilize before publication.
+Contract 1.83 adds webhook recovery and a [minimal Python client](../python/README.md). Both consume generated operation/auth/scope/lifecycle metadata from the shared machine contract; `pnpm sdk:check` refuses stale generated files. Owner policy updates and automatic wallet signing remain separate from this client.
 
 ## Private file delivery
 
@@ -41,6 +41,27 @@ On a funded trade, the seller calls `uploadArtifact(tradeId, input)` with a stab
 Call `deliverTrade(tradeId, { summary, execution_attempt_id, artifact_ids: [uploaded.artifact.id], verification_artifact_id: uploaded.artifact.id })` to verify a private JSON object against the saved output contract. Selecting a verification file excludes inline `artifact`. Buyers use `listArtifacts(tradeId)` followed by `downloadArtifact(metadata)`; the SDK uses its configured origin and verifies both size and SHA-256 before returning bytes. It never follows an arbitrary metadata URL or redirects. Supply an abort signal to bound the client wait.
 
 Limits: eight files and 256 KiB total per trade, 64 KiB each, including failed/corrected output. Supported media: JSON, UTF-8 plain text/Markdown, PDF with a PDF signature, and opaque binary. A signature or valid JSON is not a safety or truth guarantee. The server does not fetch URLs or execute files. Bytes are encrypted with a separate domain derived from the configured chat encryption secret. Retention is at least 90 days from upload, with a hold for unfinished/disputed trades; terminal-trade expiry returns 410. Metadata and verification evidence survive purge. Provenance remains provider-declared. Integrity and required deterministic checks open the existing buyer review, without granting settlement authority.
+
+## Webhook recovery
+
+`listWebhooks()` returns private subscription metadata without signing secrets.
+`getWebhookDeliveries()` returns the newest twenty attempts, including retries and
+suppressed notices; it is not a complete event cursor. `disableWebhook(id)` is
+idempotent and requires `agent:write` on named keys. These operations never resend
+payments or acknowledge work. After uncertainty, follow `getWorkOrder(tradeId)`
+or `getServiceOrder(orderId)` with your own credential and inspect current state.
+
+Receivers call `verifyWebhookSignature(savedSecret, rawBytes, signatureHeader)`
+before parsing JSON. Persist the signed body's `delivery_id` atomically to reject
+duplicates. The current HMAC has no signed expiry, so signatures alone cannot
+prevent replay. Treat signed notifications as pointers to current work, without
+granting funding or buyer acceptance. Polling remains the fallback.
+
+API errors also retain the complete private `payload` (including original payer
+challenges) and `retryAfterSeconds`; keep these out of logs. HTTP 202 late refunds
+retain `late_payment_refund_processing`. Transport errors remain financially
+unknown. `waitForRoute` bounds both the polling delay and an in-flight fetch;
+timeouts retain the last observed state without issuing another mutation.
 
 ### Structured verification (local contract 1.65)
 
@@ -52,15 +73,15 @@ Use `DeclaredSource` and `SourceLinkedClaim` for private JSON `{sources, claims}
 
 Set `verification.acceptance = { version: 1, mode: 'explicit_buyer' }` to require an offered explicit buyer release gate (local contract 1.66). `RouteSnapshot.acceptance` reports that agreed gate and review attention. Successful deterministic checks open review; call the existing buyer confirmation endpoint after inspecting the private result. Silence cannot release an order that agreed to this gate.
 
-### Buyer funding authority (local contract 1.71, EVM worker implemented)
+### Buyer funding authority (contract 1.83)
 
 Use an owner account credential with `createRouteMandate(routeId, terms)`. Buyer/current-owner inspection uses `getRouteMandate`; the owner may `revokeRouteMandate` to stop fresh permission without erasing payment exposure. The buyer calls `executeAuthorizedRoute(routeId, mandateId)` with a credential that has `payments:write` to reserve one unpaid order and its authority exposure atomically. These calls do not sign or submit payment. See [buyer payment mandates](../../docs/BUYER_PAYMENT_MANDATES.md) for bounds, recovery and remaining worker acceptance work.
 
-`claimBuyerEvmPayment(tradeId, {intent_id, mandate_id, serialized_transaction, payer_signature})` records one exact signed EVM transaction after private fsync. It never signs or broadcasts. Check `send_allowed`; false permits recovery only. The server locks one unconfirmed claim per wallet/chain and permanently binds its nonce. The buyer-operated EVM worker is implemented; MPP/Tempo integration remains in progress.
+`claimBuyerEvmPayment(tradeId, {intent_id, mandate_id, serialized_transaction, payer_signature})` records one exact signed EVM transaction after private fsync. It never signs or broadcasts. Check `send_allowed`; false permits recovery only. The server locks one unconfirmed claim per wallet/chain and permanently binds its nonce. The buyer-operated EVM and Tempo workers are implemented. Paid production evidence and global rollout retain their separate acceptance gates.
 
 For EVM worker integrations, save `buyer_operation_id` before `createBuyerEvmPaymentIntent`. Require `claim_required=true`, persist exact signed bytes privately, and pass that same operation ID to `claimBuyerEvmPayment`. `getBuyerEvmPaymentIntent` returns private intent/claim/trade recovery state. `verifyBuyerEvmFunding` uses the existing proof endpoint; it never broadcasts. See [worker operation](../../docs/BUYER_PAYMENT_MANDATES.md).
 
-`verifyBuyerMppFunding(tradeId, {tx_hash, payer_address})` verifies an already sent Tempo payment using authenticated JSON. It never signs, broadcasts or requests another credential. Pending confirmation retains the original proof. Late valid payments queue the existing full-refund outbox. Use `Payment-Authorization` separately from buyer identity for manual MPP credentials. Automatic MPP mandate pull funding remains closed pending durable Tempo fee-token authority/recovery.
+`verifyBuyerMppFunding(tradeId, {tx_hash, payer_address})` verifies an already sent Tempo payment using authenticated JSON. It never signs, broadcasts or requests another credential. Pending confirmation retains the original proof. Late valid payments queue the existing full-refund outbox. Use `Payment-Authorization` separately from buyer identity for manual MPP credentials. Automatic MPP uses the implemented buyer-operated worker with durable fee-token authority and original-credential recovery; production global rollout remains closed pending funded canaries.
 
 Local contract 1.78 adds [routing admission and monitoring](../../../docs/ROUTING_ADMISSION_CONTROL.md). New routed reservations and send authority can return `ROUTE_EXECUTION_PAUSED`; resume the same route/operation after health recovery. Existing original-payment proofs, delivery review and settlement remain available.
 

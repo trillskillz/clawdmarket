@@ -1,12 +1,12 @@
 # ClawdMarket routing-layer master plan
 
-**Source of truth for future routing-layer work.** Updated 2026-10-08 after merged PR #250 (`8a676c7`), production contract 1.80; local contract 1.82 (supported buyer funding, orchestration, confirmed-refund failover, durable metrics/admission controls, metered instant credit sessions and authenticated A2A routing tasks). The user's prioritized navigation/cleanup/deposit-backed balance release is published and verified on GitHub/Vercel. Continue routing now, preserving normal-site payment reserves and saving unfunded paid checks for later. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update its status and evidence. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
+**Source of truth for future routing-layer work.** Updated 2026-10-08 after merged PR #250 (`8a676c7`), production contract 1.80; local contract 1.83 (funding/orchestration, confirmed-refund failover, metered instant credit, A2A/MCP routing Tasks and TypeScript/Python recovery clients). Continue routing now, preserving normal-site payment reserves and saving unfunded paid checks for later. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update its status and evidence. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
 
 ## Current position
 
-**Latest publishing instruction (2026-10-08):** Finish the already-authorized activity-priority release (PR #250) to GitHub and Vercel. After that release, keep all further plan work local until **ten substantive, acceptance-complete parts** have been completed, then publish the combined batch. Count demonstrable capabilities, not commits, tests, documentation or bookkeeping. The new batch is **2/10 complete locally**: P1.3 MCP routing Tasks (contract 1.81), followed by the user-prioritized payment-proof and sitewide backed-balance correction (contract 1.82). No future-plan push or new PR is authorized before ten completed parts. Old/unnecessary PRs remain exempt; wallet spending and global rollout restrictions persist.
+**Latest publishing instruction (2026-10-08):** Finish the already-authorized activity-priority release (PR #250) to GitHub and Vercel. After that release, keep all further plan work local until **ten substantive, acceptance-complete parts** have been completed, then publish the combined batch. Count demonstrable capabilities, not commits, tests, documentation or bookkeeping. The new batch is **3/10 complete locally**: P1.3 MCP routing Tasks (1.81), the user-prioritized payment-proof/sitewide backed-balance correction (1.82), and P1.4 shared-contract TypeScript/Python recovery clients (1.83). No future-plan push or new PR is authorized before ten completed parts. Old/unnecessary PRs remain exempt; wallet spending and global rollout restrictions persist.
 
-**Latest release:** [PR #250](https://github.com/trillskillz/clawdmarket/pull/250) merged as `8a676c70b043d93d762b727fe27f076f9eb0e885` after all final-head build/browser, contract/build, CodeQL and Vercel checks passed. It puts registrations first in Live activity and reserves space for the ten newest public registrations under busy market traffic. Migration-first production deployment [37820002395](https://github.com/trillskillz/clawdmarket/actions/runs/37820002395) passed, including reserve preflight, migrations and both domain aliases. Actual read-only production Chromium checks passed at 1440/390 px: registrations precede every other event, registration names render, the feed remains bounded to fifty unique records, mobile has no horizontal overflow, and readiness is ready. Same-SHA smoke [37821101738](https://github.com/trillskillz/clawdmarket/actions/runs/37821101738) passed. PR #249 previously released contract 1.80 via successful deployment `37209338676` and same-SHA smoke `37209779948`. The current original checkout contains complete local P1.3 MCP Tasks (contract 1.81) and the subsequent payment-proof/account-balance correction (contract 1.82); next independent work is P1.4 contract and SDK recovery parity plus the minimal Python client. Paid P0 production canaries and independent-provider/semantic proof remain externally gated; global rollouts stay closed and no wallet funds have been moved.
+**Latest release:** [PR #250](https://github.com/trillskillz/clawdmarket/pull/250) merged as `8a676c70b043d93d762b727fe27f076f9eb0e885` after all final-head build/browser, contract/build, CodeQL and Vercel checks passed. It puts registrations first in Live activity and reserves space for the ten newest public registrations under busy market traffic. Migration-first production deployment [37820002395](https://github.com/trillskillz/clawdmarket/actions/runs/37820002395) passed, including reserve preflight, migrations and both domain aliases. Actual read-only production Chromium checks passed at 1440/390 px: registrations precede every other event, registration names render, the feed remains bounded to fifty unique records, mobile has no horizontal overflow, and readiness is ready. Same-SHA smoke [37821101738](https://github.com/trillskillz/clawdmarket/actions/runs/37821101738) passed. PR #249 previously released contract 1.80 via successful deployment `37209338676` and same-SHA smoke `37209779948`. The original checkout contains complete local MCP Tasks (1.81), payment proofs/account balance (1.82), and shared-contract TypeScript/Python recovery clients (1.83). Next is P1.5 capability evidence and honest confidence, followed by independently evidenced benchmark quality. Paid P0 production canaries and independent-provider/semantic proof remain externally gated; global rollouts stay closed and no wallet funds have been moved.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -24,7 +24,7 @@ Protected post-live audit `37082040543` confirmed 33 migrations, two archived se
 | 7 instant mode | Complete locally; production closed | Contract 1.79: separate prepaid deposited-credit sessions, bounded external-provider calls, schema acceptance, atomic unit settlement/receipts, uncharged failure/expiry and exactly-once billing/refunds. Whole cents, no Tempo payment channels or token/time metering. |
 | 8 spend policy and 9 failover | Partial | Buyer/agent/organization ceilings and pre-checkout fallback are enforced. Production funded failover is pending release. Local 1.76 supports approved fallback only after exact confirmed original refunds, with gross retry budgets and the original objective deadline; cancelled unpaid checkout remains uncertain. |
 | 10 A2A and 11 MCP | A2A released; MCP complete locally | Production 1.80 supports scoped owner-mandate-bound A2A tasks with closed production writes. Local 1.81 adds experimental MCP 2025-11-25 routing Tasks, private handles, resumable terminal results and safe pre-checkout cancellation over the shared router. MCP writes also default closed. |
-| 12 contract, 13 SDK, 14 metrics | Partial | Production machine contract 1.80 (local 1.81), TypeScript route client, evidenced assisted-route metrics. Python client and true autonomous GMV are absent. |
+| 12 contract, 13 SDK, 14 metrics | Recovery clients complete locally; metrics partial | Production machine contract 1.80 (local 1.83), TypeScript/Python recovery clients with checked shared definitions, evidenced assisted-route metrics. True autonomous production GMV remains unproven. |
 | 15 workflows and 16 enterprise | Foundations only | Bounded workflow plans; organizations, teams, read-only service accounts, immutable audit, and agent budget attribution. No child execution or delegated purchasing authority. |
 
 The live buyer flow is still: plan → reserve **unpaid** order → caller funds → provider receives a signed pointer or polls → provider starts/delivers → buyer accepts → existing settlement. It does **not** yet satisfy “give ClawdMarket an objective and receive a verified, settled result without manually composing marketplace calls.”
@@ -116,7 +116,7 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | P1.1 | 7 | **Complete locally (1.79; part 9/10).** Separate prepaid deposited-credit sessions and successful-call unit metering with atomic receipts; failures/expiry are uncharged and concurrent/restarted duplicate billing is safe. No contracted trade or per-call treasury escrow. Production closed; cents only, no Tempo channels or organization agents. See [instant lifecycle](docs/INSTANT_EXECUTION.md). |
 | P1.2 | 10 | **Complete locally (1.80).** A2A `route_work`, `inspect_route`, `cancel_route` and durable tasks backed by the canonical router. Add authenticated write authority and spend-policy checks; preserve the read-only card and compatibility manifest. |
 | P1.3 | 11 | **Complete locally (1.81; new batch part 1/10).** MCP 2025-11-25 Streamable HTTP, authenticated shared-router routing Tasks, durable private handles/results, cursor resumption and safe cancellation before checkout. Legacy discovery/payment clients remain compatible. Production writes default closed. |
-| P1.4 | 12–13 | Validate OpenAPI, skill.md, llms.txt, manifests, A2A, MCP, SDK examples, lifecycle states, auth, rails, and deprecations from shared definitions. Finish TypeScript funding/artifact/webhook recovery APIs and a minimal Python client with typed financial errors. |
+| P1.4 | 12–13 | **Complete locally (1.83; new batch part 3/10).** Shared generated operation/auth/scope/lifecycle/rail/deprecation metadata, TypeScript funding/artifact/webhook recovery and a usable minimal Python client with typed financial errors. Predeploy refuses contract drift; both clients recover original routes against the actual app. |
 | P1.5 | 3–5, 14 | Broaden capability hierarchy, independent benchmarks, confidence calibration, verifier adapters, and reputation quality evidence after real outcomes exist. Protect against Sybil and circular-trade inflation. |
 | P2.1 | 15 | Execute bounded DAG nodes with inherited budgets, depth/child/runtime limits, dependency artifacts, verification gates, and aggregate financial reconciliation. Keep decomposition from recursively spending without a hard mandate. |
 | P2.2 | 16 | Add organization purchasing roles, approval workflow, private providers, departmental controls, and service-account spend authority only after P0 policy/mandate isolation is proven. |
@@ -539,3 +539,49 @@ deployment occurred. This is **2/10**; keep the batch local until ten substantiv
 parts are complete. Next routing work remains P1.4 SDK/contract recovery parity
 and the minimal Python client. Automatic route mandates retain external payment
 terms; existing rollout flags remain unchanged.
+
+
+## P1.4 — shared-contract recovery clients (1.83; local part 3/10)
+
+TypeScript adds private webhook subscription/history/disable recovery and canonical
+work-order/service-order inspection. Both funding rails retain original intents,
+claims and hashes; HTTP 202 late refunds remain processing. API errors preserve
+the full private payload, financial state and Retry-After. Artifact stream failures
+remain typed and financially unknown; polling deadlines now bound in-flight fetches.
+Webhook HMAC helpers authenticate exact raw bytes, with durable receiver delivery-ID
+deduplication explicitly required because the signature has no signed expiry.
+
+The stdlib-only Python 3.11+ client supports route/mandate/lifecycle/retry recovery,
+both external funding rails, private artifacts/delivery and webhook recovery. It
+refuses redirects, bounds reads, verifies artifact size/SHA256 and never retries
+mutations, signs or broadcasts. It runs directly through PYTHONPATH; installation
+metadata includes contract.json and py.typed. This environment has no pip, so a
+wheel-install check was not performed. Both clients consume generated definitions
+from the canonical agent contract. Predeploy checks drift and runs Python tests.
+The compatibility identity schema/manifest now include backed credit; the MPP
+descriptor shares the free routing-tool list. Generated skill/llms text describe
+the same recovery bounds. Existing A2A/MCP lifecycle and write gates are preserved.
+
+Validation: Node 24 full pnpm predeploy passed **550 cases (542 passed, eight
+skipped)** plus **12 Python HTTP recovery cases**; SDK build, typecheck and lint
+passed. The production build passed with existing dependency warnings. **Eleven
+distinct Chromium/HTTP checks passed**, including both actual clients recovering
+their original plans, private webhook reads and cancellation without checkout,
+MCP Tasks, both MPP history proofs at 1440/390 px, backed-balance contract controls
+and core smoke. Two stale hard-coded browser version expectations were replaced
+with the canonical version and the final public-discovery recheck passed. The
+legacy migration test replayed all **49 IDs** twice; the fresh browser database
+was explicitly initialized/migrated separately. No production mutation, wallet
+spend, push, PR, deployment or rollout flag change. Logs: /tmp/clawdmarket-sdk-
+predeploy-final.log, sdk-build.log, sdk-python-final.log, sdk-browser.log and
+sdk-browser-contract-final.log (all with the clawdmarket prefix).
+
+**Publishing counter: 3/10.** Continue P1.5 locally. Initial audit found raw
+capability-event counts could outlive their backing evidence, and basic format
+challenges write :verified profile tags consumed by public discovery filters.
+Next acceptance-complete capability should make public capability confidence and
+proof filters derive from current backed completion evidence, while distinguishing
+format checks from independently measured quality. Preserve historical records,
+existing settlement and canonical capability matching. Independent benchmark
+quality and paid production evidence remain separate gates; do not fabricate
+evidence or count an audit as another completed part.

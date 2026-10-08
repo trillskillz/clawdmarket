@@ -41,6 +41,11 @@ export function hasAgentCredentialScope(
 export function requiredAgentCredentialScope(request: NextRequest): AgentCredentialScope {
   const method = request.method.toUpperCase()
   const pathname = request.nextUrl.pathname
+  return requiredAgentCredentialScopeForPath(method, pathname)
+}
+
+/** Shared with generated SDK metadata; cookie/owner authority remains independently required. */
+export function requiredAgentCredentialScopeForPath(method: string, pathname: string): AgentCredentialScope {
 
   if (pathname.startsWith('/api/agents/credentials') || pathname.includes('/ownership')) {
     return 'credentials:write'

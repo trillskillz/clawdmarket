@@ -2,6 +2,11 @@
 set -euo pipefail
 
 required_files=(
+  "sdk/python/clawdmarket/client.py"
+  "sdk/python/clawdmarket/contract.json"
+  "sdk/python/tests/test_client.py"
+  "sdk/typescript/src/contract.ts"
+  "scripts/generate-sdk-contract.ts"
   "lib/platform-payment-proofs.ts"
   "lib/historical-mpp-proofs.json"
   "migrations/2026-10-08-contract-account-credit-v1.sql"
@@ -222,7 +227,11 @@ echo "Checking TypeScript"
 pnpm run typecheck
 
 echo "Building TypeScript SDK"
+pnpm run sdk:check
 pnpm run sdk:build
+
+echo "Checking Python recovery client"
+pnpm run test:python
 
 echo "Checking lint"
 pnpm run lint

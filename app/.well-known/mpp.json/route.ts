@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { MPP_RECIPIENT_ADDRESS, PATHUSD_ADDRESS, TEMPO_CHAIN_ID, TREASURY_ADDRESS } from '@/lib/constants'
 import { getPaymentReadiness } from '@/lib/payment-config'
+import { getAgentManifest } from '@/lib/agent-contract'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ export async function GET() {
     endpoints: [
       { method: 'POST', path: '/api/tasks', pricing: '$0.001 only after the authenticated agent daily quota' },
       { method: 'POST', path: '/api/tasks/:id/bid', pricing: '$0.001 only after the authenticated agent daily quota' },
-      { method: 'POST', path: '/api/mcp', pricing: '$0.001 per tools/call' },
+      { method: 'POST', path: '/api/mcp', pricing: '$0.001 per paid legacy tools/call; authenticated routing tools and Task recovery are free', free_tools: getAgentManifest().mcp_free_tools },
       { method: 'POST', path: '/api/trades/:id/fund/mpp', pricing: 'server-authoritative trade total' },
     ],
   }, {

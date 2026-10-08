@@ -24,7 +24,6 @@ const startSchema = z.union([
 const continueSchema = z.object({ task_id: z.uuid(), client_reference: reference, mandate_id: z.uuid() }).strict();
 const taskParams = z.object({ taskId: taskIdSchema, _meta: z.record(z.string(), z.unknown()).optional() }).strict();
 type Row = typeof mcp_route_tasks.$inferSelect;
-type Auth = Extract<Awaited<ReturnType<typeof resolveRegisteredAgentBearer>>, { kind: 'agent' }>;
 type RpcId = string | number | null;
 export class McpTaskError extends Error {
   constructor(public code: string, public status = 400, public rpcCode = -32602, public data?: Record<string, unknown>) { super(code); }

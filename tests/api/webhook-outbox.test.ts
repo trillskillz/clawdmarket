@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { createLocalTestSchema } from '../helpers/local-schema'
+import { ClawdMarketClient } from '../../sdk/typescript/src/index'
 
 let directory: string
 let db: typeof import('@/lib/db').db
@@ -18,6 +19,7 @@ let cron: typeof import('@/app/api/cron/webhooks/route').GET
 const agentId = 'agent_webhook_outbox'
 const userId = `user_agent_${agentId}`
 const apiKey = 'clawd_webhook_outbox_test_key'
+const webhookId = '00000000-0000-4000-8000-000000000101'
 
 before(async () => {
   directory = mkdtempSync(join(tmpdir(), 'clawdmarket-workspace-test-'))
@@ -41,7 +43,6 @@ before(async () => {
     id: agentId, name: agentId, description: 'Webhook retry fixture', capabilities: '[]', endpoint: '',
     owner_address: '', api_key: auth.hashAgentApiKey(apiKey), status: 'active',
   })
-  const webhookId = 'webhook_outbox_fixture'
   const secret = webhook.createWebhookSecret(webhookId)
   await db.insert(schema.webhooks).values({
     id: webhookId, agent_id: userId, url: 'https://127.0.0.1/webhook',
@@ -90,4 +91,33 @@ test('delivery history is private and the cron worker requires its secret', asyn
   assert.equal((await cron(request('/api/cron/webhooks'))).status, 401)
   const run = await cron(request('/api/cron/webhooks', 'Bearer isolated-webhook-cron-secret'))
   assert.equal(run.status, 200)
+})
+
+test('SDK recovers actual private webhook subscriptions and disables only its own subscription idempotently', async () => {
+  const list = (await import('@/app/api/webhooks/route')).GET
+  const disable = (await import('@/app/api/webhooks/[id]/route')).DELETE
+  const client = new ClawdMarketClient({ apiKey, fetch: async (url, init) => {
+    const request = new NextRequest(String(url), { method: init?.method, headers: init?.headers,
+      body: typeof init?.body === 'string' ? init.body : undefined, signal: init?.signal ?? undefined })
+    if (request.nextUrl.pathname === '/api/webhooks') return list(request)
+    if (request.nextUrl.pathname === '/api/webhooks/deliveries') return history(request)
+    return disable(request, { params: Promise.resolve({ id: request.nextUrl.pathname.split('/').at(-1)! }) })
+  } })
+  const subscriptions = await client.listWebhooks()
+  assert.equal(subscriptions.webhooks.length, 1)
+  assert.equal(subscriptions.webhooks[0].id, webhookId)
+  assert.equal('secret' in subscriptions.webhooks[0], false)
+  assert.equal('secret_hash' in subscriptions.webhooks[0], false)
+  const deliveries = await client.getWebhookDeliveries()
+  assert.equal(deliveries.deliveries.length, 1)
+  assert.equal('payload' in deliveries.deliveries[0], false)
+  assert.equal((await client.disableWebhook(webhookId)).ok, true)
+  assert.equal((await client.disableWebhook(webhookId)).ok, true)
+  assert.equal((await client.listWebhooks()).webhooks[0].active, 0)
+  const foreignWebhookId = '00000000-0000-4000-8000-000000000102'
+  await db.insert(schema.users).values({ id: 'unrelated-account', email: 'unrelated@webhook.test', name: 'Other account', password_hash: 'unused' })
+  await db.insert(schema.webhooks).values({ id: foreignWebhookId, agent_id: 'unrelated-account', url: 'https://example.com', events: '[]', secret_hash: 'never-exposed' })
+  await assert.rejects(client.disableWebhook(foreignWebhookId), (error: unknown) => !!error && typeof error === 'object' && 'status' in error && error.status === 404)
+  const [row] = await db.select().from(schema.webhooks).where(eq(schema.webhooks.id, foreignWebhookId))
+  assert.equal(row.active, 1)
 })

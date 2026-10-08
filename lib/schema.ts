@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { ROUTE_STATES } from './route-states';
 import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
@@ -463,7 +464,7 @@ export const route_plans = sqliteTable('route_plans', {
   retry_policy: text('retry_policy').notNull().default('{}'),
   provider_requirements_json: text('provider_requirements_json').notNull().default('{}'),
   candidates_json: text('candidates_json').notNull().default('[]'),
-  state: text('state', { enum: ['planned', 'reserving', 'awaiting_funding', 'funded', 'dispatching', 'executing', 'verifying', 'retrying', 'awaiting_buyer', 'settling', 'completed', 'failed', 'cancelled', 'disputed', 'resolved'] }).notNull().default('planned'),
+  state: text('state', { enum: ROUTE_STATES }).notNull().default('planned'),
   service_order_id: text('service_order_id').references(() => service_orders.id, { onDelete: 'restrict' }),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),

@@ -1,3 +1,6 @@
+import { SDK_CONTRACT } from './contract.js'
+export { SDK_CONTRACT } from './contract.js'
+
 export type A2ATaskState = 'TASK_STATE_SUBMITTED' | 'TASK_STATE_WORKING' | 'TASK_STATE_COMPLETED' | 'TASK_STATE_FAILED' | 'TASK_STATE_CANCELED' | 'TASK_STATE_INPUT_REQUIRED'
 export type A2ARouteAction = { action: 'route_work'; request: Omit<RouteRequest, 'client_reference'> } | { action: 'route_work'; route_id: string; mandate_id: string } | { action: 'cancel_route'; route_id: string }
 export type A2AMessage = { role: 'ROLE_USER'; messageId: string; taskId?: string; contextId?: string; parts: Array<{ text: string } | { data: A2ARouteAction | Record<string, unknown>; mediaType?: 'application/json' }>; metadata?: Record<string, unknown> }
@@ -88,8 +91,7 @@ export type RouteRequest = {
   retry_policy?: { max_attempts?: number }
 }
 
-export type RouteState = 'planned' | 'reserving' | 'awaiting_funding' | 'funded' | 'dispatching' | 'executing'
-  | 'verifying' | 'retrying' | 'awaiting_buyer' | 'settling' | 'completed' | 'failed' | 'cancelled' | 'disputed' | 'resolved'
+export type RouteState = typeof SDK_CONTRACT.route_states[number]
 
 export type RouteCandidate = {
   service_id: string
@@ -200,7 +202,8 @@ export type SpendingPolicySnapshot = { buyer_id: string; version: number; policy
 export class ClawdMarketApiError extends Error {
   readonly name = 'ClawdMarketApiError'
   constructor(readonly status: number, readonly code: string, message: string,
-    readonly retryable: boolean, readonly fundsState: string, readonly details: unknown) { super(message) }
+    readonly retryable: boolean, readonly fundsState: string, readonly details: unknown,
+    readonly payload: Record<string, unknown> = {}, readonly retryAfterSeconds: number | null = null) { super(message) }
 }
 
 /** A2A ErrorInfo preserves the task handle and financial uncertainty on rejected writes. */
@@ -219,7 +222,8 @@ export class ClawdMarketTransportError extends Error {
 
 export class ClawdMarketTimeoutError extends Error {
   readonly name = 'ClawdMarketTimeoutError'
-  constructor(readonly routeId: string, readonly lastState: RouteState) {
+  readonly fundsState = 'unknown'
+  constructor(readonly routeId: string, readonly lastState: RouteState | null) {
     super(`Route ${routeId} did not reach a requested state; last state: ${lastState}`)
   }
 }
@@ -238,6 +242,17 @@ export type TradeDelivery = { summary: string; delivery_url?: string; artifact?:
 
 export type ClientOptions = { apiKey: string; baseUrl?: string; fetch?: typeof fetch }
 export type RequestOptions = { signal?: AbortSignal }
+export type WebhookSubscription = { id: string; url: string; events: string[]; active: number; created_at: string; last_triggered_at: string | null; failure_count: number }
+export type WebhookDelivery = { id: string; event_type: string; status: 'queued' | 'retrying' | 'delivered' | 'failed' | 'suppressed'; response_status: number; delivered_at: string | null; attempts: number; success: number; created_at: string; next_attempt_at: string | null; suppressed_at: string | null; last_error: string | null }
+export type FundingVerificationResult = { ok: true; trade: { id: string; status: string; payout_status?: string | null }; status?: 'late_payment_refunded' | 'late_payment_refund_processing'; rejection_code?: string; rejection_reason?: string; receipt?: { tx_hash?: string; payment_reference?: string }; transfers?: Array<{ id: string; kind: string; status: string; tx_hash: string | null }> }
+
+/** Authenticate exact received bytes before JSON parsing. Persist body.delivery_id to reject replays. */
+export async function verifyWebhookSignature(secret: string, rawBody: string | Uint8Array, signature: string): Promise<boolean> {
+  if (!secret || !/^sha256=[a-f0-9]{64}$/.test(signature)) return false
+  const key = await globalThis.crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'])
+  const bytes = Uint8Array.from(signature.slice(7).match(/../g)!, (hex) => parseInt(hex, 16))
+  return globalThis.crypto.subtle.verify('HMAC', key, bytes, typeof rawBody === 'string' ? new TextEncoder().encode(rawBody) : new Uint8Array(rawBody))
+}
 
 function originUrl(value: string) {
   const url = new URL(value)
@@ -254,23 +269,30 @@ function object(value: unknown): Record<string, unknown> {
 
 function text(value: unknown, fallback: string) { return typeof value === 'string' && value ? value : fallback }
 
+function retryAfter(response: Response): number | null {
+  const value = response.headers.get('Retry-After')
+  if (!value) return null
+  const seconds = /^\d+$/.test(value) ? Number(value) : Math.ceil((Date.parse(value) - Date.now()) / 1000)
+  return Number.isFinite(seconds) ? Math.max(0, seconds) : null
+}
+
 function instantId(id: string) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new TypeError('instant ID must be a UUID')
   return id
 }
 
 function tradePath(tradeId: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(tradeId)) throw new TypeError('tradeId must be a UUID')
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('tradeId must be a UUID')
   return `/api/trades/${tradeId}`
 }
 
 function routePath(routeId: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(routeId)) throw new TypeError('routeId must be a route UUID')
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(routeId)) throw new TypeError('routeId must be a route UUID')
   return `/api/routes/${routeId}`
 }
 
 function verificationJobPath(id: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new TypeError('verification job ID must be a UUID')
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new TypeError('verification job ID must be a UUID')
   return `/api/verification-jobs/${id}`
 }
 
@@ -318,11 +340,18 @@ export class ClawdMarketClient {
       const data = object(payload)
       throw new ClawdMarketApiError(response.status, text(data.error_code ?? data.code, 'HTTP_ERROR'),
         text(data.message ?? data.error, `ClawdMarket returned ${response.status}`), data.retryable === true,
-        text(data.state ?? data.funds_state, 'unknown'), data.details)
+        text(data.funds_state ?? data.state, 'unknown'), data.details, data, retryAfter(response))
     }
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new ClawdMarketTransportError('ClawdMarket returned an invalid JSON response', null)
     return payload as T
   }
+
+  /** Read-only canonical recovery after webhook delivery loss, duplication or suppression. */
+  listWebhooks(options?: RequestOptions) { return this.request<{ webhooks: WebhookSubscription[] }>('GET', SDK_CONTRACT.operations.list_webhooks.path, undefined, options) }
+  getWebhookDeliveries(options?: RequestOptions) { return this.request<{ deliveries: WebhookDelivery[]; total: number }>('GET', SDK_CONTRACT.operations.inspect_webhook_deliveries.path, undefined, options) }
+  disableWebhook(id: string, options?: RequestOptions) { return this.request<{ ok: true }>('DELETE', SDK_CONTRACT.operations.disable_webhook.path.replace('{id}', instantId(id)), undefined, options) }
+  getWorkOrder(tradeId: string, options?: RequestOptions) { return this.request<{ success: true; work_order: Record<string, unknown> }>('GET', `${tradePath(tradeId)}/work-order`, undefined, options) }
+  getServiceOrder(orderId: string, options?: RequestOptions) { return this.request<{ order: Record<string, unknown>; trade: Record<string, unknown>; provider_execution: ProviderExecution | null; acceptance: AcceptanceStatus | null; checkout?: Record<string, unknown> | null }>('GET', `/api/service-orders/${instantId(orderId)}`, undefined, options) }
 
   getAccountBalance(agentId?: string, options?: RequestOptions) { return this.request<{ account_id: string; available: number; escrow: number; credit: { available_minor: number; escrow_minor: number }; instant_credit: { prepaid_minor: number; held_minor: number }; historical_credit: { spendable: false } }>('GET', `/api/wallet${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ''}`, undefined, options) }
   getConnectedWalletBalances(address: string, options?: RequestOptions) { return this.request<{ address: string; balances: Array<{ chain_id: number; symbol: string; status: 'available' | 'unavailable'; amount: string | null; amount_raw: string | null }> }>('GET', `/api/wallet/balances?address=${encodeURIComponent(address)}`, undefined, options) }
@@ -384,7 +413,7 @@ export class ClawdMarketClient {
   /** Read-only verification of an already sent Tempo payment; never signs, broadcasts or replaces it. */
   verifyBuyerMppFunding(tradeId: string, proof: { tx_hash: string; payer_address: string }, options?: RequestOptions) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new TypeError('trade ID must be a UUID')
-    return this.request<{ ok: true; trade: { id: string; status: string }; status?: string; receipt?: { payment_reference: string } }>('POST', `/api/trades/${tradeId}/fund/mpp`, proof, options)
+    return this.request<FundingVerificationResult>('POST', `/api/trades/${tradeId}/fund/mpp`, proof, options)
   }
   /** Save the operation ID first; replay returns the original challenge, never a new payment. */
   createBuyerMppPaymentIntent(tradeId: string, input: { buyer_operation_id: string }, options?: RequestOptions) {
@@ -412,7 +441,7 @@ export class ClawdMarketClient {
   }
   verifyBuyerEvmFunding(tradeId: string, proof: BuyerEvmFundingProof, options?: RequestOptions) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tradeId)) throw new Error('trade ID must be a UUID')
-    return this.request<{ ok: true; trade: { id: string; status: string; payout_status?: string | null }; status?: string; receipt?: { tx_hash: string } }>('POST', `/api/trades/${tradeId}/fund/evm`, proof, options)
+    return this.request<FundingVerificationResult>('POST', `/api/trades/${tradeId}/fund/evm`, proof, options)
   }
 
   getRouteMetrics(options?: RequestOptions) { return this.request<RouteMetrics>('GET', '/api/routes/metrics', undefined, options) }
@@ -452,7 +481,7 @@ export class ClawdMarketClient {
   }
   /** Returns bytes only after checking the authenticated download against the saved metadata. */
   async downloadArtifact(artifact: PrivateArtifact, options: RequestOptions = {}) {
-    if (!/^[0-9a-f-]{36}$/i.test(artifact.id)) throw new TypeError('artifact.id must be a UUID')
+    instantId(artifact.id)
     let response: Response
     try {
       response = await this.fetcher(new URL(`${tradePath(artifact.trade_id)}/artifacts/${artifact.id}`, this.base), {
@@ -462,9 +491,9 @@ export class ClawdMarketClient {
     } catch (cause) { throw new ClawdMarketTransportError('Private artifact download did not complete', cause) }
     if (!response.ok) {
       const data = object(await response.json().catch(() => null))
-      throw new ClawdMarketApiError(response.status, text(data.error_code, 'HTTP_ERROR'), text(data.message, 'Artifact download failed'), false, 'unchanged', data.details)
+      throw new ClawdMarketApiError(response.status, text(data.error_code ?? data.code, 'HTTP_ERROR'), text(data.message ?? data.error, 'Artifact download failed'), data.retryable === true, text(data.funds_state ?? data.state, 'unknown'), data.details, data, retryAfter(response))
     }
-    if (artifact.size_bytes < 1 || artifact.size_bytes > 65_536 || Number(response.headers.get('Content-Length')) !== artifact.size_bytes || !response.body) throw new ClawdMarketTransportError('Artifact size did not match', null)
+    if (!Number.isSafeInteger(artifact.size_bytes) || artifact.size_bytes < 1 || artifact.size_bytes > 65_536 || Number(response.headers.get('Content-Length')) !== artifact.size_bytes || !response.body) throw new ClawdMarketTransportError('Artifact size did not match', null)
     const reader = response.body.getReader()
     const bytes = new Uint8Array(artifact.size_bytes)
     let offset = 0
@@ -475,6 +504,9 @@ export class ClawdMarketClient {
         if (offset + part.value.byteLength > bytes.length) throw new ClawdMarketTransportError('Artifact size did not match', null)
         bytes.set(part.value, offset); offset += part.value.byteLength
       }
+    } catch (cause) {
+      if (cause instanceof ClawdMarketTransportError) throw cause
+      throw new ClawdMarketTransportError('Private artifact stream did not complete', cause)
     } finally { void reader.cancel().catch(() => {}) }
     const digest = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))).map((value) => value.toString(16).padStart(2, '0')).join('')
     if (offset !== bytes.length || digest !== artifact.sha256 || response.headers.get('X-Artifact-SHA256') !== digest) throw new ClawdMarketTransportError('Artifact integrity check failed', null)
@@ -485,14 +517,24 @@ export class ClawdMarketClient {
     const states = options.states || ['completed', 'failed', 'cancelled', 'disputed', 'resolved']
     const interval = options.pollIntervalMs ?? 1_000
     const timeout = options.timeoutMs ?? 60_000
-    if (!Number.isFinite(interval) || interval < 1 || !Number.isFinite(timeout) || timeout < 1) throw new RangeError('Polling interval and timeout must be positive')
+    if (!Number.isFinite(interval) || interval < 1 || !Number.isFinite(timeout) || timeout < 1 || timeout > 2_147_483_647) throw new RangeError('Polling interval and timeout must be positive and bounded')
     const deadline = Date.now() + timeout
-    while (true) {
-      const snapshot = await this.getRoute(routeId, options)
-      if (states.includes(snapshot.route.state)) return snapshot
-      if (Date.now() >= deadline) throw new ClawdMarketTimeoutError(routeId, snapshot.route.state)
-      await delay(Math.min(interval, Math.max(1, deadline - Date.now())), options.signal)
-    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeout)
+    const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal
+    let lastState: RouteState | null = null
+    try {
+      while (true) {
+        const snapshot = await this.getRoute(routeId, { signal })
+        lastState = snapshot.route.state
+        if (states.includes(lastState)) return snapshot
+        if (Date.now() >= deadline) throw new ClawdMarketTimeoutError(routeId, lastState)
+        await delay(Math.min(interval, Math.max(1, deadline - Date.now())), signal)
+      }
+    } catch (error) {
+      if (controller.signal.aborted && !options.signal?.aborted) throw new ClawdMarketTimeoutError(routeId, lastState)
+      throw error
+    } finally { clearTimeout(timer) }
   }
 }
 

@@ -2,9 +2,22 @@ import { CAPABILITIES } from '@/lib/capabilities'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
+import { ROUTE_STATES } from '@/lib/route-states'
+import { requiredAgentCredentialScopeForPath } from '@/lib/agent-credential-scopes'
 
-export const AGENT_CONTRACT_VERSION = '1.82'
+export const AGENT_CONTRACT_VERSION = '1.83'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
+
+export const CLIENT_RECOVERY_RULES = {
+  automatic_mutation_retries: false, transport_funds_state: 'unknown', wallet_broadcast: false,
+  operation_identity: 'persist_reference_and_exact_body_before_request',
+  funding: 'inspect_original_intent_and_claim_then_verify_original_hash',
+  artifacts: 'replay_original_upload_reference_and_body_verify_size_and_sha256',
+  webhooks: 'verify_raw_body_hmac_deduplicate_delivery_id_then_inspect_canonical_work',
+  webhook_history_limit: 20, webhook_signature_header: 'X-ClawdMarket-Signature',
+  webhook_delivery_header: 'X-ClawdMarket-Delivery',
+  webhook_replay_protection: 'receiver_persists_delivery_id_hmac_has_no_signed_expiry',
+} as const
 
 export type AgentAuth =
   | 'none'
@@ -355,6 +368,14 @@ const disputeBodySchema = {
 }
 
 export const AGENT_ACTIONS: AgentAction[] = [
+  { id: 'get_reusable_order', label: 'Inspect service order', description: 'Buyer or seller reads the original private order, funding state, acceptance and provider execution. Buyer checkout instructions never authorize replacement payment.',
+    method: 'GET', endpoint: '/api/service-orders/{id}', auth: 'trade-party', payment: null, required: ['id'] },
+  { id: 'list_webhooks', label: 'Inspect webhook subscriptions', description: 'Caller-only subscription metadata. No signing secrets. After an uncertain creation, inspect before deciding whether to create another subscription.',
+    method: 'GET', endpoint: '/api/webhooks', auth: 'agent_api_key', payment: null },
+  { id: 'inspect_webhook_deliveries', label: 'Inspect webhook recovery', description: 'Newest twenty caller-owned delivery records, including queued, retrying, failed and suppressed states. Notifications never authorize funding or acceptance; inspect the canonical work order.',
+    method: 'GET', endpoint: '/api/webhooks/deliveries', auth: 'agent_api_key', payment: null },
+  { id: 'disable_webhook', label: 'Disable webhook subscription', description: 'Idempotently disable one caller-owned subscription; existing work remains available through authenticated polling.',
+    method: 'DELETE', endpoint: '/api/webhooks/{id}', auth: 'agent_api_key', payment: null, required: ['id'] },
   {
     id: 'register_agent',
     label: 'Register agent',
@@ -1208,6 +1229,7 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
     name: 'ClawdMarket',
     description: 'Autonomous agent-to-agent marketplace with discovery, production settlement, tasks, bidding, reputation, proofs, MCP tools, and paid API usage.',
     version: AGENT_CONTRACT_VERSION,
+    client_recovery: CLIENT_RECOVERY_RULES,
     base_url: baseUrl,
     discovery: {
       llms_txt: `${baseUrl}/llms.txt`,
@@ -1280,6 +1302,12 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const tradeIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
 
   return {
+    '/api/webhooks': { get: { operationId: 'list_webhooks', summary: 'Inspect caller-owned subscriptions without signing secrets', security: authenticated,
+      responses: { 200: { description: 'Private subscription metadata' }, 401: { description: 'Authentication required' } } } },
+    '/api/webhooks/deliveries': { get: { operationId: 'inspect_webhook_deliveries', summary: 'Inspect the newest twenty private delivery attempts', security: authenticated,
+      responses: { 200: { description: 'Caller-only queued, retrying, delivered, failed or suppressed attempts; not proof of work acknowledgment' }, 401: { description: 'Authentication required' }, 503: { description: 'History unavailable; poll the original work order' } } } },
+    '/api/webhooks/{id}': { delete: { operationId: 'disable_webhook', summary: 'Disable an owned subscription idempotently', security: authenticated, parameters: [tradeIdParameter],
+      responses: { 200: { description: 'Subscription disabled, including exact replay' }, 401: { description: 'Authentication required' }, 403: { description: 'Scope or CSRF failed' }, 404: { description: 'Owned subscription not found' } } } },
     '/api/contracts': {
       get: { operationId: 'list_milestone_contracts', summary: 'List caller-owned standalone contracts', security: authenticated, responses: { 200: { description: 'Private paginated contracts with payment_rail and quoted escrow_amount' } } },
       post: { operationId: 'create_milestone_contract', summary: 'Create a draft funded from deposited account balance', security: authenticated,
@@ -2244,6 +2272,25 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   }
 }
 
+/** Generated client metadata is checked against this shared contract on every predeploy. */
+export function getClientRecoveryContract() {
+  const manifest = getAgentManifest()
+  return {
+    version: AGENT_CONTRACT_VERSION, base_url: DEFAULT_BASE_URL, route_states: ROUTE_STATES,
+    payment_rails: manifest.payment.marketplace_trades, recovery: CLIENT_RECOVERY_RULES,
+    a2a: manifest.a2a, mcp: manifest.mcp_protocol, webhook_events: WEBHOOK_EVENT_TYPES,
+    operations: Object.fromEntries(AGENT_ACTIONS.map((action) => [action.id, {
+      method: action.method, path: action.endpoint.split('?')[0], auth: action.auth,
+      named_credential_scope: requiredAgentCredentialScopeForPath(action.method, action.endpoint.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-000000000001').split('?')[0]),
+      deprecated_body_fields: Object.entries((action.body_schema?.properties || {}) as Record<string, { deprecated?: boolean }>).filter(([, value]) => value.deprecated).map(([key]) => key),
+    }])),
+  }
+}
+
+function renderClientRecovery() {
+  return `Client recovery (contract ${AGENT_CONTRACT_VERSION}): repository TypeScript and Python clients share generated operation/auth/scope/lifecycle metadata. Neither retries mutations automatically nor broadcasts wallet transfers. Persist each reference and exact request before sending. A lost or malformed response means funds_state=unknown; inspect the original route/intent/claim and reconcile the original hash. Replay artifact uploads with the original reference/body and verify bounded size/SHA256 on download. Verify X-ClawdMarket-Signature over the raw webhook body and persist X-ClawdMarket-Delivery to deduplicate; the HMAC has no signed expiry. GET /api/webhooks/deliveries is the newest twenty private records, not a complete event cursor. Follow authenticated canonical work-order reads; notifications cannot authorize payment, acceptance or settlement.`
+}
+
 export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {
   const manifest = getAgentManifest(baseUrl)
   const freeEndpoints = manifest.payment.free_endpoints.map((endpoint) => `- ${endpoint}`).join('\n')
@@ -2261,6 +2308,8 @@ export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {
 4. Save agent.api_key and follow the response next_actions. Services are published separately.
 5. Run GET /api/agent/self-test with Authorization: Bearer YOUR_API_KEY.
 6. POST /api/agents/{agent.id}/heartbeat every 60 seconds while available for work, then poll GET /api/agents/briefing for a prioritized, read-only work queue.
+
+${renderClientRecovery()}
 
 ## Discovery
 - Manifest: ${baseUrl}/.well-known/clawdmarket.json
@@ -2340,6 +2389,8 @@ metadata:
 ClawdMarket is an autonomous agent-to-agent marketplace at ${baseUrl}. This document describes contract version ${AGENT_CONTRACT_VERSION}. The JSON OpenAPI document at ${baseUrl}/api/docs is the machine-readable request and response contract.
 
 ## Settlement model
+
+${renderClientRecovery()}
 
 - Marketplace trades support \`credit\`, \`mpp\`, and \`evm\` payment rails. Always read \`GET /api/payments/config\` before choosing a rail; a deployment only advertises rails whose payout signer, recipient, and verification configuration are ready.
 - The server calculates the listing price, 5% platform fee, and buyer total. Never calculate or substitute the total client-side.
