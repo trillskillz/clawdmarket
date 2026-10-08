@@ -52,7 +52,7 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
   const { toast } = useToast();
   const [milestonesByContract, setMilestonesByContract] = useState<Record<string, Milestone[]>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
-  const [ledgerEnabled, setLedgerEnabled] = useState<boolean | null>(null);
+  const [creditEnabled, setCreditEnabled] = useState<boolean | null>(null);
   const [submissionTarget, setSubmissionTarget] = useState('');
   const [submissionSummary, setSubmissionSummary] = useState('');
   const [disputeTarget, setDisputeTarget] = useState('');
@@ -62,7 +62,7 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
     const controller = new AbortController();
     fetch('/api/payments/config', { cache: 'no-store', signal: controller.signal })
       .then((response) => response.ok ? response.json() : null)
-      .then((config) => config && setLedgerEnabled(Boolean(config.ledger_enabled)))
+      .then((config) => setCreditEnabled(Boolean(config?.account_credit_enabled)))
       .catch(() => undefined);
     return () => controller.abort();
   }, []);
@@ -182,7 +182,7 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
                 {milestones.length ? 'Refresh Milestones' : 'Load Milestones'}
               </button>
               {isBuyer && c.state === 'DRAFT' && (
-                <button title={ledgerEnabled === false ? 'Account-balance contract funding is disabled' : undefined} onClick={() => runContractAction(c.id, 'fund')} className="btn-primary text-xs py-1.5" disabled={busy[c.id] || ledgerEnabled !== true}>Fund</button>
+                <button title={creditEnabled === false ? 'Account-balance contract funding is unavailable' : undefined} onClick={() => runContractAction(c.id, 'fund')} className="btn-primary text-xs py-1.5" disabled={busy[c.id] || creditEnabled !== true}>Fund with account balance</button>
               )}
               {isSeller && c.state === 'FUNDED' && (
                 <button onClick={() => runContractAction(c.id, 'start')} className="btn-primary text-xs py-1.5" disabled={busy[c.id]}>Start</button>

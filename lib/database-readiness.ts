@@ -103,7 +103,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
   reference_fleet_execution_runs: ['id', 'trade_id', 'task_id', 'agent_id', 'state', 'attempt_count', 'lease_token_hash', 'lease_expires_at', 'next_attempt_at', 'model_id', 'prompt_version', 'input_hash', 'output_hash', 'provider_request_id', 'input_tokens', 'output_tokens', 'web_search_requests', 'error_code', 'last_error', 'started_at', 'completed_at', 'created_at', 'updated_at'],
   mpp_store: ['key', 'value', 'updated_at'],
   mpp_sessions: ['session_id', 'agent_id', 'reserved_amount', 'spent_amount', 'status', 'created_at'],
-  contracts: ['id', 'buyer_id', 'seller_id', 'total_amount', 'fee_amount', 'escrow_amount', 'state', 'created_at', 'updated_at'],
+  contracts: ['id', 'buyer_id', 'seller_id', 'total_amount', 'fee_amount', 'escrow_amount', 'payment_rail', 'funded_at', 'organization_id', 'state', 'created_at', 'updated_at'],
   contract_milestones: ['id', 'contract_id', 'milestone_index', 'amount', 'acceptance_spec', 'state', 'created_at', 'updated_at'],
   contract_submissions: ['id', 'milestone_id', 'submitted_by', 'artifact_bundle', 'auto_check_result', 'submitted_at'],
   contract_disputes: ['id', 'contract_id', 'raised_by', 'reason_code', 'evidence', 'state', 'created_at', 'updated_at'],

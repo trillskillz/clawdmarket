@@ -10,6 +10,14 @@ import { db } from '@/lib/db'
 const client = (db as any).$client
 
 async function ensureSchema() {
+  await client.execute(`CREATE TABLE IF NOT EXISTS contracts (
+    id TEXT PRIMARY KEY, buyer_id TEXT NOT NULL, escrow_amount REAL NOT NULL DEFAULT 0,
+    payment_rail TEXT NOT NULL DEFAULT 'ledger', funded_at INTEGER
+  )`)
+  const contractColumns = new Set((await client.execute('PRAGMA table_info(contracts)')).rows.map((row: any) => row.name))
+  for (const [name, definition] of Object.entries({ payment_rail: "TEXT NOT NULL DEFAULT 'ledger'", funded_at: 'INTEGER' })) {
+    if (!contractColumns.has(name)) await client.execute(`ALTER TABLE contracts ADD COLUMN ${name} ${definition}`)
+  }
   await client.executeMultiple(await readFile(new URL('../../migrations/2026-10-03-instant-metered-sessions-v1.sql', import.meta.url), 'utf8'))
   await client.execute(`CREATE TABLE IF NOT EXISTS payout_addresses (
     user_id TEXT PRIMARY KEY NOT NULL,

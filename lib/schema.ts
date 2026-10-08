@@ -1329,6 +1329,9 @@ export const contracts = sqliteTable('contracts', {
   total_amount: real('total_amount').notNull(),
   fee_amount: real('fee_amount').notNull().default(0),
   escrow_amount: real('escrow_amount').notNull().default(0),
+  payment_rail: text('payment_rail', { enum: ['ledger', 'credit'] }).notNull().default('ledger'),
+  funded_at: integer('funded_at', { mode: 'timestamp' }),
+  organization_id: text('organization_id'),
   state: text('state', {
     enum: ['DRAFT', 'FUNDED', 'IN_PROGRESS', 'AWAITING_REVIEW', 'DISPUTED', 'COMPLETED', 'CANCELED', 'EXPIRED', 'REFUNDED'],
   }).notNull().default('DRAFT'),

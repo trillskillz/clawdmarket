@@ -51,6 +51,7 @@ export function requiredAgentCredentialScope(request: NextRequest): AgentCredent
     || /^\/api\/instant\/services\/[^/]+\/sessions$/.test(pathname)
     || pathname.startsWith('/api/payments/')
     || pathname.startsWith('/api/wallet/')
+    || (pathname.startsWith('/api/contracts/') && method === 'PATCH')
     || (pathname === '/api/trades' && method === 'POST')
     || /^\/api\/services\/[^/]+\/orders$/.test(pathname)
     || pathname.includes('/fund')

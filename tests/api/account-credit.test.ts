@@ -76,6 +76,167 @@ async function listing(seller: string, price = 1) { return (await db.insert(sche
 async function buyCredit(buyer: string, item: Awaited<ReturnType<typeof listing>>, reference = crypto.randomUUID()) { return buy(request('/api/trades', buyer, 'POST', { listing_id: item.id, amount: 1, payment_rail: 'credit', client_reference: reference })) }
 async function liability() { const [row] = await db.select({ total: sql<number>`coalesce(sum(${schema.credit_accounts.available_minor} + ${schema.credit_accounts.escrow_minor}), 0)` }).from(schema.credit_accounts); return Number(row.total) }
 
+async function contract(buyer: string, seller: string, amounts = [.4, .6]) {
+  const { POST } = await import('@/app/api/contracts/route')
+  const response = await POST(request('/api/contracts', buyer, 'POST', { seller_id: seller, milestones: amounts.map((amount, index) => ({ title: `Milestone ${index}`, amount })) }))
+  assert.equal(response.status, 201, JSON.stringify(await response.clone().json()))
+  return response.json()
+}
+async function contractAction(id: string, buyer: string, action: string) {
+  const { PATCH } = await import('@/app/api/contracts/[id]/route')
+  return PATCH(request(`/api/contracts/${id}`, buyer, 'PATCH', { action }), { params: Promise.resolve({ id }) })
+}
+async function milestoneAction(id: string, milestoneId: string, actor: string, action: string) {
+  const { PATCH } = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route')
+  return PATCH(request(`/api/contracts/${id}/milestones/${milestoneId}`, actor, 'PATCH', { action, artifact_bundle: { result: 'Delivered work' } }), { params: Promise.resolve({ id, milestoneId }) })
+}
+
+test('standalone contracts reserve backed credit once and release multiple milestones without touching legacy balances', async () => {
+  const buyer = await user(), seller = await user()
+  await db.insert(schema.wallets).values({ user_id: buyer, balance: 100000, escrow: 0 })
+  const c = await contract(buyer, seller)
+  assert.equal(c.contract.payment_rail, 'credit')
+  assert.equal((await contractAction(c.contract.id, buyer, 'fund')).status, 402)
+  await deposit(buyer, 105); const total = await liability()
+  const funded = await Promise.all([contractAction(c.contract.id, buyer, 'fund'), contractAction(c.contract.id, buyer, 'fund')])
+  assert.deepEqual(funded.map(r => r.status).sort(), [200, 409])
+  assert.equal((await credit.creditBalance(buyer)).escrow_minor, 100)
+  assert.equal((await contractAction(c.contract.id, seller, 'start')).status, 200)
+  for (const m of c.milestones) {
+    assert.equal((await milestoneAction(c.contract.id, m.id, seller, 'submit')).status, 200)
+    assert.equal((await milestoneAction(c.contract.id, m.id, buyer, 'approve')).status, 200)
+    assert.equal((await milestoneAction(c.contract.id, m.id, buyer, 'mark_paid')).status, 200)
+    assert.equal((await milestoneAction(c.contract.id, m.id, buyer, 'mark_paid')).status, 409)
+  }
+  assert.equal((await credit.creditBalance(seller)).available_minor, 100)
+  assert.equal((await credit.creditBalance(buyer)).escrow_minor, 0)
+  assert.equal((await db.select().from(schema.contracts).where(eq(schema.contracts.id, c.contract.id)))[0].state, 'COMPLETED')
+  assert.equal((await db.select().from(schema.wallets).where(eq(schema.wallets.user_id, buyer)))[0].balance, 100000)
+  assert.equal(await liability(), total)
+  const { inspectCreditHealth } = await import('@/lib/credit-health.mjs')
+  assert.equal((await inspectCreditHealth(db.$client)).healthy, true)
+})
+
+test('contract cancellation and expiry refund the original credit escrow during a payment pause', async () => {
+  for (const action of ['cancel', 'expire']) {
+    const buyer = await user(), seller = await user(); await deposit(buyer, 105)
+    const c = await contract(buyer, seller, [1]); assert.equal((await contractAction(c.contract.id, buyer, 'fund')).status, 200)
+    if (action === 'expire') await db.update(schema.contracts).set({ expires_at: new Date(0) }).where(eq(schema.contracts.id, c.contract.id))
+    const total = await liability(); process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED = 'true'
+    try {
+      assert.equal((await contractAction(c.contract.id, buyer, action)).status, 200)
+      assert.equal((await contractAction(c.contract.id, buyer, action)).status, 409)
+    } finally { delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED }
+    assert.equal((await credit.creditBalance(buyer)).available_minor, 100)
+    assert.equal((await credit.creditBalance(buyer)).escrow_minor, 0)
+    assert.equal(await liability(), total)
+  }
+})
+
+test('historical funded wallet contracts retain their original release and refund path', async () => {
+  const buyer = await user(), seller = await user()
+  await db.insert(schema.wallets).values([{ user_id: buyer, balance: 0, escrow: 2 }, { user_id: seller, balance: 0, escrow: 0 }])
+  const [legacy] = await db.insert(schema.contracts).values({ buyer_id: buyer, seller_id: seller, total_amount: 2, escrow_amount: 2, state: 'IN_PROGRESS' }).returning()
+  assert.equal(legacy.payment_rail, 'ledger')
+  const { releaseContractFunds, refundContractFunds } = await import('@/lib/contract-settlement')
+  await db.transaction(async tx => {
+    await releaseContractFunds(tx, { contractId: legacy.id, milestoneId: 'legacy-one', buyerId: buyer, sellerId: seller, amount: 1 })
+    await refundContractFunds(tx, { contractId: legacy.id, milestoneId: 'legacy-two', buyerId: buyer, amount: 1 })
+  })
+  const rows = await db.select().from(schema.wallets)
+  assert.equal(rows.find(row => row.user_id === buyer)?.balance, 1)
+  assert.equal(rows.find(row => row.user_id === buyer)?.escrow, 0)
+  assert.equal(rows.find(row => row.user_id === seller)?.balance, 1)
+  assert.equal((await credit.creditBalance(buyer)).available_minor, 0)
+  assert.equal((await credit.creditBalance(seller)).available_minor, 0)
+})
+
+test('contract disputes split cents once and cannot consume a different contract reservation', async () => {
+  const buyer = await user(), seller = await user(), admin = await user(); await deposit(buyer, 210)
+  const a = await contract(buyer, seller, [1]), b = await contract(buyer, seller, [1])
+  for (const c of [a,b]) assert.equal((await contractAction(c.contract.id, buyer, 'fund')).status, 200)
+  assert.equal((await contractAction(a.contract.id, seller, 'start')).status, 200)
+  assert.equal((await milestoneAction(a.contract.id, a.milestones[0].id, seller, 'submit')).status, 200)
+  const response = await milestoneAction(a.contract.id, a.milestones[0].id, buyer, 'open_dispute')
+  assert.equal(response.status, 200)
+  const [dispute] = await db.select().from(schema.contract_disputes).where(eq(schema.contract_disputes.contract_id, a.contract.id))
+  const { PATCH } = await import('@/app/api/admin/contracts/disputes/[id]/resolve/route')
+  const previous = process.env.ADMIN_USER_IDS; process.env.ADMIN_USER_IDS = admin
+  const resolve = () => PATCH(request(`/api/admin/contracts/disputes/${dispute.id}/resolve`, admin, 'PATCH', { ruling: 'split', split_percent_to_seller: 33 }), { params: Promise.resolve({ id: dispute.id }) })
+  try { assert.equal((await resolve()).status, 200); assert.equal((await resolve()).status, 409) }
+  finally { if (previous === undefined) delete process.env.ADMIN_USER_IDS; else process.env.ADMIN_USER_IDS = previous }
+  assert.equal((await credit.creditBalance(buyer)).available_minor, 67)
+  assert.equal((await credit.creditBalance(buyer)).escrow_minor, 100)
+  assert.equal((await credit.creditBalance(seller)).available_minor, 33)
+  const { refundContractFunds } = await import('@/lib/contract-settlement')
+  await assert.rejects(db.transaction(tx => refundContractFunds(tx, { contractId: a.contract.id, buyerId: buyer, amount: 1 })), /reservation is inconsistent/)
+  assert.equal((await credit.creditBalance(buyer)).escrow_minor, 100)
+})
+
+test('contract funding respects payment holds, whole cents and shared buyer spend policy', async () => {
+  const buyer = await user(), seller = await user(); await deposit(buyer, 210)
+  const { POST } = await import('@/app/api/contracts/route')
+  assert.equal((await POST(request('/api/contracts', buyer, 'POST', { seller_id: seller, milestones: [{ title: 'Fractional cents', amount: .001 }] }))).status, 400)
+  const a = await contract(buyer, seller, [1]), b = await contract(buyer, seller, [1])
+  process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED = 'true'
+  try {
+    assert.equal((await contractAction(a.contract.id, buyer, 'fund')).status, 503)
+    assert.equal((await POST(request('/api/contracts', buyer, 'POST', {}))).status, 503)
+  } finally { delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED }
+  await db.insert(schema.buyer_spend_policies).values({ buyer_id: buyer, owner_account_id: buyer, policy_json: JSON.stringify({ max_daily: 105, approved_payment_rails: ['credit'] }) })
+  assert.equal((await contractAction(a.contract.id, buyer, 'fund')).status, 200)
+  const blocked = await contractAction(b.contract.id, buyer, 'fund'); assert.equal(blocked.status, 409); assert.equal((await blocked.json()).code, 'BUYER_DAILY_LIMIT')
+  assert.equal((await buyCredit(buyer, await listing(seller))).status, 409)
+  assert.equal((await credit.creditBalance(buyer)).available_minor, 105)
+})
+
+test('agent and organization contract ceilings share exposure with marketplace purchases', async () => {
+  const owner = await user(), seller = await user(), agentId = crypto.randomUUID(), buyer = `user_agent_${agentId}`, now = new Date()
+  await db.insert(schema.agents).values({ id: agentId, name: 'Contract buyer', description: 'Fixture', capabilities: '[]', endpoint: 'https://example.invalid', owner_address: '', api_key: 'unused' })
+  await db.insert(schema.users).values({ id: buyer, name: 'Agent buyer', email: `${agentId}@test.invalid`, role: 'agent', password_hash: 'unused' })
+  await db.insert(schema.agent_owners).values({ agentId, userId: owner, establishedBy: 'owner_claim' })
+  const organizationId = crypto.randomUUID()
+  await db.insert(schema.organizations).values({ id: organizationId, owner_account_id: owner, client_reference: crypto.randomUUID(), name: 'Contract budget', created_at: now, updated_at: now })
+  await db.insert(schema.organization_agent_assignments).values({ agent_id: agentId, organization_id: organizationId, cost_center: 'test', assigned_at: now, updated_at: now })
+  await db.insert(schema.organization_spend_budgets).values({ organization_id: organizationId, max_daily_minor: 105, version: 1, created_at: now, updated_at: now })
+  await deposit(buyer, 210)
+  const a = await contract(buyer, seller, [1]), b = await contract(buyer, seller, [1])
+  process.env.CLAWDMARKET_AGENT_MAX_TRADE_USD = '.50'
+  try { const blocked = await contractAction(a.contract.id, buyer, 'fund'); assert.equal(blocked.status, 409); assert.equal((await blocked.json()).code, 'AGENT_PER_TRADE_LIMIT') }
+  finally { delete process.env.CLAWDMARKET_AGENT_MAX_TRADE_USD }
+  assert.equal((await contractAction(a.contract.id, buyer, 'fund')).status, 200)
+  const blocked = await contractAction(b.contract.id, buyer, 'fund'); assert.equal(blocked.status, 409); assert.equal((await blocked.json()).code, 'ORGANIZATION_DAILY_LIMIT')
+  assert.equal((await credit.creditBalance(buyer)).available_minor, 105)
+  await db.delete(schema.organization_agent_assignments).where(eq(schema.organization_agent_assignments.agent_id, agentId))
+  const { organizationBudgetUsage } = await import('@/lib/organization-budgets')
+  assert.equal((await organizationBudgetUsage(organizationId)).reserved_or_spent_today_minor, 105)
+  process.env.CLAWDMARKET_AGENT_DAILY_SPEND_USD = '1.05'
+  try { const limit = await contractAction(b.contract.id, buyer, 'fund'); assert.equal(limit.status, 409); assert.equal((await limit.json()).code, 'AGENT_DAILY_SPEND_LIMIT') }
+  finally { delete process.env.CLAWDMARKET_AGENT_DAILY_SPEND_USD }
+  const { requiredAgentCredentialScope } = await import('@/lib/agent-credential-scopes')
+  assert.equal(requiredAgentCredentialScope(request(`/api/contracts/${b.contract.id}`, buyer, 'PATCH', { action: 'fund' })), 'payments:write')
+})
+
+test('verified platform MPP receipts are durable and public without private account data or duplicate historical proofs', async () => {
+  const { recordPlatformMppReceipt, getPublicPlatformPaymentProofs } = await import('@/lib/platform-payment-proofs')
+  const hash = `0x${'fa'.repeat(32)}`, proof = { method: 'tempo', status: 'success', reference: hash, timestamp: new Date().toISOString() }
+  assert.equal(await recordPlatformMppReceipt({ ...proof, status: 'pending' }), false)
+  assert.equal(await recordPlatformMppReceipt({ ...proof, reference: 'test-receipt' }), false)
+  assert.equal(await recordPlatformMppReceipt(proof), true)
+  assert.equal(await recordPlatformMppReceipt(proof), true)
+  assert.equal((await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.tx_hash, hash))).length, 1)
+  const historyHash = '0x2bb8e95dc8f030971baf678d6266feb4decac626669bcfb7a3ae9e902baa3499'
+  await recordPlatformMppReceipt({ ...proof, reference: historyHash, timestamp: '2026-10-02T16:07:48.000Z' })
+  const publicProofs = await getPublicPlatformPaymentProofs()
+  assert.equal(publicProofs[0].tx_hash, hash)
+  assert.equal(publicProofs.filter(p => p.tx_hash === historyHash).length, 1)
+  assert.equal(publicProofs.find(p => p.tx_hash === historyHash)?.workflow_run, 37031771916)
+  assert.equal(JSON.stringify(publicProofs).includes('payer'), false)
+  const conflictHash = `0x${'fb'.repeat(32)}`
+  await db.insert(schema.payment_receipts).values({ route: '/api/wallet/deposits', payment_rail: 'evm', amount: 1, currency: 'USDC', tx_hash: conflictHash })
+  await assert.rejects(recordPlatformMppReceipt({ ...proof, reference: conflictHash }), /another payment/)
+})
+
 test('concurrent deposit intent creation grants one send and immutable reference replay', async () => {
   const id = await user(), input = { amount_minor: 100, payer: payer.address, client_reference: crypto.randomUUID() }
   const values = await Promise.all([deposits.POST(request('/api/wallet/deposits', id, 'POST', input)), deposits.POST(request('/api/wallet/deposits', id, 'POST', input))])

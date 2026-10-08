@@ -2,6 +2,10 @@
 set -euo pipefail
 
 required_files=(
+  "lib/platform-payment-proofs.ts"
+  "lib/historical-mpp-proofs.json"
+  "migrations/2026-10-08-contract-account-credit-v1.sql"
+  "docs/PAYMENT_PROOFS.md"
   "lib/mcp-route-tasks.ts"
   "migrations/2026-10-04-mcp-routing-tasks-v1.sql"
   "tests/api/mcp-tasks.test.ts"

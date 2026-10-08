@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
-import { getTradeReceipt } from '@/lib/trade-receipt'
+import { getPaymentMethodLabel, getTradeReceipt } from '@/lib/trade-receipt'
 import styles from '../proof.module.css'
 
 export const dynamic = 'force-dynamic'
@@ -97,17 +97,18 @@ export default async function ProofPage({ params }: Props) {
 
   const creditRows = trade.payment_rail === 'credit' ? await query("SELECT kind FROM credit_entries WHERE reference = ? AND ((kind = 'purchase' AND user_id = ? AND escrow_delta = ?) OR (kind = 'sale' AND user_id = ? AND available_delta = ?))", [trade_id, trade.buyer_id, Math.round(Number(trade.amount) * 100), trade.seller_id, Math.round(Number(trade.amount) * 100)]) : []
   const creditReserved = creditRows.some((row: { kind: string }) => row.kind === 'purchase')
-  const creditReleased = creditRows.some((row: { kind: string }) => row.kind === 'sale')
+  const creditSettlement = trade.payment_rail === 'credit' ? await query("SELECT id FROM credit_entries WHERE reference = ? AND user_id = ? AND kind = 'settlement' AND escrow_delta = ?", [trade_id, trade.buyer_id, -Math.round(Number(trade.amount) * 100)]) : []
+  const creditReleased = creditRows.some((row: { kind: string }) => row.kind === 'sale') && creditSettlement.length > 0
   const settlementEvidence = Boolean(payment && payout?.tx_hash && payment.payment_rail === trade.payment_rail)
   const receipt = getTradeReceipt({ ...trade, settlement_evidence: settlementEvidence } as any)
-  const rail = String(trade.payment_rail || 'ledger').toUpperCase()
+  const rail = getPaymentMethodLabel(trade.payment_rail, payment?.payment_rail)
 
   const capabilities = parseJson(task?.required_capabilities) || []
   const verification = parseJson(delivery?.verification)
   const methodPassed = (method: string) => verificationRows.some((row: any) => row.method === method && row.status === 'passed')
   const categories = {
     identity_verified: false,
-    payment_verified: Boolean(payment) || creditReserved,
+    payment_verified: Boolean(payment && payment.payment_rail === trade.payment_rail) || creditReserved,
     delivery_received: Boolean(delivery),
     structure_verified: methodPassed('schema') || methodPassed('structure') || verification?.status === 'passed',
     semantic_verified: false,

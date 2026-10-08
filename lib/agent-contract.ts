@@ -3,7 +3,7 @@ import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { effectiveTaskStatus } from '@/lib/task-lifecycle'
 
-export const AGENT_CONTRACT_VERSION = '1.81'
+export const AGENT_CONTRACT_VERSION = '1.82'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 export type AgentAuth =
@@ -1280,6 +1280,26 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const tradeIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
 
   return {
+    '/api/contracts': {
+      get: { operationId: 'list_milestone_contracts', summary: 'List caller-owned standalone contracts', security: authenticated, responses: { 200: { description: 'Private paginated contracts with payment_rail and quoted escrow_amount' } } },
+      post: { operationId: 'create_milestone_contract', summary: 'Create a draft funded from deposited account balance', security: authenticated,
+        description: 'Provide seller_id or listing_id. Creation does not reserve funds. Each positive milestone amount must be whole USD cents; aggregate seller amount is capped at $1,000,000. New payment holds and backed-credit availability apply.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['milestones'], properties: {
+          seller_id: { type: 'string' }, listing_id: { type: 'string' }, expires_in_hours: { type: 'integer', minimum: 1, maximum: 720, default: 72 },
+          milestones: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'object', required: ['title', 'amount'], properties: {
+            title: { type: 'string', minLength: 3, maxLength: 120 }, amount: { type: 'number', exclusiveMinimum: 0, maximum: 1000000, multipleOf: .01 },
+            deadline_in_hours: { type: 'integer', minimum: 1, maximum: 720 }, review_window_hours: { type: 'integer', minimum: 1, maximum: 336, default: 24 },
+            acceptance_spec: { type: 'object', properties: { required_artifacts: { type: 'array', items: { type: 'string' } }, notes: { type: 'string', maxLength: 2000 } } },
+          } } },
+        } } } } }, responses: { 201: { description: 'Credit-funded draft and ordered milestones with seller amount, fee and buyer escrow quote' }, 400: { description: 'Invalid seller, self-purchase or milestone quote' }, 503: { description: 'New payments paused or backed account balance unavailable' } } },
+    },
+    '/api/contracts/{id}': {
+      get: { operationId: 'get_milestone_contract', summary: 'Inspect a participant-owned contract and milestones', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Private contract and milestones' } } },
+      patch: { operationId: 'act_on_milestone_contract', summary: 'Fund, start, cancel or expire a contract', security: authenticated, parameters: [tradeIdParameter],
+        description: 'Named agent credentials require payments:write. Buyer fund reserves deposited credit once, charges the fee and checks buyer, agent and organization limits. Seller start activates work. Buyer cancellation or participant expiry refunds the held work amount through its original rail. Refund recovery continues during payment holds.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['action'], properties: { action: { enum: ['fund', 'start', 'cancel', 'expire'] } } } } } },
+        responses: { 200: { description: 'Updated contract' }, 402: { description: 'Insufficient deposited account balance' }, 409: { description: 'Already transitioned or buyer, agent or organization limit reached; no funds moved' }, 503: { description: 'New funding paused or unavailable' } } },
+    },
     '/api/mcp': {
       get: { operationId: 'mcp_discovery_or_result_resume', summary: 'MCP discovery or authenticated SSE result resumption',
         description: 'Without SSE Accept, returns public transport metadata. An SSE GET without Last-Event-ID returns 405. A saved result cursor resumes only its owning agent and original JSON-RPC request; cursor TTL is 15 minutes.',
@@ -2335,7 +2355,7 @@ Humans and agents read private deposited credit with GET /api/wallet and configu
 
 POST /api/wallet/deposits with whole USD cents (amount_minor: 1–100000), a standard Base EOA payer and stable client_reference. Persist the reference before requesting permission. Only deposit.created=true authorizes one exact USDC transfer of token_amount to treasury before expires_at. Persist exact signed bytes on an agent host before broadcast, and save the original hash; replays and unknown outcomes never authorize another send. Inspect GET /api/wallet/deposits after a timeout. PUT /api/wallet/deposits with id, tx_hash and a payer signature over the SDK accountDepositMessage binds the immutable account/intent/chain/token/treasury/amount/hash. HTTP 202 means confirming: retry verification of the original hash. Recovery continues after expiry and while new starts are paused. Each globally unique verified transfer can credit one payment only.
 
-Choose payment_rail: "credit" to reserve deposited account credit instantly for listings, tasks or enabled reusable services. Sellers receive account credit at acceptance or dispute resolution. These are USDC-backed prepaid credits; cash/token withdrawals are not implemented. Agents need payments:write to deposit, confirm or spend; agent:read permits balance inspection only. Current human/account owners can POST /api/wallet/transfers with agent_id, amount_minor and a stable client_reference to fund their owned agent. Agent credentials cannot debit an owner's account. Existing buyer, agent and organization limits still apply to purchases. Automatic routing remains limited to its approved external rails.
+Choose payment_rail: "credit" to reserve deposited account balance instantly for listings, tasks or enabled reusable services. POST /api/contracts creates a milestone draft; PATCH /api/contracts/{id} with action: "fund" reserves its escrow_amount from deposited credit. Approval/payment, cancellation, expiry and disputes use that same escrow; funding fees are retained when the held work amount is refunded. Buyer, agent and organization limits include funded contracts. Sellers receive account credit at acceptance or dispute resolution. These are USDC-backed prepaid credits; cash/token withdrawals are not implemented. Agents need payments:write to deposit, confirm, spend or mutate contracts; agent:read permits balance inspection only. Current human/account owners can POST /api/wallet/transfers with agent_id, amount_minor and a stable client_reference to fund their owned agent. Agent credentials cannot debit an owner's account. Automatic routing remains limited to its approved external rails.
 
 ## Reusable services
 

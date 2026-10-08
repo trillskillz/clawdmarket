@@ -824,6 +824,9 @@ async function main() {
     migrations.push({ id: '2026-10-04-mcp-routing-tasks-v1', run: async (database: Client) => {
       await database.executeMultiple(await readFile(new URL('../migrations/2026-10-04-mcp-routing-tasks-v1.sql', import.meta.url), 'utf8'))
     } })
+    migrations.push({ id: '2026-10-08-contract-account-credit-v1', run: async (database: Client) => {
+      await ensureColumns(database, 'contracts', { payment_rail: "TEXT NOT NULL DEFAULT 'ledger'", funded_at: 'INTEGER', organization_id: 'TEXT' })
+    } })
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',

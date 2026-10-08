@@ -17,6 +17,7 @@ import { routePlanningEnabled } from '@/lib/routing-feature-flags';
 import { rateLimit } from '@/lib/rate-limit';
 import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts';
 import { MCP_TASK_PROTOCOL, MCP_TASK_CAPABILITIES, MCP_TASK_TOOLS, callMcpRouteTool, handleMcpTaskMethod, resumeMcpResult, mcpTaskError } from '@/lib/mcp-route-tasks';
+import { recordPlatformMppReceipt } from '@/lib/platform-payment-proofs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -417,6 +418,11 @@ export async function POST(req: NextRequest) {
       }
       if (paymentGate.status !== 200 || typeof paymentGate.withReceipt !== 'function') {
         return withCors(NextResponse.json({ error: 'payment_service_unavailable', message: 'MPP payment verification is not configured' }, { status: 503 }));
+      }
+
+      if (!FREE_ROUTING_TOOLS.has(name)) {
+        const envelope = paymentGate.withReceipt({ jsonrpc: '2.0', id: id ?? null, result: {} });
+        await recordPlatformMppReceipt(envelope.result?._meta?.['org.paymentauth/receipt']);
       }
 
       try {

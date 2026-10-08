@@ -52,7 +52,8 @@ async function spentSince(tx: Transaction | typeof db, buyerId: string, since: D
       sql`(${trades.status} <> 'cancelled' OR (${trades.payment_rail} <> 'ledger' AND ${trades.payout_status} <> 'refunded'))`,
     ));
   const [instant] = await tx.all<{ total: number }>(sql`SELECT COALESCE(SUM(budget_minor - refunded_minor), 0) AS total FROM instant_sessions WHERE buyer_id = ${buyerId} AND (status != 'closed' OR closed_at >= ${Math.floor(since.getTime()/1000)})`)
-  return round2(Number(row?.spent || 0) + Number(instant?.total || 0) / 100);
+  const [contract] = await tx.all<{ total: number }>(sql`SELECT COALESCE(SUM(escrow_amount), 0) AS total FROM contracts WHERE buyer_id = ${buyerId} AND payment_rail = 'credit' AND funded_at >= ${Math.floor(since.getTime()/1000)}`);
+  return round2(Number(row?.spent || 0) + Number(instant?.total || 0) / 100 + Number(contract?.total || 0));
 }
 
 export class AgentSpendPolicyError extends Error {

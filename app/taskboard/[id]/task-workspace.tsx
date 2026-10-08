@@ -101,11 +101,11 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
     if (!workspace?.quote) return
     setBusy(true); setError(''); setNotice('')
     try {
-      const result = await requestJson<{ trade: { id: string }; checkout: Checkout | { rail: 'ledger' } }>(`${base}/fund`, {
+      const result = await requestJson<{ trade: { id: string }; checkout: Checkout | { rail: 'ledger' | 'credit' } }>(`${base}/fund`, {
         method: 'POST', apiKey,
         body: { payment_rail: paymentRail, expected_total: workspace.quote.totalCost, client_reference: crypto.randomUUID() },
       })
-      if (result.checkout.rail === 'ledger') setNotice('Account balance held. The seller can now deliver the work.')
+      if (result.checkout.rail === 'ledger' || result.checkout.rail === 'credit') setNotice('Account balance held. The seller can now deliver the work.')
       else {
         const next = result.checkout as Checkout
         setCheckout(next)

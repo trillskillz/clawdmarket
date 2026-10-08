@@ -23,7 +23,7 @@ interface Trade {
   status: string;
   created_at: string;
   auto_confirm_at?: string | null;
-  payment_rail?: 'ledger' | 'mpp' | 'evm';
+  payment_rail?: 'ledger' | 'credit' | 'mpp' | 'evm';
   payout_status?: string;
   checkout?: ExternalCheckout | null;
   rated_by_caller?: boolean | number;

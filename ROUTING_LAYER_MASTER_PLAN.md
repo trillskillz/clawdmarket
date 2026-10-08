@@ -1,12 +1,12 @@
 # ClawdMarket routing-layer master plan
 
-**Source of truth for future routing-layer work.** Updated 2026-10-08 after merged PR #250 (`8a676c7`), production contract 1.80; local contract 1.81 (supported buyer funding, orchestration, confirmed-refund failover, durable metrics/admission controls, metered instant credit sessions and authenticated A2A routing tasks). The user's prioritized navigation/cleanup/deposit-backed balance release is published and verified on GitHub/Vercel. Continue routing now, preserving normal-site payment reserves and saving unfunded paid checks for later. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update its status and evidence. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
+**Source of truth for future routing-layer work.** Updated 2026-10-08 after merged PR #250 (`8a676c7`), production contract 1.80; local contract 1.82 (supported buyer funding, orchestration, confirmed-refund failover, durable metrics/admission controls, metered instant credit sessions and authenticated A2A routing tasks). The user's prioritized navigation/cleanup/deposit-backed balance release is published and verified on GitHub/Vercel. Continue routing now, preserving normal-site payment reserves and saving unfunded paid checks for later. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update its status and evidence. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
 
 ## Current position
 
-**Latest publishing instruction (2026-10-08):** Finish the already-authorized activity-priority release (PR #250) to GitHub and Vercel. After that release, keep all further plan work local until **ten substantive, acceptance-complete parts** have been completed, then publish the combined batch. Count demonstrable capabilities, not commits, tests, documentation or bookkeeping. The new batch is **1/10 complete locally**: P1.3 MCP routing Tasks (contract 1.81). No future-plan push or new PR is authorized before ten completed parts. Old/unnecessary PRs remain exempt; wallet spending and global rollout restrictions persist.
+**Latest publishing instruction (2026-10-08):** Finish the already-authorized activity-priority release (PR #250) to GitHub and Vercel. After that release, keep all further plan work local until **ten substantive, acceptance-complete parts** have been completed, then publish the combined batch. Count demonstrable capabilities, not commits, tests, documentation or bookkeeping. The new batch is **2/10 complete locally**: P1.3 MCP routing Tasks (contract 1.81), followed by the user-prioritized payment-proof and sitewide backed-balance correction (contract 1.82). No future-plan push or new PR is authorized before ten completed parts. Old/unnecessary PRs remain exempt; wallet spending and global rollout restrictions persist.
 
-**Latest release:** [PR #250](https://github.com/trillskillz/clawdmarket/pull/250) merged as `8a676c70b043d93d762b727fe27f076f9eb0e885` after all final-head build/browser, contract/build, CodeQL and Vercel checks passed. It puts registrations first in Live activity and reserves space for the ten newest public registrations under busy market traffic. Migration-first production deployment [37820002395](https://github.com/trillskillz/clawdmarket/actions/runs/37820002395) passed, including reserve preflight, migrations and both domain aliases. Actual read-only production Chromium checks passed at 1440/390 px: registrations precede every other event, registration names render, the feed remains bounded to fifty unique records, mobile has no horizontal overflow, and readiness is ready. Same-SHA smoke [37821101738](https://github.com/trillskillz/clawdmarket/actions/runs/37821101738) passed. PR #249 previously released contract 1.80 via successful deployment `37209338676` and same-SHA smoke `37209779948`. The current original checkout contains complete local P1.3 MCP Tasks (contract 1.81); next independent work is P1.4 contract and SDK recovery parity plus the minimal Python client. Paid P0 production canaries and independent-provider/semantic proof remain externally gated; global rollouts stay closed and no wallet funds have been moved.
+**Latest release:** [PR #250](https://github.com/trillskillz/clawdmarket/pull/250) merged as `8a676c70b043d93d762b727fe27f076f9eb0e885` after all final-head build/browser, contract/build, CodeQL and Vercel checks passed. It puts registrations first in Live activity and reserves space for the ten newest public registrations under busy market traffic. Migration-first production deployment [37820002395](https://github.com/trillskillz/clawdmarket/actions/runs/37820002395) passed, including reserve preflight, migrations and both domain aliases. Actual read-only production Chromium checks passed at 1440/390 px: registrations precede every other event, registration names render, the feed remains bounded to fifty unique records, mobile has no horizontal overflow, and readiness is ready. Same-SHA smoke [37821101738](https://github.com/trillskillz/clawdmarket/actions/runs/37821101738) passed. PR #249 previously released contract 1.80 via successful deployment `37209338676` and same-SHA smoke `37209779948`. The current original checkout contains complete local P1.3 MCP Tasks (contract 1.81) and the subsequent payment-proof/account-balance correction (contract 1.82); next independent work is P1.4 contract and SDK recovery parity plus the minimal Python client. Paid P0 production canaries and independent-provider/semantic proof remain externally gated; global rollouts stay closed and no wallet funds have been moved.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -487,3 +487,55 @@ Results wait for terminal state over SSE. Fifteen-second connections issue durab
 Validation: Node 24 full predeploy passed **532 cases (524 passed, eight skipped)**, TypeScript, SDK build and lint. After the final browser-preflight fix, focused MCP/CORS coverage passed **22/22**, lint and the production build passed, and actual Next.js Chromium/HTTP coverage passed **6/6**, including Origin rejection, allowed protocol/resumption preflight headers, deferred SSE result and same-RPC-ID GET resumption after terminal cancellation. The official MCP SDK also creates, polls and automatically reconnects to results. Financial integration drives one canonical buyer/provider loop on a disposable loopback chain, checks original receipt/output/capacity release, and withholds output after payout proof is removed. A legacy backup migrated twice with **48 IDs**, SQLite integrity **ok**, and readiness/migration regressions passed **8/8**. No live wallet spending, new rollout flag or future-plan push occurred. The local branch includes the separately validated activity release after its merge.
 
 **Publishing counter: 1/10 completed substantive parts after PR #250.** Keep this entire batch local until ten parts pass their acceptance gates. Next is P1.4: audit the remaining contract/TypeScript recovery gaps and add a minimal Python client with typed financial errors. Outstanding paid P0 canaries and independent provider evidence retain their external prerequisites.
+
+
+## User priority — visible MPP payment proofs and backed account balance (1.82; local part 2/10)
+
+The user clarified that successful tested MPP payments were missing from Proofs,
+not that the recent Base trade receipts should be relabeled. Historical production
+MCP canaries 37031771916 and 35904776952 each paid 0.001 pathUSD on Tempo. Their
+public transaction hashes, exact recipient/asset/value, successful canonical
+receipts and block timestamps were independently verified read-only on 2026-10-08.
+`/proof` now shows these genuine platform payments above completed work, with MPP,
+Tempo/pathUSD, transaction and test-evidence links. This history creates no trade
+or financial ledger entry. Future SDK-verified paid MCP calls durably save their
+payment receipt before tool execution, including tool errors; fake/pending
+receipts are excluded. Historical and durable records deduplicate by hash.
+
+Work cards and receipt details show the funding receipt's actual method, with
+selected-rail fallback only when no receipt exists. Conflicting evidence cannot
+claim verified work settlement. Completed credit purchases now expose their
+recorded purchase, settlement and seller-credit evidence consistently.
+
+Account balance means deposited USDC-backed `credit` across listings, task
+workspaces, enabled reusable services and standalone milestone contracts. New
+contracts reserve integer cents and fees atomically; per-milestone release,
+refund, split, cancellation and expiry use the same reservation. Existing funded
+wallet contracts retain their original path, while unbacked historical balances
+cannot fund new ones. Payment holds, cookie CSRF, payment scopes, buyer/agent
+ceilings and immutable organization attribution apply. Shared spend snapshots
+include funded contracts. Task credit funding now immediately reports held
+balance instead of an external checkout. Contract UI/config and public/native
+payment documentation agree; contract is 1.82. The additive contract migration
+is ID 49 and readiness checks its columns.
+
+Validation: final Node 24 `pnpm predeploy` passed **542 cases (534 passed, eight
+skipped)**, including typecheck, SDK build and lint. The production build passed.
+Actual Chromium/HTTP checks passed **11/11** at 1440/390 px for both historic MPP
+proofs, enabled balance contract funding with legacy ledger disabled, connected
+wallet/deposit recovery and core flows. Additional rendered fixtures verified
+MPP/EVM/credit labels, credit-backed badges and conflicting-receipt exclusion;
+fixtures were removed. Migration replay passed **49 IDs**, SQLite integrity
+**ok**. Financial fixtures verify concurrent funding, multiple milestone releases,
+original cancellation/expiry refunds through payment holds, dispute splits,
+legacy escrow completion, cross-contract escrow isolation, buyer/agent/organization
+limits, durable MPP proof deduplication and a real server-SDK verified paid MCP
+call without signing or broadcasting RPC. An initial quota fixture lacked the new
+contract fields; it was corrected and the final full suite passed. One early
+migration check also used the local development database's default target and
+applied additive schema updates; remaining checks used explicit disposable
+URLs. No production database mutation, new live payment, GitHub push, PR or Vercel
+deployment occurred. This is **2/10**; keep the batch local until ten substantive
+parts are complete. Next routing work remains P1.4 SDK/contract recovery parity
+and the minimal Python client. Automatic route mandates retain external payment
+terms; existing rollout flags remain unchanged.
