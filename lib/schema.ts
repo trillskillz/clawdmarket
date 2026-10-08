@@ -1510,3 +1510,25 @@ export const a2a_message_claims = sqliteTable('a2a_message_claims', {
   message_id: text('message_id').notNull(), request_json: text('request_json').notNull(),
   created_at: integer('created_at').notNull(),
 }, t => [primaryKey({ columns: [t.agent_id, t.message_id] })]);
+
+/** MCP handles have a separate namespace; shared canonical routing owns money/work. */
+export const mcp_route_tasks = sqliteTable('mcp_route_tasks', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  context_id: text('context_id').notNull(), first_message_id: text('first_message_id').notNull(),
+  initial_message: text('initial_message').notNull(), action: text('action', { enum: ['route_work', 'cancel_route'] }).notNull(),
+  route_id: text('route_id').references(() => route_plans.id, { onDelete: 'restrict' }),
+  mandate_id: text('mandate_id').references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  last_error_code: text('last_error_code'),
+  terminal_status: text('terminal_status', { enum: ['completed', 'failed', 'cancelled'] }),
+  created_at: integer('created_at').notNull(), updated_at: integer('updated_at').notNull(),
+}, t => [uniqueIndex('mcp_route_first_message').on(t.agent_id, t.first_message_id), index('mcp_route_agent_created').on(t.agent_id, t.created_at)]);
+
+/** Short-lived SSE cursors retain the originating request ID, never private result bytes. */
+export const mcp_result_streams = sqliteTable('mcp_result_streams', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  task_id: text('task_id').notNull().references(() => mcp_route_tasks.id, { onDelete: 'restrict' }),
+  rpc_id_json: text('rpc_id_json').notNull(),
+  created_at: integer('created_at').notNull(), expires_at: integer('expires_at').notNull(),
+}, t => [index('mcp_result_stream_agent_expiry').on(t.agent_id, t.expires_at)]);

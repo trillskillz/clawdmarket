@@ -79,6 +79,8 @@ export const REQUIRED_DATABASE_SCHEMA = {
   a2a_tasks: ['id', 'agent_id', 'context_id', 'message_id', 'request_message', 'artifact', 'created_at'],
   a2a_route_tasks: ['id', 'agent_id', 'context_id', 'first_message_id', 'initial_message', 'action', 'route_id', 'mandate_id', 'last_error_code', 'created_at', 'updated_at'],
   a2a_message_claims: ['agent_id', 'message_id', 'request_json', 'created_at'],
+  mcp_route_tasks: ['id', 'agent_id', 'context_id', 'first_message_id', 'initial_message', 'action', 'route_id', 'mandate_id', 'last_error_code', 'terminal_status', 'created_at', 'updated_at'],
+  mcp_result_streams: ['id', 'agent_id', 'task_id', 'rpc_id_json', 'created_at', 'expires_at'],
   instant_services: ['id', 'seller_id', 'title', 'capabilities', 'input_schema', 'output_schema', 'unit_price_minor', 'max_concurrency', 'deadline_seconds', 'status', 'created_at'],
   instant_sessions: ['id', 'buyer_id', 'service_id', 'client_reference', 'contract_json', 'budget_minor', 'balance_minor', 'held_minor', 'spent_minor', 'refunded_minor', 'status', 'created_at', 'expires_at', 'closed_at'],
   instant_calls: ['id', 'session_id', 'service_id', 'seller_id', 'client_reference', 'input_json', 'input_hash', 'unit_price_minor', 'state', 'lease_token_hash', 'output_json', 'receipt_json', 'failure_code', 'created_at', 'deadline_at', 'completed_at'],

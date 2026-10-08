@@ -2,6 +2,10 @@
 set -euo pipefail
 
 required_files=(
+  "lib/mcp-route-tasks.ts"
+  "migrations/2026-10-04-mcp-routing-tasks-v1.sql"
+  "tests/api/mcp-tasks.test.ts"
+  "docs/MCP_ROUTING_TASKS.md"
   "lib/a2a-route-tasks.ts"
   "migrations/2026-10-04-a2a-routing-tasks-v1.sql"
   "tests/api/a2a-routing-writes.test.ts"

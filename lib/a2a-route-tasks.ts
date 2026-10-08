@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from './db';
-import { a2a_message_claims, a2a_route_tasks, route_plans } from './schema';
+import { a2a_message_claims, a2a_route_tasks, mcp_route_tasks, route_plans } from './schema';
 import { canonicalContract } from './structured-verification';
 import { withKeyedWriteLock } from './service-reservation-lock';
 import { routePlanInput } from './route-planning';
@@ -20,6 +20,8 @@ type Auth = Extract<RegisteredAgentAuth, {
   kind: 'agent';
 }>;
 type TaskRow = typeof a2a_route_tasks.$inferSelect;
+export type RouteTaskTransport = 'a2a' | 'mcp';
+const taskTable = (transport: RouteTaskTransport) => transport === 'mcp' ? mcp_route_tasks : a2a_route_tasks;
 const maxTasks = 100;
 export class A2ARouteError extends Error {
   constructor(public reason: string, public status = 409, public taskId?: string, public fundsState = 'unknown', public rpcCode?: number) { super(reason); }
@@ -91,18 +93,20 @@ export function parseA2ARouteMessage(message: unknown) {
 function internalRequest(request: NextRequest, method: string, path: string, body?: unknown) {
   return new NextRequest(new URL(path, request.url), { method, headers: { Authorization: request.headers.get('authorization') || '', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(request.headers.get('X-ClawdMarket-Run-Kind') ? { 'X-ClawdMarket-Run-Kind': request.headers.get('X-ClawdMarket-Run-Kind')! } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
-async function routeTask(agentId: string, id: string) {
-  const [row] = await db.select().from(a2a_route_tasks).where(and(eq(a2a_route_tasks.id, id), eq(a2a_route_tasks.agent_id, agentId))).limit(1);
+async function routeTask(agentId: string, id: string, transport: RouteTaskTransport = 'a2a') {
+  const table = taskTable(transport);
+  const [row] = await db.select().from(table).where(and(eq(table.id, id), eq(table.agent_id, agentId))).limit(1);
   return row || null;
 }
-async function saveError(task: TaskRow, body: Record<string, unknown>, status: number, rpcCode?: number) {
+async function saveError(task: TaskRow, body: Record<string, unknown>, status: number, rpcCode?: number, transport: RouteTaskTransport = 'a2a'): Promise<never> {
+  const table = taskTable(transport);
   const code = typeof body.error_code === 'string' ? body.error_code : 'ROUTING_OPERATION_UNAVAILABLE';
-  await db.update(a2a_route_tasks).set({ last_error_code: code, updated_at: Math.floor(Date.now() / 1000) }).where(eq(a2a_route_tasks.id, task.id));
+  await db.update(table).set({ last_error_code: code, updated_at: Math.floor(Date.now() / 1000) }).where(eq(table.id, task.id));
   const lifecycle = task.route_id ? await inspectRouteLifecycle(task.route_id, `user_agent_${task.agent_id}`).catch(() => null) : null;
   throw new A2ARouteError(code, status, task.id, String(body.funds_state || lifecycle?.funds_state || (task.route_id ? 'unknown' : 'no_funds_moved')), rpcCode);
 }
 const terminalStates = new Set(['TASK_STATE_COMPLETED', 'TASK_STATE_CANCELED', 'TASK_STATE_FAILED']);
-export async function a2aRouteTaskView(row: TaskRow, historyLength = 1, includeArtifacts = true) {
+export async function a2aRouteTaskView(row: TaskRow, historyLength = 1, includeArtifacts = true, includePrivateResult = true) {
   const buyerId = `user_agent_${row.agent_id}`;
   const snapshot = row.route_id ? await inspectOwnedRoute(row.route_id, buyerId) : null;
   if (row.route_id && !snapshot)
@@ -123,7 +127,7 @@ export async function a2aRouteTaskView(row: TaskRow, historyLength = 1, includeA
       state = 'TASK_STATE_WORKING';
   }
   const [clock] = row.route_id ? await db.select({ updated: route_plans.updated_at }).from(route_plans).where(and(eq(route_plans.id, row.route_id), eq(route_plans.buyer_id, buyerId))).limit(1) : [];
-  const content = includeArtifacts && state === 'TASK_STATE_COMPLETED' && row.route_id ? await inspectOwnedRouteResult(row.route_id, buyerId) : null;
+  const content = includeArtifacts && includePrivateResult && state === 'TASK_STATE_COMPLETED' && row.route_id ? await inspectOwnedRouteResult(row.route_id, buyerId) : null;
   const data = { kind: row.action, task_id: row.id, route_id: row.route_id, mandate_id: row.mandate_id, last_error_code: row.last_error_code,
     ...(snapshot || {}), lifecycle, result: content,
     next_action: terminalStates.has(state) ? 'none' : !row.route_id ? 'replay_original_message' : snapshot?.route.state === 'planned' && !row.mandate_id ? 'owner_authorize_then_continue' : lifecycle?.next_action || 'inspect_route',
@@ -132,23 +136,25 @@ export async function a2aRouteTaskView(row: TaskRow, historyLength = 1, includeA
     ...(includeArtifacts ? { artifacts: [{ artifactId: row.action, name: 'Buyer-authorized routing task', parts: [{ data, mediaType: 'application/json' }] }] } : {}),
     ...(historyLength > 0 ? { history: [JSON.parse(row.initial_message)] } : {}) };
 }
-export async function getA2ARouteTask(agentId: string, id: string, historyLength = 1, includeArtifacts = true) {
-  const row = await routeTask(agentId, id);
+export async function getA2ARouteTask(agentId: string, id: string, historyLength = 1, includeArtifacts = true, transport: RouteTaskTransport = 'a2a') {
+  const row = await routeTask(agentId, id, transport);
   return row ? await a2aRouteTaskView(row, historyLength, includeArtifacts) : null;
 }
-async function bindMandate(task: TaskRow, mandateId: string) {
-  const [updated] = await db.update(a2a_route_tasks).set({ mandate_id: mandateId, updated_at: Math.floor(Date.now() / 1000) }).where(and(eq(a2a_route_tasks.id, task.id), sql `(${a2a_route_tasks.mandate_id} IS NULL OR ${a2a_route_tasks.mandate_id} = ${mandateId})`)).returning();
+async function bindMandate(task: TaskRow, mandateId: string, transport: RouteTaskTransport) {
+  const table = taskTable(transport);
+  const [updated] = await db.update(table).set({ mandate_id: mandateId, updated_at: Math.floor(Date.now() / 1000) }).where(and(eq(table.id, task.id), sql `(${table.mandate_id} IS NULL OR ${table.mandate_id} = ${mandateId})`)).returning();
   if (!updated)
     throw new A2ARouteError('A2A_MANDATE_CONFLICT', 409, task.id);
   return updated;
 }
-export async function sendA2ARouteWork(request: NextRequest, auth: Auth, value: unknown) {
+export async function sendRouteTaskWork(request: NextRequest, auth: Auth, value: unknown, transport: RouteTaskTransport = 'a2a') {
+  const table = taskTable(transport);
   requireA2AWriter(auth);
   const { message, data } = parseA2ARouteMessage(value);
   const replay = await claimA2AMessage(auth.agentId, message);
-  return write(`a2a-route:${auth.agentId}`, async () => {
-    let task = message.taskId ? await routeTask(auth.agentId, message.taskId) :
-      (await db.select().from(a2a_route_tasks).where(and(eq(a2a_route_tasks.agent_id, auth.agentId), eq(a2a_route_tasks.first_message_id, message.messageId))).limit(1))[0] || null;
+  return write(`route-task:${transport}:${auth.agentId}`, async () => {
+    let task = message.taskId ? await routeTask(auth.agentId, message.taskId, transport) :
+      (await db.select().from(table).where(and(eq(table.agent_id, auth.agentId), eq(table.first_message_id, message.messageId))).limit(1))[0] || null;
     if (message.taskId && !task)
       throw new A2ARouteError('TASK_NOT_FOUND', 404);
     if (task && !message.taskId && canonicalContract(JSON.parse(task.initial_message)) !== canonicalContract(message))
@@ -172,43 +178,43 @@ export async function sendA2ARouteWork(request: NextRequest, auth: Auth, value: 
         return a2aRouteTaskView(task);
     }
     if (data.action === 'route_work' && !priorSnapshot?.route.service_order_id) {
-      if (!a2aRoutingWritesEnabled())
+      if (!(transport === 'mcp' ? process.env.NODE_ENV !== 'production' || process.env.CLAWDMARKET_MCP_ROUTING_WRITES_ENABLED === 'true' : a2aRoutingWritesEnabled()))
         throw new A2ARouteError('A2A_ROUTING_WRITES_DISABLED', 503, task?.id);
     }
     if ('route_id' in data && !await inspectOwnedRoute(data.route_id, auth.syntheticUserId))
       throw new A2ARouteError('ROUTE_NOT_FOUND', 404);
     if (!task) {
       task = await db.transaction(async (tx) => {
-        const [existing] = await tx.select().from(a2a_route_tasks).where(and(eq(a2a_route_tasks.agent_id, auth.agentId), eq(a2a_route_tasks.first_message_id, message.messageId))).limit(1);
+        const [existing] = await tx.select().from(table).where(and(eq(table.agent_id, auth.agentId), eq(table.first_message_id, message.messageId))).limit(1);
         if (existing)
           return existing;
-        const [{ count }] = await tx.select({ count: sql<number> `COUNT(*)` }).from(a2a_route_tasks).where(eq(a2a_route_tasks.agent_id, auth.agentId));
+        const [{ count }] = await tx.select({ count: sql<number> `COUNT(*)` }).from(table).where(eq(table.agent_id, auth.agentId));
         if (Number(count) >= maxTasks)
           throw new A2ARouteError('A2A_ROUTE_TASK_LIMIT', 429);
-        const [created] = await tx.insert(a2a_route_tasks).values({ agent_id: auth.agentId, context_id: message.contextId || randomUUID(), first_message_id: message.messageId,
+        const [created] = await tx.insert(table).values({ agent_id: auth.agentId, context_id: message.contextId || randomUUID(), first_message_id: message.messageId,
           initial_message: JSON.stringify(message), action: data.action, route_id: 'route_id' in data ? data.route_id : null, created_at: Math.floor(Date.now() / 1000), updated_at: Math.floor(Date.now() / 1000) }).onConflictDoNothing().returning();
         if (created)
           return created;
-        const [raced] = await tx.select().from(a2a_route_tasks).where(and(eq(a2a_route_tasks.agent_id, auth.agentId), eq(a2a_route_tasks.first_message_id, message.messageId))).limit(1);
+        const [raced] = await tx.select().from(table).where(and(eq(table.agent_id, auth.agentId), eq(table.first_message_id, message.messageId))).limit(1);
         if (!raced || canonicalContract(JSON.parse(raced.initial_message)) !== canonicalContract(message))
           throw new A2ARouteError('A2A_MESSAGE_CONFLICT');
         return raced;
       });
     }
     if (!task.route_id && 'request' in data) {
-      const reference = `a2a:${task.id}`;
+      const reference = `${transport}:${task.id}`;
       const planned = await planRoute(internalRequest(request, 'POST', '/api/routes/plan', { ...data.request, client_reference: reference }));
       const body = await planned.json();
       if (!planned.ok)
-        return saveError(task, body, planned.status);
+        return saveError(task, body, planned.status, undefined, transport);
       const routeId = String(body.route.id);
-      const [bound] = await db.update(a2a_route_tasks).set({ route_id: routeId, last_error_code: null, updated_at: Math.floor(Date.now() / 1000) }).where(and(eq(a2a_route_tasks.id, task.id), sql `(${a2a_route_tasks.route_id} IS NULL OR ${a2a_route_tasks.route_id} = ${routeId})`)).returning();
+      const [bound] = await db.update(table).set({ route_id: routeId, last_error_code: null, updated_at: Math.floor(Date.now() / 1000) }).where(and(eq(table.id, task.id), sql `(${table.route_id} IS NULL OR ${table.route_id} = ${routeId})`)).returning();
       if (!bound)
         throw new A2ARouteError('A2A_TASK_BINDING_CONFLICT', 409, task.id);
       task = bound;
     }
     if (data.action === 'cancel_route')
-      return cancelA2ARouteTask(request, auth, task.id);
+      return cancelRouteTask(request, auth, task.id, transport);
     if ('mandate_id' in data) {
       // Validate through the canonical endpoint BEFORE pinning the first authority to the task.
       const [plan] = await db.select().from(route_plans).where(and(eq(route_plans.id, task.route_id!), eq(route_plans.buyer_id, auth.syntheticUserId))).limit(1);
@@ -219,25 +225,26 @@ export async function sendA2ARouteWork(request: NextRequest, auth: Auth, value: 
       }
       catch (cause) {
         if (cause instanceof RouteMandateError)
-          return saveError(task, { error_code: cause.code }, cause.status);
+          return saveError(task, { error_code: cause.code }, cause.status, undefined, transport);
         throw cause;
       }
-      task = await bindMandate(task, data.mandate_id);
+      task = await bindMandate(task, data.mandate_id, transport);
     }
     if (task.mandate_id && task.route_id) {
       // Global routing/admission, current buyer/agent/org policy and mandate budgets remain authoritative.
       const executed = await executeRoute(internalRequest(request, 'POST', `/api/routes/${task.route_id}/execute`, { mandate_id: task.mandate_id }), { params: Promise.resolve({ id: task.route_id }) });
       const body = await executed.json();
       if (!executed.ok)
-        return saveError(task, body, executed.status);
-      await db.update(a2a_route_tasks).set({ last_error_code: null, updated_at: Math.floor(Date.now() / 1000) }).where(eq(a2a_route_tasks.id, task.id));
+        return saveError(task, body, executed.status, undefined, transport);
+      await db.update(table).set({ last_error_code: null, updated_at: Math.floor(Date.now() / 1000) }).where(eq(table.id, task.id));
     }
-    return a2aRouteTaskView((await routeTask(auth.agentId, task.id))!);
+    return a2aRouteTaskView((await routeTask(auth.agentId, task.id, transport))!);
   });
 }
-export async function cancelA2ARouteTask(request: NextRequest, auth: Auth, id: string) {
+export async function cancelRouteTask(request: NextRequest, auth: Auth, id: string, transport: RouteTaskTransport = 'a2a') {
+  const table = taskTable(transport);
   requireA2AWriter(auth);
-  const task = await routeTask(auth.agentId, id);
+  const task = await routeTask(auth.agentId, id, transport);
   if (!task)
     throw new A2ARouteError('TASK_NOT_FOUND', 404);
   if (!task.route_id)
@@ -250,11 +257,16 @@ export async function cancelA2ARouteTask(request: NextRequest, auth: Auth, id: s
   const canceled = await cancelRoute(internalRequest(request, 'DELETE', `/api/routes/${task.route_id}`), { params: Promise.resolve({ id: task.route_id }) });
   const body = await canceled.json();
   if (!canceled.ok)
-    return saveError(task, body, canceled.status, -32002);
-  await db.update(a2a_route_tasks).set({ last_error_code: null, updated_at: Math.floor(Date.now() / 1000) }).where(eq(a2a_route_tasks.id, task.id));
-  return a2aRouteTaskView((await routeTask(auth.agentId, task.id))!);
+    return saveError(task, body, canceled.status, -32002, transport);
+  await db.update(table).set({ last_error_code: null, updated_at: Math.floor(Date.now() / 1000) }).where(eq(table.id, task.id));
+  return a2aRouteTaskView((await routeTask(auth.agentId, task.id, transport))!);
 }
 /** Route tasks are retained and capped at 100 per agent in this first rollout. */
-export async function listA2ARouteTaskRows(agentId: string) {
-  return db.select().from(a2a_route_tasks).where(eq(a2a_route_tasks.agent_id, agentId)).limit(maxTasks + 1);
+export async function listA2ARouteTaskRows(agentId: string, transport: RouteTaskTransport = 'a2a') {
+  const table = taskTable(transport);
+  return db.select().from(table).where(eq(table.agent_id, agentId)).limit(maxTasks + 1);
 }
+
+// Existing A2A callers retain their public API and namespace.
+export const sendA2ARouteWork = sendRouteTaskWork;
+export const cancelA2ARouteTask = cancelRouteTask;

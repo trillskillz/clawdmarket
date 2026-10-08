@@ -26,7 +26,8 @@ function withDiscoveryHeaders(response: NextResponse, request: NextRequest) {
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
-  if (request.method === 'OPTIONS' && isBrowserCorsEnabled(path)) {
+  // MCP must validate Origin in its own handler, including browser preflights.
+  if (request.method === 'OPTIONS' && path !== '/api/mcp' && isBrowserCorsEnabled(path)) {
     return withDiscoveryHeaders(new NextResponse(null, { status: 204 }), request)
   }
   if (path.startsWith('/dashboard')) {

@@ -40,6 +40,7 @@ export default defineConfig({
       CLAWDMARKET_ROUTE_PLANNING_ENABLED: 'true',
       CLAWDMARKET_ROUTE_EXECUTION_ENABLED: 'true',
       CLAWDMARKET_A2A_ROUTING_WRITES_ENABLED: 'true',
+      CLAWDMARKET_MCP_ROUTING_WRITES_ENABLED: 'true',
     },
   },
 });

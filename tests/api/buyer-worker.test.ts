@@ -113,7 +113,7 @@ before(async () => {
       requests.push(`${incoming.method} ${path}`)
       const request = new NextRequest(`${baseUrl}${path}`, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
       const id = path.split('/')[3], context = { params: Promise.resolve({ id, artifactId: path.split('/')[5] || '' }) }
-      const handler = path === '/api/a2a' ? (await import('@/app/api/a2a/route')).POST : path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
+      const handler = path === '/api/mcp' ? (await import('@/app/api/mcp/route')).POST : path === '/api/a2a' ? (await import('@/app/api/a2a/route')).POST : path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
         : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : path.endsWith('/retry') ? retry[incoming.method as 'GET' | 'POST'] : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST']
           : path.endsWith('/work-order') ? work.GET : path.endsWith('/attempt') ? attempt.POST : path.endsWith('/delivery') ? delivery.POST
             : path.endsWith('/result') ? result.GET : path.endsWith('/artifacts') ? artifacts.POST : path.includes('/artifacts/') ? download.GET : getRoute.GET
@@ -817,4 +817,38 @@ test('A2A task follows canonical funding and settlement, rejects funded cancella
   await db.update(schema.settlement_transfers).set({ status: 'pending' }).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))
   const uncertain = await rpc('GetTask', { id: task.id }); assert.notEqual(uncertain.body.result.status.state, 'TASK_STATE_COMPLETED')
   assert.equal(uncertain.body.result.artifacts[0].parts[0].data.lifecycle.receipt, null)
+})
+
+test('MCP Tasks return one private backed result after canonical funding and reject output without current payout proof', async () => {
+  const f = await fixture(undefined, undefined, true), count = broadcastCalls
+  const input = { name: 'route_work', arguments: { client_reference: `mcp-financial-${crypto.randomUUID()}`, route_id: f.routeId, mandate_id: f.mandate.id }, task: {} }
+  async function rpc(method: string, params: unknown) {
+    const response = await fetch(`${baseUrl}/api/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })
+    return { status: response.status, body: await response.json() }
+  }
+  const started = await rpc('tools/call', input)
+  assert.equal(started.status, 200, JSON.stringify(started.body))
+  const task = started.body.result.task
+  assert.equal(task.status, 'input_required'); assert.equal(broadcastCalls, count)
+  const { funded, decision } = await routeDelivery(f)
+  const inspection = await rpc('tools/call', { name: 'get_route_task', arguments: { task_id: task.taskId } })
+  assert.equal(inspection.body.result.structuredContent.lifecycle.phase, 'awaiting_buyer')
+  assert.equal((await rpc('tasks/cancel', { taskId: task.taskId })).status, 409)
+  const outcome = await runBuyerRoute({ ...f, decision }); assert.equal(outcome.state, 'completed')
+  const result = await rpc('tasks/result', { taskId: task.taskId })
+  assert.equal(result.status, 200); assert.equal(result.body.result.isError, false)
+  const data = result.body.result.structuredContent
+  assert.deepEqual(data.lifecycle.receipt, outcome.receipt)
+  assert.equal(data.result.delivery.content_hash, decision.content_hash)
+  assert.equal(data.result.content.artifact.result, 'private-route-result')
+  assert.equal((await rpc('tools/call', input)).body.result.task.taskId, task.taskId)
+  assert.deepEqual((await rpc('tasks/result', { taskId: task.taskId })).body.result, result.body.result)
+  assert.equal(broadcastCalls, count + 2)
+  assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id, f.routeId))).length, 1)
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)))[0].active_orders, 0)
+  await db.update(schema.settlement_transfers).set({ status: 'pending' }).where(eq(schema.settlement_transfers.trade_id, funded.trade_id!))
+  assert.equal((await rpc('tasks/get', { taskId: task.taskId })).body.result.status, 'completed')
+  const uncertain = await rpc('tasks/result', { taskId: task.taskId })
+  assert.equal(uncertain.status, 503); assert.equal(uncertain.body.error.message, 'MCP_RESULT_BACKING_UNAVAILABLE')
+  assert.equal(JSON.stringify(uncertain.body).includes('private-route-result'), false)
 })

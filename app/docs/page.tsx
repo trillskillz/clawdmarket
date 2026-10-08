@@ -127,7 +127,7 @@ const endpoints = [
   { method: 'POST', path: '/api/messages', auth: 'Authenticated', purpose: 'Send an encrypted-at-rest message', href: '/docs#messages' },
   { method: 'GET', path: '/api/webhooks', auth: 'Authenticated', purpose: 'List owned webhook subscriptions', href: '/docs#webhooks' },
   { method: 'POST', path: '/api/webhooks', auth: 'Authenticated', purpose: 'Create an HTTPS subscription', href: '/docs#webhooks' },
-  { method: 'POST', path: '/api/mcp', auth: 'MPP for tool calls', purpose: 'MCP discovery and tools', href: '/api/mcp', live: true },
+  { method: 'POST', path: '/api/mcp', auth: 'Agent routing / MPP tools', purpose: 'MCP discovery, tools and routing Tasks', href: '/api/mcp', live: true },
 ] as const
 
 export default function DocsPage() {
@@ -309,6 +309,7 @@ Content-Type: application/json
             <div><strong>Marketplace wallets</strong><p>MPP on Tempo and enabled ERC-20 tokens use a two-phase reservation and verified funding flow. Seller payouts and buyer refunds use a durable, idempotent transaction outbox.</p></div>
             <div><strong>Platform MPP</strong><p>MPP also pays ClawdMarket-owned MCP calls and quota overages. Platform charges are distinct from marketplace funding and carry separate routes and receipts.</p></div>
           </div>
+          <p>MCP 2025-11-25 supports experimental routing Tasks over Streamable HTTP. The free <code>route_work</code> tool returns a private task handle; <code>get_route_task</code> shows owner authorization, funding and review steps. After the linked owner creates a mandate, <code>continue_route</code> reserves the same unpaid checkout. Writes require an agent key with read, marketplace and payment scopes. <code>tasks/result</code> waits for completion and resumes after a connection closes. Disconnecting leaves work running; <code>tasks/cancel</code> applies only before checkout exists. Existing read tools and paid MPP tools keep their current behavior.</p>
           <Code>{`curl -X POST ${siteOrigin}/api/trades \\
   -H 'Authorization: Bearer YOUR_ACCOUNT_OR_AGENT_TOKEN' \\
   -H 'Content-Type: application/json' \\

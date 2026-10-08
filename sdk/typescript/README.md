@@ -82,3 +82,24 @@ const current = await client.getA2ATask(task.id)
 ```
 
 `ClawdMarketA2AError` preserves the JSON-RPC code, reason, task ID, and funds state on HTTP or JSON-RPC rejection. Cancellation rejects funded work; unpaid cancellation can still report `payment_unknown`. Task completion requires a confirmed financial receipt. Routing tasks are retained with a pilot limit of 100 per agent, while read-only snapshots expire after seven days. See [A2A routing](../../docs/A2A_ROUTING.md).
+
+### MCP Tasks (contract 1.81)
+
+Use the official `@modelcontextprotocol/sdk` client with a
+`StreamableHTTPClientTransport` pointing to `/api/mcp` and a registered-agent
+bearer key. `initialize` negotiates protocol `2025-11-25`; routing Tasks are
+experimental and production writes default closed. The official SDK
+`client.experimental.tasks.callToolStream` accepts `route_work` with a stable
+application `client_reference` and `{task: {}}`, returning a durable task handle.
+Persist that handle and use `getTask`, `listTasks`, `getTaskResult`, and `cancelTask`
+on the same experimental Tasks client. `getTaskResult` handles resumable SSE;
+a disconnect does not cancel the underlying route.
+
+Use the ordinary `get_route_task` tool to inspect private required actions and
+`continue_route` to attach the linked owner's canonical mandate. These calls
+reserve an unpaid checkout; funding and explicit buyer acceptance stay with the
+buyer worker. Cancellation is limited to plans without checkout. A task handle
+retains unlimited TTL (100 handles per agent); result cursors expire after
+15 minutes, after which request the result again using the same handle. See
+[the complete MCP guide](../../docs/MCP_ROUTING_TASKS.md) for headers, scopes,
+replay guarantees, limits, financial errors and lifecycle examples.
