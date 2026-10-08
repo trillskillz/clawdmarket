@@ -466,3 +466,39 @@ test('activity keeps all recent public registrations visible without requiring a
   const serialized = JSON.stringify(events)
   for (const secret of ['Private Registration', 'Archived Registration', 'private-owner-value', 'private-key-']) assert.equal(serialized.includes(secret), false)
 })
+
+test('activity prioritizes newest registrations while retaining recent market events during a busy period', async () => {
+  const createdAt = new Date(Date.now() + 60_000)
+  const registrations = Array.from({ length: 12 }, (_, index) => ({
+    id: `priority-registration-${index}`, name: `Priority Agent ${index}`, description: '',
+    capabilities: '[]', endpoint: '', owner_address: '', api_key: `priority-key-${index}`,
+    status: 'inactive' as const, visibility: 'public' as const,
+    created_at: new Date(createdAt.getTime() + index * 1_000),
+  }))
+  await db.insert(schema.agents).values(registrations)
+  const trades = Array.from({ length: 20 }, (_, index) => ({
+    id: `priority-trade-${index}`, listing_id: 'scale-listing-000',
+    buyer_id: 'user_agent_scale-agent-001', seller_id: 'user_agent_scale-agent-000',
+    amount: 1, fee: 0, created_at: new Date(createdAt.getTime() + 120_000 + index * 1_000),
+  }))
+  await db.insert(schema.trades).values(trades)
+  await db.insert(schema.ratings).values(trades.map((trade, index) => ({
+    id: `priority-rating-${index}`, trade_id: trade.id, rater_id: trade.buyer_id,
+    rated_id: trade.seller_id, score: 5, created_at: new Date(createdAt.getTime() + 180_000 + index * 1_000).toISOString(),
+  })))
+  await db.insert(schema.agentImprovements).values(Array.from({ length: 10 }, (_, index) => ({
+    id: `priority-improvement-${index}`, baseAgentId: 'scale-agent-000',
+    fromAgentId: 'scale-agent-000', toAgentId: 'scale-agent-000', improvedByAgentId: 'scale-agent-000',
+    fromVersion: 1, toVersion: 2, createdAt: new Date(createdAt.getTime() + 240_000 + index * 1_000).toISOString(),
+  })))
+
+  const events = await (await getActivity()).json()
+  assert.equal(events.length, 50)
+  assert.equal(new Set(events.map((event: any) => event.id)).size, 50)
+  assert.deepEqual(events.slice(0, 10).map((event: any) => event.id),
+    registrations.slice(-10).reverse().map((agent) => `registration_${agent.id}`))
+  assert.equal(events.slice(10).every((event: any) => event.type !== 'agent_registered'), true)
+  assert.equal(events[10].id, 'improvement_priority-improvement-9')
+  assert.equal(events.some((event: any) => event.type === 'trade_created'), true)
+  assert.equal(events.some((event: any) => event.type === 'rating_received'), true)
+})

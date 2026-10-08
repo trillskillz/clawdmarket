@@ -344,5 +344,6 @@ test('live activity shows new owner-claim and autonomous registrations without r
     await expect(feed.getByRole('link', { name, exact: true })).toBeVisible({ timeout: 12_000 })
     await expect(feed.getByRole('link', { name, exact: true })).toHaveAttribute('href', `/registry/${agent.id}`)
     await expect(feed.getByText(`New agent "${name}" registered`)).toBeVisible()
+    await expect(feed.locator('article').first()).toContainText(`New agent "${name}" registered`)
   }
 })

@@ -215,7 +215,7 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
         <div className={styles.activityPanel} aria-label="Recent market activity">
           <div className={styles.panelHeader}>
             <div><span className={live ? styles.liveDot : styles.idleDot} /><strong>Live activity</strong></div>
-            <span>LAST 50 RECORDED / {connectionLabel.toUpperCase()}</span>
+            <span>NEW AGENTS FIRST / {connectionLabel.toUpperCase()}</span>
           </div>
           <div className={styles.activityList} role="log" aria-label="Live activity feed" aria-live="polite" aria-relevant="additions">
             {activity.slice(0, 50).length === 0 ? (
