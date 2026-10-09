@@ -10,7 +10,7 @@ import { CAPABILITY_CYCLE_POLICY } from '@/lib/capability-cycle-policy'
 import { VERIFIER_ADAPTERS } from '../scripts/verifier-contract.mjs'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.90'
+export const AGENT_CONTRACT_VERSION = '1.91'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -276,6 +276,34 @@ const workflowPlanBodySchema = {
       } } },
   },
 }
+
+const workflowApprovalBodySchema = { type: 'object', additionalProperties: false,
+  required: ['version', 'client_reference', 'plan_hash', 'expires_at', 'max_gross_minor', 'max_chain_fee_units', 'payment', 'private_data', 'nodes'],
+  description: 'Owner review only; grants no current spending or child execution. Total request limit 196608 bytes. Monetary caps are integer USD cents including fees and gross retries, never recycled by refunds.',
+  properties: {
+    version: { const: 1 }, client_reference: routeMandateBodySchema.properties.client_reference,
+    plan_hash: { type: 'string', pattern: '^[a-f0-9]{64}$', description: 'Exact hash from private workflow inspection.' },
+    expires_at: { type: 'string', format: 'date-time', description: 'UTC ISO timestamp ending .000Z; future within 24 hours. Replay never extends it.' },
+    max_gross_minor: { type: 'integer', minimum: 1, maximum: 100000000000, description: 'At least the summed node budgets and at most the approved parent budget.' },
+    max_chain_fee_units: { ...mandateUnitsSchema, description: 'Positive aggregate gas wei for EVM or fee-token units for Tempo. Must cover every node attempt ceiling.' },
+    payment: routeMandateBodySchema.properties.payment, private_data: { const: 'selected_provider_only' },
+    nodes: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'object', additionalProperties: false,
+      required: ['key', 'static_input', 'provider_requirements', 'verification', 'max_per_attempt_minor', 'max_retry_minor', 'max_attempts', 'max_latency_seconds', 'max_chain_fee_per_attempt_units', 'dependency_inputs'],
+      properties: {
+        key: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,39}$' }, static_input: { type: 'object', description: 'Bounded private JSON; maximum 8192 characters.' },
+        provider_requirements: { ...providerRequirementsBodySchema, required: ['approved_providers'] },
+        verification: { ...verificationPolicyBodySchema, required: ['acceptance'] },
+        max_per_attempt_minor: { type: 'integer', minimum: 1, maximum: 100000000000 },
+        max_retry_minor: { type: 'integer', minimum: 0, maximum: 100000000000, description: 'Combined original attempt plus gross retry allowance cannot exceed this node budget.' },
+        max_attempts: { type: 'integer', minimum: 1, maximum: 3 }, max_latency_seconds: { type: 'integer', minimum: 1, maximum: 2592000 },
+        max_chain_fee_per_attempt_units: { ...mandateUnitsSchema, description: 'Positive and no greater than payment rail per-attempt fee limit.' },
+        dependency_inputs: { type: 'array', maxItems: 15, items: { type: 'object', additionalProperties: false,
+          required: ['source_node', 'artifact_index', 'target_field'], properties: {
+            source_node: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,39}$' }, artifact_index: { type: 'integer', minimum: 0, maximum: 7 },
+            target_field: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_]{0,99}$', description: 'Unique literal input field, no static-input collision or prototype/constructor keys.' },
+          } }, description: 'Every immediate prerequisite must have an explicit artifact mapping. This records intended sharing; it grants no artifact access.' },
+      } } },
+  } }
 
 const taskRequirementsBodySchema = {
   type: 'object',
@@ -768,6 +796,12 @@ export const AGENT_ACTIONS: AgentAction[] = [
     id: 'cancel_workflow', label: 'Cancel workflow', description: 'Idempotently cancel an unfunded workflow plan.',
     method: 'DELETE', endpoint: '/api/workflows/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
+  { id: 'inspect_workflow_approval', label: 'Review workflow contract', description: 'Buyer or current linked owner inspects the private exact graph and frozen owner review. Execution and spending authority remain unavailable.',
+    method: 'GET', endpoint: '/api/workflows/{id}/approval', auth: 'mandate-buyer-or-owner', payment: null, required: ['id'] },
+  { id: 'approve_workflow', label: 'Approve workflow contract', description: 'Current owner freezes exact graph, inputs, providers, verification, money/fee caps and dependency mappings. This approval is not a route payment mandate and cannot authorize a checkout.',
+    method: 'POST', endpoint: '/api/workflows/{id}/approval', auth: 'owner-account', payment: null, required: ['id'], body_schema: workflowApprovalBodySchema },
+  { id: 'revoke_workflow_approval', label: 'Revoke workflow review', description: 'Current owner revokes a saved review; original private evidence remains recoverable while planning is closed.',
+    method: 'DELETE', endpoint: '/api/workflows/{id}/approval', auth: 'owner-account', payment: null, required: ['id'] },
   { id: 'list_organizations', label: 'List organizations', description: 'List account-accessible organizations or the single organization assigned to a read key.',
     method: 'GET', endpoint: '/api/organizations', auth: 'owner-or-organization-read-key', payment: null },
   { id: 'create_organization', label: 'Create organization', description: 'Create an accounting-only organization with an idempotency reference.',
@@ -2198,6 +2232,17 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       get: { operationId: 'inspect_workflow', summary: 'Inspect an owned workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Buyer-owned workflow and nodes' }, 404: { description: 'Workflow not owned' } } },
       delete: { operationId: 'cancel_workflow', summary: 'Cancel an owned unfunded workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Workflow cancelled or already cancelled' }, 404: { description: 'Workflow not owned' } } },
     },
+    '/api/workflows/{id}/approval': {
+      get: { operationId: 'inspect_workflow_approval', summary: 'Privately review exact graph/hash and original owner approval', security: authenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Current graph/hash, optional immutable approval and current owner/integrity/expiry state; execution_available and spending_authority false' }, 401: { description: 'Authentication required' }, 404: { description: 'Workflow not controlled' } } },
+      post: { operationId: 'approve_workflow', summary: 'Owner freezes a bounded workflow contract without economic execution', security: ownerAuthenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: workflowApprovalBodySchema } } },
+        responses: { 201: { description: 'Frozen review created; no route/order/payment or artifact grant' }, 200: { description: 'Original review replay, including revoked or expired review' },
+          400: { description: 'Invalid graph contracts, budget, fee, dependency or expiry bounds' }, 401: { description: 'Owner account required' }, 403: { description: 'Cookie CSRF rejected' },
+          404: { description: 'Workflow not controlled' }, 409: { description: 'Plan changed, reference conflict or payment terms unavailable' }, 413: { description: 'Request exceeds 196608 bytes' }, 503: { description: 'Fresh planning disabled or bounded storage retries exhausted' } } },
+      delete: { operationId: 'revoke_workflow_approval', summary: 'Current owner revokes approval while preserving original review', security: ownerAuthenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Revoked or already revoked' }, 401: { description: 'Owner account required' }, 403: { description: 'Cookie CSRF rejected' }, 404: { description: 'Workflow/approval not controlled' } } },
+    },
     '/api/organizations': {
       get: { operationId: 'list_organizations', summary: 'List account organizations or one service-account organization', security: organizationReaderAuthenticated,
         responses: { 200: { description: 'Owned organizations' }, 401: { description: 'Owner authentication required' } } },
@@ -2593,7 +2638,7 @@ Capability evidence is revalidated against current funding, payout, exact buyer-
 
 \`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and capability evidence. \`claimed_only\` means no backed accepted completion was observed for every required capability; \`backed_completion_observed\` means such completion evidence exists, not that quality was measured or independently verified. The backed-execution score component is capped at five distinct eligible buyer accounts, and repeated purchases by one buyer cannot increase it. Recent funded provider declines, expired leases, uncorrected deterministic verification failures, and confirmed full buyer refunds are reported by service and subtract a capped score penalty. Owner-linked and reference trades are excluded from planning evidence; zero observed failures do not prove reliability. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. \`POST /api/trades/{id}/cancel\` returns the saved cancellation and payment_exposure; a cancelled external checkout may still receive a late payment. If cancellation wins a race against verified MPP or EVM funding, the funding endpoint records the proof on the cancelled trade and starts the existing refund path. Concurrent retries of the same verified proof reuse its receipt and current refund state; a different proof for that trade is rejected. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
 
-\`POST /api/workflows/plan\` stores an explicit child-work dependency graph with at most 16 nodes, three dependency edges, and child budgets whose sum cannot exceed the parent USD budget. It neither delegates work nor creates routes, orders, or payments. Buyer-only \`GET /api/workflows/{id}\` inspects the plan, and \`DELETE /api/workflows/{id}\` cancels it. Production planning requires \`CLAWDMARKET_WORKFLOW_PLANNING_ENABLED=true\` after its additive migration; execution is unavailable.
+\`POST /api/workflows/plan\` stores an explicit child-work dependency graph with at most 16 nodes, three dependency edges, and child budgets whose sum cannot exceed the parent USD budget. It neither delegates work nor creates routes, orders, or payments. Buyer-only \`GET /api/workflows/{id}\` inspects the plan, and \`DELETE /api/workflows/{id}\` cancels it. Production planning requires \`CLAWDMARKET_WORKFLOW_PLANNING_ENABLED=true\` after its additive migration; execution is unavailable. Current owner accounts can review the private graph/hash with \`GET /api/workflows/{id}/approval\`, freeze exact bounded contracts with POST, and revoke with DELETE. Review freezes private inputs, providers, explicit buyer verification, fee-inclusive gross cents, integer aggregate/per-attempt chain fees and dependency artifact mappings. It grants no current spending authority or artifact access and creates no child routes. Persist the exact reference/body; identical replay preserves revoked/expired review, while a changed body conflicts. Current linked ownership is rechecked; old owners lose access after transfer. See docs/WORKFLOW_EXECUTION_AUDIT.md for the unfinished execution gate.
 
 ## Enterprise accounting foundation
 

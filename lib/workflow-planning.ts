@@ -1,8 +1,10 @@
 import 'server-only'
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { normalizeCapability } from './capabilities'
 import { money } from './service-definitions'
 import type { workflow_nodes, workflows } from './schema'
+import { canonicalContract } from './structured-verification'
 
 const capabilityList = z.array(z.string().trim().min(1).max(80)).min(1).max(20)
 const workflowNodeInput = z.object({
@@ -81,7 +83,7 @@ export function normalizeWorkflow(input: Input) {
 export function workflowDto(workflow: typeof workflows.$inferSelect, nodes: Array<typeof workflow_nodes.$inferSelect>) {
   return {
     id: workflow.id, client_reference: workflow.client_reference, objective: workflow.objective,
-    state: workflow.state, execution_available: false, funds_moved: false,
+    state: workflow.state, plan_hash: workflowPlanHash(workflow, nodes), execution_available: false, funds_moved: false,
     max_budget: { amount: minorAmount(workflow.max_budget_minor), currency: workflow.currency },
     allocated_budget: { amount: minorAmount(nodes.reduce((sum, node) => sum + node.budget_minor, 0)), currency: workflow.currency },
     deadline_seconds: workflow.deadline_seconds,
@@ -93,4 +95,30 @@ export function workflowDto(workflow: typeof workflows.$inferSelect, nodes: Arra
     })),
     created_at: workflow.created_at, updated_at: workflow.updated_at,
   }
+}
+
+/** Bind the stored graph and its materialized nodes; neither representation may drift. */
+export function workflowSnapshot(workflow: typeof workflows.$inferSelect, rows: Array<typeof workflow_nodes.$inferSelect>) {
+  try {
+    const stored = JSON.parse(workflow.plan_json) as NormalizedWorkflow
+    const parsed = workflowPlanInput.parse({ client_reference: workflow.client_reference, objective: stored.objective,
+      max_budget: { amount: minorAmount(stored.max_budget_minor), currency: 'USD' }, deadline_seconds: stored.deadline_seconds,
+      nodes: stored.nodes.map((node) => ({ key: node.key, objective: node.objective, required_capabilities: node.required_capabilities,
+        budget: { amount: minorAmount(node.budget_minor), currency: 'USD' }, depends_on: node.depends_on, deadline_seconds: node.deadline_seconds })) })
+    const normalized = normalizeWorkflow(parsed)
+    const materialized = rows.map((node) => ({ key: node.node_key, objective: node.objective,
+      required_capabilities: JSON.parse(node.required_capabilities), budget_minor: node.budget_minor,
+      depends_on: JSON.parse(node.depends_on), deadline_seconds: node.deadline_seconds, depth: node.depth }))
+      .sort((a, b) => a.key.localeCompare(b.key))
+    if (canonicalContract(stored) !== canonicalContract(normalized) || canonicalContract(materialized) !== canonicalContract(normalized.nodes)
+      || rows.some((node) => node.workflow_id !== workflow.id) || workflow.objective !== normalized.objective
+      || workflow.max_budget_minor !== normalized.max_budget_minor || workflow.deadline_seconds !== normalized.deadline_seconds || workflow.currency !== 'USD') {
+      throw new Error('Stored graph does not match its nodes')
+    }
+    return { kind: 'workflow-plan-v1' as const, id: workflow.id, buyer_id: workflow.buyer_id, ...normalized }
+  } catch { throw new WorkflowPlanError('WORKFLOW_CONTRACT_INVALID', 'Stored workflow contract is invalid') }
+}
+
+export function workflowPlanHash(workflow: typeof workflows.$inferSelect, nodes: Array<typeof workflow_nodes.$inferSelect>) {
+  return createHash('sha256').update(canonicalContract(workflowSnapshot(workflow, nodes))).digest('hex')
 }

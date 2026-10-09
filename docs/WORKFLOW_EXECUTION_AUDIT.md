@@ -1,8 +1,11 @@
 # Bounded workflow execution: implementation audit
 
-Status: design checkpoint for P2.1, after the contract 1.90 release. Workflow
-execution is not implemented or enabled. This checkpoint does not count as an
-acceptance-complete publishing part.
+Status: P2.1 implementation audit, after the verified contract 1.90 release.
+Local contract 1.91 adds the [owner-review boundary](WORKFLOW_OWNER_APPROVAL.md):
+exact stored-graph/node validation, immutable bounded contracts, current linked
+ownership, replay and revocation. Workflow execution is not implemented or
+enabled. This intermediate foundation does not count as an acceptance-complete
+publishing part.
 
 ## Existing boundaries
 

@@ -2,6 +2,10 @@
 set -euo pipefail
 
 required_files=(
+  "lib/workflow-approval.ts"
+  "docs/WORKFLOW_OWNER_APPROVAL.md"
+  "app/api/workflows/[id]/approval/route.ts"
+  "migrations/2026-10-09-workflow-owner-approval-v1.sql"
   "scripts/verify-evidence-query-compatibility.ts"
   "lib/reputation-evidence-sql.ts"
   "lib/reputation-evidence-policy.ts"

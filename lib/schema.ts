@@ -627,6 +627,24 @@ export const bids = sqliteTable('bids', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
+/** Frozen owner review only. Execution must add atomic child exposure and recovery before consuming approval. */
+export const workflow_approvals = sqliteTable('workflow_approvals', {
+  id: text('id').primaryKey(),
+  workflow_id: text('workflow_id').notNull().unique().references(() => workflows.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(),
+  plan_hash: text('plan_hash').notNull(),
+  contract_hash: text('contract_hash').notNull(),
+  contract_json: text('contract_json').notNull(),
+  state: text('state', { enum: ['approved', 'revoked'] }).notNull().default('approved'),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  revoked_at: integer('revoked_at', { mode: 'timestamp' }),
+  revoked_by: text('revoked_by').references(() => users.id, { onDelete: 'restrict' }),
+}, (table) => [uniqueIndex('workflow_approvals_owner_reference_idx').on(table.owner_account_id, table.client_reference)]);
+
 /** Last observed worker run, used only for operator health inspection. */
 export const worker_heartbeats = sqliteTable('worker_heartbeats', {
   worker_name: text('worker_name').primaryKey(),
