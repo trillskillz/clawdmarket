@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P2.1 bounded workflow execution. Local contract **1.92** now implements exact owner-reviewed contracts, atomic parent/node gross reservation, common deadlines, current accepted/backed dependencies, immutable selected-provider grants, a finite restartable buyer workflow worker and aggregate reconciliation. A two-node paid HTTP/provider loop passes through separate-process deaths and original receipt recovery using dummy wallets and an RPC simulation. Actual disposable-chain evidence, measured fees and the remaining adverse/retry/crash matrix are next; full P2.1 remains unfinished and the publishing counter stays **0/10**. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
+**Next:** P2.1 bounded workflow execution. Local contract **1.92** now implements exact owner-reviewed contracts, atomic parent/node gross reservation, common deadlines, current accepted/backed dependencies, immutable selected-provider grants, a finite restartable buyer workflow worker and aggregate reconciliation. A two-node paid HTTP/provider loop passes through separate-process deaths and original receipt recovery using dummy wallets and an RPC simulation. Disposable EVM evidence now passes; recording measured fees in aggregate reconciliation and the remaining adverse/retry/crash matrix are next; full P2.1 remains unfinished and the publishing counter stays **0/10**. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -1264,3 +1264,36 @@ Runbook: [WORKFLOW_EXECUTION_LOCAL.md](docs/WORKFLOW_EXECUTION_LOCAL.md).
 Next: actual disposable EVM HTTP/provider evidence, measured transaction fees and
 remaining adverse/retry/crash boundaries. No push, deployment, live funds or
 production flag changes. Full P2.1 remains unfinished; **0/10**.
+
+
+### P2.1 local checkpoint — actual disposable EVM provider loop
+
+A loopback-only, unforked Anvil 1.8.5 EVM deploys the checked dummy ERC-20 fixture
+and funds only public dummy test wallets. The existing two-node HTTP/provider
+recovery test now runs on the real VM as well as the RPC simulation. Actual
+funding, buyer decisions, seller payouts to a distinct wallet, recipient artifact
+download and aggregate receipt recovery pass through separate buyer/provider
+process deaths. Original pending funding/payout confirmation is resumed, with no
+replacement economic order or transfer. All task-owned processes are awaited and
+closed, and fixture/configuration changes are restored.
+
+Both funding transfers and both payouts have real successful EVM receipts. Exact
+balances prove buyer cost 2.10 tokens, seller payout 2.00 and retained marketplace
+fees 0.10. Native balance differences equal the four receipts' measured gas
+charges. The full buyer suite passed **32/32**, including existing retry, pending
+broadcast/refund, pause, A2A and MCP recovery. Typecheck and targeted lint pass.
+Evidence: `/tmp/clawdmarket-workflow-anvil-buyer-suite.log`,
+`/tmp/clawdmarket-workflow-anvil-typecheck-final.log` and
+`/tmp/clawdmarket-workflow-anvil-lint.log`.
+
+Run this acceptance case with `CLAWDMARKET_TEST_ANVIL_BINARY` pointing to a verified
+local Anvil executable; ordinary test runs explicitly skip it when absent. The
+local official release archive was SHA256-verified before execution; compiler
+0.8.30 was checked against the official Solidity binary digest. Nothing was
+installed outside /tmp and no application dependency or production flag changed.
+The committed source/artifact pair is guarded by its source SHA256.
+
+The aggregate still records fee ceilings with actual fees null: this checkpoint
+measures them in the test without persisting them in the marketplace. Next add
+verified receipt fee evidence and separate buyer/treasury aggregates, then finish
+the remaining adverse/retry/crash matrix. Full P2.1 remains unfinished; **0/10**.

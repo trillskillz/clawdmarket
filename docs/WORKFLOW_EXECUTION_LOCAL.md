@@ -103,3 +103,25 @@ passed. The selected 16 existing Chromium journeys plus the new built-app
 workflow cancellation/recovery journey passed (17 total, with the new cache
 assertion corrected for Next.js max-age=0 and rerun). Evidence files are recorded
 in the master plan. These results do not replace the remaining audit gates.
+
+
+## Disposable EVM acceptance checkpoint
+
+The same two-node HTTP/provider test also runs on an owned, loopback-only,
+unforked [Anvil EVM](https://getfoundry.sh/anvil/index.html), with the committed
+dummy token source/artifact pair and separate payout wallet. Set
+`CLAWDMARKET_TEST_ANVIL_BINARY` to a checksum-verified local executable. The helper
+owns startup/shutdown, requires a guarded disposable database, and never forks or
+connects to a public chain. The normal test suite explicitly skips this extra
+case when the executable is absent.
+
+```sh
+CLAWDMARKET_TEST_ANVIL_BINARY=/absolute/path/to/anvil   node --conditions=react-server --import tsx --test tests/api/buyer-worker.test.ts
+```
+
+The full buyer suite passes 32/32 with this case enabled. Real token balances,
+four successful transfer receipts and separate buyer/treasury native balance
+changes verify fees, total cost, payout and retained marketplace fees. Original
+pending confirmations are recovered through the existing APIs/outbox. Aggregate
+fee persistence is still the next implementation; test measurements must not be
+mistaken for recorded receipt fields. Full P2.1 and the 0/10 counter are unchanged.

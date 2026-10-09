@@ -1,0 +1,93 @@
+{
+  "compiler_version": "0.8.30+commit.73712a01.Linux.g++",
+  "source_sha256": "6fe41922efe732f44c08ec48dd5fb7bb166079e928c32603f96a8b1ca10aff1f",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "name": "Transfer",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "balanceOf",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "mint",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "transfer",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600e575f5ffd5b506102d58061001c5f395ff3fe608060405234801561000f575f5ffd5b506004361061003f575f3560e01c806340c10f191461004357806370a0823114610058578063a9059cbb1461008a575b5f5ffd5b61005661005136600461021d565b6100ad565b005b610077610066366004610245565b5f6020819052908152604090205481565b6040519081526020015b60405180910390f35b61009d61009836600461021d565b61011d565b6040519015158152602001610081565b6001600160a01b0382165f90815260208190526040812080548392906100d4908490610279565b90915550506040518181526001600160a01b038316905f907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9060200160405180910390a35050565b335f908152602081905260408120548211156101695760405162461bcd60e51b815260206004820152600760248201526662616c616e636560c81b604482015260640160405180910390fd5b335f908152602081905260408120805484929061018790849061028c565b90915550506001600160a01b0383165f90815260208190526040812080548492906101b3908490610279565b90915550506040518281526001600160a01b0384169033907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9060200160405180910390a35060015b92915050565b80356001600160a01b0381168114610218575f5ffd5b919050565b5f5f6040838503121561022e575f5ffd5b61023783610202565b946020939093013593505050565b5f60208284031215610255575f5ffd5b61025e82610202565b9392505050565b634e487b7160e01b5f52601160045260245ffd5b808201808211156101fc576101fc610265565b818103818111156101fc576101fc61026556fea26469706673582212207b9d3eb2d5d17281a15fa9fde6dc029ac46a632dcf8d5ecca4bc6268757cfc3f64736f6c634300081e0033"
+}
