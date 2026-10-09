@@ -217,6 +217,10 @@ export default function DashboardPage() {
     setFocusedTradeId(params.get('trade') || undefined);
   }, []);
 
+  useEffect(() => {
+    if (isAdmin && new URLSearchParams(window.location.search).get('tab') === 'admin') setActiveTab('admin');
+  }, [isAdmin]);
+
   const selectTab = (tab: DashboardTab) => {
     setActiveTab(tab);
     const url = new URL(window.location.href);

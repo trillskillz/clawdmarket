@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P3 routing operations console over the existing aggregate health and revision-bound admission controls. Local contract **1.97** completes bounded spending service accounts for exact human-approved direct-service credit orders, with real disposable-chain deposit, private provider restart, buyer acceptance after key revocation, immutable gross limits and crash/race recovery. Contract **1.96** completes explicitly shared private providers, **1.95** exact service purchasing approvals, **1.94** departmental ceilings and **1.93** bounded EVM workflows. The local publishing counter is **5/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Other checkout paths and public route/workflow discovery do not inherit these bounded grants. Broader delegated rails/purchases and multi-node Tempo paid proof remain separate. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain external prerequisites. Global routing writes remain closed.
+**Next:** P3 owner enterprise observation/configuration over existing organization, department and purchasing APIs: one private owner workspace for current limits/assignment and original purchase history, preserving exact approvals and financial recovery. The routing operations console is locally accepted over existing HTTP contract **1.97**, with real revision conflicts, lost committed response recovery, financial blocking, stale inspection and private desktop/mobile access. Contract **1.97** completes bounded approved-credit spending accounts, **1.96** private providers, **1.95** purchasing approvals, **1.94** departmental ceilings and **1.93** EVM workflows. The local publishing counter is **6/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Other checkout paths and public route/workflow discovery do not inherit these bounded grants. Broader delegated rails/purchases and multi-node Tempo paid proof remain separate. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain external prerequisites. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -122,7 +122,7 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | P1.5 | 3–5, 14 | **Partial; released in 1.90.** Current-backed work discovery, honest unmeasured capability confidence, evaluator-bound private peer benchmark recovery, explicit hierarchy discovery, immutable versioned/private server-checked JSON benchmark observations, bounded backed-cycle exclusions, external isolated Python tests and current-backed buyer reputation with bounded owner-principal feedback are complete. Independent production benchmark quality, confidence calibration and broader reputation quality evidence remain unfinished. Unknown-owner independence and cycles beyond four principals remain unresolved. Continue independent local work on P2.1 bounded workflow execution. |
 | P2.1 | 15 | **Local bounded EVM execution complete (1.93).** Owner-reviewed finite DAGs, inherited gross/fee/runtime caps, private dependency grants, explicit verification/acceptance and all-attempt reconciliation pass real disposable-chain crash/refund/race acceptance. Production activation remains closed; real multi-node Tempo proof and independent production rollout remain separate. |
 | P2.2 | 16 | **Bounded local direct-service enterprise acceptance complete through 1.97.** Department ceilings, explicit purchasing roles/approvals, two-owner private providers and separately bounded approved-credit spending accounts preserve existing authority and original recovery. Viewer/read keys remain read-only. Broader delegated rails/purchases require separate grants and acceptance. |
-| P3 | Website/control plane | **Next: routing operations console.** Admin aggregate incident observation and revision-bound pause/healthy resume over existing controls, with stale/conflicting/uncertain-response recovery. Then owner enterprise observation/configuration over the same authoritative APIs. No separate UI economic lifecycle. |
+| P3 | Website/control plane | **Routing operations console locally accepted over HTTP 1.97; next owner enterprise observation/configuration.** Actual aggregate incident inspection, revision-bound pause/healthy resume, stale/conflicting/lost-response recovery and private mobile access pass. Continue an owner workspace for current organization/department limits, assignments and original purchasing history over existing APIs. No separate UI economic lifecycle. |
 
 ## Rules for every future batch and release
 
@@ -1577,3 +1577,43 @@ Runbook: [ORGANIZATION_SPENDING_ACCOUNTS.md](docs/ORGANIZATION_SPENDING_ACCOUNTS
 flags, actual MPP money, external withdrawal, independent-provider quality,
 push or deployment. Continue P3 with usable operator observation and manual
 admission control over the existing router state.
+
+### P3 acceptance complete — routing operations console (existing HTTP 1.97)
+
+Local publishing counter **6/10**. An administrator enters the private responsive
+console from the dashboard Admin tab and inspects actual aggregate provider,
+funding, receipt, credit, outbox, verification, worker and financial observations.
+Admission source/reason/revision, monitor recovery and rollout flags remain
+distinct. The existing APIs remain authoritative; no schema, SDK/economic API,
+financial state machine or production flag changes are introduced.
+
+Actual CSRF-protected pause/healthy resume binds the displayed revision. Another
+operator's committed command rejects the stale view. A real committed pause with
+a discarded response sends only once and requires original-state refresh. A real
+unbacked-credit fixture blocks resume without advancing the control or changing
+money. Expired/unavailable observations disable commands; freshness is rechecked
+on click. Keyboard operation, auth denial/private-state clearing, authorized
+dashboard return and mobile overflow pass. Browser environment/closed-rollout
+display is modeled; existing actual API tests prove their enforcement. Existing
+paid proof/provider/acceptance/refund/payout/capacity recovery remains available.
+
+Full predeploy passes **703 cases: 698 passed, five expected skips**, with actual
+dummy EVM and isolated verification, SDK/Python/TypeScript/lint and migration 60
+replay. Existing control/operator-health acceptance passes **14/14**. Final
+typecheck/lint and production build pass; the rebuilt application passes all
+**31** selected browser journeys. Explicit responsive CSS fixes global-reset
+spacing, and desktop/mobile screenshots were inspected. Existing MPP/ox warning
+remains. Early test selectors were corrected for existing proxy redirects,
+private cache directives and the separate Next route announcer.
+
+Evidence: `/tmp/clawdmarket-routing-console-predeploy.log`,
+`/tmp/clawdmarket-routing-console-focused.log`,
+`/tmp/clawdmarket-routing-console-build-complete.log`,
+`/tmp/clawdmarket-routing-console-browser-complete.log`,
+`/tmp/clawdmarket-routing-console-typecheck-final.log` and
+`/tmp/clawdmarket-routing-console-lint-final.log`.
+Runbook: [ROUTING_OPERATIONS_CONSOLE.md](docs/ROUTING_OPERATIONS_CONSOLE.md);
+[audit](docs/ROUTING_OPERATIONS_CONSOLE_AUDIT.md). No live funds, global rollout
+flags, push or deployment. Continue P3 owner enterprise observation/configuration
+over the current organization, department and exact purchasing APIs, preserving
+original assignments, limits, approvals and financial history.

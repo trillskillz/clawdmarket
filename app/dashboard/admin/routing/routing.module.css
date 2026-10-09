@@ -1,0 +1,38 @@
+.page {
+  width: min(1120px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 64px 0 100px;
+  color: var(--site-ink);
+  line-height: 1.65;
+}
+.page > * + * { margin-top: 24px; }
+.page header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 24px; }
+.page header > div { flex: 1 1 520px; min-width: 0; }
+.page h1 { font: 500 clamp(30px, 4vw, 48px)/1.1 'Space Grotesk', sans-serif; letter-spacing: -.04em; }
+.page header p { max-width: 700px; margin-top: 16px; color: var(--site-muted); }
+.page h2 { margin-bottom: 14px; font: 600 18px/1.4 'Space Grotesk', sans-serif; }
+.page :global(.card) { min-width: 0; border: 1px solid var(--site-line); border-radius: 0; background: var(--site-surface); padding: 24px; box-shadow: none; }
+.page section p + p { margin-top: 12px; }
+.page section p + button { margin-top: 20px; }
+.page :global(.btn-secondary) { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--site-line); border-radius: 0; font: 500 11px 'JetBrains Mono', monospace; }
+.page :global(.btn-secondary:hover) { border-color: var(--site-signal); }
+.page :global(.btn-secondary:disabled) { opacity: .45; cursor: not-allowed; }
+.page :global(.btn-secondary:focus-visible), .page summary:focus-visible { outline: 2px solid var(--site-signal); outline-offset: 4px; }
+.page [role='alert'] { color: #fca5a5; overflow-wrap: anywhere; }
+.page [role='status'] { color: var(--site-lime); overflow-wrap: anywhere; }
+.page dl { display: grid; gap: 10px; margin-top: 16px; }
+.page dl > div { display: flex; align-items: flex-start; gap: 16px; }
+.page dt { flex: 1; min-width: 0; overflow-wrap: anywhere; text-transform: capitalize; color: var(--site-muted); }
+.page dd { flex: none; font: 500 12px/1.8 'JetBrains Mono', monospace; }
+.page li { overflow-wrap: anywhere; }
+.page li + li { margin-top: 12px; }
+.page ul { list-style: none; }
+.page details ul { margin-top: 16px; }
+.page summary { cursor: pointer; }
+.metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.page .flags { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 32px; }
+@media (max-width: 700px) {
+  .page { width: calc(100% - 32px); padding: 40px 0 72px; font-size: 14px; }
+  .page :global(.card) { padding: 20px; }
+  .metrics, .page .flags { grid-template-columns: minmax(0, 1fr); }
+}
