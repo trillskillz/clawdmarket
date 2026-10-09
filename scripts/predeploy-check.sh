@@ -2,6 +2,9 @@
 set -euo pipefail
 
 required_files=(
+  "app/dashboard/admin/routing/page.tsx"
+  "docs/ROUTING_OPERATIONS_CONSOLE.md"
+  "e2e/routing-operations.spec.ts"
   "lib/organization-spending-accounts.ts"
   "lib/organization-spending-evidence.ts"
   "app/api/organizations/[id]/spending-accounts/route.ts"

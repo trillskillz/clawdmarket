@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface AdminTabProps {
   getCsrfToken: () => string;
@@ -143,6 +144,11 @@ export default function AdminTab({ getCsrfToken }: AdminTabProps) {
 
   return (
     <div className="space-y-6">
+      <section className="card space-y-3" aria-labelledby="routing-operations-title">
+        <h3 id="routing-operations-title" className="text-xl font-bold">Routing operations</h3>
+        <p className="text-sm text-text-dim">Inspect routing health, provider incidents and original payment recovery. Pause new routed purchases or resume healthy admission using the current control state.</p>
+        <Link href="/dashboard/admin/routing" className="btn-secondary inline-flex min-h-11 items-center px-4">Open routing operations</Link>
+      </section>
       <section className="card space-y-3" aria-labelledby="payment-control-title">
         <h3 id="payment-control-title" className="text-xl font-bold">Marketplace payment control</h3>
         <p className="text-sm text-text-dim">Stops new trade reservations and MPP challenges. Existing transaction verification, refunds, disputes, and seller payouts continue.</p>
