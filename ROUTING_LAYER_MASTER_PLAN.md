@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P2.2 bounded spending service-account authority. Local contract **1.96** completes explicitly shared private organization providers, current two-owner acceptance, exact assigned buyer access and permanent public projection privacy, with actual disposable-chain-backed purchase/provider restart and revoked-share sent-proof full refund. Contract **1.95** completes bounded exact-service purchasing roles/approvals, **1.94** departmental ceilings and **1.93** bounded EVM workflows. The local publishing counter is **4/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Other checkout paths and public route/workflow discovery do not inherit private service shares or direct-service approvals. Spending service accounts remain unfinished. Multi-node Tempo paid proof is not claimed. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain external prerequisites. Global routing writes remain closed.
+**Next:** P3 routing operations console over the existing aggregate health and revision-bound admission controls. Local contract **1.97** completes bounded spending service accounts for exact human-approved direct-service credit orders, with real disposable-chain deposit, private provider restart, buyer acceptance after key revocation, immutable gross limits and crash/race recovery. Contract **1.96** completes explicitly shared private providers, **1.95** exact service purchasing approvals, **1.94** departmental ceilings and **1.93** bounded EVM workflows. The local publishing counter is **5/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Other checkout paths and public route/workflow discovery do not inherit these bounded grants. Broader delegated rails/purchases and multi-node Tempo paid proof remain separate. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain external prerequisites. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -121,8 +121,8 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | P1.4 | 12–13 | **Complete locally (1.83; new batch part 3/10).** Shared generated operation/auth/scope/lifecycle/rail/deprecation metadata, TypeScript funding/artifact/webhook recovery and a usable minimal Python client with typed financial errors. Predeploy refuses contract drift; both clients recover original routes against the actual app. |
 | P1.5 | 3–5, 14 | **Partial; released in 1.90.** Current-backed work discovery, honest unmeasured capability confidence, evaluator-bound private peer benchmark recovery, explicit hierarchy discovery, immutable versioned/private server-checked JSON benchmark observations, bounded backed-cycle exclusions, external isolated Python tests and current-backed buyer reputation with bounded owner-principal feedback are complete. Independent production benchmark quality, confidence calibration and broader reputation quality evidence remain unfinished. Unknown-owner independence and cycles beyond four principals remain unresolved. Continue independent local work on P2.1 bounded workflow execution. |
 | P2.1 | 15 | **Local bounded EVM execution complete (1.93).** Owner-reviewed finite DAGs, inherited gross/fee/runtime caps, private dependency grants, explicit verification/acceptance and all-attempt reconciliation pass real disposable-chain crash/refund/race acceptance. Production activation remains closed; real multi-node Tempo proof and independent production rollout remain separate. |
-| P2.2 | 16 | **Partial; local 1.96 private providers, 1.95 exact service approvals and 1.94 departmental ceilings complete.** Current provider/org owners approve exact private service access for assigned buyers and scoped purchasing participants. Original private orders never become public. Exact approvals and existing departmental budgets remain enforced. Next bounded service-account spend authority; ordinary viewer membership/read credentials remain read-only. |
-| P3 | Website/control plane | Improve observation, administration, discovery, manual override, and incident tooling over the same router state; avoid a separate UI economic lifecycle. |
+| P2.2 | 16 | **Bounded local direct-service enterprise acceptance complete through 1.97.** Department ceilings, explicit purchasing roles/approvals, two-owner private providers and separately bounded approved-credit spending accounts preserve existing authority and original recovery. Viewer/read keys remain read-only. Broader delegated rails/purchases require separate grants and acceptance. |
+| P3 | Website/control plane | **Next: routing operations console.** Admin aggregate incident observation and revision-bound pause/healthy resume over existing controls, with stale/conflicting/uncertain-response recovery. Then owner enterprise observation/configuration over the same authoritative APIs. No separate UI economic lifecycle. |
 
 ## Rules for every future batch and release
 
@@ -1534,3 +1534,46 @@ Runbook: [ORGANIZATION_PRIVATE_PROVIDERS.md](docs/ORGANIZATION_PRIVATE_PROVIDERS
 [audit](docs/ORGANIZATION_PRIVATE_PROVIDERS_AUDIT.md). No live funds, global flags,
 actual MPP money, external provider consent, semantic-quality claim, push or
 deployment. Next: separately bounded spending service-account authority.
+
+### P2.2 acceptance complete — bounded spending service accounts (local 1.97)
+
+Local publishing counter **5/10**. Current owner issues one once-only HMAC-stored
+`cmos_` key for an exact linked assigned buyer, department/cost center, finite
+service/share pairs, positive fee-inclusive purchase/day/month/lifetime limits
+and <=30-day expiry. It purchases only human-approved exact direct services from
+the buyer's verified deposited credit. Existing read keys/viewers, general buyer
+authentication, external wallets, policy/approval writes, delivery acceptance and
+other checkout paths acquire no authority. All existing policies and flags apply.
+
+Original grant use commits atomically with capacity, approval, order, trade and
+credit. Refunds never recycle gross limits. Real dummy-chain buyer/treasury token
+balances prove exact deposits; private provider restart and original buyer review
+after key revocation pay 100 backed seller-credit cents, retain five fee cents,
+clear escrow and release capacity. Active exact-key replay survives closed write
+flags; a different grant cannot read or replay the order. Independent-process
+gross/order races, SIGKILL before/after grant and checkout commits, UTC rollover,
+current authority changes and contradictory/missing uses pass. Lost committed
+grant secrets cannot be reissued; original parties and owner history recover.
+Migration **60** preserves legacy read hashes/status/timestamps and economic rows.
+
+Full predeploy passes **703 cases: 698 passed, five expected skips**, with actual
+disposable EVM and external verifier isolation enabled, SDK/Python/TypeScript,
+lint and twice-replayed legacy migration. Final build and typecheck pass; all
+**29** selected built-app Chromium journeys pass, including private mobile owner
+management, CSRF, once-only key, auth isolation and insufficient-credit rollback.
+An expired rollover fixture, render-time ref usage and missing disposable base
+schema were corrected; no financial/authentication invariant was relaxed.
+Validation uses SHA256-verified official Node 24.21.0 and Anvil 1.8.5 in `/tmp`.
+Existing MPP/ox build warning remains.
+
+Evidence: `/tmp/clawdmarket-spending-predeploy-complete.log`,
+`/tmp/clawdmarket-spending-build-final.log`,
+`/tmp/clawdmarket-spending-browser.log`,
+`/tmp/clawdmarket-spending-isolation.log`,
+`/tmp/clawdmarket-spending-typecheck-final.log` and
+`/tmp/clawdmarket-spending-suite-schema.log`.
+Runbook: [ORGANIZATION_SPENDING_ACCOUNTS.md](docs/ORGANIZATION_SPENDING_ACCOUNTS.md);
+[audit](docs/ORGANIZATION_SPENDING_ACCOUNTS_AUDIT.md). No live funds, production
+flags, actual MPP money, external withdrawal, independent-provider quality,
+push or deployment. Continue P3 with usable operator observation and manual
+admission control over the existing router state.

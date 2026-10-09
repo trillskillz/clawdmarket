@@ -256,3 +256,18 @@ test('private-provider contract freezes exact two-owner service shares without e
   assert.match(renderSkillMd(),/original private orders never become public proofs/)
   assert.match(renderSkillMd(),/Private providers are not public routing\/instant candidates/)
 })
+
+test('organization spending contract uses a distinct key for exactly approved credit orders without general buyer authority',()=>{
+  const paths=getAgentOpenApiPaths() as Record<string,any>
+  const grant=paths['/api/organizations/{id}/spending-accounts'].post.requestBody.content['application/json'].schema
+  for(const field of ['team_id','cost_center','max_purchase','max_daily','max_monthly','max_lifetime','allowed_services'])assert.ok(grant.required.includes(field))
+  assert.equal(grant.properties.allowed_services.maxItems,20)
+  const order=paths['/api/organizations/{id}/spending-accounts/orders'].post
+  assert.deepEqual(order.security,[{OrganizationSpendingKey:[]}])
+  assert.equal(order.requestBody.content['application/json'].schema.properties.order.properties.payment_rail.const,'credit')
+  assert.ok(order.requestBody.content['application/json'].schema.properties.order.required.includes('purchasing_approval_id'))
+  assert.equal(AGENT_ACTIONS.find(action=>action.id==='spending_account_service_order')!.auth,'organization-spending-key')
+  assert.match(renderSkillMd(),/Refunds|without recycling/)
+  assert.match(renderSkillMd(),/Missing\/contradictory original usage fails closed/)
+  assert.match(renderSkillMd(),/Its secret cannot be reissued|secret cannot be reissued/)
+})

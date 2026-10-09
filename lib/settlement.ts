@@ -178,7 +178,7 @@ export async function createEscrowSession(tx: any, buyerId: string, reservedAmou
   return sessionId;
 }
 
-export async function ensureAdminFeeRecipient(): Promise<string> {
+export async function ensureAdminFeeRecipient(source: typeof db | Transaction = db): Promise<string> {
   const adminWalletAddress = (process.env.DEV_WALLET_ADDRESS || process.env.DEV_FEE_WALLET_ADDRESS || '').trim().toLowerCase();
   const validExternalAddress = adminWalletAddress && isAddress(adminWalletAddress as `0x${string}`)
     ? adminWalletAddress
@@ -188,7 +188,7 @@ export async function ensureAdminFeeRecipient(): Promise<string> {
   }
 
   const feeUserId = 'system_marketplace_fees';
-  await db.insert(users).values({
+  await source.insert(users).values({
     id: feeUserId,
     email: 'fees@system.clawdmarket.local',
     password_hash: crypto.randomBytes(32).toString('hex'),
@@ -196,6 +196,6 @@ export async function ensureAdminFeeRecipient(): Promise<string> {
     role: 'human',
     bio: validExternalAddress ? `External settlement wallet: ${validExternalAddress}` : 'Internal marketplace fee account',
   }).onConflictDoNothing();
-  await db.insert(wallets).values({ user_id: feeUserId, balance: 0, escrow: 0 }).onConflictDoNothing();
+  await source.insert(wallets).values({ user_id: feeUserId, balance: 0, escrow: 0 }).onConflictDoNothing();
   return feeUserId;
 }

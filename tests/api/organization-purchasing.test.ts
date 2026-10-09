@@ -29,6 +29,10 @@ before(async () => {
     address: chain?.token || `0x${'44'.repeat(20)}`, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain?.url || 'https://example.invalid' }])
   db = (await import('@/lib/db')).db; schema = await import('@/lib/schema'); await createLocalTestSchema(db.$client, schema)
   jwt = (await import('@/lib/auth')).generateJWT; domain = await import('@/lib/organization-purchasing')
+  const disputeApi = await import('@/app/api/trades/[id]/dispute/route')
+  const resolveApi = await import('@/app/api/trades/[id]/resolve/route')
+  const spendingApi = await import('@/app/api/organizations/[id]/spending-accounts/route')
+  const spendingOrdersApi = await import('@/app/api/organizations/[id]/spending-accounts/orders/route')
   const tradeApi = await import('@/app/api/trades/route')
   const previewApi = await import('@/app/api/trades/preview/route')
   const privateApi = await import('@/app/api/services/[id]/organization-access/route')
@@ -54,7 +58,9 @@ before(async () => {
       const body = Buffer.concat(chunks).toString(), path = incoming.url!.split('?')[0], parts = path.split('/')
       const request = new NextRequest(baseUrl + incoming.url!, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
       let response: Response
-      if (path === '/api/trades') response = await tradeApi.POST(request)
+      if(path.endsWith('/spending-accounts/orders')) response = await spendingOrdersApi[incoming.method as 'GET'|'POST'](request,{params:Promise.resolve({id:parts[3]})})
+      else if(path.endsWith('/spending-accounts')) response = await spendingApi[incoming.method as 'GET'|'POST'|'DELETE'](request,{params:Promise.resolve({id:parts[3]})})
+      else if (path === '/api/trades') response = await tradeApi.POST(request)
       else if (path === '/api/trades/preview') response = await previewApi.POST(request)
       else if (path.endsWith('/organization-access')) response = await privateApi[incoming.method as 'GET'|'POST'|'DELETE'](request,{params:Promise.resolve({id:parts[3]})})
       else if (path.includes('/providers/')) response = await acceptApi.POST(request,{params:Promise.resolve({id:parts[3],shareId:parts[5]})})
@@ -71,7 +77,7 @@ before(async () => {
       else if (path === '/api/wallet/deposits') response = await depositsApi[incoming.method as 'POST' | 'PUT'](request)
       else {
         const params = { params: Promise.resolve({ id: parts[3] }) }
-        response = path.endsWith('/fund/evm/intent') ? await intentApi.POST(request, params) : path.endsWith('/fund/evm') ? await fundingApi.POST(request, params) : path.endsWith('/attempt') ? await attemptApi.POST(request, params) : path.endsWith('/delivery') ? await deliverApi.POST(request, params)
+        response = path.endsWith('/dispute') ? await disputeApi.POST(request,params) : path.endsWith('/resolve') ? await resolveApi.POST(request,params) : path.endsWith('/fund/evm/intent') ? await intentApi.POST(request, params) : path.endsWith('/fund/evm') ? await fundingApi.POST(request, params) : path.endsWith('/attempt') ? await attemptApi.POST(request, params) : path.endsWith('/delivery') ? await deliverApi.POST(request, params)
           : path.endsWith('/confirm') ? await confirmApi.POST(request, params) : await workApi.GET(request, params)
       }
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text())
@@ -588,4 +594,222 @@ test('SIGKILL at private offer, consent and economic commit boundaries preserves
       const purchased=await buy(f,body);assert.ok([200,201].includes(purchased.status),JSON.stringify(purchased.body));assert.deepEqual(await counts(f),{orders:1,capacity:1})
     }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited}
   }
+})
+
+async function spendingGrant(f:Fixture,mutation={}){
+  const input={version:1,client_reference:crypto.randomUUID(),name:'Bounded service purchase automation',buyer_agent_id:f.agent,team_id:f.team,cost_center:'ENGINEERING',
+    allowed_services:[{service_id:f.service,provider_share_id:null}],max_purchase:'1.05',max_daily:'1.05',max_monthly:'1.05',max_lifetime:'1.05',
+    expires_at:new Date(Date.now()+3600_000).toISOString(),...mutation}
+  const response=await call(`/api/organizations/${f.id}/spending-accounts`,f.owner,'POST',input)
+  assert.equal(response.status,201,JSON.stringify(response.body));return {input,account:response.body.account,key:response.body.api_key,path:`/api/organizations/${f.id}/spending-accounts`}
+}
+async function spend(path:string,key:string,method='POST',body?:unknown){
+  const response=await fetch(baseUrl+path,{method,headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})})
+  return {status:response.status,body:await response.json(),headers:response.headers}
+}
+async function depositBacked(f:Fixture,amount=105){
+  assert.ok(chain)
+  const buyerTokens=await chain.balance(payer.address),treasuryTokens=await chain.balance(chain.treasury)
+  const {creditBalance}=await import('@/lib/account-credit'),priorCredit=await creditBalance(f.buyer)
+  const deposit=await call('/api/wallet/deposits',f.key,'POST',{amount_minor:amount,payer:payer.address,client_reference:crypto.randomUUID()},true)
+  assert.equal(deposit.status,200,JSON.stringify(deposit.body))
+  const wallet=createWalletClient({chain:chain.client.chain,account:payer,transport:http(chain.url)})
+  const txHash=await wallet.writeContract({address:chain.token,abi:erc20Abi,functionName:'transfer',args:[chain.treasury,BigInt(amount)*10000n]})
+  assert.equal((await chain.client.waitForTransactionReceipt({hash:txHash})).status,'success')
+  const signature=await payer.signMessage({message:creditDepositMessage(deposit.body.deposit,txHash)})
+  assert.equal((await call('/api/wallet/deposits',f.key,'PUT',{id:deposit.body.deposit.id,tx_hash:txHash,signature},true)).status,200)
+  assert.equal(await chain.balance(payer.address),buyerTokens-BigInt(amount)*10000n)
+  assert.equal(await chain.balance(chain.treasury),treasuryTokens+BigInt(amount)*10000n)
+  assert.equal((await creditBalance(f.buyer)).available_minor,priorCredit.available_minor+amount)
+}
+
+test('spending credentials are issued once by the current owner and never promote viewers, read keys or general buyer authentication',async()=>{
+  const f=await fixture(),g=await spendingGrant(f)
+  assert.match(g.key,/^cmos_[a-f0-9]{64}$/)
+  const replay=await call(g.path,f.owner,'POST',g.input);assert.equal(replay.status,200);assert.equal(replay.body.api_key,null);assert.equal(replay.body.account.id,g.account.id)
+  assert.equal((await call(g.path,f.viewer,'POST',g.input)).status,404)
+  assert.equal((await call(g.path,f.owner,'POST',{...g.input,max_lifetime:'2.10'})).status,409)
+  const history=await call(g.path,f.owner);assert.equal(history.status,200);assert.ok(!JSON.stringify(history.body).includes(g.key));assert.ok(!JSON.stringify(history.body).includes('credential_hash'))
+  const {createOrganizationServiceAccount}=await import('@/lib/organization-service-accounts')
+  const read=await createOrganizationServiceAccount(f.id,f.owner,{client_reference:crypto.randomUUID(),name:'Existing read authority',lifetime_days:1})
+  assert.equal(read.kind,'ok');if(read.kind!=='ok')throw Error('Read fixture failed')
+  assert.equal((await spend(g.path+'/orders',read.api_key!, 'POST',{})).status,401)
+  assert.equal((await spend(g.path+'/orders',f.key,'POST',{})).status,401)
+  assert.equal((await spend(`/api/services/${f.service}/orders`,g.key,'POST',{client_reference:crypto.randomUUID(),objective:'Do not impersonate the delegated buyer',payment_rail:'credit'})).status,401)
+  const noApproval=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:{client_reference:crypto.randomUUID(),objective:'An exact approval is required for this purchase',payment_rail:'credit'}})
+  assert.ok(noApproval.status>=400)
+  assert.equal((await call(g.path,f.owner,'POST',{...g.input,client_reference:crypto.randomUUID(),expires_at:new Date(Date.now()+31*86400_000).toISOString()})).status,400)
+  assert.equal((await call(g.path,f.owner,'POST',{...g.input,padding:'x'.repeat(17000)})).status,413)
+  const cookie=await fetch(baseUrl+g.path,{method:'POST',headers:{Cookie:`auth-token=${token(f.owner)}`,'Content-Type':'application/json'},body:JSON.stringify(g.input)})
+  assert.equal(cookie.status,403)
+  assert.deepEqual(await counts(f),{orders:0,capacity:0})
+})
+
+test('spending account authority rejects changed owner, buyer, assignment, department, expiry, ban and forged evidence before any financial write',async()=>{
+  for(const change of ['owner','buyer-owner','assignment','department','expiry','revocation','ban','flags','hash'] as const){
+    const f=await fixture(),g=await spendingGrant(f),a=await approved(f,{order:{client_reference:crypto.randomUUID(),objective:'Execute the exactly approved bounded purchase',input:{},payment_rail:'credit',max_total:'1.05'}})
+    if(change==='owner')await db.update(schema.organizations).set({owner_account_id:f.viewer}).where(eq(schema.organizations.id,f.id))
+    if(change==='buyer-owner')await db.update(schema.agent_owners).set({userId:f.viewer}).where(eq(schema.agent_owners.agentId,f.agent))
+    if(change==='assignment')await db.update(schema.organization_agent_assignments).set({cost_center:'CHANGED'}).where(eq(schema.organization_agent_assignments.agent_id,f.agent))
+    if(change==='department')await db.update(schema.organization_teams).set({status:'archived'}).where(eq(schema.organization_teams.id,f.team))
+    if(change==='expiry')await db.update(schema.organization_spending_accounts).set({expires_at:new Date(Date.now()-1000)}).where(eq(schema.organization_spending_accounts.id,g.account.id))
+    if(change==='revocation')await call(g.path,f.owner,'DELETE',{account_id:g.account.id})
+    if(change==='ban')await db.insert(schema.banned_users).values({user_id:f.owner,reason:'Disposable authorization boundary',created_at:Date.now()})
+    if(change==='flags')process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='false'
+    if(change==='hash')await db.update(schema.organization_spending_accounts).set({max_lifetime_minor:100000}).where(eq(schema.organization_spending_accounts.id,g.account.id))
+    try{assert.ok((await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout})).status>=400,change);assert.deepEqual(await counts(f),{orders:0,capacity:0})}
+    finally{process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='true'}
+  }
+  const f=await fixture(),g=await spendingGrant(f),a=await approved(f,{order:{client_reference:crypto.randomUUID(),objective:'Execute the exactly approved bounded purchase',input:{},payment_rail:'credit',max_total:'1.05'}})
+  const {reserveServiceOrder}=await import('@/lib/service-order-reservation'),{serviceOrderInput}=await import('@/lib/service-definitions')
+  await assert.rejects(()=>reserveServiceOrder({serviceId:f.service,principal:{userId:f.buyer,agentId:f.agent,kind:'registered-agent',usesCookieAuth:false},request:serviceOrderInput.parse(a.checkout),organizationSpendingEvidence:{accountId:g.account.id,organizationId:f.id,buyerId:f.buyer,agentId:f.agent,credentialHash:'caller-json'}}),/Validated spending credential required/)
+  const wrongRail=await approved(f)
+  const failed=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:wrongRail.checkout});assert.equal(failed.body.error_code,'SPENDING_EXACT_CREDIT_APPROVAL_REQUIRED')
+  assert.deepEqual(await counts(f),{orders:0,capacity:0})
+})
+
+test('real verified credit backs a private spending-key purchase, provider restart and original buyer acceptance with immutable account/share/approval attribution',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  const f=await privateFixture(),s=await shared(f),g=await spendingGrant(f,{allowed_services:[{service_id:f.service,provider_share_id:s.share.id}]}),a=await approved(f,{order:privateOrder(s.share.id,'credit')})
+  await depositBacked(f)
+  const created=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout});assert.equal(created.status,201,JSON.stringify(created.body))
+  assert.equal(created.body.order.organization_spending_account_id,g.account.id);assert.equal(created.body.order.private_provider_share_id,s.share.id);assert.equal(created.body.order.purchasing_approval_id,a.approval.id)
+  const use=await spend(g.path+'/orders?order_id='+created.body.order.id,g.key,'GET');assert.equal(use.status,200);assert.equal(use.body.use.amount_minor,105)
+  const otherAccount=await spendingGrant(f,{allowed_services:[{service_id:f.service,provider_share_id:s.share.id}]})
+  assert.equal((await spend(g.path+'/orders?order_id='+created.body.order.id,otherAccount.key,'GET')).status,404)
+  assert.equal((await spend(g.path+'/orders',otherAccount.key,'POST',{service_id:f.service,order:a.checkout})).status,409)
+  process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='false';process.env.CLAWDMARKET_REUSABLE_SERVICES_ENABLED='false'
+  try{const closedReplay=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout});assert.equal(closedReplay.status,200);assert.equal(closedReplay.body.order.id,created.body.order.id)}
+  finally{process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='true';process.env.CLAWDMARKET_REUSABLE_SERVICES_ENABLED='true'}
+  await call(f.privatePath,f.providerOwner,'DELETE',{share_id:s.share.id})
+  const handlerFile=join(directory,`${created.body.trade.id}.spending-handler.mjs`);await writeFile(handlerFile,`export default async()=>({summary:'Completed the delegated exact private purchase.',artifact:{result:'Original approved private result'}})`)
+  const command=['scripts/provider-worker.mjs','--trade-id',created.body.trade.id,'--service-id',f.service,'--state-dir',join(directory,created.body.trade.id),'--handler',handlerFile]
+  const run=promisify(execFile),options={cwd:process.cwd(),env:{...process.env,BASE_URL:baseUrl,CLAWDMARKET_PROVIDER_API_KEY:f.providerKey}}
+  const delivered=JSON.parse((await run(process.execPath,command,options)).stdout);assert.equal(delivered.state,'delivered');assert.equal(JSON.parse((await run(process.execPath,command,options)).stdout).delivery_id,delivered.delivery_id)
+  assert.equal((await spend(`/api/trades/${created.body.trade.id}/confirm`,g.key,'POST',{content_hash:delivered.content_hash})).status,401)
+  assert.equal((await call(g.path,f.owner,'DELETE',{account_id:g.account.id})).status,200)
+  assert.equal((await call(`/api/trades/${created.body.trade.id}/confirm`,f.key,'POST',{content_hash:delivered.content_hash},true)).status,200)
+  const {creditBalance}=await import('@/lib/account-credit');assert.equal((await creditBalance(f.seller)).available_minor,100);assert.equal((await creditBalance(f.buyer)).escrow_minor,0)
+  assert.equal((await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout})).status,401)
+  assert.equal((await spend(g.path+'/orders?order_id='+created.body.order.id,g.key,'GET')).status,401)
+  const recovered=await buy(f,a.checkout);assert.equal(recovered.body.order.id,created.body.order.id)
+  const history=await call(g.path,f.owner),originalAccount=history.body.spending_accounts.find((entry:{account:{id:string}})=>entry.account.id===g.account.id)
+  assert.equal(originalAccount.uses.length,1);assert.equal(originalAccount.uses[0].amount_minor,105)
+  const {publicTradeAvailable}=await import('@/lib/public-trade-visibility');assert.equal(await publicTradeAvailable(created.body.trade.id),false)
+  assert.deepEqual(await counts(f),{orders:1,capacity:0})
+})
+
+test('real credit refunds do not recycle fee-inclusive spending-account purchase/day/month/lifetime ceilings',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  for(const [field,code] of [['max_purchase','SPENDING_PURCHASE_LIMIT'],['max_daily','SPENDING_DAILY_LIMIT'],['max_monthly','SPENDING_MONTHLY_LIMIT'],['max_lifetime','SPENDING_LIFETIME_LIMIT']] as const){
+    const f=await fixture(),g=await spendingGrant(f,{max_purchase:'4.20',max_daily:'4.20',max_monthly:'4.20',max_lifetime:'4.20',[field]:field==='max_purchase'?'1.04':'1.05'})
+    const order=()=>({client_reference:crypto.randomUUID(),objective:'Buy exactly approved work within delegated ceilings',input:{},payment_rail:'credit',max_total:'1.05'})
+    const a=await approved(f,{order:order()}),b=await approved(f,{order:order()})
+    await depositBacked(f,210)
+    const original=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout})
+    if(field==='max_purchase'){assert.equal(original.body.error_code,code);assert.deepEqual(await counts(f),{orders:0,capacity:0});continue}
+    assert.equal(original.status,201,JSON.stringify(original.body))
+    const blocked=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:b.checkout});assert.equal(blocked.body.error_code,code,JSON.stringify(blocked.body))
+    assert.equal((await call(`/api/trades/${original.body.trade.id}/dispute`,`clawdmarket-test-${f.agent}`,'POST',{reason:'Controlled original funded service failure'},true)).status,200)
+    const previousAdmin=process.env.ADMIN_USER_IDS;process.env.ADMIN_USER_IDS=f.owner
+    try{const resolved=await call(`/api/trades/${original.body.trade.id}/resolve`,f.owner,'POST',{resolution:'buyer'});assert.equal(resolved.status,200,JSON.stringify(resolved.body))}
+    finally{if(previousAdmin===undefined)delete process.env.ADMIN_USER_IDS;else process.env.ADMIN_USER_IDS=previousAdmin}
+    const {creditBalance}=await import('@/lib/account-credit');assert.equal((await creditBalance(f.buyer)).available_minor,205);assert.equal((await creditBalance(f.buyer)).escrow_minor,0)
+    const repeated=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:b.checkout});assert.equal(repeated.body.error_code,code)
+    const originalReplay=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout});assert.equal(originalReplay.body.order.id,original.body.order.id)
+    const history=await call(g.path,f.owner);assert.equal(history.body.spending_accounts[0].uses.length,1);assert.equal(history.body.spending_accounts[0].uses[0].amount_minor,105)
+    assert.deepEqual(await counts(f),{orders:1,capacity:0})
+  }
+})
+
+test('a valid spending credential cannot bypass service allowlists or remaining buyer and department policies',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  const f=await fixture(),other=await fixture(),g=await spendingGrant(f,{allowed_services:[{service_id:other.service,provider_share_id:null}]})
+  const a=await approved(f,{order:{client_reference:crypto.randomUUID(),objective:'Only the exact approved allowed service can be bought',input:{},payment_rail:'credit',max_total:'1.05'}})
+  assert.equal((await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout})).body.error_code,'SPENDING_SERVICE_SCOPE_MISMATCH')
+  const valid=await spendingGrant(f)
+  await depositBacked(f)
+  await db.update(schema.buyer_spend_policies).set({policy_json:'{"approval_required_above":50,"max_per_execution":104}'}).where(eq(schema.buyer_spend_policies.buyer_id,f.buyer))
+  assert.equal((await spend(valid.path+'/orders',valid.key,'POST',{service_id:f.service,order:a.checkout})).body.error_code,'BUYER_PER_EXECUTION_LIMIT')
+  await db.update(schema.buyer_spend_policies).set({policy_json:'{"approval_required_above":50}'}).where(eq(schema.buyer_spend_policies.buyer_id,f.buyer))
+  const now=new Date();await db.insert(schema.organization_team_budgets).values({team_id:f.team,organization_id:f.id,max_per_execution_minor:104,version:1,created_at:now,updated_at:now})
+  const failed=await spend(valid.path+'/orders',valid.key,'POST',{service_id:f.service,order:a.checkout});assert.equal(failed.body.error_code,'TEAM_PER_EXECUTION_LIMIT',JSON.stringify(failed.body))
+  assert.deepEqual(await counts(f),{orders:0,capacity:0});assert.equal((await db.select().from(schema.organization_spending_uses).where(eq(schema.organization_spending_uses.account_id,valid.account.id))).length,0)
+})
+
+test('independent spending-key processes reserve one original order and cannot race two approvals past the same gross grant',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  for(const same of [true,false]){
+    const f=await fixture(),g=await spendingGrant(f),makeOrder=()=>({client_reference:crypto.randomUUID(),objective:'Spend only the approved single grant allowance',input:{},payment_rail:'credit',max_total:'1.05'})
+    const a=await approved(f,{order:makeOrder()}),b=same?a:await approved(f,{order:makeOrder()});await depositBacked(f,210)
+    const code=`(async()=>{const {NextRequest}=await import('next/server'),{resolveSpendingAccount}=await import('./lib/organization-spending-accounts.ts'),{reserveServiceOrder}=await import('./lib/service-order-reservation.ts'),{serviceOrderInput}=await import('./lib/service-definitions.ts');const a=JSON.parse(process.argv[1]);try{const evidence=await resolveSpendingAccount(new NextRequest('http://127.0.0.1/api/organizations/'+a.org+'/spending-accounts/orders',{headers:{Authorization:'Bearer '+a.key}}),a.org);const r=await reserveServiceOrder({serviceId:a.service,principal:{userId:a.buyer,agentId:a.agent,kind:'registered-agent',usesCookieAuth:false},request:serviceOrderInput.parse(a.order),organizationSpendingEvidence:evidence});console.log(JSON.stringify({order:r.order.id,trade:r.trade.id}))}catch(e){console.log(JSON.stringify({error:e.code||e.message}))}finally{(await import('./lib/db.ts')).db.$client.close()}})().catch(e=>{console.error(e);process.exitCode=1})`
+    const run=promisify(execFile),results=await Promise.allSettled([a,a,b].map(purchase=>run(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify({org:f.id,key:g.key,service:f.service,buyer:f.buyer,agent:f.agent,order:purchase.checkout})],{cwd:process.cwd(),env:process.env})))
+    const responses=results.map(result=>{if(result.status!=='fulfilled')throw result.reason;return JSON.parse(result.value.stdout)})
+    const successful=responses.filter(row=>row.order);assert.ok(successful.length>0,JSON.stringify(responses));assert.equal(new Set(successful.map(row=>row.order)).size,1)
+    if(same)assert.equal(successful.length,3);else assert.ok(responses.some(row=>row.error==='SPENDING_DAILY_LIMIT'),JSON.stringify(responses))
+    const uses=await db.select().from(schema.organization_spending_uses).where(eq(schema.organization_spending_uses.account_id,g.account.id));assert.equal(uses.length,1);assert.equal(uses[0].amount_minor,105)
+    const {creditBalance}=await import('@/lib/account-credit');assert.equal((await creditBalance(f.buyer)).available_minor,105);assert.equal((await creditBalance(f.buyer)).escrow_minor,100)
+    assert.deepEqual(await counts(f),{orders:1,capacity:1})
+    // Original use reconciliation must fail closed if an immutable ledger row is missing or contradicts its original order.
+    const winning=successful[0]
+    const fresh=await approved(f,{order:makeOrder()})
+    await db.delete(schema.organization_spending_uses).where(eq(schema.organization_spending_uses.order_id,winning.order))
+    const missing=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:fresh.checkout});assert.equal(missing.body.error_code,'SPENDING_USAGE_INVALID')
+    await db.insert(schema.organization_spending_uses).values(uses[0])
+    await db.update(schema.organization_spending_uses).set({amount_minor:1}).where(eq(schema.organization_spending_uses.order_id,winning.order))
+    const corrupt=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:fresh.checkout});assert.equal(corrupt.body.error_code,'SPENDING_USAGE_INVALID')
+    assert.deepEqual(await counts(f),{orders:1,capacity:1});assert.equal((await creditBalance(f.buyer)).available_minor,105)
+  }
+})
+
+test('SIGKILL before and after spending grant and funded checkout commits preserves once-issued credentials and original gross use',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  for(const operation of ['grant','checkout'] as const)for(const boundary of ['before','after'] as const){
+    const f=await fixture(),input={version:1,client_reference:crypto.randomUUID(),name:'Crash-bounded purchasing',buyer_agent_id:f.agent,team_id:f.team,cost_center:'ENGINEERING',
+      allowed_services:[{service_id:f.service,provider_share_id:null}],max_purchase:'1.05',max_daily:'1.05',max_monthly:'1.05',max_lifetime:'1.05',expires_at:new Date(Date.now()+3600_000).toISOString()}
+    let key:string|undefined,accountId:string|undefined,checkout:unknown
+    if(operation==='checkout'){
+      const g=await spendingGrant(f);key=g.key;accountId=g.account.id;checkout=(await approved(f,{order:{client_reference:crypto.randomUUID(),objective:'Recover the exactly approved spending order',input:{},payment_rail:'credit',max_total:'1.05'}})).checkout
+      await depositBacked(f)
+    }
+    const marker=join(directory,`spending-${operation}-${boundary}-${f.id}.marker`),args={f,input,key,accountId,checkout}
+    const code=`(async()=>{const {writeFile}=await import('node:fs/promises'),a=JSON.parse(process.argv[1]);const stop=async()=>{await writeFile(process.argv[2],'boundary');await new Promise(()=>{})};
+      ${boundary==='before'?"const {db}=await import('./lib/db.ts'),proto=Object.getPrototypeOf(db.session),original=proto.transaction;proto.transaction=function(fn,c){return original.call(this,async tx=>{const r=await fn(tx);await stop();return r},c)};":''}
+      const d=await import('./lib/organization-spending-accounts.ts');
+      ${operation==='grant'?"await d.createSpendingAccount(a.f.id,a.f.owner,d.spendingAccountInput.parse(a.input))":"const {NextRequest}=await import('next/server'),{reserveServiceOrder}=await import('./lib/service-order-reservation.ts'),{serviceOrderInput}=await import('./lib/service-definitions.ts');const evidence=await d.resolveSpendingAccount(new NextRequest('http://127.0.0.1/api/organizations/'+a.f.id+'/spending-accounts/orders',{headers:{Authorization:'Bearer '+a.key}}),a.f.id);await reserveServiceOrder({serviceId:a.f.service,principal:{userId:a.f.buyer,agentId:a.f.agent,kind:'registered-agent',usesCookieAuth:false},request:serviceOrderInput.parse(a.checkout),organizationSpendingEvidence:evidence})"};await stop()})().catch(e=>{console.error(e);process.exitCode=1})`
+    const child=spawn(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify(args),marker],{cwd:process.cwd(),env:process.env,stdio:['ignore','ignore','pipe']})
+    let errors='';child.stderr.on('data',chunk=>{errors+=chunk});const exited=new Promise<void>((done,reject)=>{child.once('exit',()=>done());child.once('error',reject)})
+    try{
+      let reached=false;for(let wait=0;wait<150;wait++){try{await readFile(marker);reached=true;break}catch{}if(child.exitCode!==null)throw Error(errors);await new Promise(done=>setTimeout(done,100))}
+      assert.equal(reached,true,errors);child.kill('SIGKILL');await exited
+      if(operation==='grant'){
+        const rows=await db.select().from(schema.organization_spending_accounts).where(eq(schema.organization_spending_accounts.organization_id,f.id));assert.equal(rows.length,boundary==='before'?0:1)
+        const recovered=await call(`/api/organizations/${f.id}/spending-accounts`,f.owner,'POST',input)
+        assert.equal(recovered.status,boundary==='before'?201:200)
+        if(boundary==='after'){assert.equal(recovered.body.api_key,null);assert.equal(recovered.body.account.id,rows[0].id)
+          // A committed but lost once-only key cannot be reissued: explicitly revoke it and create new authority.
+          await call(`/api/organizations/${f.id}/spending-accounts`,f.owner,'DELETE',{account_id:rows[0].id})
+          assert.equal((await call(`/api/organizations/${f.id}/spending-accounts`,f.owner,'POST',{...input,client_reference:crypto.randomUUID()})).status,201)}
+      }else{
+        const {creditBalance}=await import('@/lib/account-credit');assert.equal((await creditBalance(f.buyer)).available_minor,boundary==='before'?105:0)
+        const prior=await db.select().from(schema.organization_spending_uses).where(eq(schema.organization_spending_uses.account_id,accountId!));assert.equal(prior.length,boundary==='before'?0:1)
+        const recovered=await spend(`/api/organizations/${f.id}/spending-accounts/orders`,key!,'POST',{service_id:f.service,order:checkout});assert.ok([200,201].includes(recovered.status),JSON.stringify(recovered.body))
+        if(prior.length)assert.equal(recovered.body.order.id,prior[0].order_id)
+        const final=await db.select().from(schema.organization_spending_uses).where(eq(schema.organization_spending_uses.account_id,accountId!));assert.equal(final.length,1);assert.equal(final[0].amount_minor,105)
+        assert.equal((await creditBalance(f.buyer)).available_minor,0);assert.equal((await creditBalance(f.buyer)).escrow_minor,100);assert.deepEqual(await counts(f),{orders:1,capacity:1})
+      }
+    }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited}
+  }
+})
+
+test('UTC month and day changes renew only their respective spending windows while original lifetime uses remain charged',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async context=>{
+  const f=await fixture();await depositBacked(f,315)
+  const now=new Date(),monthEnd=Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,0,23,59,50)
+  context.mock.timers.enable({apis:['Date'],now:monthEnd})
+  try{
+    const g=await spendingGrant(f,{max_lifetime:'3.15',expires_at:new Date(monthEnd+3*86400_000).toISOString()}),order=()=>({client_reference:crypto.randomUUID(),objective:'Book approved service credit in its original UTC window',input:{},payment_rail:'credit',max_total:'1.05'})
+    const a=await approved(f,{order:order()}),first=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout});assert.equal(first.status,201,JSON.stringify(first.body))
+    context.mock.timers.setTime(monthEnd+120000)
+    const b=await approved(f,{order:order()}),second=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:b.checkout});assert.equal(second.status,201,JSON.stringify(second.body))
+    const c=await approved(f,{order:order()}),sameDay=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:c.checkout});assert.equal(sameDay.body.error_code,'SPENDING_DAILY_LIMIT')
+    context.mock.timers.setTime(monthEnd+86400_000+120000)
+    const d=await approved(f,{order:order()}),nextDay=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:d.checkout});assert.equal(nextDay.body.error_code,'SPENDING_MONTHLY_LIMIT')
+    const history=await call(g.path,f.owner);assert.equal(history.body.spending_accounts[0].uses.length,2);assert.equal(history.body.spending_accounts[0].uses.reduce((total:number,use:{amount_minor:number})=>total+use.amount_minor,0),210)
+    assert.deepEqual(await counts(f),{orders:2,capacity:2})
+  }finally{context.mock.timers.reset()}
 })
