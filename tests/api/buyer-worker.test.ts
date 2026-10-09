@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm'
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, erc20Abi, keccak256, parseTransaction, recoverTransactionAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { createLocalTestSchema } from '../helpers/local-schema'
+import { startDisposableWorkflowChain } from '../helpers/disposable-workflow-chain'
 import { runBuyerFunding } from '../../scripts/buyer-worker.mjs'
 import { createBuyerEvmAdapter } from '../../scripts/buyer-evm-adapter.mjs'
 import { buyerWalletReference, withBuyerWalletLock } from '../../scripts/buyer-wallet-lock.mjs'
@@ -22,13 +23,15 @@ import { runProviderWork } from '../../scripts/provider-worker.mjs'
 let directory: string, baseUrl: string, rpcUrl: string
 let db: typeof import('@/lib/db').db, schema: typeof import('@/lib/schema'), jwt: typeof import('@/lib/auth').generateJWT
 const apiServer = createServer(), rpcServer = createServer()
-const token = `0x${'44'.repeat(20)}` as const, treasury = privateKeyToAccount(`0x${'99'.repeat(32)}`).address.toLowerCase()
+let token: `0x${string}` = `0x${'44'.repeat(20)}`
+const treasury = privateKeyToAccount(`0x${'99'.repeat(32)}`).address.toLowerCase()
 const blockHash = `0x${'55'.repeat(32)}`, requests: string[] = []
 const transactions = new Map<string, { raw: `0x${string}`; payer: `0x${string}`; amount: bigint; recipient: `0x${string}`; mined: boolean; nonce: number; timestamp: number }>()
 const balances = new Map<string, { token: bigint; native: bigint }>()
 let signerIndex = 100, broadcastCalls = 0, loseBroadcastReply = false
 let l1Fee = 10_000n, rpcChainId = 8453
 let minePayout = true
+let realChainUrl: string | null = null
 const operatorFee = 2_000n
 let apiHook: ((path: string, response: Response) => Promise<boolean>) | null = null
 
@@ -50,6 +53,12 @@ before(async () => {
     try {
       const chunks = []; for await (const chunk of incoming) chunks.push(chunk)
       const input = JSON.parse(Buffer.concat(chunks).toString()), p = input.params
+      if (realChainUrl) {
+        const response = await fetch(realChainUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })
+        const value = await response.json()
+        if (input.method === 'eth_sendRawTransaction' && value.result && !value.error) broadcastCalls++
+        outgoing.setHeader('Content-Type', 'application/json'); outgoing.end(JSON.stringify(value)); return
+      }
       let result: unknown
       if (input.method === 'eth_chainId') result = `0x${rpcChainId.toString(16)}`
       else if (input.method === 'eth_estimateGas') result = '0xc350'
@@ -861,8 +870,24 @@ test('MCP Tasks return one private backed result after canonical funding and rej
   assert.equal(JSON.stringify(uncertain.body).includes('private-route-result'), false)
 })
 
-test('workflow HTTP loop pays and settles two exact dependent nodes across buyer/provider process death without duplicate economic work', async () => {
-  const f = await fixture(), count = broadcastCalls
+test('workflow HTTP loop pays and settles two exact dependent nodes across buyer/provider process death without duplicate economic work', () => workflowHttpLoop(false))
+test('workflow HTTP loop on disposable EVM settles exact token transfers across buyer/provider process deaths', {
+  skip: !process.env.CLAWDMARKET_TEST_ANVIL_BINARY && 'Set CLAWDMARKET_TEST_ANVIL_BINARY to a verified local Anvil binary', timeout: 60_000,
+}, () => workflowHttpLoop(true))
+
+async function workflowHttpLoop(realChain: boolean) {
+  const f = await fixture(), count = broadcastCalls, chainId = realChain ? 1 : 8453
+  const chainFee = realChain ? '10000000000000000' : '1000000000000'
+  const previousToken = token, previousConfig = process.env.EVM_ACCEPTED_TOKENS
+  const chain = realChain ? await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY!, f.account.address) : null
+  const payoutAddress = `0x${'22'.repeat(20)}` as const
+  try {
+  if (chain) {
+    token = chain.token; realChainUrl = chain.url
+    process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId, chainName: 'Disposable local EVM', address: token, symbol: 'TEST', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl }])
+    f.adapter = createBuyerEvmAdapter({ chainId, rpcUrl, account: f.account })
+    await db.update(schema.payout_addresses).set({ address: payoutAddress }).where(eq(schema.payout_addresses.user_id, f.sellerId))
+  }
   const headers = { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' }
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(`${baseUrl}${path}`, { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) })
@@ -876,17 +901,17 @@ test('workflow HTTP loop pays and settles two exact dependent nodes across buyer
     nodes: [{ key: 'source', objective: 'Produce a private structured upstream review', required_capabilities: ['code-review'], budget: { amount: '1.05', currency: 'USD' }, deadline_seconds: 300 },
       { key: 'review', objective: 'Review the exact approved private upstream attachment', required_capabilities: ['code-review'], budget: { amount: '1.05', currency: 'USD' }, deadline_seconds: 600, depends_on: ['source'] }] })
   const { approval } = await api('POST', `/api/workflows/${workflow.id}/approval`, { version: 1, client_reference: `paid-review-${f.routeId}`, plan_hash: workflow.plan_hash,
-    expires_at: new Date(Math.floor(Date.now() / 1000) * 1000 + 900_000).toISOString(), max_gross_minor: 210, max_chain_fee_units: '2000000000000',
-    private_data: 'selected_provider_only', payment: { rail: 'evm', chain_id: 8453, token_address: token, payer_address: f.account.address.toLowerCase(),
-      treasury_address: treasury, minimum_token_reserve_units: '5000000', minimum_native_reserve_wei: '1000000', max_gas_cost_wei: '1000000000000' },
+    expires_at: new Date(Math.floor(Date.now() / 1000) * 1000 + 900_000).toISOString(), max_gross_minor: 210, max_chain_fee_units: (BigInt(chainFee) * 2n).toString(),
+    private_data: 'selected_provider_only', payment: { rail: 'evm', chain_id: chainId, token_address: token, payer_address: f.account.address.toLowerCase(),
+      treasury_address: treasury, minimum_token_reserve_units: '5000000', minimum_native_reserve_wei: '1000000', max_gas_cost_wei: chainFee },
     nodes: ['source', 'review'].map((key) => ({ key, static_input: { private_text: `private-${key}-input` }, provider_requirements: { approved_providers: [f.sellerId] },
       verification: policy, max_per_attempt_minor: 105, max_retry_minor: 0, max_attempts: 1, max_latency_seconds: 60,
-      max_chain_fee_per_attempt_units: '1000000000000', dependency_inputs: key === 'review' ? [{ source_node: 'source', artifact_index: 0, target_field: 'upstream' }] : [] })) })
+      max_chain_fee_per_attempt_units: chainFee, dependency_inputs: key === 'review' ? [{ source_node: 'source', artifact_index: 0, target_field: 'upstream' }] : [] })) })
   const command = { version: 1, client_reference: `paid-execution-${f.routeId}`, approval_id: approval.id, contract_hash: approval.contract_hash, authorize_spending: true }
   const activated = await api('POST', `/api/workflows/${workflow.id}/execute`, command), run = activated.run
   const root = await api('POST', `/api/workflows/${workflow.id}/nodes/source/prepare`, { version: 1, run_id: run.id })
   const workflowApproval = { version: 1, origin: baseUrl, workflow_id: workflow.id, run_id: run.id,
-    contract_hash: approval.contract_hash, chain_id: 8453, rpc_url: rpcUrl }
+    contract_hash: approval.contract_hash, chain_id: chainId, rpc_url: rpcUrl }
   const rootFile = join(directory, `${run.id}.workflow-approval.json`), stateDirectory = join(directory, `${run.id}.workflow-state`)
   await writeFile(rootFile, JSON.stringify(workflowApproval), { mode: 0o600 })
   const options = { approval: workflowApproval, apiKey: f.apiKey, stateDirectory, account: f.account, adapter: f.adapter }
@@ -925,7 +950,12 @@ test('workflow HTTP loop pays and settles two exact dependent nodes across buyer
   } finally { clearTimeout(buyerTimeout); apiHook = null; release(); if (buyer.exitCode === null && buyer.signalCode === null && buyer.pid) { process.kill(-buyer.pid, 'SIGKILL'); await buyerExit } }
   const restartedBuyer = await promisify(execFile)(process.execPath, ['scripts/buyer-workflow-worker.mjs', rootFile, stateDirectory],
     { cwd: resolve('.'), env: buyerEnvironment, timeout: 30_000 })
-  const restartedWorkflow = JSON.parse(restartedBuyer.stdout), fundedRoot = restartedWorkflow.nodes.find((node: { node_key: string }) => node.node_key === 'source')
+  let restartedWorkflow = JSON.parse(restartedBuyer.stdout), fundedRoot = restartedWorkflow.nodes.find((node: { node_key: string }) => node.node_key === 'source')
+  for (let attempt = 0; chain && fundedRoot.state === 'awaiting_confirmation' && attempt < 5; attempt++) {
+    await new Promise((done) => setTimeout(done, 200))
+    restartedWorkflow = await runBuyerWorkflow(options)
+    fundedRoot = restartedWorkflow.nodes.find((node: {node_key:string}) => node.node_key === 'source')
+  }
   assert.equal(restartedWorkflow.state, 'incomplete'); assert.equal(fundedRoot.state, 'funded'); assert.equal(broadcastCalls, count + 1)
   const providerKey = jwt({ userId: f.sellerId, email: `${f.sellerId}@test.invalid`, role: 'human' })
   const handlerFile = join(directory, `${run.id}.provider-handler.mjs`), providerDirectory = join(directory, `${run.id}.provider-state`)
@@ -959,9 +989,23 @@ test('workflow HTTP loop pays and settles two exact dependent nodes across buyer
   const firstDelivery = JSON.parse(recoveredProvider.stdout)
   const decisions = { version: 1, workflow_id: workflow.id, run_id: run.id,
     decisions: [{ node_key: 'source', decision: 'accept', content_hash: firstDelivery.content_hash }] }
-  const progressed = await runBuyerWorkflow({ ...options, decisions })
-  assert.equal(progressed.nodes.find((node: {node_key:string}) => node.node_key === 'source')?.state, 'completed', JSON.stringify(progressed))
-  const fundedChild = progressed.nodes.find((node: {node_key:string}) => node.node_key === 'review')!
+  let progressed = await runBuyerWorkflow({ ...options, decisions })
+  if (chain && progressed.nodes.find((node: {node_key:string}) => node.node_key === 'source')?.state === 'settling') {
+    assert.equal(progressed.state, 'incomplete'); assert.equal(progressed.unresolved_buyer_minor, 105)
+    const [original] = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, fundedRoot.trade_id))
+    await (await import('@/lib/external-settlement')).processSettlementTransfer(original.id, { waitMs: 5000 })
+    progressed = await runBuyerWorkflow({ ...options, decisions })
+  }
+  const sourceView = await api('GET', `/api/workflows/${workflow.id}/execute`)
+  assert.equal(sourceView.receipt.nodes.find((node: {node_key:string}) => node.node_key === 'source')?.phase, 'completed')
+  const payoutDiagnostic = await db.select({ status: schema.settlement_transfers.status, error: schema.settlement_transfers.last_error, nonce: schema.settlement_transfers.nonce }).from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, fundedRoot.trade_id))
+  if (!chain) assert.equal(progressed.nodes.find((node: {node_key:string}) => node.node_key === 'source')?.state, 'completed', JSON.stringify({ progressed, payoutDiagnostic }))
+  let fundedChild = progressed.nodes.find((node: {node_key:string}) => node.node_key === 'review')!
+  for (let attempt = 0; chain && fundedChild.state === 'awaiting_confirmation' && attempt < 5; attempt++) {
+    await new Promise((done) => setTimeout(done, 200))
+    progressed = await runBuyerWorkflow({ ...options, decisions })
+    fundedChild = progressed.nodes.find((node: {node_key:string}) => node.node_key === 'review')!
+  }
   assert.equal(fundedChild.state, 'funded', JSON.stringify(progressed)); assert.equal(broadcastCalls, count + 3)
   const partial = await api('POST', `/api/workflows/${workflow.id}/reconcile`, { version: 1, run_id: run.id })
   assert.equal(partial.completed, false); assert.equal(partial.receipt_persisted, false)
@@ -975,7 +1019,23 @@ test('workflow HTTP loop pays and settles two exact dependent nodes across buyer
     decisions: [...decisions.decisions, { node_key: 'review', decision: 'accept', content_hash: secondDelivery.content_hash }] }), { mode: 0o600 })
   let receiptReady!: () => void, receiptRelease!: () => void
   const receiptSaved = new Promise<void>((done) => { receiptReady = done }), receiptGate = new Promise<void>((done) => { receiptRelease = done })
-  apiHook = async (path, response) => { if (path.endsWith('/reconcile') && response.ok) { receiptReady(); await receiptGate } return false }
+  apiHook = async (path, response) => {
+    if (chain && path.endsWith('/advance') && response.ok) {
+      // Model original outbox recovery while the bounded API wait stays pending.
+      for (const node of (await api('GET', `/api/workflows/${workflow.id}/execute`)).receipt.nodes) {
+        if (node.node_key !== 'review') continue
+        const [order] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, fundedChild.trade_id!))
+        if (!order) continue
+        const [outbox] = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, order.trade_id))
+        if (outbox && outbox.status !== 'confirmed') {
+          const recovered = await (await import('@/lib/external-settlement')).processSettlementTransfer(outbox.id, { waitMs: 5000 })
+          if (recovered.status === 'confirmed') await api('POST', `/api/routes/${fundedChild.route_id}/advance`, { version: 1, action: 'observe' })
+        }
+      }
+    }
+    if (path.endsWith('/reconcile') && response.ok) { receiptReady(); await receiptGate }
+    return false
+  }
   const finalBuyer = spawn(process.execPath, ['scripts/buyer-workflow-worker.mjs', rootFile, stateDirectory, decisionFile],
     { cwd: resolve('.'), env: buyerEnvironment, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
   let finalError = ''; finalBuyer.stderr.on('data', (value) => { finalError += value.toString() })
@@ -1002,4 +1062,27 @@ test('workflow HTTP loop pays and settles two exact dependent nodes across buyer
   assert.equal((await db.select().from(schema.workflow_receipts).where(eq(schema.workflow_receipts.run_id, run.id))).length, 1)
   const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId))
   assert.equal(service.active_orders, 0)
-})
+  if (chain) {
+    assert.equal(await chain.balance(f.account.address), 97_900_000n)
+    assert.equal(await chain.balance(payoutAddress), 2_000_000n)
+    assert.equal(await chain.balance(treasury as `0x${string}`), 100_100_000n)
+    let buyerFees = 0n, treasuryFees = 0n
+    for (const attempt of outcome.receipt.attempts) {
+      for (const hash of [attempt.financial.funding.tx_hash, attempt.financial.payout.tx_hash]) {
+        const receipt = await chain.client.getTransactionReceipt({ hash })
+        assert.equal(receipt.status, 'success'); assert.ok(receipt.gasUsed > 0n && receipt.effectiveGasPrice > 0n)
+        const fee = receipt.gasUsed * receipt.effectiveGasPrice
+        if (receipt.from.toLowerCase() === f.account.address.toLowerCase()) buyerFees += fee
+        else { assert.equal(receipt.from.toLowerCase(), treasury); treasuryFees += fee }
+      }
+    }
+    assert.equal(chain.buyerNative - await chain.client.getBalance({ address: f.account.address }), buyerFees)
+    assert.equal(chain.treasuryNative - await chain.client.getBalance({ address: treasury as `0x${string}` }), treasuryFees)
+    assert.ok(buyerFees <= BigInt(chainFee) * 2n)
+    console.info(JSON.stringify({ disposable_evm_workflow: 'passed', nodes: 2, distinct_transfers: 4, gross_buyer_minor: 210, seller_payout_minor: 200, unresolved_buyer_minor: 0, measured_buyer_fee_wei: buyerFees.toString(), measured_treasury_fee_wei: treasuryFees.toString() }))
+  }
+  } finally {
+    realChainUrl = null; token = previousToken; process.env.EVM_ACCEPTED_TOKENS = previousConfig
+    if (chain) await chain.stop()
+  }
+}
