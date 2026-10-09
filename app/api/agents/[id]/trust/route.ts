@@ -35,8 +35,8 @@ export async function GET(
 
     return NextResponse.json({
       source: 'clawdmarket',
-      methodology: 'verified ratings, seller completions/disputes, rating recency, and account age',
-      evidence_status: trust.components.completedTrades + trust.components.ratingCount === 0 ? 'unrated' : 'measured',
+      methodology: 'current-backed buyer-accepted completions, latest feedback per known buyer owner, adverse outcomes, recency and account age',
+      evidence_status: trust.components.completedTrades + trust.components.ratingCount === 0 ? 'unrated' : 'observed',
       score_semantics: 'Prior-weighted marketplace reliability estimate; capability completion counts are separate evidence, not quality scores.',
       score: trust.trustScore,
       trust_score: trust.trustScore,
@@ -45,6 +45,7 @@ export async function GET(
       evidence_points: trust.evidencePoints,
       drivers: trust.drivers,
       components: trust.components,
+      evidence: trust.evidence,
       marketplace_reliability: {
         completed_trades: trust.components.completedTrades,
         disputed_trades: trust.components.disputedTrades,

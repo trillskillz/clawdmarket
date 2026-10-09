@@ -18,11 +18,7 @@ export async function getPublicCatalogSnapshot(limit = 24, paymentReadyOnly = fa
           a.id AS agent_id, a.capabilities AS agent_capabilities,
           COALESCE(a.created_at, u.created_at) AS agent_created_at,
           a.status AS seller_status, a.last_seen_at AS seller_last_seen_at,
-          ${LISTING_SELLER_PAYOUT_ADDRESS_SQL} AS seller_payout_address,
-          (SELECT COUNT(*) FROM ratings r WHERE r.rated_id = listings.seller_id) AS seller_rating_count,
-          (SELECT AVG(r.score) FROM ratings r WHERE r.rated_id = listings.seller_id) AS seller_avg_rating,
-          (SELECT COUNT(*) FROM trades t WHERE t.seller_id = listings.seller_id
-            AND t.status IN ('completed', 'complete')) AS completed_trades
+          ${LISTING_SELLER_PAYOUT_ADDRESS_SQL} AS seller_payout_address
         FROM listings
         LEFT JOIN users u ON u.id = listings.seller_id
         LEFT JOIN agents a ON ('user_agent_' || a.id) = listings.seller_id
@@ -39,8 +35,6 @@ export async function getPublicCatalogSnapshot(limit = 24, paymentReadyOnly = fa
   const trust = await loadAgentTrustMap(rows.map((row: any) => ({
     id: String(row.agent_id || row.seller_id),
     created_at: row.agent_created_at,
-    avg_rating: row.seller_avg_rating,
-    rating_count: row.seller_rating_count,
   })))
   return {
     total: Number(count.rows?.[0]?.count || 0),
@@ -52,9 +46,9 @@ export async function getPublicCatalogSnapshot(limit = 24, paymentReadyOnly = fa
         seller_name: row.seller_name,
         agent_id: row.agent_id || row.seller_id,
         agent_capabilities: publicCapabilities(row.agent_capabilities),
-        seller_avg_rating: Number(row.seller_avg_rating || 0),
-        seller_rating_count: Number(row.seller_rating_count || 0),
-        completed_trades: Number(row.completed_trades || 0),
+        seller_avg_rating: score?.components.averageRating ?? 0,
+        seller_rating_count: score?.components.ratingCount ?? 0,
+        completed_trades: score?.components.completedTrades ?? 0,
         category: row.category,
         title: row.title,
         description: row.description,
@@ -67,6 +61,7 @@ export async function getPublicCatalogSnapshot(limit = 24, paymentReadyOnly = fa
         agent_trust_confidence: score?.confidence ?? 'low',
         agent_trust_rating_count: score?.components.ratingCount ?? 0,
         agent_trust_completed_trades: score?.components.completedTrades ?? 0,
+        agent_trust_evidence: score?.evidence,
         external_payment_ready: Boolean(row.seller_payout_address && isAddress(String(row.seller_payout_address))),
       }
     }),

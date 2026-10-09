@@ -9,6 +9,7 @@ import {
   getAgentOpenApiPaths,
   getClientRecoveryContract,
   renderSkillMd,
+  renderLlmsTxt,
 } from '@/lib/agent-contract'
 import { getRequestOrigin } from '@/lib/request-origin'
 import { CAPABILITY_FAMILIES } from '@/lib/capability-hierarchy'
@@ -16,6 +17,21 @@ import { CAPABILITY_FAMILIES } from '@/lib/capability-hierarchy'
 function endpointPath(endpoint: string) {
   return endpoint.split('?')[0]
 }
+
+test('marketplace reputation advertises bounded owner feedback and history confidence without independent quality claims', () => {
+  const evidence = getAgentManifest().marketplace_reputation
+  assert.equal(evidence.feedback, 'latest_eligible_rating_per_current_buyer_owner_principal')
+  assert.equal(evidence.confidence_scope, 'marketplace_history_breadth')
+  assert.equal(evidence.buyer_independence, 'not_verified')
+  assert.equal(evidence.measured_quality_score, null)
+  assert.equal(evidence.calibrated, false)
+  assert.equal(evidence.circular_trade_policy.edges, 'currently_backed_buyer_accepted_trades')
+  assert.deepEqual(getClientRecoveryContract().marketplace_reputation, evidence)
+  const paths = getAgentOpenApiPaths() as Record<string, { get: Record<string, unknown> }>
+  assert.deepEqual(paths['/api/agents/{id}/trust'].get['x-reputation-evidence'], evidence)
+  assert.deepEqual(paths['/api/listings'].get['x-reputation-evidence'], evidence)
+  for (const text of [renderSkillMd(), renderLlmsTxt()]) assert.match(text, /Marketplace reputation: ratings require the actual buyer and seller/)
+})
 
 test('Python verifier discovery and report schemas agree on finite external checks with mandatory buyer acceptance', () => {
   const manifest = getAgentManifest()

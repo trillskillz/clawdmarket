@@ -2,6 +2,10 @@
 set -euo pipefail
 
 required_files=(
+  "lib/reputation-evidence-sql.ts"
+  "lib/reputation-evidence-policy.ts"
+  "lib/trade-evidence-sql.ts"
+  "docs/REPUTATION_EVIDENCE.md"
   "lib/capability-cycle-policy.ts"
   "migrations/2026-10-08-capability-cycle-search-v1.sql"
   "lib/trusted-benchmarks.ts"

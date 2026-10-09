@@ -152,6 +152,7 @@ export async function GET(req: NextRequest) {
         trust_evidence_points: trust.evidencePoints,
         trust_drivers: trust.drivers,
         trust_components: trust.components,
+        trust_evidence: trust.evidence,
         reputation_score: trust.trustScore,
         moltbook_handle: null,
         match_score: Number(row.match_score || 0),

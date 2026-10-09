@@ -7,6 +7,7 @@ import { FALLBACK_LISTINGS } from '@/lib/marketplace-fallback'
 import { getAgentAvailability } from '@/lib/agent-presence'
 import { canViewAgentProfile } from '@/lib/agent-profile-visibility'
 import { LEGACY_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
+import { rankedBuyerFeedbackSql } from '@/lib/reputation-evidence-sql'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,15 +20,9 @@ export async function GET(
  const registeredPrincipalId = `user_agent_${id}`
  const client = (db as any).$client
 
- // Parallel: agent row, trade counts, recent trades w/ names, ratings w/ names, benchmarks, improvements, training network
- const [agentRes, tradeCountRes, recentTradesRes, ratingsRes, benchmarksRes, lastImpRes, trainersRes, traineesRes] = await Promise.all([
+ // Parallel: agent row, recent trades, eligible feedback, benchmarks and training network.
+ const [agentRes, recentTradesRes, ratingsRes, benchmarksRes, lastImpRes, trainersRes, traineesRes] = await Promise.all([
   client.execute('SELECT * FROM agents WHERE id = ? LIMIT 1', [id]).catch(() => null),
-  client.execute(
-   `SELECT COUNT(*) as total_trades,
-           SUM(CASE WHEN status IN ('completed', 'complete') THEN 1 ELSE 0 END) as completed_trades,
-           SUM(CASE WHEN status IN ('completed', 'complete') THEN CAST(amount AS REAL) ELSE 0 END) as total_volume
-    FROM trades WHERE seller_id IN (?, ?)`, [id, registeredPrincipalId]
-  ).catch(() => null),
   client.execute(
    `SELECT t.id, t.buyer_id, t.seller_id, t.amount, t.status, t.created_at,
            COALESCE(b.name, bu.name) as buyer_name, COALESCE(s.name, su.name) as seller_name
@@ -40,12 +35,13 @@ export async function GET(
     ORDER BY t.created_at DESC LIMIT 10`, [id, registeredPrincipalId, id, registeredPrincipalId]
   ).catch(() => null),
   client.execute(
-   `SELECT r.id, r.trade_id, r.rater_id, r.rated_id, r.score, r.comment, r.created_at,
+   `WITH feedback AS (${rankedBuyerFeedbackSql('r.rated_id IN (?, ?)')})
+    SELECT r.id, r.trade_id, r.rater_id, r.rated_id, r.score, r.comment, r.created_at,
            COALESCE(a.name, u.name) as rater_name
     FROM ratings r
+    JOIN feedback ON feedback.id = r.id AND feedback.feedback_rank = 1
     LEFT JOIN agents a ON a.id = r.rater_id OR ('user_agent_' || a.id) = r.rater_id
     LEFT JOIN users u ON u.id = r.rater_id
-    WHERE r.rated_id IN (?, ?)
     ORDER BY r.created_at DESC LIMIT 20`, [id, registeredPrincipalId]
   ).catch(() => null),
   client.execute(
@@ -156,8 +152,6 @@ export async function GET(
   try { return JSON.parse(String(raw)) } catch { return [] }
  })()
 
- const tradeRow = tradeCountRes?.rows?.[0] || {}
- const totalVolume = Number((tradeRow as any).total_volume || 0)
  const benchmarkScore = (row as any).benchmark_score ? Number((row as any).benchmark_score) : null
  const velocityScore = (row as any).velocity_score ? Number((row as any).velocity_score) : null
  const improvementCount = Number((row as any).improvement_count || 0)
@@ -168,13 +162,8 @@ export async function GET(
   rating_count: (row as any).rating_count,
  })
 
- // Rating distribution
+ const ratingDist = trust.components.ratingDistribution;
  const ratings = ratingsRes?.rows || []
- const ratingDist = [0, 0, 0, 0, 0] // index 0 = 1 star, index 4 = 5 stars
- for (const r of ratings) {
-  const score = Number((r as any).score)
-  if (score >= 1 && score <= 5) ratingDist[score - 1]++
- }
 
  const availability = getAgentAvailability((row as any).status, (row as any).last_seen_at)
  const agent = {
@@ -212,12 +201,13 @@ export async function GET(
   moltbook_handle: (row as any).moltbook_handle || null,
   completed_trades: trust.components.completedTrades,
   total_trades: trust.components.totalTrades,
-  total_volume: Math.round(totalVolume * 100) / 100,
+  total_volume: Math.round(trust.components.backedVolume * 100) / 100,
   trust_score: trust.trustScore,
   trust_confidence: trust.confidence,
   trust_evidence_points: trust.evidencePoints,
   trust_drivers: trust.drivers,
   trust_components: trust.components,
+  trust_evidence: trust.evidence,
   trust: {
    score: trust.trustScore,
    band: trust.band,

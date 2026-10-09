@@ -1,5 +1,5 @@
 {
-  "version": "1.89",
+  "version": "1.90",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -224,6 +224,27 @@
     "explicit_buyer_acceptance_required": true,
     "isolation_observed_by_app": false,
     "semantic_verified": false
+  },
+  "marketplace_reputation": {
+    "version": 1,
+    "scope": "current_backed_buyer_accepted_marketplace_history",
+    "feedback": "latest_eligible_rating_per_current_buyer_owner_principal",
+    "confidence_scope": "marketplace_history_breadth",
+    "calibrated": false,
+    "buyer_independence": "not_verified",
+    "measured_quality_score": null,
+    "positive_evidence_weight": "at_most_one_completion_and_rating_per_buyer_principal",
+    "negative_outcomes": "retained_separately",
+    "circular_trade_policy": {
+      "version": 1,
+      "max_cycle_length": 4,
+      "max_search_states": 256,
+      "edges": "currently_backed_buyer_accepted_trades",
+      "principals": "current_authoritative_owner_or_account",
+      "search_exhausted": "exclude_completion_evidence",
+      "longer_cycles": "not_resolved",
+      "independence": "not_verified"
+    }
   },
   "operations": {
     "list_benchmark_definitions": {

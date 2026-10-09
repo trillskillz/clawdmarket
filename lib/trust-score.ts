@@ -10,6 +10,7 @@ export interface TrustSignals {
   disputedTrades: number;
   accountAgeDays: number;
   recentRatings90d?: number;
+  distinctBuyerCount?: number;
 }
 
 export interface TrustComputation {
@@ -35,6 +36,8 @@ export function computeTrustScore(signals: TrustSignals): TrustComputation {
   const disputedTrades = Math.max(0, signals.disputedTrades || 0);
   const accountAgeDays = Math.max(0, signals.accountAgeDays || 0);
   const recentRatings90d = Math.max(0, signals.recentRatings90d ?? 0);
+  const buyers = Math.max(0, signals.distinctBuyerCount ?? Math.max(totalRatings, completedTrades));
+  const weightedCompletions = Math.min(completedTrades, buyers);
 
   // Bayesian-smoothed rating base (continuous 0-100).
   // New agents start near neutral. A score can rise quickly, but confidence stays
@@ -50,13 +53,13 @@ export function computeTrustScore(signals: TrustSignals): TrustComputation {
   const bayesianRating = ((ratingMean * totalRatings) + (priorMean * priorWeight)) / (totalRatings + priorWeight);
 
   // Trade reliability: completion vs disputes.
-  const tradeEvents = completedTrades + disputedTrades;
-  const completionRate = tradeEvents > 0 ? completedTrades / tradeEvents : 0.9;
+  const tradeEvents = weightedCompletions + disputedTrades;
+  const completionRate = tradeEvents > 0 ? weightedCompletions / tradeEvents : 0.9;
   const tradeReliability = completionRate * 100;
 
   // Evidence weighting and confidence.
-  const evidencePoints = totalRatings * 1.5 + completedTrades * 0.75 + Math.min(15, accountAgeDays / 30);
-  const confidence: TrustConfidence = evidencePoints >= 40 ? 'high' : evidencePoints >= 16 ? 'medium' : 'low';
+  const evidencePoints = Math.min(totalRatings, buyers) * 1.5 + weightedCompletions * 0.75 + (buyers ? Math.min(15, accountAgeDays / 30) : 0);
+  const confidence: TrustConfidence = buyers >= 20 && evidencePoints >= 40 ? 'high' : buyers >= 5 && evidencePoints >= 16 ? 'medium' : 'low';
   const evidenceWeight = clamp(evidencePoints / 50, 0.15, 1);
 
   // Recency boost/decay: active recent ratings add slight confidence in current score.
@@ -72,7 +75,7 @@ export function computeTrustScore(signals: TrustSignals): TrustComputation {
   if (completedTrades > 0) drivers.push(`${completedTrades} completed trade${completedTrades === 1 ? '' : 's'}`);
   if (disputedTrades > 0) drivers.push(`${disputedTrades} dispute${disputedTrades === 1 ? '' : 's'} (penalty applied)`);
   if (totalRatings > 0 && averageRating != null) {
-    drivers.push(`${averageRating.toFixed(1)}/5 across ${totalRatings} verified rating${totalRatings === 1 ? '' : 's'}`);
+    drivers.push(`${averageRating.toFixed(1)}/5 across ${totalRatings} backed buyer rating${totalRatings === 1 ? '' : 's'}`);
   } else if (totalRatings > 0) {
     drivers.push(`${likes} likes / ${dislikes} dislikes`);
   }
