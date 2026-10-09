@@ -35,6 +35,12 @@ export async function checkProviderRequirements(source: Source, buyerId: string,
 
 /** New payment permission and verified funding share this check. Proof recovery is always allowed. */
 export async function serviceFundingEligibility(trade: typeof trades.$inferSelect, source: Source = db, mode: 'new_payment' | 'proof_recovery' = 'new_payment'): Promise<string | null> {
+  // Fresh sends honor the original organization/department for every attributed checkout,
+  // including listings and tasks. Already-sent proof recovery retains its existing path.
+  if (mode === 'new_payment') {
+    const organizationReason = await organizationFundingBudgetFailure(trade, source)
+    if (organizationReason) return organizationReason
+  }
   const [linked] = await source.select({ order: service_orders, service: service_definitions }).from(service_orders)
     .leftJoin(service_definitions, eq(service_definitions.id, service_orders.service_id))
     .where(eq(service_orders.trade_id, trade.id)).limit(1)

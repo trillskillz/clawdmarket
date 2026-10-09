@@ -161,7 +161,11 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
-      assert.equal(migrationRows.rows.length, 56)
+      assert.equal(migrationRows.rows.length, 57)
+      for (const table of ['organization_team_budgets', 'organization_team_budget_events', 'organization_contract_attributions']) {
+        assert.equal(tableNames.has(table), true)
+        assert.equal((await migrated.execute(`SELECT * FROM ${table}`)).rows.length, 0)
+      }
       assert.equal(tableNames.has('workflow_runs'), true)
       assert.equal(tableNames.has('workflow_node_runs'), true)
       assert.equal(tableNames.has('workflow_reservations'), true)

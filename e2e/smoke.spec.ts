@@ -97,6 +97,7 @@ test.describe('Core smoke matrix', () => {
     expect(routingControl.status()).toBe(401);
     expect(routingControl.headers()['cache-control']).toContain('private');
     expect(openApi.paths['/api/organizations/{id}/budget']?.put).toBeTruthy();
+    expect(openApi.paths['/api/organizations/{id}/teams/{teamId}/budget']?.put).toBeTruthy();
     expect(openApi.paths['/api/organizations/{id}/service-accounts']?.post).toBeTruthy();
     expect(openApi.paths['/api/spending-policy']?.put?.responses?.['200']).toBeTruthy();
     expect(openApi.paths['/api/agents/{id}/trust']?.get?.responses?.['200']).toBeTruthy();
