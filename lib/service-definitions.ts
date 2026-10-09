@@ -16,6 +16,7 @@ import { money, jsonObject } from './service-order-input'
 export { money, jsonObject, serviceOrderInput } from './service-order-input'
 
 export const serviceDefinitionInput = z.object({
+  visibility: z.enum(['public', 'organization']).default('public'),
   title: z.string().trim().min(5).max(100),
   description: z.string().trim().min(20).max(2_000),
   capabilities: z.array(z.string().trim().min(1).max(80)).min(1).max(20),
@@ -54,11 +55,11 @@ export function canonicalServiceCapabilities(values: string[]) {
   return [...new Set(values.map((value) => normalizeCapability(value)!).filter(Boolean))]
 }
 
-export async function serviceDefinitionDto(service: typeof service_definitions.$inferSelect, requesterId?: string) {
+export async function serviceDefinitionDto(service: typeof service_definitions.$inferSelect, requesterId?: string, privateAccess = false) {
   const [payoutAddress, paymentControl, sellerVisible] = await Promise.all([
     payoutAddressForUser(service.seller_id),
     getNewPaymentControl(),
-    isPublicMarketplaceSeller(service.seller_id),
+    privateAccess ? Promise.resolve(true) : service.visibility === 'public' ? isPublicMarketplaceSeller(service.seller_id) : Promise.resolve(false),
   ])
   const rails = getPaymentReadiness()
   const capacityAvailable = service.active_orders < service.max_concurrency
@@ -83,6 +84,7 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
     capabilities: JSON.parse(service.capabilities) as string[],
     input_schema: contract.inputSchema,
     output_schema: contract.outputSchema,
+    visibility: service.visibility,
     pricing: { model: service.pricing_model, amount: servicePrice(service.price_minor), currency: service.currency },
     estimated_latency_seconds: service.estimated_latency_seconds,
     max_concurrency: service.max_concurrency,

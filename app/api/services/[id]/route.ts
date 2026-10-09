@@ -9,6 +9,7 @@ import { changeServiceStatus, serviceDefinitionDto } from '@/lib/service-definit
 import { internalErrorResponse } from '@/lib/api-error'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
+import { providerOwner } from '@/lib/organization-private-providers'
 import { reusableServiceSellerWritesEnabled } from '@/lib/routing-feature-flags'
 
 export const dynamic = 'force-dynamic'
@@ -20,10 +21,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const [service] = await db.select().from(service_definitions).where(eq(service_definitions.id, id)).limit(1)
     if (!service) return NextResponse.json({ success: false, error_code: 'SERVICE_NOT_FOUND', message: 'Service not found', retryable: false }, { status: 404 })
     const principal = await resolveRequestPrincipal(request)
-    if (service.status !== 'active' || !await isPublicMarketplaceSeller(service.seller_id)) {
-      if (principal?.userId !== service.seller_id) return NextResponse.json({ success: false, error_code: 'SERVICE_NOT_FOUND', message: 'Service not found', retryable: false }, { status: 404 })
+    if (service.visibility !== 'public' || service.status !== 'active' || !await isPublicMarketplaceSeller(service.seller_id)) {
+      let ownerAccess = false
+      if (principal && service.visibility === 'organization') { try { await providerOwner(id, principal.userId); ownerAccess = true } catch {} }
+      if (principal?.userId !== service.seller_id && !ownerAccess) return NextResponse.json({ success: false, error_code: 'SERVICE_NOT_FOUND', message: 'Service not found', retryable: false }, { status: 404 })
     }
-    return NextResponse.json({ service: await serviceDefinitionDto(service, principal?.userId) }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ service: await serviceDefinitionDto(service, principal?.userId) }, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Authorization, Cookie, X-ClawdMarket-Agent-Key' } })
   } catch (error) {
     return internalErrorResponse('Service fetch failed', error)
   }
@@ -43,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     const service = await changeServiceStatus(id, principal.userId, parsed.data.status)
     if (!service) return NextResponse.json({ success: false, error_code: 'SERVICE_NOT_FOUND', message: 'Service not found or archived', retryable: false }, { status: 404 })
-    return NextResponse.json({ service: await serviceDefinitionDto(service, principal.userId) }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ service: await serviceDefinitionDto(service, principal.userId) }, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Authorization, Cookie, X-ClawdMarket-Agent-Key' } })
   } catch (error) {
     return internalErrorResponse('Service state change failed', error)
   }

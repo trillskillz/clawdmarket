@@ -36,6 +36,21 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       sql: 'INSERT INTO service_execution_attempts (id, order_id, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
       args: [`legacy-${state}`, `order-${state}`, state, 1000, 1001],
     })
+    // Original service/order rows predate visibility and sharing; the additive upgrade must not reclassify or rewrite them.
+    await client.execute(`CREATE TABLE service_definitions (
+      id TEXT PRIMARY KEY, seller_id TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL,
+      capabilities TEXT NOT NULL DEFAULT '[]', input_schema TEXT NOT NULL DEFAULT '{}', output_schema TEXT NOT NULL DEFAULT '{}',
+      pricing_model TEXT NOT NULL DEFAULT 'fixed', price_minor INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
+      estimated_latency_seconds INTEGER, max_concurrency INTEGER NOT NULL DEFAULT 1, active_orders INTEGER NOT NULL DEFAULT 0,
+      execution_mode TEXT NOT NULL DEFAULT 'contracted', verification_policy TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'draft', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`)
+    await client.execute("INSERT INTO service_definitions (id,seller_id,title,description,price_minor,status,created_at,updated_at) VALUES ('legacy-service','legacy-seller','Original service','Original terms',123,'active',1000,1001)")
+    await client.execute(`CREATE TABLE service_orders (
+      id TEXT PRIMARY KEY, service_id TEXT NOT NULL, listing_id TEXT NOT NULL UNIQUE, trade_id TEXT NOT NULL UNIQUE,
+      buyer_id TEXT NOT NULL, client_reference TEXT NOT NULL UNIQUE, objective TEXT NOT NULL,
+      input_json TEXT NOT NULL DEFAULT '{}', price_minor INTEGER NOT NULL, payment_rail TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'awaiting_funding', capacity_released_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`)
+    await client.execute("INSERT INTO service_orders (id,service_id,listing_id,trade_id,buyer_id,client_reference,objective,input_json,price_minor,payment_rail,state,created_at,updated_at) VALUES ('legacy-order','legacy-service','legacy-listing','legacy-financial-trade','legacy-buyer','original-reference','Original objective','{\"secret\":\"original input\"}',123,'mpp','completed',1000,1001)")
     client.close()
 
     const environment = { ...process.env, TURSO_DATABASE_URL: databaseUrl }
@@ -136,6 +151,8 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       const workerHeartbeats = await migrated.execute('PRAGMA table_info("worker_heartbeats")')
       assert.equal(names(workerHeartbeats.rows).has('last_outcome'), true)
       const serviceDefinitions = await migrated.execute('PRAGMA table_info("service_definitions")')
+      assert.equal(names(serviceDefinitions.rows).has('visibility'),true)
+      assert.equal(serviceDefinitions.rows.find(row=>row.name==='visibility')?.dflt_value,"'public'")
       const serviceOrders = await migrated.execute('PRAGMA table_info("service_orders")')
       assert.equal(names(serviceDefinitions.rows).has('active_orders'), true)
       assert.equal(names(serviceDefinitions.rows).has('provider_protocol'), true)
@@ -162,8 +179,15 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
       assert.equal(names(serviceOrders.rows).has('purchasing_approval_id'), true)
-      assert.equal(migrationRows.rows.length, 58)
-      for (const table of ['organization_purchasing_roles', 'organization_purchase_requests', 'organization_purchase_approvals', 'organization_purchase_uses', 'organization_team_budgets', 'organization_team_budget_events', 'organization_contract_attributions']) {
+      assert.equal(names(serviceOrders.rows).has('private_provider_share_id'), true)
+      const originalService=(await migrated.execute("SELECT * FROM service_definitions WHERE id='legacy-service'")).rows[0]
+      assert.equal(originalService.visibility,'public');assert.equal(originalService.price_minor,123);assert.equal(originalService.title,'Original service')
+      const originalOrder=(await migrated.execute("SELECT * FROM service_orders WHERE id='legacy-order'")).rows[0]
+      assert.equal(originalOrder.private_provider_share_id,null);assert.equal(originalOrder.purchasing_approval_id,null)
+      assert.equal(originalOrder.trade_id,'legacy-financial-trade');assert.equal(originalOrder.payment_rail,'mpp');assert.equal(originalOrder.price_minor,123)
+      assert.equal(originalOrder.input_json,'{"secret":"original input"}');assert.equal(originalOrder.state,'completed')
+      assert.equal(migrationRows.rows.length, 59)
+      for (const table of ['organization_provider_shares', 'organization_purchasing_roles', 'organization_purchase_requests', 'organization_purchase_approvals', 'organization_purchase_uses', 'organization_team_budgets', 'organization_team_budget_events', 'organization_contract_attributions']) {
         assert.equal(tableNames.has(table), true)
         assert.equal((await migrated.execute(`SELECT * FROM ${table}`)).rows.length, 0)
       }

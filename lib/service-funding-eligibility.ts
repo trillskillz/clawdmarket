@@ -16,13 +16,14 @@ import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 import { isolatedVerifierEligibility } from './isolated-verifier-eligibility'
 import { mandateFundingEligibility } from './route-payment-mandate'
 import { agentFundingPolicyFailure } from './agent-spend-policy'
+import { privateProviderAccess } from './organization-private-providers'
 import { fundingPurchaseEvidence, PurchasingError } from './organization-purchasing'
 import { organizationFundingBudgetFailure } from './organization-budgets'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
-export async function checkProviderRequirements(source: Source, buyerId: string, sellerId: string, capabilities: string[], requirementsJson: string) {
-  if (sellerId.startsWith('user_agent_')) {
+export async function checkProviderRequirements(source: Source, buyerId: string, sellerId: string, capabilities: string[], requirementsJson: string, privateAccess = false) {
+  if (!privateAccess && sellerId.startsWith('user_agent_')) {
     const visible = await source.all(sql`SELECT id FROM agents WHERE ('user_agent_' || id) = ${sellerId}
       AND status = 'active' AND visibility = 'public' AND archived_at IS NULL LIMIT 1`)
     if (!visible.length) return 'SERVICE_UNAVAILABLE'
@@ -59,6 +60,7 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     if (organizationReason) return organizationReason
     const { order, service } = linked
     if (!service) return 'SERVICE_UNAVAILABLE'
+    const privateShare = await privateProviderAccess(service, trade.buyer_id, order.private_provider_share_id ?? undefined, source)
     const agreed = serviceExecutionContract(order, service)
     const capabilities = storedServiceCapabilities(agreed.capabilities)
     if (order.state !== 'awaiting_funding' || !capabilities?.length || service.status !== 'active'
@@ -74,7 +76,7 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     if (!contract.ready || checkServiceInput(JSON.parse(order.input_json), contract.inputSchema).status !== 'valid') return 'SERVICE_CONTRACT_CHANGED'
     const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, trade.buyer_id, trade.seller_id, source)
     if (verifierFailure) return verifierFailure
-    if (trade.seller_id.startsWith('user_agent_')) {
+    if (!privateShare && trade.seller_id.startsWith('user_agent_')) {
       const visible = await source.all(sql`SELECT id FROM agents WHERE ('user_agent_' || id) = ${trade.seller_id}
         AND status = 'active' AND visibility = 'public' AND archived_at IS NULL AND instr(description, ${REFERENCE_FLEET_MARKER}) = 0 LIMIT 1`)
       if (!visible.length) return 'SERVICE_UNAVAILABLE'
@@ -83,7 +85,7 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     if (plan && !serviceSupportsRoute(service, plan)) return 'ROUTE_STALE_PROVIDER'
     if (plan?.execution_deadline_at && trade.status === 'pending' && (!service.estimated_latency_seconds
       || Date.now() + service.estimated_latency_seconds * 1000 > plan.execution_deadline_at.getTime())) return 'ROUTE_RETRY_DEADLINE_EXCEEDED'
-    const reason = await checkProviderRequirements(source, trade.buyer_id, trade.seller_id, capabilities, order.provider_requirements_json)
+    const reason = await checkProviderRequirements(source, trade.buyer_id, trade.seller_id, capabilities, order.provider_requirements_json, Boolean(privateShare))
     if (reason) return reason
     const purchaseEvidence = await fundingPurchaseEvidence(order, trade, service, source)
     const policy = await loadBuyerSpendPolicy(trade.buyer_id, source)

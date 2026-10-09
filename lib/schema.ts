@@ -343,6 +343,29 @@ export const organization_purchase_uses = sqliteTable('organization_purchase_use
   created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
+/** Explicit provider-owner offer and organization-owner acceptance; no wallet authority. */
+export const organization_provider_shares = sqliteTable('organization_provider_shares', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  organization_owner_id: text('organization_owner_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  provider_owner_id: text('provider_owner_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  provider_agent_id: text('provider_agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  service_id: text('service_id').notNull().references(() => service_definitions.id, { onDelete: 'restrict' }),
+  team_id: text('team_id').references(() => organization_teams.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(),
+  accept_reference: text('accept_reference'),
+  accept_hash: text('accept_hash'),
+  state: text('state', { enum: ['pending', 'active', 'revoked'] }).notNull().default('pending'),
+  expires_at: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  accepted_at: integer('accepted_at', { mode: 'timestamp_ms' }),
+  revoked_at: integer('revoked_at', { mode: 'timestamp_ms' }),
+  revoked_by: text('revoked_by'),
+}, (table) => [uniqueIndex('provider_shares_owner_reference_idx').on(table.provider_owner_id, table.client_reference),
+  index('provider_shares_org_state_idx').on(table.organization_id, table.state),
+  index('provider_shares_service_state_idx').on(table.service_id, table.state)]);
+
 /** Departmental ceilings are additional restrictions, never delegated purchasing authority. */
 export const organization_team_budgets = sqliteTable('organization_team_budgets', {
   team_id: text('team_id').primaryKey().references(() => organization_teams.id, { onDelete: 'restrict' }),
@@ -387,7 +410,7 @@ export const organization_audit_events = sqliteTable('organization_audit_events'
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
   actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
-  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked', 'budget_updated', 'team_budget_updated', 'purchasing_role_created', 'purchasing_role_revoked', 'purchase_requested', 'purchase_approved', 'purchase_cancelled', 'purchase_approval_revoked'] }).notNull(),
+  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked', 'budget_updated', 'team_budget_updated', 'purchasing_role_created', 'purchasing_role_revoked', 'purchase_requested', 'purchase_approved', 'purchase_cancelled', 'purchase_approval_revoked', 'provider_share_offered', 'provider_share_accepted', 'provider_share_revoked'] }).notNull(),
   agent_id: text('agent_id'),
   team_id: text('team_id'),
   member_account_id: text('member_account_id'),
@@ -435,6 +458,7 @@ export const listings = sqliteTable('listings', {
 ]);
 
 export const service_definitions = sqliteTable('service_definitions', {
+  visibility: text('visibility', { enum: ['public', 'organization'] }).notNull().default('public'),
   id: text('id').primaryKey(),
   seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   title: text('title').notNull(),
@@ -503,6 +527,7 @@ export const trades = sqliteTable('trades', {
 }, (table) => [index('trades_buyer_status_idx').on(table.buyer_id, table.status)]);
 
 export const service_orders = sqliteTable('service_orders', {
+  private_provider_share_id: text('private_provider_share_id'),
   purchasing_approval_id: text('purchasing_approval_id'),
   id: text('id').primaryKey(),
   service_id: text('service_id').notNull().references(() => service_definitions.id, { onDelete: 'restrict' }),

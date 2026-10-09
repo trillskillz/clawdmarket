@@ -25,7 +25,7 @@ import { getPaymentReadiness } from '@/lib/payment-config';
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
 import { NewPaymentsPausedError, requireNewPaymentsOpen } from '@/lib/payment-control';
-import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
+import { isPublicMarketplaceSeller, originalPrivateServiceListing } from '@/lib/listing-visibility';
 import { selectMarketplaceRail } from '@/lib/payment-rail-selection';
 import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets';
 
@@ -135,7 +135,7 @@ async function createTradePost(req: NextRequest) {
       );
     }
 
-    if (!await isPublicMarketplaceSeller(String(listing.seller_id))) {
+    if (await originalPrivateServiceListing(listing.id) || !await isPublicMarketplaceSeller(String(listing.seller_id))) {
       return NextResponse.json({
         ...paymentError('LISTING_NOT_AVAILABLE', 'Listing is not available for purchase'),
         ...envMeta('clawdmarket/api/trades'),
@@ -200,7 +200,7 @@ async function createTradePost(req: NextRequest) {
       const [newTrade] = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction(async (tx) => {
         if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost, sellerId: listing.seller_id, paymentRail: selectedRail });
         const claimed = await tx.update(listings).set({ status: 'sold' })
-          .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'))).returning({ id: listings.id });
+          .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'), sql`NOT EXISTS (SELECT 1 FROM service_orders private_order JOIN service_definitions private_service ON private_service.id = private_order.service_id WHERE private_order.listing_id = ${listings.id} AND (private_order.private_provider_share_id IS NOT NULL OR private_service.visibility = 'organization'))`)).returning({ id: listings.id });
         if (!claimed.length) throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
         const [trade] = await tx.insert(trades).values({
           listing_id: listing.id,
@@ -302,7 +302,7 @@ async function createTradePost(req: NextRequest) {
 
     if (error instanceof CreditError) return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status });
     if (error instanceof TradeRaceError) {
-      const status = error.code === 'LISTING_ALREADY_CLAIMED' ? 409 : 402;
+      const status = error.code === 'INSUFFICIENT_FUNDS_AT_COMMIT' ? 402 : 409;
       await logPaymentFailure({
         buyer_id: auth.userId,
         token: 'ledger',

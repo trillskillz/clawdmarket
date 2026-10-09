@@ -36,6 +36,7 @@ import { captureServiceExecutionContract } from './service-execution-contract'
 import { reserveMandateExposure } from './route-payment-mandate'
 import { assertRouteRetryReconciled, RouteRetryError } from './route-retry-reconciliation'
 import { listRouteFundingSteps } from './route-funding-steps'
+import { privateProviderAccess } from './organization-private-providers'
 import { validatePurchaseApproval, consumePurchaseApproval, originalPurchaseOrderMatches } from './organization-purchasing'
 import { purchasingTransaction } from './organization-purchasing-transaction'
 import { workflowTransaction, WorkflowApprovalError } from './workflow-approval'
@@ -73,6 +74,7 @@ export async function existingServiceOrder(reference: string) {
 function sameRequest(prior: NonNullable<Awaited<ReturnType<typeof existingServiceOrder>>>, args: ReservationArgs) {
   const { request, principal, serviceId } = args
   return (prior.order.purchasing_approval_id ?? null) === (request.purchasing_approval_id ?? null)
+    && (prior.order.private_provider_share_id ?? null) === (request.provider_share_id ?? null)
     && prior.order.buyer_id === principal.userId && prior.order.service_id === serviceId
     && prior.order.provider_requirements_json === JSON.stringify(request.provider_requirements ?? {})
     && prior.order.objective === request.objective && prior.order.input_json === JSON.stringify(request.input)
@@ -97,7 +99,7 @@ async function replay(args: ReservationArgs) {
 /** Reserves capacity and creates an order in one transaction. External rails remain unpaid. */
 export async function reserveServiceOrder(args: ReservationArgs) {
   const { serviceId: id, principal, request, routeId, attemptNumber, externalOnly } = args
-  if (request.purchasing_approval_id && (routeId || args.mandateId)) throw new ServiceOrderReservationError('PURCHASING_SCOPE_MISMATCH', 'Approval is for a direct service order')
+  if ((request.purchasing_approval_id || request.provider_share_id) && (routeId || args.mandateId)) throw new ServiceOrderReservationError('PURCHASING_SCOPE_MISMATCH', 'Approval is for a direct service order')
   const reference = request.client_reference
   const prior = await replay(args)
   if (prior) return prior
@@ -107,7 +109,8 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     if (service && args.expectedSellerId !== undefined && service.seller_id !== args.expectedSellerId) {
       throw new ServiceOrderReservationError('ROUTE_STALE_PROVIDER', 'Service provider changed after route eligibility was checked')
     }
-    if (!service || service.status !== 'active' || !await isPublicMarketplaceSeller(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is not active')
+    if (!service || service.status !== 'active' || service.visibility === 'public' && !await isPublicMarketplaceSeller(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is not active')
+    await privateProviderAccess(service, principal.userId, request.provider_share_id)
     if (!reusableServiceSellerWritesEnabled(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is outside the active canary', 409)
     const contract = serviceContractReadiness(service)
     if (!contract.executionModeReady) throw new ServiceOrderReservationError('EXECUTION_MODE_UNSUPPORTED', 'Service execution mode is unsupported')
@@ -147,9 +150,10 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         if (error instanceof WorkflowApprovalError && error.status === 503) throw new ServiceOrderReservationError('WORKFLOW_STORAGE_BUSY', 'Retry the same workflow child reference', 503, true)
         throw error
       }
-    } : request.purchasing_approval_id ? purchasingTransaction : db.transaction.bind(db)
+    } : request.purchasing_approval_id || request.provider_share_id ? purchasingTransaction : db.transaction.bind(db)
     const reserveOnce = () => transaction(async (tx) => {
       const now = new Date()
+      const privateShare = await privateProviderAccess(service, principal.userId, request.provider_share_id, tx)
       let retrySpendMinor = 0
       let agreedCapabilities = storedServiceCapabilities(service.capabilities)
       if (!agreedCapabilities?.length) throw new ServiceOrderReservationError(routeId ? 'ROUTE_STALE_PROVIDER' : 'SERVICE_UNAVAILABLE', 'Service capabilities are invalid')
@@ -188,6 +192,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       const [claimed] = await tx.update(service_definitions)
         .set({ active_orders: sql`${service_definitions.active_orders} + 1`, updated_at: now })
         .where(and(eq(service_definitions.id, id), eq(service_definitions.status, 'active'),
+          eq(service_definitions.visibility, service.visibility),
           eq(service_definitions.price_minor, service.price_minor),
           eq(service_definitions.seller_id, service.seller_id),
           eq(service_definitions.capabilities, service.capabilities),
@@ -201,7 +206,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
           sql`${service_definitions.active_orders} < ${service_definitions.max_concurrency}`))
         .returning({ id: service_definitions.id })
       if (!claimed) throw new ServiceOrderReservationError('SERVICE_CAPACITY_OR_PRICE_CHANGED', 'Service capacity or price changed; re-plan before retrying')
-      const requirementFailure = await checkProviderRequirements(tx, principal.userId, service.seller_id, agreedCapabilities, JSON.stringify(request.provider_requirements ?? {}))
+      const requirementFailure = await checkProviderRequirements(tx, principal.userId, service.seller_id, agreedCapabilities, JSON.stringify(request.provider_requirements ?? {}), Boolean(privateShare))
       if (requirementFailure) throw new ServiceOrderReservationError(requirementFailure, 'Provider does not satisfy buyer evidence requirements')
       const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, principal.userId, service.seller_id, tx)
       if (verifierFailure) throw new ServiceOrderReservationError(verifierFailure, 'Isolated verifier is unavailable or shares a trade-party owner')
@@ -227,6 +232,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
           }).returning())[0]
       if (!internal) await attributeOrganizationTrade(tx, principal.agentId, trade, totalMinor, now)
       const [order] = await tx.insert(service_orders).values({
+        private_provider_share_id: privateShare?.id ?? null,
         purchasing_approval_id: request.purchasing_approval_id ?? null,
         id: crypto.randomUUID(), service_id: id, listing_id: listing.id, trade_id: trade.id,
         buyer_id: principal.userId, client_reference: reference, objective: request.objective,

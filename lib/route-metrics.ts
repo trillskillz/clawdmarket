@@ -1,5 +1,6 @@
 import { parseUnits } from 'viem'
 import { db } from './db'
+import { publicTradeWhereSql } from './public-trade-visibility'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 
 function count(value: unknown) { return Math.max(0, Number(value) || 0) }
@@ -72,6 +73,7 @@ export async function getRouteMetrics() {
       LEFT JOIN settlement_transfers payout ON payout.trade_id = t.id AND payout.kind = 'seller_payout'
       LEFT JOIN evm_payment_intents evm ON evm.trade_id = t.id LEFT JOIN buyer_evm_payment_claims evmClaim ON evmClaim.intent_id = evm.id
       LEFT JOIN buyer_mpp_payment_intents tempo ON tempo.trade_id = t.id LEFT JOIN buyer_mpp_payment_claims tempoClaim ON tempoClaim.intent_id = tempo.id
+      WHERE t.id IS NULL OR ${publicTradeWhereSql('t')}
     ) SELECT COUNT(*) AS plans,
       SUM(CASE WHEN json_valid(candidates_json) THEN CASE WHEN json_array_length(candidates_json) > 0 THEN 1 ELSE 0 END ELSE 0 END) AS viable_plans,
       SUM(CASE WHEN service_order_id IS NOT NULL THEN 1 ELSE 0 END) AS executions,
@@ -90,12 +92,16 @@ export async function getRouteMetrics() {
       FROM route_evidence`, args: [REFERENCE_FLEET_MARKER, REFERENCE_FLEET_MARKER] }),
     db.$client.execute(`SELECT COALESCE(origin.channel, 'legacy_unknown') AS channel, COALESCE(origin.cohort, 'legacy_unknown') AS cohort,
       COUNT(*) AS plans, SUM(CASE WHEN r.service_order_id IS NOT NULL THEN 1 ELSE 0 END) AS executions
-      FROM route_plans r LEFT JOIN route_origins origin ON origin.route_id = r.id GROUP BY channel, cohort`),
-    db.$client.execute("SELECT COUNT(*) AS services, SUM(max_concurrency) AS slots, SUM(active_orders) AS occupied FROM service_definitions WHERE status = 'active'"),
+      FROM route_plans r LEFT JOIN route_origins origin ON origin.route_id = r.id
+      LEFT JOIN service_orders o ON o.id = r.service_order_id LEFT JOIN trades t ON t.id = o.trade_id
+      WHERE t.id IS NULL OR ${publicTradeWhereSql('t')} GROUP BY channel, cohort`),
+    db.$client.execute(`SELECT COUNT(*) AS services, SUM(max_concurrency) AS slots, SUM(active_orders) AS occupied FROM service_definitions
+      WHERE status = 'active' AND visibility = 'public' AND (seller_id NOT GLOB 'user_agent_*' OR EXISTS
+      (SELECT 1 FROM agents a WHERE ('user_agent_' || a.id) = service_definitions.seller_id AND a.visibility = 'public' AND a.status = 'active' AND a.archived_at IS NULL))`),
     db.$client.execute(`SELECT v.method, v.status, COUNT(*) AS count FROM verification_results v
       JOIN trade_deliveries d ON d.id = v.delivery_id AND d.trade_id = v.trade_id AND d.content_hash = v.content_hash
       JOIN service_orders o ON o.trade_id = v.trade_id JOIN route_attempts a ON a.service_order_id = o.id
-      GROUP BY v.method, v.status`),
+      JOIN trades t ON t.id = o.trade_id WHERE ${publicTradeWhereSql('t')} GROUP BY v.method, v.status`),
     db.$client.execute(`SELECT t.status, t.payout_status, t.resolution, t.resolution_seller_percent, t.completed_at,
       t.total_cost, t.seller_amount, t.payment_rail, o.state AS order_state, o.capacity_released_at,
       EXISTS(SELECT 1 FROM route_retry_funding_steps retry WHERE retry.id = step.id) AS is_retry,
@@ -110,7 +116,8 @@ export async function getRouteMetrics() {
       FROM ${allSteps} step JOIN trades t ON t.id = step.trade_id JOIN service_orders o ON o.id = step.order_id
       JOIN route_payment_mandates m ON m.id = step.mandate_id
       LEFT JOIN payment_receipts p ON p.trade_id = t.id
-      LEFT JOIN settlement_transfers refund ON refund.trade_id = t.id AND refund.kind = 'buyer_refund'`),
+      LEFT JOIN settlement_transfers refund ON refund.trade_id = t.id AND refund.kind = 'buyer_refund'
+      WHERE ${publicTradeWhereSql('t')}`),
   ])
   const row = totals.rows[0] || {}, plans = count(row.plans), executions = count(row.executions), accepted = count(row.accepted_settled_routes)
   const verification: Record<string, Record<string, number>> = {}

@@ -240,3 +240,19 @@ test('purchasing contract separates exact participant approvals from owner grant
   assert.match(renderSkillMd(),/Only the approval threshold is satisfied; all other policy checks still apply/)
   assert.match(renderSkillMd(),/One approval creates one original order\/trade/)
 })
+
+test('private-provider contract freezes exact two-owner service shares without extending public routing authority',()=>{
+  const paths=getAgentOpenApiPaths() as Record<string,any>
+  const definition=paths['/api/services'].post.requestBody.content['application/json'].schema
+  assert.deepEqual(definition.properties.visibility.enum,['public','organization'])
+  const order=paths['/api/services/{id}/orders'].post.requestBody.content['application/json'].schema
+  assert.equal(order.properties.provider_share_id.format,'uuid')
+  const quote=paths['/api/organizations/{id}/purchasing/requests'].post.requestBody.content['application/json'].schema
+  assert.equal(quote.properties.order.properties.provider_share_id.format,'uuid')
+  for(const actionId of ['offer_private_provider','accept_private_provider','revoke_private_provider_offer','revoke_organization_private_provider']){
+    const action=AGENT_ACTIONS.find(item=>item.id===actionId)!;assert.equal(action.auth,'owner-account');assert.ok(paths[action.endpoint])
+  }
+  assert.equal(paths['/api/organizations/{id}/providers'].get.parameters.find((p:any)=>p.name==='role_id').in,'query')
+  assert.match(renderSkillMd(),/original private orders never become public proofs/)
+  assert.match(renderSkillMd(),/Private providers are not public routing\/instant candidates/)
+})

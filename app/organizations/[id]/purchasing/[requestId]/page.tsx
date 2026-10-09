@@ -49,7 +49,7 @@ export default function PurchaseReview({ params }: { params: Promise<{ id: strin
       <details className="my-6"><summary>Review exact private input and provider requirements</summary>
         <pre className="mt-3 overflow-auto whitespace-pre-wrap break-words rounded border p-4">{JSON.stringify({ input: order.input, provider_requirements: order.provider_requirements }, null, 2)}</pre>
       </details>
-      {purchase.use ? <p>Used for <Link className="underline" href={`/proof/${purchase.use.trade_id}`}>the original purchase</Link>.</p>
+      {purchase.use ? <p>Used for {order.provider_share_id ? <span>private order {purchase.use.order_id}. Original buyer and provider credentials retain access to its receipt.</span> : <Link className="underline" href={`/proof/${purchase.use.trade_id}`}>the original purchase</Link>}.</p>
         : <div className="mt-6 flex flex-wrap gap-3">
           {purchase.permissions.approve && <button disabled={busy} onClick={() => act('approve')} className="rounded border px-4 py-2">Approve exact purchase</button>}
           {purchase.permissions.revoke && <button disabled={busy} onClick={() => act('revoke')} className="rounded border px-4 py-2">Revoke approval</button>}

@@ -1,9 +1,10 @@
+import { publicTradeWhereSql } from './public-trade-visibility'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 import { boundedCycleExclusionSql, financialBackingSql, tradePrincipalSql, type EvidenceTradeAlias } from './trade-evidence-sql'
 
 /** Positive and adverse observations share identity/cohort exclusions, never cycle filtering. */
 export function eligibleReputationTradeSql(trade: EvidenceTradeAlias) {
-  return `${trade}.buyer_id <> ${trade}.seller_id AND ${trade}.id NOT GLOB 'trade_reference_*'
+  return `${publicTradeWhereSql(trade)} AND ${trade}.buyer_id <> ${trade}.seller_id AND ${trade}.id NOT GLOB 'trade_reference_*'
     AND ${tradePrincipalSql(`${trade}.buyer_id`)} <> ${tradePrincipalSql(`${trade}.seller_id`)}
     AND NOT EXISTS (SELECT 1 FROM agents ref WHERE (('user_agent_' || ref.id) IN (${trade}.seller_id, ${trade}.buyer_id) OR ref.id IN (${trade}.seller_id, ${trade}.buyer_id))
       AND instr(ref.description, '${REFERENCE_FLEET_MARKER}') > 0)

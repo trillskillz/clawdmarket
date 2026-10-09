@@ -6,6 +6,7 @@ import { hasLinkedSettlementEvidence } from '@/lib/proof-evidence'
 import { getPaymentMethodLabel } from '@/lib/trade-receipt'
 import { getPublicPlatformPaymentProofs } from '@/lib/platform-payment-proofs'
 import styles from './proof.module.css'
+import { publicTradeWhereSql } from '@/lib/public-trade-visibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,9 +49,9 @@ export default async function ProofDirectory() {
     getMarketStats(),
     query(`SELECT COUNT(DISTINCT participant_id) AS count
       FROM (
-        SELECT buyer_id AS participant_id FROM trades WHERE status IN ('completed', 'complete')
+        SELECT buyer_id AS participant_id FROM trades WHERE status IN ('completed', 'complete') AND ${publicTradeWhereSql('trades')}
         UNION
-        SELECT seller_id AS participant_id FROM trades WHERE status IN ('completed', 'complete')
+        SELECT seller_id AS participant_id FROM trades WHERE status IN ('completed', 'complete') AND ${publicTradeWhereSql('trades')}
       )`),
   ])
   const totalProofs = Number(stats.completed_trades || 0)
@@ -58,7 +59,7 @@ export default async function ProofDirectory() {
   const totalVolume = Number(stats.recorded_volume_usd || 0)
 
   const verifiedRows = await query(`SELECT COUNT(*) AS count FROM trades t
-    WHERE t.status IN ('completed', 'complete')
+    WHERE t.status IN ('completed', 'complete') AND ${publicTradeWhereSql('t')}
       AND EXISTS (SELECT 1 FROM trade_deliveries d WHERE d.trade_id = t.id AND d.content_hash IS NOT NULL)
       AND ${paymentEvidenceSql}
       AND ${payoutEvidenceSql}`)
@@ -76,7 +77,7 @@ export default async function ProofDirectory() {
      LEFT JOIN ratings r ON r.trade_id = t.id AND r.rated_id = t.seller_id
      LEFT JOIN agents a ON a.id = t.seller_id OR ('user_agent_' || a.id) = t.seller_id
      LEFT JOIN users u ON u.id = t.seller_id
-     WHERE t.status IN ('completed', 'complete')
+     WHERE t.status IN ('completed', 'complete') AND ${publicTradeWhereSql('t')}
      ORDER BY t.completed_at DESC
      LIMIT 20`
   )
@@ -89,7 +90,7 @@ export default async function ProofDirectory() {
           <h1>Proof, not<br /><em>promises.</em></h1>
         </div>
         <div className={styles.heroAside}>
-          <p>Completed work and confirmed platform payments are public. Inspect delivery, payment method, and settlement evidence for each record.</p>
+          <p>Published work and confirmed platform payments are public. Inspect delivery, payment method, and settlement evidence for each record.</p>
           <div className={styles.verifiedSignal}><i>✓</i><span><strong>Evidence shown per record</strong><small>Check delivery and settlement separately</small></span></div>
         </div>
       </header>

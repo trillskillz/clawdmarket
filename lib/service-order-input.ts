@@ -18,6 +18,7 @@ export const jsonObject = z.record(z.string().max(100), z.unknown()).refine(
 )
 
 export const serviceOrderInput = z.object({
+  provider_share_id: z.string().uuid().optional(),
   purchasing_approval_id: z.string().uuid().optional(),
   provider_requirements: providerRequirementsSchema.default({}),
   client_reference: z.string().trim().min(8).max(200),

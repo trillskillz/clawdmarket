@@ -3,7 +3,7 @@ export {}
 async function main() {
   if (!process.env.TURSO_DATABASE_URL?.startsWith('file:/tmp/clawdmarket-workspace-test-') || process.env.TURSO_AUTH_TOKEN) throw Error('Disposable local database required')
   const [mode, agentId] = process.argv.slice(2)
-  if (!['owners', 'counts', 'transfer', 'service', 'purchasing-policy'].includes(mode) || !/^agent_[a-f0-9-]{36}$/.test(agentId || '')) throw Error('Fixture mode/agent required')
+  if (!['owners', 'counts', 'transfer', 'service', 'purchasing-policy', 'private-service', 'publish-provider'].includes(mode) || !/^agent_[a-f0-9-]{36}$/.test(agentId || '')) throw Error('Fixture mode/agent required')
   const { db } = await import('../../lib/db'), s = await import('../../lib/schema'), { eq } = await import('drizzle-orm')
   const owner = `workflow-owner-${agentId}`, outsider = `workflow-outsider-${agentId}`, buyer = `user_agent_${agentId}`
   try {
@@ -12,6 +12,18 @@ async function main() {
       await db.insert(s.agent_owners).values({ agentId, userId: owner, establishedBy: 'isolated-browser' })
       const { generateJWT } = await import('../../lib/auth')
       console.log(JSON.stringify({ owner_key: generateJWT({ userId: owner, email: `${owner}@test.invalid`, role: 'human' }), outsider_key: generateJWT({ userId: outsider, email: `${outsider}@test.invalid`, role: 'human' }) }))
+    } else if (mode === 'publish-provider') {
+      await db.update(s.agents).set({visibility:'public'}).where(eq(s.agents.id,agentId))
+      console.log(JSON.stringify({published:true}))
+    } else if (mode === 'private-service') {
+      const providerAgent=`agent_${crypto.randomUUID()}`,providerOwner=`private-provider-owner-${providerAgent}`,seller=`user_agent_${providerAgent}`
+      const {hashAgentApiKey}=await import('../../lib/registered-agent-auth'),{generateJWT}=await import('../../lib/auth')
+      const providerKey=`clawdmarket-test-private-${providerAgent}`
+      await db.insert(s.users).values([providerOwner,seller].map(id=>({id,name:id,email:`${id}@test.invalid`,password_hash:'unused'})))
+      await db.insert(s.agents).values({id:providerAgent,name:'Private browser provider',description:'Confidential organization work',capabilities:'["code-review"]',endpoint:'https://example.invalid',owner_address:'',visibility:'private',api_key:hashAgentApiKey(providerKey)})
+      await db.insert(s.agent_owners).values({agentId:providerAgent,userId:providerOwner,establishedBy:'isolated-browser'})
+      await db.insert(s.payout_addresses).values({user_id:seller,address:`0x${'22'.repeat(20)}`})
+      console.log(JSON.stringify({providerAgent,providerKey,providerOwnerKey:generateJWT({userId:providerOwner,email:`${providerOwner}@test.invalid`,role:'human'})}))
     } else if (mode === 'service') {
       const seller = `workflow-seller-${agentId}`, service = crypto.randomUUID()
       await db.insert(s.users).values({ id: seller, name: seller, email: `${seller}@test.invalid`, password_hash: 'unused' })

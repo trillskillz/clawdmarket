@@ -5,6 +5,7 @@ import { users, wallets, mpp_sessions, listings, trades, transactions } from './
 import { and, eq, sql } from 'drizzle-orm';
 import { createPublicClient, decodeEventLog, erc20Abi, http, isAddress, parseAbiItem } from 'viem';
 import crypto from 'crypto';
+import { originalPrivateServiceListing } from './listing-visibility'
 import { enforceAgentSpendPolicy } from './agent-spend-policy';
 import type { SpendContext } from './buyer-spend-policy';
 import { attributeOrganizationTrade } from './organization-budgets';
@@ -30,7 +31,7 @@ export function calculateTradeFinancials(itemPrice: number) {
 }
 
 export class TradeRaceError extends Error {
-  constructor(public readonly code: 'LISTING_ALREADY_CLAIMED' | 'INSUFFICIENT_FUNDS_AT_COMMIT', message: string) {
+  constructor(public readonly code: 'LISTING_ALREADY_CLAIMED' | 'INSUFFICIENT_FUNDS_AT_COMMIT' | 'PRIVATE_SERVICE_LISTING', message: string) {
     super(message);
     this.name = 'TradeRaceError';
   }
@@ -45,6 +46,7 @@ export async function createLedgerTrade(
   feeRecipientId: string,
   options: { rail?: 'ledger' | 'credit'; agentId?: string | null; clientReference?: string | null; spendContext?: Omit<SpendContext, 'totalMinor'> } = {},
 ) {
+  if (await originalPrivateServiceListing(listing.id, tx)) throw new TradeRaceError('PRIVATE_SERVICE_LISTING', 'Recover the original private service order')
   if (listing.seller_id === buyerId) throw new Error('Cannot buy your own work');
   if (!Number.isFinite(listing.price_bankr) || listing.price_bankr <= 0) throw new Error('Invalid listing price');
   const { sellerAmount, platformFee, totalCost } = calculateTradeFinancials(listing.price_bankr);

@@ -858,6 +858,11 @@ async function main() {
       await database.executeMultiple(await readFile(new URL('../migrations/2026-10-09-organization-purchasing-v1.sql', import.meta.url), 'utf8'))
       await ensureColumns(database, 'service_orders', { purchasing_approval_id: 'TEXT' })
     } })
+    migrations.push({ id: '2026-10-09-organization-private-providers-v1', run: async (database: Client) => {
+      await ensureColumns(database, 'service_definitions', { visibility: "TEXT NOT NULL DEFAULT 'public'" })
+      await ensureColumns(database, 'service_orders', { private_provider_share_id: 'TEXT' })
+      await database.executeMultiple(await readFile(new URL('../migrations/2026-10-09-organization-private-providers-v1.sql', import.meta.url), 'utf8'))
+    } })
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',
