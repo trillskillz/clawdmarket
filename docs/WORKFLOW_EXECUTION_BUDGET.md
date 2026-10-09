@@ -18,9 +18,9 @@ Exact replay preserves the original clock and references, including after expiry
 revocation or cancellation. Replay does not authorize a fresh payment. Other
 owners and different activation parameters cannot reuse that reference.
 
-`prepareWorkflowNode` can prepare roots only. Every dependent remains blocked
-until current accepted/backed prerequisite evidence and private recipient grants
-are implemented. Roots inherit frozen static input, objective, capabilities,
+The original checkpoint prepared roots only. The subsequent local
+[execution checkpoint](WORKFLOW_EXECUTION_LOCAL.md) adds currently accepted/backed
+dependencies and immutable recipient grants. All children inherit frozen static input, objective, capabilities,
 provider requirements, explicit buyer acceptance, rail/token terms, attempt and
 retry ceilings. Candidate seller account IDs are resolved from actual eligible
 services. Each child has its own exact route-bound mandate, route and terms hashes,

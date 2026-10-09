@@ -16,6 +16,7 @@ import { runBuyerFunding } from '../../scripts/buyer-worker.mjs'
 import { createBuyerEvmAdapter } from '../../scripts/buyer-evm-adapter.mjs'
 import { buyerWalletReference, withBuyerWalletLock } from '../../scripts/buyer-wallet-lock.mjs'
 import { runBuyerRoute } from '../../scripts/buyer-route-worker.mjs'
+import { runBuyerWorkflow } from '../../scripts/buyer-workflow-worker.mjs'
 import { runProviderWork } from '../../scripts/provider-worker.mjs'
 
 let directory: string, baseUrl: string, rpcUrl: string
@@ -41,6 +42,7 @@ before(async () => {
   balances.set(treasury, { token: 10_000_000n, native: 1_000_000_000_000_000n })
   process.env.CLAWDMARKET_REUSABLE_SERVICES_ENABLED = 'true'
   process.env.CLAWDMARKET_ROUTE_PLANNING_ENABLED = 'true'
+  process.env.CLAWDMARKET_WORKFLOW_PLANNING_ENABLED = 'true'; process.env.CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED = 'true'
   process.env.CLAWDMARKET_ROUTE_EXECUTION_ENABLED = 'true'
   delete process.env.CLAWDMARKET_CANONICAL_ORIGIN; delete process.env.CLAWDMARKET_PRODUCTION_READINESS; delete process.env.VERCEL_ENV
   delete process.env.MPP_SECRET_KEY; delete process.env.MPP_SECRET_KEY_CURRENT
@@ -112,11 +114,17 @@ before(async () => {
       const body = Buffer.concat(chunks).toString(), path = incoming.url!
       requests.push(`${incoming.method} ${path}`)
       const request = new NextRequest(`${baseUrl}${path}`, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
-      const id = path.split('/')[3], context = { params: Promise.resolve({ id, artifactId: path.split('/')[5] || '' }) }
-      const handler = path === '/api/mcp' ? (await import('@/app/api/mcp/route')).POST : path === '/api/a2a' ? (await import('@/app/api/a2a/route')).POST : path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
+      const id = path.split('/')[3], context = { params: Promise.resolve({ id, artifactId: path.split('/')[5] || '', grantId: path.split('/')[5] || '', key: path.split('/')[5] || '' }) }
+      const workflowHandler = !path.startsWith('/api/workflows/') ? null : path === '/api/workflows/plan' ? (await import('@/app/api/workflows/plan/route')).POST
+        : path.endsWith('/approval') ? (await import('@/app/api/workflows/[id]/approval/route'))[incoming.method as 'GET' | 'POST' | 'DELETE']
+        : path.endsWith('/execute') ? (await import('@/app/api/workflows/[id]/execute/route'))[incoming.method as 'GET' | 'POST']
+        : path.endsWith('/prepare') ? (await import('@/app/api/workflows/[id]/nodes/[key]/prepare/route')).POST
+        : path.endsWith('/reconcile') ? (await import('@/app/api/workflows/[id]/reconcile/route')).POST
+        : path.includes('/artifacts/') ? (await import('@/app/api/workflows/[id]/artifacts/[grantId]/route')).GET : null
+      const handler = workflowHandler || (path === '/api/mcp' ? (await import('@/app/api/mcp/route')).POST : path === '/api/a2a' ? (await import('@/app/api/a2a/route')).POST : path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
         : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : path.endsWith('/retry') ? retry[incoming.method as 'GET' | 'POST'] : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST']
           : path.endsWith('/work-order') ? work.GET : path.endsWith('/attempt') ? attempt.POST : path.endsWith('/delivery') ? delivery.POST
-            : path.endsWith('/result') ? result.GET : path.endsWith('/artifacts') ? artifacts.POST : path.includes('/artifacts/') ? download.GET : getRoute.GET
+            : path.endsWith('/result') ? result.GET : path.endsWith('/artifacts') ? artifacts.POST : path.includes('/artifacts/') ? download.GET : getRoute.GET)
       const response = await handler(request, context)
       if (apiHook && await apiHook(path, response)) { outgoing.destroy(); return }
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()))
@@ -851,4 +859,147 @@ test('MCP Tasks return one private backed result after canonical funding and rej
   const uncertain = await rpc('tasks/result', { taskId: task.taskId })
   assert.equal(uncertain.status, 503); assert.equal(uncertain.body.error.message, 'MCP_RESULT_BACKING_UNAVAILABLE')
   assert.equal(JSON.stringify(uncertain.body).includes('private-route-result'), false)
+})
+
+test('workflow HTTP loop pays and settles two exact dependent nodes across buyer/provider process death without duplicate economic work', async () => {
+  const f = await fixture(), count = broadcastCalls
+  const headers = { Authorization: `Bearer ${f.apiKey}`, 'Content-Type': 'application/json' }
+  const api = async (method: string, path: string, body?: unknown) => {
+    const response = await fetch(`${baseUrl}${path}`, { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) })
+    const value = await response.json()
+    assert.ok(response.ok, `${path}: ${response.status}: ${JSON.stringify(value)}`)
+    return value
+  }
+  const policy = { required: true, methods: ['buyer_review', 'schema'], acceptance: { version: 1, mode: 'explicit_buyer' } }
+  const { workflow } = await api('POST', '/api/workflows/plan', { client_reference: `paid-workflow-${f.routeId}`,
+    objective: 'Review the private upstream result and settle the bounded objective', max_budget: { amount: '2.10', currency: 'USD' }, deadline_seconds: 600,
+    nodes: [{ key: 'source', objective: 'Produce a private structured upstream review', required_capabilities: ['code-review'], budget: { amount: '1.05', currency: 'USD' }, deadline_seconds: 300 },
+      { key: 'review', objective: 'Review the exact approved private upstream attachment', required_capabilities: ['code-review'], budget: { amount: '1.05', currency: 'USD' }, deadline_seconds: 600, depends_on: ['source'] }] })
+  const { approval } = await api('POST', `/api/workflows/${workflow.id}/approval`, { version: 1, client_reference: `paid-review-${f.routeId}`, plan_hash: workflow.plan_hash,
+    expires_at: new Date(Math.floor(Date.now() / 1000) * 1000 + 900_000).toISOString(), max_gross_minor: 210, max_chain_fee_units: '2000000000000',
+    private_data: 'selected_provider_only', payment: { rail: 'evm', chain_id: 8453, token_address: token, payer_address: f.account.address.toLowerCase(),
+      treasury_address: treasury, minimum_token_reserve_units: '5000000', minimum_native_reserve_wei: '1000000', max_gas_cost_wei: '1000000000000' },
+    nodes: ['source', 'review'].map((key) => ({ key, static_input: { private_text: `private-${key}-input` }, provider_requirements: { approved_providers: [f.sellerId] },
+      verification: policy, max_per_attempt_minor: 105, max_retry_minor: 0, max_attempts: 1, max_latency_seconds: 60,
+      max_chain_fee_per_attempt_units: '1000000000000', dependency_inputs: key === 'review' ? [{ source_node: 'source', artifact_index: 0, target_field: 'upstream' }] : [] })) })
+  const command = { version: 1, client_reference: `paid-execution-${f.routeId}`, approval_id: approval.id, contract_hash: approval.contract_hash, authorize_spending: true }
+  const activated = await api('POST', `/api/workflows/${workflow.id}/execute`, command), run = activated.run
+  const root = await api('POST', `/api/workflows/${workflow.id}/nodes/source/prepare`, { version: 1, run_id: run.id })
+  const workflowApproval = { version: 1, origin: baseUrl, workflow_id: workflow.id, run_id: run.id,
+    contract_hash: approval.contract_hash, chain_id: 8453, rpc_url: rpcUrl }
+  const rootFile = join(directory, `${run.id}.workflow-approval.json`), stateDirectory = join(directory, `${run.id}.workflow-state`)
+  await writeFile(rootFile, JSON.stringify(workflowApproval), { mode: 0o600 })
+  const options = { approval: workflowApproval, apiKey: f.apiKey, stateDirectory, account: f.account, adapter: f.adapter }
+  // An expanded server response cannot enlarge the reviewed mandate or reach a wallet.
+  await assert.rejects(runBuyerWorkflow({ ...options, fetcher: async (input, init) => {
+    const response = await fetch(input, init)
+    if (String(input).endsWith('/nodes/source/prepare')) {
+      const child = await response.json(); child.mandate.terms.max_aggregate = '99.00'
+      return Response.json(child)
+    }
+    return response
+  } }), /BUYER_WORKFLOW_CONTRACT_EXPANSION/)
+  assert.equal(broadcastCalls, count)
+  // A successful prepare whose response is lost must resume its original child.
+  await assert.rejects(runBuyerWorkflow({ ...options, fetcher: async (input, init) => {
+    const response = await fetch(input, init)
+    if (String(input).endsWith('/nodes/source/prepare')) { await response.arrayBuffer(); throw Error('simulated lost prepare response') }
+    return response
+  } }), /BUYER_WORKFLOW_REQUEST_UNCERTAIN_RESUME_ORIGINAL_RUN/)
+  const original = await api('POST', `/api/workflows/${workflow.id}/nodes/source/prepare`, { version: 1, run_id: run.id })
+  assert.equal(original.route.id, root.route.id); assert.equal(original.mandate.id, root.mandate.id)
+  assert.equal(broadcastCalls, count)
+  const buyerEnvironment = { ...process.env, CLAWDMARKET_BUYER_PRIVATE_KEY: f.dummyKey, CLAWDMARKET_BUYER_API_KEY: f.apiKey }
+  let release!: () => void, ready!: () => void
+  const claimed = new Promise<void>((done) => { ready = done }), claimGate = new Promise<void>((done) => { release = done })
+  apiHook = async (path, response) => { if (path.endsWith('/claim') && response.ok) { ready(); await claimGate } return false }
+  const buyer = spawn(process.execPath, ['scripts/buyer-workflow-worker.mjs', rootFile, stateDirectory],
+    { cwd: resolve('.'), env: buyerEnvironment, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  let buyerError = ''; buyer.stderr.on('data', (value) => { buyerError += value.toString() })
+  const buyerExit = new Promise<void>((done) => buyer.once('exit', () => done()))
+  const buyerTimeout = setTimeout(() => { if (buyer.pid) process.kill(-buyer.pid, 'SIGKILL'); release() }, 20_000)
+  try {
+    await Promise.race([claimed, buyerExit.then(() => { throw Error(`Workflow buyer exited: ${buyerError}`) })])
+    if (buyer.pid) process.kill(-buyer.pid, 'SIGKILL'); await buyerExit
+    assert.equal(broadcastCalls, count)
+  } finally { clearTimeout(buyerTimeout); apiHook = null; release(); if (buyer.exitCode === null && buyer.signalCode === null && buyer.pid) { process.kill(-buyer.pid, 'SIGKILL'); await buyerExit } }
+  const restartedBuyer = await promisify(execFile)(process.execPath, ['scripts/buyer-workflow-worker.mjs', rootFile, stateDirectory],
+    { cwd: resolve('.'), env: buyerEnvironment, timeout: 30_000 })
+  const restartedWorkflow = JSON.parse(restartedBuyer.stdout), fundedRoot = restartedWorkflow.nodes.find((node: { node_key: string }) => node.node_key === 'source')
+  assert.equal(restartedWorkflow.state, 'incomplete'); assert.equal(fundedRoot.state, 'funded'); assert.equal(broadcastCalls, count + 1)
+  const providerKey = jwt({ userId: f.sellerId, email: `${f.sellerId}@test.invalid`, role: 'human' })
+  const handlerFile = join(directory, `${run.id}.provider-handler.mjs`), providerDirectory = join(directory, `${run.id}.provider-state`)
+  await writeFile(handlerFile, `import {createHash} from 'node:crypto';
+    export default async function(work) {
+      if(work.input.upstream){const ref=work.dependency_artifacts[0];
+        if(!ref || ref.binding_id!==work.input.upstream.binding_id || ref.sha256!==work.input.upstream.sha256) throw Error('DEPENDENCY_BINDING_INVALID');
+        const response=await fetch(new URL(ref.download_path,process.env.BASE_URL),{redirect:'error',headers:{Authorization:'Bearer '+process.env.CLAWDMARKET_PROVIDER_API_KEY}});
+        if(!response.ok) throw Error('DEPENDENCY_UNAVAILABLE'); const bytes=Buffer.from(await response.arrayBuffer());
+        if(createHash('sha256').update(bytes).digest('hex')!==ref.sha256 || bytes.length!==ref.size_bytes) throw Error('DEPENDENCY_HASH_INVALID');
+        return {summary:'The separate provider reviewed the exact approved private upstream bytes.',artifact:{result:JSON.parse(bytes.toString()).result+'-reviewed'}};
+      }
+      const bytes=Buffer.from(JSON.stringify({result:'workflow-private-upstream'}));
+      return {summary:'Separate provider produced the private structured upstream attachment.',artifact:{result:'workflow-private-upstream'},
+        files:[{name:'upstream.json',media_type:'application/json',content_base64:bytes.toString('base64'),sha256:createHash('sha256').update(bytes).digest('hex')}]};
+    }`, { mode: 0o600 })
+  const providerArgs = ['scripts/provider-worker.mjs', '--trade-id', fundedRoot.trade_id, '--service-id', f.serviceId, '--handler', handlerFile, '--state-dir', providerDirectory]
+  const providerEnvironment = { ...process.env, BASE_URL: baseUrl, CLAWDMARKET_PROVIDER_API_KEY: providerKey }
+  let deliveryReady!: () => void, deliveryRelease!: () => void
+  const delivered = new Promise<void>((done) => { deliveryReady = done }), deliveryGate = new Promise<void>((done) => { deliveryRelease = done })
+  apiHook = async (path, response) => { if (path.endsWith('/delivery') && response.ok) { deliveryReady(); await deliveryGate } return false }
+  const provider = spawn(process.execPath, providerArgs, { cwd: resolve('.'), env: providerEnvironment, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  let providerError = ''; provider.stderr.on('data', (value) => { providerError += value.toString() })
+  const providerExit = new Promise<void>((done) => provider.once('exit', () => done()))
+  const providerTimeout = setTimeout(() => { if (provider.pid) process.kill(-provider.pid, 'SIGKILL'); deliveryRelease() }, 20_000)
+  try {
+    await Promise.race([delivered, providerExit.then(() => { throw Error(`Workflow provider exited: ${providerError}`) })])
+    if (provider.pid) process.kill(-provider.pid, 'SIGKILL'); await providerExit
+  } finally { clearTimeout(providerTimeout); apiHook = null; deliveryRelease(); if (provider.exitCode === null && provider.signalCode === null && provider.pid) { process.kill(-provider.pid, 'SIGKILL'); await providerExit } }
+  const recoveredProvider = await promisify(execFile)(process.execPath, providerArgs, { cwd: resolve('.'), env: providerEnvironment, timeout: 30_000 })
+  const firstDelivery = JSON.parse(recoveredProvider.stdout)
+  const decisions = { version: 1, workflow_id: workflow.id, run_id: run.id,
+    decisions: [{ node_key: 'source', decision: 'accept', content_hash: firstDelivery.content_hash }] }
+  const progressed = await runBuyerWorkflow({ ...options, decisions })
+  assert.equal(progressed.nodes.find((node: {node_key:string}) => node.node_key === 'source')?.state, 'completed', JSON.stringify(progressed))
+  const fundedChild = progressed.nodes.find((node: {node_key:string}) => node.node_key === 'review')!
+  assert.equal(fundedChild.state, 'funded', JSON.stringify(progressed)); assert.equal(broadcastCalls, count + 3)
+  const partial = await api('POST', `/api/workflows/${workflow.id}/reconcile`, { version: 1, run_id: run.id })
+  assert.equal(partial.completed, false); assert.equal(partial.receipt_persisted, false)
+  assert.equal(partial.receipt.totals.unresolved_buyer_minor, 105)
+  await assert.rejects(runBuyerWorkflow({ ...options, decisions: { ...decisions, decisions: [{ ...decisions.decisions[0], content_hash: '00'.repeat(32) }] } }), /BUYER_WORKFLOW_DECISION_CONFLICT/)
+  const downstream = await promisify(execFile)(process.execPath, ['scripts/provider-worker.mjs', '--trade-id', fundedChild.trade_id!, '--service-id', f.serviceId,
+    '--handler', handlerFile, '--state-dir', providerDirectory], { cwd: resolve('.'), env: providerEnvironment, timeout: 30_000 })
+  const secondDelivery = JSON.parse(downstream.stdout)
+  const decisionFile = join(directory, `${run.id}.workflow-decisions.json`)
+  await writeFile(decisionFile, JSON.stringify({ ...decisions,
+    decisions: [...decisions.decisions, { node_key: 'review', decision: 'accept', content_hash: secondDelivery.content_hash }] }), { mode: 0o600 })
+  let receiptReady!: () => void, receiptRelease!: () => void
+  const receiptSaved = new Promise<void>((done) => { receiptReady = done }), receiptGate = new Promise<void>((done) => { receiptRelease = done })
+  apiHook = async (path, response) => { if (path.endsWith('/reconcile') && response.ok) { receiptReady(); await receiptGate } return false }
+  const finalBuyer = spawn(process.execPath, ['scripts/buyer-workflow-worker.mjs', rootFile, stateDirectory, decisionFile],
+    { cwd: resolve('.'), env: buyerEnvironment, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  let finalError = ''; finalBuyer.stderr.on('data', (value) => { finalError += value.toString() })
+  const finalExit = new Promise<void>((done) => finalBuyer.once('exit', () => done()))
+  const finalTimeout = setTimeout(() => { if (finalBuyer.pid) process.kill(-finalBuyer.pid, 'SIGKILL'); receiptRelease() }, 20_000)
+  try {
+    await Promise.race([receiptSaved, finalExit.then(() => { throw Error(`Final workflow buyer exited: ${finalError}`) })])
+    if (finalBuyer.pid) process.kill(-finalBuyer.pid, 'SIGKILL'); await finalExit
+  } finally { clearTimeout(finalTimeout); apiHook = null; receiptRelease(); if (finalBuyer.exitCode === null && finalBuyer.signalCode === null && finalBuyer.pid) { process.kill(-finalBuyer.pid, 'SIGKILL'); await finalExit } }
+  const completed = await runBuyerWorkflow(options)
+  assert.equal(completed.state, 'completed', JSON.stringify(completed))
+  const outcome = await api('POST', `/api/workflows/${workflow.id}/reconcile`, { version: 1, run_id: run.id })
+  assert.equal(outcome.completed, true); assert.equal(outcome.receipt_persisted, true)
+  assert.equal(outcome.receipt.nodes.length, 2); assert.equal(outcome.receipt.attempts.length, 2)
+  assert.equal(outcome.receipt.totals.gross_buyer_minor, 210); assert.equal(outcome.receipt.totals.confirmed_seller_payout_minor, 200)
+  assert.equal(outcome.receipt.totals.unresolved_buyer_minor, 0); assert.equal(broadcastCalls, count + 4)
+  const replay = await api('POST', `/api/workflows/${workflow.id}/execute`, command)
+  assert.equal(replay.run.id, run.id); assert.equal(replay.run.started_at, run.started_at)
+  const completedReplay = await api('POST', `/api/workflows/${workflow.id}/reconcile`, { version: 1, run_id: run.id })
+  assert.equal(completedReplay.content_hash, outcome.content_hash);
+  const workflowReplay = await promisify(execFile)(process.execPath, ['scripts/buyer-workflow-worker.mjs', rootFile, stateDirectory], { cwd: resolve('.'), env: buyerEnvironment, timeout: 30_000 })
+  assert.equal(JSON.parse(workflowReplay.stdout).receipt.content_hash, outcome.content_hash); assert.equal(broadcastCalls, count + 4); assert.equal(completedReplay.idempotent, true)
+  assert.equal((await db.select().from(schema.workflow_artifact_grants).where(eq(schema.workflow_artifact_grants.trade_id, fundedChild.trade_id!))).length, 1)
+  assert.equal((await db.select().from(schema.workflow_receipts).where(eq(schema.workflow_receipts.run_id, run.id))).length, 1)
+  const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId))
+  assert.equal(service.active_orders, 0)
 })

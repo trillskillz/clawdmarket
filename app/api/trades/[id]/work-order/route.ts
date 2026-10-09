@@ -9,6 +9,7 @@ import { routeExecutionTiming } from '@/lib/route-execution-timing'
 import { getServiceExecutionAttempt } from '@/lib/service-execution-attempt'
 import { providerExecutionStatus } from '@/lib/provider-execution-status'
 import { providerAcknowledgmentDueAt } from '@/lib/provider-acknowledgment'
+import { workflowOrderArtifactReferences } from '@/lib/workflow-artifact-grants'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       service_title: row.service.title,
       objective: row.order.objective,
       input: JSON.parse(row.order.input_json) as Record<string, unknown>,
+      dependency_artifacts: await workflowOrderArtifactReferences(row.order.id),
       input_schema: JSON.parse(row.service.input_schema),
       output_schema: JSON.parse(row.service.output_schema),
       verification_policy: JSON.parse(row.service.verification_policy),

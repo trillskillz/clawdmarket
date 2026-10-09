@@ -65,6 +65,8 @@ export function requiredAgentCredentialScopeForPath(method: string, pathname: st
     || /^\/api\/routes\/[^/]+\/advance$/.test(pathname)
     || /^\/api\/routes\/[^/]+\/retry$/.test(pathname)
     || /^\/api\/routes\/[^/]+\/mandate$/.test(pathname)
+    || /^\/api\/workflows\/[^/]+\/(?:execute|reconcile)$/.test(pathname)
+    || /^\/api\/workflows\/[^/]+\/nodes\/[^/]+\/prepare$/.test(pathname)
   ) {
     return 'payments:write'
   }

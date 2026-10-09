@@ -16,6 +16,7 @@ import { providerMatches } from './provider-requirements'
 import { routeAdmissionFailure } from './route-control'
 import { routeExecutionEnabled } from './routing-feature-flags'
 import { findTradeFundingStep } from './route-funding-steps'
+import { assertWorkflowDependencyBindings, freezeWorkflowDependencies, reserveWorkflowArtifactGrants } from './workflow-artifact-grants'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 type Run = typeof workflow_runs.$inferSelect
@@ -60,7 +61,7 @@ async function current(source: Source, run: Run) {
   if (await routeAdmissionFailure(source)) fail('ROUTE_EXECUTION_PAUSED', 503)
   return { approval, contract, nodes }
 }
-function nodeContract(node: Node, run: Run, checked: Awaited<ReturnType<typeof current>>) {
+function nodeContract(node: Node, run: Run, checked: Awaited<ReturnType<typeof current>>, allowBlocked = false) {
   const planned = checked.contract.workflow.nodes.find((item) => item.key === node.node_key)
   const terms = checked.contract.terms.nodes.find((item) => item.key === node.node_key)
   const materialized = checked.nodes.find((item) => item.id === node.workflow_node_id)
@@ -68,8 +69,7 @@ function nodeContract(node: Node, run: Run, checked: Awaited<ReturnType<typeof c
     || node.deadline_at.getTime() !== Math.min(run.deadline_at.getTime(), run.started_at.getTime() + planned.deadline_seconds * 1000)) {
     return fail('WORKFLOW_NODE_CONTRACT_CHANGED')
   }
-  // Dependency acceptance and private recipient grants are a later stage, so no dependent can be purchased here.
-  if (planned.depends_on.length || node.state === 'blocked') fail('WORKFLOW_DEPENDENCY_NOT_READY')
+  if (node.state === 'blocked' && !allowBlocked) fail('WORKFLOW_DEPENDENCY_NOT_READY')
   if (node.deadline_at.getTime() <= Date.now()) fail('WORKFLOW_NODE_EXPIRED')
   return { planned, terms, materialized }
 }
@@ -111,11 +111,22 @@ async function ownedNode(source: Source, runId: string, key: string, userId: str
   return { run, node }
 }
 export async function prepareWorkflowNode(runId: string, key: string, userId: string) {
-  const initial = await ownedNode(db, runId, key, userId)
-  if (initial.node.route_id) return { node: initial.node, idempotent: true }
+  const saved = await ownedNode(db, runId, key, userId)
+  if (saved.node.route_id) return { node: saved.node, idempotent: true }
+  const initial = await workflowTransaction(async (tx) => {
+    const owned = await ownedNode(tx, runId, key, userId)
+    const checked = await current(tx, owned.run)
+    nodeContract(owned.node, owned.run, checked, true)
+    const dependencies = await freezeWorkflowDependencies(tx, owned.run, owned.node)
+    if (owned.node.state === 'blocked') {
+      const [ready] = await tx.update(workflow_node_runs).set({ state: 'ready' }).where(eq(workflow_node_runs.id, owned.node.id)).returning()
+      owned.node = ready
+    }
+    return { ...owned, dependencies }
+  })
   const checked = await current(db, initial.run), { planned, terms } = nodeContract(initial.node, initial.run, checked)
   const input = routePlanInput.parse({ client_reference: `wf:${runId}:${key}`, objective: planned.objective,
-    required_capabilities: planned.required_capabilities, input: terms.static_input,
+    required_capabilities: planned.required_capabilities, input: { ...terms.static_input, ...initial.dependencies.input },
     max_budget: { amount: money(terms.max_per_attempt_minor), currency: 'USD' }, deadline_seconds: planned.deadline_seconds,
     verification: terms.verification, provider_requirements: terms.provider_requirements,
     payment_policy: { allowed_rails: [checked.contract.terms.payment.rail] }, retry_policy: { max_attempts: terms.max_attempts } })
@@ -129,6 +140,8 @@ export async function prepareWorkflowNode(runId: string, key: string, userId: st
     const { run, node } = await ownedNode(tx, runId, key, userId)
     if (node.route_id) return { node, idempotent: true }
     const latest = await current(tx, run), bound = nodeContract(node, run, latest)
+    const dependencies = await assertWorkflowDependencyBindings(tx, run, node)
+    if (hash(input.input) !== hash({ ...bound.terms.static_input, ...dependencies.input })) fail('WORKFLOW_DEPENDENCY_CHANGED')
     const expiry = new Date(Math.floor(node.deadline_at.getTime() / 1000) * 1000)
     if (expiry.getTime() <= Date.now()) fail('WORKFLOW_NODE_EXPIRED')
     const [route] = await tx.insert(route_plans).values({ id: node.planned_route_id, buyer_id: run.buyer_id,
@@ -168,12 +181,14 @@ export async function validateWorkflowRouteAuthority(source: Source, row: Mandat
   const [run] = await source.select().from(workflow_runs).where(eq(workflow_runs.id, node.run_id)).limit(1)
   if (!run) return fail('WORKFLOW_CONTRACT_INVALID')
   const checked = await current(source, run), contract = nodeContract(node, run, checked)
+  const dependencies = await assertWorkflowDependencyBindings(source, run, node)
+  if (hash(JSON.parse(plan.input_json)) !== hash({ ...contract.terms.static_input, ...dependencies.input })) fail('WORKFLOW_CHILD_CONTRACT_CHANGED')
   if (node.route_id !== plan.id || node.planned_route_id !== plan.id || node.mandate_id !== row.id
     || contract.materialized.route_id !== plan.id || node.route_hash !== routeAuthorityHash(plan) || node.terms_hash !== hash(mandateTerms)
     || plan.buyer_id !== run.buyer_id || row.owner_account_id !== run.owner_account_id
     || plan.execution_deadline_at?.getTime() !== node.deadline_at.getTime()
     || plan.expires_at.getTime() !== Math.floor(node.deadline_at.getTime() / 1000) * 1000) fail('WORKFLOW_CHILD_CONTRACT_CHANGED')
-  const { ledger } = await exposureLedger(source, run, checked)
+  const { ledger } = await workflowExposureLedger(source, run, checked)
   if (plan.service_order_id) {
     const reservation = ledger.find((entry) => entry.order_id === plan.service_order_id && entry.node_run_id === node.id)
     if (!reservation) fail('WORKFLOW_FUNDING_RESERVATION_MISSING')
@@ -190,7 +205,7 @@ export async function validateWorkflowRouteAuthority(source: Source, row: Mandat
   return { run, node, checked, ...contract }
 }
 
-async function exposureLedger(source: Source, run: Run, checked: Awaited<ReturnType<typeof current>>) {
+export async function workflowExposureLedger(source: Source, run: Run, checked: Awaited<ReturnType<typeof current>>) {
   const ledger = await source.select().from(workflow_reservations).where(eq(workflow_reservations.run_id, run.id)).limit(49)
   if (ledger.length > 48) fail('WORKFLOW_EXPOSURE_INVALID')
   const children = await source.select().from(workflow_node_runs).where(eq(workflow_node_runs.run_id, run.id))
@@ -237,7 +252,7 @@ export async function reserveWorkflowExposure(source: Source, input: { mandate: 
     || step.order_id !== order.id || step.route_id !== node.route_id || step.mandate_id !== node.mandate_id || step.terms_hash !== node.terms_hash
     || order.input_json !== input.plan.input_json || order.objective !== input.plan.objective) fail('WORKFLOW_ORDER_CONTRACT_CHANGED')
   if (!input.service.estimated_latency_seconds || Date.now() + input.service.estimated_latency_seconds * 1000 > node.deadline_at.getTime()) fail('WORKFLOW_NODE_RUNTIME_EXCEEDED')
-  const { ledger, total, feeTotal } = await exposureLedger(source, run, checked)
+  const { ledger, total, feeTotal } = await workflowExposureLedger(source, run, checked)
   const attempts = ledger.filter((item) => item.node_run_id === node.id).sort((a, b) => a.attempt_number - b.attempt_number)
   const fee = BigInt(terms.max_chain_fee_per_attempt_units)
   if (!Number.isSafeInteger(input.totalMinor) || input.totalMinor <= 0 || input.totalMinor > terms.max_per_attempt_minor
@@ -256,4 +271,5 @@ export async function reserveWorkflowExposure(source: Source, input: { mandate: 
   await source.insert(workflow_reservations).values({ id: crypto.randomUUID(), run_id: run.id, node_run_id: node.id,
     route_id: input.plan.id, mandate_id: input.mandate.id, order_id: order.id, trade_id: trade.id, amount_minor: input.totalMinor,
     chain_fee_units: fee.toString(), attempt_number: node.attempt_count + 1, terms_hash: node.terms_hash! })
+  await reserveWorkflowArtifactGrants(source, run, node, order.id, trade.id, trade.seller_id)
 }

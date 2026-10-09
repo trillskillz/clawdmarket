@@ -2,6 +2,17 @@
 set -euo pipefail
 
 required_files=(
+  "lib/workflow-dependency-evidence.ts"
+  "lib/workflow-artifact-grants.ts"
+  "lib/workflow-reconciliation.ts"
+  "lib/workflow-execution-http.ts"
+  "scripts/buyer-workflow-worker.mjs"
+  "docs/WORKFLOW_EXECUTION_LOCAL.md"
+  "app/api/workflows/[id]/execute/route.ts"
+  "app/api/workflows/[id]/nodes/[key]/prepare/route.ts"
+  "app/api/workflows/[id]/artifacts/[grantId]/route.ts"
+  "app/api/workflows/[id]/reconcile/route.ts"
+  "migrations/2026-10-09-workflow-private-grants-v1.sql"
   "lib/workflow-execution-budget.ts"
   "tests/api/workflow-execution-budget.test.ts"
   "docs/WORKFLOW_EXECUTION_BUDGET.md"

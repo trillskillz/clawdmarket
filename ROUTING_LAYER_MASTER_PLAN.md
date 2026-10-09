@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P2.1 bounded workflow execution. Local contract **1.91** now implements exact owner-reviewed frozen DAG/contracts; local atomic fee-inclusive parent/node reservations, stable root child references and a common deadline are now implemented. Current accepted/backed dependency evidence and private recipient grants are next. Full child execution, dependency artifact grants, atomic fee-inclusive reservations, common deadlines, crash recovery and aggregate financial reconciliation must meet the audit's acceptance gate before counting a completed part. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
+**Next:** P2.1 bounded workflow execution. Local contract **1.92** now implements exact owner-reviewed contracts, atomic parent/node gross reservation, common deadlines, current accepted/backed dependencies, immutable selected-provider grants, a finite restartable buyer workflow worker and aggregate reconciliation. A two-node paid HTTP/provider loop passes through separate-process deaths and original receipt recovery using dummy wallets and an RPC simulation. Actual disposable-chain evidence, measured fees and the remaining adverse/retry/crash matrix are next; full P2.1 remains unfinished and the publishing counter stays **0/10**. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -1219,3 +1219,48 @@ Five new cases plus the budget/artifact regressions pass **29/29**; typecheck an
 targeted lint pass. Details/evidence: [WORKFLOW_DEPENDENCY_EVIDENCE.md](docs/WORKFLOW_DEPENDENCY_EVIDENCE.md).
 Next implementation: durable selected-provider grants and dependent execution.
 No push/deployment/live funds/rollout changes. Full P2.1 remains unfinished; **0/10**.
+
+
+### P2.1 local checkpoint — private dependent execution and workflow recovery (1.92)
+
+Migration 55 adds immutable dependency bindings, selected funded-order recipient
+grants and one aggregate receipt. Preparation preserves stable references and
+current accepted/backed upstream evidence. Existing checkout reserves grants in
+the same transaction as capacity, mandate and parent/node exposure. Grant reads
+recheck exact recipient, original funded order, current parent/child authority,
+backing and encrypted artifact integrity. Original trade-party recovery is kept.
+
+Private HTTP activation, preparation, inspection and reconciliation are now
+available locally, with explicit owner authorization, scoped credentials, CSRF,
+bounded requests and private no-store responses. Workflow cancellation stops new
+purchases while preserving original outstanding money/capacity obligations.
+The finite buyer workflow worker verifies frozen contracts and inherited terms,
+persists original references before wallet effects, requires explicit hash-bound
+buyer decisions and composes existing route/wallet workers and kernel locks.
+
+A two-node paid HTTP loop uses separate provider processes and exact private
+upstream bytes. Buyer/provider SIGKILL after wallet claim, delivery commit and
+aggregate persistence recovers original child/attempt/receipt identities. Lost
+prepare responses, server-expanded payment terms and conflicting acceptance
+hashes fail closed. Two buyer fundings and two confirmed payouts produce one
+grant/aggregate receipt, gross buyer cost 210 cents, payouts 200 cents, zero
+unresolved buyer money and released capacity. The RPC is a simulation; this is
+not yet disposable-chain acceptance. Actual chain fees remain explicitly null,
+separate from integer reserved ceilings.
+
+Validation: full `pnpm predeploy` passed **655 cases: 650 passed, five skipped**,
+including isolated verification, Python SDK, TypeScript/SDK checks, lint and
+migration replay through 55. Production build passed with the existing MPP/ox
+bundler warning. Chromium passed the 16 existing selected journeys and the added
+built-app workflow recovery journey (17 total); the new journey's cache assertion
+was corrected to allow Next.js's additional `max-age=0` directive and rerun.
+Local evidence: `/tmp/clawdmarket-workflow-grants-predeploy.log`,
+`/tmp/clawdmarket-workflow-grants-build.log`,
+`/tmp/clawdmarket-workflow-grants-browser.log`,
+`/tmp/clawdmarket-workflow-grants-browser-recovery.log` and
+`/tmp/clawdmarket-workflow-whole-worker-final.log`.
+Runbook: [WORKFLOW_EXECUTION_LOCAL.md](docs/WORKFLOW_EXECUTION_LOCAL.md).
+
+Next: actual disposable EVM HTTP/provider evidence, measured transaction fees and
+remaining adverse/retry/crash boundaries. No push, deployment, live funds or
+production flag changes. Full P2.1 remains unfinished; **0/10**.

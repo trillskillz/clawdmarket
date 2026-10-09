@@ -698,6 +698,36 @@ export const workflow_reservations = sqliteTable('workflow_reservations', {
   check('workflow_reservations_attempt_bounded', sql`${table.attempt_number} BETWEEN 1 AND 3`),
 ]);
 
+/** Immutable accepted prerequisite mapping, persisted before a dependent child exists. */
+export const workflow_dependency_bindings = sqliteTable('workflow_dependency_bindings', {
+  id: text('id').primaryKey(),
+  run_id: text('run_id').notNull().references(() => workflow_runs.id, { onDelete: 'restrict' }),
+  node_run_id: text('node_run_id').notNull().references(() => workflow_node_runs.id, { onDelete: 'restrict' }),
+  target_field: text('target_field').notNull(),
+  artifact_id: text('artifact_id').notNull().references(() => private_artifacts.id, { onDelete: 'restrict' }),
+  binding_hash: text('binding_hash').notNull(), binding_json: text('binding_json').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [uniqueIndex('workflow_dependency_bindings_target_idx').on(table.node_run_id, table.target_field)]);
+
+/** A grant belongs to one exact economic attempt and recipient, never to candidate providers. */
+export const workflow_artifact_grants = sqliteTable('workflow_artifact_grants', {
+  id: text('id').primaryKey(),
+  binding_id: text('binding_id').notNull().references(() => workflow_dependency_bindings.id, { onDelete: 'restrict' }),
+  node_run_id: text('node_run_id').notNull().references(() => workflow_node_runs.id, { onDelete: 'restrict' }),
+  order_id: text('order_id').notNull().references(() => service_orders.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'restrict' }),
+  recipient_id: text('recipient_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  revoked_at: integer('revoked_at', { mode: 'timestamp' }),
+}, (table) => [uniqueIndex('workflow_artifact_grants_order_binding_idx').on(table.order_id, table.binding_id)]);
+
+/** One private aggregate receipt; historical evidence never grants fresh payment permission. */
+export const workflow_receipts = sqliteTable('workflow_receipts', {
+  run_id: text('run_id').primaryKey().references(() => workflow_runs.id, { onDelete: 'restrict' }),
+  contract_hash: text('contract_hash').notNull(), content_hash: text('content_hash').notNull(), receipt_json: text('receipt_json').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 /** Last observed worker run, used only for operator health inspection. */
 export const worker_heartbeats = sqliteTable('worker_heartbeats', {
   worker_name: text('worker_name').primaryKey(),
