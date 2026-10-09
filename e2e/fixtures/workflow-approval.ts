@@ -3,7 +3,7 @@ export {}
 async function main() {
   if (!process.env.TURSO_DATABASE_URL?.startsWith('file:/tmp/clawdmarket-workspace-test-') || process.env.TURSO_AUTH_TOKEN) throw Error('Disposable local database required')
   const [mode, agentId] = process.argv.slice(2)
-  if (!['owners', 'counts', 'transfer', 'service'].includes(mode) || !/^agent_[a-f0-9-]{36}$/.test(agentId || '')) throw Error('Fixture mode/agent required')
+  if (!['owners', 'counts', 'transfer', 'service', 'purchasing-policy'].includes(mode) || !/^agent_[a-f0-9-]{36}$/.test(agentId || '')) throw Error('Fixture mode/agent required')
   const { db } = await import('../../lib/db'), s = await import('../../lib/schema'), { eq } = await import('drizzle-orm')
   const owner = `workflow-owner-${agentId}`, outsider = `workflow-outsider-${agentId}`, buyer = `user_agent_${agentId}`
   try {
@@ -21,6 +21,10 @@ async function main() {
         estimated_latency_seconds: 30, max_concurrency: 2, status: 'active',
         verification_policy: JSON.stringify({ required: true, methods: ['buyer_review'], acceptance: { version: 1, mode: 'explicit_buyer' } }) })
       console.log(JSON.stringify({ seller, service }))
+    } else if (mode === 'purchasing-policy') {
+      const now = new Date()
+      await db.insert(s.buyer_spend_policies).values({ buyer_id: buyer, owner_account_id: owner, policy_json: '{"approval_required_above":50}', version: 1, created_at: now, updated_at: now })
+      console.log(JSON.stringify({ configured: true }))
     } else if (mode === 'transfer') {
       await db.update(s.agent_owners).set({ userId: outsider }).where(eq(s.agent_owners.agentId, agentId))
       console.log(JSON.stringify({ transferred: true }))

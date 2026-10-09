@@ -9,7 +9,7 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { mainnet } from 'viem/chains'
 import fixture from '../fixtures/chain/workflow-token.json'
 
-export async function startDisposableWorkflowChain(binary: string, buyer: Address, treasuryKey: Hex = `0x${'99'.repeat(32)}`) {
+export async function startDisposableWorkflowChain(binary: string, buyer: Address, treasuryKey: Hex = `0x${'99'.repeat(32)}`, chainId: 1 | 8453 = 1) {
   if (!binary.startsWith('/') || !process.env.TURSO_DATABASE_URL?.startsWith('file:/tmp/clawdmarket-workspace-test-') || process.env.TURSO_AUTH_TOKEN) throw Error('DISPOSABLE_CHAIN_REQUIRED')
   const source = await readFile(resolve('tests/fixtures/chain/WorkflowToken.sol'))
   if (createHash('sha256').update(source).digest('hex') !== fixture.source_sha256) throw Error('DUMMY_TOKEN_SOURCE_CHANGED_RECOMPILE_FIXTURE')
@@ -17,12 +17,13 @@ export async function startDisposableWorkflowChain(binary: string, buyer: Addres
   await new Promise<void>((done) => portServer.listen(0, '127.0.0.1', done))
   const port = (portServer.address() as {port:number}).port
   await new Promise<void>((done, reject) => portServer.close((error) => error ? reject(error) : done()))
-  const child = spawn(binary, ['--host', '127.0.0.1', '--port', String(port), '--chain-id', '1', '--accounts', '0', '--silent'], { stdio: 'ignore' })
+  const child = spawn(binary, ['--host', '127.0.0.1', '--port', String(port), '--chain-id', String(chainId), '--accounts', '0', '--silent'], { stdio: 'ignore' })
   let closed = false, spawnError: unknown
   const exited = new Promise<void>((done) => { child.once('exit', () => { closed = true; done() }); child.once('error', (error) => { spawnError = error; closed = true; done() }) })
   const stop = async () => { if (!closed) child.kill('SIGKILL'); await exited }
   const url = `http://127.0.0.1:${port}`
-  const client = createPublicClient({ chain: mainnet, transport: http(url, { retryCount: 0, timeout: 1000 }) })
+  const fixtureChain = { ...mainnet, id: chainId }
+  const client = createPublicClient({ chain: fixtureChain, transport: http(url, { retryCount: 0, timeout: 1000 }) })
   const rpc = async (method: string, params: unknown[]) => {
     const response = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(3000), headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })
@@ -33,13 +34,13 @@ export async function startDisposableWorkflowChain(binary: string, buyer: Addres
     let ready = false
     for (let attempt = 0; attempt < 50; attempt++) {
       if (closed) throw Error(`DISPOSABLE_CHAIN_START_FAILED: ${String(spawnError || 'exited')}`)
-      try { if (await client.getChainId() === 1) { ready = true; break } } catch {}
+      try { if (await client.getChainId() === chainId) { ready = true; break } } catch {}
       await new Promise((done) => setTimeout(done, 100))
     }
     if (!ready) throw Error('DISPOSABLE_CHAIN_START_TIMEOUT')
     const treasury = privateKeyToAccount(treasuryKey)
     for (const address of [treasury.address, buyer]) await rpc('anvil_setBalance', [address, `0x${parseEther('10').toString(16)}`])
-    const wallet = createWalletClient({ chain: mainnet, transport: http(url), account: treasury })
+    const wallet = createWalletClient({ chain: fixtureChain, transport: http(url), account: treasury })
     const deployed = await client.waitForTransactionReceipt({ hash: await wallet.deployContract({ abi: fixture.abi, bytecode: fixture.bytecode as Hex }) })
     if (deployed.status !== 'success' || !deployed.contractAddress) throw Error('DUMMY_TOKEN_DEPLOY_FAILED')
     const token = deployed.contractAddress

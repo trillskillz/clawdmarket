@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 // Disposable test token only. Never deploy to a public chain.
 contract WorkflowToken {
+    uint8 public constant decimals = 6;
     mapping(address => uint256) public balanceOf;
     event Transfer(address indexed from, address indexed to, uint256 value);
     function mint(address recipient, uint256 amount) external {

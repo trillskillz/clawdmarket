@@ -125,6 +125,6 @@ export async function enforceAgentSpendPolicy(
   }
   await enforceBuyerSpendPolicy(tx, input.buyerId, { totalMinor: Math.round(input.totalCost * 100),
     sellerId: input.sellerId, capabilities: input.capabilities, paymentRail: input.paymentRail,
-    verificationMethods: input.verificationMethods, retrySpendMinor: input.retrySpendMinor }, now);
+    purchaseEvidence: input.purchaseEvidence, verificationMethods: input.verificationMethods, retrySpendMinor: input.retrySpendMinor }, now);
   return policy;
 }

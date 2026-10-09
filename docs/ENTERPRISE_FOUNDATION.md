@@ -103,3 +103,5 @@ The ceiling applies when an agent currently assigned to the organization creates
 4. Monitor reservation 409/5xx rates, database locks, and buyer policy errors. Disable the flag to stop new policy writes; retain budget enforcement until existing limits are deliberately cleared. Do not drop additive tables during rollback.
 
 Before exposing budget writes in production, run the normal payment preflight and marketplace smoke, followed by a low-value test-agent checkout canary. Do not fund it unless a payment canary is separately authorized.
+
+Explicit requester/approver grants and exact direct-service purchase continuation are documented in [bounded organization purchasing](ORGANIZATION_PURCHASING.md). Viewer membership and organization read credentials still grant no purchasing authority implicitly.

@@ -2,6 +2,7 @@ import { and, eq, gte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from './db'
 import { buyer_spend_policies, trades } from './schema'
+import { purchaseThresholdSatisfied, type VerifiedPurchase } from './organization-purchase-evidence'
 import { normalizeCapability } from './capabilities'
 
 import { providerRequirementsSchema, providerMatches } from './provider-requirements'
@@ -39,6 +40,7 @@ export const buyerSpendPolicyInput = z.object({
 
 export type BuyerSpendPolicy = z.output<typeof buyerSpendPolicyInput>
 export type SpendContext = {
+  purchaseEvidence?: VerifiedPurchase
   totalMinor: number
   sellerId?: string
   capabilities?: string[]
@@ -68,7 +70,7 @@ export async function loadBuyerSpendPolicy(buyerId: string, source: Transaction 
 
 export function checkBuyerPolicyConstraints(policy: BuyerSpendPolicy, context: SpendContext): string | null {
   if (policy.max_per_execution !== undefined && context.totalMinor > policy.max_per_execution) return 'BUYER_PER_EXECUTION_LIMIT'
-  if (policy.approval_required_above !== undefined && context.totalMinor > policy.approval_required_above) return 'BUYER_APPROVAL_REQUIRED'
+  if (policy.approval_required_above !== undefined && context.totalMinor > policy.approval_required_above && !purchaseThresholdSatisfied(context.purchaseEvidence, context)) return 'BUYER_APPROVAL_REQUIRED'
   if (policy.max_retry_budget !== undefined && context.retrySpendMinor !== undefined && context.retrySpendMinor > policy.max_retry_budget) return 'BUYER_RETRY_BUDGET_EXCEEDED'
   if (policy.approved_payment_rails && (!context.paymentRail || !policy.approved_payment_rails.includes(context.paymentRail))) return 'BUYER_PAYMENT_RAIL_BLOCKED'
   if (policy.approved_providers && (!context.sellerId || !providerMatches(policy.approved_providers, context.sellerId))) return 'BUYER_PROVIDER_BLOCKED'
@@ -96,6 +98,7 @@ export async function buyerPolicyUsage(buyerId: string, now = new Date(), source
 }
 
 export async function enforceBuyerSpendPolicy(tx: Transaction, buyerId: string, context: SpendContext, now = new Date()) {
+  if (context.purchaseEvidence && context.purchaseEvidence.buyerId !== buyerId) throw new BuyerSpendPolicyError('PURCHASING_BUYER_MISMATCH', 'Approval belongs to another buyer')
   const loaded = await loadBuyerSpendPolicy(buyerId, tx)
   if (!loaded) return
   const reason = checkBuyerPolicyConstraints(loaded.policy, context)

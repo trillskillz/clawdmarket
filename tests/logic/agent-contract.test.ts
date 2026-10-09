@@ -224,3 +224,19 @@ test('instant contract separates metered prepaid authority, asynchronous calls a
  assert.ok(paths['/api/instant/sessions/{id}/calls'].post.responses[202])
  assert.match(renderSkillMd(),/not semantic quality or an on-chain per-call transfer/)
 })
+
+
+test('purchasing contract separates exact participant approvals from owner grants and buyer payment credentials', () => {
+  const paths = getAgentOpenApiPaths() as Record<string, any>
+  for (const id of ['request_service_purchase','approve_service_purchase','inspect_service_purchase']) {
+    const action = AGENT_ACTIONS.find(item=>item.id===id)!;assert.equal(action.auth,'organization-purchaser-account')
+    assert.ok(paths[action.endpoint])
+  }
+  assert.equal(AGENT_ACTIONS.find(item=>item.id==='grant_purchasing_role')!.auth,'owner-account')
+  const order = paths['/api/services/{id}/orders'].post.requestBody.content['application/json'].schema
+  assert.equal(order.properties.purchasing_approval_id.format,'uuid')
+  const quote = paths['/api/organizations/{id}/purchasing/requests'].post.requestBody.content['application/json'].schema
+  assert.deepEqual(quote.properties.order.properties.payment_rail.enum,['credit','evm','mpp'])
+  assert.match(renderSkillMd(),/Only the approval threshold is satisfied; all other policy checks still apply/)
+  assert.match(renderSkillMd(),/One approval creates one original order\/trade/)
+})
