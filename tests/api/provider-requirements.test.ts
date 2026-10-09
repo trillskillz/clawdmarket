@@ -151,6 +151,59 @@ test('current ownership links and missing economic proof remove historical eligi
   assert.equal((await plan(f, { minimum_accepted_completions: 1 })).candidates.some((c) => c.service_id === f.id), false)
 })
 
+test('a newly closed owner-principal cycle removes ranking proof and rechecks saved execution, reservation and verified funding', async () => {
+  const f = await fixture(), b = await fixture(), c = await fixture()
+  const original = await completion(f)
+  await db.insert(schema.agent_owners).values({ agentId: c.agentId, userId: f.pastBuyer, establishedBy: 'test' })
+  await completion(b, f.sellerId)
+  const requirements = { approved_providers: [f.sellerId], minimum_accepted_completions: 1 }
+  const before = await plan(f, requirements)
+  assert.equal(before.candidates[0].capability_evidence[0].accepted_completion_count, 1)
+  assert.ok(before.candidates[0].score_components.backed_execution > 0)
+  const { POST: makePlan } = await import('@/app/api/routes/plan/route'), { POST: execute } = await import('@/app/api/routes/[id]/execute/route')
+  const saved = await makePlan(request('/api/routes/plan', f.buyerId, { client_reference: crypto.randomUUID(), objective: 'Review this code for correctness', required_capabilities: ['code-review'], max_budget: { amount: '2.00', currency: 'USD' }, provider_requirements: requirements }))
+  assert.equal(saved.status, 201)
+  const route = (await saved.json()).route, pending = await checkout(f, requirements)
+  await completion(c, b.sellerId)
+  const after = await plan(f, { approved_providers: [f.sellerId] })
+  assert.equal(after.candidates[0].capability_evidence[0].accepted_completion_count, 0)
+  assert.equal(after.candidates[0].score_components.backed_execution, 0)
+  assert.equal(after.candidates[0].eligibility.buyer_independence, 'not_verified')
+  assert.equal((await plan(f, requirements)).candidates.length, 0)
+  const refused = await execute(request(`/api/routes/${route.id}/execute`, f.buyerId), context(route.id))
+  assert.equal(refused.status, 409)
+  assert.equal((await refused.json()).error_code, 'PROVIDER_EVIDENCE_REQUIRED')
+  assert.equal((await order(f, requirements)).status, 409)
+  const received = proof(pending.trade)
+  await assert.rejects(funding.recordExternalTradeFunding(received), (error: any) => error.code === 'PROVIDER_ELIGIBILITY_CHANGED')
+  const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, pending.trade.id))
+  assert.equal(trade.status, 'cancelled')
+  const receipts = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, trade.id))
+  assert.equal(receipts.length, 1); assert.equal(receipts[0].tx_hash, received.txHash)
+  assert.equal((await db.select().from(schema.service_execution_attempts).where(eq(schema.service_execution_attempts.order_id, pending.order.id))).length, 0)
+  assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.id, original.id)))[0].status, 'completed')
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.id)))[0].active_orders, 0)
+})
+
+test('a cycle committed by another connection immediately before reservation is authoritative', async () => {
+  const f = await fixture(), b = await fixture(), c = await fixture()
+  await completion(f); await completion(b, f.sellerId)
+  const closing = await completion(c, b.sellerId)
+  const worker = createClient({ url: process.env.TURSO_DATABASE_URL! }), original = db.transaction.bind(db)
+  let changed = false
+  Reflect.set(db, 'transaction', async (callback: Parameters<typeof db.transaction>[0]) => {
+    if (!changed) {
+      changed = true
+      await worker.execute({ sql: 'INSERT INTO agent_owners (agent_id, user_id, established_by, established_at, updated_at) VALUES (?, ?, ?, 1, 1)', args: [c.agentId, f.pastBuyer, 'test'] })
+    }
+    return original(callback)
+  })
+  try { assert.equal((await order(f, { minimum_accepted_completions: 1 })).status, 409) }
+  finally { Reflect.set(db, 'transaction', original); worker.close() }
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.buyer_id, f.buyerId))).length, 0)
+  assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.id, closing.id)))[0].status, 'completed')
+})
+
 test('reservation sees evidence invalidated by another connection immediately before its transaction', async () => {
   const f = await fixture(); await completion(f)
   const worker = createClient({ url: process.env.TURSO_DATABASE_URL! }), original = db.transaction.bind(db)

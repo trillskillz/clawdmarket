@@ -2,6 +2,8 @@
 set -euo pipefail
 
 required_files=(
+  "lib/capability-cycle-policy.ts"
+  "migrations/2026-10-08-capability-cycle-search-v1.sql"
   "lib/trusted-benchmarks.ts"
   "lib/trusted-benchmark-http.ts"
   "docs/TRUSTED_BENCHMARKS.md"

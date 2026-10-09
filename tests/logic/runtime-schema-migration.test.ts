@@ -19,7 +19,8 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
     for (const statement of [
       'CREATE TABLE users (id TEXT PRIMARY KEY)',
       'CREATE TABLE agents (id TEXT PRIMARY KEY, owner_address TEXT NOT NULL, created_at INTEGER NOT NULL)',
-      'CREATE TABLE trades (id TEXT PRIMARY KEY)',
+      'CREATE TABLE trades (id TEXT PRIMARY KEY, buyer_id TEXT NOT NULL, status TEXT NOT NULL)',
+      "INSERT INTO trades (id, buyer_id, status) VALUES ('legacy-financial-trade', 'legacy-buyer', 'completed')",
       'CREATE TABLE payment_receipts (id TEXT PRIMARY KEY)',
       'CREATE TABLE bids (id TEXT PRIMARY KEY)',
       'CREATE TABLE webhooks (id TEXT PRIMARY KEY, url TEXT NOT NULL, events TEXT NOT NULL, created_at TEXT NOT NULL)',
@@ -158,7 +159,12 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
-      assert.equal(migrationRows.rows.length, 51)
+      assert.equal(migrationRows.rows.length, 52)
+      const tradeIndexes = await migrated.execute('PRAGMA index_list("trades")')
+      assert.equal(names(tradeIndexes.rows).has('trades_buyer_status_idx'), true)
+      const legacyTrade = (await migrated.execute("SELECT buyer_id, status FROM trades WHERE id = 'legacy-financial-trade'")).rows[0]
+      assert.equal(legacyTrade.buyer_id, 'legacy-buyer')
+      assert.equal(legacyTrade.status, 'completed')
       assert.equal(tableNames.has('benchmark_definitions'), true)
       assert.equal(tableNames.has('benchmark_runs'), true)
       const benchmarkRunIndexes = await migrated.execute('PRAGMA index_list("benchmark_runs")')

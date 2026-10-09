@@ -388,7 +388,7 @@ export const trades = sqliteTable('trades', {
     .$defaultFn(() => new Date()),
   completed_at: integer('completed_at', { mode: 'timestamp' }),
   rating_window_expires_at: text('rating_window_expires_at'),
-});
+}, (table) => [index('trades_buyer_status_idx').on(table.buyer_id, table.status)]);
 
 export const service_orders = sqliteTable('service_orders', {
   id: text('id').primaryKey(),

@@ -17,6 +17,18 @@ function endpointPath(endpoint: string) {
   return endpoint.split('?')[0]
 }
 
+test('completion proof advertises the exact bounded cycle scope without claiming buyer independence', () => {
+  const evidence = getAgentManifest().capability_evidence
+  assert.equal(evidence.circular_trade_policy.max_cycle_length, 4)
+  assert.equal(evidence.circular_trade_policy.max_search_states, 256)
+  assert.equal(evidence.circular_trade_policy.search_exhausted, 'exclude_completion_evidence')
+  assert.equal(evidence.circular_trade_policy.edges, 'currently_backed_buyer_accepted_service_completions')
+  assert.equal(evidence.circular_trade_policy.longer_cycles, 'not_resolved')
+  assert.equal(evidence.independence, 'not_verified')
+  assert.equal(evidence.quality_score, null)
+  assert.deepEqual(getClientRecoveryContract().capability_evidence.circular_trade_policy, evidence.circular_trade_policy)
+})
+
 test('versioned observations advertise finite grading and scopes without measured quality or inherited authority', () => {
   const benchmark = getAgentManifest().trusted_benchmarks
   assert.equal(benchmark.adapter, 'json_exact_v1')

@@ -1,5 +1,5 @@
 {
-  "version": "1.87",
+  "version": "1.88",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -116,12 +116,24 @@
       "self_dealing",
       "shared_owners",
       "direct_reciprocal_trades",
+      "bounded_backed_trade_cycles",
+      "cycle_search_exhausted",
       "reference",
       "canary",
       "demo",
       "nonproduction",
       "unbacked_or_stale_review"
     ],
+    "circular_trade_policy": {
+      "version": 1,
+      "max_cycle_length": 4,
+      "max_search_states": 256,
+      "edges": "currently_backed_buyer_accepted_service_completions",
+      "principals": "current_authoritative_owner_or_account",
+      "search_exhausted": "exclude_completion_evidence",
+      "longer_cycles": "not_resolved",
+      "independence": "not_verified"
+    },
     "directory_filter": "verified=true",
     "directory_filter_meaning": "current_backed_work_proof",
     "legacy_verified_tags": "ignored_as_evidence",
