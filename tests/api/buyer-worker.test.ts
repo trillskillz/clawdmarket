@@ -1079,6 +1079,20 @@ async function workflowHttpLoop(realChain: boolean) {
     assert.equal(chain.buyerNative - await chain.client.getBalance({ address: f.account.address }), buyerFees)
     assert.equal(chain.treasuryNative - await chain.client.getBalance({ address: treasury as `0x${string}` }), treasuryFees)
     assert.ok(buyerFees <= BigInt(chainFee) * 2n)
+    assert.equal(outcome.receipt.totals.actual_buyer_chain_fee_units, buyerFees.toString())
+    assert.equal(outcome.receipt.totals.actual_treasury_chain_fee_units, treasuryFees.toString())
+    assert.equal(outcome.receipt.totals.actual_chain_fee_units, (buyerFees + treasuryFees).toString())
+    assert.equal(outcome.receipt.totals.chain_fee_measurement, 'measured')
+    assert.deepEqual(outcome.receipt.totals.chain_fee_currency, { chain_id: 1, asset: 'native', unit: 'wei' })
+    const [feeRecord] = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, fundedRoot.trade_id))
+    const tampered = JSON.parse(feeRecord.chain_fee_evidence_json!)
+    tampered.gas_used = (BigInt(chainFee) + 1n).toString(); tampered.effective_gas_price = '1'
+    tampered.execution_fee_units = tampered.gas_used; tampered.total_fee_units = tampered.gas_used
+    await db.update(schema.payment_receipts).set({ chain_fee_evidence_json: JSON.stringify(tampered) }).where(eq(schema.payment_receipts.id, feeRecord.id))
+    const rejectedFees = await fetch(`${baseUrl}/api/workflows/${workflow.id}/execute`, { headers })
+    assert.equal(rejectedFees.status, 409); assert.equal((await rejectedFees.json()).error_code, 'WORKFLOW_CHAIN_FEE_CEILING_EXCEEDED')
+    await db.update(schema.payment_receipts).set({ chain_fee_evidence_json: feeRecord.chain_fee_evidence_json }).where(eq(schema.payment_receipts.id, feeRecord.id))
+    assert.equal((await api('POST', `/api/workflows/${workflow.id}/reconcile`, { version: 1, run_id: run.id })).content_hash, outcome.content_hash)
     console.info(JSON.stringify({ disposable_evm_workflow: 'passed', nodes: 2, distinct_transfers: 4, gross_buyer_minor: 210, seller_payout_minor: 200, unresolved_buyer_minor: 0, measured_buyer_fee_wei: buyerFees.toString(), measured_treasury_fee_wei: treasuryFees.toString() }))
   }
   } finally {

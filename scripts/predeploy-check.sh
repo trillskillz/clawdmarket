@@ -2,6 +2,13 @@
 set -euo pipefail
 
 required_files=(
+  "lib/chain-fee-evidence.ts"
+  "tests/logic/chain-fee-evidence.test.ts"
+  "docs/WORKFLOW_CHAIN_FEES.md"
+  "migrations/2026-10-09-chain-fee-evidence-v1.sql"
+  "tests/helpers/disposable-workflow-chain.ts"
+  "tests/fixtures/chain/WorkflowToken.sol"
+  "tests/fixtures/chain/workflow-token.json"
   "lib/workflow-dependency-evidence.ts"
   "lib/workflow-artifact-grants.ts"
   "lib/workflow-reconciliation.ts"

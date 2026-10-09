@@ -11,6 +11,8 @@ import { recordCancelledExternalFunding, recordExternalTradeFunding, TradeFundin
 import { fireWebhook } from '@/lib/webhooks'
 import { evmPaymentProofMessage, verifyEvmPaymentProof } from '@/lib/evm-payment-proof'
 
+import { measuredEvmChainFee } from '@/lib/chain-fee-evidence'
+
 export const dynamic = 'force-dynamic'
 const TX_HASH = /^0x[a-fA-F0-9]{64}$/
 
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       tokenAddress, chainId, tokenSymbol: verified.token.symbol,
       tokenDecimals: verified.token.decimals, tokenAmount: verified.tokenAmount,
       tokenUsdPrice: verified.token.fixedUsdPrice, usdValue: verified.usdValue,
+      chainFeeEvidence: measuredEvmChainFee(chainId, verified.receipt),
     } as const
     let funded
     try {

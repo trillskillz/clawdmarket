@@ -89,8 +89,9 @@ closed; restart completes two exact nodes, one private grant and one receipt
 without duplicate economic work. This simulation is not a disposable EVM VM.
 
 Aggregate gross marketplace costs, confirmed refunds/payouts and unresolved
-amounts are explicit. Chain-fee ceilings remain integer reservations;
-`actual_chain_fee_units` is null and `chain_fee_measurement` is `not_recorded`.
+amounts are explicit. Chain-fee ceilings remain integer reservations. Local
+contract 1.93 records verified Ethereum L1 buyer/treasury native fees; other
+models remain null and explicitly unmeasured. See [fee evidence](WORKFLOW_CHAIN_FEES.md).
 Do not present approved ceilings as measured fees. The next work must establish
 actual disposable-chain evidence, measured transaction fees and the remaining
 adverse/retry/crash matrix before the full audit gate is complete. No live funds,
@@ -125,3 +126,10 @@ changes verify fees, total cost, payout and retained marketplace fees. Original
 pending confirmations are recovered through the existing APIs/outbox. Aggregate
 fee persistence is still the next implementation; test measurements must not be
 mistaken for recorded receipt fields. Full P2.1 and the 0/10 counter are unchanged.
+
+
+Local contract 1.93 subsequently adds verified original native fee observations
+and buyer/treasury aggregate costs. The real EVM receipt now matches all four
+measured fees and exact native wallet balance changes. Missing/unsupported
+models remain null; observations cannot change reviewed chain/payer or exceed
+the original buyer fee ceiling. See [WORKFLOW_CHAIN_FEES.md](WORKFLOW_CHAIN_FEES.md).

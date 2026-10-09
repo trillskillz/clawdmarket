@@ -847,6 +847,10 @@ async function main() {
     migrations.push({ id: '2026-10-09-workflow-private-grants-v1', run: async (database: Client) => {
       await database.executeMultiple(await readFile(new URL('../migrations/2026-10-09-workflow-private-grants-v1.sql', import.meta.url), 'utf8'))
     } })
+    migrations.push({ id: '2026-10-09-chain-fee-evidence-v1', run: async (database: Client) => {
+      await ensureColumns(database, 'payment_receipts', { chain_fee_evidence_json: 'TEXT' })
+      await ensureColumns(database, 'settlement_transfers', { chain_fee_evidence_json: 'TEXT' })
+    } })
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',
