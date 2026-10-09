@@ -1033,6 +1033,33 @@ Logs: `/tmp/clawdmarket-remote-cycle-fix-tests.log`,
 `/tmp/clawdmarket-cycle-hotfix-browser.log`, and
 `/tmp/clawdmarket-cycle-hotfix-capability-browser.log`.
 
+The refreshed default-branch dependency graph also reports fifteen open advisories
+(one critical, four high, nine moderate and one low). The correction updates the
+verified patched releases of Next.js/eslint-config-next 16.3.8, MCP SDK 1.31.0 and
+sharp 0.35.5, plus targeted proxy-addr, source-map-js, fast-uri, ip-address and
+brace-expansion overrides. This refresh belongs to the existing P0 release
+baseline; it does not count as a new capability. Full release gates must be rerun
+with these exact dependencies. Maintainer evidence:
+[Next.js](https://github.com/vercel/next.js/security/advisories/GHSA-cjq9-62q9-8jv4),
+[MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-6qxp-vccf-f47h),
+[sharp](https://github.com/lovell/sharp/security/advisories/GHSA-wq5f-xc86-pv6w), and
+[proxy-addr](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h).
+
+The complete local audit additionally identifies high-severity
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) in
+braces 3.0.3, for which upstream lists no patched release. `pnpm why braces` shows
+its only installed path through micromatch/fast-glob in the development-only
+Next ESLint plugin. It remains explicitly tracked; no advisory is dismissed or
+ignored to obtain a clean audit. Production dependency audit is checked
+separately from that development-tool limitation.
+With the patched lockfile, full Node 24 predeploy passes 616 cases (611 passed,
+five skipped), actual external JavaScript/Python isolation, twelve Python client
+cases, SDK drift/build, typecheck and lint. `pnpm audit --prod` reports zero
+vulnerabilities; the unpatched development-only braces advisory remains recorded.
+PR CI also runs the query-compilation script against its initialized disposable
+database. Evidence: `/tmp/clawdmarket-cycle-hotfix-security-predeploy.log` and
+`/tmp/clawdmarket-cycle-hotfix-production-audit.json`.
+
 ### Continued plan audit — next independent capability: bounded workflow execution
 
 The existing workflow model stores at most sixteen explicit nodes, three
