@@ -1,5 +1,5 @@
 {
-  "version": "1.94",
+  "version": "1.95",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -821,6 +821,62 @@
       "path": "/api/organizations/{id}/budget",
       "auth": "owner-account",
       "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "list_purchasing_roles": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/purchasing/roles",
+      "auth": "organization-purchaser-account",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "grant_purchasing_role": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/purchasing/roles",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "revoke_purchasing_role": {
+      "method": "DELETE",
+      "path": "/api/organizations/{id}/purchasing/roles",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "request_service_purchase": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/purchasing/requests",
+      "auth": "organization-purchaser-account",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "inspect_service_purchase": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/purchasing/requests/{requestId}",
+      "auth": "organization-purchaser-account",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "cancel_service_purchase": {
+      "method": "DELETE",
+      "path": "/api/organizations/{id}/purchasing/requests/{requestId}",
+      "auth": "organization-purchaser-account",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "approve_service_purchase": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/purchasing/requests/{requestId}/approval",
+      "auth": "organization-purchaser-account",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "revoke_service_purchase_approval": {
+      "method": "DELETE",
+      "path": "/api/organizations/{id}/purchasing/requests/{requestId}/approval",
+      "auth": "organization-purchaser-account",
+      "named_credential_scope": null,
       "deprecated_body_fields": []
     },
     "inspect_team_budget": {

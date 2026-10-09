@@ -271,6 +271,78 @@ export const organization_budget_events = sqliteTable('organization_budget_event
   created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
 }, (table) => [index('organization_budget_events_org_version_idx').on(table.organization_id, table.version)]);
 
+/** Immutable bounded account-role grants, separate from viewer membership and read credentials. */
+export const organization_purchasing_roles = sqliteTable('organization_purchasing_roles', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  account_id: text('account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  team_id: text('team_id').references(() => organization_teams.id, { onDelete: 'restrict' }),
+  role: text('role', { enum: ['requester', 'approver'] }).notNull(),
+  max_purchase_minor: integer('max_purchase_minor').notNull(),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(),
+  expires_at: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  state: text('state', { enum: ['active', 'revoked'] }).notNull().default('active'),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  revoked_at: integer('revoked_at', { mode: 'timestamp_ms' }),
+}, (table) => [uniqueIndex('purchasing_roles_org_reference_idx').on(table.organization_id, table.client_reference),
+  index('purchasing_roles_account_org_idx').on(table.account_id, table.organization_id),
+  check('purchasing_roles_amount_positive', sql`${table.max_purchase_minor} > 0`)]);
+
+export const organization_purchase_requests = sqliteTable('organization_purchase_requests', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  agent_id: text('agent_id').notNull(),
+  team_id: text('team_id'),
+  cost_center: text('cost_center').notNull(),
+  service_id: text('service_id').notNull().references(() => service_definitions.id, { onDelete: 'restrict' }),
+  requester_account_id: text('requester_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  requester_role_id: text('requester_role_id').references(() => organization_purchasing_roles.id, { onDelete: 'restrict' }),
+  reviewer_role_id: text('reviewer_role_id').references(() => organization_purchasing_roles.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(),
+  service_hash: text('service_hash').notNull(),
+  order_json: text('order_json').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  payment_rail: text('payment_rail', { enum: ['credit', 'evm', 'mpp'] }).notNull(),
+  state: text('state', { enum: ['open', 'approved', 'cancelled'] }).notNull().default('open'),
+  expires_at: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  cancelled_at: integer('cancelled_at', { mode: 'timestamp_ms' }),
+}, (table) => [uniqueIndex('purchase_requests_org_reference_idx').on(table.organization_id, table.client_reference),
+  index('purchase_requests_buyer_created_idx').on(table.buyer_id, table.created_at),
+  check('purchase_requests_amount_positive', sql`${table.amount_minor} > 0`)]);
+
+export const organization_purchase_approvals = sqliteTable('organization_purchase_approvals', {
+  id: text('id').primaryKey(),
+  request_id: text('request_id').notNull().unique().references(() => organization_purchase_requests.id, { onDelete: 'restrict' }),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  approver_account_id: text('approver_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  approver_role_id: text('approver_role_id').references(() => organization_purchasing_roles.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(),
+  decision_hash: text('decision_hash').notNull(),
+  state: text('state', { enum: ['active', 'revoked'] }).notNull().default('active'),
+  expires_at: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  revoked_at: integer('revoked_at', { mode: 'timestamp_ms' }),
+}, (table) => [uniqueIndex('purchase_approvals_org_reference_idx').on(table.organization_id, table.client_reference)]);
+
+/** One approval can create only one original economic order; cancellation/refunds do not reuse it. */
+export const organization_purchase_uses = sqliteTable('organization_purchase_uses', {
+  approval_id: text('approval_id').primaryKey().references(() => organization_purchase_approvals.id, { onDelete: 'restrict' }),
+  order_id: text('order_id').notNull().unique().references(() => service_orders.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull(),
+  request_hash: text('request_hash').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
 /** Departmental ceilings are additional restrictions, never delegated purchasing authority. */
 export const organization_team_budgets = sqliteTable('organization_team_budgets', {
   team_id: text('team_id').primaryKey().references(() => organization_teams.id, { onDelete: 'restrict' }),
@@ -315,7 +387,7 @@ export const organization_audit_events = sqliteTable('organization_audit_events'
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
   actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
-  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked', 'budget_updated', 'team_budget_updated'] }).notNull(),
+  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked', 'budget_updated', 'team_budget_updated', 'purchasing_role_created', 'purchasing_role_revoked', 'purchase_requested', 'purchase_approved', 'purchase_cancelled', 'purchase_approval_revoked'] }).notNull(),
   agent_id: text('agent_id'),
   team_id: text('team_id'),
   member_account_id: text('member_account_id'),
@@ -431,6 +503,7 @@ export const trades = sqliteTable('trades', {
 }, (table) => [index('trades_buyer_status_idx').on(table.buyer_id, table.status)]);
 
 export const service_orders = sqliteTable('service_orders', {
+  purchasing_approval_id: text('purchasing_approval_id'),
   id: text('id').primaryKey(),
   service_id: text('service_id').notNull().references(() => service_definitions.id, { onDelete: 'restrict' }),
   listing_id: text('listing_id').notNull().unique().references(() => listings.id, { onDelete: 'restrict' }),

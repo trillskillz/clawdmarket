@@ -36,6 +36,8 @@ import { captureServiceExecutionContract } from './service-execution-contract'
 import { reserveMandateExposure } from './route-payment-mandate'
 import { assertRouteRetryReconciled, RouteRetryError } from './route-retry-reconciliation'
 import { listRouteFundingSteps } from './route-funding-steps'
+import { validatePurchaseApproval, consumePurchaseApproval, originalPurchaseOrderMatches } from './organization-purchasing'
+import { purchasingTransaction } from './organization-purchasing-transaction'
 import { workflowTransaction, WorkflowApprovalError } from './workflow-approval'
 
 type ParsedOrderRequest = z.output<typeof serviceOrderInput>
@@ -70,7 +72,8 @@ export async function existingServiceOrder(reference: string) {
 
 function sameRequest(prior: NonNullable<Awaited<ReturnType<typeof existingServiceOrder>>>, args: ReservationArgs) {
   const { request, principal, serviceId } = args
-  return prior.order.buyer_id === principal.userId && prior.order.service_id === serviceId
+  return (prior.order.purchasing_approval_id ?? null) === (request.purchasing_approval_id ?? null)
+    && prior.order.buyer_id === principal.userId && prior.order.service_id === serviceId
     && prior.order.provider_requirements_json === JSON.stringify(request.provider_requirements ?? {})
     && prior.order.objective === request.objective && prior.order.input_json === JSON.stringify(request.input)
     && (request.payment_rail === 'auto' || prior.order.payment_rail === request.payment_rail)
@@ -82,6 +85,8 @@ async function replay(args: ReservationArgs) {
   const prior = await existingServiceOrder(args.request.client_reference)
   if (!prior) return null
   if (!sameRequest(prior, args)) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference belongs to another order or rail')
+  if (args.request.purchasing_approval_id && !await originalPurchaseOrderMatches(args.request.purchasing_approval_id, args.principal.userId, prior.order.id,
+    { ...args.request, provider_requirements: args.request.provider_requirements ?? {} })) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Approved checkout body changed')
   if (args.routeId) {
     const [plan] = await db.select({ service_order_id: route_plans.service_order_id }).from(route_plans).where(eq(route_plans.id, args.routeId)).limit(1)
     if (plan?.service_order_id !== prior.order.id) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference is not linked to this route')
@@ -92,6 +97,7 @@ async function replay(args: ReservationArgs) {
 /** Reserves capacity and creates an order in one transaction. External rails remain unpaid. */
 export async function reserveServiceOrder(args: ReservationArgs) {
   const { serviceId: id, principal, request, routeId, attemptNumber, externalOnly } = args
+  if (request.purchasing_approval_id && (routeId || args.mandateId)) throw new ServiceOrderReservationError('PURCHASING_SCOPE_MISMATCH', 'Approval is for a direct service order')
   const reference = request.client_reference
   const prior = await replay(args)
   if (prior) return prior
@@ -141,7 +147,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         if (error instanceof WorkflowApprovalError && error.status === 503) throw new ServiceOrderReservationError('WORKFLOW_STORAGE_BUSY', 'Retry the same workflow child reference', 503, true)
         throw error
       }
-    } : db.transaction.bind(db)
+    } : request.purchasing_approval_id ? purchasingTransaction : db.transaction.bind(db)
     const reserveOnce = () => transaction(async (tx) => {
       const now = new Date()
       let retrySpendMinor = 0
@@ -199,7 +205,9 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       if (requirementFailure) throw new ServiceOrderReservationError(requirementFailure, 'Provider does not satisfy buyer evidence requirements')
       const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, principal.userId, service.seller_id, tx)
       if (verifierFailure) throw new ServiceOrderReservationError(verifierFailure, 'Isolated verifier is unavailable or shares a trade-party owner')
-      const spendContext = { sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: contract.verificationPolicy!.methods,
+      const purchaseEvidence = request.purchasing_approval_id ? await validatePurchaseApproval(tx, { approvalId: request.purchasing_approval_id,
+        buyerId: principal.userId, service, request: { ...request, provider_requirements: request.provider_requirements ?? {} }, totalMinor, rail }) : undefined
+      const spendContext = { purchaseEvidence, sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: contract.verificationPolicy!.methods,
         ...(args.mandateId ? { retrySpendMinor } : {}) }
       if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100, ...spendContext })
       else await enforceBuyerSpendPolicy(tx, principal.userId, { totalMinor, ...spendContext }, now)
@@ -219,6 +227,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
           }).returning())[0]
       if (!internal) await attributeOrganizationTrade(tx, principal.agentId, trade, totalMinor, now)
       const [order] = await tx.insert(service_orders).values({
+        purchasing_approval_id: request.purchasing_approval_id ?? null,
         id: crypto.randomUUID(), service_id: id, listing_id: listing.id, trade_id: trade.id,
         buyer_id: principal.userId, client_reference: reference, objective: request.objective,
         provider_requirements_json: JSON.stringify(request.provider_requirements ?? {}),
@@ -226,6 +235,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         input_json: JSON.stringify(request.input), price_minor: service.price_minor,
         payment_rail: rail, state: internal ? 'funded' : 'awaiting_funding',
       }).returning()
+      if (purchaseEvidence) await consumePurchaseApproval(tx, purchaseEvidence, order.id, trade.id)
       if (args.mandateId) {
         const [plan] = routeId ? await tx.select().from(route_plans).where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId))).limit(1) : []
         if (!plan) throw new ServiceOrderReservationError('MANDATE_ROUTE_REQUIRED', 'A mandate must bind an owned route')

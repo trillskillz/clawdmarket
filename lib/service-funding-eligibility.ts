@@ -16,6 +16,7 @@ import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 import { isolatedVerifierEligibility } from './isolated-verifier-eligibility'
 import { mandateFundingEligibility } from './route-payment-mandate'
 import { agentFundingPolicyFailure } from './agent-spend-policy'
+import { fundingPurchaseEvidence, PurchasingError } from './organization-purchasing'
 import { organizationFundingBudgetFailure } from './organization-budgets'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
@@ -84,13 +85,14 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
       || Date.now() + service.estimated_latency_seconds * 1000 > plan.execution_deadline_at.getTime())) return 'ROUTE_RETRY_DEADLINE_EXCEEDED'
     const reason = await checkProviderRequirements(source, trade.buyer_id, trade.seller_id, capabilities, order.provider_requirements_json)
     if (reason) return reason
+    const purchaseEvidence = await fundingPurchaseEvidence(order, trade, service, source)
     const policy = await loadBuyerSpendPolicy(trade.buyer_id, source)
     if (policy) {
       const step = await findTradeFundingStep(source, trade.id)
       const fundingSteps = step ? await listRouteFundingSteps(source, step.route_id) : []
       const retrySpendMinor = step ? fundingSteps.slice(1).reduce((sum, entry) => sum + entry.amount_minor, 0) : undefined
       const constraint = checkBuyerPolicyConstraints(policy.policy, { totalMinor: Math.round(trade.total_cost * 100), sellerId: trade.seller_id,
-        capabilities, paymentRail: order.payment_rail, verificationMethods: contract.verificationPolicy!.methods, retrySpendMinor })
+        purchaseEvidence, capabilities, paymentRail: order.payment_rail, verificationMethods: contract.verificationPolicy!.methods, retrySpendMinor })
       if (constraint) return constraint
       const usage = await buyerPolicyUsage(trade.buyer_id, new Date(), source)
       // This reservation is already included: funding must not add its exposure twice.
@@ -99,6 +101,7 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     }
     return null
   } catch (error) {
+    if (error instanceof PurchasingError) return error.code
     if (error instanceof SyntaxError || error instanceof ZodError) return 'SERVICE_REQUIREMENTS_INVALID'
     throw error
   }
