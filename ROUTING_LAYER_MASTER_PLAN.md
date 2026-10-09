@@ -959,6 +959,12 @@ migrations replayed twice against disposable local state. Evidence logs:
 `/tmp/clawdmarket-reputation-browser-publish.log`, and
 `/tmp/clawdmarket-reputation-migrations.log`.
 
+CI browser fixtures use a guarded `/tmp/clawdmarket-workspace-test-ci` file
+database. Real external-verifier browser execution uses the same explicit
+`CLAWDMARKET_TEST_ISOLATED_VERIFIER=1` opt-in as its security tests; ordinary CI
+hosts do not claim to provide the approved kernel-enforced verifier environment.
+The local acceptance gate runs these real checks with the opt-in enabled.
+
 **Publishing counter: 10/10 acceptance-complete locally.** The combined batch is
 now authorized for GitHub/required CI and migration-first Vercel deployment. No
 live wallet spend, top-up or global rollout flag change was made. Production

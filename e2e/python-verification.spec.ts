@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import jwt from 'jsonwebtoken'
 
 test('external Python CLI survives process death after HTTP report commit and leaves settlement to the buyer', async ({ request, page, baseURL }) => {
+  test.skip(process.env.CLAWDMARKET_TEST_ISOLATED_VERIFIER !== '1', 'Requires an approved external verifier host with enforced kernel controls')
   test.setTimeout(60000)
   expect(process.env.TURSO_DATABASE_URL).toMatch(/^file:\/tmp\/clawdmarket-workspace-test-/)
   expect(process.env.TURSO_AUTH_TOKEN || '').toBe('')

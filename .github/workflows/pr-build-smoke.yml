@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      TURSO_DATABASE_URL: file:./ci.db
+      TURSO_DATABASE_URL: file:/tmp/clawdmarket-workspace-test-ci/ci.db
       JWT_SECRET: ci-jwt-secret-please-change
       CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
       WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
@@ -43,7 +43,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Initialize isolated CI database
-        run: pnpm exec drizzle-kit push --force
+        run: |
+          mkdir -p /tmp/clawdmarket-workspace-test-ci
+          pnpm exec drizzle-kit push --force
 
       - name: Lint
         run: pnpm run lint
