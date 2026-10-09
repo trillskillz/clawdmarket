@@ -1,5 +1,5 @@
 {
-  "version": "1.95",
+  "version": "1.96",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -819,6 +819,48 @@
     "set_organization_budget": {
       "method": "PUT",
       "path": "/api/organizations/{id}/budget",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "list_private_provider_offers": {
+      "method": "GET",
+      "path": "/api/services/{id}/organization-access",
+      "auth": "owner-account",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
+    "offer_private_provider": {
+      "method": "POST",
+      "path": "/api/services/{id}/organization-access",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "revoke_private_provider_offer": {
+      "method": "DELETE",
+      "path": "/api/services/{id}/organization-access",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "list_organization_private_providers": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/providers",
+      "auth": "organization-purchaser-account",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "accept_private_provider": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/providers/{shareId}/accept",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "revoke_organization_private_provider": {
+      "method": "DELETE",
+      "path": "/api/organizations/{id}/providers",
       "auth": "owner-account",
       "named_credential_scope": "marketplace:write",
       "deprecated_body_fields": []

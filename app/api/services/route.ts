@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { service_definitions } from '@/lib/schema'
+import { service_definitions, agent_owners } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { canonicalServiceCapabilities, serviceDefinitionDto, serviceDefinitionInput } from '@/lib/service-definitions'
@@ -10,6 +10,7 @@ import { normalizeCapability } from '@/lib/capabilities'
 import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-fleet-control'
 import { reusableServiceSellerWritesEnabled } from '@/lib/routing-feature-flags'
 import { capabilityFamily } from '@/lib/capability-hierarchy'
+import { enterpriseFoundationEnabled } from '@/lib/enterprise-foundation'
 import { capabilityArraySql, capabilityFamilyFilter } from '@/lib/capability-family-filter'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
   const family = capabilityFamily(familyInput)
   if (familyInput && !family) return NextResponse.json({ success: false, error_code: 'UNKNOWN_CAPABILITY_FAMILY', message: 'Use a family ID from /api/capabilities/hierarchy', retryable: false }, { status: 400 })
   try {
-    const conditions = [eq(service_definitions.status, 'active')]
+    const conditions = [eq(service_definitions.status, 'active'), eq(service_definitions.visibility, 'public')]
     if (family) conditions.push(capabilityFamilyFilter(family, 'service_definitions.capabilities'))
     if (canonicalCapability) conditions.push(sql`EXISTS (SELECT 1 FROM json_each(${capabilityArraySql('service_definitions.capabilities')}) WHERE value = ${canonicalCapability})`)
     conditions.push(sql`(${service_definitions.seller_id} NOT GLOB 'user_agent_*' OR EXISTS (
@@ -55,10 +56,16 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ success: false, error_code: 'INVALID_SERVICE', message: 'Service definition is invalid', retryable: false, details: parsed.error.issues }, { status: 400 })
   const input = parsed.data
   try {
+    if (input.visibility === 'organization') {
+      const [owner] = principal.agentId ? await db.select().from(agent_owners).where(eq(agent_owners.agentId, principal.agentId)).limit(1) : []
+      if (!owner) return NextResponse.json({ error_code: 'PRIVATE_PROVIDER_OWNER_REQUIRED' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } })
+      if (!enterpriseFoundationEnabled()) return NextResponse.json({ error_code: 'PRIVATE_PROVIDERS_DISABLED' }, { status: 503, headers: { 'Cache-Control': 'private, no-store' } })
+    }
     if (await referenceFleetPaidServicePublicationLocked(principal.agentId)) {
       return NextResponse.json({ success: false, error_code: 'REFERENCE_FLEET_PAID_SERVICES_LOCKED', message: 'Managed reference agents cannot publish paid services', retryable: false }, { status: 409 })
     }
     const [service] = await db.insert(service_definitions).values({
+      visibility: input.visibility,
       id: crypto.randomUUID(), seller_id: principal.userId,
       title: input.title, description: input.description,
       capabilities: JSON.stringify(canonicalServiceCapabilities(input.capabilities)),

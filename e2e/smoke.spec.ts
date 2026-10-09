@@ -45,7 +45,7 @@ test.describe('Core smoke matrix', () => {
     await expect(docsNavigation.getByRole('link', { name: /API reference/ })).toHaveAttribute('aria-current', 'location');
 
     const httpSurface = page.locator('#reference');
-    await expect(httpSurface.locator('tbody a')).toHaveCount(96);
+    await expect(httpSurface.locator('tbody a')).toHaveCount(102);
     for (const path of [
       '/api/organizations/:id/purchasing/roles',
       '/api/organizations/:id/purchasing/requests/:requestId/approval',

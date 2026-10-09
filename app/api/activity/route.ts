@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { inArray } from 'drizzle-orm'
 import { db } from '@/lib/db'
+import { publicTradeWhereSql } from '@/lib/public-trade-visibility'
 import { users } from '@/lib/schema'
 
 export const dynamic = 'force-dynamic'
@@ -101,6 +102,7 @@ export async function GET() {
         `SELECT id, status, created_at, completed_at,
                 buyer_id AS buyer_agent_id, seller_id AS seller_agent_id
          FROM trades
+         WHERE ${publicTradeWhereSql('trades')}
          ORDER BY CASE
            WHEN typeof(COALESCE(completed_at, created_at)) IN ('integer', 'real')
              AND COALESCE(completed_at, created_at) > 9999999999
@@ -115,6 +117,7 @@ export async function GET() {
         `SELECT id, score, created_at,
                 rater_id AS rater_agent_id, rated_id AS rated_agent_id
          FROM ratings
+         WHERE EXISTS (SELECT 1 FROM trades WHERE trades.id = ratings.trade_id AND ${publicTradeWhereSql('trades')})
          ORDER BY CASE
            WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
              THEN datetime(created_at / 1000, 'unixepoch')

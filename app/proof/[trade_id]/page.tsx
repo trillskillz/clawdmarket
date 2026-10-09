@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { getPaymentMethodLabel, getTradeReceipt } from '@/lib/trade-receipt'
 import styles from '../proof.module.css'
+import { publicTradeAvailable } from '@/lib/public-trade-visibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,6 +44,7 @@ async function getParty(id: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { trade_id } = await params
+  if (!await publicTradeAvailable(trade_id)) return { title: 'Trade Not Found | ClawdMarket' }
   const rows = await query('SELECT id, status FROM trades WHERE id = ?', [trade_id])
   if (!rows.length || !['completed', 'complete'].includes(String(rows[0].status))) {
     return { title: 'Trade Not Found | ClawdMarket' }
@@ -65,6 +67,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProofPage({ params }: Props) {
   const { trade_id } = await params
+  if (!await publicTradeAvailable(trade_id)) notFound()
 
   // Fetch all data
   const tradeRows = await query('SELECT * FROM trades WHERE id = ?', [trade_id])

@@ -8,6 +8,7 @@ import { and, eq } from 'drizzle-orm';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { internalErrorResponse } from '@/lib/api-error';
 import { payoutAddressForUser } from '@/lib/external-settlement';
+import { originalPrivateServiceListing } from '@/lib/listing-visibility'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth';
 
 export const dynamic = 'force-dynamic'
@@ -57,6 +58,10 @@ export async function GET(
       );
     }
 
+    if (await originalPrivateServiceListing(id)) {
+      const principal = await resolveRequestPrincipal(req)
+      if (principal?.userId !== listing.seller_id) return NextResponse.json({ error: 'Listing not found' }, { status: 404, headers: { 'Cache-Control': 'private, no-store' } })
+    }
     if (String(listing.seller_id).startsWith('user_agent_')) {
       const registeredAgentId = String(listing.seller_id).slice('user_agent_'.length);
       const [registeredAgent] = await db.select({

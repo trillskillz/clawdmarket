@@ -29,6 +29,13 @@ before(async () => {
     address: chain?.token || `0x${'44'.repeat(20)}`, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain?.url || 'https://example.invalid' }])
   db = (await import('@/lib/db')).db; schema = await import('@/lib/schema'); await createLocalTestSchema(db.$client, schema)
   jwt = (await import('@/lib/auth')).generateJWT; domain = await import('@/lib/organization-purchasing')
+  const tradeApi = await import('@/app/api/trades/route')
+  const previewApi = await import('@/app/api/trades/preview/route')
+  const privateApi = await import('@/app/api/services/[id]/organization-access/route')
+  const catalogApi = await import('@/app/api/organizations/[id]/providers/route')
+  const acceptApi = await import('@/app/api/organizations/[id]/providers/[shareId]/accept/route')
+  const profileApi = await import('@/app/api/agents/[id]/route')
+  const activityApi = await import('@/app/api/activity/route')
   const roleApi = await import('@/app/api/organizations/[id]/purchasing/roles/route')
   const requestApi = await import('@/app/api/organizations/[id]/purchasing/requests/route')
   const inspectApi = await import('@/app/api/organizations/[id]/purchasing/requests/[requestId]/route')
@@ -45,9 +52,16 @@ before(async () => {
     try {
       const chunks = []; for await (const chunk of incoming) chunks.push(chunk)
       const body = Buffer.concat(chunks).toString(), path = incoming.url!.split('?')[0], parts = path.split('/')
-      const request = new NextRequest(baseUrl + path, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
+      const request = new NextRequest(baseUrl + incoming.url!, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
       let response: Response
-      if (path.includes('/purchasing/')) {
+      if (path === '/api/trades') response = await tradeApi.POST(request)
+      else if (path === '/api/trades/preview') response = await previewApi.POST(request)
+      else if (path.endsWith('/organization-access')) response = await privateApi[incoming.method as 'GET'|'POST'|'DELETE'](request,{params:Promise.resolve({id:parts[3]})})
+      else if (path.includes('/providers/')) response = await acceptApi.POST(request,{params:Promise.resolve({id:parts[3],shareId:parts[5]})})
+      else if (path.endsWith('/providers')) response = await catalogApi[incoming.method as 'GET'|'DELETE'](request,{params:Promise.resolve({id:parts[3]})})
+      else if (path.includes('/agents/')) response = await profileApi.GET(request,{params:Promise.resolve({id:parts[3]})})
+      else if (path === '/api/activity') response = await activityApi.GET()
+      else if (path.includes('/purchasing/')) {
         const params = { params: Promise.resolve({ id: parts[3], requestId: parts[6] }) }
         if (path.endsWith('/roles')) response = await roleApi[incoming.method as 'GET' | 'POST' | 'DELETE'](request, params)
         else if (path.endsWith('/approval')) response = await approvalApi[incoming.method as 'POST' | 'DELETE'](request, params)
@@ -356,4 +370,222 @@ test('an already-sent real EVM payment survives approval revocation and closed f
     assert.equal(outbox.length,1);assert.equal(outbox[0].kind,'buyer_refund');assert.equal(outbox[0].status,'confirmed')
     assert.deepEqual(await counts(f),{orders:1,capacity:0});assert.equal((await buy(f,a.checkout)).body.trade.id,tradeId)
   } finally { delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED;process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='true' }
+})
+
+async function privateFixture() {
+  const f=await fixture(),providerAgent=crypto.randomUUID(),providerOwner=`provider-owner-${providerAgent}`,seller=`user_agent_${providerAgent}`
+  await db.insert(schema.users).values([providerOwner,seller].map(id=>({id,name:id,email:`${id}@test.invalid`,password_hash:'unused'})))
+  const {hashAgentApiKey}=await import('@/lib/registered-agent-auth')
+  await db.insert(schema.agents).values({id:providerAgent,name:'Confidential provider',description:'Private organization service',capabilities:'["code-review"]',endpoint:'https://example.invalid',owner_address:'',visibility:'private',api_key:hashAgentApiKey(`test-private-${providerAgent}`)})
+  await db.insert(schema.agent_owners).values({agentId:providerAgent,userId:providerOwner,establishedBy:'test'})
+  await db.insert(schema.payout_addresses).values({user_id:seller,address:privateKeyToAccount(`0x${'19'.repeat(32)}`).address})
+  await db.update(schema.service_definitions).set({seller_id:seller,visibility:'organization',title:'Confidential organization analysis'}).where(eq(schema.service_definitions.id,f.service))
+  const {createNamedAgentCredential}=await import('@/lib/agent-named-credentials')
+  const credential=await createNamedAgentCredential({agentId:providerAgent,name:'Private provider worker',scopes:['agent:read','marketplace:write'],actorCredentialId:null})
+  assert.equal(credential.kind,'created');if(credential.kind!=='created')throw Error('Provider credential fixture failed')
+  return {...f,seller,providerAgent,providerOwner,providerKey:credential.api_key,privatePath:`/api/services/${f.service}/organization-access`,catalogPath:`/api/organizations/${f.id}/providers`}
+}
+type PrivateFixture=Awaited<ReturnType<typeof privateFixture>>
+async function shared(f:PrivateFixture,mutation={}) {
+  const input={version:1,client_reference:crypto.randomUUID(),organization_id:f.id,team_id:f.team,expires_at:new Date(Date.now()+3600_000).toISOString(),...mutation}
+  const offer=await call(f.privatePath,f.providerOwner,'POST',input);assert.equal(offer.status,201,JSON.stringify(offer.body))
+  const decision={version:1,client_reference:crypto.randomUUID(),request_hash:offer.body.share.request_hash}
+  const accepted=await call(`${f.catalogPath}/${offer.body.share.id}/accept`,f.owner,'POST',decision);assert.equal(accepted.status,201,JSON.stringify(accepted.body))
+  return {input,decision,share:accepted.body.share}
+}
+const privateOrder=(shareId:string,rail='evm')=>({client_reference:crypto.randomUUID(),objective:'Review confidential organization code',input:{private_code:'Confidential source input'},payment_rail:rail,max_total:'1.05',expected_price:'1.00',provider_share_id:shareId})
+
+test('private provider requires both current owners and an exact bounded share; ordinary viewers and read accounts cannot inspect it',async()=>{
+  const f=await privateFixture(),s=await shared(f)
+  assert.equal((await call(f.privatePath,f.providerOwner,'POST',s.input)).body.share.id,s.share.id)
+  assert.equal((await call(`${f.catalogPath}/${s.share.id}/accept`,f.owner,'POST',s.decision)).status,200)
+  assert.equal((await call(`${f.catalogPath}/${s.share.id}/accept`,f.owner,'POST',{...s.decision,client_reference:crypto.randomUUID()})).status,409)
+  assert.equal((await call(f.privatePath,f.owner,'GET')).status,404)
+  assert.equal((await call(f.catalogPath,f.viewer)).status,404)
+  assert.equal((await call(f.catalogPath,f.key,'GET',undefined,true)).body.providers[0].service.title,'Confidential organization analysis')
+  const role=await grant(f,'requester')
+  const allowed=await call(f.catalogPath+'?role_id='+role.row.id,f.requester);assert.equal(allowed.status,200);assert.equal(allowed.body.providers.length,1)
+  const small=await grant(f,'requester',{max_purchase:'1.04'})
+  assert.equal((await call(f.catalogPath+'?role_id='+small.row.id,f.requester)).body.providers.length,0)
+  const wrong=await grant(f,'requester',{team_id:f.otherTeam})
+  assert.equal((await call(f.catalogPath+'?role_id='+wrong.row.id,f.requester)).body.providers.length,0)
+  const {createOrganizationServiceAccount}=await import('@/lib/organization-service-accounts')
+  const read=await createOrganizationServiceAccount(f.id,f.owner,{client_reference:crypto.randomUUID(),name:'Catalog read isolation',lifetime_days:1})
+  assert.equal(read.kind,'ok');if(read.kind!=='ok')throw Error('Read account fixture failed')
+  assert.equal((await fetch(baseUrl+f.catalogPath,{headers:{Authorization:`Bearer ${read.api_key}`}})).status,401)
+  assert.equal((await buy(f,privateOrder(crypto.randomUUID()))).status,404)
+  const cookie=await fetch(baseUrl+f.privatePath,{method:'POST',headers:{Cookie:`auth-token=${token(f.providerOwner)}`,'Content-Type':'application/json'},body:JSON.stringify(s.input)})
+  assert.equal(cookie.status,403)
+  assert.equal((await call(f.privatePath,f.providerOwner,'POST',{...s.input,padding:'x'.repeat(17000)})).status,413)
+  assert.equal((await call(`${f.catalogPath}/${s.share.id}/accept`,f.viewer,'POST',s.decision)).status,404)
+  assert.deepEqual(await counts(f),{orders:0,capacity:0})
+})
+
+test('private provider checkout freezes privacy and enforces current share, assignment, ownership, expiry and department before fresh funding',async()=>{
+  const f=await privateFixture(),s=await shared(f),a=await approved(f,{order:privateOrder(s.share.id)})
+  assert.equal((await buy(f,{...a.checkout,provider_share_id:crypto.randomUUID()})).status,404)
+  const created=await buy(f,a.checkout);assert.equal(created.status,201,JSON.stringify(created.body))
+  const [order]=await db.select().from(schema.service_orders).where(eq(schema.service_orders.id,created.body.order.id))
+  assert.equal(order.private_provider_share_id,s.share.id)
+  const [trade]=await db.select().from(schema.trades).where(eq(schema.trades.id,order.trade_id))
+  const {serviceFundingEligibility}=await import('@/lib/service-funding-eligibility')
+  assert.equal(await serviceFundingEligibility(trade),null)
+  await db.update(schema.organization_teams).set({status:'archived'}).where(eq(schema.organization_teams.id,f.team))
+  assert.equal(await serviceFundingEligibility(trade),'PROVIDER_SHARE_DEPARTMENT_UNAVAILABLE')
+  await db.update(schema.organization_teams).set({status:'active'}).where(eq(schema.organization_teams.id,f.team))
+  await call(f.privatePath,f.providerOwner,'DELETE',{share_id:s.share.id})
+  assert.equal(await serviceFundingEligibility(trade),'PROVIDER_SHARE_INACTIVE')
+  process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='false'
+  try {const replay=await buy(f,a.checkout);assert.equal(replay.status,200);assert.equal(replay.body.trade.id,trade.id)}
+  finally{process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='true'}
+  await db.update(schema.agents).set({visibility:'public'}).where(eq(schema.agents.id,f.providerAgent))
+  const {publicTradeAvailable}=await import('@/lib/public-trade-visibility')
+  assert.equal(await publicTradeAvailable(trade.id),false)
+  const profile=await call(`/api/agents/${f.providerAgent}`,f.viewer)
+  assert.equal(profile.status,200,JSON.stringify(profile.body));assert.ok(!JSON.stringify(profile.body).includes(trade.id));assert.ok(!JSON.stringify(profile.body).includes('Confidential organization analysis'))
+  const activity=await call('/api/activity',f.viewer);assert.equal(activity.status,200);assert.ok(!JSON.stringify(activity.body).includes(trade.id))
+  const {originalPrivateServiceListing}=await import('@/lib/listing-visibility');assert.equal(await originalPrivateServiceListing(order.listing_id),true)
+  await db.update(schema.listings).set({status:'active'}).where(eq(schema.listings.id,order.listing_id))
+  assert.equal((await call('/api/trades/preview',f.viewer,'POST',{listing_id:order.listing_id})).status,409)
+  const bypass=await call('/api/trades',f.key,'POST',{listing_id:order.listing_id,amount:1,payment_rail:'evm',client_reference:crypto.randomUUID()},true)
+  assert.equal(bypass.status,409,JSON.stringify(bypass.body));assert.equal(bypass.body.error_code,'LISTING_NOT_AVAILABLE')
+  assert.deepEqual(await counts(f),{orders:1,capacity:1})
+})
+
+test('a real backed private order survives share revocation, provider restart and explicit acceptance without becoming public', {skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  assert.ok(chain)
+  const f=await privateFixture(),s=await shared(f),a=await approved(f,{order:privateOrder(s.share.id,'credit')})
+  const {getMarketStats}=await import('@/lib/market-stats'),publishedBefore=await getMarketStats()
+  const deposit=await call('/api/wallet/deposits',f.key,'POST',{amount_minor:105,payer:payer.address,client_reference:crypto.randomUUID()},true);assert.equal(deposit.status,200,JSON.stringify(deposit.body))
+  const wallet=createWalletClient({chain:chain.client.chain,account:payer,transport:http(chain.url)})
+  const txHash=await wallet.writeContract({address:chain.token,abi:erc20Abi,functionName:'transfer',args:[chain.treasury,1_050_000n]})
+  await chain.client.waitForTransactionReceipt({hash:txHash})
+  const signature=await payer.signMessage({message:creditDepositMessage(deposit.body.deposit,txHash)})
+  assert.equal((await call('/api/wallet/deposits',f.key,'PUT',{id:deposit.body.deposit.id,tx_hash:txHash,signature},true)).status,200)
+  const created=await buy(f,a.checkout);assert.equal(created.status,201,JSON.stringify(created.body))
+  assert.equal((await call(f.privatePath,f.providerOwner,'DELETE',{share_id:s.share.id})).status,200)
+  const handlerFile=join(directory,`${created.body.trade.id}.private-handler.mjs`)
+  await writeFile(handlerFile,`export default async()=>({summary:'Completed the original confidential order.',artifact:{result:'Confidential approved result'}})`)
+  const command=['scripts/provider-worker.mjs','--trade-id',created.body.trade.id,'--service-id',f.service,'--state-dir',join(directory,created.body.trade.id),'--handler',handlerFile]
+  const options={cwd:process.cwd(),env:{...process.env,BASE_URL:baseUrl,CLAWDMARKET_PROVIDER_API_KEY:f.providerKey}},run=promisify(execFile)
+  const delivered=JSON.parse((await run(process.execPath,command,options)).stdout);assert.equal(delivered.state,'delivered')
+  const restarted=JSON.parse((await run(process.execPath,command,options)).stdout);assert.equal(restarted.delivery_id,delivered.delivery_id)
+  assert.equal((await call(`/api/trades/${created.body.trade.id}/confirm`,f.key,'POST',{content_hash:delivered.content_hash},true)).status,200)
+  const {creditBalance}=await import('@/lib/account-credit');assert.equal((await creditBalance(f.seller)).available_minor,100);assert.equal((await creditBalance(f.buyer)).escrow_minor,0)
+  assert.deepEqual(await counts(f),{orders:1,capacity:0})
+  await db.update(schema.agents).set({visibility:'public'}).where(eq(schema.agents.id,f.providerAgent))
+  const {publicTradeAvailable}=await import('@/lib/public-trade-visibility');assert.equal(await publicTradeAvailable(created.body.trade.id),false)
+  const profile=await call(`/api/agents/${f.providerAgent}`,f.viewer);assert.ok(!JSON.stringify(profile.body).includes(created.body.trade.id))
+  const {loadAgentTrust}=await import('@/lib/agent-trust');assert.equal((await loadAgentTrust({id:f.providerAgent})).components.completedTrades,0)
+  const {providerCapabilityEvidence}=await import('@/lib/provider-evidence');assert.equal((await providerCapabilityEvidence(f.seller,['code-review']))[0].accepted_completion_count,0)
+  const activity=await call('/api/activity',f.viewer);assert.ok(!JSON.stringify(activity.body).includes(created.body.trade.id))
+  const publishedAfter=await getMarketStats();assert.equal(publishedAfter.completed_trades,publishedBefore.completed_trades);assert.equal(publishedAfter.recorded_volume_usd,publishedBefore.recorded_volume_usd)
+  assert.equal((await buy(f,a.checkout)).body.trade.id,created.body.trade.id)
+})
+test('an already-sent real private-service EVM payment survives share revocation through the original full refund', { skip: !process.env.CLAWDMARKET_TEST_ANVIL_BINARY }, async () => {
+  assert.ok(chain)
+  const f = await privateFixture(), share = await shared(f), a = await approved(f,{order:privateOrder(share.share.id)}), created = await buy(f,a.checkout); assert.equal(created.status,201,JSON.stringify(created.body))
+  const tradeId = created.body.trade.id, wallet = createWalletClient({ chain:chain.client.chain,account:payer,transport:http(chain.url) })
+  const balanceBefore = await chain.balance(payer.address)
+  const original = await call(`/api/trades/${tradeId}/fund/evm/intent`,f.key,'POST',{chain_id:8453,token_address:chain.token,payer_address:payer.address},true)
+  assert.equal(original.status,201,JSON.stringify(original.body))
+  const txHash = await wallet.writeContract({ address:chain.token,abi:erc20Abi,functionName:'transfer',args:[chain.treasury,BigInt(original.body.intent.token_amount)] })
+  await chain.client.waitForTransactionReceipt({hash:txHash})
+  const { evmPaymentProofMessage } = await import('@/lib/evm-payment-proof')
+  const signature = await payer.signMessage({message:evmPaymentProofMessage(original.body.intent,txHash)})
+  assert.equal((await call(f.privatePath,f.providerOwner,'DELETE',{share_id:share.share.id})).status,200)
+  process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED = 'false'
+  process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED = 'true'
+  try {
+    const body = {intent_id:original.body.intent.id,chain_id:8453,token_address:chain.token,payer_address:payer.address,tx_hash:txHash,payer_signature:signature}
+    const recovered = await call(`/api/trades/${tradeId}/fund/evm`,f.key,'POST',body,true)
+    assert.ok([200,202].includes(recovered.status),JSON.stringify(recovered.body))
+    assert.equal(recovered.body.rejection_code,'PROVIDER_ELIGIBILITY_CHANGED')
+    let terminal = recovered
+    for (let retry = 0; retry < 8 && terminal.body.trade.payout_status !== 'refunded'; retry++) {
+      await new Promise(done=>setTimeout(done,200));terminal=await call(`/api/trades/${tradeId}/fund/evm`,f.key,'POST',body,true)
+      assert.ok([200,202].includes(terminal.status),JSON.stringify(terminal.body))
+    }
+    assert.equal(terminal.body.trade.payout_status,'refunded',JSON.stringify(terminal.body))
+    assert.equal(await chain.balance(payer.address),balanceBefore)
+    const receipts = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.external_id,tradeId))
+    assert.equal(receipts.length,1);assert.equal(receipts[0].tx_hash,txHash)
+    const outbox = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,tradeId))
+    assert.equal(outbox.length,1);assert.equal(outbox[0].kind,'buyer_refund');assert.equal(outbox[0].status,'confirmed')
+    assert.deepEqual(await counts(f),{orders:1,capacity:0});assert.equal((await buy(f,a.checkout)).body.trade.id,tradeId)
+  } finally { delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED;process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='true' }
+})
+
+test('private checkout fails closed after either owner transfer, buyer reassignment, expiry or provider unavailability without funds or capacity',async()=>{
+  for(const change of ['organization-owner','provider-owner','buyer-owner','assignment','expiry','provider','department','consent','flags'] as const){
+    const f=await privateFixture(),s=await shared(f),a=await approved(f,{order:privateOrder(s.share.id)})
+    if(change==='organization-owner')await db.update(schema.organizations).set({owner_account_id:f.viewer}).where(eq(schema.organizations.id,f.id))
+    if(change==='provider-owner')await db.update(schema.agent_owners).set({userId:f.viewer}).where(eq(schema.agent_owners.agentId,f.providerAgent))
+    if(change==='buyer-owner')await db.update(schema.agent_owners).set({userId:f.viewer}).where(eq(schema.agent_owners.agentId,f.agent))
+    if(change==='assignment')await db.update(schema.organization_agent_assignments).set({team_id:f.otherTeam}).where(eq(schema.organization_agent_assignments.agent_id,f.agent))
+    if(change==='expiry')await db.update(schema.organization_provider_shares).set({expires_at:new Date(Date.now()-1000)}).where(eq(schema.organization_provider_shares.id,s.share.id))
+    if(change==='provider')await db.update(schema.agents).set({status:'inactive'}).where(eq(schema.agents.id,f.providerAgent))
+    if(change==='department')await db.update(schema.organization_teams).set({status:'archived'}).where(eq(schema.organization_teams.id,f.team))
+    if(change==='consent')await db.update(schema.organization_provider_shares).set({accept_hash:'0'.repeat(64)}).where(eq(schema.organization_provider_shares.id,s.share.id))
+    if(change==='flags')process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='false'
+    try{assert.ok((await buy(f,a.checkout)).status>=400,change);assert.deepEqual(await counts(f),{orders:0,capacity:0})}
+    finally{process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='true'}
+  }
+})
+
+test('independent private share, consent and checkout processes converge on original identities and one capacity claim',async()=>{
+  const f=await privateFixture(),run=promisify(execFile)
+  const input={version:1,client_reference:crypto.randomUUID(),organization_id:f.id,team_id:f.team,expires_at:new Date(Date.now()+3600_000).toISOString()}
+  async function race(operation:string,args:unknown){
+    const code=`(async()=>{const d=await import('./lib/organization-private-providers.ts'),p=JSON.parse(process.argv[1]);let r;
+      ${operation==='offer'?"r=await d.offerPrivateProvider(p.service,p.actor,d.providerOfferInput.parse(p.input))":operation==='accept'?"r=await d.acceptPrivateProvider(p.org,p.share,p.actor,d.providerAcceptInput.parse(p.input))":"const {reserveServiceOrder}=await import('./lib/service-order-reservation.ts');const {serviceOrderInput}=await import('./lib/service-definitions.ts');p.request=serviceOrderInput.parse(p.request);r=await reserveServiceOrder(p)"};
+      console.log(JSON.stringify(r));(await import('./lib/db.ts')).db.$client.close();})().catch(e=>{console.error(e);process.exitCode=1})`
+    const results=await Promise.allSettled(Array.from({length:3},()=>run(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify(args)],{cwd:process.cwd(),env:process.env})))
+    return results.map(result=>{if(result.status!=='fulfilled')throw result.reason;return JSON.parse(result.value.stdout.trim())})
+  }
+  const offers=await race('offer',{service:f.service,actor:f.providerOwner,input});assert.equal(new Set(offers.map(r=>r.share.id)).size,1)
+  const share=offers[0].share,decision={version:1,client_reference:crypto.randomUUID(),request_hash:share.request_hash}
+  const decisions=await race('accept',{org:f.id,share:share.id,actor:f.owner,input:decision});assert.equal(new Set(decisions.map(r=>r.share.accept_hash)).size,1)
+  const a=await approved(f,{order:privateOrder(share.id)}),orders=await race('checkout',{serviceId:f.service,principal:{userId:f.buyer,agentId:f.agent,kind:'registered-agent',usesCookieAuth:false},request:a.checkout})
+  assert.equal(new Set(orders.map(r=>r.order.id)).size,1);assert.equal(new Set(orders.map(r=>r.trade.id)).size,1);assert.deepEqual(await counts(f),{orders:1,capacity:1})
+  const events=await db.select().from(schema.organization_audit_events).where(eq(schema.organization_audit_events.organization_id,f.id))
+  assert.equal(events.filter(e=>e.action==='provider_share_offered').length,1);assert.equal(events.filter(e=>e.action==='provider_share_accepted').length,1)
+})
+
+test('SIGKILL at private offer, consent and economic commit boundaries preserves original share and order recovery',async()=>{
+  const privateDomain=await import('@/lib/organization-private-providers')
+  for(const operation of ['offer','accept','checkout'] as const)for(const boundary of ['before','after'] as const){
+    const f=await privateFixture(),input={version:1,client_reference:crypto.randomUUID(),organization_id:f.id,team_id:f.team,expires_at:new Date(Date.now()+3600_000).toISOString()}
+    let shareId:string|undefined,decision:object|undefined,checkout:unknown
+    if(operation!=='offer'){
+      const offered=await privateDomain.offerPrivateProvider(f.service,f.providerOwner,privateDomain.providerOfferInput.parse(input));shareId=offered.share.id
+      decision={version:1,client_reference:crypto.randomUUID(),request_hash:offered.share.request_hash}
+      if(operation==='checkout'){
+        await privateDomain.acceptPrivateProvider(f.id,shareId,f.owner,privateDomain.providerAcceptInput.parse(decision))
+        checkout=(await approved(f,{order:privateOrder(shareId)})).checkout
+      }
+    }
+    const args={f,input,shareId,decision,checkout},marker=join(directory,`private-${operation}-${boundary}-${f.id}.marker`)
+    const code=`(async()=>{const {writeFile}=await import('node:fs/promises'),a=JSON.parse(process.argv[1]);const stop=async()=>{await writeFile(process.argv[2],'boundary');await new Promise(()=>{})};
+      ${boundary==='before'?"const {db}=await import('./lib/db.ts');const proto=Object.getPrototypeOf(db.session),original=proto.transaction;proto.transaction=function(fn,c){return original.call(this,async tx=>{const r=await fn(tx);await stop();return r},c)};":''}
+      const d=await import('./lib/organization-private-providers.ts');
+      ${operation==='offer'?"await d.offerPrivateProvider(a.f.service,a.f.providerOwner,d.providerOfferInput.parse(a.input))":operation==='accept'?"await d.acceptPrivateProvider(a.f.id,a.shareId,a.f.owner,d.providerAcceptInput.parse(a.decision))":"const {reserveServiceOrder}=await import('./lib/service-order-reservation.ts');const {serviceOrderInput}=await import('./lib/service-definitions.ts');await reserveServiceOrder({serviceId:a.f.service,principal:{userId:a.f.buyer,agentId:a.f.agent,kind:'registered-agent',usesCookieAuth:false},request:serviceOrderInput.parse(a.checkout)})"};await stop()})().catch(e=>{console.error(e);process.exitCode=1})`
+    const child=spawn(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify(args),marker],{cwd:process.cwd(),env:process.env,stdio:['ignore','ignore','pipe']})
+    let errors='';child.stderr.on('data',chunk=>{errors+=chunk});const exited=new Promise<void>((done,reject)=>{child.once('exit',()=>done());child.once('error',reject)})
+    try{
+      let reached=false
+      for(let wait=0;wait<150;wait++){try{await readFile(marker);reached=true;break}catch{}if(child.exitCode!==null)throw Error(errors);await new Promise(done=>setTimeout(done,100))}
+      assert.equal(reached,true,errors);child.kill('SIGKILL');await exited
+      const shares=await db.select().from(schema.organization_provider_shares).where(eq(schema.organization_provider_shares.service_id,f.service))
+      if(operation==='offer')assert.equal(shares.length,boundary==='before'?0:1)
+      if(operation==='accept')assert.equal(shares[0].state,boundary==='before'?'pending':'active')
+      if(operation==='checkout')assert.deepEqual(await counts(f),{orders:boundary==='before'?0:1,capacity:boundary==='before'?0:1})
+      const recovered=await privateDomain.offerPrivateProvider(f.service,f.providerOwner,privateDomain.providerOfferInput.parse(input))
+      if(shares.length)assert.equal(recovered.share.id,shares[0].id)
+      const originalDecision=decision||{version:1,client_reference:crypto.randomUUID(),request_hash:recovered.share.request_hash}
+      await privateDomain.acceptPrivateProvider(f.id,recovered.share.id,f.owner,privateDomain.providerAcceptInput.parse(originalDecision))
+      const body=checkout||(await approved(f,{order:privateOrder(recovered.share.id)})).checkout
+      const purchased=await buy(f,body);assert.ok([200,201].includes(purchased.status),JSON.stringify(purchased.body));assert.deepEqual(await counts(f),{orders:1,capacity:1})
+    }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited}
+  }
 })

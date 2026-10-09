@@ -11,6 +11,7 @@ import { captureServiceExecutionContract } from './service-execution-contract'
 import { storedServiceCapabilities } from './route-service-eligibility'
 import { enterpriseFoundationEnabled } from './enterprise-foundation'
 import { PurchasingError, purchasingTransaction, type PurchasingSource } from './organization-purchasing-transaction'
+import { privateProviderAccess } from './organization-private-providers'
 import { issuePurchaseEvidence, validPurchaseEvidence, type VerifiedPurchase } from './organization-purchase-evidence'
 export { PurchasingError } from './organization-purchasing-transaction'
 
@@ -107,7 +108,7 @@ function serviceHash(service: typeof service_definitions.$inferSelect) {
   const capabilities = storedServiceCapabilities(service.capabilities)
   if (!capabilities?.length || service.status !== 'active' || !Number.isSafeInteger(service.price_minor) || service.price_minor < 1)
     throw new PurchasingError('PURCHASING_SERVICE_UNAVAILABLE')
-  return hash({ contract: captureServiceExecutionContract(service, capabilities), price_minor: service.price_minor, currency: service.currency })
+  return hash({ contract: captureServiceExecutionContract(service, capabilities), price_minor: service.price_minor, currency: service.currency, ...(service.visibility === 'organization' ? { visibility: service.visibility } : {}) })
 }
 async function currentRequest(row: typeof requests.$inferSelect, source: PurchasingSource) {
   const org = await organization(row.organization_id, source)
@@ -124,6 +125,8 @@ async function currentRequest(row: typeof requests.$inferSelect, source: Purchas
   else if (row.requester_account_id !== org.owner_account_id) throw new PurchasingError('PURCHASING_ROLE_INVALID', 403)
   const [service] = await source.select().from(service_definitions).where(eq(service_definitions.id, row.service_id)).limit(1)
   if (!service || serviceHash(service) !== row.service_hash) throw new PurchasingError('PURCHASING_QUOTE_CHANGED')
+  const order = JSON.parse(row.order_json) as z.output<typeof serviceOrderInput>
+  await privateProviderAccess(service, row.buyer_id, order.provider_share_id, source)
   return { org, service }
 }
 export async function createPurchaseRequest(orgId: string, actor: string, input: z.output<typeof purchaseRequestInput>) {

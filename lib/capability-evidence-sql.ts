@@ -1,3 +1,4 @@
+import { publicTradeWhereSql } from './public-trade-visibility'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 import { boundedCycleExclusionSql, financialBackingSql } from './trade-evidence-sql'
 type TradeAlias = 't' | 'trades' | 'cycle_trade'
@@ -5,7 +6,7 @@ type EventAlias = 'e' | 'capability_performance_events' | 'cycle_event'
 
 /** Nonrecursive eligibility shared by the observed completion and every graph edge. */
 function backedCompletionSql(event: EventAlias, trade: TradeAlias) {
-  return `${event}.evidence_kind = 'buyer_accepted_completion' AND ${event}.verification_method = 'buyer_review'
+  return `${publicTradeWhereSql(trade)} AND ${event}.evidence_kind = 'buyer_accepted_completion' AND ${event}.verification_method = 'buyer_review'
     AND ${trade}.status = 'completed' AND ${trade}.seller_id = ('user_agent_' || ${event}.seller_agent_id)
     AND ${trade}.buyer_id <> ${trade}.seller_id AND ${trade}.id NOT GLOB 'trade_reference_*'
     AND EXISTS (SELECT 1 FROM agents evidence_agent WHERE evidence_agent.id = ${event}.seller_agent_id AND instr(evidence_agent.description, '${REFERENCE_FLEET_MARKER}') = 0)

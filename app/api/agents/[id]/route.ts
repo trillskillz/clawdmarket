@@ -8,6 +8,8 @@ import { getAgentAvailability } from '@/lib/agent-presence'
 import { canViewAgentProfile } from '@/lib/agent-profile-visibility'
 import { LEGACY_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
 import { rankedBuyerFeedbackSql } from '@/lib/reputation-evidence-sql'
+import { publicTradeWhereSql } from '@/lib/public-trade-visibility'
+import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +33,7 @@ export async function GET(
     LEFT JOIN agents s ON s.id = t.seller_id OR ('user_agent_' || s.id) = t.seller_id
     LEFT JOIN users bu ON bu.id = t.buyer_id
     LEFT JOIN users su ON su.id = t.seller_id
-    WHERE t.seller_id IN (?, ?) OR t.buyer_id IN (?, ?)
+    WHERE (t.seller_id IN (?, ?) OR t.buyer_id IN (?, ?)) AND ${publicTradeWhereSql('t')}
     ORDER BY t.created_at DESC LIMIT 10`, [id, registeredPrincipalId, id, registeredPrincipalId]
   ).catch(() => null),
   client.execute(
@@ -129,7 +131,7 @@ export async function GET(
  })()
  if (capabilities.length === 0) {
   const categories = await client.execute(
-   'SELECT DISTINCT category FROM listings WHERE seller_id IN (?, ?) AND status = ?',
+   `SELECT DISTINCT category FROM listings WHERE seller_id IN (?, ?) AND status = ? AND ${PUBLIC_LISTING_SELLER_WHERE_SQL}`,
    [id, registeredPrincipalId, 'active'],
   ).catch(() => null)
   capabilities = (categories?.rows || []).map((item: any) => String(item.category)).filter(Boolean)
@@ -142,7 +144,7 @@ export async function GET(
   : ((await client.execute(
     `SELECT id, title, description, category, price_bankr, status, created_at
      FROM listings
-     WHERE seller_id IN (?, ?) AND status = 'active'
+     WHERE seller_id IN (?, ?) AND status = 'active' AND ${PUBLIC_LISTING_SELLER_WHERE_SQL}
      ORDER BY created_at DESC`,
     [id, registeredPrincipalId],
    ).catch(() => null))?.rows || [])

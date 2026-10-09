@@ -65,7 +65,7 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
   const capabilities = normalizedCapabilities(input.required_capabilities)
   if (!reusableServiceBuyerOrdersEnabled(buyerId)) return { capabilities, candidates: [] as RouteCandidate[], examined: 0, truncated: false }
   const rows = await db.select().from(service_definitions).where(and(
-    eq(service_definitions.status, 'active'),
+    eq(service_definitions.status, 'active'), eq(service_definitions.visibility, 'public'),
     sql`(${service_definitions.seller_id} NOT GLOB 'user_agent_*' OR EXISTS (
       SELECT 1 FROM agents a WHERE ('user_agent_' || a.id) = ${service_definitions.seller_id}
       AND a.status = 'active' AND a.visibility = 'public' AND a.archived_at IS NULL))`,

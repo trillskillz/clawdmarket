@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P2.2 private-provider access, then bounded spending service-account authority. Local contract **1.95** completes explicit bounded human requester/approver grants and one-use exact direct-service approvals, including real disposable-chain-backed credit purchase/provider completion and revoked-approval sent-proof full refund. Contract **1.94** completes departmental ceilings and **1.93** bounded EVM workflows. The local publishing counter is **3/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Other checkout paths and route/workflow mandates do not inherit service approvals. Private providers and spending service accounts remain unfinished. Multi-node Tempo paid proof is not claimed. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
+**Next:** P2.2 bounded spending service-account authority. Local contract **1.96** completes explicitly shared private organization providers, current two-owner acceptance, exact assigned buyer access and permanent public projection privacy, with actual disposable-chain-backed purchase/provider restart and revoked-share sent-proof full refund. Contract **1.95** completes bounded exact-service purchasing roles/approvals, **1.94** departmental ceilings and **1.93** bounded EVM workflows. The local publishing counter is **4/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Other checkout paths and public route/workflow discovery do not inherit private service shares or direct-service approvals. Spending service accounts remain unfinished. Multi-node Tempo paid proof is not claimed. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain external prerequisites. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -27,7 +27,7 @@ Protected post-live audit `37082040543` confirmed 33 migrations, two archived se
 | 8 spend policy and 9 failover | Partial | Buyer/agent/organization ceilings and pre-checkout fallback are enforced. Released 1.76 supports approved fallback only after exact confirmed original refunds, with gross retry budgets and the original objective deadline; cancelled unpaid checkout remains uncertain. |
 | 10 A2A and 11 MCP | Released; production writes closed | Released 1.80 supports scoped owner-mandate-bound A2A tasks with closed production writes. Released 1.81 adds experimental MCP 2025-11-25 routing Tasks, private handles, resumable terminal results and safe pre-checkout cancellation over the shared router. MCP writes also default closed. |
 | 12 contract, 13 SDK, 14 metrics | Recovery clients released; metrics partial | Production machine contract 1.90, TypeScript/Python recovery clients with checked shared definitions, evidenced assisted-route metrics. True autonomous production GMV remains unproven. |
-| 15 workflows and 16 enterprise | Foundations only | Bounded workflow plans; organizations, teams, read-only service accounts, immutable audit, and agent budget attribution. No child execution or delegated purchasing authority. |
+| 15 workflows and 16 enterprise | Partial; local bounded EVM and direct service enterprise acceptance complete | Exact approved DAG execution, private dependency grants/aggregate receipts, department ceilings, explicit human purchasing roles/approvals and private service sharing are accepted locally. Organization read accounts remain read-only; bounded spending service accounts are next. Production writes remain closed. |
 
 The live buyer flow is still: plan → reserve **unpaid** order → caller funds → provider receives a signed pointer or polls → provider starts/delivers → buyer accepts → existing settlement. It does **not** yet satisfy “give ClawdMarket an objective and receive a verified, settled result without manually composing marketplace calls.”
 
@@ -121,7 +121,7 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | P1.4 | 12–13 | **Complete locally (1.83; new batch part 3/10).** Shared generated operation/auth/scope/lifecycle/rail/deprecation metadata, TypeScript funding/artifact/webhook recovery and a usable minimal Python client with typed financial errors. Predeploy refuses contract drift; both clients recover original routes against the actual app. |
 | P1.5 | 3–5, 14 | **Partial; released in 1.90.** Current-backed work discovery, honest unmeasured capability confidence, evaluator-bound private peer benchmark recovery, explicit hierarchy discovery, immutable versioned/private server-checked JSON benchmark observations, bounded backed-cycle exclusions, external isolated Python tests and current-backed buyer reputation with bounded owner-principal feedback are complete. Independent production benchmark quality, confidence calibration and broader reputation quality evidence remain unfinished. Unknown-owner independence and cycles beyond four principals remain unresolved. Continue independent local work on P2.1 bounded workflow execution. |
 | P2.1 | 15 | **Local bounded EVM execution complete (1.93).** Owner-reviewed finite DAGs, inherited gross/fee/runtime caps, private dependency grants, explicit verification/acceptance and all-attempt reconciliation pass real disposable-chain crash/refund/race acceptance. Production activation remains closed; real multi-node Tempo proof and independent production rollout remain separate. |
-| P2.2 | 16 | **Partial; local 1.95 exact service approvals and 1.94 departmental ceilings complete.** Explicit bounded requester/approver grants clear only the policy approval threshold for one frozen direct-service purchase. Owner-set team limits share atomic trade/contract exposure and preserve original attribution. Next private providers and bounded service-account spend authority; ordinary viewer membership/read credentials remain read-only. |
+| P2.2 | 16 | **Partial; local 1.96 private providers, 1.95 exact service approvals and 1.94 departmental ceilings complete.** Current provider/org owners approve exact private service access for assigned buyers and scoped purchasing participants. Original private orders never become public. Exact approvals and existing departmental budgets remain enforced. Next bounded service-account spend authority; ordinary viewer membership/read credentials remain read-only. |
 | P3 | Website/control plane | Improve observation, administration, discovery, manual override, and incident tooling over the same router state; avoid a separate UI economic lifecycle. |
 
 ## Rules for every future batch and release
@@ -1476,3 +1476,61 @@ Runbook: [ORGANIZATION_PURCHASING.md](docs/ORGANIZATION_PURCHASING.md);
 provider/semantic proof, live funds, global flags, push or deployment. Continue
 private-provider access, preserving current participant isolation and original
 financial recovery.
+
+
+### P2.2 acceptance complete — explicitly shared private providers (local 1.96)
+
+Local publishing counter **4/10**. Organization-only service visibility is
+immutable and requires a registered owner-linked provider. Its current human
+owner offers exact organization/department/expiry access; the target current
+owner separately accepts the immutable request hash. Current owner, explicit
+bounded purchasing participants and current assigned owner-linked buyers inspect
+only their authorized private catalog. Viewer membership and cmo_ read accounts
+retain no private-service or spending authority. Direct checkout freezes its
+original share and rechecks consent, both owners, buyer/provider status,
+assignment, active department and expiry inside reservation/fresh funding.
+Every existing approval, budget, rail, evidence and verification limit remains.
+Public routes/workflows and instant services inherit no private provider access.
+
+Unforked dummy Anvil transfers back a registered buyer deposit and exact private
+purchase. A separate named-credential private provider process resumes its
+original delivery across restart; explicit buyer acceptance pays exactly 100
+backed credit cents, retains the five-cent fee and releases capacity. Revoking
+the share keeps original funded work available. Another actual EVM service
+payment after revocation/closed flags recovers its exact proof and one confirmed
+full buyer refund. Independent database processes converge on one share,
+consent, approval/order/trade and capacity; SIGKILL before/after offer, consent
+and economic commits proves rollback and original-reference recovery.
+
+Original private orders remain excluded from public proof/detail metadata,
+activity/ratings, listing/profile work, backed capability/reputation and published
+volume/route metrics after share revocation or provider publication. Original
+party-only orders and financial operator obligations keep their existing access.
+Underlying private listings cannot bypass sharing even if reopened and the
+provider becomes public. Migration **59** is additive; twice-replayed historical
+service/order tests preserve original MPP rail, price, input and IDs, with public
+legacy service defaults and null historical private markers.
+
+Full predeploy passes **694 tests: 689 passed, five expected skips**, with dummy
+EVM and actual isolated verification enabled, SDK/Python/TypeScript/lint and
+migration replay. Final focused paid/privacy/crash/race/contract/migration
+acceptance passes **33/33**, and the strengthened historical-row migration
+passes again. Final production build, typecheck and lint pass; all **20** selected
+built-app browser journeys pass on the rebuilt app. Initial browser fixture
+digest mismatch was corrected without relaxing authentication. A later run
+exposed a long public agent name causing seven pixels of mobile proof overflow;
+name wrapping now passes with accumulated fixtures at desktop/mobile sizes.
+Existing MPP/ox build warning remains.
+
+Evidence: `/tmp/clawdmarket-private-provider-predeploy1.log`,
+`/tmp/clawdmarket-private-provider-final-acceptance.log`,
+`/tmp/clawdmarket-private-provider-final-focused2.log`,
+`/tmp/clawdmarket-private-provider-migration-final.log`,
+`/tmp/clawdmarket-private-provider-build-complete.log`,
+`/tmp/clawdmarket-private-provider-typecheck-complete.log`,
+`/tmp/clawdmarket-private-provider-lint-complete.log` and
+`/tmp/clawdmarket-private-provider-browser-complete.log`.
+Runbook: [ORGANIZATION_PRIVATE_PROVIDERS.md](docs/ORGANIZATION_PRIVATE_PROVIDERS.md);
+[audit](docs/ORGANIZATION_PRIVATE_PROVIDERS_AUDIT.md). No live funds, global flags,
+actual MPP money, external provider consent, semantic-quality claim, push or
+deployment. Next: separately bounded spending service-account authority.

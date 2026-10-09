@@ -2,6 +2,7 @@ import { and, eq, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, listings, payment_receipts, ratings, tasks, trades } from '@/lib/schema'
 import { AGENT_ONLINE_WINDOW_SECONDS } from '@/lib/agent-presence'
+import { publicTradeWhereSql } from '@/lib/public-trade-visibility'
 import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
 import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility'
 
@@ -43,7 +44,7 @@ async function getVolumeByRail(): Promise<VolumeByRail> {
         amount: sql<number>`COALESCE(SUM(${trades.amount}), 0)`,
       })
       .from(trades)
-      .where(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')))
+      .where(and(or(eq(trades.status, 'completed'), eq(trades.status, 'complete')), sql.raw(publicTradeWhereSql('trades'))))
       .groupBy(trades.payment_rail)
 
     for (const row of rows) {
@@ -110,7 +111,7 @@ export async function getMarketStats() {
           'unixepoch'
         ) >= datetime('now', '-1 day')
         THEN ${trades.amount} ELSE 0 END), 0)`,
-    }).from(trades).catch(() => [{
+    }).from(trades).where(sql.raw(publicTradeWhereSql('trades'))).catch(() => [{
       total_trades: 0,
       completed_trades: 0,
       trade_volume_usd: 0,
@@ -124,11 +125,11 @@ export async function getMarketStats() {
       .innerJoin(trades, eq(payment_receipts.trade_id, trades.id))
       .where(and(
         or(eq(trades.status, 'completed'), eq(trades.status, 'complete')),
-        sql`${payment_receipts.usd_value_at_payment} IS NOT NULL`,
+        sql`${payment_receipts.usd_value_at_payment} IS NOT NULL`, sql.raw(publicTradeWhereSql('trades')),
       ))
       .catch(() => [{ receipt_volume_usd: 0 }]),
     db.select({ avg_rating: sql<number | null>`AVG(${ratings.score})` })
-      .from(ratings)
+      .from(ratings).where(sql.raw(`EXISTS (SELECT 1 FROM trades WHERE trades.id = ratings.trade_id AND ${publicTradeWhereSql('trades')})`))
       .catch(() => [{ avg_rating: null }]),
     db.select({
       tasks_total: sql<number>`COALESCE(COUNT(*), 0)`,
