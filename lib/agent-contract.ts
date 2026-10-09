@@ -10,7 +10,7 @@ import { CAPABILITY_CYCLE_POLICY } from '@/lib/capability-cycle-policy'
 import { VERIFIER_ADAPTERS } from '../scripts/verifier-contract.mjs'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.93'
+export const AGENT_CONTRACT_VERSION = '1.94'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -866,6 +866,17 @@ export const AGENT_ACTIONS: AgentAction[] = [
     body_schema: { type: 'object', additionalProperties: false,
       required: ['expected_version', 'max_per_execution', 'max_daily', 'max_monthly'], properties: {
         expected_version: { type: 'integer', minimum: 0 },
+        max_per_execution: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
+        max_daily: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
+        max_monthly: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
+      } } },
+  { id: 'inspect_team_budget', label: 'Inspect department budget', description: 'Owner-only department ceilings and immutable trade/contract usage; reassignment preserves original exposure.',
+    method: 'GET', endpoint: '/api/organizations/{id}/teams/{teamId}/budget', auth: 'owner-account', payment: null, required: ['id', 'teamId'] },
+  { id: 'set_team_budget', label: 'Set department budget', description: 'Owner-only versioned departmental ceilings, additional to organization and buyer limits; no spending authority is granted.',
+    method: 'PUT', endpoint: '/api/organizations/{id}/teams/{teamId}/budget', auth: 'owner-account', payment: null,
+    required: ['id', 'teamId', 'expected_version', 'max_per_execution', 'max_daily', 'max_monthly'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['expected_version', 'max_per_execution', 'max_daily', 'max_monthly'],
+      properties: { expected_version: { type: 'integer', minimum: 0 },
         max_per_execution: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
         max_daily: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
         max_monthly: { anyOf: [{ type: 'string', pattern: '^(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,2})?$' }, { type: 'null' }] },
@@ -2337,6 +2348,16 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         parameters: [tradeIdParameter], requestBody: { required: true, content: { 'application/json': { schema: getAction('set_organization_budget').body_schema } } },
         responses: { 200: { description: 'Budget updated or idempotent replay' }, 409: { description: 'Expected version conflict' }, 503: { description: 'Enterprise foundation disabled' } } },
     },
+    '/api/organizations/{id}/teams/{teamId}/budget': {
+      get: { operationId: 'inspect_team_budget', summary: 'Inspect owner-only departmental ceilings and usage', security: ownerAuthenticated,
+        parameters: [tradeIdParameter, { name: 'teamId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { 200: { description: 'Current budget and frozen trade/contract attribution' }, 404: { description: 'Team not owned in this organization' } } },
+      put: { operationId: 'set_team_budget', summary: 'Set additional versioned departmental USD ceilings', security: ownerAuthenticated,
+        parameters: [tradeIdParameter, { name: 'teamId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('set_team_budget').body_schema } } },
+        responses: { 200: { description: 'Budget updated or idempotent replay' }, 409: { description: 'Version conflict or archived team' },
+          413: { description: 'Body exceeds 2048 bytes' }, 503: { description: 'Enterprise writes closed or retryable storage contention' } } },
+    },
     '/api/organizations/{id}/teams/{teamId}': { patch: { operationId: 'archive_organization_team', summary: 'Archive an empty team', security: ownerAuthenticated,
       parameters: [tradeIdParameter, { name: 'teamId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       requestBody: { required: true, content: { 'application/json': { schema: getAction('archive_organization_team').body_schema } } },
@@ -2685,6 +2706,8 @@ Capability evidence is revalidated against current funding, payout, exact buyer-
 ## Enterprise accounting foundation
 
 An authenticated owner account can create an accounting-only organization with \`POST /api/organizations\` and inspect it with \`GET /api/organizations/{id}\`. \`POST /api/organizations/{id}/teams\` creates an owner-only team; \`PATCH /api/organizations/{id}/teams/{teamId}\` archives it after its assignments are removed. \`PUT /api/organizations/{id}/agents\` assigns an already owner-linked agent to one cost center and optionally an active team; \`DELETE\` removes the assignment. The owner can set versioned per-execution, UTC-day, and UTC-month USD ceilings through \`PUT /api/organizations/{id}/budget\`. These are enforced transactionally for trades opened by currently assigned agent buyers; immutable trade-time cost-center attribution survives reassignment. An owner may invite a specific account ID with \`POST /api/organizations/{id}/invitations\`; that account sees the pending invitation through \`GET /api/organizations/invitations\` and accepts it with \`POST /api/organizations/invitations/{invitationId}/accept\`. The owner can cancel pending invitations and revoke active members. Members have viewer-only access to organization names and team metadata; assignments, audit, budgets, invitations, and membership lists remain owner-only. Owners can issue and revoke expiring \`cmo_\` organization read keys through \`/api/organizations/{id}/service-accounts\`; keys can read only their organization summary and teams and cannot authenticate to routing or checkout. Neither membership, service credential, nor team assignment grants ownership, checkout access, or spending authority. Production writes require \`CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=true\` after the additive migrations; previously set budgets remain active when the flag is off.
+
+Department budgets use owner-only GET/PUT /api/organizations/{id}/teams/{teamId}/budget with the same versioned USD ceilings. They restrict existing purchasing authority and share original trade and funded-contract exposure. Reassignment preserves original department/cost-center attribution; cancelled uncertain external checkouts remain charged. Fresh funding permission rechecks the original attribution. Closed enterprise writes preserve configured enforcement and private history. Budget bodies are bounded to 2048 bytes; cookie writes require CSRF. Department controls do not enable purchasing roles, private providers or spending service-account keys.
 
 ## Authentication
 

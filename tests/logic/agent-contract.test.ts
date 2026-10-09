@@ -18,6 +18,20 @@ function endpointPath(endpoint: string) {
   return endpoint.split('?')[0]
 }
 
+test('department budget operations remain owner-only and do not delegate purchasing authority', () => {
+  const actions = getAgentManifest().actions
+  for (const id of ['inspect_team_budget', 'set_team_budget']) {
+    const action = actions.find((entry) => entry.id === id)!
+    assert.equal(action.auth, 'owner-account')
+    assert.equal(action.endpoint, '/api/organizations/{id}/teams/{teamId}/budget')
+    assert.ok(action.required?.includes('teamId'))
+    assert.equal(action.payment, null)
+  }
+  const paths = getAgentOpenApiPaths() as Record<string, Record<string, { operationId: string; parameters: { name: string }[] }>>
+  assert.equal(paths['/api/organizations/{id}/teams/{teamId}/budget'].put.operationId, 'set_team_budget')
+  assert.deepEqual(paths['/api/organizations/{id}/teams/{teamId}/budget'].put.parameters.map((entry) => entry.name), ['id', 'teamId'])
+})
+
 test('marketplace reputation advertises bounded owner feedback and history confidence without independent quality claims', () => {
   const evidence = getAgentManifest().marketplace_reputation
   assert.equal(evidence.feedback, 'latest_eligible_rating_per_current_buyer_owner_principal')

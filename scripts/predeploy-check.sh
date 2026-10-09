@@ -2,6 +2,11 @@
 set -euo pipefail
 
 required_files=(
+  "lib/organization-team-budgets.ts"
+  "docs/ORGANIZATION_TEAM_BUDGETS.md"
+  "app/api/organizations/[id]/teams/[teamId]/budget/route.ts"
+  "tests/api/organization-team-budgets.test.ts"
+  "migrations/2026-10-09-organization-team-budgets-v1.sql"
   "lib/chain-fee-evidence.ts"
   "tests/logic/chain-fee-evidence.test.ts"
   "docs/WORKFLOW_CHAIN_FEES.md"

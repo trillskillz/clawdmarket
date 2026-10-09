@@ -15,7 +15,7 @@ This increment provides a private, owner-scoped accounting namespace and an addi
 - `organization_budget_events`: append-only before/after budget versions.
 - `organization_audit_events`: append-only creation, assignment, and removal records. Agent IDs remain in the audit record when an agent is deleted.
 
-There are no team memberships, delegated purchasing permissions, approval workflow, or private marketplaces yet. Organization membership, service credentials, and team metadata must never be interpreted as purchasing authority. The route and checkout paths continue to enforce the buyer's existing authenticated identity and spending policy. Organization budgets add a stricter ceiling; they never grant spending authority.
+There are no team memberships, delegated purchasing permissions, approval workflow, or private marketplaces yet. Organization membership, service credentials, and team metadata must never be interpreted as purchasing authority. The route and checkout paths continue to enforce the buyer's existing authenticated identity and spending policy. Organization budgets add a stricter ceiling; they never grant spending authority. Local contract 1.94 adds [departmental ceilings](ORGANIZATION_TEAM_BUDGETS.md) and original contract department attribution alongside those existing limits.
 
 ## API
 

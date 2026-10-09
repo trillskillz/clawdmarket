@@ -48,6 +48,7 @@ export default defineConfig({
       ADMIN_USER_IDS: process.env.ADMIN_USER_IDS || 'benchmark-browser-admin',
       CLAWDMARKET_BENCHMARK_GRADER_IDS: process.env.CLAWDMARKET_BENCHMARK_GRADER_IDS || 'trusted-benchmark-browser-grader',
       CLAWDMARKET_REUSABLE_SERVICES_ENABLED: 'true',
+      CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED: 'true',
       CLAWDMARKET_ROUTE_PLANNING_ENABLED: 'true',
       CLAWDMARKET_ROUTE_EXECUTION_ENABLED: 'true',
       CLAWDMARKET_WORKFLOW_PLANNING_ENABLED: 'true',

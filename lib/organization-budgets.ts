@@ -4,9 +4,10 @@ import { and, eq, gte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { agent_owners, organization_agent_assignments, organization_budget_events,
-  organization_spend_budgets, organization_trade_attributions, organization_audit_events, organizations, trades, contracts } from '@/lib/schema'
+  organization_spend_budgets, organization_trade_attributions, organization_contract_attributions, organization_audit_events, organizations, trades, contracts } from '@/lib/schema'
 import { BuyerSpendPolicyError } from '@/lib/buyer-spend-policy'
 import { withKeyedWriteLock } from '@/lib/service-reservation-lock'
+import { teamBudgetFailure } from '@/lib/organization-team-budgets'
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 const dollars = z.string().regex(/^(?:0|[1-9][0-9]{0,8})(?:\.[0-9]{1,2})?$/).transform((value) => {
@@ -122,6 +123,8 @@ export async function attributeOrganizationTrade(tx: Transaction, agentId: strin
   await tx.insert(organization_trade_attributions).values({ trade_id: trade.id, organization_id: assignment.organization_id,
     agent_id: agentId, team_id: assignment.team_id, cost_center: assignment.cost_center,
     total_minor: totalMinor, created_at: now })
+  const teamFailure = await teamBudgetFailure(assignment.organization_id, assignment.team_id, totalMinor, tx, now)
+  if (teamFailure) throw new BuyerSpendPolicyError(teamFailure, 'Departmental budget would be exceeded')
   const [budget] = await tx.select().from(organization_spend_budgets)
     .where(eq(organization_spend_budgets.organization_id, assignment.organization_id)).limit(1)
   if (!budget) return
@@ -148,16 +151,25 @@ export async function organizationBudgetForAgent(agentId: string) {
 /** Capture the organization at funding; reassignment cannot erase contract exposure. */
 export async function attributeOrganizationContract(tx: Transaction, agentId: string | null | undefined, contractId: string, totalMinor: number, now: Date) {
   if (!agentId) return
-  const [assignment] = await tx.select({ organizationId: organization_agent_assignments.organization_id })
+  const [existing] = await tx.select().from(organization_contract_attributions).where(eq(organization_contract_attributions.contract_id, contractId)).limit(1)
+  if (existing && (existing.agent_id !== agentId || existing.total_minor !== totalMinor))
+    throw new BuyerSpendPolicyError('ORGANIZATION_ATTRIBUTION_CONFLICT', 'Contract attribution differs from its original funding')
+  const [assignment] = await tx.select({ organization_id: organization_agent_assignments.organization_id,
+    team_id: organization_agent_assignments.team_id, cost_center: organization_agent_assignments.cost_center })
     .from(organization_agent_assignments)
     .innerJoin(organizations, eq(organizations.id, organization_agent_assignments.organization_id))
     .innerJoin(agent_owners, and(eq(agent_owners.agentId, agentId), eq(agent_owners.userId, organizations.owner_account_id)))
     .where(eq(organization_agent_assignments.agent_id, agentId)).limit(1)
-  if (!assignment) return
-  await tx.update(contracts).set({ organization_id: assignment.organizationId }).where(eq(contracts.id, contractId))
-  const [budget] = await tx.select().from(organization_spend_budgets).where(eq(organization_spend_budgets.organization_id, assignment.organizationId)).limit(1)
+  const attribution = existing || assignment
+  if (!attribution) return
+  if (!existing) await tx.insert(organization_contract_attributions).values({ contract_id: contractId, agent_id: agentId,
+    organization_id: attribution.organization_id, team_id: attribution.team_id, cost_center: attribution.cost_center, total_minor: totalMinor, created_at: now })
+  await tx.update(contracts).set({ organization_id: attribution.organization_id }).where(eq(contracts.id, contractId))
+  const teamFailure = await teamBudgetFailure(attribution.organization_id, attribution.team_id, totalMinor, tx, now)
+  if (teamFailure) throw new BuyerSpendPolicyError(teamFailure, 'Departmental budget would be exceeded')
+  const [budget] = await tx.select().from(organization_spend_budgets).where(eq(organization_spend_budgets.organization_id, attribution.organization_id)).limit(1)
   if (!budget) return
-  const usage = await organizationBudgetUsage(assignment.organizationId, now, tx)
+  const usage = await organizationBudgetUsage(attribution.organization_id, now, tx)
   if (budget.max_per_execution_minor !== null && totalMinor > budget.max_per_execution_minor) throw new BuyerSpendPolicyError('ORGANIZATION_PER_EXECUTION_LIMIT', 'Organization per-execution budget would be exceeded')
   if (budget.max_daily_minor !== null && usage.reserved_or_spent_today_minor > budget.max_daily_minor) throw new BuyerSpendPolicyError('ORGANIZATION_DAILY_LIMIT', 'Organization daily budget would be exceeded')
   if (budget.max_monthly_minor !== null && usage.reserved_or_spent_month_minor > budget.max_monthly_minor) throw new BuyerSpendPolicyError('ORGANIZATION_MONTHLY_LIMIT', 'Organization monthly budget would be exceeded')
@@ -167,6 +179,8 @@ export async function attributeOrganizationContract(tx: Transaction, agentId: st
 export async function organizationFundingBudgetFailure(trade: typeof trades.$inferSelect, source: Transaction | typeof db = db, now = new Date()) {
   const [attribution] = await source.select().from(organization_trade_attributions).where(eq(organization_trade_attributions.trade_id, trade.id)).limit(1)
   if (!attribution) return null
+  const teamFailure = await teamBudgetFailure(attribution.organization_id, attribution.team_id, attribution.total_minor, source, now)
+  if (teamFailure) return teamFailure
   const [budget] = await source.select().from(organization_spend_budgets).where(eq(organization_spend_budgets.organization_id, attribution.organization_id)).limit(1)
   if (!budget) return null
   if (budget.max_per_execution_minor !== null && attribution.total_minor > budget.max_per_execution_minor) return 'ORGANIZATION_PER_EXECUTION_LIMIT'
