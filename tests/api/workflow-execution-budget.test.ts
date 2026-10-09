@@ -21,6 +21,7 @@ before(async () => {
   directory = mkdtempSync(join(tmpdir(), 'clawdmarket-workspace-test-workflow-budget-'))
   process.env.TURSO_DATABASE_URL = `file:${join(directory, 'budget.db')}`; process.env.TURSO_AUTH_TOKEN = ''
   process.env.JWT_SECRET = 'workflow-budget-tests-only'
+  process.env.CHAT_ENCRYPTION_KEY = 'workflow-dependency-local-fixture-key'
   process.env.TREASURY_ADDRESS = treasury; process.env.EVM_SETTLEMENT_PRIVATE_KEY = `0x${'99'.repeat(32)}`
   process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId: 8453, chainName: 'Test Base', address: token,
     symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 3, rpcUrl: 'https://rpc.example.invalid' }])
@@ -363,4 +364,100 @@ test('Tempo children inherit explicit fee-token units and reserve gross exposure
   } finally {
     names.forEach((name, index) => { if (saved[index] === undefined) delete process.env[name]; else process.env[name] = saved[index] })
   }
+})
+
+async function completedPrerequisite(accepted = true, backed = true) {
+  const f = await fixture(true), purchased = await checkout(f)
+  assert.equal(purchased.response.status, 201, JSON.stringify(purchased.data))
+  const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, purchased.data.trade.id))
+  const fundingHash = `0x${f.id.replaceAll('-', '').repeat(2)}`
+  await (await import('@/lib/trade-funding')).recordExternalTradeFunding({ trade, rail: 'evm', txHash: fundingHash, externalId: fundingHash,
+    payerAddress: f.body.payment.payer_address, tokenAddress: token, chainId: 8453, tokenSymbol: 'USDC', tokenDecimals: 6,
+    tokenAmount: 1050000n, tokenUsdPrice: 1, usdValue: 1.05 })
+  const { uploadPrivateArtifact } = await import('@/lib/private-artifacts'), { createHash } = await import('node:crypto')
+  const artifacts = []
+  for (const key of ['alpha', 'beta']) {
+    const bytes = Buffer.from(JSON.stringify({ result: `private-${key}-${f.id}` }))
+    const { artifact } = await uploadPrivateArtifact(trade.id, trade.seller_id, { client_reference: `dependency-${key}-${f.id}`,
+      name: `${key}.json`, media_type: 'application/json', content_base64: bytes.toString('base64'), sha256: createHash('sha256').update(bytes).digest('hex') })
+    artifacts.push(artifact)
+  }
+  // The reviewed index follows accepted attachment order, explicitly opposite lexical ID order.
+  artifacts.sort((a, b) => b.id.localeCompare(a.id))
+  const { delivery } = await (await import('@/lib/trade-delivery')).submitTradeDelivery(trade.id, trade.seller_id,
+    { summary: 'Private reviewed upstream findings for the bounded workflow.', artifact_ids: artifacts.map((item) => item.id), verification_artifact_id: artifacts[0].id })
+  await db.transaction(async (tx) => {
+    if (accepted) await (await import('@/lib/verification-evidence')).advanceBuyerReview(tx, trade.id, 'passed', delivery.content_hash)
+    await tx.update(schema.trades).set({ status: 'completed', payout_status: 'complete', completed_at: new Date() }).where(eq(schema.trades.id, trade.id))
+    await (await import('@/lib/service-order-state')).advanceServiceOrder(tx, trade.id, 'completed')
+    if (backed) await tx.insert(schema.settlement_transfers).values({ business_key: `${trade.id}:seller_payout`, trade_id: trade.id,
+      kind: 'seller_payout', chain_id: 8453, token_address: token, from_address: treasury, to_address: treasury,
+      token_amount: '1000000', usd_amount: 1, status: 'confirmed', tx_hash: `0x${'bb'.repeat(32)}`, confirmed_at: new Date() })
+  })
+  return { f, purchased, trade, artifacts, delivery }
+}
+async function dependencies(f: Fixture, runId: string, user = f.buyer) {
+  return (await import('@/lib/workflow-dependency-evidence')).inspectWorkflowDependencies(runId, 'second', user)
+}
+
+test('dependency evidence binds the exact accepted artifact order and current backing without granting bytes or executing a child', async () => {
+  const { f, purchased, artifacts, delivery } = await completedPrerequisite()
+  const evidence = await dependencies(f, purchased.active.run.id), replay = await dependencies(f, purchased.active.run.id, f.owner)
+  assert.equal(evidence.bindings.length, 1); assert.equal(evidence.bindings[0].artifact.id, artifacts[0].id)
+  assert.equal(evidence.bindings[0].artifact.sha256, artifacts[0].sha256)
+  assert.equal(evidence.bindings[0].delivery_hash, delivery.content_hash)
+  assert.equal(evidence.dependency_hash, replay.dependency_hash)
+  assert.equal(evidence.execution_available, false); assert.equal(evidence.artifact_access_granted, false)
+  assert.equal(JSON.stringify(evidence).includes('content_base64'), false)
+  assert.equal((await reservations(purchased.active.run.id)).length, 1)
+  await rejectsCode(() => budget.prepareWorkflowNode(purchased.active.run.id, 'second', f.buyer), 'WORKFLOW_DEPENDENCY_NOT_READY')
+  process.env.CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED = 'false'
+  try { assert.equal((await dependencies(f, purchased.active.run.id)).dependency_hash, evidence.dependency_hash) }
+  finally { process.env.CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED = 'true' }
+})
+
+test('missing settlement, unaccepted delivery and completion flags without proof cannot authorize dependency inputs', async () => {
+  const pending = await fixture(true), active = await activate(pending)
+  await rejectsCode(() => dependencies(pending, active.run.id), 'WORKFLOW_DEPENDENCY_NOT_READY')
+  const checkout = await budget.prepareWorkflowNode(active.run.id, 'first', pending.buyer)
+  assert.ok(checkout.node.route_id)
+  await rejectsCode(() => dependencies(pending, active.run.id), 'WORKFLOW_DEPENDENCY_NOT_SETTLED')
+  const unbacked = await completedPrerequisite(true, false)
+  await rejectsCode(() => dependencies(unbacked.f, unbacked.purchased.active.run.id), 'WORKFLOW_DEPENDENCY_BACKING_MISSING')
+  const unaccepted = await completedPrerequisite(false, true)
+  await rejectsCode(() => dependencies(unaccepted.f, unaccepted.purchased.active.run.id), 'WORKFLOW_DEPENDENCY_NOT_ACCEPTED')
+})
+
+test('a historical backed receipt cannot substitute for withdrawn current payout or funding evidence', async () => {
+  const { f, purchased, trade } = await completedPrerequisite()
+  const saved = await (await import('@/lib/route-lifecycle')).persistBackedRouteReceipt(purchased.node.route_id!, f.buyer)
+  assert.ok(saved)
+  await db.update(schema.settlement_transfers).set({ status: 'submitted' }).where(and(eq(schema.settlement_transfers.trade_id, trade.id), eq(schema.settlement_transfers.kind, 'seller_payout')))
+  await rejectsCode(() => dependencies(f, purchased.active.run.id), 'WORKFLOW_DEPENDENCY_BACKING_MISSING')
+  await db.update(schema.settlement_transfers).set({ status: 'confirmed' }).where(eq(schema.settlement_transfers.trade_id, trade.id))
+  await db.update(schema.payment_receipts).set({ token_amount: '1049999' }).where(eq(schema.payment_receipts.trade_id, trade.id))
+  await rejectsCode(() => dependencies(f, purchased.active.run.id), 'WORKFLOW_DEPENDENCY_BACKING_MISSING')
+  assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id, purchased.node.route_id!))).length, 1)
+})
+
+test('purged bytes, ciphertext swaps and changed accepted artifact metadata fail dependency integrity', async () => {
+  for (const change of ['purged', 'swap', 'metadata']) {
+    const { f, purchased, artifacts } = await completedPrerequisite()
+    if (change === 'purged') await db.update(schema.private_artifacts).set({ purged_at: new Date() }).where(eq(schema.private_artifacts.id, artifacts[0].id))
+    if (change === 'metadata') await db.update(schema.private_artifacts).set({ sha256: 'a'.repeat(64) }).where(eq(schema.private_artifacts.id, artifacts[0].id))
+    if (change === 'swap') {
+      const [payload] = await db.select().from(schema.private_artifact_payloads).where(eq(schema.private_artifact_payloads.artifact_id, artifacts[1].id))
+      await db.update(schema.private_artifact_payloads).set({ ciphertext: payload.ciphertext, nonce: payload.nonce }).where(eq(schema.private_artifact_payloads.artifact_id, artifacts[0].id))
+    }
+    await rejectsCode(() => dependencies(f, purchased.active.run.id), change === 'purged' ? 'ARTIFACT_EXPIRED' : change === 'swap' ? 'ARTIFACT_INTEGRITY_FAILED' : 'WORKFLOW_DEPENDENCY_ARTIFACT_CHANGED')
+  }
+})
+
+test('dependency inspection is buyer/current-owner private and never expands original artifact authorization', async () => {
+  const { f, purchased, trade, artifacts } = await completedPrerequisite()
+  await rejectsCode(() => dependencies(f, purchased.active.run.id, f.outsider), 'WORKFLOW_NOT_FOUND')
+  await rejectsCode(() => dependencies(f, purchased.active.run.id, trade.seller_id), 'WORKFLOW_NOT_FOUND')
+  await rejectsCode(() => (import('@/lib/private-artifacts').then((api) => api.downloadPrivateArtifact(trade.id, artifacts[0].id, f.sellers[1]))), 'TRADE_NOT_FOUND')
+  const data = await dependencies(f, purchased.active.run.id)
+  assert.equal(data.artifact_access_granted, false)
 })
