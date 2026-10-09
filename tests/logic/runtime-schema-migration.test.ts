@@ -159,7 +159,12 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
-      assert.equal(migrationRows.rows.length, 52)
+      assert.equal(migrationRows.rows.length, 53)
+      assert.equal(tableNames.has('workflow_approvals'), true)
+      const approvals = await migrated.execute('PRAGMA table_info("workflow_approvals")')
+      assert.equal(names(approvals.rows).has('contract_hash'), true)
+      assert.equal(names(approvals.rows).has('revoked_by'), true)
+      assert.equal((await migrated.execute('SELECT * FROM workflow_approvals')).rows.length, 0)
       const tradeIndexes = await migrated.execute('PRAGMA index_list("trades")')
       assert.equal(names(tradeIndexes.rows).has('trades_buyer_status_idx'), true)
       const legacyTrade = (await migrated.execute("SELECT buyer_id, status FROM trades WHERE id = 'legacy-financial-trade'")).rows[0]

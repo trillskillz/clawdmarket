@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P2.1 bounded workflow execution, beginning with exact owner-approved frozen DAG/contracts and aggregate authority boundaries. Full child execution, dependency artifact grants, atomic fee-inclusive reservations, common deadlines, crash recovery and aggregate financial reconciliation must meet the audit's acceptance gate before counting a completed part. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
+**Next:** P2.1 bounded workflow execution. Local contract **1.91** now implements exact owner-reviewed frozen DAG/contracts; atomic parent/node financial reservations and stable child execution/recovery references are next. Full child execution, dependency artifact grants, atomic fee-inclusive reservations, common deadlines, crash recovery and aggregate financial reconciliation must meet the audit's acceptance gate before counting a completed part. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -1098,8 +1098,8 @@ The next local publishing counter is **0/10**.
 The implementation audit is recorded in
 [WORKFLOW_EXECUTION_AUDIT.md](docs/WORKFLOW_EXECUTION_AUDIT.md), including concrete
 existing code boundaries and required HTTP/provider, concurrency and recovery
-acceptance gates. This design checkpoint does not complete P2.1 or count as a
-substantive publishing part.
+acceptance gates. The audit and intermediate owner-review implementation do not complete P2.1 or
+count as a substantive publishing part.
 
 The existing workflow model stores at most sixteen explicit nodes, three
 dependency edges of depth and a summed budget, but still truthfully returns
@@ -1120,3 +1120,50 @@ an aggregate receipt. Acceptance requires an actual multi-node HTTP/provider loo
 concurrent budget races, process-death recovery and failed dependency/refund paths
 on disposable chains. Independent production quality/provider canaries remain
 external gates; no live wallet spending or global flags are implied by this work.
+
+### P2.1 local checkpoint — exact owner workflow review (1.91)
+
+The current owner can inspect the exact private graph/hash, freeze every node's
+static inputs, approved providers, explicit buyer verification, fee-inclusive
+gross attempt/retry budgets, integer EVM/Tempo fee caps and dependency artifact
+mappings, and revoke the original review. Agent credentials cannot approve or
+revoke. Every graph representation is checked; current linked ownership, expiry,
+cancellation and drift are visible without erasing historical review. Semantic
+replay preserves the original immutable ID/hash even after revocation/expiry;
+authority changes conflict. Approval grants **no current spending authority**,
+creates no child order/payment/artifact grant, and cannot be passed as a route
+payment mandate. Production planning/write flags remain unchanged.
+
+Additive migration 53 stores reviews without changing financial history. The
+four-schema readiness gate includes its required columns. Real process contention
+also exposed failed-BEGIN native statements poisoning later shared-pool requests.
+Workflow review uses disposable transaction clients with bounded lock retries,
+closing each client without altering the financial pool or its concurrency.
+Exhaustion returns retryable 503; the same saved request recovers after the lock
+releases. A separate-process lock test verifies later planning still works.
+
+Validation: Node 24 predeploy passes **627 cases (622 passed/five skipped)**,
+actual external JavaScript/Python isolation, twelve Python recovery cases,
+SDK drift/build, typecheck and lint. Production build passes. **16 actual app
+HTTP/Chromium journeys** pass: the new owner review/transfer/revocation and
+non-spending boundary, plus fifteen proof, core smoke, reputation/mobile catalog
+and semantic search/hierarchy cases. Readiness and twice-replayed legacy migration
+checks pass with **53** IDs and preserved legacy financial records. The Next.js
+cache response appends max-age=0; the HTTP test checks the required private/no-store
+directives without rejecting that additional restriction.
+
+Evidence: `/tmp/clawdmarket-workflow-approval-predeploy.log`,
+`/tmp/clawdmarket-workflow-approval-build.log`,
+`/tmp/clawdmarket-workflow-approval-readiness.log`,
+`/tmp/clawdmarket-workflow-approval-contention.log`,
+`/tmp/clawdmarket-workflow-approval-browser.log` (fifteen regressions passed), and
+`/tmp/clawdmarket-workflow-approval-http.log` (new journey passed).
+See [WORKFLOW_OWNER_APPROVAL.md](docs/WORKFLOW_OWNER_APPROVAL.md).
+
+This is a verified foundation, **not completed bounded workflow execution**.
+The next implementation is atomic fee-inclusive parent/node exposure in the same
+transaction as existing route/order/capacity/policy reservation, with stable child
+references and a common absolute deadline. Dependency grants, actual multi-node
+execution/crash recovery and aggregate settlement remain required before P2.1 can
+count. The local publishing counter remains **0/10**; nothing from this checkpoint
+is pushed or deployed.

@@ -22,11 +22,12 @@ const units = z.string().regex(/^(?:0|[1-9][0-9]{0,77})$/)
 const paymentFields = { chain_id: z.number().int().positive(), token_address: address, payer_address: address,
   treasury_address: address, minimum_token_reserve_units: units }
 const evmFeeFields = { minimum_native_reserve_wei: units, max_gas_cost_wei: units.refine((value) => BigInt(value) > 0n) }
-const paymentSchema = z.discriminatedUnion('rail', [
+export const routeMandatePaymentInput = z.discriminatedUnion('rail', [
   z.object({ ...paymentFields, rail: z.literal('evm'), ...evmFeeFields }).strict(),
   z.object({ ...paymentFields, rail: z.literal('mpp'), fee_token_address: address,
     minimum_fee_token_reserve_units: units, max_fee_token_cost_units: units.refine((value) => BigInt(value) > 0n) }).strict(),
 ])
+const paymentSchema = routeMandatePaymentInput
 // Historical MPP terms remain inspectable with their original fingerprint; they grant no automatic pull permission.
 const storedPaymentSchema = z.union([paymentSchema, z.object({ ...paymentFields, rail: z.literal('mpp'), ...evmFeeFields }).strict()])
 const storedMandateInput = z.object({ version: z.literal(1), client_reference: z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
@@ -100,7 +101,7 @@ export function mandateDto(row: Mandate) {
     automatic_funded_retry_enabled: termsOf(row).max_attempts > 1 && termsOf(row).max_retry_budget > 0 }
 }
 
-function paymentContract(payment: Input['payment']) {
+export function paymentContract(payment: Input['payment']) {
   const ready = getPaymentReadiness()
   if (payment.rail === 'evm') {
     const token = findAcceptedToken(payment.chain_id, payment.token_address)
