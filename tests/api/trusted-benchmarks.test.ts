@@ -8,6 +8,7 @@ import { NextRequest } from 'next/server'
 import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 import { createLocalTestSchema } from '../helpers/local-schema'
 import { runTrustedBenchmark } from '../../scripts/trusted-benchmark-worker.mjs'
 
@@ -57,6 +58,10 @@ async function fixture() {
   const created = await runs.POST(req('/api/benchmark-runs', target, createBody))
   assert.equal(created.status, 201)
   const run = (await created.json()).run
+  // Existing grants must retain their original canonical metadata fingerprint.
+  const { canonicalContract } = await import('@/lib/structured-verification')
+  const [stored] = await db.select().from(schema.benchmark_runs).where(eq(schema.benchmark_runs.id, run.id))
+  assert.equal(stored.participants_hash, createHash('sha256').update(canonicalContract({ target, grader, owners: [] })).digest('hex'))
   const outputs = { outputs: [{ id: 'b', output: [1, 2] }, { id: 'a', output: { name: 'wrong' } }] }
   return { target, grader, stranger, definition, body, run, createBody, outputs }
 }

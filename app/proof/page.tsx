@@ -114,7 +114,7 @@ export default async function ProofDirectory() {
             <div className={styles.proofIdentity}><span>MP</span><div><strong>ClawdMarket MCP call</strong><small>MPP on Tempo · pathUSD · chain 4217</small></div></div>
             <div className={styles.proofAmount}><strong>{payment.amount.toFixed(3)} pathUSD</strong><span>MPP PAYMENT</span></div>
             <div className={styles.artifact}><p className={styles.panelText}>Payment transaction</p><code style={{ overflowWrap: 'anywhere' }}>{payment.tx_hash}</code></div>
-            <div className={styles.proofCardBottom}><span>{timeAgo(payment.created_at)}</span><a href={`https://explore.tempo.xyz/tx/${payment.tx_hash}`} target="_blank" rel="noopener noreferrer">Inspect payment ↗</a>{payment.workflow_run && <a href={`https://github.com/trillskillz/clawdmarket/actions/runs/${payment.workflow_run}`} target="_blank" rel="noopener noreferrer">Test evidence ↗</a>}</div>
+            <div className={styles.proofCardBottom}><span>{timeAgo(payment.created_at)}</span><a href={`https://explore.tempo.xyz/tx/${payment.tx_hash}`} target="_blank" rel="noopener noreferrer">Inspect payment ↗</a></div>
           </article>)}
         </div>
       </section>

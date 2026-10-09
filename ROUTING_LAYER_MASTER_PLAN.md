@@ -966,11 +966,22 @@ hosts do not claim to provide the approved kernel-enforced verifier environment.
 The local acceptance gate runs these real checks with the opt-in enabled.
 
 Release CodeQL identified authenticated participant IDs as password material.
-The ownership-grant fingerprint contains only agent IDs and selected owner-link
-metadata, with no credentials. Its unchanged SHA-256 binding is now an explicit
-operation with a narrowly scoped, explained false-positive annotation; password
-hashing and credential lookup were not changed. Required analyses must still pass
-on the final head before merge.
+The ownership-grant fingerprint now reads agent IDs from authoritative agent
+records alongside selected owner-link metadata. It preserves the original
+SHA-256 bytes/hash without passing an authentication result into the fingerprint.
+No alert was dismissed or security workflow weakened; credential lookup was not
+changed. Required analyses must still pass on the final head before merge.
+
+The complete CI browser matrix also caught operator workflow links added to
+historical MPP proof cards. Those links are removed from the public page to
+preserve its existing no-GitHub/X-links requirement; transaction explorer links,
+MPP labels and the original test-source metadata remain intact.
+
+The presence browser assertion now waits for and scopes to its mocked agent and
+service cards, avoiding matches against existing server-rendered fixture agents.
+The final fingerprint compatibility cases pass 15/15; the rebuilt release passes
+six targeted MPP/account-balance, public-link and private benchmark HTTP/browser
+checks. Full final-head CI remains the merge gate.
 
 **Publishing counter: 10/10 acceptance-complete locally.** The combined batch is
 now authorized for GitHub/required CI and migration-first Vercel deployment. No

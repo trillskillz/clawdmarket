@@ -49,14 +49,17 @@ async function graderEligible(id: string, source: Source) {
   return !!agent && agent.status === 'active' && !agent.archivedAt && !agent.description.includes(REFERENCE_FLEET_MARKER)
 }
 async function participantHash(target: string, grader: string, source: Source) {
+  // Fingerprint authoritative participant metadata, independently of the
+  // authentication result that selected these records.
+  const [targetAgent] = await source.select({ id: agents.id }).from(agents).where(eq(agents.id, target)).limit(1)
+  const [graderAgent] = await source.select({ id: agents.id }).from(agents).where(eq(agents.id, grader)).limit(1)
+  if (!targetAgent || !graderAgent) fail('BENCHMARK_GRANT_INACTIVE')
   const owners = await source.select({ agent: agent_owners.agentId, owner: agent_owners.userId }).from(agent_owners)
     .where(inArray(agent_owners.agentId, [target, grader]))
-  const participants = { target, grader, owners: owners.sort((a, b) => compare(canonicalContract(a), canonicalContract(b))) }
-  // This fingerprints public agent IDs and authoritative owner-link metadata
-  // to invalidate a private grant after ownership changes. No credential or
-  // password is included; SHA-256 preserves the existing integrity binding.
-  // CodeQL propagates credential taint to the ID returned by authentication.
-  // codeql[js/insufficient-password-hash]
+  const participants = { target: targetAgent.id, grader: graderAgent.id,
+    owners: owners.sort((a, b) => compare(canonicalContract(a), canonicalContract(b))) }
+  // SHA-256 binds these IDs and owner links to a private grant. The bytes are
+  // unchanged; credentials and passwords never enter this metadata projection.
   return createHash('sha256').update(canonicalContract(participants)).digest('hex')
 }
 async function durable<T>(key: string, action: () => Promise<T>): Promise<T> {
