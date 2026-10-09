@@ -1,7 +1,8 @@
 import { z } from 'zod'
+import { VERIFIER_ADAPTERS } from '../scripts/verifier-contract.mjs'
 
 export const isolatedCheckPolicySchema = z.object({ version: z.literal(1),
-  adapter: z.enum(['javascript_tests_v1', 'javascript_static_v1']), verifier_agent_id: z.uuid(),
+  adapter: z.enum(VERIFIER_ADAPTERS), verifier_agent_id: z.union([z.uuid(), z.string().regex(/^agent_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/)]),
   suite_sha256: z.string().regex(/^[a-f0-9]{64}$/), max_runtime_seconds: z.number().int().min(1).max(30),
 }).strict()
 const jsonValue = z.unknown().superRefine((value, context) => {

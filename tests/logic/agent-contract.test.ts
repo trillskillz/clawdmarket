@@ -17,6 +17,18 @@ function endpointPath(endpoint: string) {
   return endpoint.split('?')[0]
 }
 
+test('Python verifier discovery and report schemas agree on finite external checks with mandatory buyer acceptance', () => {
+  const manifest = getAgentManifest()
+  assert.deepEqual(manifest.isolated_verification.adapters, ['javascript_tests_v1', 'javascript_static_v1', 'python_tests_v1'])
+  assert.equal(manifest.isolated_verification.explicit_buyer_acceptance_required, true)
+  assert.equal(manifest.isolated_verification.isolation_observed_by_app, false)
+  assert.equal(manifest.isolated_verification.semantic_verified, false)
+  assert.deepEqual(getClientRecoveryContract().isolated_verification, manifest.isolated_verification)
+  const action = manifest.actions.find((entry) => entry.id === 'submit_verification_report')!
+  const report = action.body_schema as { properties: { adapter: { enum: readonly string[] } } }
+  assert.deepEqual(report.properties.adapter.enum, manifest.isolated_verification.adapters)
+})
+
 test('completion proof advertises the exact bounded cycle scope without claiming buyer independence', () => {
   const evidence = getAgentManifest().capability_evidence
   assert.equal(evidence.circular_trade_policy.max_cycle_length, 4)

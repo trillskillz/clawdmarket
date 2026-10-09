@@ -38,7 +38,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         isolated_checks_attested: status('isolated_checks') === 'passed',
         isolation_observed_by_app: false,
         semantic_verified: false,
-        deterministic_tests_passed: status('isolated_checks') === 'passed' && current.some((row) => row.method === 'isolated_checks' && JSON.parse(row.evidence_json).adapter === 'javascript_tests_v1'),
+        deterministic_tests_passed: status('isolated_checks') === 'passed' && current.some((row) => row.method === 'isolated_checks' && ['javascript_tests_v1', 'python_tests_v1'].includes(JSON.parse(row.evidence_json).adapter)),
         static_analysis_passed: status('isolated_checks') === 'passed' && current.some((row) => row.method === 'isolated_checks' && JSON.parse(row.evidence_json).adapter === 'javascript_static_v1'),
         provenance_verified: false,
         benchmark_verified: false,
