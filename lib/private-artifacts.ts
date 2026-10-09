@@ -63,7 +63,7 @@ export async function listPrivateArtifacts(tradeId: string, userId: string) {
   return rows.map((row) => artifactMetadata(row, trade.status))
 }
 
-async function verifyPayload(row: Metadata, source: Source, tradeStatus: string) {
+export async function verifyPrivateArtifactPayload(row: Metadata, source: Source, tradeStatus: string) {
   if (row.purged_at || terminalStates.includes(tradeStatus) && row.retention_expires_at <= new Date()) throw new ArtifactError('ARTIFACT_EXPIRED', 410)
   const [payload] = await source.select().from(private_artifact_payloads).where(eq(private_artifact_payloads.artifact_id, row.id)).limit(1)
   if (!payload) throw new ArtifactError('ARTIFACT_INTEGRITY_FAILED', 422)
@@ -81,7 +81,7 @@ export async function downloadPrivateArtifact(tradeId: string, artifactId: strin
   const trade = await authorizeArtifactTrade(tradeId, userId)
   const [row] = await db.select().from(private_artifacts).where(and(eq(private_artifacts.id, artifactId), eq(private_artifacts.trade_id, tradeId))).limit(1)
   if (!row) throw new ArtifactError('ARTIFACT_NOT_FOUND', 404)
-  return { metadata: artifactMetadata(row, trade.status), bytes: await verifyPayload(row, db, trade.status) }
+  return { metadata: artifactMetadata(row, trade.status), bytes: await verifyPrivateArtifactPayload(row, db, trade.status) }
 }
 
 /** Used in the delivery transaction: immutable references, content integrity, no URL fetching or code execution. */
@@ -90,7 +90,7 @@ export async function loadDeliveryArtifacts(tradeId: string, ids: string[], trad
   for (const id of ids) {
     const [row] = await source.select().from(private_artifacts).where(and(eq(private_artifacts.id, id), eq(private_artifacts.trade_id, tradeId))).limit(1)
     if (!row || row.delivery_id) throw new ArtifactError('ARTIFACT_NOT_AVAILABLE', 409)
-    result.push({ row, bytes: await verifyPayload(row, source, tradeStatus) })
+    result.push({ row, bytes: await verifyPrivateArtifactPayload(row, source, tradeStatus) })
   }
   return result
 }

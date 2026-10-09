@@ -1206,3 +1206,16 @@ This remains a foundation, not a complete DAG executor. Next: exact accepted and
 currently backed dependency evidence, selected-provider private artifact grants,
 executor/crash recovery and aggregate economic reconciliation. No new push,
 deployment, live spending or global rollout change occurred. Counter **0/10**.
+
+### P2.1 local checkpoint — current prerequisite evidence
+
+Private dependency inspection now binds the approved mapping to exact child
+contracts/reservations, accepted delivery and required checks, current confirmed
+funding/payout and capacity release. Historical receipts cannot substitute for
+withdrawn backing. Attachment indices follow accepted integrity evidence order;
+all immutable metadata, encrypted identity/bytes and retention are rechecked.
+Buyer/current-owner inspection returns references/hashes without bytes or grants.
+Five new cases plus the budget/artifact regressions pass **29/29**; typecheck and
+targeted lint pass. Details/evidence: [WORKFLOW_DEPENDENCY_EVIDENCE.md](docs/WORKFLOW_DEPENDENCY_EVIDENCE.md).
+Next implementation: durable selected-provider grants and dependent execution.
+No push/deployment/live funds/rollout changes. Full P2.1 remains unfinished; **0/10**.

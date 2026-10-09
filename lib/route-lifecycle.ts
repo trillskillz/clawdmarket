@@ -31,7 +31,7 @@ async function owned(source: Source, routeId: string, buyerId: string) {
 }
 
 /** A completion flag is insufficient: require the existing financial records for this exact trade. */
-async function financialProof(source: Source, trade: typeof trades.$inferSelect) {
+export async function currentRouteFinancialProof(source: Source, trade: typeof trades.$inferSelect) {
   if (!['completed', 'complete'].includes(trade.status) || trade.payout_status !== 'complete' || !trade.completed_at) return null
   if (['mpp', 'evm'].includes(trade.payment_rail)) {
     const [funding] = await source.select().from(payment_receipts).where(eq(payment_receipts.trade_id, trade.id)).limit(1)
@@ -72,7 +72,7 @@ export async function persistBackedRouteReceipt(routeId: string, buyerId: string
       return { receipt, content_hash: prior.content_hash, idempotent: true }
     }
     if (!order || !trade) return null
-    const financial = await financialProof(tx, trade), acceptance = await tradeAcceptanceStatus(trade.id, tx)
+    const financial = await currentRouteFinancialProof(tx, trade), acceptance = await tradeAcceptanceStatus(trade.id, tx)
     const [delivered] = await tx.select().from(trade_deliveries).where(eq(trade_deliveries.trade_id, trade.id)).limit(1)
     const delivery = delivered ? { id: delivered.id, content_hash: delivered.content_hash } : null
     if (!financial || !delivery || !acceptance.accepted || !order.capacity_released_at || order.state !== 'completed' || route.state !== 'completed') return null
@@ -142,7 +142,7 @@ export async function inspectRouteLifecycle(routeId: string, buyerId: string) {
   let phase = route.state as string, nextAction = 'fund_original_payment', fundsState = 'payment_unknown', errorCode: string | null = null
   if (!trade) { nextAction = 'authorize_and_reserve'; fundsState = 'no_funds_moved' }
   else if (['completed', 'complete'].includes(trade.status)) {
-    const proof = await financialProof(db, trade)
+    const proof = await currentRouteFinancialProof(db, trade)
     phase = proof && acceptance?.accepted && order?.capacity_released_at && order.state === 'completed' && route.state === 'completed' ? 'completed' : 'financial_uncertainty'
     nextAction = phase === 'completed' ? receipt ? 'done' : 'persist_receipt' : 'operator_reconciliation'
     fundsState = phase === 'completed' ? 'settled' : 'payment_unknown'
