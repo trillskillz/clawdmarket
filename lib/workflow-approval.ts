@@ -51,7 +51,8 @@ export const workflowApprovalInput = z.object({
 })
 
 type Input = z.output<typeof workflowApprovalInput>
-type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
+type Source = typeof db | Transaction
 type Approval = typeof workflow_approvals.$inferSelect
 const hash = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
 
@@ -139,13 +140,13 @@ async function dto(row: Approval, source: Source) {
 /** Isolate lock failures from the application's shared financial connection pool.
  * A failed local BEGIN can leave native statements pending; dispose that client
  * before retrying, rather than poisoning later requests on the shared client. */
-async function write<T>(run: (source: Source) => Promise<T>): Promise<T> {
+async function write<T>(run: (source: Transaction) => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     const client = createClient({ url: process.env.TURSO_DATABASE_URL?.trim() || 'file:./local.db', authToken: process.env.TURSO_AUTH_TOKEN })
     try { return await drizzle(client, { schema }).transaction(run) } catch (error) {
       let cause: unknown = error, raced = false
       for (let depth = 0; cause && typeof cause === 'object' && depth < 6; depth++) {
-        if ('message' in cause && /SQLITE_BUSY|database is locked|UNIQUE constraint failed.*workflow_approvals/i.test(String(cause.message))) raced = true
+        if ('message' in cause && /SQLITE_BUSY|database is locked|UNIQUE constraint failed.*workflow_(?:approvals|runs|node_runs)/i.test(String(cause.message))) raced = true
         cause = 'cause' in cause ? cause.cause : null
       }
       if (!raced) throw error
@@ -212,3 +213,4 @@ export async function revokeWorkflowApproval(id: string, ownerId: string) {
 }
 
 export { WorkflowPlanError }
+export { controls as workflowOwnerControlsBuyer, storedContract as storedWorkflowContract, write as workflowTransaction }

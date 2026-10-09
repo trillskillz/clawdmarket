@@ -2,6 +2,10 @@
 set -euo pipefail
 
 required_files=(
+  "lib/workflow-execution-budget.ts"
+  "tests/api/workflow-execution-budget.test.ts"
+  "docs/WORKFLOW_EXECUTION_BUDGET.md"
+  "migrations/2026-10-09-workflow-exposure-v1.sql"
   "lib/workflow-approval.ts"
   "docs/WORKFLOW_OWNER_APPROVAL.md"
   "app/api/workflows/[id]/approval/route.ts"

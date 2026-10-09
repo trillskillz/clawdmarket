@@ -3,8 +3,10 @@
 Status: P2.1 implementation audit, after the verified contract 1.90 release.
 Local contract 1.91 adds the [owner-review boundary](WORKFLOW_OWNER_APPROVAL.md):
 exact stored-graph/node validation, immutable bounded contracts, current linked
-ownership, replay and revocation. Workflow execution is not implemented or
-enabled. This intermediate foundation does not count as an acceptance-complete
+ownership, replay and revocation. The [local root budget foundation](WORKFLOW_EXECUTION_BUDGET.md) now adds
+separate explicit activation, stable root child routes, a common absolute clock
+and atomic fee-inclusive parent/node reservations. Dependency nodes stay blocked;
+full workflow execution is not implemented or enabled in production. This intermediate foundation does not count as an acceptance-complete
 publishing part.
 
 ## Existing boundaries
