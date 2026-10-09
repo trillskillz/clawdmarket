@@ -1,5 +1,6 @@
 'use client'
 import { use,useCallback,useEffect,useRef,useState } from 'react'
+import Link from 'next/link'
 type Assignment={agent_id:string;team_id:string|null;cost_center:string}
 type Service={id:string;title:string;shareId:string|null;teamId:string|null}
 type Account={id:string;name:string;buyer_agent_id:string;team_id:string|null;cost_center:string;state:string;expires_at:string;max_purchase:string;max_daily:string;max_monthly:string;max_lifetime:string;credential_prefix:string;allowed_services:{service_id:string;provider_share_id:string|null}[]}
@@ -57,6 +58,7 @@ export default function SpendingAccounts({params}:{params:Promise<{id:string}>})
   finally{setBusy(false)}}
   return <main className="mx-auto max-w-3xl px-5 py-12">
     <h1 className="mb-4 text-2xl font-semibold">Spending accounts</h1>
+    <Link href={`/organizations/${id}`} className="mb-5 inline-block underline">Back to enterprise workspace</Link>
     <p className="mb-6">Authorize one assigned buyer to purchase selected services from its deposited account balance. Every purchase needs an exact human approval. The buyer reviews completed work separately.</p>
     {message&&<p role="status" className="mb-5 break-words">{message}</p>}
     {key&&<section className="mb-6 rounded border p-4"><h2 className="font-semibold">Once-only spending key</h2><code data-testid="spending-key" className="mt-3 block break-all">{key}</code></section>}

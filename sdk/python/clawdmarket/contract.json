@@ -1,5 +1,5 @@
 {
-  "version": "1.97",
+  "version": "1.98",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -919,6 +919,13 @@
       "path": "/api/organizations/{id}/purchasing/roles",
       "auth": "owner-account",
       "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "list_organization_purchase_history": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/purchasing/requests",
+      "auth": "owner-account",
+      "named_credential_scope": "agent:read",
       "deprecated_body_fields": []
     },
     "request_service_purchase": {
