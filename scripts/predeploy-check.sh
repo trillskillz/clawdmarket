@@ -2,6 +2,11 @@
 set -euo pipefail
 
 required_files=(
+  "app/organizations/[id]/page.tsx"
+  "components/dashboard/EnterpriseTab.tsx"
+  "lib/organization-purchase-history.ts"
+  "docs/OWNER_ENTERPRISE_WORKSPACE.md"
+  "e2e/owner-enterprise-workspace.spec.ts"
   "app/dashboard/admin/routing/page.tsx"
   "docs/ROUTING_OPERATIONS_CONSOLE.md"
   "e2e/routing-operations.spec.ts"

@@ -1,0 +1,30 @@
+.page { width: min(1120px, calc(100% - 48px)); margin: 0 auto; padding: 64px 0 100px; }
+.workspace { color: var(--site-ink); line-height: 1.6; overflow-wrap: anywhere; }
+.workspace > * + * { margin-top: 24px; }
+.workspace h1 { font: 500 clamp(30px, 4vw, 48px)/1.15 'Space Grotesk', sans-serif; letter-spacing: -.04em; }
+.workspace h2 { font: 600 20px/1.4 'Space Grotesk', sans-serif; margin-bottom: 16px; }
+.workspace h3 { font: 600 17px/1.4 'Space Grotesk', sans-serif; margin-bottom: 12px; }
+.workspace p + p { margin-top: 12px; }
+.workspace article, .workspace section { border: 1px solid var(--site-line); background: var(--site-surface); padding: 24px; min-width: 0; }
+.workspace article > * + *, .workspace form > * + * { margin-top: 16px; }
+.workspace button, .workspace a { min-height: 44px; display: inline-flex; align-items: center; padding: 8px 14px; border: 1px solid var(--site-line); font: 500 12px/1.6 'JetBrains Mono', monospace; }
+.workspace button:disabled { opacity: .45; cursor: not-allowed; }
+.workspace button:hover, .workspace a:hover { border-color: var(--site-signal); }
+.workspace :is(a, button, input, select, summary):focus-visible { outline: 2px solid var(--site-signal); outline-offset: 4px; }
+.workspace label { display: block; min-width: 0; }
+.workspace input, .workspace select { display: block; width: 100%; min-height: 44px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--site-line); background: var(--site-surface); color: var(--site-ink); }
+.workspace fieldset { border: 0; min-width: 0; }
+.workspace fieldset > * + * { margin-top: 16px; }
+.workspace [role='alert'] { color: #fca5a5; }
+.workspace [role='status'] { color: var(--site-lime); }
+.workspace dl { display: grid; gap: 10px; }
+.workspace dl > div { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.workspace dt { flex: 1; color: var(--site-muted); }
+.workspace dd { font-family: 'JetBrains Mono', monospace; }
+.workspace details { margin-top: 20px; }
+.workspace summary { cursor: pointer; }
+.workspace li { margin-top: 12px; list-style: none; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.links { display: flex; gap: 12px; flex-wrap: wrap; }
+.history { display: grid; gap: 20px; margin-top: 20px; }
+@media (max-width: 700px) { .page { width: calc(100% - 32px); padding: 40px 0 72px; } .grid { grid-template-columns: minmax(0, 1fr); } .workspace article, .workspace section { padding: 20px; } }

@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P3 owner enterprise observation/configuration over existing organization, department and purchasing APIs: one private owner workspace for current limits/assignment and original purchase history, preserving exact approvals and financial recovery. The routing operations console is locally accepted over existing HTTP contract **1.97**, with real revision conflicts, lost committed response recovery, financial blocking, stale inspection and private desktop/mobile access. Contract **1.97** completes bounded approved-credit spending accounts, **1.96** private providers, **1.95** purchasing approvals, **1.94** departmental ceilings and **1.93** EVM workflows. The local publishing counter is **6/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Other checkout paths and public route/workflow discovery do not inherit these bounded grants. Broader delegated rails/purchases and multi-node Tempo paid proof remain separate. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain external prerequisites. Global routing writes remain closed.
+**Next:** P3 human finite-workflow review over existing private approval/run APIs: inspect the exact DAG, review buyer-proposed bounded terms, freeze the original owner decision and revoke fresh use while preserving original children and unresolved obligations. Owner enterprise observation/configuration is locally accepted in contract **1.98**, with versioned organization/department budgets, explicit assignment moves, current-owner-only paginated original purchase metadata and private desktop/mobile recovery. The routing operations console is accepted over existing HTTP **1.97**. Contracts **1.97–1.93** complete bounded approved-credit spending accounts, private providers, purchasing approvals, departmental ceilings and EVM workflows. The local publishing counter is **7/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Other checkout paths and public discovery do not inherit these grants. Broader delegated rails/purchases and multi-node Tempo paid proof remain separate. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain external prerequisites. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -27,7 +27,7 @@ Protected post-live audit `37082040543` confirmed 33 migrations, two archived se
 | 8 spend policy and 9 failover | Partial | Buyer/agent/organization ceilings and pre-checkout fallback are enforced. Released 1.76 supports approved fallback only after exact confirmed original refunds, with gross retry budgets and the original objective deadline; cancelled unpaid checkout remains uncertain. |
 | 10 A2A and 11 MCP | Released; production writes closed | Released 1.80 supports scoped owner-mandate-bound A2A tasks with closed production writes. Released 1.81 adds experimental MCP 2025-11-25 routing Tasks, private handles, resumable terminal results and safe pre-checkout cancellation over the shared router. MCP writes also default closed. |
 | 12 contract, 13 SDK, 14 metrics | Recovery clients released; metrics partial | Production machine contract 1.90, TypeScript/Python recovery clients with checked shared definitions, evidenced assisted-route metrics. True autonomous production GMV remains unproven. |
-| 15 workflows and 16 enterprise | Partial; local bounded EVM and direct service enterprise acceptance complete | Exact approved DAG execution, private dependency grants/aggregate receipts, department ceilings, explicit human purchasing roles/approvals and private service sharing are accepted locally. Organization read accounts remain read-only; bounded spending service accounts are next. Production writes remain closed. |
+| 15 workflows and 16 enterprise | Partial; local bounded EVM and direct service enterprise acceptance complete | Exact approved DAG execution, private dependency grants/aggregate receipts, department ceilings, explicit human purchasing roles/approvals and private service sharing are accepted locally. Organization read accounts remain read-only; separately bounded approved-credit spending accounts are accepted locally. Production writes remain closed. |
 
 The live buyer flow is still: plan → reserve **unpaid** order → caller funds → provider receives a signed pointer or polls → provider starts/delivers → buyer accepts → existing settlement. It does **not** yet satisfy “give ClawdMarket an objective and receive a verified, settled result without manually composing marketplace calls.”
 
@@ -122,7 +122,7 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | P1.5 | 3–5, 14 | **Partial; released in 1.90.** Current-backed work discovery, honest unmeasured capability confidence, evaluator-bound private peer benchmark recovery, explicit hierarchy discovery, immutable versioned/private server-checked JSON benchmark observations, bounded backed-cycle exclusions, external isolated Python tests and current-backed buyer reputation with bounded owner-principal feedback are complete. Independent production benchmark quality, confidence calibration and broader reputation quality evidence remain unfinished. Unknown-owner independence and cycles beyond four principals remain unresolved. Continue independent local work on P2.1 bounded workflow execution. |
 | P2.1 | 15 | **Local bounded EVM execution complete (1.93).** Owner-reviewed finite DAGs, inherited gross/fee/runtime caps, private dependency grants, explicit verification/acceptance and all-attempt reconciliation pass real disposable-chain crash/refund/race acceptance. Production activation remains closed; real multi-node Tempo proof and independent production rollout remain separate. |
 | P2.2 | 16 | **Bounded local direct-service enterprise acceptance complete through 1.97.** Department ceilings, explicit purchasing roles/approvals, two-owner private providers and separately bounded approved-credit spending accounts preserve existing authority and original recovery. Viewer/read keys remain read-only. Broader delegated rails/purchases require separate grants and acceptance. |
-| P3 | Website/control plane | **Routing operations console locally accepted over HTTP 1.97; next owner enterprise observation/configuration.** Actual aggregate incident inspection, revision-bound pause/healthy resume, stale/conflicting/lost-response recovery and private mobile access pass. Continue an owner workspace for current organization/department limits, assignments and original purchasing history over existing APIs. No separate UI economic lifecycle. |
+| P3 | Website/control plane | **Routing operations console (HTTP 1.97) and owner enterprise workspace (1.98) locally accepted; next human finite-workflow review.** Aggregate incident control and original enterprise configuration/history pass conflict, uncertainty, private mobile and economic regression gates. Continue exact bounded DAG review and future-use revocation over existing approval/run APIs. No separate UI economic lifecycle. |
 
 ## Rules for every future batch and release
 
@@ -1617,3 +1617,45 @@ Runbook: [ROUTING_OPERATIONS_CONSOLE.md](docs/ROUTING_OPERATIONS_CONSOLE.md);
 flags, push or deployment. Continue P3 owner enterprise observation/configuration
 over the current organization, department and exact purchasing APIs, preserving
 original assignments, limits, approvals and financial history.
+
+
+### P3 acceptance complete — owner enterprise workspace (contract 1.98)
+
+Local publishing counter **7/10**. Dashboard Enterprise opens a private current-owner
+workspace for organization and department ceilings, UTC reserved-or-spent usage,
+explicit department creation/assignment/unassignment, original purchasing metadata
+and recent audit. Existing APIs remain authoritative for every configuration command.
+Exact purchase review, private providers and bounded spending-account controls retain
+their existing paths; no schema or financial state machine changes are introduced.
+
+The added owner-only history GET uses bound descending created_at/id pagination,
+omits private input/objectives/credentials/actor identities and rejects foreign
+cursors or contradictory approval/use references. Original department/cost center
+and consumed order/trade identities survive reassignment, expiry and revocation.
+Current ownership transfer removes former access without erasing original accounting.
+Viewer/requester/reviewer/read-key/spending-key/registered-agent authority stays separate.
+
+Built-app acceptance records actual CSRF-protected budgets/assignments, another
+operator's version conflict, a committed budget change with a discarded response,
+explicit refresh without automatic writes, exact owner-approved purchase consumption,
+real department daily-limit rejection and original replay after revocation/reassignment.
+Pagination of 26 actual requests, stale/unavailable reads, private access clearing,
+keyboard operation, dashboard navigation and desktop/mobile overflow pass. Success is
+reported only after its current-state read completes. Screenshots were inspected.
+
+Full predeploy passes **705 cases: 700 passed, five expected skips**, with actual dummy
+EVM and isolated verification enabled, TypeScript/lint/SDK/Python and migration-60
+legacy replay. Production build passes with the existing MPP/ox warning. The selected
+browser matrix passes **32 journeys**, with the one external Python case initially
+skipped for its absent opt-in flag and then passing separately under enforced isolation:
+**33 executed journeys passed overall**. Both new history API cases pass. Initial
+browser assertions were corrected for a native select's accessible role, and an early
+run started during an unfinished build was discarded and rerun after completion.
+
+Evidence: `/tmp/clawdmarket-enterprise-predeploy.log`,
+`/tmp/clawdmarket-enterprise-build.log`, `/tmp/clawdmarket-enterprise-browser-complete.log`,
+`/tmp/clawdmarket-enterprise-browser-isolation.log`,
+`/tmp/clawdmarket-enterprise-history-tests.log` and guarded schema logs.
+Runbook: [OWNER_ENTERPRISE_WORKSPACE.md](docs/OWNER_ENTERPRISE_WORKSPACE.md);
+[audit](docs/OWNER_ENTERPRISE_WORKSPACE_AUDIT.md). No production funds, flags,
+push or deployment. Continue P3 human finite-workflow review and original recovery.

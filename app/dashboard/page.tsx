@@ -13,6 +13,7 @@ import ProfileTab from '@/components/dashboard/ProfileTab';
 import ContractsTab from '@/components/dashboard/ContractsTab';
 import AdminTab from '@/components/dashboard/AdminTab';
 import AgentOwnershipTab from '@/components/dashboard/AgentOwnershipTab';
+import EnterpriseTab from '@/components/dashboard/EnterpriseTab';
 import styles from './dashboard.module.css';
 
 interface User {
@@ -26,8 +27,8 @@ interface User {
   avatar_emoji?: string;
 }
 
-type DashboardTab = 'listings' | 'trades' | 'contracts' | 'api-keys' | 'agent-ownership' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'admin';
-const PUBLIC_DASHBOARD_TABS = new Set<DashboardTab>(['listings', 'trades', 'contracts', 'api-keys', 'agent-ownership', 'webhooks', 'wallet', 'analytics', 'profile']);
+type DashboardTab = 'listings' | 'trades' | 'contracts' | 'api-keys' | 'agent-ownership' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'enterprise' | 'admin';
+const PUBLIC_DASHBOARD_TABS = new Set<DashboardTab>(['listings', 'trades', 'contracts', 'api-keys', 'agent-ownership', 'webhooks', 'wallet', 'analytics', 'profile', 'enterprise']);
 const TAB_DETAILS: Record<DashboardTab, { title: string; description: string }> = {
   listings: { title: 'Your services', description: 'Publish and manage the capabilities available to buyers.' },
   trades: { title: 'Trade history', description: 'Track funded work, delivery, and settlement in one place.' },
@@ -38,6 +39,7 @@ const TAB_DETAILS: Record<DashboardTab, { title: string; description: string }> 
   'api-keys': { title: 'API access', description: 'Manage credentials for your integrations and agents.' },
   'agent-ownership': { title: 'Agent ownership', description: 'Recover and transfer the agents linked to your account.' },
   webhooks: { title: 'Webhooks', description: 'Deliver marketplace events to your own systems.' },
+  enterprise: { title: 'Enterprise', description: 'Manage organization limits, departments and original purchasing history.' },
   admin: { title: 'Administration', description: 'Review operational controls and moderation tools.' },
 };
 
@@ -263,6 +265,7 @@ export default function DashboardPage() {
     { id: 'wallet' as const, label: 'Wallet', group: 'Account' },
     { id: 'analytics' as const, label: 'Analytics', group: 'Account' },
     { id: 'profile' as const, label: 'Profile', group: 'Account' },
+    { id: 'enterprise' as const, label: 'Enterprise', group: 'Account' },
     { id: 'api-keys' as const, label: 'API Keys', group: 'Integrations' },
     { id: 'agent-ownership' as const, label: 'Agent Ownership', group: 'Integrations' },
     { id: 'webhooks' as const, label: 'Webhooks', group: 'Integrations' },
@@ -386,6 +389,7 @@ export default function DashboardPage() {
         {activeTab === 'webhooks' && (
           <WebhooksTab webhooks={webhooksData} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
+        {activeTab === 'enterprise' && <EnterpriseTab />}
         {activeTab === 'admin' && isAdmin && (
           <AdminTab getCsrfToken={getCsrfToken} />
         )}

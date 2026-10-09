@@ -1,5 +1,6 @@
 'use client'
 import { use, useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 type Provider = { share: { id:string; state:string; request_hash:string; expires_at:string; team_id:string|null }; service:{id:string;title:string;description:string;pricing:{amount:string};capabilities:string[]} }
 export default function PrivateProviders({params}:{params:Promise<{id:string}>}) {
   const {id}=use(params),path=`/api/organizations/${encodeURIComponent(id)}/providers`
@@ -25,6 +26,7 @@ export default function PrivateProviders({params}:{params:Promise<{id:string}>})
   }
   return <main className="mx-auto max-w-3xl px-5 py-12">
     <h1 className="mb-4 text-2xl font-semibold">Private providers</h1>
+    <Link href={`/organizations/${id}`} className="mb-5 inline-block underline">Back to enterprise workspace</Link>
     <p className="mb-6">Review the service, department and expiry before accepting an offer. Purchases still require buyer authorization and all spending limits.</p>
     {message&&<p role="status" className="mb-5">{message}</p>}
     <div className="space-y-5">{providers.map(provider=><article key={provider.share.id} className="rounded border p-5 break-words">

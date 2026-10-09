@@ -35,6 +35,7 @@ export default function PurchaseReview({ params }: { params: Promise<{ id: strin
   const order = purchase ? JSON.parse(purchase.request.order_json) : null
   return <main className="mx-auto max-w-3xl px-5 py-12">
     <h1 className="mb-6 text-2xl font-semibold">Purchase review</h1>
+    <Link href={`/organizations/${id}`} className="mb-5 inline-block underline">Back to enterprise workspace</Link>
     {message && <p role="status" className="mb-5">{message}</p>}
     {purchase && <>
       <p className="mb-5">{order.objective}</p>

@@ -72,7 +72,7 @@ before(async () => {
         if (path.endsWith('/roles')) response = await roleApi[incoming.method as 'GET' | 'POST' | 'DELETE'](request, params)
         else if (path.endsWith('/approval')) response = await approvalApi[incoming.method as 'POST' | 'DELETE'](request, params)
         else if (parts[6]) response = await inspectApi[incoming.method as 'GET' | 'DELETE'](request, params)
-        else response = await requestApi.POST(request, params)
+        else response = await requestApi[incoming.method as 'GET' | 'POST'](request, params)
       } else if (path.includes('/services/')) response = await orderApi.POST(request, { params: Promise.resolve({ id: parts[3] }) })
       else if (path === '/api/wallet/deposits') response = await depositsApi[incoming.method as 'POST' | 'PUT'](request)
       else {
@@ -812,4 +812,59 @@ test('UTC month and day changes renew only their respective spending windows whi
     const history=await call(g.path,f.owner);assert.equal(history.body.spending_accounts[0].uses.length,2);assert.equal(history.body.spending_accounts[0].uses.reduce((total:number,use:{amount_minor:number})=>total+use.amount_minor,0),210)
     assert.deepEqual(await counts(f),{orders:2,capacity:2})
   }finally{context.mock.timers.reset()}
+})
+
+test('current owner history retains original attribution and consumed IDs after reassignment and revocation, omitting private payloads', async () => {
+  const f = await fixture(), a = await approved(f), spending = await spendingGrant(f), original = await buy(f, a.checkout)
+  assert.equal(original.status, 201)
+  const before = await counts(f)
+  await db.update(schema.organization_agent_assignments).set({ team_id: f.otherTeam, cost_center: 'RESEARCH' })
+    .where(eq(schema.organization_agent_assignments.agent_id, f.agent))
+  assert.equal((await call(f.prefix + '/roles', f.owner, 'DELETE', { role_id: a.reviewer.row.id })).status, 200)
+  assert.equal((await call(a.path + '/approval', f.owner, 'DELETE')).status, 200)
+  process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED = 'false'
+  try {
+    const result = await call(f.prefix + '/requests', f.owner)
+    assert.equal(result.status, 200); assert.equal(result.headers.get('cache-control'), 'private, no-store')
+    assert.equal(result.body.next_cursor, null); assert.equal(result.body.purchases.length, 1)
+    const item = result.body.purchases[0]
+    assert.equal(item.request.team_id, f.team); assert.equal(item.request.cost_center, 'ENGINEERING')
+    assert.equal(item.approval.state, 'revoked'); assert.equal(item.use.order_id, original.body.order.id)
+    assert.equal(item.use.trade_id, original.body.trade.id); assert.equal(item.request.amount_minor, 105)
+    const payload = JSON.stringify(result.body)
+    for (const secret of ['private_code', 'const result = 42', 'order_json', 'request_hash', 'owner_account_id', 'requester_account_id', f.key]) assert.equal(payload.includes(secret), false, secret)
+    assert.deepEqual(await counts(f), before)
+    for (const account of [f.viewer, f.requester, f.reviewer]) assert.equal((await call(f.prefix + '/requests', account)).status, 404)
+    assert.equal((await call(f.prefix + '/requests', f.key, 'GET', undefined, true)).status, 401)
+    assert.equal((await spend(f.prefix + '/requests', spending.key, 'GET')).status, 401)
+    assert.equal((await fetch(baseUrl + f.prefix + '/requests')).status, 401)
+    const { createOrganizationServiceAccount } = await import('@/lib/organization-service-accounts')
+    process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED = 'true'
+    const key = await createOrganizationServiceAccount(f.id, f.owner, { client_reference: crypto.randomUUID(), name: 'History read isolation', lifetime_days: 1 })
+    assert.equal(key.kind, 'ok'); if (key.kind !== 'ok') throw Error('Read key fixture failed')
+    assert.equal((await fetch(baseUrl + f.prefix + '/requests', { headers: { Authorization: `Bearer ${key.api_key}` } })).status, 401)
+  } finally { process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED = 'true' }
+  await db.update(schema.organization_purchase_uses).set({ amount_minor: 104 }).where(eq(schema.organization_purchase_uses.approval_id, a.approval.id))
+  assert.equal((await call(f.prefix + '/requests', f.owner)).body.error_code, 'PURCHASE_HISTORY_INTEGRITY')
+  await db.update(schema.organization_purchase_uses).set({ amount_minor: 105 }).where(eq(schema.organization_purchase_uses.approval_id, a.approval.id))
+  await db.update(schema.organizations).set({ owner_account_id: f.viewer }).where(eq(schema.organizations.id, f.id))
+  assert.equal((await call(f.prefix + '/requests', f.owner)).status, 404)
+  assert.equal((await call(f.prefix + '/requests', f.viewer)).body.purchases[0].use.trade_id, original.body.trade.id)
+})
+
+test('owner history pagination is bounded, tied by original ID, rejects foreign cursors and fails closed on contradictory original references', async () => {
+  const f = await fixture(), a = await approved(f), q = await quote(f), other = await fixture(), foreign = await quote(other)
+  const same = new Date(1700000000000)
+  await db.update(schema.organization_purchase_requests).set({ created_at: same }).where(eq(schema.organization_purchase_requests.organization_id, f.id))
+  const sorted = [a.row.id, q.row.id].sort().reverse()
+  const first = await call(f.prefix + '/requests?limit=1', f.owner)
+  assert.equal(first.body.purchases[0].request.id, sorted[0]); assert.equal(first.body.next_cursor, sorted[0])
+  const second = await call(f.prefix + `/requests?limit=1&cursor=${first.body.next_cursor}`, f.owner)
+  assert.equal(second.body.purchases[0].request.id, sorted[1]); assert.equal(second.body.next_cursor, null)
+  for (const query of ['limit=0', 'limit=51', 'limit=1.5', 'limit=no', 'cursor=no', `cursor=${foreign.row.id}`, `cursor=${crypto.randomUUID()}`, 'unknown=yes'])
+    assert.equal((await call(f.prefix + '/requests?' + query, f.owner)).status, 400, query)
+  await db.update(schema.organization_purchase_approvals).set({ request_hash: 'f'.repeat(64) }).where(eq(schema.organization_purchase_approvals.id, a.approval.id))
+  const broken = await call(f.prefix + '/requests', f.owner)
+  assert.equal(broken.status, 503); assert.equal(broken.body.error_code, 'PURCHASE_HISTORY_INTEGRITY')
+  assert.equal(broken.body.purchases, undefined); assert.deepEqual(await counts(f), { orders: 0, capacity: 0 })
 })
