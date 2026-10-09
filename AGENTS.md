@@ -6,7 +6,7 @@ Preserve the existing payment and settlement state machines. The user's 2026-10-
 
 ## Current publishing gate (2026-10-09)
 
-The activity-priority release PR #250 and ten-part release PR #251 with correction PR #252 are published and production-verified at contract 1.90. The next local batch starts at 0/10, with P2.1 bounded workflow execution next. The user's latest instruction keeps all subsequent work local until ten substantive acceptance-complete parts are finished, then publishes the combined batch. Follow the current counter and next priority in ROUTING_LAYER_MASTER_PLAN.md. The older one-capability release and 2026-10-03 publishing exception below do not authorize an early push. Do not spend live wallet funds or open global rollout flags without their existing authorization and acceptance gates.
+The activity-priority release PR #250 and ten-part release PR #251 with correction PR #252 are published and production-verified at contract 1.90. Local bounded EVM workflow execution passes acceptance at contract 1.93; the current batch is 1/10, with P2.2 organization purchasing controls next. The user's latest instruction keeps all subsequent work local until ten substantive acceptance-complete parts are finished, then publishes the combined batch. Follow the current counter and next priority in ROUTING_LAYER_MASTER_PLAN.md. The older one-capability release and 2026-10-03 publishing exception below do not authorize an early push. Do not spend live wallet funds or open global rollout flags without their existing authorization and acceptance gates.
 
 ## Historical user priority and publishing exception (2026-10-03)
 

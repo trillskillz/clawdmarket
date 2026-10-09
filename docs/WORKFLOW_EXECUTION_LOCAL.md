@@ -1,15 +1,15 @@
-# Local bounded workflow execution — contract 1.92
+# Local bounded workflow execution — contract 1.93
 
-This local checkpoint adds recipient grants, dependent child preparation, a
-restartable buyer workflow worker and aggregate reconciliation to the reviewed
-budget foundation. Production activation remains closed, including when the
-local execution flag is set in a Vercel environment. It does not complete the
-full P2.1 acceptance gate or increment the local publishing counter (0/10).
+Owner-reviewed budgets, recipient grants, dependent child preparation, a
+restartable buyer workflow worker and aggregate reconciliation form one local
+bounded execution capability. Production activation remains closed, including
+when the local execution flag is set in a Vercel environment. The master plan
+records the current acceptance evidence and ten-capability publishing counter.
 
 ## Authorization and APIs
 
 Use an isolated database named `file:/tmp/clawdmarket-workspace-test-…` with a
-blank Turso authentication token, additive migrations through 55 and dummy
+blank Turso authentication token, additive migrations through 56 and dummy
 wallets. Local planning, reusable-service and route execution flags must be
 configured; local workflow activation also requires
 `CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED=true`. Do not configure these flags on
@@ -78,39 +78,35 @@ saved decisions are rejected. Upstream completion permits the next exact child
 within the same finite pass. Replays preserve original children, clock, money
 attempts and aggregate receipt.
 
-## Validation and remaining acceptance
+## Validation
 
-The local HTTP test uses real API handlers, signed transactions, funding/proof,
-provider delivery, explicit review, payout and capacity transitions, with dummy
-wallets and an RPC simulation. Separate buyer/provider processes are killed after
-wallet claim, provider delivery commit and aggregate receipt persistence. Lost
-prepare responses, expanded child terms and conflicting review hashes fail
-closed; restart completes two exact nodes, one private grant and one receipt
-without duplicate economic work. This simulation is not a disposable EVM VM.
+The HTTP tests use real API handlers, a registered buyer agent's scoped payment
+credential, separate owner review/activation and distinct provider processes and
+accounts. Both an RPC simulation and a real loopback EVM exercise signed funding,
+private dependency delivery, explicit buyer acceptance, payout and capacity
+transitions. Separate processes receive SIGKILL after child preparation, wallet
+claim, real broadcast acceptance before its response, delivery, before aggregate
+persistence and after aggregate persistence before its response. Restart retains
+original references and one receipt. Expanded terms and conflicting review
+hashes fail closed before fresh spending.
 
 Aggregate gross marketplace costs, confirmed refunds/payouts and unresolved
 amounts are explicit. Chain-fee ceilings remain integer reservations. Local
 contract 1.93 records verified Ethereum L1 buyer/treasury native fees; other
 models remain null and explicitly unmeasured. See [fee evidence](WORKFLOW_CHAIN_FEES.md).
-Do not present approved ceilings as measured fees. The next work must establish
-actual disposable-chain evidence, measured transaction fees and the remaining
-adverse/retry/crash matrix before the full audit gate is complete. No live funds,
-GitHub push, Vercel deployment or production rollout changes are part of this
-checkpoint. See [the full acceptance gate](WORKFLOW_EXECUTION_AUDIT.md).
-
-Local checkpoint verification: `pnpm predeploy` passed 655 cases (650 passed,
-five skipped), Python SDK checks, typecheck/SDK checks and lint. Production build
-passed. The selected 16 existing Chromium journeys plus the new built-app
-workflow cancellation/recovery journey passed (17 total, with the new cache
-assertion corrected for Next.js max-age=0 and rerun). Evidence files are recorded
-in the master plan. These results do not replace the remaining audit gates.
+Do not present approved ceilings as measured fees. No live funds, GitHub push,
+Vercel deployment or production rollout changes are authorized by these tests.
+See [the acceptance evidence mapping](WORKFLOW_EXECUTION_AUDIT.md) and the master
+plan for full predeploy, production build and 17 selected built-app Chromium
+journeys. Production quality, independent providers and paid production rollout
+retain their separate external prerequisites.
 
 
 ## Disposable EVM acceptance checkpoint
 
 The same two-node HTTP/provider test also runs on an owned, loopback-only,
 unforked [Anvil EVM](https://getfoundry.sh/anvil/index.html), with the committed
-dummy token source/artifact pair and separate payout wallet. Set
+dummy token source/artifact pair and separate provider payout wallets. Set
 `CLAWDMARKET_TEST_ANVIL_BINARY` to a checksum-verified local executable. The helper
 owns startup/shutdown, requires a guarded disposable database, and never forks or
 connects to a public chain. The normal test suite explicitly skips this extra
@@ -120,16 +116,21 @@ case when the executable is absent.
 CLAWDMARKET_TEST_ANVIL_BINARY=/absolute/path/to/anvil   node --conditions=react-server --import tsx --test tests/api/buyer-worker.test.ts
 ```
 
-The full buyer suite passes 32/32 with this case enabled. Real token balances,
-four successful transfer receipts and separate buyer/treasury native balance
-changes verify fees, total cost, payout and retained marketplace fees. Original
-pending confirmations are recovered through the existing APIs/outbox. Aggregate
-fee persistence is still the next implementation; test measurements must not be
-mistaken for recorded receipt fields. Full P2.1 and the 0/10 counter are unchanged.
+Real token balances, four successful transfers and recorded buyer/treasury
+native fee observations match exact balance changes. Original pending
+confirmations recover through the existing APIs/outbox. A second EVM case tests
+a declined prerequisite, explicit confirmed refund, approved fallback and private
+dependent settlement: three original attempts, six transfers, gross 315 cents,
+refund 100, payouts 200, retained marketplace fees 15 and zero unresolved money.
+The refund does not recycle gross or chain-fee limits; the original common
+deadline survives every retry. Both providers' capacities release exactly once.
 
+Independent processes also race duplicate retries and a different root checkout
+against the same parent. Atomic gross/fee counters include the refunded original
+attempt. Current owner, policy, expiry, pause and dependency backing checks stop
+fresh work without erasing original money recovery.
 
-Local contract 1.93 subsequently adds verified original native fee observations
-and buyer/treasury aggregate costs. The real EVM receipt now matches all four
-measured fees and exact native wallet balance changes. Missing/unsupported
-models remain null; observations cannot change reviewed chain/payer or exceed
-the original buyer fee ceiling. See [WORKFLOW_CHAIN_FEES.md](WORKFLOW_CHAIN_FEES.md).
+Missing/unsupported fee models remain null. Only complete Ethereum L1 native
+fees are measured; this evidence does not claim an actual multi-node Tempo run.
+Observations cannot change reviewed chain/payer or exceed the original buyer
+fee ceiling. See [WORKFLOW_CHAIN_FEES.md](WORKFLOW_CHAIN_FEES.md).

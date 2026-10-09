@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P2.1 bounded workflow execution. Local contract **1.93** now implements exact owner-reviewed contracts, atomic parent/node gross reservation, common deadlines, current accepted/backed dependencies, immutable selected-provider grants, a finite restartable buyer workflow worker and aggregate reconciliation. A two-node paid HTTP/provider loop passes through separate-process deaths and original receipt recovery using dummy wallets and an RPC simulation. Disposable EVM evidence now passes; verified original Ethereum L1 fee observations and separate buyer/treasury aggregates now pass; the remaining adverse/retry/crash matrix is next; full P2.1 remains unfinished and the publishing counter stays **0/10**. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
+**Next:** P2.2 organization purchasing controls, starting with departmental ceilings. Local contract **1.93** completes bounded EVM workflow execution: exact owner review/activation, atomic parent/node gross and fee reservations, common deadlines, accepted/current-backed private dependencies, a finite restartable registered-agent buyer worker and original-attempt aggregate reconciliation. Real disposable EVM HTTP/provider tests pass process-death recovery and confirmed refund before bounded fallback. The local publishing counter is **1/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Multi-node Tempo paid proof is not claimed. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -120,7 +120,7 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | P1.3 | 11 | **Complete locally (1.81; new batch part 1/10).** MCP 2025-11-25 Streamable HTTP, authenticated shared-router routing Tasks, durable private handles/results, cursor resumption and safe cancellation before checkout. Legacy discovery/payment clients remain compatible. Production writes default closed. |
 | P1.4 | 12–13 | **Complete locally (1.83; new batch part 3/10).** Shared generated operation/auth/scope/lifecycle/rail/deprecation metadata, TypeScript funding/artifact/webhook recovery and a usable minimal Python client with typed financial errors. Predeploy refuses contract drift; both clients recover original routes against the actual app. |
 | P1.5 | 3–5, 14 | **Partial; released in 1.90.** Current-backed work discovery, honest unmeasured capability confidence, evaluator-bound private peer benchmark recovery, explicit hierarchy discovery, immutable versioned/private server-checked JSON benchmark observations, bounded backed-cycle exclusions, external isolated Python tests and current-backed buyer reputation with bounded owner-principal feedback are complete. Independent production benchmark quality, confidence calibration and broader reputation quality evidence remain unfinished. Unknown-owner independence and cycles beyond four principals remain unresolved. Continue independent local work on P2.1 bounded workflow execution. |
-| P2.1 | 15 | Execute bounded DAG nodes with inherited budgets, depth/child/runtime limits, dependency artifacts, verification gates, and aggregate financial reconciliation. Keep decomposition from recursively spending without a hard mandate. |
+| P2.1 | 15 | **Local bounded EVM execution complete (1.93).** Owner-reviewed finite DAGs, inherited gross/fee/runtime caps, private dependency grants, explicit verification/acceptance and all-attempt reconciliation pass real disposable-chain crash/refund/race acceptance. Production activation remains closed; real multi-node Tempo proof and independent production rollout remain separate. |
 | P2.2 | 16 | Add organization purchasing roles, approval workflow, private providers, departmental controls, and service-account spend authority only after P0 policy/mandate isolation is proven. |
 | P3 | Website/control plane | Improve observation, administration, discovery, manual override, and incident tooling over the same router state; avoid a separate UI economic lifecycle. |
 
@@ -1332,3 +1332,47 @@ Runbook: [WORKFLOW_CHAIN_FEES.md](docs/WORKFLOW_CHAIN_FEES.md).
 Next: remaining separate-process crash boundaries and actual workflow refund/
 retry/dependency-failure reconciliation. Production execution remains closed;
 no live funds, pushes or deployments. Full P2.1 remains unfinished; **0/10**.
+
+### P2.1 acceptance complete — bounded EVM workflow execution (local 1.93)
+
+All six local audit gates now have concrete executed evidence in
+[WORKFLOW_EXECUTION_AUDIT.md](docs/WORKFLOW_EXECUTION_AUDIT.md). A registered buyer
+agent uses a named scoped credential after separate current-owner review and
+activation. Distinct provider accounts/processes exchange only approved private
+artifacts. Buyer/provider SIGKILL boundaries cover committed child preparation,
+wallet claim, actual accepted broadcast before its reply, delivery, before receipt
+persistence and after receipt commit before its reply. Restart preserves original
+children, attempts, clock, transfers and one aggregate receipt.
+
+An actual prerequisite provider decline blocks the dependent. Explicit dispute
+resolution confirms the original refund before approved fallback. Its accepted
+backed result unlocks the dependent, bound to the successful fallback trade.
+Three original attempts and six actual transfers reconcile gross 315 cents,
+refund 100, seller payouts 200, retained marketplace fees 15 and zero unresolved
+buyer money. Both capacities release. Refunds do not recycle gross or fee limits;
+closing local execution prevents fresh fallback while original recovery stays
+available. Exact token/native wallet balances match original recorded receipts.
+
+Independent processes race duplicate retries and a different root against one
+parent, preserving all original gross cents and beyond-64-bit fee ceilings. Those
+budget races use trusted proof fixtures; payment/refund proofs use an unforked
+loopback Anvil EVM and dummy wallets. Actual multi-node Tempo payments, production
+provider independence, semantic quality and live rollout are not claimed.
+
+Final required predeploy passes **662 tests: 657 passed, five skipped**, with
+Anvil and actual external verifier isolation enabled, Python/TypeScript SDK
+checks, lint and migration replay through 56. Final targeted typecheck/lint pass.
+The unchanged application implementation already passed production build and all
+17 selected built-app Chromium journeys at the preceding 1.93 checkpoint; this
+batch changes acceptance tests and documentation only.
+
+Evidence: `/tmp/clawdmarket-workflow-agent-matrix.log`,
+`/tmp/clawdmarket-workflow-retry-root-race.log`,
+`/tmp/clawdmarket-workflow-recovery-predeploy.log`,
+`/tmp/clawdmarket-workflow-recovery-typecheck.log` and
+`/tmp/clawdmarket-workflow-recovery-lint.log`.
+
+This is **one** substantive capability, including all preceding foundations:
+**1/10** locally complete. No push, deployment, live funds or production flags.
+Continue P2.2 with owner-set departmental ceilings, preserving original cost
+attribution and all existing buyer/agent/organization authorization checks.

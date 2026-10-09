@@ -1,15 +1,15 @@
 # Bounded workflow execution: implementation audit
 
-Status: P2.1 implementation audit, after the verified contract 1.90 release.
-Local contract 1.91 adds the [owner-review boundary](WORKFLOW_OWNER_APPROVAL.md):
-exact stored-graph/node validation, immutable bounded contracts, current linked
-ownership, replay and revocation. The [local root budget foundation](WORKFLOW_EXECUTION_BUDGET.md) now adds
-separate explicit activation, stable root child routes, a common absolute clock
-and atomic fee-inclusive parent/node reservations. Dependency nodes stay blocked;
-full workflow execution is not implemented or enabled in production. This intermediate foundation does not count as an acceptance-complete
-publishing part.
+Status: local contract 1.93 implements the bounded execution model below.
+The [owner-review boundary](WORKFLOW_OWNER_APPROVAL.md),
+[atomic budgets](WORKFLOW_EXECUTION_BUDGET.md),
+[private grants and worker](WORKFLOW_EXECUTION_LOCAL.md) and
+[original fee observations](WORKFLOW_CHAIN_FEES.md) compose one capability.
+Production activation stays closed. The final acceptance run and publishing
+counter are recorded in the master plan; intermediate commits are not separate
+capabilities.
 
-## Existing boundaries
+## Boundaries retained from the planning-only implementation
 
 - `lib/workflow-planning.ts` normalizes explicit DAGs with at most sixteen nodes,
   three dependency edges, summed integer-cent budgets and ordered deadlines.
@@ -104,3 +104,22 @@ a partial graph as a successful objective.
 
 This work does not authorize production wallet spending or global rollout flags.
 Independent production provider quality and calibration remain separate gates.
+
+## Local acceptance evidence
+
+| Gate | Executed evidence |
+| --- | --- |
+| Actual paid DAG | `buyer-worker.test.ts` runs real HTTP handlers with a registered buyer agent's named scoped credential, separate owner approval/activation, distinct upstream/downstream provider accounts and processes, explicit hash-bound review and a loopback unforked Anvil EVM. Two original funding transfers, two payouts, one recipient grant and one aggregate receipt match exact token/native wallet changes. The downstream provider cannot download the original source trade artifact. |
+| Concurrent budgets | `workflow-execution-budget.test.ts` races independent activation/prepare processes, distinct root checkouts, duplicate retry operations and another root checkout. Atomic ledger/counters retain all original gross cents and beyond-64-bit fee ceilings. Late failure and grant failure roll back order, capacity, policy and mandate exposure. |
+| Process death | Actual buyer/provider processes receive SIGKILL after child preparation commits, after wallet claim, after a real accepted broadcast before its response, after delivery commits, before receipt persistence and after receipt commits before its response. Restart recovers original references and exactly one receipt without new economic effects. |
+| Adverse evidence | Approval/budget/mandate tests cover current owner transfer, revocation, expiry, cancellation, pause, stale/expanded child contracts, required runtime, missing acceptance, changed dependency basis, purged/swapped encrypted artifacts and withdrawn backing. Historical receipts cannot unlock fresh dependencies. |
+| Refund/fallback | The second Anvil HTTP loop funds a prerequisite whose provider declines. Its dependent remains blocked. Explicit dispute resolution confirms the original buyer refund before the bounded approved fallback runs. Closed execution flags preserve original inspection/refund and stop retry. Three original attempts and six transfers reconcile gross 315 cents, refund 100, payouts 200, fees 15, zero unresolved money and released capacity; refunds never recycle gross or chain-fee allowance. The dependent binding references the successful fallback trade. |
+| API/client isolation | Owner review and activation are separate from agent payment scope; private inspection, cookie CSRF, bounded writes, exact workflow/run references and recovery under closed flags have API and built-app Chromium coverage. SDK drift and migration replay are required predeploy checks. |
+
+The independent-process budget race uses trusted proof fixtures and no RPC;
+the actual payment/refund cases use the disposable EVM. Only Ethereum L1 native
+fees have verified complete measured models. Base, Tempo and incomplete fee
+observations remain null with an explicit measurement status. Tempo inherited
+fee-token terms and existing single-route recovery have coverage; a real
+multi-node Tempo payment run is not claimed by this EVM acceptance evidence.
+No production provider independence, semantic quality or live canary is implied.
