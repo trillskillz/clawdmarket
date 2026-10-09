@@ -28,6 +28,8 @@ export function financialBackingSql(trade: EvidenceTradeAlias) {
 /** Internal SQL only. The caller supplies a nonrecursive, currently backed edge predicate. */
 export function boundedCycleExclusionSql(trade: EvidenceTradeAlias, edgeSql: string, capabilityEvents: boolean) {
   // CROSS JOIN keeps indexed outgoing-buyer probes before optional event lookup.
+  // An explicit constant group preserves one aggregate and supports the remote
+  // Turso parser, which rejects HAVING without GROUP BY.
   return `NOT EXISTS (
     WITH RECURSIVE cycle_walk(principal, depth) AS (
       SELECT ${tradePrincipalSql(`${trade}.seller_id`)}, 0
@@ -43,6 +45,7 @@ export function boundedCycleExclusionSql(trade: EvidenceTradeAlias, edgeSql: str
       LIMIT ${CAPABILITY_CYCLE_POLICY.max_search_states + 1}
     )
     SELECT count(*) FROM cycle_walk
+    GROUP BY 'bounded_cycle'
     HAVING max(depth > 0 AND principal = ${tradePrincipalSql(`${trade}.buyer_id`)}) = 1
       OR count(*) > ${CAPABILITY_CYCLE_POLICY.max_search_states}
   )`

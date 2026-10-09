@@ -87,6 +87,12 @@ jobs:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
+      - name: Verify production evidence query compatibility
+        run: pnpm run db:verify:evidence
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
       - name: Build deployment artifact
         run: npx -y vercel@${VERCEL_CLI_VERSION} build --prod --token="$VERCEL_TOKEN"
 

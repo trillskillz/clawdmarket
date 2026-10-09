@@ -47,6 +47,9 @@ jobs:
           mkdir -p /tmp/clawdmarket-workspace-test-ci
           pnpm exec drizzle-kit push --force
 
+      - name: Verify evidence query compilation
+        run: pnpm run db:verify:evidence
+
       - name: Lint
         run: pnpm run lint
 
