@@ -127,6 +127,7 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
   }, [fetchKey, filter, verifiedOnly, family, semanticMode])
 
   useEffect(() => {
+    setError(null)
     if (!semanticMode || !semanticQuery.trim()) {
       setSemanticResults([])
       setSemanticTotal(0)
@@ -156,10 +157,18 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
           setSemanticSearchMode(data.mode || 'keyword')
           setSemanticLoading(false)
         })
-        .catch(() => { if (!controller.signal.aborted) { setSemanticResults([]); setSemanticLoading(false) } })
+        .catch(() => {
+          if (controller.signal.aborted) return
+          setSemanticResults([])
+          setSemanticTotal(0)
+          setSemanticKeywords([])
+          setSemanticSearchMode('')
+          setError('The registry could not be reached.')
+          setSemanticLoading(false)
+        })
     }, 500)
     return () => { clearTimeout(timer); controller.abort() }
-  }, [semanticMode, semanticQuery, verifiedOnly, family])
+  }, [semanticMode, semanticQuery, verifiedOnly, family, fetchKey])
 
   const displayedAgents = semanticMode ? semanticResults : agents
   const resultCount = semanticMode ? semanticTotal : agentTotal

@@ -1,5 +1,47 @@
 import { test, expect } from '@playwright/test'
 
+for (const failure of ['http', 'network'] as const) {
+  test(`semantic search shows a connection error and retries after ${failure} failure`, async ({ page }) => {
+    let outcome: 'success' | 'failure' | 'empty' = 'success'
+    const queries: string[] = []
+    await page.route('**/api/agents/search?**', async (route) => {
+      queries.push(new URL(route.request().url()).searchParams.get('q') || '')
+      if (outcome === 'failure') {
+        if (failure === 'network') return route.abort('failed')
+        return route.fulfill({ status: 503, json: { message: 'Search temporarily unavailable' } })
+      }
+      return route.fulfill({ json: { agents: outcome === 'empty' ? [] : [{
+        id: 'semantic-recovery-agent', name: 'Semantic Recovery Agent', capabilities: ['web-research'],
+      }], total: outcome === 'empty' ? 0 : 1, keywords: outcome === 'empty' ? [] : ['research'], mode: 'keyword' } })
+    })
+    await page.goto('/registry')
+    await page.getByRole('button', { name: 'Semantic' }).click()
+    const search = page.getByRole('textbox', { name: 'Describe the agent you need' })
+    await search.fill('research')
+    const result = page.getByRole('heading', { name: 'Semantic Recovery Agent', exact: true })
+    await expect(result).toBeVisible()
+    await expect(page.getByText('MATCHED TERMS', { exact: true })).toBeVisible()
+
+    outcome = 'failure'
+    await search.fill('research failing')
+    await expect(page.getByText('CONNECTION ERROR', { exact: true })).toBeVisible()
+    await expect(page.getByText('NO MATCH', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('MATCHED TERMS', { exact: true })).toHaveCount(0)
+    await expect(result).toHaveCount(0)
+
+    outcome = 'success'
+    await page.getByRole('button', { name: 'Retry connection' }).click()
+    await expect(result).toBeVisible()
+    await expect(page.getByText('CONNECTION ERROR', { exact: true })).toHaveCount(0)
+    expect(queries.filter((query) => query === 'research failing')).toHaveLength(2)
+
+    outcome = 'empty'
+    await search.fill('unknown capability')
+    await expect(page.getByText('NO MATCH', { exact: true })).toBeVisible()
+    await expect(page.getByText('CONNECTION ERROR', { exact: true })).toHaveCount(0)
+  })
+}
+
 test('registry family discovery filters real registrations in keyword and semantic modes on desktop and mobile', async ({ request, page }) => {
   const prefix = `Hierarchy ${Date.now()}`
   for (const [index, skill] of ['web-research', 'code-review'].entries()) {

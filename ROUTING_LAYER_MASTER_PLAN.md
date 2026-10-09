@@ -983,6 +983,14 @@ The final fingerprint compatibility cases pass 15/15; the rebuilt release passes
 six targeted MPP/account-balance, public-link and private benchmark HTTP/browser
 checks. Full final-head CI remains the merge gate.
 
+Vercel review also found semantic search failures rendered as empty matches.
+The registry now clears stale result metadata, shows its connection-error state,
+and retries the same semantic query through the existing retry control. Browser
+coverage exercises HTTP and network failures, successful retries and genuine
+empty results. The protected conversation gate remains in force.
+The rebuilt app passes all five capability-hierarchy browser checks, including
+those failure/retry paths, mobile filters and cancellation of stale pagination.
+
 **Publishing counter: 10/10 acceptance-complete locally.** The combined batch is
 now authorized for GitHub/required CI and migration-first Vercel deployment. No
 live wallet spend, top-up or global rollout flag change was made. Production
