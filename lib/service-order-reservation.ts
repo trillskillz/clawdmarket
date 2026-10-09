@@ -4,7 +4,7 @@ import { isolatedVerifierEligibility } from '@/lib/isolated-verifier-eligibility
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { db } from '@/lib/db'
-import { listings, route_attempts, route_payment_mandates, route_plans, service_definitions, service_orders, trades } from '@/lib/schema'
+import { listings, route_attempts, route_payment_mandates, route_plans, service_definitions, service_orders, trades, workflow_node_runs } from '@/lib/schema'
 import type { RequestPrincipal } from '@/lib/request-principal'
 import { serviceOrderInput } from '@/lib/service-definitions'
 import { selectMarketplaceRail } from '@/lib/payment-rail-selection'
@@ -36,6 +36,7 @@ import { captureServiceExecutionContract } from './service-execution-contract'
 import { reserveMandateExposure } from './route-payment-mandate'
 import { assertRouteRetryReconciled, RouteRetryError } from './route-retry-reconciliation'
 import { listRouteFundingSteps } from './route-funding-steps'
+import { workflowTransaction, WorkflowApprovalError } from './workflow-approval'
 
 type ParsedOrderRequest = z.output<typeof serviceOrderInput>
 type OrderRequest = Omit<ParsedOrderRequest, 'provider_requirements'> & { provider_requirements?: ParsedOrderRequest['provider_requirements'] }
@@ -129,7 +130,19 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     if (!rail || externalOnly && ['ledger', 'credit'].includes(rail)) throw new ServiceOrderReservationError(sellerPayout ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED', 'No eligible external payment rail for this seller')
     const internal = rail === 'ledger' || rail === 'credit'
     const feeRecipient = internal ? await ensureAdminFeeRecipient() : null
-    const reserveOnce = () => db.transaction(async (tx) => {
+    const [workflowChild] = routeId ? await db.select({ id: workflow_node_runs.id, mandate_id: workflow_node_runs.mandate_id }).from(workflow_node_runs)
+      .where(eq(workflow_node_runs.planned_route_id, routeId)).limit(1) : []
+    if (workflowChild && (!workflowChild.mandate_id || workflowChild.mandate_id !== args.mandateId)) {
+      throw new ServiceOrderReservationError('WORKFLOW_MANDATE_REQUIRED', 'A workflow child requires its inherited mandate')
+    }
+    const transaction: typeof db.transaction = workflowChild ? async (run) => {
+      try { return await workflowTransaction(run) }
+      catch (error) {
+        if (error instanceof WorkflowApprovalError && error.status === 503) throw new ServiceOrderReservationError('WORKFLOW_STORAGE_BUSY', 'Retry the same workflow child reference', 503, true)
+        throw error
+      }
+    } : db.transaction.bind(db)
+    const reserveOnce = () => transaction(async (tx) => {
       const now = new Date()
       let retrySpendMinor = 0
       let agreedCapabilities = storedServiceCapabilities(service.capabilities)

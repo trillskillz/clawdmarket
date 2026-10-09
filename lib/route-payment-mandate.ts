@@ -174,6 +174,8 @@ async function activeMandate(source: Source, row: Mandate, plan: Plan) {
   const terms = termsOf(row), current = paymentContract(terms.payment)
   if (current.token_decimals !== terms.token_decimals || current.token_usd_price !== terms.token_usd_price
     || current.fee_token_decimals !== terms.fee_token_decimals) throw new RouteMandateError('MANDATE_TOKEN_TERMS_CHANGED')
+  const { validateWorkflowRouteAuthority } = await import('./workflow-execution-budget')
+  await validateWorkflowRouteAuthority(source, row, plan, terms)
   return terms
 }
 
@@ -219,6 +221,8 @@ export async function reserveMandateExposure(source: Source, input: { mandateId:
   if (input.retry) await source.insert(route_retry_funding_steps).values({ ...step, retry_operation_id: input.retry.operationId,
     previous_trade_id: input.retry.previousTradeId, attempt_id: input.retry.attemptId })
   else await source.insert(route_funding_steps).values(step)
+  const { reserveWorkflowExposure } = await import('./workflow-execution-budget')
+  await reserveWorkflowExposure(source, { ...input, mandate: row, terms })
 }
 
 export async function mandateFundingEligibility(trade: typeof trades.$inferSelect, source: Source = db,

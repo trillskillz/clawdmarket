@@ -645,6 +645,59 @@ export const workflow_approvals = sqliteTable('workflow_approvals', {
   revoked_by: text('revoked_by').references(() => users.id, { onDelete: 'restrict' }),
 }, (table) => [uniqueIndex('workflow_approvals_owner_reference_idx').on(table.owner_account_id, table.client_reference)]);
 
+/** Local execution foundation; no public workflow execution entry point is enabled. */
+export const workflow_runs = sqliteTable('workflow_runs', {
+  id: text('id').primaryKey(),
+  workflow_id: text('workflow_id').notNull().unique().references(() => workflows.id, { onDelete: 'restrict' }),
+  approval_id: text('approval_id').notNull().unique().references(() => workflow_approvals.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(), contract_hash: text('contract_hash').notNull(),
+  state: text('state', { enum: ['authorized', 'cancelled'] }).notNull().default('authorized'),
+  gross_reserved_minor: integer('gross_reserved_minor').notNull().default(0),
+  chain_fee_reserved_units: text('chain_fee_reserved_units').notNull().default('0'),
+  started_at: integer('started_at', { mode: 'timestamp_ms' }).notNull(),
+  deadline_at: integer('deadline_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => [uniqueIndex('workflow_runs_owner_reference_idx').on(table.owner_account_id, table.client_reference),
+  check('workflow_runs_gross_nonnegative', sql`${table.gross_reserved_minor} >= 0`),
+  check('workflow_runs_state_valid', sql`${table.state} IN ('authorized','cancelled')`),
+]);
+
+export const workflow_node_runs = sqliteTable('workflow_node_runs', {
+  id: text('id').primaryKey(), run_id: text('run_id').notNull().references(() => workflow_runs.id, { onDelete: 'restrict' }),
+  workflow_node_id: text('workflow_node_id').notNull().unique().references(() => workflow_nodes.id, { onDelete: 'restrict' }),
+  node_key: text('node_key').notNull(),
+  planned_route_id: text('planned_route_id').notNull().unique(),
+  route_id: text('route_id').unique().references(() => route_plans.id, { onDelete: 'restrict' }),
+  mandate_id: text('mandate_id').unique().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  route_hash: text('route_hash'), terms_hash: text('terms_hash'),
+  state: text('state', { enum: ['ready', 'blocked', 'reserved'] }).notNull(),
+  gross_reserved_minor: integer('gross_reserved_minor').notNull().default(0),
+  chain_fee_reserved_units: text('chain_fee_reserved_units').notNull().default('0'),
+  attempt_count: integer('attempt_count').notNull().default(0),
+  deadline_at: integer('deadline_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => [uniqueIndex('workflow_node_runs_key_idx').on(table.run_id, table.node_key),
+  check('workflow_node_runs_gross_nonnegative', sql`${table.gross_reserved_minor} >= 0`),
+  check('workflow_node_runs_attempts_bounded', sql`${table.attempt_count} BETWEEN 0 AND 3`),
+  check('workflow_node_runs_state_valid', sql`${table.state} IN ('ready','blocked','reserved')`),
+]);
+
+/** Gross attempt reservations never recycle after a refund or an uncertain send. */
+export const workflow_reservations = sqliteTable('workflow_reservations', {
+  id: text('id').primaryKey(), run_id: text('run_id').notNull().references(() => workflow_runs.id, { onDelete: 'restrict' }),
+  node_run_id: text('node_run_id').notNull().references(() => workflow_node_runs.id, { onDelete: 'restrict' }),
+  route_id: text('route_id').notNull().references(() => route_plans.id, { onDelete: 'restrict' }),
+  mandate_id: text('mandate_id').notNull().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  order_id: text('order_id').notNull().unique().references(() => service_orders.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  amount_minor: integer('amount_minor').notNull(), chain_fee_units: text('chain_fee_units').notNull(),
+  attempt_number: integer('attempt_number').notNull(), terms_hash: text('terms_hash').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [uniqueIndex('workflow_reservations_attempt_idx').on(table.node_run_id, table.attempt_number),
+  check('workflow_reservations_amount_positive', sql`${table.amount_minor} > 0`),
+  check('workflow_reservations_attempt_bounded', sql`${table.attempt_number} BETWEEN 1 AND 3`),
+]);
+
 /** Last observed worker run, used only for operator health inspection. */
 export const worker_heartbeats = sqliteTable('worker_heartbeats', {
   worker_name: text('worker_name').primaryKey(),
