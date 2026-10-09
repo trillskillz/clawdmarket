@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P2.1 bounded workflow execution. Local contract **1.92** now implements exact owner-reviewed contracts, atomic parent/node gross reservation, common deadlines, current accepted/backed dependencies, immutable selected-provider grants, a finite restartable buyer workflow worker and aggregate reconciliation. A two-node paid HTTP/provider loop passes through separate-process deaths and original receipt recovery using dummy wallets and an RPC simulation. Disposable EVM evidence now passes; recording measured fees in aggregate reconciliation and the remaining adverse/retry/crash matrix are next; full P2.1 remains unfinished and the publishing counter stays **0/10**. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
+**Next:** P2.1 bounded workflow execution. Local contract **1.93** now implements exact owner-reviewed contracts, atomic parent/node gross reservation, common deadlines, current accepted/backed dependencies, immutable selected-provider grants, a finite restartable buyer workflow worker and aggregate reconciliation. A two-node paid HTTP/provider loop passes through separate-process deaths and original receipt recovery using dummy wallets and an RPC simulation. Disposable EVM evidence now passes; verified original Ethereum L1 fee observations and separate buyer/treasury aggregates now pass; the remaining adverse/retry/crash matrix is next; full P2.1 remains unfinished and the publishing counter stays **0/10**. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain their external prerequisites. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -1297,3 +1297,38 @@ The aggregate still records fee ceilings with actual fees null: this checkpoint
 measures them in the test without persisting them in the marketplace. Next add
 verified receipt fee evidence and separate buyer/treasury aggregates, then finish
 the remaining adverse/retry/crash matrix. Full P2.1 remains unfinished; **0/10**.
+
+
+### P2.1 local checkpoint — measured original native fees (1.93)
+
+Migration 56 adds nullable fee observations to original payment receipts and
+settlement transfers, preserving historical amounts, identities and null values.
+Observations come from verified receipts, bind original chain/hash/payer/block
+and use exact integer execution/blob arithmetic. Complete Ethereum L1 native
+models are supported; rollup/Tempo/incomplete/historical fees remain explicitly
+unmeasured. Reconciliation separates actual buyer/treasury costs, original
+transaction evidence and currency from approved buyer ceilings. Unknown costs
+stay null. Swapped observations, arithmetic changes, a different reviewed
+chain/payer and costs above the original buyer ceiling fail closed.
+
+The real EVM aggregate matches all four original transfer fees and exact native
+wallet balance changes, including original payout confirmation and receipt
+recovery. Tests cover blob fees, beyond-64-bit totals, unsupported models,
+missing metadata, original identity and manipulation, partial aggregates and
+unchanged saved receipts. Full predeploy passed **660 cases: 655 passed, five
+skipped**, with the disposable EVM enabled and isolated verification, migration
+56 replay, Python/TypeScript SDK checks and lint. Six focused final fee/identity/
+ceiling and real-chain cases pass; final typecheck/lint and production build pass.
+All **17** selected built-app Chromium journeys pass.
+
+Evidence: `/tmp/clawdmarket-workflow-native-fees-predeploy.log`,
+`/tmp/clawdmarket-workflow-native-fees-final-focused.log`,
+`/tmp/clawdmarket-workflow-native-fees-typecheck-final.log`,
+`/tmp/clawdmarket-workflow-native-fees-lint-final.log`,
+`/tmp/clawdmarket-workflow-native-fees-build-final.log` and
+`/tmp/clawdmarket-workflow-native-fees-browser.log`.
+Runbook: [WORKFLOW_CHAIN_FEES.md](docs/WORKFLOW_CHAIN_FEES.md).
+
+Next: remaining separate-process crash boundaries and actual workflow refund/
+retry/dependency-failure reconciliation. Production execution remains closed;
+no live funds, pushes or deployments. Full P2.1 remains unfinished; **0/10**.

@@ -5,6 +5,7 @@ import { listings, payment_receipts, service_orders, trades } from '@/lib/schema
 import { advanceServiceOrder } from '@/lib/service-order-state'
 import { queueFundedWorkOrder } from '@/lib/service-order-dispatch'
 import { serviceFundingEligibility } from './service-funding-eligibility'
+import { serializeChainFeeEvidence, type ChainFeeEvidence } from './chain-fee-evidence'
 import { withKeyedWriteLock } from '@/lib/service-reservation-lock'
 import { mandateFundingEligibility, recordMandateFunding } from './route-payment-mandate'
 
@@ -65,6 +66,7 @@ export type ExternalFundingInput = {
   tokenAmount: bigint
   tokenUsdPrice: number
   usdValue: number
+  chainFeeEvidence?: ChainFeeEvidence | null
 }
 
 function paymentReceiptValues(input: ExternalFundingInput) {
@@ -75,6 +77,7 @@ function paymentReceiptValues(input: ExternalFundingInput) {
     amount: input.trade.total_cost,
     currency: input.tokenAddress.toLowerCase(),
     tx_hash: input.txHash,
+    chain_fee_evidence_json: serializeChainFeeEvidence(input.chainFeeEvidence, { chainId: input.chainId, txHash: input.txHash, payerAddress: input.payerAddress }),
     external_id: input.externalId,
     payer_address: input.payerAddress.toLowerCase(),
     token_address: input.tokenAddress.toLowerCase(),

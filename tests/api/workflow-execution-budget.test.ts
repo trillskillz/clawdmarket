@@ -662,3 +662,25 @@ test('workflow HTTP cookies require CSRF, oversized writes are bounded and cance
   assert.equal(preserved.capacity_released_at, null)
   assert.equal((await db.select().from(schema.workflow_reservations).where(eq(schema.workflow_reservations.order_id, order.id))).length, 1)
 })
+
+
+test('swapped or malformed fee observations cannot turn original workflow costs into measured fees', async () => {
+  const f = await dependentCheckout(), { inspectWorkflowRun } = await import('@/lib/workflow-reconciliation')
+  const [funding] = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, f.trade.id))
+  await db.update(schema.payment_receipts).set({ chain_fee_evidence_json: '{' }).where(eq(schema.payment_receipts.id, funding.id))
+  await rejectsCode(() => inspectWorkflowRun(f.f.workflowId, f.f.buyer), 'WORKFLOW_CHAIN_FEE_EVIDENCE_INVALID')
+  const { measuredEvmChainFee } = await import('@/lib/chain-fee-evidence')
+  const foreign = measuredEvmChainFee(1, { transactionHash: funding.tx_hash!, blockHash: `0x${'11'.repeat(32)}`, blockNumber: 55n,
+    from: funding.payer_address!, gasUsed: 50_000n, effectiveGasPrice: 1n, type: 'eip1559' })!
+  await db.update(schema.payment_receipts).set({ chain_fee_evidence_json: JSON.stringify(foreign) }).where(eq(schema.payment_receipts.id, funding.id))
+  await rejectsCode(() => inspectWorkflowRun(f.f.workflowId, f.f.buyer), 'WORKFLOW_CHAIN_FEE_EVIDENCE_INVALID')
+  await db.update(schema.payment_receipts).set({ chain_id: 1 }).where(eq(schema.payment_receipts.id, funding.id))
+  await rejectsCode(() => inspectWorkflowRun(f.f.workflowId, f.f.buyer), 'WORKFLOW_CHAIN_FEE_EVIDENCE_INVALID')
+  await db.update(schema.payment_receipts).set({ chain_id: 8453, chain_fee_evidence_json: null }).where(eq(schema.payment_receipts.id, funding.id))
+  const original = await inspectWorkflowRun(f.f.workflowId, f.f.buyer)
+  assert.equal(original.receipt.totals.actual_chain_fee_units, null)
+  assert.equal(original.receipt.totals.chain_fee_measurement, 'not_recorded')
+  assert.equal(original.receipt.totals.gross_buyer_minor, 210)
+  assert.equal(original.receipt.totals.unresolved_buyer_minor, 105)
+  assert.equal((await db.select().from(schema.workflow_receipts).where(eq(schema.workflow_receipts.run_id, original.run.id))).length, 0)
+})
