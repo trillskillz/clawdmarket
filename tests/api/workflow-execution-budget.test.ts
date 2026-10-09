@@ -233,6 +233,68 @@ test('independent process child checkouts atomically retain the full parent gros
   }
 })
 
+test('independent retry and root checkouts retain original refunds, gross exposure and BigInt fee ceilings', async () => {
+  const f = await fixture(false, false, 2), original = await checkout(f)
+  assert.equal(original.response.status, 201, JSON.stringify(original.data))
+  const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, original.data.trade.id))
+  // Trusted proof boundary only; actual payment/refund evidence is covered by the disposable EVM HTTP loop.
+  const { recordExternalTradeFunding } = await import('@/lib/trade-funding')
+  const { advanceServiceOrder } = await import('@/lib/service-order-state')
+  const fundingHash = `0x${f.id.replaceAll('-', '').repeat(2)}`
+  await recordExternalTradeFunding({ trade, rail: 'evm', txHash: fundingHash, externalId: fundingHash,
+    payerAddress: f.body.payment.payer_address, tokenAddress: token, chainId: 8453, tokenSymbol: 'USDC', tokenDecimals: 6,
+    tokenAmount: 1050000n, tokenUsdPrice: 1, usdValue: 1.05 })
+  await db.transaction(async (tx) => {
+    await tx.update(schema.trades).set({ status: 'cancelled', payout_status: 'refunded' }).where(eq(schema.trades.id, trade.id))
+    await advanceServiceOrder(tx, trade.id, 'cancelled')
+    await advanceServiceOrder(tx, trade.id, 'cancelled') // Repeated recovery releases capacity once.
+    await tx.insert(schema.settlement_transfers).values({ business_key: `${trade.id}:buyer_refund`, trade_id: trade.id,
+      kind: 'buyer_refund', chain_id: 8453, token_address: token, from_address: treasury, to_address: f.body.payment.payer_address,
+      token_amount: '1050000', usd_amount: 1.05, status: 'confirmed', tx_hash: `0x${'aa'.repeat(32)}`, confirmed_at: new Date() })
+  })
+  const { node: second } = await budget.prepareWorkflowNode(original.active.run.id, 'second', f.buyer)
+  await db.update(schema.route_plans).set({ state: 'reserving' }).where(eq(schema.route_plans.id, second.route_id!))
+  const command = { version: 1 as const, mandate_id: original.node.mandate_id!, previous_trade_id: trade.id, retry_operation_id: crypto.randomUUID() }
+  const principal = { userId: f.buyer, agentId: null, kind: 'account' as const, usesCookieAuth: false }
+  const retryScript = `const {reserveFundedRouteRetry}=require('./lib/route-funded-retry.ts');const {db}=require('./lib/db.ts');
+    (async()=>{try{const r=await reserveFundedRouteRetry(${JSON.stringify(original.node.route_id)},${JSON.stringify(principal)},${JSON.stringify(command)});
+      console.log(JSON.stringify({trade:r.trade.id}));}catch(e){console.log(JSON.stringify({error:e.code}));if(!e.code)throw e;}})().finally(()=>db.$client.close());`
+  const rootScript = `const {reserveServiceOrder}=require('./lib/service-order-reservation.ts');const {db}=require('./lib/db.ts');const s=require('./lib/schema.ts');const {eq}=require('drizzle-orm');
+    (async()=>{const [p]=await db.select().from(s.route_plans).where(eq(s.route_plans.id,${JSON.stringify(second.route_id)}));
+      const r=await reserveServiceOrder({serviceId:JSON.parse(p.candidates_json)[0].service_id,routeId:p.id,mandateId:${JSON.stringify(second.mandate_id)},
+      principal:${JSON.stringify(principal)},externalOnly:true,request:{client_reference:'checkout:'+p.id,objective:p.objective,input:JSON.parse(p.input_json),
+      provider_requirements:JSON.parse(p.provider_requirements_json),payment_rail:'evm',max_total:105}});console.log(JSON.stringify({trade:r.trade.id}));})().finally(()=>db.$client.close());`
+  const results = await Promise.allSettled([retryScript, retryScript, rootScript].map((script) => promisify(execFile)(process.execPath,
+    ['--conditions=react-server', '--import', 'tsx', '-e', script], { cwd: process.cwd(), env: { ...process.env }, timeout: 30_000 })))
+  const { reserveFundedRouteRetry } = await import('@/lib/route-funded-retry')
+  const recovered = await reserveFundedRouteRetry(original.node.route_id!, principal, command)
+  for (let index = 0; index < results.length; index++) {
+    const result = results[index]
+    if (result.status === 'rejected') throw result.reason
+    const data = JSON.parse(result.value.stdout.trim().split('\n').at(-1)!)
+    if (index === 2) assert.ok(data.trade)
+    else if (data.error) assert.ok(['MANDATE_ATTEMPTS_EXHAUSTED', 'ROUTE_RETRY_PREVIOUS_TRADE_CHANGED', 'ROUTE_RETRY_ATTEMPTS_EXHAUSTED'].includes(data.error), data.error)
+    else assert.equal(data.trade, recovered.trade.id)
+  }
+  const entries = await reservations(original.active.run.id)
+  assert.equal(entries.length, 3); assert.equal(new Set(entries.map((entry) => entry.trade_id)).size, 3)
+  assert.deepEqual(entries.filter((entry) => entry.node_run_id === original.node.id).map((entry) => entry.attempt_number).sort(), [1, 2])
+  assert.equal(entries.filter((entry) => entry.node_run_id === second.id).length, 1)
+  const [run] = await db.select().from(schema.workflow_runs).where(eq(schema.workflow_runs.id, original.active.run.id))
+  assert.equal(run.gross_reserved_minor, 315); assert.equal(run.chain_fee_reserved_units, (BigInt(fee) * 3n).toString())
+  assert.equal((await db.select().from(schema.route_retry_funding_steps).where(eq(schema.route_retry_funding_steps.route_id, original.node.route_id!))).length, 1)
+  const nodes = await db.select().from(schema.workflow_node_runs).where(eq(schema.workflow_node_runs.run_id, run.id))
+  for (const node of nodes) {
+    assert.equal(node.gross_reserved_minor, node.node_key === 'first' ? 210 : 105)
+    assert.equal(node.chain_fee_reserved_units, (BigInt(fee) * BigInt(node.attempt_count)).toString())
+    const [route] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, node.route_id!))
+    assert.equal(route.execution_deadline_at?.getTime(), node.deadline_at.getTime())
+  }
+  const services = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.seller_id, f.sellers[0]))
+  const [fallback] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.services[1]))
+  assert.equal(services[0].active_orders + fallback.active_orders, 2)
+})
+
 test('funding eligibility requires its original parent reservation and preserves late-payment recovery', async () => {
   const f = await fixture(), purchased = await checkout(f)
   assert.equal(purchased.response.status, 201, JSON.stringify(purchased.data))

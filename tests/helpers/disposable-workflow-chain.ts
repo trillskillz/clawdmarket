@@ -9,7 +9,7 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { mainnet } from 'viem/chains'
 import fixture from '../fixtures/chain/workflow-token.json'
 
-export async function startDisposableWorkflowChain(binary: string, buyer: Address) {
+export async function startDisposableWorkflowChain(binary: string, buyer: Address, treasuryKey: Hex = `0x${'99'.repeat(32)}`) {
   if (!binary.startsWith('/') || !process.env.TURSO_DATABASE_URL?.startsWith('file:/tmp/clawdmarket-workspace-test-') || process.env.TURSO_AUTH_TOKEN) throw Error('DISPOSABLE_CHAIN_REQUIRED')
   const source = await readFile(resolve('tests/fixtures/chain/WorkflowToken.sol'))
   if (createHash('sha256').update(source).digest('hex') !== fixture.source_sha256) throw Error('DUMMY_TOKEN_SOURCE_CHANGED_RECOMPILE_FIXTURE')
@@ -37,7 +37,7 @@ export async function startDisposableWorkflowChain(binary: string, buyer: Addres
       await new Promise((done) => setTimeout(done, 100))
     }
     if (!ready) throw Error('DISPOSABLE_CHAIN_START_TIMEOUT')
-    const treasury = privateKeyToAccount(`0x${'99'.repeat(32)}`)
+    const treasury = privateKeyToAccount(treasuryKey)
     for (const address of [treasury.address, buyer]) await rpc('anvil_setBalance', [address, `0x${parseEther('10').toString(16)}`])
     const wallet = createWalletClient({ chain: mainnet, transport: http(url), account: treasury })
     const deployed = await client.waitForTransactionReceipt({ hash: await wallet.deployContract({ abi: fixture.abi, bytecode: fixture.bytecode as Hex }) })
@@ -49,6 +49,6 @@ export async function startDisposableWorkflowChain(binary: string, buyer: Addres
       if (minted.status !== 'success') throw Error('DUMMY_TOKEN_MINT_FAILED')
     }
     const buyerNative = await client.getBalance({ address: buyer }), treasuryNative = await client.getBalance({ address: treasury.address })
-    return { url, token, client, rpc, stop, buyerNative, treasuryNative, balance: (address: Address) => client.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [address] }) }
+    return { url, token, treasury: treasury.address, client, rpc, stop, buyerNative, treasuryNative, balance: (address: Address) => client.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [address] }) }
   } catch (error) { await stop(); throw error }
 }
