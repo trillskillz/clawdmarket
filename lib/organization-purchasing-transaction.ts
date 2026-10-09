@@ -13,7 +13,7 @@ export class PurchasingError extends Error {
 function contention(error: unknown) {
   for (let depth = 0; error && depth < 6; depth++) {
     if (typeof error !== 'object') return false
-    if ('message' in error && /SQLITE_BUSY|database is locked|UNIQUE constraint failed: (organization_purchasing_roles|organization_purchase_requests|organization_purchase_approvals|organization_purchase_uses|organization_provider_shares)\./i.test(String(error.message))) return true
+    if ('message' in error && /SQLITE_BUSY|database is locked|UNIQUE constraint failed: (organization_purchasing_roles|organization_purchase_requests|organization_purchase_approvals|organization_purchase_uses|organization_provider_shares|organization_spending_accounts|organization_spending_uses)\./i.test(String(error.message))) return true
     error = 'cause' in error ? error.cause : null
   }
   return false

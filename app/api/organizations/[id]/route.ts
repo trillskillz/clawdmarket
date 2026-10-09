@@ -34,7 +34,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .innerJoin(agent_owners, and(eq(agent_owners.agentId, organization_agent_assignments.agent_id),
           eq(agent_owners.userId, owner.userId)))
         .where(eq(organization_agent_assignments.organization_id, organization.id)).limit(200),
-      db.select({ id: organization_audit_events.id, action: organization_audit_events.action,
+      db.select({ id: organization_audit_events.id, spending_account_id: organization_audit_events.spending_account_id, action: organization_audit_events.action,
         agent_id: organization_audit_events.agent_id, cost_center: organization_audit_events.cost_center,
         team_id: organization_audit_events.team_id,
         created_at: organization_audit_events.created_at }).from(organization_audit_events)

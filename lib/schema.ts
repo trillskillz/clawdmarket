@@ -366,6 +366,35 @@ export const organization_provider_shares = sqliteTable('organization_provider_s
   index('provider_shares_org_state_idx').on(table.organization_id, table.state),
   index('provider_shares_service_state_idx').on(table.service_id, table.state)]);
 
+/** Separate owner-granted direct-service credit credentials; cmo_ read keys retain their old authority. */
+export const organization_spending_accounts = sqliteTable('organization_spending_accounts', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  buyer_agent_id: text('buyer_agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  team_id: text('team_id').references(() => organization_teams.id, { onDelete: 'restrict' }),
+  cost_center: text('cost_center').notNull(),
+  client_reference: text('client_reference').notNull(), name: text('name').notNull(),
+  allowed_services_json: text('allowed_services_json').notNull(),
+  max_purchase_minor: integer('max_purchase_minor').notNull(), max_daily_minor: integer('max_daily_minor').notNull(),
+  max_monthly_minor: integer('max_monthly_minor').notNull(), max_lifetime_minor: integer('max_lifetime_minor').notNull(),
+  authority_hash: text('authority_hash').notNull(), credential_hash: text('credential_hash').notNull(), credential_prefix: text('credential_prefix').notNull(),
+  state: text('state', {enum:['active','revoked']}).notNull().default('active'),
+  expires_at: integer('expires_at',{mode:'timestamp_ms'}).notNull(), created_at: integer('created_at',{mode:'timestamp_ms'}).notNull(),
+  revoked_at: integer('revoked_at',{mode:'timestamp_ms'}),
+}, table=>[uniqueIndex('spending_accounts_org_reference_idx').on(table.organization_id,table.client_reference),
+  uniqueIndex('spending_accounts_credential_idx').on(table.credential_hash),index('spending_accounts_org_state_idx').on(table.organization_id,table.state),
+  check('spending_accounts_limits_positive',sql`${table.max_purchase_minor}>0 AND ${table.max_daily_minor}>0 AND ${table.max_monthly_minor}>0 AND ${table.max_lifetime_minor}>0`)]);
+
+/** Immutable original gross use; refunds do not recycle delegation authority. */
+export const organization_spending_uses = sqliteTable('organization_spending_uses', {
+  order_id: text('order_id').primaryKey().references(()=>service_orders.id,{onDelete:'restrict'}),
+  trade_id: text('trade_id').notNull().unique().references(()=>trades.id,{onDelete:'restrict'}),
+  account_id: text('account_id').notNull().references(()=>organization_spending_accounts.id,{onDelete:'restrict'}),
+  authority_hash: text('authority_hash').notNull(), buyer_id: text('buyer_id').notNull(), amount_minor: integer('amount_minor').notNull(),
+  created_at: integer('created_at',{mode:'timestamp_ms'}).notNull(),
+},table=>[index('spending_uses_account_created_idx').on(table.account_id,table.created_at),check('spending_uses_amount_positive',sql`${table.amount_minor}>0`)]);
+
 /** Departmental ceilings are additional restrictions, never delegated purchasing authority. */
 export const organization_team_budgets = sqliteTable('organization_team_budgets', {
   team_id: text('team_id').primaryKey().references(() => organization_teams.id, { onDelete: 'restrict' }),
@@ -410,10 +439,11 @@ export const organization_audit_events = sqliteTable('organization_audit_events'
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
   actor_account_id: text('actor_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
-  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked', 'budget_updated', 'team_budget_updated', 'purchasing_role_created', 'purchasing_role_revoked', 'purchase_requested', 'purchase_approved', 'purchase_cancelled', 'purchase_approval_revoked', 'provider_share_offered', 'provider_share_accepted', 'provider_share_revoked'] }).notNull(),
+  action: text('action', { enum: ['created', 'team_created', 'team_archived', 'agent_assigned', 'agent_unassigned', 'member_invited', 'invitation_cancelled', 'member_joined', 'member_revoked', 'service_account_created', 'service_account_revoked', 'budget_updated', 'team_budget_updated', 'purchasing_role_created', 'purchasing_role_revoked', 'purchase_requested', 'purchase_approved', 'purchase_cancelled', 'purchase_approval_revoked', 'provider_share_offered', 'provider_share_accepted', 'provider_share_revoked', 'spending_account_created', 'spending_account_revoked'] }).notNull(),
   agent_id: text('agent_id'),
   team_id: text('team_id'),
   member_account_id: text('member_account_id'),
+  spending_account_id: text('spending_account_id'),
   service_account_id: text('service_account_id'),
   cost_center: text('cost_center'),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
@@ -528,6 +558,7 @@ export const trades = sqliteTable('trades', {
 
 export const service_orders = sqliteTable('service_orders', {
   private_provider_share_id: text('private_provider_share_id'),
+  organization_spending_account_id: text('organization_spending_account_id'),
   purchasing_approval_id: text('purchasing_approval_id'),
   id: text('id').primaryKey(),
   service_id: text('service_id').notNull().references(() => service_definitions.id, { onDelete: 'restrict' }),
@@ -547,7 +578,7 @@ export const service_orders = sqliteTable('service_orders', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   updated_at: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 }, (table) => [
-  index('service_orders_service_state_idx').on(table.service_id, table.state),
+  index('service_orders_spending_account_idx').on(table.organization_spending_account_id), index('service_orders_service_state_idx').on(table.service_id, table.state),
   index('service_orders_buyer_created_idx').on(table.buyer_id, table.created_at),
 ]);
 

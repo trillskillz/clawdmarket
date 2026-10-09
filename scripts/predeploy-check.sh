@@ -2,6 +2,13 @@
 set -euo pipefail
 
 required_files=(
+  "lib/organization-spending-accounts.ts"
+  "lib/organization-spending-evidence.ts"
+  "app/api/organizations/[id]/spending-accounts/route.ts"
+  "app/api/organizations/[id]/spending-accounts/orders/route.ts"
+  "app/organizations/[id]/spending-accounts/page.tsx"
+  "docs/ORGANIZATION_SPENDING_ACCOUNTS.md"
+  "migrations/2026-10-09-organization-spending-accounts-v1.sql"
   "lib/organization-purchasing.ts"
   "lib/organization-purchasing-transaction.ts"
   "docs/ORGANIZATION_PURCHASING.md"
