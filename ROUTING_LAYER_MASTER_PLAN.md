@@ -999,6 +999,40 @@ remains 1.80 until that deployment succeeds. Remaining PR inventory is unchanged
 gates, and #163–173 are stale dependency proposals, including downgrades. Retain
 the recorded old/unnecessary-PR exemption instead of merging those blindly.
 
+### Production verification incident — 2026-10-09
+
+PR #251 merged as `cd5cd24fa16033dbdc121170850812b5b48dd02d` after final-head
+CodeQL/review/contract gates and CI passed: 606 unit tests (ten environment skips),
+nine MCP contract cases and 57 Chromium/HTTP journeys (five environment skips).
+Migration-first deployment `37886920522` passed and applied the five new runtime
+migrations, reaching all 52 IDs. Production smoke `37887556081` then failed an
+agent-profile read, and the independent public check found listings unavailable.
+Runtime logs identify `SQL_PARSE_ERROR` at an ungrouped `HAVING`: local SQLite
+accepts the syntax, but the remote Turso parser rejects it.
+
+Production was rolled back to the verified PR #250 artifact
+`clawdmarket-l8bmp8xhg-jacob-millers-projects-09998dbb.vercel.app`; public listings
+and contract 1.80 are restored. Additive migrations remain intact. This release
+is **not production-verified** until the correction passes its final-head checks,
+remote query compilation, migration-first deploy and production smoke/browser
+checks. It remains part of the authorized ten-part release, not a new capability
+or bookkeeping release; further plan implementation waits for that completion.
+
+The correction adds a constant `GROUP BY` to the bounded cycle aggregate, retaining
+the same single-group count/reachability and 256-state bound. All 29 focused
+reputation/capability tests pass, including every rail, owner changes, cycles,
+state boundaries, indexed probes and public sorting. A new read-only deployment
+gate compiles the actual feedback, reputation, marketplace-ranking and capability
+query shapes with `EXPLAIN` against the production transport after migrations and
+before artifact deployment. It emits neither private rows nor credentials.
+Local typecheck/lint, all four query-compilation shapes and the rebuilt production
+artifact pass. Three actual HTTP/Chromium cases cover cross-worker reputation
+backing/owner changes, capability-cycle removal and truthful work-proof discovery.
+Logs: `/tmp/clawdmarket-remote-cycle-fix-tests.log`,
+`/tmp/clawdmarket-cycle-hotfix-build.log`,
+`/tmp/clawdmarket-cycle-hotfix-browser.log`, and
+`/tmp/clawdmarket-cycle-hotfix-capability-browser.log`.
+
 ### Continued plan audit — next independent capability: bounded workflow execution
 
 The existing workflow model stores at most sixteen explicit nodes, three

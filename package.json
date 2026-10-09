@@ -26,6 +26,7 @@
     "db:seed": "node --conditions=react-server --import tsx scripts/seed.ts",
     "db:migrate:agent-env": "node --conditions=react-server --import tsx scripts/migrate-agent-env.ts",
     "db:migrate:runtime": "node --import tsx scripts/migrate-runtime-schema.ts",
+    "db:verify:evidence": "node --conditions=react-server --import tsx scripts/verify-evidence-query-compatibility.ts",
     "ops:sync-release-monitor": "node --import tsx scripts/sync-release-monitor.ts",
     "ops:reconcile-service-capacity": "node --conditions=react-server --import tsx scripts/reconcile-service-capacity.ts",
     "ops:payment-canary": "node scripts/prod-payment-canary.mjs",

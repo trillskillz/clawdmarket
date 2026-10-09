@@ -2,6 +2,7 @@
 set -euo pipefail
 
 required_files=(
+  "scripts/verify-evidence-query-compatibility.ts"
   "lib/reputation-evidence-sql.ts"
   "lib/reputation-evidence-policy.ts"
   "lib/trade-evidence-sql.ts"
