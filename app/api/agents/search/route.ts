@@ -7,13 +7,16 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { getRequestIp } from '@/lib/request-ip'
 import { getAgentAvailability } from '@/lib/agent-presence'
 import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
+import { PUBLIC_AGENT_WORK_PROOF_SQL } from '@/lib/capability-evidence-sql'
+import { capabilityFamily } from '@/lib/capability-hierarchy'
+import { rawCapabilityFamilyFilter } from '@/lib/capability-family-filter'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim().slice(0, 500)
-  const parsedPage = Number.parseInt(req.nextUrl.searchParams.get('page') || '1', 10)
-  const parsedLimit = Number.parseInt(req.nextUrl.searchParams.get('limit') || '20', 10)
+  const parsedPage = Number(req.nextUrl.searchParams.get('page') || '1')
+  const parsedLimit = Number(req.nextUrl.searchParams.get('limit') || '20')
   if (!Number.isInteger(parsedPage) || parsedPage < 1) {
     return NextResponse.json({ error: 'invalid_page', message: 'page must be a positive integer' }, { status: 400 })
   }
@@ -24,8 +27,12 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parsedLimit, 50)
   const offset = (page - 1) * limit
   const verifiedOnly = req.nextUrl.searchParams.get('verified') === 'true'
+  const familyInput = req.nextUrl.searchParams.get('family')?.trim() || ''
+  const family = capabilityFamily(familyInput)
+  if (familyInput && !family) return NextResponse.json({ error: 'unknown_capability_family', message: 'Use a family ID from /api/capabilities/hierarchy' }, { status: 400 })
+  const familyPredicate = family ? rawCapabilityFamilyFilter(family, 'agents.capabilities') : null
   if (!q) {
-    return NextResponse.json({ agents: [], query: '', keywords: [], page, limit, total: 0, total_pages: 0, has_more: false })
+    return NextResponse.json({ agents: [], family: family?.id || null, query: '', keywords: [], page, limit, total: 0, total_pages: 0, has_more: false })
   }
 
   let searchLimitHeaders: Record<string, string> = {}
@@ -62,7 +69,7 @@ export async function GET(req: NextRequest) {
       ...resolveCapabilityQuery(q),
     ])
     if (keywords.length === 0) {
-      return NextResponse.json({ agents: [], query: q, keywords: [] }, { headers: searchLimitHeaders })
+      return NextResponse.json({ agents: [], family: family?.id || null, query: q, keywords: [], page, limit, total: 0, total_pages: 0, has_more: false }, { headers: searchLimitHeaders })
     }
 
     const client = (db as any).$client
@@ -95,23 +102,25 @@ export async function GET(req: NextRequest) {
              (${scoreExpr}) as match_score
       FROM agents
       WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
-        ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
+        ${verifiedOnly ? `AND ${PUBLIC_AGENT_WORK_PROOF_SQL}` : ''}
+        ${familyPredicate ? `AND ${familyPredicate.clause}` : ''}
         AND (${matchConditions.join(' OR ')})
-      ORDER BY match_score DESC, COALESCE(avg_rating, 0) DESC
+      ORDER BY match_score DESC, COALESCE(avg_rating, 0) DESC, id DESC
       LIMIT ? OFFSET ?
     `
 
     const [result, countResult] = await Promise.all([
       client.execute({
         sql,
-        args: [...scoreArgs, ...args, limit, offset],
+        args: [...scoreArgs, ...(familyPredicate?.args || []), ...args, limit, offset],
       }),
       client.execute({
         sql: `SELECT COUNT(*) AS count FROM agents
               WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
-              ${verifiedOnly ? `AND LOWER(capabilities) LIKE '%:verified%'` : ''}
+              ${verifiedOnly ? `AND ${PUBLIC_AGENT_WORK_PROOF_SQL}` : ''}
+              ${familyPredicate ? `AND ${familyPredicate.clause}` : ''}
               AND (${matchConditions.join(' OR ')})`,
-        args,
+        args: [...(familyPredicate?.args || []), ...args],
       }),
     ])
 
@@ -143,6 +152,7 @@ export async function GET(req: NextRequest) {
         trust_evidence_points: trust.evidencePoints,
         trust_drivers: trust.drivers,
         trust_components: trust.components,
+        trust_evidence: trust.evidence,
         reputation_score: trust.trustScore,
         moltbook_handle: null,
         match_score: Number(row.match_score || 0),
@@ -152,6 +162,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       agents,
+      family: family?.id || null,
       query: q,
       keywords,
       mode: process.env.ANTHROPIC_API_KEY ? 'semantic' : 'keyword',

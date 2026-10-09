@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { db } from '@/lib/db'
 import { getMarketStats } from '@/lib/market-stats'
 import { hasLinkedSettlementEvidence } from '@/lib/proof-evidence'
+import { getPaymentMethodLabel } from '@/lib/trade-receipt'
+import { getPublicPlatformPaymentProofs } from '@/lib/platform-payment-proofs'
 import styles from './proof.module.css'
 
 export const dynamic = 'force-dynamic'
@@ -11,6 +13,13 @@ export const metadata: Metadata = {
   title: 'Proof Network | ClawdMarket',
   description: 'Public, permanent verification records for completed autonomous agent trades on ClawdMarket.',
 }
+
+const paymentEvidenceSql = `(EXISTS (SELECT 1 FROM payment_receipts p WHERE p.trade_id = t.id AND p.payment_rail = t.payment_rail)
+  OR (t.payment_rail = 'credit' AND EXISTS (SELECT 1 FROM credit_entries e WHERE e.reference = t.id AND e.user_id = t.buyer_id AND e.kind = 'purchase' AND e.escrow_delta = CAST(ROUND(t.amount * 100) AS INTEGER))))`
+const payoutEvidenceSql = `(EXISTS (SELECT 1 FROM settlement_transfers s WHERE s.trade_id = t.id AND s.kind = 'seller_payout' AND s.status = 'confirmed' AND s.tx_hash IS NOT NULL)
+  OR (t.payment_rail = 'credit'
+    AND EXISTS (SELECT 1 FROM credit_entries e WHERE e.reference = t.id AND e.user_id = t.seller_id AND e.kind = 'sale' AND e.available_delta = CAST(ROUND(t.amount * 100) AS INTEGER))
+    AND EXISTS (SELECT 1 FROM credit_entries e WHERE e.reference = t.id AND e.user_id = t.buyer_id AND e.kind = 'settlement' AND e.escrow_delta = -CAST(ROUND(t.amount * 100) AS INTEGER))))`
 
 async function query(sql: string, args: any[] = []) {
   const client = (db as any).$client
@@ -34,6 +43,7 @@ function timeAgo(value: any): string {
 }
 
 export default async function ProofDirectory() {
+  const platformPayments = await getPublicPlatformPaymentProofs()
   const [stats, participantRows] = await Promise.all([
     getMarketStats(),
     query(`SELECT COUNT(DISTINCT participant_id) AS count
@@ -50,17 +60,18 @@ export default async function ProofDirectory() {
   const verifiedRows = await query(`SELECT COUNT(*) AS count FROM trades t
     WHERE t.status IN ('completed', 'complete')
       AND EXISTS (SELECT 1 FROM trade_deliveries d WHERE d.trade_id = t.id AND d.content_hash IS NOT NULL)
-      AND EXISTS (SELECT 1 FROM payment_receipts p WHERE p.trade_id = t.id AND p.payment_rail = t.payment_rail)
-      AND EXISTS (SELECT 1 FROM settlement_transfers s WHERE s.trade_id = t.id AND s.kind = 'seller_payout' AND s.status = 'confirmed' AND s.tx_hash IS NOT NULL)`)
+      AND ${paymentEvidenceSql}
+      AND ${payoutEvidenceSql}`)
   const verifiedCount = Number(verifiedRows[0]?.count || 0)
 
   const proofs = await query(
     `SELECT t.id, t.amount, t.seller_id, t.completed_at, t.payment_rail,
+            (SELECT p.payment_rail FROM payment_receipts p WHERE p.trade_id = t.id LIMIT 1) AS receipt_rail,
             r.score,
             COALESCE(a.name, u.name) as seller_name, a.version as seller_version,
             EXISTS (SELECT 1 FROM trade_deliveries d WHERE d.trade_id = t.id AND d.content_hash IS NOT NULL) AS delivery_recorded,
-            EXISTS (SELECT 1 FROM payment_receipts p WHERE p.trade_id = t.id AND p.payment_rail = t.payment_rail) AS payment_recorded,
-            EXISTS (SELECT 1 FROM settlement_transfers s WHERE s.trade_id = t.id AND s.kind = 'seller_payout' AND s.status = 'confirmed' AND s.tx_hash IS NOT NULL) AS payout_confirmed
+            ${paymentEvidenceSql} AS payment_recorded,
+            ${payoutEvidenceSql} AS payout_confirmed
      FROM trades t
      LEFT JOIN ratings r ON r.trade_id = t.id AND r.rated_id = t.seller_id
      LEFT JOIN agents a ON a.id = t.seller_id OR ('user_agent_' || a.id) = t.seller_id
@@ -78,7 +89,7 @@ export default async function ProofDirectory() {
           <h1>Proof, not<br /><em>promises.</em></h1>
         </div>
         <div className={styles.heroAside}>
-          <p>Completed work records are public. Recent records may include delivery fingerprints and payment evidence; older records may not.</p>
+          <p>Completed work and confirmed platform payments are public. Inspect delivery, payment method, and settlement evidence for each record.</p>
           <div className={styles.verifiedSignal}><i>✓</i><span><strong>Evidence shown per record</strong><small>Check delivery and settlement separately</small></span></div>
         </div>
       </header>
@@ -89,6 +100,23 @@ export default async function ProofDirectory() {
           ['02', String(totalAgents).padStart(2, '0'), 'Recorded participants'],
           ['03', `$${totalVolume.toFixed(2)}`, 'Recorded trade value'],
         ].map(([number, value, label]) => <div key={label}><i>{number}</i><strong>{value}</strong><span>{label}</span></div>)}
+      </section>
+
+      <section className={styles.proofIndex} aria-label="Payment proofs">
+        <div className={styles.indexHeader}>
+          <div><span>VERIFIED PAYMENTS</span><h2>Payment proofs</h2></div>
+          <span>{String(platformPayments.length).padStart(2, '0')} MPP RECEIPTS / LATEST FIRST</span>
+        </div>
+        <p>These MPP on Tempo payments paid for ClawdMarket MCP calls. Each receipt links to its payment transaction.</p>
+        <div className={styles.proofGrid}>
+          {platformPayments.map(payment => <article key={payment.tx_hash} className={styles.proofCard}>
+            <div className={styles.proofCardTop}><span>PLATFORM PAYMENT</span><span>✓ PAYMENT CONFIRMED</span></div>
+            <div className={styles.proofIdentity}><span>MP</span><div><strong>ClawdMarket MCP call</strong><small>MPP on Tempo · pathUSD · chain 4217</small></div></div>
+            <div className={styles.proofAmount}><strong>{payment.amount.toFixed(3)} pathUSD</strong><span>MPP PAYMENT</span></div>
+            <div className={styles.artifact}><p className={styles.panelText}>Payment transaction</p><code style={{ overflowWrap: 'anywhere' }}>{payment.tx_hash}</code></div>
+            <div className={styles.proofCardBottom}><span>{timeAgo(payment.created_at)}</span><a href={`https://explore.tempo.xyz/tx/${payment.tx_hash}`} target="_blank" rel="noopener noreferrer">Inspect payment ↗</a></div>
+          </article>)}
+        </div>
       </section>
 
       <section className={styles.proofIndex}>
@@ -114,7 +142,7 @@ export default async function ProofDirectory() {
                     <span>{(proof.seller_name || 'Agent').slice(0, 2).toUpperCase()}</span>
                     <div><strong>{proof.seller_name || 'Agent'}</strong><small>agent version {proof.seller_version || 1}</small></div>
                   </div>
-                  <div className={styles.proofAmount}><strong>${Number(proof.amount || 0).toFixed(2)}</strong><span>{String(proof.payment_rail || 'ledger').toUpperCase()} SETTLEMENT</span></div>
+                  <div className={styles.proofAmount}><strong>${Number(proof.amount || 0).toFixed(2)}</strong><span>{getPaymentMethodLabel(proof.payment_rail, proof.receipt_rail).toUpperCase()} SETTLEMENT</span></div>
                   <div className={styles.proofCardBottom}><span>{score ? `${'★'.repeat(score)}${'☆'.repeat(5 - score)}` : 'UNRATED'}</span><span>{timeAgo(proof.completed_at)}</span><strong>Inspect proof →</strong></div>
                 </Link>
               )

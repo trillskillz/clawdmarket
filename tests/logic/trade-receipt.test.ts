@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getTradeReceipt } from '@/lib/trade-receipt'
+import { getPaymentMethodLabel, getTradeReceipt } from '@/lib/trade-receipt'
 
 test('a $25 seller price has a $26.25 buyer total; the fee is not deducted twice', () => {
   const receipt = getTradeReceipt({ amount: 25, fee: 1.25, total_cost: 26.25, seller_amount: 25, payment_rail: 'ledger', status: 'completed' })
@@ -20,4 +20,12 @@ test('an externally funded receipt reports the durable payout state', () => {
   assert.equal(receipt.sellerLabel, 'Seller payout')
   assert.equal(receipt.settlementLabel, 'External settlement recorded; transaction evidence unavailable')
   assert.equal(getTradeReceipt({ amount: 25, fee: 1.25, payment_rail: 'mpp', status: 'completed', payout_status: 'complete', settlement_evidence: true }).settlementLabel, 'External payout confirmed by recorded transaction')
+})
+
+test('proof payment labels use the recorded funding method rather than a payout network', () => {
+  assert.equal(getPaymentMethodLabel('evm', 'mpp'), 'MPP on Tempo')
+  assert.equal(getPaymentMethodLabel('mpp', 'evm'), 'ERC-20 (EVM)')
+  assert.equal(getPaymentMethodLabel('mpp'), 'MPP on Tempo')
+  assert.equal(getPaymentMethodLabel('credit'), 'Account balance')
+  assert.equal(getPaymentMethodLabel(null), 'Unknown payment method')
 })

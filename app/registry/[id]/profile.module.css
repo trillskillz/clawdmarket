@@ -58,7 +58,7 @@
 
 .evidenceGrid { padding:112px 0; display:grid; grid-template-columns:1.45fr .55fr; gap:64px; border-bottom:1px solid rgba(240,236,225,.13); }
 .sectionHeading > span { color:#ff6a43; font:8px 'JetBrains Mono',monospace; letter-spacing:.1em; text-transform:uppercase; }
-.sectionHeading h2 { max-width:760px; margin-top:14px; font:500 clamp(34px,4vw,54px)/1 'Space Grotesk',sans-serif; letter-spacing:-.055em; }
+.sectionHeading h2 { max-width:760px; margin-top:14px; font:500 clamp(34px,4vw,54px)/1 'Space Grotesk',sans-serif; letter-spacing:-.055em; overflow-wrap:anywhere; }
 .sectionHeading > p { max-width:630px; margin-top:16px; color:#747a72; font-size:11px; line-height:1.75; }
 .drivers { margin-top:38px; border-top:1px solid rgba(240,236,225,.11); }
 .drivers > div { min-height:62px; padding:14px 0; border-bottom:1px solid rgba(240,236,225,.09); display:grid; grid-template-columns:46px 1fr; align-items:center; }
@@ -73,7 +73,7 @@
 .servicesSection { padding:112px 0 124px; border-bottom:1px solid rgba(240,236,225,.13); scroll-margin-top:96px; }
 .servicesSection > header { margin-bottom:46px; }
 .serviceGrid { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid rgba(240,236,225,.13); border-bottom:1px solid rgba(240,236,225,.13); }
-.serviceCard { min-height:390px; padding:23px 24px; display:flex; flex-direction:column; background:rgba(13,16,14,.48); transition:background .2s ease; }
+.serviceCard { min-width:0; min-height:390px; padding:23px 24px; display:flex; flex-direction:column; background:rgba(13,16,14,.48); transition:background .2s ease; }
 .serviceCard + .serviceCard { border-left:1px solid rgba(240,236,225,.13); }
 .serviceCard:nth-child(3n+1) { border-left:0; }
 .serviceCard:nth-child(n+4) { border-top:1px solid rgba(240,236,225,.13); }
@@ -81,7 +81,7 @@
 .cardMeta { display:flex; justify-content:space-between; color:#565c55; font:7px 'JetBrains Mono',monospace; letter-spacing:.09em; }
 .cardMeta b { color:#b9ef72; font-weight:500; text-transform:uppercase; }
 .category { margin-top:48px; color:#ff7954; font:7px 'JetBrains Mono',monospace; letter-spacing:.1em; text-transform:uppercase; }
-.serviceCard h3 { margin-top:12px; color:#e0ded6; font:500 24px/1.08 'Space Grotesk',sans-serif; letter-spacing:-.045em; }
+.serviceCard h3 { margin-top:12px; color:#e0ded6; font:500 24px/1.08 'Space Grotesk',sans-serif; letter-spacing:-.045em; overflow-wrap:anywhere; }
 .serviceCard > p { margin-top:18px; color:#7e847b; font-size:10px; line-height:1.75; }
 .serviceCard footer { margin-top:auto; padding-top:21px; border-top:1px solid rgba(240,236,225,.1); display:flex; align-items:flex-end; justify-content:space-between; gap:18px; }
 .serviceCard footer div { display:flex; flex-direction:column; }

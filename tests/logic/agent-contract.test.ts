@@ -7,13 +7,86 @@ import {
   AGENT_CONTRACT_VERSION,
   getAgentManifest,
   getAgentOpenApiPaths,
+  getClientRecoveryContract,
   renderSkillMd,
+  renderLlmsTxt,
 } from '@/lib/agent-contract'
 import { getRequestOrigin } from '@/lib/request-origin'
+import { CAPABILITY_FAMILIES } from '@/lib/capability-hierarchy'
 
 function endpointPath(endpoint: string) {
   return endpoint.split('?')[0]
 }
+
+test('marketplace reputation advertises bounded owner feedback and history confidence without independent quality claims', () => {
+  const evidence = getAgentManifest().marketplace_reputation
+  assert.equal(evidence.feedback, 'latest_eligible_rating_per_current_buyer_owner_principal')
+  assert.equal(evidence.confidence_scope, 'marketplace_history_breadth')
+  assert.equal(evidence.buyer_independence, 'not_verified')
+  assert.equal(evidence.measured_quality_score, null)
+  assert.equal(evidence.calibrated, false)
+  assert.equal(evidence.circular_trade_policy.edges, 'currently_backed_buyer_accepted_trades')
+  assert.deepEqual(getClientRecoveryContract().marketplace_reputation, evidence)
+  const paths = getAgentOpenApiPaths() as Record<string, { get: Record<string, unknown> }>
+  assert.deepEqual(paths['/api/agents/{id}/trust'].get['x-reputation-evidence'], evidence)
+  assert.deepEqual(paths['/api/listings'].get['x-reputation-evidence'], evidence)
+  for (const text of [renderSkillMd(), renderLlmsTxt()]) assert.match(text, /Marketplace reputation: ratings require the actual buyer and seller/)
+})
+
+test('Python verifier discovery and report schemas agree on finite external checks with mandatory buyer acceptance', () => {
+  const manifest = getAgentManifest()
+  assert.deepEqual(manifest.isolated_verification.adapters, ['javascript_tests_v1', 'javascript_static_v1', 'python_tests_v1'])
+  assert.equal(manifest.isolated_verification.explicit_buyer_acceptance_required, true)
+  assert.equal(manifest.isolated_verification.isolation_observed_by_app, false)
+  assert.equal(manifest.isolated_verification.semantic_verified, false)
+  assert.deepEqual(getClientRecoveryContract().isolated_verification, manifest.isolated_verification)
+  const action = manifest.actions.find((entry) => entry.id === 'submit_verification_report')!
+  const report = action.body_schema as { properties: { adapter: { enum: readonly string[] } } }
+  assert.deepEqual(report.properties.adapter.enum, manifest.isolated_verification.adapters)
+})
+
+test('completion proof advertises the exact bounded cycle scope without claiming buyer independence', () => {
+  const evidence = getAgentManifest().capability_evidence
+  assert.equal(evidence.circular_trade_policy.max_cycle_length, 4)
+  assert.equal(evidence.circular_trade_policy.max_search_states, 256)
+  assert.equal(evidence.circular_trade_policy.search_exhausted, 'exclude_completion_evidence')
+  assert.equal(evidence.circular_trade_policy.edges, 'currently_backed_buyer_accepted_service_completions')
+  assert.equal(evidence.circular_trade_policy.longer_cycles, 'not_resolved')
+  assert.equal(evidence.independence, 'not_verified')
+  assert.equal(evidence.quality_score, null)
+  assert.deepEqual(getClientRecoveryContract().capability_evidence.circular_trade_policy, evidence.circular_trade_policy)
+})
+
+test('versioned observations advertise finite grading and scopes without measured quality or inherited authority', () => {
+  const benchmark = getAgentManifest().trusted_benchmarks
+  assert.equal(benchmark.adapter, 'json_exact_v1')
+  assert.equal(benchmark.grader_authority, 'allowlisted_registered_agent')
+  assert.equal(benchmark.grant_seconds, 600)
+  assert.equal(benchmark.evidence.measured_quality_score, null)
+  assert.equal(benchmark.evidence.independence, 'not_verified')
+  assert.equal(benchmark.evidence.calibrated, false)
+  assert.equal(benchmark.evidence.routing_eligible, false)
+  const operations = getClientRecoveryContract().operations
+  assert.equal(operations.publish_benchmark_definition.named_credential_scope, null)
+  assert.equal(operations.retire_benchmark_definition.named_credential_scope, null)
+  for (const operation of ['create_benchmark_run', 'submit_benchmark_outputs', 'report_benchmark_run', 'cancel_benchmark_run']) assert.equal(operations[operation].named_credential_scope, 'agent:write')
+  assert.equal(operations.inspect_benchmark_run.named_credential_scope, 'agent:read')
+})
+
+test('family discovery advertises explicit navigation IDs without granting purchase or evidence inheritance', () => {
+  const manifest = getAgentManifest()
+  assert.deepEqual(manifest.capability_hierarchy.family_ids, CAPABILITY_FAMILIES.map(({ id }) => id))
+  assert.equal(manifest.capability_hierarchy.matching.purchase, 'exact_canonical_leaves')
+  assert.equal(manifest.capability_hierarchy.matching.evidence, 'exact_canonical_leaves')
+  assert.equal(manifest.capability_hierarchy.matching.sibling_inheritance, false)
+  const paths = getAgentOpenApiPaths() as Record<string, Record<string, any>>
+  for (const path of ['/api/agents/list', '/api/agents/search', '/api/services']) {
+    assert.deepEqual(paths[path].get.parameters.find((parameter: { name: string }) => parameter.name === 'family').schema.enum, manifest.capability_hierarchy.family_ids)
+    assert.ok(paths[path].get.responses[400])
+  }
+  assert.ok(manifest.discovery.capability_hierarchy.endsWith('/api/capabilities/hierarchy'))
+  assert.ok(renderSkillMd().includes('family query'))
+})
 
 test('every advertised agent action has one matching OpenAPI operation', () => {
   const paths = getAgentOpenApiPaths() as Record<string, Record<string, any>>

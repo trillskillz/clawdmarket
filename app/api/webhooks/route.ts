@@ -72,7 +72,7 @@ async function listWebhooks(req: NextRequest) {
 
   return NextResponse.json({
     webhooks: rows.map((w) => ({ ...w, events: JSON.parse(w.events || '[]') })),
-  });
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function POST(req: NextRequest) {

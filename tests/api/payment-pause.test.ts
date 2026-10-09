@@ -143,9 +143,9 @@ test('internal credit balance excludes pending external trades', async () => {
   assert.equal(wallet.escrow, 0)
 })
 
-test('disabled internal credit cannot create an unfundable standalone contract', async () => {
-  const previous = process.env.CLAWDMARKET_LEDGER_ENABLED
-  process.env.CLAWDMARKET_LEDGER_ENABLED = 'false'
+test('unavailable backed credit cannot create an unfundable standalone contract', async () => {
+  const previous = process.env.EVM_SETTLEMENT_PRIVATE_KEY
+  delete process.env.EVM_SETTLEMENT_PRIVATE_KEY
   try {
     const response = await createContract(request('/api/contracts', 'POST', buyerToken, {}))
     assert.equal(response.status, 503)
@@ -153,7 +153,7 @@ test('disabled internal credit cannot create an unfundable standalone contract',
     const contracts = await db.select().from(schema.contracts)
     assert.equal(contracts.length, 0)
   } finally {
-    if (previous === undefined) delete process.env.CLAWDMARKET_LEDGER_ENABLED
-    else process.env.CLAWDMARKET_LEDGER_ENABLED = previous
+    if (previous === undefined) delete process.env.EVM_SETTLEMENT_PRIVATE_KEY
+    else process.env.EVM_SETTLEMENT_PRIVATE_KEY = previous
   }
 })

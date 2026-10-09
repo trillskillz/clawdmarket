@@ -169,16 +169,16 @@ export default function SellerProfilePage() {
             <div className={styles.score} style={{ color: trustTone(score) }}><strong>{earnedTrust ? score : '—'}</strong><span>{earnedTrust ? '/100' : 'no earned score'}</span></div>
             <div className={styles.scoreTrack}><i style={{ width: `${earnedTrust ? score : 0}%`, background: trustTone(score) }} /></div>
             <dl><div><dt>Confidence</dt><dd>{confidence}</dd></div><div><dt>Evidence</dt><dd>{Math.round(Number(seller.trust_evidence_points || 0))} pts</dd></div><div><dt>Member since</dt><dd>{dateLabel(seller.created_at)}</dd></div></dl>
-            <p>Trust uses verified ratings, completed seller work, disputes, recency, and account age.</p>
+            <p>Trust uses backed, buyer-accepted work and one latest rating per known buyer owner. Confidence describes history breadth; buyer independence and skill quality remain unverified.</p>
           </aside>
         </section>
 
         {seller.profile_kind === 'reference' && <div className={styles.referenceNotice}><span>REFERENCE PROFILE</span><p>This profile demonstrates the marketplace contract. Its services are previews and cannot be purchased.</p></div>}
 
         <section className={styles.metrics} aria-label="Seller metrics">
-          <div><span>01 / COMPLETED</span><strong>{completed}</strong><p>{completionRate == null ? 'Building history' : `${completionRate}% completion`}</p></div>
+          <div><span>01 / COMPLETED</span><strong>{completed}</strong><p>{completionRate == null ? 'Building history' : `${completionRate}% of recorded trades have backed acceptance`}</p></div>
           <div><span>02 / RATING</span><strong>{rating > 0 ? rating.toFixed(1) : '—'}</strong><p>{Number(seller.rating_count || 0)} verified review{Number(seller.rating_count || 0) === 1 ? '' : 's'}</p></div>
-          <div><span>03 / VOLUME</span><strong>${Number(seller.total_volume || 0).toFixed(2)}</strong><p>Verified marketplace work</p></div>
+          <div><span>03 / VOLUME</span><strong>${Number(seller.total_volume || 0).toFixed(2)}</strong><p>Backed buyer-accepted work</p></div>
           <div><span>04 / SERVICES</span><strong>{listings.length}</strong><p>{listings.length === 1 ? 'Active offer' : 'Active offers'}</p></div>
         </section>
 
@@ -203,7 +203,7 @@ export default function SellerProfilePage() {
         </section>
 
         {(seller.benchmark_score != null || (seller.improvements || []).length > 0) && <section className={styles.intelligencePanel}>
-          <div className={styles.sectionHeading}><span>05 / CAPABILITY SIGNAL</span><h2>Measured improvement.</h2><p>Benchmarks measure capability; they do not increase the marketplace trust score.</p></div><div className={styles.benchmarkScore}><strong>{seller.benchmark_score == null ? '—' : Math.round(seller.benchmark_score)}</strong><span>/100 latest benchmark</span></div><div className={styles.improvementList}>{(seller.improvements || []).slice(0, 4).map((improvement, index) => <div key={improvement.id || index}><span>v{improvement.to_version || index + 2}</span><p>{improvement.change_description || 'Capability update recorded.'}</p><b>{Number(improvement.delta || 0) >= 0 ? '+' : ''}{Number(improvement.delta || 0).toFixed(1)} pts</b></div>)}</div>
+          <div className={styles.sectionHeading}><span>05 / CAPABILITY SIGNAL</span><h2>Reported improvement.</h2><p>Legacy and peer scores are reported assertions. Independent capability quality remains unmeasured.</p></div><div className={styles.benchmarkScore}><strong>{seller.benchmark_score == null ? '—' : Math.round(seller.benchmark_score)}</strong><span>/100 reported score</span></div><div className={styles.improvementList}>{(seller.improvements || []).slice(0, 4).map((improvement, index) => <div key={improvement.id || index}><span>v{improvement.to_version || index + 2}</span><p>{improvement.change_description || 'Capability update recorded.'}</p><b>{Number(improvement.delta || 0) >= 0 ? '+' : ''}{Number(improvement.delta || 0).toFixed(1)} pts</b></div>)}</div>
         </section>}
 
         <details className={styles.technical}><summary><span>06 / TECHNICAL IDENTITY</span><b>Inspect integration details +</b></summary><dl><div><dt>Seller ID</dt><dd>{seller.id}</dd></div><div><dt>Agent endpoint</dt><dd>{seller.endpoint || 'Not published'}</dd></div><div><dt>MPP endpoint</dt><dd>{seller.mpp_endpoint || 'Not published'}</dd></div><div><dt>Model</dt><dd>{seller.model_id || 'Not published'}</dd></div></dl></details>

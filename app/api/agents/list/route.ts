@@ -4,6 +4,10 @@ import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { reportInternalError } from '@/lib/api-error'
 import { getAgentAvailability } from '@/lib/agent-presence'
 import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
+import { PUBLIC_AGENT_WORK_PROOF_SQL } from '@/lib/capability-evidence-sql'
+import { LEGACY_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
+import { capabilityFamily } from '@/lib/capability-hierarchy'
+import { rawCapabilityFamilyFilter } from '@/lib/capability-family-filter'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,8 +16,8 @@ const MAX_PAGE_SIZE = 100
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const parsedLimit = Number.parseInt(searchParams.get('limit') || String(DEFAULT_PAGE_SIZE), 10)
-  const parsedPage = Number.parseInt(searchParams.get('page') || '1', 10)
+  const parsedLimit = Number(searchParams.get('limit') || String(DEFAULT_PAGE_SIZE))
+  const parsedPage = Number(searchParams.get('page') || '1')
   if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
     return NextResponse.json({ error: 'invalid_limit', message: 'limit must be a positive integer' }, { status: 400 })
   }
@@ -25,17 +29,25 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit
   const search = searchParams.get('search')?.trim().slice(0, 200) || ''
   const verifiedOnly = searchParams.get('verified') === 'true'
+  const familyInput = searchParams.get('family')?.trim() || ''
+  const family = capabilityFamily(familyInput)
+  if (familyInput && !family) return NextResponse.json({ error: 'unknown_capability_family', message: 'Use a family ID from /api/capabilities/hierarchy' }, { status: 400 })
 
   try {
     const conditions = [PUBLIC_AGENT_DIRECTORY_WHERE_SQL]
     const filterArgs: string[] = []
+    if (family) {
+      const predicate = rawCapabilityFamilyFilter(family, 'agents.capabilities')
+      conditions.push(predicate.clause)
+      filterArgs.push(...predicate.args)
+    }
     if (search) {
       conditions.push('(LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(capabilities) LIKE ?)')
       const term = `%${search.toLowerCase()}%`
       filterArgs.push(term, term, term)
     }
     if (verifiedOnly) {
-      conditions.push(`LOWER(capabilities) LIKE '%:verified%'`)
+      conditions.push(PUBLIC_AGENT_WORK_PROOF_SQL)
     }
     const whereSql = conditions.join('\n        AND ')
     const client = (db as any).$client
@@ -47,7 +59,7 @@ export async function GET(request: NextRequest) {
       improvement_count, moltbook_handle, is_online, last_seen_at
       FROM agents
       WHERE ${whereSql}
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT ? OFFSET ?`, args: [...filterArgs, limit, offset] }),
       client.execute({
         sql: `SELECT COUNT(*) AS count FROM agents WHERE ${whereSql}`,
@@ -89,6 +101,7 @@ export async function GET(request: NextRequest) {
         created_at: row.created_at,
         version: row.version || 1,
         benchmark_score: benchmarkScore,
+        benchmark_evidence: LEGACY_BENCHMARK_EVIDENCE,
         velocity_score: velocityScore,
         improvement_count: Number(row.improvement_count || 0),
         moltbook_handle: row.moltbook_handle || null,
@@ -102,6 +115,7 @@ export async function GET(request: NextRequest) {
         trust_evidence_points: trust.evidencePoints,
         trust_drivers: trust.drivers,
         trust_components: trust.components,
+        trust_evidence: trust.evidence,
         // Compatibility alias. Reputation and trust now share a documented 0-100 scale.
         reputation_score: trust.trustScore,
       }
@@ -109,6 +123,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       agents,
+      family: family?.id || null,
       page,
       limit,
       total,

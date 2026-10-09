@@ -28,7 +28,7 @@ export default function HomePaymentRails({ className, initialConfig = null }: { 
     ? config.accepted_tokens.map((token) => `${token.symbol || 'Token'} on ${token.chain_name || 'EVM'}`).join(', ')
     : 'ERC-20 escrow'
   const rails = [
-    `USDC account credit / ${status(config?.account_credit_enabled)}`,
+    `Account balance (USDC-backed) / ${status(config?.account_credit_enabled)}`,
     `${tokenLabel} / ${status(config?.erc20_configured)}`,
     `MPP pathUSD on Tempo / ${status(config?.mpp_configured)}`,
   ]

@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { ROUTE_STATES } from './route-states';
 import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
@@ -387,7 +388,7 @@ export const trades = sqliteTable('trades', {
     .$defaultFn(() => new Date()),
   completed_at: integer('completed_at', { mode: 'timestamp' }),
   rating_window_expires_at: text('rating_window_expires_at'),
-});
+}, (table) => [index('trades_buyer_status_idx').on(table.buyer_id, table.status)]);
 
 export const service_orders = sqliteTable('service_orders', {
   id: text('id').primaryKey(),
@@ -463,7 +464,7 @@ export const route_plans = sqliteTable('route_plans', {
   retry_policy: text('retry_policy').notNull().default('{}'),
   provider_requirements_json: text('provider_requirements_json').notNull().default('{}'),
   candidates_json: text('candidates_json').notNull().default('[]'),
-  state: text('state', { enum: ['planned', 'reserving', 'awaiting_funding', 'funded', 'dispatching', 'executing', 'verifying', 'retrying', 'awaiting_buyer', 'settling', 'completed', 'failed', 'cancelled', 'disputed', 'resolved'] }).notNull().default('planned'),
+  state: text('state', { enum: ROUTE_STATES }).notNull().default('planned'),
   service_order_id: text('service_order_id').references(() => service_orders.id, { onDelete: 'restrict' }),
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
@@ -781,6 +782,8 @@ export const capability_performance_events = sqliteTable('capability_performance
 export const benchmarks = sqliteTable('benchmarks', {
   id: text('id').primaryKey(),
   agentId: text('agent_id').notNull(),
+  evaluatorAgentId: text('evaluator_agent_id'),
+  clientReference: text('client_reference'),
   taskId: text('task_id'),
   capability: text('capability').notNull(),
   testInput: text('test_input').notNull(),
@@ -793,7 +796,32 @@ export const benchmarks = sqliteTable('benchmarks', {
   notes: text('notes'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   scoredAt: text('scored_at'),
-});
+}, (table) => [uniqueIndex('benchmarks_evaluator_reference_idx').on(table.evaluatorAgentId, table.clientReference)]);
+
+/** Immutable benchmark versions; expected answers are private encrypted materials. */
+export const benchmark_definitions = sqliteTable('benchmark_definitions', {
+  id: text('id').primaryKey(), suite_key: text('suite_key').notNull(), version: integer('version').notNull(),
+  title: text('title').notNull(), capability_id: text('capability_id').notNull(), grader_agent_id: text('grader_agent_id').notNull(),
+  definition_hash: text('definition_hash').notNull(), request_hash: text('request_hash').notNull(),
+  ciphertext: text('ciphertext').notNull(), nonce: text('nonce').notNull(), case_count: integer('case_count').notNull(),
+  status: text('status', { enum: ['active', 'retired'] }).notNull().default('active'), created_by: text('created_by').notNull(),
+  retired_by: text('retired_by'), retired_at: integer('retired_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, (table) => [uniqueIndex('benchmark_definition_version_idx').on(table.suite_key, table.version)]);
+
+export const benchmark_runs = sqliteTable('benchmark_runs', {
+  id: text('id').primaryKey(), definition_id: text('definition_id').notNull().references(() => benchmark_definitions.id),
+  definition_hash: text('definition_hash').notNull(), target_agent_id: text('target_agent_id').notNull(),
+  grader_agent_id: text('grader_agent_id').notNull(), client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(), participants_hash: text('participants_hash').notNull(),
+  state: text('state', { enum: ['awaiting_submission', 'awaiting_grading', 'graded', 'cancelled', 'expired'] }).notNull().default('awaiting_submission'),
+  submission_hash: text('submission_hash'), submission_ciphertext: text('submission_ciphertext'), submission_nonce: text('submission_nonce'),
+  report_hash: text('report_hash'), report_json: text('report_json'), passed_count: integer('passed_count'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(), completed_at: integer('completed_at', { mode: 'timestamp' }),
+}, (table) => [uniqueIndex('benchmark_run_reference_idx').on(table.target_agent_id, table.client_reference),
+  index('benchmark_run_target_definition_idx').on(table.target_agent_id, table.definition_id),
+  index('benchmark_run_expiry_idx').on(table.state, table.expires_at)]);
 
 export const capability_challenges = sqliteTable('capability_challenges', {
   id: text('id').primaryKey(),
@@ -1329,6 +1357,9 @@ export const contracts = sqliteTable('contracts', {
   total_amount: real('total_amount').notNull(),
   fee_amount: real('fee_amount').notNull().default(0),
   escrow_amount: real('escrow_amount').notNull().default(0),
+  payment_rail: text('payment_rail', { enum: ['ledger', 'credit'] }).notNull().default('ledger'),
+  funded_at: integer('funded_at', { mode: 'timestamp' }),
+  organization_id: text('organization_id'),
   state: text('state', {
     enum: ['DRAFT', 'FUNDED', 'IN_PROGRESS', 'AWAITING_REVIEW', 'DISPUTED', 'COMPLETED', 'CANCELED', 'EXPIRED', 'REFUNDED'],
   }).notNull().default('DRAFT'),
@@ -1510,3 +1541,25 @@ export const a2a_message_claims = sqliteTable('a2a_message_claims', {
   message_id: text('message_id').notNull(), request_json: text('request_json').notNull(),
   created_at: integer('created_at').notNull(),
 }, t => [primaryKey({ columns: [t.agent_id, t.message_id] })]);
+
+/** MCP handles have a separate namespace; shared canonical routing owns money/work. */
+export const mcp_route_tasks = sqliteTable('mcp_route_tasks', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  context_id: text('context_id').notNull(), first_message_id: text('first_message_id').notNull(),
+  initial_message: text('initial_message').notNull(), action: text('action', { enum: ['route_work', 'cancel_route'] }).notNull(),
+  route_id: text('route_id').references(() => route_plans.id, { onDelete: 'restrict' }),
+  mandate_id: text('mandate_id').references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  last_error_code: text('last_error_code'),
+  terminal_status: text('terminal_status', { enum: ['completed', 'failed', 'cancelled'] }),
+  created_at: integer('created_at').notNull(), updated_at: integer('updated_at').notNull(),
+}, t => [uniqueIndex('mcp_route_first_message').on(t.agent_id, t.first_message_id), index('mcp_route_agent_created').on(t.agent_id, t.created_at)]);
+
+/** Short-lived SSE cursors retain the originating request ID, never private result bytes. */
+export const mcp_result_streams = sqliteTable('mcp_result_streams', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  task_id: text('task_id').notNull().references(() => mcp_route_tasks.id, { onDelete: 'restrict' }),
+  rpc_id_json: text('rpc_id_json').notNull(),
+  created_at: integer('created_at').notNull(), expires_at: integer('expires_at').notNull(),
+}, t => [index('mcp_result_stream_agent_expiry').on(t.agent_id, t.expires_at)]);

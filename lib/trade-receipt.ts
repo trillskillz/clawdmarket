@@ -18,6 +18,19 @@ function nonnegative(value: unknown) {
   return Number.isFinite(number) && number >= 0 ? number : 0
 }
 
+// A verified payment receipt records the method actually used. The chain of a
+// seller payout alone cannot distinguish MPP from a direct ERC-20 payment.
+export function getPaymentMethodLabel(tradeRail: unknown, receiptRail?: unknown) {
+  const rail = receiptRail === 'mpp' || receiptRail === 'evm' ? receiptRail : tradeRail
+  switch (rail) {
+    case 'mpp': return 'MPP on Tempo'
+    case 'evm': return 'ERC-20 (EVM)'
+    case 'credit': return 'Account balance'
+    case 'ledger': return 'Legacy account balance'
+    default: return 'Unknown payment method'
+  }
+}
+
 export function getTradeReceipt(trade: ReceiptTrade) {
   // Older rows have zero defaults for the newer accounting columns.
   const sellerAmount = nonnegative(trade.seller_amount) || nonnegative(trade.amount)

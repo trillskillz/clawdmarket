@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual, promisify } from 'node:util'
-import { canonicalJSON } from './verifier-contract.mjs'
+import { canonicalJSON, VERIFIER_ADAPTERS, verifierArtifactExtension } from './verifier-contract.mjs'
 
 const execute = promisify(execFile)
 const sha = (value) => createHash('sha256').update(value).digest('hex')
@@ -17,6 +17,16 @@ const { default: run } = await import('/input/module.mjs');
 if (typeof run !== 'function') process.exit(2);
 const result = await run(...args);
 process.stdout.write(JSON.stringify(result));`
+
+const pythonHarness = `import importlib.util, json, sys
+with open('/input/args.json', encoding='utf-8') as source:
+    args = json.load(source)
+spec = importlib.util.spec_from_file_location('submission', '/input/module.py')
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+result = module.run(*args)
+sys.stdout.write(json.dumps(result, allow_nan=False, ensure_ascii=True, separators=(',', ':')))
+`
 
 function validateSuite(suite) {
   if (!suite || suite.version !== 1 || Object.keys(suite).sort().join() !== 'cases,version' || !Array.isArray(suite.cases)
@@ -39,7 +49,7 @@ function validateSuite(suite) {
   }
 }
 
-async function isolatedCommand(directory, command, timeoutMs) {
+async function isolatedCommand(directory, command, timeoutMs, python = false) {
   const unit = `clawdmarket-verifier-${randomUUID()}`
   const args = ['--user', '--scope', '--quiet', '--collect', `--unit=${unit}`, '--property=MemoryMax=128M', '--property=MemorySwapMax=0', '--property=TasksMax=32',
     '--property=CPUQuota=100%', `--property=RuntimeMaxSec=${Math.max(1, Math.ceil(timeoutMs / 1000))}s`, '--property=TimeoutStopSec=1s',
@@ -47,7 +57,8 @@ async function isolatedCommand(directory, command, timeoutMs) {
     '--unshare-all', '--unshare-user', '--disable-userns', '--die-with-parent', '--new-session', '--cap-drop', 'ALL', '--clearenv',
     '--ro-bind', '/usr', '/usr', '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64', '--proc', '/proc', '--dev', '/dev',
     '--tmpfs', '/tmp', '--dir', '/runtime', '--ro-bind', process.execPath, '/runtime/node', '--ro-bind', directory, '/input', '--chdir', '/input',
-    '/usr/bin/prlimit', '--cpu=30', '--nofile=64', '--fsize=8192', '--', '/runtime/node', '--max-old-space-size=64', ...command]
+    '/usr/bin/prlimit', '--cpu=30', '--nofile=64', '--fsize=8192', '--',
+    ...(python ? ['/usr/bin/python3', '-I', '-S', '-B'] : ['/runtime/node', '--max-old-space-size=64']), ...command]
   let output = Buffer.alloc(0), overflow = false, timedOut = false
   let stopping
   const stop = () => stopping ||= execute('/usr/bin/systemctl', ['--user', 'stop', `${unit}.scope`], { timeout: 5000 }).catch(() => {})
@@ -64,26 +75,27 @@ async function isolatedCommand(directory, command, timeoutMs) {
   } finally { clearTimeout(timer); await stop(); child.kill('SIGKILL') }
 }
 
-/** @param {{code: Buffer, suite: any, adapter: 'javascript_tests_v1'|'javascript_static_v1', maxRuntimeSeconds?: number}} options */
+/** @param {{code: Buffer, suite: any, adapter: 'javascript_tests_v1'|'javascript_static_v1'|'python_tests_v1', maxRuntimeSeconds?: number}} options */
 export async function runIsolatedVerification({ code, suite, adapter, maxRuntimeSeconds = 30 }) {
   validateSuite(suite)
-  if (!Buffer.isBuffer(code) || !code.length || code.length > 65536 || !['javascript_tests_v1', 'javascript_static_v1'].includes(adapter)
+  if (!Buffer.isBuffer(code) || !code.length || code.length > 65536 || !VERIFIER_ADAPTERS.includes(adapter)
     || !Number.isInteger(maxRuntimeSeconds) || maxRuntimeSeconds < 1 || maxRuntimeSeconds > 30
     || adapter === 'javascript_static_v1' && suite.cases.length !== 1) throw new Error('INVALID_VERIFIER_INPUT')
   const started = performance.now(), deadline = started + maxRuntimeSeconds * 1000
   const directory = await mkdtemp(join(tmpdir(), 'clawdmarket-isolated-verifier-'))
   let passed = 0, failure = null
   try {
-    await writeFile(join(directory, 'module.mjs'), code, { mode: 0o600 })
-    await writeFile(join(directory, 'harness.mjs'), harness, { mode: 0o600 })
-    const probe = await isolatedCommand(directory, ['-e', 'process.stdout.write("isolated-verifier-ready-v1")'], Math.max(1, deadline - performance.now())).catch(() => null)
+    const python = adapter === 'python_tests_v1'
+    await writeFile(join(directory, `module${verifierArtifactExtension(adapter)}`), code, { mode: 0o600 })
+    await writeFile(join(directory, python ? 'harness.py' : 'harness.mjs'), python ? pythonHarness : harness, { mode: 0o600 })
+    const probe = await isolatedCommand(directory, python ? ['-c', 'import sys; sys.stdout.write("isolated-verifier-ready-v1")'] : ['-e', 'process.stdout.write("isolated-verifier-ready-v1")'], Math.max(1, deadline - performance.now()), python).catch(() => null)
     if (!probe || probe.code !== 0 || probe.output.toString() !== 'isolated-verifier-ready-v1') failure = 'sandbox_failed'
     for (const entry of suite.cases) {
       if (failure === 'sandbox_failed') break
       if (performance.now() >= deadline) { failure = 'timeout'; break }
       await writeFile(join(directory, 'args.json'), JSON.stringify(entry.args), { mode: 0o600 })
       let result
-      try { result = await isolatedCommand(directory, adapter === 'javascript_static_v1' ? ['--check', '/input/module.mjs'] : ['/input/harness.mjs'], Math.max(1, deadline - performance.now())) }
+      try { result = await isolatedCommand(directory, adapter === 'javascript_static_v1' ? ['--check', '/input/module.mjs'] : [python ? '/input/harness.py' : '/input/harness.mjs'], Math.max(1, deadline - performance.now()), python) }
       catch { failure = 'sandbox_failed'; break }
       if (result.timedOut) { failure = 'timeout'; break }
       if (result.code !== 0 || result.overflow) { failure = result.overflow ? 'resource_limit' : 'checks_failed'; continue }
@@ -102,7 +114,7 @@ export async function runIsolatedVerification({ code, suite, adapter, maxRuntime
 
 async function main() {
   const [codePath, suitePath, adapter] = process.argv.slice(2)
-  if (!codePath || !suitePath) throw new Error('VERIFIER_USAGE: node scripts/isolated-verifier.mjs CODE.mjs SUITE.json javascript_tests_v1|javascript_static_v1')
+  if (!codePath || !suitePath) throw new Error('VERIFIER_USAGE: node scripts/isolated-verifier.mjs CODE_FILE SUITE.json ADAPTER')
   const report = await runIsolatedVerification({ code: await readFile(resolve(codePath)), suite: JSON.parse(await readFile(resolve(suitePath), 'utf8')), adapter })
   process.stdout.write(`${JSON.stringify(report)}\n`)
   process.exitCode = report.status === 'passed' ? 0 : 1

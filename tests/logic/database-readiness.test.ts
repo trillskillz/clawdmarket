@@ -64,6 +64,18 @@ test('database readiness reports schema drift without changing the database', as
   )
 })
 
+test('database readiness blocks MCP deployment until durable task and result cursor tables exist', async () => {
+  await withDatabase(
+    (table, columns) => table === 'mcp_route_tasks' || table === 'mcp_result_streams' ? [] : columns,
+    async (client) => {
+      const result = await inspectDatabaseSchema(client)
+      assert.equal(result.ready, false)
+      assert.deepEqual([...result.missing_tables].sort(), ['mcp_result_streams', 'mcp_route_tasks'])
+      assert.equal((await client.execute("SELECT name FROM sqlite_master WHERE name LIKE 'mcp_%'")).rows.length, 0)
+    },
+  )
+})
+
 test('database readiness blocks external checkout when a returned trade column is missing', async () => {
   await withDatabase(
     (table, columns) => table === 'trades'

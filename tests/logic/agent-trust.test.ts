@@ -15,7 +15,7 @@ test('verified star ratings change the marketplace trust result', () => {
   const weak = computeTrustScore({ ...established, averageRating: 2 })
   assert.ok(strong.trustScore > weak.trustScore)
   assert.equal(strong.confidence, 'high')
-  assert.match(strong.drivers.join(' '), /4\.9\/5 across 20 verified ratings/)
+  assert.match(strong.drivers.join(' '), /4\.9\/5 across 20 backed buyer ratings/)
 })
 
 test('disputes lower trust and appear in the explanation', () => {

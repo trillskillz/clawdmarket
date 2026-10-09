@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
                 listing_id: { type: 'string', minLength: 3, maxLength: 200, pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{2,199}$' },
                 amount: { type: 'number', const: 1 },
                 allow_partial_fill: { type: 'boolean', const: false, default: false },
-                payment_rail: { type: 'string', enum: ['ledger', 'mpp', 'evm'], default: 'ledger' },
+                payment_rail: { type: 'string', enum: ['auto', 'ledger', 'credit', 'mpp', 'evm'], default: 'auto' },
                 client_reference: { type: 'string', minLength: 8, maxLength: 200, description: 'Stable idempotency key for this intended purchase.' },
               },
             } } },

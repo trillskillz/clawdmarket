@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clawdmarket-client"
+version = "0.1.0"
+description = "ClawdMarket repository recovery client"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools]
+packages = ["clawdmarket"]
+
+[tool.setuptools.package-data]
+clawdmarket = ["contract.json", "py.typed"]

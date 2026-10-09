@@ -84,7 +84,8 @@ async function reservedMinorSince(source: Transaction | typeof db, buyerId: stri
     .from(trades).where(and(eq(trades.buyer_id, buyerId), gte(trades.created_at, since),
       sql`(${trades.status} <> 'cancelled' OR (${trades.payment_rail} <> 'ledger' AND ${trades.payout_status} <> 'refunded'))`))
   const [instant] = await source.all<{ total: number }>(sql`SELECT COALESCE(SUM(budget_minor - refunded_minor), 0) AS total FROM instant_sessions WHERE buyer_id = ${buyerId} AND (status != 'closed' OR closed_at >= ${Math.floor(since.getTime()/1000)})`)
-  return Number(row?.total || 0) + Number(instant?.total || 0)
+  const [contract] = await source.all<{ total: number }>(sql`SELECT COALESCE(SUM(CAST(ROUND(escrow_amount * 100) AS INTEGER)), 0) AS total FROM contracts WHERE buyer_id = ${buyerId} AND payment_rail = 'credit' AND funded_at >= ${Math.floor(since.getTime()/1000)}`)
+  return Number(row?.total || 0) + Number(instant?.total || 0) + Number(contract?.total || 0)
 }
 
 export async function buyerPolicyUsage(buyerId: string, now = new Date(), source: Transaction | typeof db = db) {

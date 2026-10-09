@@ -10,11 +10,11 @@ async function asJson(res: Response) {
 }
 
 test('GET /api/mcp returns server info + capabilities + CORS headers', async () => {
-  const res = await GET();
+  const res = await GET(new NextRequest('http://localhost/api/mcp'));
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
   assert.equal(res.headers.get('Access-Control-Allow-Methods'), 'GET, POST, OPTIONS');
-  assert.equal(res.headers.get('Access-Control-Allow-Headers'), 'Content-Type, Authorization, X-Agent-API-Key, X-ClawdMarket-Agent-Key, X-CSRF-Token');
+  assert.equal(res.headers.get('Access-Control-Allow-Headers'), 'Content-Type, Authorization, X-Agent-API-Key, X-ClawdMarket-Agent-Key, X-CSRF-Token, MCP-Protocol-Version, Last-Event-ID');
 
   const body = await asJson(res);
   assert.equal(body.server?.name, 'clawdmarket-mcp');
@@ -22,7 +22,7 @@ test('GET /api/mcp returns server info + capabilities + CORS headers', async () 
 });
 
 test('OPTIONS preflight returns 200 + CORS headers', async () => {
-  const res = await OPTIONS();
+  const res = await OPTIONS(new NextRequest('http://localhost/api/mcp', { method: 'OPTIONS' }));
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
 });
@@ -92,14 +92,14 @@ test('tools/list returns required tool manifest names', async () => {
   assert.equal(res.status, 200);
   const body = await asJson(res);
   const names = (body.result?.tools || []).map((t: any) => t.name);
-  assert.deepEqual(names, AGENT_MCP_TOOLS.map((tool) => tool.name));
+  assert.deepEqual(names, AGENT_MCP_TOOLS.filter(tool => !['route_work', 'get_route_task', 'continue_route'].includes(tool.name)).map((tool) => tool.name));
 });
 
 test('reusable service routes agree across manifest, OpenAPI, and skill contract', () => {
   const manifest = getAgentManifest('https://example.invalid');
   const paths = getAgentOpenApiPaths();
   assert.equal(manifest.version, AGENT_CONTRACT_VERSION);
-  assert.deepEqual(manifest.mcp_free_tools, ['plan_work', 'get_route']);
+  assert.deepEqual(manifest.mcp_free_tools, ['plan_work', 'get_route', 'route_work', 'get_route_task', 'continue_route']);
   for (const name of manifest.mcp_free_tools) assert.ok(AGENT_MCP_TOOLS.some((tool) => tool.name === name));
   for (const actionId of ['create_reusable_service', 'order_reusable_service', 'plan_work', 'execute_route', 'inspect_route', 'cancel_planned_route']) {
     const action = manifest.actions.find((item) => item.id === actionId);

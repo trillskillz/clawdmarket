@@ -15,13 +15,18 @@ import { previewRoute } from '@/lib/route-preview';
 import { inspectOwnedRoute } from '@/lib/route-inspection';
 import { routePlanningEnabled } from '@/lib/routing-feature-flags';
 import { rateLimit } from '@/lib/rate-limit';
+import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts';
+import { MCP_TASK_PROTOCOL, MCP_TASK_CAPABILITIES, MCP_TASK_TOOLS, callMcpRouteTool, handleMcpTaskMethod, resumeMcpResult, mcpTaskError } from '@/lib/mcp-route-tasks';
+import { recordPlatformMppReceipt } from '@/lib/platform-payment-proofs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
+const PROTOCOLS = new Set(['2024-11-05', '2025-03-26', '2025-06-18', MCP_TASK_PROTOCOL]);
 
 const SERVER_INFO = {
   name: 'clawdmarket-mcp',
-  version: '1.0.0',
+  version: '1.1.0',
 };
 
 const CAPABILITIES = {
@@ -101,8 +106,30 @@ function withCors(res: Response | NextResponse): Response {
   const headers = new Headers(res.headers);
   headers.set('Access-Control-Allow-Origin', '*');
   headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Agent-API-Key, X-ClawdMarket-Agent-Key, X-CSRF-Token');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Agent-API-Key, X-ClawdMarket-Agent-Key, X-CSRF-Token, MCP-Protocol-Version, Last-Event-ID');
+  headers.set('Cache-Control', 'private, no-store');
   return new Response(res.body, { status: res.status, headers });
+}
+
+function originAllowed(req?: NextRequest) {
+  const origin = req?.headers.get('origin');
+  if (!origin) return true;
+  const allowed = new Set(['https://clawdmkt.com', 'https://www.clawdmkt.com']);
+  for (const configured of (process.env.CLAWDMARKET_MCP_ALLOWED_ORIGINS || '').split(',')) {
+    try { const url = new URL(configured.trim()); if (url.protocol === 'https:') allowed.add(url.origin); } catch { /* invalid configuration grants no origin */ }
+  }
+  if (req && ['localhost', '127.0.0.1', '[::1]'].includes(req.nextUrl.hostname)) allowed.add(req.nextUrl.origin);
+  return allowed.has(origin);
+}
+
+function taskFailure(id: unknown, error: unknown): Response | null {
+  const problem = mcpTaskError(error);
+  if (!problem) return null;
+  const response = jsonRpcError(id, problem.rpcCode, problem.code, problem.data);
+  const headers = new Headers(response.headers);
+  if (problem.status === 401) headers.set('WWW-Authenticate', 'Bearer realm="ClawdMarket MCP"');
+  if (problem.status === 429) headers.set('Retry-After', '60');
+  return withCors(new Response(response.body, { status: problem.status, headers }));
 }
 
 function jsonRpcResult(id: unknown, result: unknown) {
@@ -283,45 +310,91 @@ async function executeTool(req: NextRequest, name: string, args: any) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!originAllowed(req)) return new Response('Forbidden origin', { status: 403 });
+  const protocol = req?.headers.get('mcp-protocol-version');
+  if (protocol && !PROTOCOLS.has(protocol)) return withCors(jsonRpcError(null, -32600, 'Unsupported MCP protocol version'));
+  if (req?.headers.get('accept')?.includes('text/event-stream')) {
+    if (!req.headers.get('last-event-id')) return withCors(new Response(null, { status: 405, headers: { Allow: 'POST, OPTIONS' } }));
+    if (protocol !== MCP_TASK_PROTOCOL) return withCors(jsonRpcError(null, -32600, 'MCP Tasks require protocol 2025-11-25'));
+    try { return withCors(await resumeMcpResult(req)); } catch (error) {
+      const response = taskFailure(null, error);
+      if (response) return response;
+      const errorId = reportInternalError('MCP result resumption failed', error);
+      return withCors(jsonRpcError(null, -32000, 'Internal MCP error', { error_id: errorId }));
+    }
+  }
   return withCors(
     NextResponse.json({
       server: SERVER_INFO,
-      capabilities: CAPABILITIES,
+      capabilities: MCP_TASK_CAPABILITIES,
       transport: {
-        kind: 'http',
+        kind: 'streamable-http',
         methods: ['GET', 'POST'],
+        protocolVersion: MCP_TASK_PROTOCOL,
+        stateless: true,
+        resumableTaskResults: true,
       },
     }),
   );
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null);
+  if (!originAllowed(req)) return new Response('Forbidden origin', { status: 403 });
+  const protocol = req.headers.get('mcp-protocol-version') || '2025-03-26';
+  if (!PROTOCOLS.has(protocol)) return withCors(jsonRpcError(null, -32600, 'Unsupported MCP protocol version'));
+  if (req.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json')
+    return withCors(new Response('Content-Type must be application/json', { status: 415 }));
+  if (protocol === MCP_TASK_PROTOCOL && (!req.headers.get('accept')?.includes('application/json') || !req.headers.get('accept')?.includes('text/event-stream')))
+    return withCors(new Response('Accept must include application/json and text/event-stream', { status: 406 }));
+  let body;
+  try { body = await readBoundedJson(req, 16_384); } catch (error) {
+    if (error instanceof ArtifactError) return withCors(new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: error.status === 413 ? -32600 : -32700, message: error.code } }), { status: error.status, headers: { 'Content-Type': 'application/json' } }));
+    throw error;
+  }
   if (!body || body.jsonrpc !== '2.0' || typeof body.method !== 'string') {
     return withCors(jsonRpcError(null, -32600, 'Invalid Request'));
   }
 
   const { id, method, params } = body;
+  if (params != null && (typeof params !== 'object' || Array.isArray(params))) return withCors(jsonRpcError(id, -32602, 'Invalid parameters'));
+  if (!('id' in body)) {
+    if (['notifications/initialized', 'notifications/cancelled'].includes(method)) return withCors(new Response(null, { status: 202 }));
+    return withCors(jsonRpcError(null, -32600, 'Invalid notification'));
+  }
+  if (!(id === null || typeof id === 'string' || typeof id === 'number' && Number.isSafeInteger(id))) return withCors(jsonRpcError(null, -32600, 'Invalid request ID'));
 
   try {
     if (method === 'initialize') {
+      const negotiated = PROTOCOLS.has(params?.protocolVersion) ? params.protocolVersion : MCP_TASK_PROTOCOL;
       return withCors(
         jsonRpcResult(id, {
-          protocolVersion: '2024-11-05',
+          protocolVersion: negotiated,
           serverInfo: SERVER_INFO,
-          capabilities: CAPABILITIES,
+          capabilities: negotiated === MCP_TASK_PROTOCOL ? MCP_TASK_CAPABILITIES : CAPABILITIES,
         }),
       );
     }
 
     if (method === 'tools/list') {
-      return withCors(jsonRpcResult(id, { tools: TOOLS }));
+      return withCors(jsonRpcResult(id, { tools: protocol === MCP_TASK_PROTOCOL ? TOOLS : TOOLS.filter(tool => !MCP_TASK_TOOLS.has(tool.name)) }));
+    }
+
+    if (method === 'ping') return withCors(jsonRpcResult(id, {}));
+    if (method.startsWith('tasks/')) {
+      if (protocol !== MCP_TASK_PROTOCOL) return withCors(jsonRpcError(id, -32601, 'MCP Tasks require protocol 2025-11-25'));
+      const result = await handleMcpTaskMethod(req, method, params, id);
+      return withCors(result instanceof Response ? result : jsonRpcResult(id, result));
     }
 
     if (method === 'tools/call') {
       const name = params?.name;
       const args = params?.arguments ?? {};
+      if (typeof name === 'string' && MCP_TASK_TOOLS.has(name)) {
+        if (protocol !== MCP_TASK_PROTOCOL) return withCors(jsonRpcError(id, -32601, 'MCP Tasks require protocol 2025-11-25'));
+        return withCors(jsonRpcResult(id, await callMcpRouteTool(req, name, args, params?.task)));
+      }
+      if (protocol === MCP_TASK_PROTOCOL && params?.task !== undefined) return withCors(jsonRpcError(id, -32601, 'This tool forbids task augmentation'));
       if (!name || typeof name !== 'string') {
         return withCors(
           jsonRpcResult(id, {
@@ -345,6 +418,11 @@ export async function POST(req: NextRequest) {
       }
       if (paymentGate.status !== 200 || typeof paymentGate.withReceipt !== 'function') {
         return withCors(NextResponse.json({ error: 'payment_service_unavailable', message: 'MPP payment verification is not configured' }, { status: 503 }));
+      }
+
+      if (!FREE_ROUTING_TOOLS.has(name)) {
+        const envelope = paymentGate.withReceipt({ jsonrpc: '2.0', id: id ?? null, result: {} });
+        await recordPlatformMppReceipt(envelope.result?._meta?.['org.paymentauth/receipt']);
       }
 
       try {
@@ -375,11 +453,14 @@ export async function POST(req: NextRequest) {
 
     return withCors(jsonRpcError(id, -32601, `Method not found: ${method}`));
   } catch (error: any) {
+    const taskError = taskFailure(id, error);
+    if (taskError) return taskError;
     const errorId = reportInternalError('MCP request failed', error, { method });
     return withCors(jsonRpcError(id, -32000, 'Internal MCP error', { error_id: errorId }));
   }
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(req: NextRequest) {
+  if (!originAllowed(req)) return new Response('Forbidden origin', { status: 403 });
   return withCors(new NextResponse(null, { status: 200 }));
 }

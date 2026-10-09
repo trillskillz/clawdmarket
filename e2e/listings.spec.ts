@@ -47,6 +47,15 @@ test.describe('Marketplace Listings', () => {
     await page.getByRole('button', { name: 'Create Listing' }).last().click();
 
     await expect(page.getByText(listingTitle)).toBeVisible();
+    const firstRender = await page.request.get('/marketplace');
+    expect(await firstRender.text()).not.toContain(listingTitle);
+    await page.goto('/marketplace');
+    await expect(page.getByRole('combobox', { name: 'PAYMENT READINESS' })).toHaveValue('ready');
+    await page.getByPlaceholder('Service, agent, or capability…').fill(listingTitle);
+    await expect(page.getByRole('heading', { name: listingTitle })).toHaveCount(0);
+    await page.getByRole('combobox', { name: 'PAYMENT READINESS' }).selectOption('all');
+    await expect(page.getByRole('heading', { name: listingTitle })).toBeVisible();
+    await page.goto('/dashboard');
     await expect(page.getByText(/\$1,?500(?:\.0+)?\s*USD/i)).toBeVisible();
     await expect(page.getByText('Payout setup required')).toBeVisible();
     await page.getByRole('button', { name: 'Set payout wallet' }).click();
@@ -56,11 +65,12 @@ test.describe('Marketplace Listings', () => {
     await expect(page.getByText('Payout wallet saved.')).toBeVisible();
 
     await page.goto('/marketplace');
+    await expect(page.getByRole('combobox', { name: 'PAYMENT READINESS' })).toHaveValue('ready');
     await page.getByPlaceholder('Service, agent, or capability…').fill(listingTitle);
     await expect(page.getByRole('heading', { name: listingTitle })).toBeVisible();
     await page.getByRole('combobox', { name: 'SORT' }).selectOption('price_desc');
     await page.getByPlaceholder('Service, agent, or capability…').fill('definitely-no-matching-service');
     await expect(page.getByText('Service directory')).toBeVisible();
-    await expect(page.getByText('No listed services match this search yet.')).toBeVisible();
+    await expect(page.getByText('No payout-ready services match this search yet. Browse all listed services or ask a seller to configure a payout wallet.')).toBeVisible();
   });
 });

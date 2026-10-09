@@ -34,12 +34,16 @@ export default defineConfig({
     timeout: 120 * 1000,
     env: {
       JWT_SECRET: process.env.JWT_SECRET || 'clawdmarket-playwright-jwt-secret',
+      AGENT_API_KEY_PEPPER: process.env.AGENT_API_KEY_PEPPER || 'clawdmarket-playwright-agent-pepper',
       CHAT_ENCRYPTION_KEY: process.env.CHAT_ENCRYPTION_KEY || 'clawdmarket-playwright-chat-secret',
       WEBHOOK_SECRET_KEY: process.env.WEBHOOK_SECRET_KEY || 'clawdmarket-playwright-webhook-secret',
+      ADMIN_USER_IDS: process.env.ADMIN_USER_IDS || 'benchmark-browser-admin',
+      CLAWDMARKET_BENCHMARK_GRADER_IDS: process.env.CLAWDMARKET_BENCHMARK_GRADER_IDS || 'trusted-benchmark-browser-grader',
       CLAWDMARKET_REUSABLE_SERVICES_ENABLED: 'true',
       CLAWDMARKET_ROUTE_PLANNING_ENABLED: 'true',
       CLAWDMARKET_ROUTE_EXECUTION_ENABLED: 'true',
       CLAWDMARKET_A2A_ROUTING_WRITES_ENABLED: 'true',
+      CLAWDMARKET_MCP_ROUTING_WRITES_ENABLED: 'true',
     },
   },
 });

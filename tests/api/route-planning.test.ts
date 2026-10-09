@@ -721,6 +721,7 @@ test('planning separates provider claims from backed completion evidence without
 
 test('planning skips unsupported contracts and saved routes recheck them before checkout', async () => {
   const cases = [
+    { field: 'capabilities', value: '["code-generation"]' },
     { field: 'execution_mode', value: 'instant' },
     { field: 'provider_protocol', value: 'unsupported' },
     { field: 'verification_policy', value: '{broken' },

@@ -44,6 +44,20 @@ test('verification policy requires buyer review and rejects unsupported or unsaf
   assert.equal(supportsVerification(requested, offered), false)
 })
 
+test('Python verification binds adapter, suite, runtime, designated registered agent and explicit acceptance', () => {
+  const base = { methods: ['buyer_review', 'isolated_checks'], acceptance: { version: 1, mode: 'explicit_buyer' },
+    isolated_checks: { version: 1, adapter: 'python_tests_v1', verifier_agent_id: `agent_${crypto.randomUUID()}`, suite_sha256: 'a'.repeat(64), max_runtime_seconds: 5 } }
+  const python = verificationPolicySchema.parse(base)
+  assert.equal(verificationPolicySchema.safeParse({ ...base, acceptance: undefined }).success, false)
+  const changed = (changes: Record<string, unknown>) => verificationPolicySchema.parse({ ...base, isolated_checks: { ...base.isolated_checks, ...changes } })
+  assert.equal(supportsVerification(python, python), true)
+  for (const changes of [{ adapter: 'javascript_tests_v1' }, { verifier_agent_id: crypto.randomUUID() }, { suite_sha256: 'b'.repeat(64) }, { max_runtime_seconds: 4 }]) {
+    assert.equal(supportsVerification(python, changed(changes)), false)
+  }
+  assert.equal(supportsVerification(python, changed({ max_runtime_seconds: 10 })), true)
+  assert.equal(verificationPolicySchema.safeParse({ ...base, isolated_checks: { ...base.isolated_checks, adapter: 'python_shell_v1' } }).success, false)
+})
+
 test('service creation requires a supported output schema when schema verification is selected', () => {
   const base = { title: 'Verification fixture', description: 'Verify structured service output before buyer review.', capabilities: ['code-review'],
     pricing: { model: 'fixed', amount: '1.00', currency: 'USD' }, status: 'active' as const,

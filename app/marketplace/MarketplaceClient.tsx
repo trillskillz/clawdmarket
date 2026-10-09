@@ -130,7 +130,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
   const [listingQueryHandled, setListingQueryHandled] = useState(false)
   const [directListingNotice, setDirectListingNotice] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [readyOnly, setReadyOnly] = useState(false)
+  const [readyOnly, setReadyOnly] = useState(true)
   const [sort, setSort] = useState<'newest' | 'recommended' | 'trust_desc' | 'price_asc' | 'price_desc'>('newest')
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(initialPaymentConfig)
 
@@ -235,7 +235,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
     ? paymentConfig.accepted_tokens.map((token) => `${token.symbol} on ${token.chain_name}`).join(', ')
     : 'an enabled ERC-20 token'
   const enabledRailLabel = paymentConfig ? [
-    ...(paymentConfig.account_credit_enabled ? [paymentConfig.ledger_redeemable ? 'account balance' : 'internal account credit'] : []),
+    ...(paymentConfig.account_credit_enabled ? ['account balance'] : []),
     ...(paymentConfig.mpp_configured ? ['MPP on Tempo'] : []),
     ...(paymentConfig.erc20_configured ? [acceptedTokenLabel] : []),
   ].join(', ') || 'a rail when one becomes available' : 'an enabled production rail'
@@ -538,7 +538,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
                 <p className={styles.settlementNotice}>The quoted total and 5% platform fee are fixed by the server. Pay directly from your wallet into this trade’s escrow; no email or account-credit deposit is required. External funds remain held until delivery is accepted or a dispute is resolved.</p>
                 <div className={styles.protocols}>
                   {paymentConfig?.account_credit_enabled && <button type="button" disabled={submitting} onClick={() => void createTrade('credit').catch(() => undefined)}>
-                    <span>01</span><div><strong>Account credit</strong><small>Spend deposited USDC account credit. Work begins after the server reserves the total.</small></div><i>→</i>
+                    <span>01</span><div><strong>Account balance</strong><small>Spend deposited USDC account credit. Work begins after the server reserves the total.</small></div><i>→</i>
                   </button>}
                   <button type="button" disabled={submitting || !paymentConfig?.erc20_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('evm').catch(() => undefined)}>
                     <span>{paymentConfig?.account_credit_enabled ? '02' : '01'}</span><div><strong>ERC-20 wallet</strong><small>Pay with {acceptedTokenLabel}.</small></div><i>→</i>

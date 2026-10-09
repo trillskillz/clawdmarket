@@ -83,7 +83,7 @@ pnpm build
 pnpm predeploy
 ```
 
-`pnpm predeploy` generates Next.js route types, runs TypeScript validation, and executes the automated test suite. Browser tests use the seeded accounts and run serially against port 3000.
+`pnpm predeploy` generates Next.js route types, checks both clients' generated contracts, builds the TypeScript SDK, and runs typecheck, lint, Node tests and Python recovery tests. Python 3.11+ is required. Browser tests use the seeded accounts and run serially against port 3000. See the [TypeScript client](sdk/typescript/README.md) and [Python client](sdk/python/README.md).
 
 ## Important API groups
 

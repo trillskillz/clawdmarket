@@ -19,11 +19,14 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
     for (const statement of [
       'CREATE TABLE users (id TEXT PRIMARY KEY)',
       'CREATE TABLE agents (id TEXT PRIMARY KEY, owner_address TEXT NOT NULL, created_at INTEGER NOT NULL)',
-      'CREATE TABLE trades (id TEXT PRIMARY KEY)',
+      'CREATE TABLE trades (id TEXT PRIMARY KEY, buyer_id TEXT NOT NULL, status TEXT NOT NULL)',
+      "INSERT INTO trades (id, buyer_id, status) VALUES ('legacy-financial-trade', 'legacy-buyer', 'completed')",
       'CREATE TABLE payment_receipts (id TEXT PRIMARY KEY)',
       'CREATE TABLE bids (id TEXT PRIMARY KEY)',
       'CREATE TABLE webhooks (id TEXT PRIMARY KEY, url TEXT NOT NULL, events TEXT NOT NULL, created_at TEXT NOT NULL)',
       "INSERT INTO webhooks (id, url, events, created_at) VALUES ('legacy-webhook', 'https://example.com/hook', '[]', datetime('now'))",
+      "CREATE TABLE benchmarks (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, task_id TEXT, capability TEXT NOT NULL, test_input TEXT NOT NULL, test_output TEXT, scoring_rubric TEXT, score REAL, scored_by_agent_id TEXT, status TEXT NOT NULL DEFAULT 'pending', run_time_ms INTEGER, notes TEXT, created_at TEXT NOT NULL, scored_at TEXT)",
+      "INSERT INTO benchmarks (id, agent_id, capability, test_input, score, scored_by_agent_id, status, created_at) VALUES ('legacy-benchmark', 'legacy-agent', 'analysis', 'LEGACY_PRIVATE_TEST', 88, 'legacy-scorer', 'scored', '2026-09-01')",
     ]) await client.execute(statement)
     await client.execute(`CREATE TABLE service_execution_attempts (
       id TEXT PRIMARY KEY, order_id TEXT NOT NULL UNIQUE, state TEXT NOT NULL,
@@ -156,9 +159,31 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       assert.equal(names(webhookDeliveries.rows).has('next_attempt_at'), true)
       assert.equal(names(webhookDeliveries.rows).has('last_error'), true)
       assert.equal(names(webhookDeliveries.rows).has('suppressed_at'), true)
-      assert.equal(migrationRows.rows.length, 47)
+      assert.equal(migrationRows.rows.length, 52)
+      const tradeIndexes = await migrated.execute('PRAGMA index_list("trades")')
+      assert.equal(names(tradeIndexes.rows).has('trades_buyer_status_idx'), true)
+      const legacyTrade = (await migrated.execute("SELECT buyer_id, status FROM trades WHERE id = 'legacy-financial-trade'")).rows[0]
+      assert.equal(legacyTrade.buyer_id, 'legacy-buyer')
+      assert.equal(legacyTrade.status, 'completed')
+      assert.equal(tableNames.has('benchmark_definitions'), true)
+      assert.equal(tableNames.has('benchmark_runs'), true)
+      const benchmarkRunIndexes = await migrated.execute('PRAGMA index_list("benchmark_runs")')
+      assert.equal(names(benchmarkRunIndexes.rows).has('benchmark_run_reference_idx'), true)
+      const legacyBenchmark = (await migrated.execute("SELECT * FROM benchmarks WHERE id = 'legacy-benchmark'")).rows[0]
+      assert.equal(legacyBenchmark.test_input, 'LEGACY_PRIVATE_TEST')
+      assert.equal(legacyBenchmark.score, 88)
+      assert.equal(legacyBenchmark.scored_by_agent_id, 'legacy-scorer')
+      assert.equal(legacyBenchmark.evaluator_agent_id, null)
+      assert.equal(legacyBenchmark.client_reference, null)
+      const benchmarkIndexes = (await migrated.execute('PRAGMA index_list("benchmarks")')).rows
+      assert.equal(benchmarkIndexes.some((row) => row.name === 'benchmarks_evaluator_reference_idx' && row.unique === 1), true)
+      assert.equal((await migrated.execute('PRAGMA integrity_check')).rows[0].integrity_check, 'ok')
+      const contractColumns = names((await migrated.execute('PRAGMA table_info("contracts")')).rows)
+      for (const column of ['payment_rail', 'funded_at', 'organization_id']) assert.equal(contractColumns.has(column), true)
       for (const table of ['buyer_mpp_payment_intents', 'buyer_mpp_payment_claims', 'route_receipts', 'route_retry_funding_steps', 'route_origins', 'route_agent_decisions', 'route_controls', 'route_control_events']) assert.equal(tableNames.has(table), true)
       for (const table of ['credit_accounts', 'credit_entries', 'credit_deposits', 'instant_services', 'instant_sessions', 'instant_calls', 'a2a_route_tasks', 'a2a_message_claims']) assert.equal(tableNames.has(table), true)
+      for (const table of ['mcp_route_tasks', 'mcp_result_streams']) assert.equal(tableNames.has(table), true)
+      assert.equal(names((await migrated.execute('PRAGMA table_info("mcp_route_tasks")')).rows).has('terminal_status'), true)
       await migrated.execute("INSERT INTO users (id) VALUES ('credit-check')")
       await migrated.execute("INSERT INTO credit_accounts (user_id) VALUES ('credit-check')")
       await assert.rejects(migrated.execute("UPDATE credit_accounts SET available_minor = -1 WHERE user_id = 'credit-check'"), /CHECK constraint/)

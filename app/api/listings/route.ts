@@ -18,6 +18,8 @@ import { referenceFleetPaidServicePublicationLocked } from '@/lib/reference-flee
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { PUBLIC_LISTING_SELLER_WHERE_SQL } from '@/lib/listing-visibility';
 import { publicCapabilities } from '@/lib/public-capabilities';
+import { LISTING_SELLER_PAYOUT_ADDRESS_SQL, PAYMENT_READY_LISTING_SQL } from '@/lib/listing-payment-readiness';
+import { listingFeedbackAggregateSql, LISTING_BACKED_BUYER_COUNT_SQL } from '@/lib/reputation-evidence-sql';
 
 export const dynamic = 'force-dynamic'
 
@@ -26,23 +28,19 @@ function getSortOrder(sort?: string) {
     case 'price_asc': return sql`${listings.price_bankr} ASC`;
     case 'price_desc': return sql`${listings.price_bankr} DESC`;
     case 'trust_desc': return sql`
-      COALESCE((SELECT AVG(CAST(r.score AS REAL)) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0) DESC,
-      COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0) DESC,
+      COALESCE(${sql.raw(listingFeedbackAggregateSql('AVG(score)'))}, 0) DESC,
+      ${sql.raw(listingFeedbackAggregateSql('COUNT(*)'))} DESC,
       ${listings.created_at} DESC`;
     case 'recommended': return sql`
-      COALESCE((SELECT COUNT(*) FROM trades t WHERE t.seller_id = ${listings.seller_id} AND t.status IN ('completed', 'complete')), 0) DESC,
-      COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0) DESC,
-      COALESCE((SELECT AVG(CAST(r.score AS REAL)) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0) DESC,
+      ${sql.raw(LISTING_BACKED_BUYER_COUNT_SQL)} DESC,
+      ${sql.raw(listingFeedbackAggregateSql('COUNT(*)'))} DESC,
+      COALESCE(${sql.raw(listingFeedbackAggregateSql('AVG(score)'))}, 0) DESC,
       ${listings.created_at} DESC`;
     default: return sql`${listings.created_at} DESC`;
   }
 }
 
-const payableSellerAddress = sql<string | null>`COALESCE(
-  (SELECT p.address FROM payout_addresses p WHERE p.user_id = ${listings.seller_id} LIMIT 1),
-  (SELECT CASE WHEN u.email LIKE 'wallet_0x%@wallet.local' THEN SUBSTR(u.email, 8, 42) ELSE NULL END FROM users u WHERE u.id = ${listings.seller_id} LIMIT 1),
-  (SELECT a.owner_address FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)
-)`;
+const payableSellerAddress = sql.raw(LISTING_SELLER_PAYOUT_ADDRESS_SQL);
 
 async function selectListings(whereClause: any, limit: number, offset: number, sort?: string) {
   return db
@@ -53,15 +51,12 @@ async function selectListings(whereClause: any, limit: number, offset: number, s
       seller_role: users.role,
       seller_avatar_url: users.avatar_url,
       seller_avatar_emoji: users.avatar_emoji,
-      seller_avg_rating: sql<number>`COALESCE((SELECT ROUND(AVG(r.score), 2) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
-      seller_rating_count: sql<number>`COALESCE((SELECT COUNT(*) FROM ratings r WHERE r.rated_id = ${listings.seller_id}), 0)`,
       agent_id: sql<string>`COALESCE((SELECT a.id FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), ${listings.seller_id})`,
       agent_created_at: sql<string | number | null>`COALESCE((SELECT a.created_at FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), ${users.created_at})`,
       agent_capabilities: sql<string>`COALESCE((SELECT a.capabilities FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1), '[]')`,
       seller_status: sql<string | null>`(SELECT a.status FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)`,
       seller_last_seen_at: sql<number | null>`(SELECT a.last_seen_at FROM agents a WHERE ('user_agent_' || a.id) = ${listings.seller_id} LIMIT 1)`,
       seller_payout_address: payableSellerAddress,
-      completed_trades: sql<number>`COALESCE((SELECT COUNT(*) FROM trades t WHERE t.seller_id = ${listings.seller_id} AND t.status IN ('completed', 'complete')), 0)`,
       category: listings.category,
       title: listings.title,
       description: listings.description,
@@ -124,9 +119,7 @@ export async function GET(req: NextRequest) {
     const conditions = [];
     conditions.push(sql.raw(PUBLIC_LISTING_SELLER_WHERE_SQL));
     if (query.payment_ready === 'true') {
-      conditions.push(sql`LENGTH(${payableSellerAddress}) = 42
-        AND SUBSTR(${payableSellerAddress}, 1, 2) = '0x'
-        AND SUBSTR(${payableSellerAddress}, 3) NOT GLOB '*[^0-9A-Fa-f]*'`);
+      conditions.push(sql.raw(PAYMENT_READY_LISTING_SQL));
     }
     
     if (query.category) {
@@ -195,8 +188,6 @@ export async function GET(req: NextRequest) {
     const trustInputs = [...new Map(results.map((listing: any) => [String(listing.agent_id), {
       id: String(listing.agent_id),
       created_at: listing.agent_created_at,
-      avg_rating: listing.seller_avg_rating,
-      rating_count: listing.seller_rating_count,
     }])).values()];
     const trustMap = await loadAgentTrustMap(trustInputs);
     const normalizedResults = results.map((listing: any) => {
@@ -214,6 +205,9 @@ export async function GET(req: NextRequest) {
         : null;
       return {
         ...publicListing,
+        seller_avg_rating: trust?.components.averageRating ?? 0,
+        seller_rating_count: trust?.components.ratingCount ?? 0,
+        completed_trades: trust?.components.completedTrades ?? 0,
         agent_capabilities: publicCapabilities(storedCapabilities),
         price_bankr: Number.isFinite(Number(listing.price_bankr))
           ? Number(listing.price_bankr)
@@ -226,6 +220,7 @@ export async function GET(req: NextRequest) {
         agent_trust_confidence: trust?.confidence ?? 'low',
         agent_trust_rating_count: trust?.components.ratingCount ?? 0,
         agent_trust_completed_trades: trust?.components.completedTrades ?? 0,
+        agent_trust_evidence: trust?.evidence,
         agent_trust_drivers: trust?.drivers ?? ['No verified marketplace activity'],
         external_payment_ready: Boolean(sellerPayoutAddress && isAddress(sellerPayoutAddress)),
         seller_online: sellerAvailability === null ? null : sellerAvailability === 'online',

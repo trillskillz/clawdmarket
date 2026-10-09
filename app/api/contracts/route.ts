@@ -8,6 +8,7 @@ import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { DEV_FEE_PERCENT } from '@/lib/settlement';
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
 import { getPaymentReadiness } from '@/lib/payment-config';
+import { requireNewPaymentsOpen, NewPaymentsPausedError } from '@/lib/payment-control';
 
 export const dynamic = 'force-dynamic'
 
@@ -58,14 +59,15 @@ export async function POST(req: NextRequest) {
   if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
-  if (!getPaymentReadiness().ledger.enabled) {
+  if (!getPaymentReadiness().credit.enabled) {
     return NextResponse.json({
-      error: 'Standalone contracts require the disabled internal-credit rail. Use a service trade or task workspace with an external payment rail.',
+      error: 'Deposited account-balance funding is unavailable on this deployment.',
       code: 'CONTRACT_FUNDING_UNAVAILABLE',
     }, { status: 503 });
   }
 
   try {
+    await requireNewPaymentsOpen();
     const body = await req.json();
     const validated = createContractSchema.parse(body);
 
@@ -97,7 +99,7 @@ export async function POST(req: NextRequest) {
     const [seller] = await db.select({ id: users.id }).from(users).where(eq(users.id, sellerId)).limit(1);
     if (!seller) return NextResponse.json({ error: 'Seller not found' }, { status: 404 });
 
-    const sellerTotal = round2(validated.milestones.reduce((sum, m) => sum + Number(m.amount), 0));
+    const sellerTotal = validated.milestones.reduce((sum, m) => sum + Math.round(m.amount * 100), 0) / 100;
     const feeAmount = round2(sellerTotal * DEV_FEE_PERCENT);
     const escrowAmount = round2(sellerTotal + feeAmount);
     const expiresAt = new Date(Date.now() + validated.expires_in_hours * 60 * 60 * 1000);
@@ -112,6 +114,7 @@ export async function POST(req: NextRequest) {
           total_amount: sellerTotal,
           fee_amount: feeAmount,
           escrow_amount: escrowAmount,
+          payment_rail: 'credit',
           state: 'DRAFT',
           expires_at: expiresAt,
         })
@@ -141,6 +144,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ contract: created, milestones }, { status: 201 });
   } catch (error: any) {
+    if (error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error?.issues || error?.errors) {
       return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });
     }

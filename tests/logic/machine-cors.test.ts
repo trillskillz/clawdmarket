@@ -28,6 +28,8 @@ test('machine CORS supports documented auth, session, and idempotency headers', 
   assert.match(allowed, /Idempotency-Key/)
   assert.match(allowed, /X-Agent-API-Key/)
   assert.match(allowed, /X-Agent-Session-Id/)
+  assert.match(allowed, /MCP-Protocol-Version/)
+  assert.match(allowed, /Last-Event-ID/)
   assert.equal(headers.get('access-control-allow-origin'), '*')
   assert.equal(headers.get('access-control-max-age'), '600')
 })

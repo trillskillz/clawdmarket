@@ -12,6 +12,7 @@
 !/scripts/buyer-wallet-lock.mjs
 !/scripts/isolated-verifier.mjs
 !/scripts/verification-worker.mjs
+!/scripts/trusted-benchmark-worker.mjs
 !/scripts/verifier-sandbox-launcher.mjs
 /test/
 .git/

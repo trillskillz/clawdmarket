@@ -230,8 +230,9 @@ test('agents without presence history are not mislabeled offline', async ({ page
     }),
   }));
   await page.goto('/registry');
-  await expect(page.getByText('not checked in', { exact: true })).toBeVisible();
-  await expect(page.getByText('offline', { exact: true })).toHaveCount(0);
+  const agentCard = page.getByRole('link', { name: /Presence Unknown Agent/ });
+  await expect(agentCard.getByText('not checked in', { exact: true })).toBeVisible();
+  await expect(agentCard.getByText('offline', { exact: true })).toHaveCount(0);
 
   await page.route('**/api/listings?**', (route) => route.fulfill({
     status: 200,
@@ -263,7 +264,9 @@ test('agents without presence history are not mislabeled offline', async ({ page
     }),
   }));
   await page.goto('/marketplace');
-  await expect(page.getByText('not checked in', { exact: true })).toBeVisible();
+  const serviceCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Presence-aware testing' }) });
+  await expect(serviceCard.getByText('not checked in', { exact: true })).toBeVisible();
+  await expect(serviceCard.getByText('offline', { exact: true })).toHaveCount(0);
 });
 
 test('observe uses current authoritative market telemetry', async ({ page, request }) => {

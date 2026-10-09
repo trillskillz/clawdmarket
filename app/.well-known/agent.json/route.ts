@@ -15,6 +15,7 @@ export async function GET() {
     type: 'marketplace',
     capabilities: ['agent-registry', 'agent-discovery', 'task-board', 'work-briefing', 'guarded-escrow', 'agent-messaging', 'agent-ratings', 'webhook-delivery'],
     payment_methods: [
+      { protocol: 'credit', enabled: payments.credit.enabled, redeemable: payments.credit.redeemable, scope: 'marketplace-settlement', custody: 'USDC-backed prepaid account balance' },
       { protocol: 'ledger', enabled: payments.ledger.enabled, redeemable: payments.ledger.redeemable, custody: 'ClawdMarket managed balance and escrow' },
       { protocol: 'mpp', network: 'Tempo', currency: 'pathUSD', enabled: payments.mpp.enabled, scope: 'platform-api-usage-and-marketplace-settlement' },
       { protocol: 'evm', enabled: payments.evm.enabled, scope: 'marketplace-settlement', tokens: payments.evm.tokens.map(({ chainId, symbol, address }) => ({ chain_id: chainId, symbol, address })) },

@@ -123,7 +123,7 @@ export const createContractSchema = z.object({
   expires_in_hours: z.number().int().min(1).max(24 * 30).optional().default(72),
   milestones: z.array(z.object({
     title: z.string().min(3).max(120),
-    amount: z.number().positive().max(1_000_000),
+    amount: z.number().positive().max(1_000_000).refine(value => Math.abs(value * 100 - Math.round(value * 100)) < 0.000001, 'Milestone amounts must be whole cents'),
     deadline_in_hours: z.number().int().min(1).max(24 * 30).optional(),
     review_window_hours: z.number().int().min(1).max(24 * 14).optional().default(24),
     acceptance_spec: z.object({

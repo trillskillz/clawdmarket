@@ -1,12 +1,12 @@
 # ClawdMarket routing-layer master plan
 
-**Source of truth for future routing-layer work.** Updated 2026-10-08 after released PR #249 (`d9b62f7`), production contract 1.80 (supported buyer funding, orchestration, confirmed-refund failover, durable metrics/admission controls, metered instant credit sessions and authenticated A2A routing tasks). The user's prioritized navigation/cleanup/deposit-backed balance release is published and verified on GitHub/Vercel. Continue routing now, preserving normal-site payment reserves and saving unfunded paid checks for later. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update its status and evidence. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
+**Source of truth for future routing-layer work.** Updated 2026-10-08 after merged PR #250 (`8a676c7`), production contract 1.80; local contract 1.90 (funding/orchestration, confirmed-refund failover, metered instant credit, A2A/MCP routing Tasks, TypeScript/Python recovery clients, current-backed capability proof discovery, evaluator-bound peer benchmark recovery, explicit capability hierarchy discovery, versioned private benchmark observations, bounded backed-cycle exclusions, isolated Python verification and current-backed buyer reputation). Continue routing now, preserving normal-site payment reserves and saving unfunded paid checks for later. This plan implements the user's original phase 0–16 vision in dependency order. The existing marketplace and settlement system remain authoritative. Before starting a batch, read this file and the affected code/tests; after completing it, update its status and evidence. Do not mark a milestone done because its schema or endpoint exists if the full transition cannot yet run safely.
 
 ## Current position
 
-**Latest publishing instruction (2026-10-04):** The user prioritized showing new registrations in the live activity feed and explicitly authorized pushing the completed current bundle to GitHub and Vercel, including relevant unmerged PRs, then continuing the plan. Their follow-up exempts old or unnecessary PRs. Publish current PR #249 after its required gates; leave the superseded public-surface, legacy credential-removal and stale dependency PRs unchanged. This authorization does not enable closed routing/instant/A2A rollouts or spend wallet reserves.
+**Latest publishing instruction (2026-10-08):** Finish the already-authorized activity-priority release (PR #250) to GitHub and Vercel. After that release, keep all further plan work local until **ten substantive, acceptance-complete parts** have been completed, then publish the combined batch. Count demonstrable capabilities, not commits, tests, documentation or bookkeeping. The new batch is **10/10 complete locally**: P1.3 MCP routing Tasks (1.81), the user-prioritized payment-proof/sitewide backed-balance correction (1.82), P1.4 shared-contract TypeScript/Python recovery clients (1.83), truthful current-backed capability proof discovery/confidence (1.84), evaluator-bound private peer benchmark recovery (1.85), explicit capability hierarchy discovery (1.86), versioned private benchmark observations (1.87), bounded backed-cycle evidence exclusions (1.88), isolated Python verification (1.89), and current-backed buyer reputation with bounded owner-principal feedback (1.90). All ten acceptance gates now pass; publish this combined batch through required CI and the migration-first deployment workflow. Old/unnecessary PRs remain exempt; wallet spending and global rollout restrictions persist.
 
-**Latest release:** [PR #248](https://github.com/trillskillz/clawdmarket/pull/248) merged as `420fc89cc24908a4d938d8a455f188bf7a45e494`, production contract 1.72. [Deployment `37142815760`](https://github.com/trillskillz/clawdmarket/actions/runs/37142815760), [same-SHA smoke `37143123938`](https://github.com/trillskillz/clawdmarket/actions/runs/37143123938) and [read-only audit `37146672980`](https://github.com/trillskillz/clawdmarket/actions/runs/37146672980) passed. Audit confirmed 40 migrations, healthy credit conservation with zero deposits/liability, healthy settlement reserves, and no provider/deadline/artifact/outbox/funding anomalies. Actual production desktop/mobile navigation passed at 1440/390 px; Why/Proofs return 200 and genome returns 404. Payment config reports unpaused Base/Tempo and backed account credit, with historical ledger spending disabled. No wallet funds were moved. The new paid credit proof remains saved for a sufficiently funded dedicated buyer. P0.5 buyer funding, P0.6 orchestration, P0.7 confirmed-refund failover, and P0.8 durable metrics/financial admission monitoring and P1.1 metered instant sessions plus P1.2 authenticated A2A routing tasks are complete locally (ten substantive parts). P0.8 paid production failure canaries and independent provider/semantic proof remain deferred; global routing stays closed. Continue the next independent implementation in plan order without spending site reserves. Earlier checkpoints are historical.
+**Latest release:** [PR #250](https://github.com/trillskillz/clawdmarket/pull/250) merged as `8a676c70b043d93d762b727fe27f076f9eb0e885` after all final-head build/browser, contract/build, CodeQL and Vercel checks passed. It puts registrations first in Live activity and reserves space for the ten newest public registrations under busy market traffic. Migration-first production deployment [37820002395](https://github.com/trillskillz/clawdmarket/actions/runs/37820002395) passed, including reserve preflight, migrations and both domain aliases. Actual read-only production Chromium checks passed at 1440/390 px: registrations precede every other event, registration names render, the feed remains bounded to fifty unique records, mobile has no horizontal overflow, and readiness is ready. Same-SHA smoke [37821101738](https://github.com/trillskillz/clawdmarket/actions/runs/37821101738) passed. PR #249 previously released contract 1.80 via successful deployment `37209338676` and same-SHA smoke `37209779948`. The original checkout contains complete local MCP Tasks (1.81), payment proofs/account balance (1.82), shared-contract TypeScript/Python recovery clients (1.83), current-backed capability proof discovery (1.84), evaluator-bound private peer benchmark recovery (1.85), capability hierarchy discovery (1.86), versioned private benchmark observations (1.87), bounded backed-cycle exclusions (1.88), and isolated Python verification (1.89). The user-requested payout-ready marketplace default is complete locally and does not count as another substantive part. Current-backed buyer reputation and bounded owner-principal feedback (1.90) are also acceptance-complete locally. Publish the ten-part batch before starting bounded workflow execution (P2.1); independent production benchmark quality and calibration remain unfinished. Paid P0 production canaries and independent-provider/semantic proof remain externally gated; global rollouts stay closed and no wallet funds have been moved.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -23,8 +23,8 @@ Protected post-live audit `37082040543` confirmed 33 migrations, two archived se
 | 5 verification and 6 delivery/artifacts | Partial | Delivery endpoint is authoritative; structured schema and source-list checks persist evidence; buyer review controls release. Private encrypted multi-artifacts are released. Local contracts 1.65–1.67 add agreed assertions, declared source date/claim-link checks, explicit buyer acceptance and externally isolated finite JavaScript tests/syntax checks. Remote isolation is authenticated attestation; independent semantic proof remains unverified. |
 | 7 instant mode | Complete locally; production closed | Contract 1.79: separate prepaid deposited-credit sessions, bounded external-provider calls, schema acceptance, atomic unit settlement/receipts, uncharged failure/expiry and exactly-once billing/refunds. Whole cents, no Tempo payment channels or token/time metering. |
 | 8 spend policy and 9 failover | Partial | Buyer/agent/organization ceilings and pre-checkout fallback are enforced. Production funded failover is pending release. Local 1.76 supports approved fallback only after exact confirmed original refunds, with gross retry budgets and the original objective deadline; cancelled unpaid checkout remains uncertain. |
-| 10 A2A and 11 MCP | A2A complete locally; MCP read-only | Contract 1.80 adds scoped owner-mandate-bound A2A plan/reserve/cancel tasks, live private lifecycle and backed receipt completion. Public A2A discovery stays read-only; production writes stay closed. MCP Tasks and write authorization remain. |
-| 12 contract, 13 SDK, 14 metrics | Partial | Production machine contract 1.72 (local 1.80), TypeScript route client, evidenced assisted-route metrics. Python client and true autonomous GMV are absent. |
+| 10 A2A and 11 MCP | A2A released; MCP complete locally | Production 1.80 supports scoped owner-mandate-bound A2A tasks with closed production writes. Local 1.81 adds experimental MCP 2025-11-25 routing Tasks, private handles, resumable terminal results and safe pre-checkout cancellation over the shared router. MCP writes also default closed. |
+| 12 contract, 13 SDK, 14 metrics | Recovery clients complete locally; metrics partial | Production machine contract 1.80 (local 1.90), TypeScript/Python recovery clients with checked shared definitions, evidenced assisted-route metrics. True autonomous production GMV remains unproven. |
 | 15 workflows and 16 enterprise | Foundations only | Bounded workflow plans; organizations, teams, read-only service accounts, immutable audit, and agent budget attribution. No child execution or delegated purchasing authority. |
 
 The live buyer flow is still: plan → reserve **unpaid** order → caller funds → provider receives a signed pointer or polls → provider starts/delivers → buyer accepts → existing settlement. It does **not** yet satisfy “give ClawdMarket an objective and receive a verified, settled result without manually composing marketplace calls.”
@@ -115,9 +115,9 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | --- | --- | --- |
 | P1.1 | 7 | **Complete locally (1.79; part 9/10).** Separate prepaid deposited-credit sessions and successful-call unit metering with atomic receipts; failures/expiry are uncharged and concurrent/restarted duplicate billing is safe. No contracted trade or per-call treasury escrow. Production closed; cents only, no Tempo channels or organization agents. See [instant lifecycle](docs/INSTANT_EXECUTION.md). |
 | P1.2 | 10 | **Complete locally (1.80).** A2A `route_work`, `inspect_route`, `cancel_route` and durable tasks backed by the canonical router. Add authenticated write authority and spend-policy checks; preserve the read-only card and compatibility manifest. |
-| P1.3 | 11 | **Next independent milestone.** Upgrade MCP protocol/transport to a Tasks-capable version, then expose shared router operations and authorization-bound task handles, result retrieval, and cancellation. Keep current discovery tools compatible. |
-| P1.4 | 12–13 | Validate OpenAPI, skill.md, llms.txt, manifests, A2A, MCP, SDK examples, lifecycle states, auth, rails, and deprecations from shared definitions. Finish TypeScript funding/artifact/webhook recovery APIs and a minimal Python client with typed financial errors. |
-| P1.5 | 3–5, 14 | Broaden capability hierarchy, independent benchmarks, confidence calibration, verifier adapters, and reputation quality evidence after real outcomes exist. Protect against Sybil and circular-trade inflation. |
+| P1.3 | 11 | **Complete locally (1.81; new batch part 1/10).** MCP 2025-11-25 Streamable HTTP, authenticated shared-router routing Tasks, durable private handles/results, cursor resumption and safe cancellation before checkout. Legacy discovery/payment clients remain compatible. Production writes default closed. |
+| P1.4 | 12–13 | **Complete locally (1.83; new batch part 3/10).** Shared generated operation/auth/scope/lifecycle/rail/deprecation metadata, TypeScript funding/artifact/webhook recovery and a usable minimal Python client with typed financial errors. Predeploy refuses contract drift; both clients recover original routes against the actual app. |
+| P1.5 | 3–5, 14 | **Partial locally (1.90; new batch parts 4–10/10).** Current-backed work discovery, honest unmeasured capability confidence, evaluator-bound private peer benchmark recovery, explicit hierarchy discovery, immutable versioned/private server-checked JSON benchmark observations, bounded backed-cycle exclusions, external isolated Python tests and current-backed buyer reputation with bounded owner-principal feedback are complete. Independent production benchmark quality, confidence calibration and broader reputation quality evidence remain unfinished. Unknown-owner independence and cycles beyond four principals remain unresolved. After the ten-part release, continue independent local work on P2.1 bounded workflow execution. |
 | P2.1 | 15 | Execute bounded DAG nodes with inherited budgets, depth/child/runtime limits, dependency artifacts, verification gates, and aggregate financial reconciliation. Keep decomposition from recursively spending without a hard mandate. |
 | P2.2 | 16 | Add organization purchasing roles, approval workflow, private providers, departmental controls, and service-account spend authority only after P0 policy/mandate isolation is proven. |
 | P3 | Website/control plane | Improve observation, administration, discovery, manual override, and incident tooling over the same router state; avoid a separate UI economic lifecycle. |
@@ -474,3 +474,549 @@ The user's latest clarification prioritizes registrations at the top of Live act
 Reviewed the remaining PR inventory: #231 conflicts with the now-released public surfaces, #200 removes legacy key recovery and has failed gates, and #163–173 are stale dependency proposals (several would downgrade released dependencies). Preserve the established exemption for old/unnecessary PRs rather than bundling them into this capability. P1.3 MCP Tasks remains the next independent plan milestone in the original checkout.
 
 Validation: Node 24 `pnpm predeploy` passed **521 cases (513 passed, eight skipped)**, TypeScript, SDK build and lint. Production build passed with the existing MPP/ox dependency warning. Actual local Chromium/HTTP coverage passed: both owner-claim and autonomous registrations appeared as the first feed item without reload while telemetry returned 503. No migration or financial transition changed. Publish this capability through fresh GitHub gates and migration-first Vercel deployment, then continue the isolated P1.3 MCP implementation.
+
+
+## New local batch part 1/10 — MCP routing Tasks (1.81)
+
+Implements P1.3 as one capability: protocol negotiation preserves 2024-11-05/2025-03-26/2025-06-18 clients while 2025-11-25 exposes experimental Tasks. Authenticated task-augmented route_work persists intent before shared planning; get_route_task exposes private owner/funding/review steps, and continue_route binds canonical owner authority to exactly one unpaid checkout. MCP and A2A use separate retained task namespaces over the same router. The adapter cannot sign, broadcast, accept delivery or settle money. New MCP production writes default closed, independently of existing routing flags and financial admission. Exact replay, private reads and safe cancellation remain recoverable during closure.
+
+Migration 48 retains task bindings/terminal protocol status and bounded result-stream cursors. Requested TTL is overridden with unlimited task retention and a 100-handle pilot cap. Lists are private, live and cursor-paged. Reads require agent:read; writes also require marketplace:write and payments:write. Streamed input is bounded to 16 KiB and per-agent quotas remain enforced. Only a plan without checkout can reach MCP terminal cancellation: once any checkout exists, refuse cancellation rather than hiding late-payment uncertainty. Current backed financial proof is required before private completed output is returned, even after a terminal protocol status has been saved.
+
+Results wait for terminal state over SSE. Fifteen-second connections issue durable cursors retaining the original RPC ID, expire after fifteen minutes, and revalidate active authority before private output. Disconnect never cancels economic work. Browser Origin validation includes preflights; the shared proxy delegates MCP OPTIONS to its handler, and CORS accepts protocol/resumption headers. Legacy tool charges and authenticated free planning/inspection remain intact. Native manifest, OpenAPI extensions, generated skill/llms text, site guide and [MCP guide](docs/MCP_ROUTING_TASKS.md) describe the same lifecycle and recovery bounds.
+
+Validation: Node 24 full predeploy passed **532 cases (524 passed, eight skipped)**, TypeScript, SDK build and lint. After the final browser-preflight fix, focused MCP/CORS coverage passed **22/22**, lint and the production build passed, and actual Next.js Chromium/HTTP coverage passed **6/6**, including Origin rejection, allowed protocol/resumption preflight headers, deferred SSE result and same-RPC-ID GET resumption after terminal cancellation. The official MCP SDK also creates, polls and automatically reconnects to results. Financial integration drives one canonical buyer/provider loop on a disposable loopback chain, checks original receipt/output/capacity release, and withholds output after payout proof is removed. A legacy backup migrated twice with **48 IDs**, SQLite integrity **ok**, and readiness/migration regressions passed **8/8**. No live wallet spending, new rollout flag or future-plan push occurred. The local branch includes the separately validated activity release after its merge.
+
+**Publishing counter: 1/10 completed substantive parts after PR #250.** Keep this entire batch local until ten parts pass their acceptance gates. Next is P1.4: audit the remaining contract/TypeScript recovery gaps and add a minimal Python client with typed financial errors. Outstanding paid P0 canaries and independent provider evidence retain their external prerequisites.
+
+
+## User priority — visible MPP payment proofs and backed account balance (1.82; local part 2/10)
+
+The user clarified that successful tested MPP payments were missing from Proofs,
+not that the recent Base trade receipts should be relabeled. Historical production
+MCP canaries 37031771916 and 35904776952 each paid 0.001 pathUSD on Tempo. Their
+public transaction hashes, exact recipient/asset/value, successful canonical
+receipts and block timestamps were independently verified read-only on 2026-10-08.
+`/proof` now shows these genuine platform payments above completed work, with MPP,
+Tempo/pathUSD, transaction and test-evidence links. This history creates no trade
+or financial ledger entry. Future SDK-verified paid MCP calls durably save their
+payment receipt before tool execution, including tool errors; fake/pending
+receipts are excluded. Historical and durable records deduplicate by hash.
+
+Work cards and receipt details show the funding receipt's actual method, with
+selected-rail fallback only when no receipt exists. Conflicting evidence cannot
+claim verified work settlement. Completed credit purchases now expose their
+recorded purchase, settlement and seller-credit evidence consistently.
+
+Account balance means deposited USDC-backed `credit` across listings, task
+workspaces, enabled reusable services and standalone milestone contracts. New
+contracts reserve integer cents and fees atomically; per-milestone release,
+refund, split, cancellation and expiry use the same reservation. Existing funded
+wallet contracts retain their original path, while unbacked historical balances
+cannot fund new ones. Payment holds, cookie CSRF, payment scopes, buyer/agent
+ceilings and immutable organization attribution apply. Shared spend snapshots
+include funded contracts. Task credit funding now immediately reports held
+balance instead of an external checkout. Contract UI/config and public/native
+payment documentation agree; contract is 1.82. The additive contract migration
+is ID 49 and readiness checks its columns.
+
+Validation: final Node 24 `pnpm predeploy` passed **542 cases (534 passed, eight
+skipped)**, including typecheck, SDK build and lint. The production build passed.
+Actual Chromium/HTTP checks passed **11/11** at 1440/390 px for both historic MPP
+proofs, enabled balance contract funding with legacy ledger disabled, connected
+wallet/deposit recovery and core flows. Additional rendered fixtures verified
+MPP/EVM/credit labels, credit-backed badges and conflicting-receipt exclusion;
+fixtures were removed. Migration replay passed **49 IDs**, SQLite integrity
+**ok**. Financial fixtures verify concurrent funding, multiple milestone releases,
+original cancellation/expiry refunds through payment holds, dispute splits,
+legacy escrow completion, cross-contract escrow isolation, buyer/agent/organization
+limits, durable MPP proof deduplication and a real server-SDK verified paid MCP
+call without signing or broadcasting RPC. An initial quota fixture lacked the new
+contract fields; it was corrected and the final full suite passed. One early
+migration check also used the local development database's default target and
+applied additive schema updates; remaining checks used explicit disposable
+URLs. No production database mutation, new live payment, GitHub push, PR or Vercel
+deployment occurred. This is **2/10**; keep the batch local until ten substantive
+parts are complete. Next routing work remains P1.4 SDK/contract recovery parity
+and the minimal Python client. Automatic route mandates retain external payment
+terms; existing rollout flags remain unchanged.
+
+
+## P1.4 — shared-contract recovery clients (1.83; local part 3/10)
+
+TypeScript adds private webhook subscription/history/disable recovery and canonical
+work-order/service-order inspection. Both funding rails retain original intents,
+claims and hashes; HTTP 202 late refunds remain processing. API errors preserve
+the full private payload, financial state and Retry-After. Artifact stream failures
+remain typed and financially unknown; polling deadlines now bound in-flight fetches.
+Webhook HMAC helpers authenticate exact raw bytes, with durable receiver delivery-ID
+deduplication explicitly required because the signature has no signed expiry.
+
+The stdlib-only Python 3.11+ client supports route/mandate/lifecycle/retry recovery,
+both external funding rails, private artifacts/delivery and webhook recovery. It
+refuses redirects, bounds reads, verifies artifact size/SHA256 and never retries
+mutations, signs or broadcasts. It runs directly through PYTHONPATH; installation
+metadata includes contract.json and py.typed. This environment has no pip, so a
+wheel-install check was not performed. Both clients consume generated definitions
+from the canonical agent contract. Predeploy checks drift and runs Python tests.
+The compatibility identity schema/manifest now include backed credit; the MPP
+descriptor shares the free routing-tool list. Generated skill/llms text describe
+the same recovery bounds. Existing A2A/MCP lifecycle and write gates are preserved.
+
+Validation: Node 24 full pnpm predeploy passed **550 cases (542 passed, eight
+skipped)** plus **12 Python HTTP recovery cases**; SDK build, typecheck and lint
+passed. The production build passed with existing dependency warnings. **Eleven
+distinct Chromium/HTTP checks passed**, including both actual clients recovering
+their original plans, private webhook reads and cancellation without checkout,
+MCP Tasks, both MPP history proofs at 1440/390 px, backed-balance contract controls
+and core smoke. Two stale hard-coded browser version expectations were replaced
+with the canonical version and the final public-discovery recheck passed. The
+legacy migration test replayed all **49 IDs** twice; the fresh browser database
+was explicitly initialized/migrated separately. No production mutation, wallet
+spend, push, PR, deployment or rollout flag change. Logs: /tmp/clawdmarket-sdk-
+predeploy-final.log, sdk-build.log, sdk-python-final.log, sdk-browser.log and
+sdk-browser-contract-final.log (all with the clawdmarket prefix).
+
+**Publishing counter: 3/10.** Continue P1.5 locally. Initial audit found raw
+capability-event counts could outlive their backing evidence, and basic format
+challenges write :verified profile tags consumed by public discovery filters.
+Next acceptance-complete capability should make public capability confidence and
+proof filters derive from current backed completion evidence, while distinguishing
+format checks from independently measured quality. Preserve historical records,
+existing settlement and canonical capability matching. Independent benchmark
+quality and paid production evidence remain separate gates; do not fabricate
+evidence or count an audit as another completed part.
+
+
+## P1.5 — current-backed capability proof discovery (1.84; local part 4/10)
+
+Registry “With completed work proof” and compatibility verified=true filters now
+share the same current-backed predicate as capability profiles and routing provider
+requirements, including identical row/count filters. Exact delivery hash, completed
+order/rail, external funding total and confirmed payout chain/token/business key/
+amount are required. Credit requires exact purchase, buyer escrow release and
+seller-credit entries. Legacy ledger escrow semantics remain explicit. No new RPC,
+financial transition or historical event deletion occurs during discovery.
+
+Known owner-linked buyers collapse to one breadth principal. Self/shared-owner,
+direct reciprocal completed trades, reference providers and known nonproduction
+route cohorts do not count. Unknown ownership and longer cycles remain unresolved;
+buyer breadth does not prove independence. Repeat purchases cannot elevate
+capability confidence above low while independent quality is unmeasured.
+
+Basic format challenges no longer write :verified profile tags; historical tags
+remain stored but confer no proof. Responses explicitly identify practice evidence,
+null measured quality and no routing eligibility. Summary word counts are computed
+from the actual text. Ownership and concurrent-submission checks remain enforced.
+Canonical contract/OpenAPI/skill/llms and generated client metadata agree on 1.84.
+See [capability evidence](docs/CAPABILITY_EVIDENCE.md).
+
+Validation: Node 24 full predeploy passed **559 cases (551 passed, eight skipped)**
+and **12 Python HTTP cases**, including SDK drift/build, typecheck and lint. Final
+focused financial/auth/capability checks passed **53/53**. Final production build
+passed. **Twelve distinct isolated Chromium/HTTP checks passed** across actual
+client recovery, MCP Tasks, MPP proofs, backed balance and core smoke; the final
+capability-proof case also passed at 1440/390 px without overflow. Representative
+legacy migration replay passed twice with **49 IDs**; this part adds no migration.
+Logs: /tmp/clawdmarket-capability-predeploy.log, capability-focused-checkpoint.log,
+capability-build-final.log, capability-browser.log and capability-browser-final.log
+(all with the clawdmarket prefix). No production mutation, wallet spending, push,
+PR, deployment or rollout change.
+
+**Publishing counter: 4/10.** The latest user priority is complete locally: the
+marketplace defaults to “Hireable with payout wallet”, including its server-rendered
+first page, client filtering and pagination. “All listed services” remains selectable.
+The API and first-render rows/counts share their payout-readiness predicate. This
+small default change is not a separate substantive part. Thirteen catalog/payout
+integration cases, focused lint, production build and five actual Chromium/HTTP
+checks passed, including a newly created listing excluded before payout setup,
+visible after opting into all listings, and visible by default after payout setup.
+MPP proof and backed-balance checks passed at 1440/390 px. Logs are under
+/tmp/clawdmarket-ready-default-{tests-final,build,browser}.log. No publishing.
+Continue P1.5: audit existing peer benchmark authorization/provenance before
+adding independent benchmark quality. Hierarchy, independently evidenced benchmark
+results, calibration and verifier adapters remain unfinished; no audit or label
+alone counts as another completed capability.
+
+
+## P1.5 — evaluator-bound peer benchmark recovery (1.85; local part 5/10)
+
+Audit found that any active agent could score another agent's pending benchmark,
+public lists serialized raw test materials, and peer scores wrote agent quality/
+velocity caches. This capability replaces that path with attributable immutable
+peer evaluations, private inspection and original-request recovery. It does not
+claim to complete independent benchmark quality or the broader P1.5 milestone.
+
+Creation binds its authenticated active creator as the only evaluator. A persisted
+UUID client_reference recovers the original ID/state with the same canonical body;
+changed reuse conflicts and other evaluators have separate reference namespaces.
+Original creation recovery survives later target privacy/owner changes without
+creating new authority. Only the original evaluator can score. Current self,
+shared-owner, reference, inactive and archived participant checks are enforced in
+the scoring transaction. Concurrent exact score replay returns the same immutable
+result; altered score/output/notes conflicts. Database uniqueness and guarded
+updates are authoritative across servers; local keyed locks reduce contention.
+
+Public lists return allowlisted metadata for public active unarchived targets.
+Input/output/rubric/notes, recovery references and evaluator bindings are omitted.
+The new private detail endpoint requires the target, recorded evaluator or their
+current linked owner; ownership transfer removes the former owner's read access.
+Private responses are no-store, and inaccessible reads/scoring return 404. Named
+mutations require agent:write. Legacy creators are not inferred from historical
+scorers; unknown-author pending records cannot be adopted. Historical rows and
+cached scores are retained without migration rewrites.
+
+Peer scores no longer write agent benchmark/velocity aggregates, completion
+proofs, marketplace trust or route ranking. Machine/profile/leaderboard/lineage
+DTOs and the profile UI explicitly label historical scores as reported assertions,
+with unverified independence and null measured quality. Legacy benchmark/velocity
+sorts remain sorts of those labeled reported values. Native manifest/OpenAPI,
+skill/llms actions, generated client metadata and human docs agree on contract
+1.85. See [peer benchmark authority and privacy](docs/PEER_BENCHMARKS.md).
+
+Validation: Node 24 predeploy passed **568 cases (560 passed, eight skipped)** plus
+**12 Python HTTP cases**, SDK drift/build, typecheck and lint. Focused benchmark/
+privacy/readiness/migration/contract checks passed **30/30**. Production build
+passed. **Fourteen isolated Chromium/HTTP cases passed on a fresh local database**,
+including actual peer creation/replay, private inspection, denied foreign scoring,
+no quality inflation, marketplace default/all-listings/payout setup, both client
+recoveries, MCP Tasks, MPP proofs and balance controls at 1440/390 px. The first
+browser run exposed a stricter framework cache header and shared fixture quota;
+the assertions/fixture registration identities were corrected without relaxing
+production limits. Migration **50 IDs** replayed twice over legacy data, retaining
+private inputs/scores/scorers while leaving unknown evaluator/reference fields null;
+the unique index exists and SQLite integrity is ok. Logs are under
+/tmp/clawdmarket-peer-{focused-checkpoint,predeploy,build,browser-final}.log,
+peer-typecheck-final.log, peer-lint.log, peer-browser-schema.log and
+peer-browser-migration-final.log (all with the clawdmarket prefix).
+
+**Publishing counter: 5/10.** All work stays local; no push, PR, deployment, wallet
+spending or global rollout change. Next local P1.5 capability is explicit capability
+hierarchy discovery: distinguish navigation families from purchasable leaf IDs,
+let agents/humans browse family descendants through canonical discovery, preserve
+exact leaf capability/evidence/mandate matching at checkout and funding, and verify
+private-profile, alias, pagination and false-inheritance boundaries. The current
+flat category field and the legacy research alias are not an implemented hierarchy.
+Independent benchmark definitions, trusted graders/attestations, calibrated quality,
+additional verifier adapters and longer-cycle/unknown-owner independence remain
+unfinished. Peer assertions cannot substitute for any of those acceptance gates.
+
+
+## P1.5 — explicit capability hierarchy discovery (1.86; local part 6/10)
+
+Humans can browse the registry by nine named capability families. Agents can read
+`GET /api/capabilities/hierarchy`, resolve explicit family IDs separately from leaf
+IDs, and filter public agent lists/search or reusable services by `family`. Keyword,
+semantic, completed-work-proof and exact-service-capability filters compose with
+family discovery. Rows and counts use identical predicates, bounded pages and
+stable ID tie-breaks. Changing the family/search aborts old requests and hides
+pending semantic results; late pages cannot append agents from the previous family.
+
+Families classify the existing canonical leaves without changing the flat catalog.
+`family:research` is a navigation family; the historical `research` alias remains
+`web-research`. Stored claims match explicit known leaf IDs/labels/aliases after
+case folding and trimming, including canonical spellings of those known terms.
+Family claims, verified-tag suffixes, substrings, malformed JSON, scalar/object
+claims and nonstring entries grant no descendant membership. Public visibility,
+active status, archive checks and private owner/credential exclusions remain intact.
+Unknown families and invalid pagination fail before searching.
+
+Service definitions, route requirements and allowed/blocked spending capabilities
+reject family IDs. Exact canonical leaf matching remains authoritative at planning,
+reservation and funding; changing a provider to a sibling skill cannot fund or
+execute the originally agreed work. An already verified late payment remains
+recorded exactly once for refund recovery while the order is cancelled, dispatch
+is suppressed and mandate exposure stays reserved. Accepted completion proof does
+not inherit to siblings or family IDs. Independent quality remains unmeasured.
+Native manifest/OpenAPI/skill/llms, generated client metadata and human docs agree
+on contract 1.86. See [capability families](docs/CAPABILITY_HIERARCHY.md).
+
+Validation: Node 24 final predeploy passed **575 cases (567 passed, eight skipped)**
+plus **12 Python HTTP cases**, SDK drift/build, typecheck and lint. Production build
+passed. **Seventeen isolated Chromium/HTTP checks passed on a fresh local database**,
+including real family-filtered registrations in keyword/semantic modes at desktop
+and 390 px, aborted stale pagination in both modes, marketplace payout-ready default/
+all-listings/setup, peer privacy/recovery, MCP Tasks, both repository clients, and MPP
+proofs/backed balance controls at 1440/390 px. Legacy migration replay passed twice
+with **50 migration IDs**, preserving historical benchmark material and unknown
+authorship; this part adds no migration. Logs: /tmp/clawdmarket-hierarchy-predeploy-final.log,
+hierarchy-build.log, hierarchy-browser-final.log, hierarchy-focused-final.log,
+hierarchy-browser-migration.log, hierarchy-registry-lint.log and
+hierarchy-browser-lint.log (all with the clawdmarket prefix).
+
+**Publishing counter: 6/10.** All work stays local; no push, PR, deployment, live
+wallet spending or production rollout change. Next local P1.5 capability: versioned
+benchmark definitions and attributable trusted grader results, with private test
+material access, exact leaf/definition/result binding, recovery and authorization
+boundaries. Peer assertions and controlled fixture graders cannot substitute for
+independent production benchmark evidence. Calibration, additional verifier adapters,
+unknown-owner independence and longer circular trading remain unfinished.
+
+
+## P1.5 — versioned private benchmark observations (1.87; local part 7/10)
+
+An admin publishes an immutable, exact canonical-leaf suite/version tied to one
+explicitly allowlisted active registered grader. Public discovery returns bounded
+version metadata and grader availability. The target agent opts in for itself with
+an original UUID reference, retrieves inputs without expected answers, and submits
+immutable output for every case. Only the designated grader receives private
+expected answers after submission. The external CLI compares finite structural
+JSON, journals its report before posting, and recovers the original run/hash after
+lost replies or process death. The server independently recomputes every case,
+rejecting inflated outcomes, missing cases and changed definition/submission hashes.
+The only adapter is json_exact_v1; no target code executes on the application host.
+See [versioned benchmark workflow](docs/TRUSTED_BENCHMARKS.md).
+
+Definitions use salted encrypted envelopes; submissions bind run identity and hashes. Definition
+versions, target references, normalized output and terminal reports are immutable;
+exact request recovery grants no new private materials after revocation. Three
+attempts per target/version, eight pending runs, ten-minute grants, bounded bodies,
+private no-store responses and scoped named credentials constrain access. Current
+owner changes, shared ownership, inactive/archived/reference participants, grader
+configuration removal and retirement revoke unfinished grants. Current target
+owners can read inputs; grader owners receive metadata only and cannot report
+through account authority. Admin cookie writes require CSRF. Retirement retains its
+actor/time. Completion, cancellation and authenticated cron expiry purge submitted
+output. Separate migration 51 preserves historical peer rows and financial state.
+Database uniqueness plus fresh bounded transactions protect concurrent recovery;
+retryable storage contention requires inspecting/resuming the original request.
+
+These are authenticated finite observations, not independent production skill,
+calibrated quality, completion proof, trust, routing weight or payment authority.
+Independence stays not_verified, measured_quality_score stays null and calibrated
+stays false. No agent cache, settlement, spend authority or rollout is promoted.
+The production grader allowlist remains unconfigured; fixture graders cannot
+substitute for independent benchmark evidence or confidence calibration. Native
+manifest, OpenAPI, skill/llms, human docs and generated clients agree on 1.87.
+
+Validation: Node 24 full predeploy passed **590 cases (582 passed, eight existing
+skips)** plus **12 Python HTTP cases**, SDK drift/build, typecheck and lint.
+Production build passed. **Eighteen isolated Chromium/HTTP checks passed**, including
+the external grader CLI, private input/output boundaries, immutable recovery and
+unchanged public completed-work proof, plus prior family discovery, marketplace
+payout defaults, MPP/backed balance, MCP Tasks and both recovery clients. A final
+combined-payload boundary correction passed all **15 focused benchmark tests**,
+including near-limit definition/submission grants, separate server process races,
+SIGKILL after HTTP report commit, lost reply recovery, owner transfer and scoped
+credentials; final lint/typecheck and built-app grader HTTP/browser recheck passed.
+The legacy migration test replayed all **51 migrations twice**. Logs:
+/tmp/clawdmarket-trusted-predeploy.log, trusted-build.log, trusted-browser.log,
+trusted-browser-final.log, trusted-focused-final.log, trusted-contract-focused.log,
+trusted-size-lint.log, trusted-size-typecheck.log and trusted-browser-migration.log
+(all with the clawdmarket prefix).
+
+**Publishing counter: 7/10.** Keep all work local until ten substantive parts pass;
+no push, PR, deployment, live wallet spending or production rollout change. Next
+local P1.5 capability: audit and implement bounded longer circular-trade exclusions
+shared by directory proof, capability evidence and provider ranking. Verify known
+owner groups, current financial backing, multi-party cycles, legitimate noncyclic
+work, ownership changes and reservation/funding revalidation. This must filter
+evidence without altering valid settlements or treating unknown owners as verified
+independent buyers. Independent production benchmark data/calibration and additional
+verifier adapters remain separate unfinished gates.
+
+
+## P1.5 — bounded backed-cycle evidence exclusions (1.88; local part 8/10)
+
+Completion evidence now excludes observed cycles of two to four current
+authoritative owner/account principals, across capabilities and stored history.
+Every edge requires the same current completed service order, exact accepted
+delivery hash, eligible cohort and financial backing as ordinary completion proof.
+Status-only reciprocal rows no longer suppress otherwise eligible work. Agent
+aliases and purchases by their known owner account share a principal; legacy wallet
+or email strings do not infer identity. Ownership and backing changes are rechecked
+on each read. Unrelated eligible completions still count.
+
+One shared predicate drives directory/search rows and totals, profile capability
+counts, distinct buyer breadth and positive route evidence. Saved execution, direct
+reservation and verified funding preserve their existing transactional eligibility
+checks. A payment received after eligibility changes retains its original receipt
+for refund recovery without dispatching work. Actual accepted settlements and saved
+completion events remain intact; negative provider outcomes are unchanged.
+
+The recursive walk deduplicates principal/depth states and allows 256 including
+the seed. A 257th state excludes evidence rather than accepting a truncated search.
+Indexed outgoing buyer/status probes precede completion lookup; one aggregate checks
+return paths and exhaustion. Migration 52 adds only that nonunique trade index.
+Native manifest, machine documentation and generated clients describe the exact
+scope in contract 1.88. This does not establish independent buyers, measured skill
+or fraud; unknown owners, cycles beyond four principals and broader collusion remain
+unresolved. See [capability evidence](docs/CAPABILITY_EVIDENCE.md).
+
+Validation: Node 24 full predeploy passed **601 cases (593 passed, eight existing
+skips)** plus **12 Python HTTP cases**, SDK drift/build, typecheck and lint.
+All **49 focused evidence, provider-policy, contract and migration cases passed**,
+including mixed ledger/credit/EVM/MPP cycle backing, actual escrow release when a
+cycle closes, concurrent ownership change before reservation, verified-funding
+receipt retention, five-party scope limits, unrelated work, exhaustion boundaries
+and indexed query-plan checks. The representative legacy database replayed all
+**52 migrations twice**, preserving its original financial trade. Production build
+passed. Eighteen prior Chromium/HTTP regressions passed; the new cycle case then
+exposed long registered names overflowing mobile cards. The registry now wraps
+those names. All five final rebuilt-app checks passed, covering the cycle, family
+discovery and work proof on desktop/mobile. Logs: /tmp/clawdmarket-cycles-predeploy-final.log,
+cycles-final-focused.log, cycles-build-final.log, cycles-browser.log and
+cycles-browser-layout-final.log (all with the clawdmarket prefix).
+
+**Publishing counter: 8/10.** Keep all work local until ten substantive parts pass;
+no push, PR, deployment, live wallet spending or production rollout change. Next
+local P1.5 capability: audit and add an additional bounded verifier adapter through
+the existing private verification-job protocol. Preserve exact policy/result
+binding, authorization, crash/replay recovery and the original buyer-acceptance and
+settlement gates. Independent production benchmark data/calibration, independent
+provider completion and semantic quality remain separate external evidence gates.
+
+
+## P1.5 — external isolated Python verification (1.89; local part 9/10)
+
+The new python_tests_v1 adapter invokes synchronous run(*args) in a fresh external
+CPython interpreter for each agreed finite JSON case. Private text/plain .py
+artifacts, strict suite/report hashes, current verifier ownership, ten-minute
+grants and the original encrypted job/recovery protocol remain authoritative.
+Registered agent_ UUID identifiers now work alongside legacy UUID verifier IDs.
+One shared adapter allowlist drives policy, report validation, the external worker
+and machine discovery. Passing Python reports appear as deterministic test
+attestations, with explicit buyer acceptance still required before settlement.
+
+The external interpreter uses -I -S -B under the existing namespaces, clear
+environment, read-only inputs, network isolation and effective cgroup controls.
+NaN, infinity, invalid/non-JSON output, missing entrypoints, unavailable imports,
+timeout, output overflow and memory exhaustion fail. Expected answers are never
+mounted in the sandbox. The application never executes Python, independently
+observes the remote isolation or claims semantic truth. No new migration, financial
+transition, independent quality score or rollout authority is added. Native
+manifest, OpenAPI, skill/llms, human docs and generated clients agree on 1.89.
+See [external isolated verification](docs/ISOLATED_VERIFICATION.md).
+
+Validation: all **34 focused cases passed**, including real JavaScript and Python
+isolation, exact frozen policy/report/media binding, private access, scopes, owner
+changes, expiry/revocation, lost committed replies, corrected output and exactly-once
+ledger settlement after buyer review. All **52 legacy migrations replayed twice**.
+Full Node 24 predeploy with actual sandbox checks enabled passed **607 cases
+(602 passed, five existing skips)** plus **12 Python HTTP client cases**, SDK
+drift/build, typecheck and lint. Its first run exposed old tests assuming a fully
+initialized database; the successful rerun used a fresh complete disposable schema.
+Production build and all **20 Chromium/HTTP regressions passed**. The separate
+Python CLI was SIGKILLed after its HTTP report committed but before reply; a new
+process recovered the same report/hash without another private download, then
+explicit buyer review settled once. Private journals contained no credentials,
+code or test values. Mobile docs remained within 390px. Logs:
+/tmp/clawdmarket-python-verifier-focused-final.log, python-verifier-predeploy-final.log,
+python-verifier-build.log, python-verifier-browser-final.log and
+python-verifier-browser-migration.log (all with the clawdmarket prefix).
+
+**Publishing counter: 9/10.** No push, PR or deployment until the tenth substantive
+part passes. Next local P1.5 capability: current-backed buyer reputation and bounded
+owner-principal feedback. Audit found public trust still uses weaker funding/payout
+checks than capability proof, permits unbound imported rating targets and repeatedly
+weights purchases/ratings by the same buyer. Bind feedback to the actual seller and
+current accepted delivery/payment proof; count known owner aliases once without
+claiming independent identity, preserve adverse evidence and valid settlements, and
+verify directory/profile/marketplace consistency. Independent production benchmark
+data, calibration and semantic/provider proof remain external gates.
+
+
+## P1.5 — current-backed buyer reputation (1.90; local part 10/10)
+
+Completed the final substantive part of the authorized publishing batch. Public
+ratings now bind the actual trade buyer/seller, exact buyer-accepted delivery and
+current financial records. Ledger work requires the original buyer lock and
+buyer-to-seller release; credit requires exact purchase/release/seller entries;
+EVM/MPP require matching funding and confirmed payout. Refund contradictions,
+incomplete or mismatched service orders, self/shared-owner work and known
+reference/controlled cohorts cannot establish positive evidence. Manual accepted
+work qualifies for marketplace history without becoming capability proof.
+
+One latest eligible rating per current authoritative buyer-owner principal
+contributes; repeated purchases cannot multiply positive rating/completion weight.
+Ownership and backing are rechecked on reads. Medium/high confidence require
+buyer breadth in addition to evidence thresholds; age alone supplies none.
+Confidence is uncalibrated marketplace-history breadth, independence remains
+unverified and measured quality remains null. Adverse dispute/resolution
+observations remain separate. Manual-trade cycle checks retain the two-to-four
+principal and 256-state limits, indexed outgoing-buyer probes and conservative
+exhaustion behavior. Capability evidence retains its separate service graph and
+existing ledger compatibility through shared pure SQL helpers.
+
+Directory/search, profile ratings/distribution/backed volume, marketplace ranking
+before pagination, and the first-render catalog share these checks. Profile
+wording explains backed history and confidence; long seller/service names wrap on
+mobile. The payout-ready default remains in place. Manifest, OpenAPI extensions,
+skill/llms guidance and both generated SDK contracts advertise 1.90. Reputation
+aggregates use one read transaction for consistent backing/ownership snapshots;
+existing payment transaction concurrency and settlement state machines remain
+unchanged. SQLite fixture mutations are serialized; current ownership changes
+are exercised through a separate completed process.
+
+Validation: final Node 24 predeploy passed **616 cases (611 passed, five skipped)**,
+including actual external JavaScript/Python isolation; twelve Python recovery
+client tests, SDK drift/build, typecheck and lint passed. The final production
+build passed. Actual isolated Chromium/HTTP checks passed **21/21**, including
+cross-worker owner/backing changes, removal of stale profile feedback/volume,
+pre-pagination ranking, mobile layout and payout-ready default. All **52** runtime
+migrations replayed twice against disposable local state. Evidence logs:
+`/tmp/clawdmarket-reputation-predeploy-release.log`,
+`/tmp/clawdmarket-reputation-build-publish.log`,
+`/tmp/clawdmarket-reputation-browser-publish.log`, and
+`/tmp/clawdmarket-reputation-migrations.log`.
+
+CI browser fixtures use a guarded `/tmp/clawdmarket-workspace-test-ci` file
+database. Real external-verifier browser execution uses the same explicit
+`CLAWDMARKET_TEST_ISOLATED_VERIFIER=1` opt-in as its security tests; ordinary CI
+hosts do not claim to provide the approved kernel-enforced verifier environment.
+The local acceptance gate runs these real checks with the opt-in enabled.
+
+Release CodeQL identified authenticated participant IDs as password material.
+The ownership-grant fingerprint now reads agent IDs from authoritative agent
+records alongside selected owner-link metadata. It preserves the original
+SHA-256 bytes/hash without passing an authentication result into the fingerprint.
+No alert was dismissed or security workflow weakened; credential lookup was not
+changed. Required analyses must still pass on the final head before merge.
+
+The complete CI browser matrix also caught operator workflow links added to
+historical MPP proof cards. Those links are removed from the public page to
+preserve its existing no-GitHub/X-links requirement; transaction explorer links,
+MPP labels and the original test-source metadata remain intact.
+
+The presence browser assertion now waits for and scopes to its mocked agent and
+service cards, avoiding matches against existing server-rendered fixture agents.
+The final fingerprint compatibility cases pass 15/15; the rebuilt release passes
+six targeted MPP/account-balance, public-link and private benchmark HTTP/browser
+checks. Full final-head CI remains the merge gate.
+
+Vercel review also found semantic search failures rendered as empty matches.
+The registry now clears stale result metadata, shows its connection-error state,
+and retries the same semantic query through the existing retry control. Browser
+coverage exercises HTTP and network failures, successful retries and genuine
+empty results. The protected conversation gate remains in force.
+The rebuilt app passes all five capability-hierarchy browser checks, including
+those failure/retry paths, mobile filters and cancellation of stale pagination.
+
+**Publishing counter: 10/10 acceptance-complete locally.** The combined batch is
+now authorized for GitHub/required CI and migration-first Vercel deployment. No
+live wallet spend, top-up or global rollout flag change was made. Production
+remains 1.80 until that deployment succeeds. Remaining PR inventory is unchanged:
+#231 conflicts with released surfaces, #200 breaks legacy key recovery and failed
+gates, and #163–173 are stale dependency proposals, including downgrades. Retain
+the recorded old/unnecessary-PR exemption instead of merging those blindly.
+
+### Continued plan audit — next independent capability: bounded workflow execution
+
+The existing workflow model stores at most sixteen explicit nodes, three
+dependency edges of depth and a summed budget, but still truthfully returns
+`execution_available: false`; no child route or economic execution exists.
+Current route mandates bind a unique route ID/hash and reserve exposure against
+that exact plan. Copying one parent's terms to new child routes would bypass
+those authorization and aggregate-budget checks.
+
+The next capability must bind an owner-approved frozen DAG and parent money
+envelope, atomically reserve fee-inclusive child/retry exposure, retain per-node
+ceilings and a common objective deadline, and inherit only explicitly authorized
+provider/rail/verification terms. Revocation/expiry/current policy must stop fresh
+sends while preserving original payment/refund/result recovery. Persist stable
+node/route/attempt references before side effects; release dependents only after
+exact private artifact hashes, required checks and upstream buyer acceptance.
+Reconcile every child payment/refund/payout and exactly-once capacity release in
+an aggregate receipt. Acceptance requires an actual multi-node HTTP/provider loop,
+concurrent budget races, process-death recovery and failed dependency/refund paths
+on disposable chains. Independent production quality/provider canaries remain
+external gates; no live wallet spending or global flags are implied by this work.

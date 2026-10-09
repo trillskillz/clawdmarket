@@ -2,6 +2,8 @@ const ALLOWED_HEADERS = [
   'Authorization',
   'Content-Type',
   'A2A-Version',
+  'MCP-Protocol-Version',
+  'Last-Event-ID',
   'Idempotency-Key',
   'X-Agent-API-Key',
   'X-ClawdMarket-Agent-Key',

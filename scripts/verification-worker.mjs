@@ -4,7 +4,7 @@ import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
-import { canonicalJSON } from './verifier-contract.mjs'
+import { canonicalJSON, VERIFIER_ADAPTERS } from './verifier-contract.mjs'
 import { runIsolatedVerification } from './isolated-verifier.mjs'
 
 function fail(code) { throw new Error(code) }
@@ -60,7 +60,7 @@ export async function runVerifierWork({ baseUrl = 'https://www.clawdmkt.com', ap
   if (journal && journal.request_hash !== job.request_hash) fail('VERIFIER_JOURNAL_MISMATCH')
   if (!journal) {
     if (job.state !== 'pending' || !work.test_suite || !(Date.parse(job.expires_at) > Date.now())
-      || !['javascript_tests_v1', 'javascript_static_v1'].includes(job.policy?.adapter)
+      || !VERIFIER_ADAPTERS.includes(job.policy?.adapter)
       || !Number.isInteger(job.policy.max_runtime_seconds) || job.policy.max_runtime_seconds < 1 || job.policy.max_runtime_seconds > 30
       || hash(canonicalJSON(work.test_suite)) !== job.policy.suite_sha256) fail('VERIFIER_GRANT_INACTIVE')
     const bytes = await api('GET', '/artifact')

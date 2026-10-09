@@ -821,6 +821,23 @@ async function main() {
     migrations.push({ id: '2026-10-04-a2a-routing-tasks-v1', run: async (database: Client) => {
       await database.executeMultiple(await readFile(new URL('../migrations/2026-10-04-a2a-routing-tasks-v1.sql', import.meta.url), 'utf8'))
     } })
+    migrations.push({ id: '2026-10-04-mcp-routing-tasks-v1', run: async (database: Client) => {
+      await database.executeMultiple(await readFile(new URL('../migrations/2026-10-04-mcp-routing-tasks-v1.sql', import.meta.url), 'utf8'))
+    } })
+    migrations.push({ id: '2026-10-08-contract-account-credit-v1', run: async (database: Client) => {
+      await ensureColumns(database, 'contracts', { payment_rail: "TEXT NOT NULL DEFAULT 'ledger'", funded_at: 'INTEGER', organization_id: 'TEXT' })
+    } })
+    migrations.push({ id: '2026-10-08-peer-benchmark-authority-v1', run: async (database: Client) => {
+      await database.executeMultiple(await readFile(new URL('../migrations/2026-10-08-peer-benchmark-authority-v1.sql', import.meta.url), 'utf8'))
+      await ensureColumns(database, 'benchmarks', { evaluator_agent_id: 'TEXT', client_reference: 'TEXT' })
+      await database.execute('CREATE UNIQUE INDEX IF NOT EXISTS benchmarks_evaluator_reference_idx ON benchmarks(evaluator_agent_id, client_reference)')
+    } })
+    migrations.push({ id: '2026-10-08-trusted-benchmarks-v1', run: async (database: Client) => {
+      await database.executeMultiple(await readFile(new URL('../migrations/2026-10-08-trusted-benchmarks-v1.sql', import.meta.url), 'utf8'))
+    } })
+    migrations.push({ id: '2026-10-08-capability-cycle-search-v1', run: async (database: Client) => {
+      await database.executeMultiple(await readFile(new URL('../migrations/2026-10-08-capability-cycle-search-v1.sql', import.meta.url), 'utf8'))
+    } })
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',

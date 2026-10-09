@@ -2,6 +2,40 @@
 set -euo pipefail
 
 required_files=(
+  "lib/reputation-evidence-sql.ts"
+  "lib/reputation-evidence-policy.ts"
+  "lib/trade-evidence-sql.ts"
+  "docs/REPUTATION_EVIDENCE.md"
+  "lib/capability-cycle-policy.ts"
+  "migrations/2026-10-08-capability-cycle-search-v1.sql"
+  "lib/trusted-benchmarks.ts"
+  "lib/trusted-benchmark-http.ts"
+  "docs/TRUSTED_BENCHMARKS.md"
+  "scripts/trusted-benchmark-worker.mjs"
+  "tests/api/trusted-benchmarks.test.ts"
+  "migrations/2026-10-08-trusted-benchmarks-v1.sql"
+  "lib/capability-hierarchy.ts"
+  "lib/capability-family-filter.ts"
+  "docs/CAPABILITY_HIERARCHY.md"
+  "app/api/capabilities/hierarchy/route.ts"
+  "lib/peer-benchmarks.ts"
+  "docs/PEER_BENCHMARKS.md"
+  "migrations/2026-10-08-peer-benchmark-authority-v1.sql"
+  "lib/capability-evidence-sql.ts"
+  "docs/CAPABILITY_EVIDENCE.md"
+  "sdk/python/clawdmarket/client.py"
+  "sdk/python/clawdmarket/contract.json"
+  "sdk/python/tests/test_client.py"
+  "sdk/typescript/src/contract.ts"
+  "scripts/generate-sdk-contract.ts"
+  "lib/platform-payment-proofs.ts"
+  "lib/historical-mpp-proofs.json"
+  "migrations/2026-10-08-contract-account-credit-v1.sql"
+  "docs/PAYMENT_PROOFS.md"
+  "lib/mcp-route-tasks.ts"
+  "migrations/2026-10-04-mcp-routing-tasks-v1.sql"
+  "tests/api/mcp-tasks.test.ts"
+  "docs/MCP_ROUTING_TASKS.md"
   "lib/a2a-route-tasks.ts"
   "migrations/2026-10-04-a2a-routing-tasks-v1.sql"
   "tests/api/a2a-routing-writes.test.ts"
@@ -214,7 +248,11 @@ echo "Checking TypeScript"
 pnpm run typecheck
 
 echo "Building TypeScript SDK"
+pnpm run sdk:check
 pnpm run sdk:build
+
+echo "Checking Python recovery client"
+pnpm run test:python
 
 echo "Checking lint"
 pnpm run lint

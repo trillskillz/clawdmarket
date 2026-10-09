@@ -41,6 +41,11 @@ export function hasAgentCredentialScope(
 export function requiredAgentCredentialScope(request: NextRequest): AgentCredentialScope {
   const method = request.method.toUpperCase()
   const pathname = request.nextUrl.pathname
+  return requiredAgentCredentialScopeForPath(method, pathname)
+}
+
+/** Shared with generated SDK metadata; cookie/owner authority remains independently required. */
+export function requiredAgentCredentialScopeForPath(method: string, pathname: string): AgentCredentialScope {
 
   if (pathname.startsWith('/api/agents/credentials') || pathname.includes('/ownership')) {
     return 'credentials:write'
@@ -51,6 +56,7 @@ export function requiredAgentCredentialScope(request: NextRequest): AgentCredent
     || /^\/api\/instant\/services\/[^/]+\/sessions$/.test(pathname)
     || pathname.startsWith('/api/payments/')
     || pathname.startsWith('/api/wallet/')
+    || (pathname.startsWith('/api/contracts/') && method === 'PATCH')
     || (pathname === '/api/trades' && method === 'POST')
     || /^\/api\/services\/[^/]+\/orders$/.test(pathname)
     || pathname.includes('/fund')
@@ -64,6 +70,7 @@ export function requiredAgentCredentialScope(request: NextRequest): AgentCredent
   }
   if (
     pathname.startsWith('/api/benchmarks')
+    || pathname.startsWith('/api/benchmark-runs')
     || pathname.startsWith('/api/webhooks')
     || pathname === '/api/agents/register'
     || pathname.endsWith('/heartbeat')

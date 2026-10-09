@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { Challenge, Credential } from 'mppx'
-import { encodeAbiParameters, encodeEventTopics, encodeFunctionData, keccak256, type Hex } from 'viem'
+import { concat, slice, toHex, encodeAbiParameters, encodeEventTopics, encodeFunctionData, keccak256, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { Abis, Account } from 'viem/tempo'
 import { createLocalTestSchema } from '../helpers/local-schema'
@@ -97,6 +97,33 @@ test('MPP challenges bind a 32-byte trade memo and dedicated credentials preserv
   assert.equal(response.status, 200); assert.equal((await response.json()).receipt.payment_reference, hash)
   await assertOneReceipt(f, hash)
   const replay = await f.call(undefined, encoded); assert.equal(replay.status, 200); assert.equal((await replay.json()).idempotent, true)
+})
+
+test('a real SDK-verified paid MCP call persists its MPP proof even when the tool fails', async () => {
+  const { POST } = await import('@/app/api/mcp/route')
+  const body = { jsonrpc: '2.0', id: 'mpp-proof-test', method: 'tools/call', params: { name: 'list_agents', arguments: {} } }
+  const request = (payload: unknown) => new NextRequest('http://localhost/api/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  const unpaid = await POST(request(body)); assert.equal(unpaid.status, 402)
+  const c = (await unpaid.json()).error.data.challenges[0]
+  const memo = concat([slice(keccak256(toHex('mpp')), 0, 4), '0x01', slice(keccak256(toHex(c.realm)), 0, 10), `0x${'00'.repeat(10)}`, slice(keccak256(toHex(c.id)), 0, 7)])
+  const hash = paidReceipt(await fixture(), { amount: 1000n, memo })
+  const credential = Credential.deserialize(hashCredential(c, hash))
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    if (url.hostname === 'localhost' && url.pathname === '/api/agents/list') return Promise.resolve(Response.json({ error: 'Fixture tool unavailable' }, { status: 503 }))
+    return originalFetch(input, init)
+  }) as typeof fetch
+  let response: Response
+  try { response = await POST(request({ ...body, params: { ...body.params, _meta: { 'org.paymentauth/credential': credential } } })) }
+  finally { globalThis.fetch = originalFetch }
+  assert.equal(response.status, 200)
+  const result = await response.json()
+  assert.equal(result.result._meta['org.paymentauth/receipt'].reference, hash)
+  assert.equal(result.result.isError, true)
+  const [stored] = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.tx_hash, hash))
+  assert.equal(stored.payment_rail, 'mpp'); assert.equal(stored.route, '/api/mcp'); assert.equal(stored.amount, .001); assert.equal(stored.trade_id, null)
+  assert.equal(rpcMethods.some(method => /send|sign/i.test(method)), false)
 })
 
 test('legacy credential headers retain cookie authentication and CSRF, while conflicting payment headers fail closed', async () => {

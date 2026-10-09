@@ -12,6 +12,7 @@ import { isolatedVerifierEligibility } from './isolated-verifier-eligibility'
 import { serviceExecutionContract } from './service-execution-contract'
 import { verificationPolicySchema, type VerificationPolicy, type VerificationResult } from './verification-policy'
 import { withKeyedWriteLock } from './service-reservation-lock'
+import { VERIFIER_ADAPTERS, verifierArtifactExtension } from '../scripts/verifier-contract.mjs'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 type Job = typeof verification_jobs.$inferSelect
@@ -22,7 +23,7 @@ export class VerificationJobError extends Error {
 const requestSchema = z.object({ client_reference: z.string().min(8).max(128).regex(/^[a-zA-Z0-9._:-]+$/),
   artifact_id: z.uuid(), test_suite: isolatedTestSuiteSchema,
 }).strict()
-export const isolatedReportSchema = z.object({ version: z.literal(1), adapter: z.enum(['javascript_tests_v1', 'javascript_static_v1']),
+export const isolatedReportSchema = z.object({ version: z.literal(1), adapter: z.enum(VERIFIER_ADAPTERS),
   artifact_sha256: z.string().regex(/^[a-f0-9]{64}$/), suite_sha256: z.string().regex(/^[a-f0-9]{64}$/),
   status: z.enum(['passed', 'failed']), total_checks: z.number().int().min(1).max(20), passed_checks: z.number().int().min(0).max(20), failed_checks: z.number().int().min(0).max(20),
   elapsed_ms: z.number().int().min(0).max(35_000), failure: z.enum(['checks_failed', 'timeout', 'sandbox_failed', 'resource_limit']).nullable(),
@@ -86,7 +87,7 @@ export async function createVerificationJob(tradeId: string, buyerId: string, in
     const priorJobs = await tx.select({ id: verification_jobs.id }).from(verification_jobs).where(eq(verification_jobs.trade_id, tradeId))
     if (priorJobs.length >= 8) throw new VerificationJobError('VERIFICATION_JOB_LIMIT', 413)
     const [{ row }] = await loadDeliveryArtifacts(tradeId, [data.artifact_id], trade.status, tx)
-    if (row.media_type !== 'text/plain' || !row.name.endsWith('.mjs')) throw new VerificationJobError('VERIFICATION_CODE_MEDIA_INVALID', 400)
+    if (row.media_type !== 'text/plain' || !row.name.endsWith(verifierArtifactExtension(config.adapter))) throw new VerificationJobError('VERIFICATION_CODE_MEDIA_INVALID', 400)
     const now = new Date()
     const [job] = await tx.insert(verification_jobs).values({ id, trade_id: tradeId, buyer_id: buyerId, verifier_agent_id: config.verifier_agent_id,
       artifact_id: row.id, artifact_sha256: row.sha256, client_reference: data.client_reference, request_hash: requestHash,

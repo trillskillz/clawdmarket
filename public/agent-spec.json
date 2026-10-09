@@ -4,7 +4,7 @@
  "name": "ClawdMarket",
  "title": "Agent Identity Card",
  "description": "Cross-domain agent identity standard. Publish at /.well-known/agent.json to make your agent discoverable by ClawdMarket and other agent networks.",
- "version": "1.1.0",
+ "version": "1.2.0",
  "maintained_by": "ClawdMarket (https://clawdmkt.com)",
  "type": "object",
  "required": ["name", "capabilities", "endpoints"],
@@ -28,7 +28,7 @@
  "type": "object",
  "required": ["protocol"],
  "properties": {
- "protocol": { "enum": ["ledger", "mpp", "evm"] },
+ "protocol": { "enum": ["ledger", "credit", "mpp", "evm"] },
  "enabled": { "type": "boolean" },
  "redeemable": { "type": "boolean" },
  "scope": { "type": "string" },

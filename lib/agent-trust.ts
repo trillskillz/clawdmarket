@@ -1,4 +1,7 @@
 import { db } from '@/lib/db';
+import { backedReputationTradeSql, eligibleReputationTradeSql, rankedBuyerFeedbackSql } from './reputation-evidence-sql';
+import { tradePrincipalSql } from './trade-evidence-sql';
+import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy';
 import { computeTrustScore, trustBand, type TrustComputation } from '@/lib/trust-score';
 
 export interface AgentTrustInput {
@@ -10,6 +13,7 @@ export interface AgentTrustInput {
 
 export interface AgentTrustSnapshot extends TrustComputation {
   band: string;
+  evidence: typeof REPUTATION_EVIDENCE_POLICY;
   components: {
     averageRating: number | null;
     ratingCount: number;
@@ -20,10 +24,14 @@ export interface AgentTrustSnapshot extends TrustComputation {
     totalTrades: number;
     recentRatings90d: number;
     accountAgeDays: number;
+    distinctBuyerCount: number;
+    ratingDistribution: number[];
+    backedVolume: number;
   };
 }
 
 interface RatingAggregate {
+  distribution: number[];
   ratingCount: number;
   ratingTotal: number;
   positiveRatings: number;
@@ -32,6 +40,8 @@ interface RatingAggregate {
 }
 
 interface TradeAggregate {
+  backedVolume: number;
+  distinctBuyers: number;
   completedTrades: number;
   disputedTrades: number;
   totalTrades: number;
@@ -76,6 +86,7 @@ export function computeAgentTrust(
   const age = accountAgeDays(agent.created_at);
   const trust = computeTrustScore({
     averageRating,
+    distinctBuyerCount: trades.distinctBuyers,
     totalRatings: ratingCount,
     completedTrades: trades.completedTrades,
     disputedTrades: trades.disputedTrades,
@@ -85,6 +96,7 @@ export function computeAgentTrust(
 
   return {
     ...trust,
+    evidence: REPUTATION_EVIDENCE_POLICY,
     band: trustBand(trust.trustScore),
     components: {
       averageRating,
@@ -96,6 +108,9 @@ export function computeAgentTrust(
       totalTrades: trades.totalTrades,
       recentRatings90d: ratings.recentRatings90d,
       accountAgeDays: age,
+      distinctBuyerCount: trades.distinctBuyers,
+      ratingDistribution: ratings.distribution,
+      backedVolume: trades.backedVolume,
     },
   };
 }
@@ -107,57 +122,44 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
   const principals = agents.flatMap((agent) => [agent.id, `user_agent_${agent.id}`]);
   const placeholders = principals.map(() => '?').join(', ');
   const client = (db as any).$client;
-  const eligibleTrade = `t.buyer_id <> t.seller_id
-    AND NOT EXISTS (SELECT 1 FROM agents ref WHERE ('user_agent_' || ref.id) = t.seller_id AND INSTR(ref.description, '[clawdmarket-reference-fleet:v1]') > 0)
-    AND NOT EXISTS (SELECT 1 FROM agent_owners own WHERE ('user_agent_' || own.agent_id) = t.seller_id AND own.user_id = t.buyer_id)
-    AND NOT EXISTS (SELECT 1 FROM agent_owners seller_owner JOIN agent_owners buyer_owner ON seller_owner.user_id = buyer_owner.user_id WHERE ('user_agent_' || seller_owner.agent_id) = t.seller_id AND ('user_agent_' || buyer_owner.agent_id) = t.buyer_id)
-    AND t.id NOT LIKE 'trade_reference_%'`;
-  const backedWork = `t.status IN ('completed', 'complete')
-    AND ${eligibleTrade}
-    AND EXISTS (SELECT 1 FROM trade_deliveries d WHERE d.trade_id = t.id AND d.content_hash IS NOT NULL)
-    AND (
-      (t.payment_rail = 'ledger' AND EXISTS (SELECT 1 FROM transactions x WHERE x.reference_id = t.id AND x.type = 'escrow_lock'))
-      OR (t.payment_rail = 'credit' AND EXISTS (SELECT 1 FROM credit_entries c WHERE c.reference = t.id AND c.user_id = t.buyer_id AND c.kind = 'purchase') AND EXISTS (SELECT 1 FROM credit_entries c WHERE c.reference = t.id AND c.user_id = t.seller_id AND c.kind = 'sale'))
-      OR (t.payment_rail IN ('mpp', 'evm')
-        AND EXISTS (SELECT 1 FROM payment_receipts p WHERE p.trade_id = t.id AND p.payment_rail = t.payment_rail)
-        AND EXISTS (SELECT 1 FROM settlement_transfers s WHERE s.trade_id = t.id AND s.kind = 'seller_payout' AND s.status = 'confirmed' AND s.tx_hash IS NOT NULL))
-    )`;
-
-  const [ratingResult, tradeResult] = await Promise.all([
-    client.execute({
-      sql: `SELECT r.rated_id,
-                   COUNT(*) AS rating_count,
-                   SUM(CAST(r.score AS REAL)) AS rating_total,
-                   SUM(CASE WHEN r.score >= 4 THEN 1 ELSE 0 END) AS positive_ratings,
-                   SUM(CASE WHEN r.score <= 2 THEN 1 ELSE 0 END) AS negative_ratings,
-                   SUM(CASE WHEN datetime(r.created_at) >= datetime('now', '-90 days') THEN 1 ELSE 0 END) AS recent_ratings
-            FROM ratings r JOIN trades t ON t.id = r.trade_id
-            WHERE r.rated_id IN (${placeholders}) AND r.rater_id = t.buyer_id AND ${backedWork}
-            GROUP BY r.rated_id`,
+  // A single read transaction keeps ratings and completion breadth at the same
+  // backing/ownership snapshot and releases recursive-query locks together.
+  const [ratingResult, tradeResult] = await client.batch([
+    {
+      sql: `WITH feedback AS (${rankedBuyerFeedbackSql(`r.rated_id IN (${placeholders})`)})
+            SELECT rated_id, COUNT(*) AS rating_count, SUM(score) AS rating_total,
+              SUM(score >= 4) AS positive_ratings, SUM(score <= 2) AS negative_ratings,
+              SUM(datetime(created_at) >= datetime('now', '-90 days')) AS recent_ratings,
+              SUM(score = 1) AS star_1, SUM(score = 2) AS star_2, SUM(score = 3) AS star_3,
+              SUM(score = 4) AS star_4, SUM(score = 5) AS star_5
+            FROM feedback WHERE feedback_rank = 1 GROUP BY rated_id`,
       args: principals,
-    }),
-    client.execute({
-      sql: `SELECT t.seller_id,
-                   COUNT(*) AS total_trades,
-                   SUM(CASE WHEN ${backedWork} THEN 1 ELSE 0 END) AS completed_trades,
-                   SUM(CASE WHEN t.status = 'disputed' OR t.resolution IS NOT NULL THEN 1 ELSE 0 END) AS disputed_trades
-            FROM trades t
-            WHERE t.seller_id IN (${placeholders}) AND ${eligibleTrade}
-            GROUP BY t.seller_id`,
+    },
+    {
+      sql: `WITH observations AS MATERIALIZED (
+              SELECT CASE WHEN t.seller_id GLOB 'user_agent_*' THEN substr(t.seller_id, 12) ELSE t.seller_id END AS seller_id, t.status, t.resolution, t.amount, ${tradePrincipalSql('t.buyer_id')} AS buyer,
+                CASE WHEN ${backedReputationTradeSql('t')} THEN 1 ELSE 0 END AS backed
+              FROM trades t WHERE t.seller_id IN (${placeholders}) AND ${eligibleReputationTradeSql('t')}
+            ) SELECT seller_id, COUNT(*) AS total_trades, SUM(backed) AS completed_trades,
+              COUNT(DISTINCT CASE WHEN backed = 1 THEN buyer END) AS distinct_buyers,
+              SUM(CASE WHEN backed = 1 THEN amount ELSE 0 END) AS backed_volume,
+              SUM(status = 'disputed' OR resolution IS NOT NULL) AS disputed_trades
+            FROM observations GROUP BY seller_id`,
       args: principals,
-    }),
-  ]);
+    },
+  ], 'read');
 
   const ratingMap = new Map<string, RatingAggregate>();
   for (const row of ratingResult?.rows || []) {
     const id = canonicalAgentId(String((row as any).rated_id || ''), knownIds);
     if (!id) continue;
-    const current = ratingMap.get(id) || { ratingCount: 0, ratingTotal: 0, positiveRatings: 0, negativeRatings: 0, recentRatings90d: 0 };
+    const current = ratingMap.get(id) || { ratingCount: 0, ratingTotal: 0, positiveRatings: 0, negativeRatings: 0, recentRatings90d: 0, distribution: [0, 0, 0, 0, 0] };
     current.ratingCount += asFiniteNumber((row as any).rating_count);
     current.ratingTotal += asFiniteNumber((row as any).rating_total);
     current.positiveRatings += asFiniteNumber((row as any).positive_ratings);
     current.negativeRatings += asFiniteNumber((row as any).negative_ratings);
     current.recentRatings90d += asFiniteNumber((row as any).recent_ratings);
+    for (let star = 1; star <= 5; star++) current.distribution[star - 1] += asFiniteNumber((row as any)[`star_${star}`]);
     ratingMap.set(id, current);
   }
 
@@ -165,10 +167,12 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
   for (const row of tradeResult?.rows || []) {
     const id = canonicalAgentId(String((row as any).seller_id || ''), knownIds);
     if (!id) continue;
-    const current = tradeMap.get(id) || { completedTrades: 0, disputedTrades: 0, totalTrades: 0 };
+    const current = tradeMap.get(id) || { completedTrades: 0, disputedTrades: 0, totalTrades: 0, distinctBuyers: 0, backedVolume: 0 };
     current.completedTrades += asFiniteNumber((row as any).completed_trades);
     current.disputedTrades += asFiniteNumber((row as any).disputed_trades);
     current.totalTrades += asFiniteNumber((row as any).total_trades);
+    current.distinctBuyers += asFiniteNumber((row as any).distinct_buyers);
+    current.backedVolume += asFiniteNumber((row as any).backed_volume);
     tradeMap.set(id, current);
   }
 
@@ -176,8 +180,8 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
     agent.id,
     computeAgentTrust(
       agent,
-      ratingMap.get(agent.id) || { ratingCount: 0, ratingTotal: 0, positiveRatings: 0, negativeRatings: 0, recentRatings90d: 0 },
-      tradeMap.get(agent.id) || { completedTrades: 0, disputedTrades: 0, totalTrades: 0 },
+      ratingMap.get(agent.id) || { ratingCount: 0, ratingTotal: 0, positiveRatings: 0, negativeRatings: 0, recentRatings90d: 0, distribution: [0, 0, 0, 0, 0] },
+      tradeMap.get(agent.id) || { completedTrades: 0, disputedTrades: 0, totalTrades: 0, distinctBuyers: 0, backedVolume: 0 },
     ),
   ]));
 }
