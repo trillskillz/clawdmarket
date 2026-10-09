@@ -51,7 +51,13 @@ async function graderEligible(id: string, source: Source) {
 async function participantHash(target: string, grader: string, source: Source) {
   const owners = await source.select({ agent: agent_owners.agentId, owner: agent_owners.userId }).from(agent_owners)
     .where(inArray(agent_owners.agentId, [target, grader]))
-  return digest({ target, grader, owners: owners.sort((a, b) => compare(canonicalContract(a), canonicalContract(b))) })
+  const participants = { target, grader, owners: owners.sort((a, b) => compare(canonicalContract(a), canonicalContract(b))) }
+  // This fingerprints public agent IDs and authoritative owner-link metadata
+  // to invalidate a private grant after ownership changes. No credential or
+  // password is included; SHA-256 preserves the existing integrity binding.
+  // CodeQL propagates credential taint to the ID returned by authentication.
+  // codeql[js/insufficient-password-hash]
+  return createHash('sha256').update(canonicalContract(participants)).digest('hex')
 }
 async function durable<T>(key: string, action: () => Promise<T>): Promise<T> {
   return withKeyedWriteLock(`trusted-benchmark:${key}`, async () => {

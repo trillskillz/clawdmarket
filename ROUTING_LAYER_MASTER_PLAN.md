@@ -965,6 +965,13 @@ database. Real external-verifier browser execution uses the same explicit
 hosts do not claim to provide the approved kernel-enforced verifier environment.
 The local acceptance gate runs these real checks with the opt-in enabled.
 
+Release CodeQL identified authenticated participant IDs as password material.
+The ownership-grant fingerprint contains only agent IDs and selected owner-link
+metadata, with no credentials. Its unchanged SHA-256 binding is now an explicit
+operation with a narrowly scoped, explained false-positive annotation; password
+hashing and credential lookup were not changed. Required analyses must still pass
+on the final head before merge.
+
 **Publishing counter: 10/10 acceptance-complete locally.** The combined batch is
 now authorized for GitHub/required CI and migration-first Vercel deployment. No
 live wallet spend, top-up or global rollout flag change was made. Production
