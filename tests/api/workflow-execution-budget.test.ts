@@ -410,7 +410,9 @@ test('dependency evidence binds the exact accepted artifact order and current ba
   assert.equal(evidence.execution_available, false); assert.equal(evidence.artifact_access_granted, false)
   assert.equal(JSON.stringify(evidence).includes('content_base64'), false)
   assert.equal((await reservations(purchased.active.run.id)).length, 1)
-  await rejectsCode(() => budget.prepareWorkflowNode(purchased.active.run.id, 'second', f.buyer), 'WORKFLOW_DEPENDENCY_NOT_READY')
+  const prepared = await budget.prepareWorkflowNode(purchased.active.run.id, 'second', f.buyer)
+  assert.ok(prepared.node.route_id)
+  assert.equal((await db.select().from(schema.workflow_artifact_grants).where(eq(schema.workflow_artifact_grants.node_run_id, prepared.node.id))).length, 0)
   process.env.CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED = 'false'
   try { assert.equal((await dependencies(f, purchased.active.run.id)).dependency_hash, evidence.dependency_hash) }
   finally { process.env.CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED = 'true' }
@@ -460,4 +462,203 @@ test('dependency inspection is buyer/current-owner private and never expands ori
   await rejectsCode(() => (import('@/lib/private-artifacts').then((api) => api.downloadPrivateArtifact(trade.id, artifacts[0].id, f.sellers[1]))), 'TRADE_NOT_FOUND')
   const data = await dependencies(f, purchased.active.run.id)
   assert.equal(data.artifact_access_granted, false)
+})
+
+async function dependentCheckout() {
+  const source = await completedPrerequisite(), purchased = await checkout(source.f, 'second')
+  assert.equal(purchased.response.status, 201, JSON.stringify(purchased.data))
+  const grants = await db.select().from(schema.workflow_artifact_grants).where(eq(schema.workflow_artifact_grants.order_id, purchased.data.order.id))
+  assert.equal(grants.length, 1)
+  return { ...source, dependent: purchased, grant: grants[0] }
+}
+async function fundDependent(f: Awaited<ReturnType<typeof dependentCheckout>>) {
+  const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, f.dependent.data.trade.id))
+  const hash = `0x${f.f.id.replaceAll('-', '')}${'dd'.repeat(16)}`
+  await (await import('@/lib/trade-funding')).recordExternalTradeFunding({ trade, rail: 'evm', txHash: hash, externalId: hash,
+    payerAddress: f.f.body.payment.payer_address, tokenAddress: token, chainId: 8453, tokenSymbol: 'USDC', tokenDecimals: 6,
+    tokenAmount: 1050000n, tokenUsdPrice: 1, usdValue: 1.05 })
+}
+async function getGrant(f: Awaited<ReturnType<typeof dependentCheckout>>, user: string | null = f.grant.recipient_id, workflowId = f.f.workflowId) {
+  const api = (await import('@/app/api/workflows/[id]/artifacts/[grantId]/route')).GET
+  const request = new NextRequest(`http://localhost/api/workflows/${workflowId}/artifacts/${f.grant.id}`, {
+    headers: user ? { Authorization: `Bearer ${jwt({ userId: user, email: `${user}@test.invalid`, role: 'human' })}` } : {},
+  })
+  return api(request, { params: Promise.resolve({ id: workflowId, grantId: f.grant.id }) })
+}
+
+test('an exact dependent order grants only the funded selected provider its approved private artifact', async () => {
+  const f = await dependentCheckout()
+  assert.equal(f.grant.recipient_id, f.dependent.data.trade.seller_id)
+  assert.equal(f.grant.recipient_id, f.f.sellers[1])
+  const pending = await getGrant(f)
+  assert.equal(pending.status, 409); assert.equal((await pending.json()).error_code, 'WORKFLOW_ARTIFACT_ORDER_NOT_FUNDED')
+  assert.equal((await getGrant(f, null)).status, 401)
+  for (const user of [f.f.outsider, f.f.sellers[0], f.f.buyer]) assert.equal((await getGrant(f, user)).status, 404)
+  await fundDependent(f)
+  const result = await getGrant(f)
+  assert.equal(result.status, 200, await result.clone().text())
+  assert.equal(result.headers.get('cache-control'), 'private, no-store')
+  assert.equal(result.headers.get('x-artifact-sha256'), f.artifacts[0].sha256)
+  assert.ok(result.headers.get('content-security-policy')?.includes('sandbox'))
+  const original = await (await import('@/lib/private-artifacts')).downloadPrivateArtifact(f.trade.id, f.artifacts[0].id, f.f.buyer)
+  assert.deepEqual(Buffer.from(await result.arrayBuffer()), original.bytes)
+  assert.equal((await getGrant(f, f.grant.recipient_id, crypto.randomUUID())).status, 404)
+  await rejectsCode(() => import('@/lib/private-artifacts').then((api) => api.downloadPrivateArtifact(f.trade.id, f.artifacts[0].id, f.grant.recipient_id)), 'TRADE_NOT_FOUND')
+  const work = (await import('@/app/api/trades/[id]/work-order/route')).GET
+  const response = await work(new NextRequest(`http://localhost/api/trades/${f.dependent.data.trade.id}/work-order`, { headers: {
+    Authorization: `Bearer ${jwt({ userId: f.grant.recipient_id, email: `${f.grant.recipient_id}@test.invalid`, role: 'human' })}` } }), context(f.dependent.data.trade.id))
+  assert.equal(response.status, 200)
+  const data = await response.json()
+  assert.equal(data.work_order.dependency_artifacts.length, 1)
+  assert.equal(data.work_order.dependency_artifacts[0].download_path, `/api/workflows/${f.f.workflowId}/artifacts/${f.grant.id}`)
+  assert.equal(data.work_order.input.upstream.binding_id, f.grant.binding_id)
+  assert.equal(data.work_order.input.upstream.sha256, f.artifacts[0].sha256)
+})
+
+test('changed prerequisite basis blocks a fresh dependent checkout and preserves its original frozen binding', async () => {
+  const { f, purchased, trade } = await completedPrerequisite()
+  const { node } = await budget.prepareWorkflowNode(purchased.active.run.id, 'second', f.buyer)
+  const [binding] = await db.select().from(schema.workflow_dependency_bindings).where(eq(schema.workflow_dependency_bindings.node_run_id, node.id))
+  await db.update(schema.settlement_transfers).set({ tx_hash: `0x${'cc'.repeat(32)}` }).where(eq(schema.settlement_transfers.trade_id, trade.id))
+  const result = await execute(request(`/api/routes/${node.route_id}/execute`, f.buyer, { mandate_id: node.mandate_id }), context(node.route_id!))
+  assert.equal((await result.json()).error_code, 'WORKFLOW_DEPENDENCY_CHANGED')
+  const [retained] = await db.select().from(schema.workflow_dependency_bindings).where(eq(schema.workflow_dependency_bindings.id, binding.id))
+  assert.equal(retained.binding_hash, binding.binding_hash)
+  assert.equal((await reservations(purchased.active.run.id)).length, 1)
+  assert.equal((await db.select().from(schema.workflow_artifact_grants).where(eq(schema.workflow_artifact_grants.node_run_id, node.id))).length, 0)
+})
+
+test('artifact grant failure atomically rolls back dependent capacity, money and order reservations', async () => {
+  const { f, purchased } = await completedPrerequisite()
+  const { node } = await budget.prepareWorkflowNode(purchased.active.run.id, 'second', f.buyer)
+  await db.$client.execute(`CREATE TRIGGER workflow_grant_failure BEFORE INSERT ON workflow_artifact_grants
+    WHEN NEW.node_run_id = '${node.id}' BEGIN SELECT RAISE(ABORT, 'TEST_GRANT_FAILURE'); END`)
+  try {
+    const response = await execute(request(`/api/routes/${node.route_id}/execute`, f.buyer, { mandate_id: node.mandate_id }), context(node.route_id!))
+    assert.equal(response.status, 500)
+    assert.equal((await reservations(purchased.active.run.id)).length, 1)
+    const [run] = await db.select().from(schema.workflow_runs).where(eq(schema.workflow_runs.id, purchased.active.run.id))
+    const [mandate] = await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id, node.mandate_id!))
+    const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.services[1]))
+    assert.equal(run.gross_reserved_minor, 105); assert.equal(mandate.reserved_minor, 0); assert.equal(service.active_orders, 0)
+  } finally { await db.$client.execute('DROP TRIGGER workflow_grant_failure') }
+  const resumed = await checkout(f, 'second')
+  assert.equal(resumed.response.status, 201, JSON.stringify(resumed.data))
+  assert.equal(resumed.node.route_id, node.route_id)
+  assert.equal((await db.select().from(schema.workflow_artifact_grants).where(eq(schema.workflow_artifact_grants.node_run_id, node.id))).length, 1)
+})
+
+test('funded grants deny revoked parent/child authority, withdrawn backing and revoked recipient access', async () => {
+  for (const action of ['parent', 'child', 'grant', 'backing']) {
+    const f = await dependentCheckout(); await fundDependent(f)
+    if (action === 'parent') await approval.revokeWorkflowApproval(f.f.workflowId, f.f.owner)
+    if (action === 'child') await (await import('@/lib/route-payment-mandate')).revokeRouteMandate(f.dependent.node.route_id!, f.f.owner)
+    if (action === 'grant') await db.update(schema.workflow_artifact_grants).set({ revoked_at: new Date() }).where(eq(schema.workflow_artifact_grants.id, f.grant.id))
+    if (action === 'backing') await db.update(schema.settlement_transfers).set({ status: 'submitted' }).where(eq(schema.settlement_transfers.trade_id, f.trade.id))
+    const response = await getGrant(f)
+    assert.equal((await response.json()).error_code, action === 'parent' ? 'WORKFLOW_INACTIVE' : action === 'child' ? 'MANDATE_INACTIVE'
+      : action === 'grant' ? 'WORKFLOW_ARTIFACT_GRANT_REVOKED' : 'WORKFLOW_DEPENDENCY_BACKING_MISSING')
+    const recovered = await checkout(f.f, 'second')
+    assert.equal(recovered.response.status, 200); assert.equal(recovered.data.trade.id, f.dependent.data.trade.id)
+    const original = await (await import('@/lib/private-artifacts')).downloadPrivateArtifact(f.trade.id, f.artifacts[0].id, f.f.buyer)
+    assert.ok(original.bytes.length) // Original private result and economic recovery remain available.
+  }
+})
+
+test('whole workflow reconciliation cannot report a partial graph as completed and persists one exact aggregate receipt', async () => {
+  const f = await dependentCheckout(), { inspectWorkflowRun, reconcileWorkflow } = await import('@/lib/workflow-reconciliation')
+  const partial = await reconcileWorkflow(f.f.workflowId, f.f.buyer)
+  assert.equal(partial.completed, false); assert.equal(partial.receipt_persisted, false)
+  assert.equal(partial.receipt.totals.gross_buyer_minor, 210)
+  assert.equal(partial.receipt.totals.unresolved_buyer_minor, 105)
+  assert.equal(partial.receipt.nodes.filter((node) => node.phase === 'completed').length, 1)
+  assert.equal((await db.select().from(schema.workflow_receipts).where(eq(schema.workflow_receipts.run_id, f.purchased.active.run.id))).length, 0)
+  await fundDependent(f)
+  const { delivery } = await (await import('@/lib/trade-delivery')).submitTradeDelivery(f.dependent.data.trade.id, f.grant.recipient_id,
+    { summary: 'Completed downstream review based on the approved exact private dependency.', artifact: { result: 'accepted downstream findings' } })
+  await db.transaction(async (tx) => {
+    await (await import('@/lib/verification-evidence')).advanceBuyerReview(tx, f.dependent.data.trade.id, 'passed', delivery.content_hash)
+    await tx.update(schema.trades).set({ status: 'completed', payout_status: 'complete', completed_at: new Date() }).where(eq(schema.trades.id, f.dependent.data.trade.id))
+    await (await import('@/lib/service-order-state')).advanceServiceOrder(tx, f.dependent.data.trade.id, 'completed')
+    await tx.insert(schema.settlement_transfers).values({ business_key: `${f.dependent.data.trade.id}:seller_payout`, trade_id: f.dependent.data.trade.id,
+      kind: 'seller_payout', chain_id: 8453, token_address: token, from_address: treasury, to_address: treasury,
+      token_amount: '1000000', usd_amount: 1, status: 'confirmed', tx_hash: `0x${'ee'.repeat(32)}`, confirmed_at: new Date() })
+  })
+  const result = await reconcileWorkflow(f.f.workflowId, f.f.buyer)
+  assert.equal(result.completed, true); assert.equal(result.receipt_persisted, true); assert.equal(result.idempotent, false)
+  assert.equal(result.receipt.nodes.length, 2); assert.equal(result.receipt.attempts.length, 2)
+  assert.equal(result.receipt.totals.confirmed_seller_payout_minor, 200)
+  assert.equal(result.receipt.totals.gross_marketplace_fee_minor, 10)
+  assert.equal(result.receipt.totals.unresolved_buyer_minor, 0)
+  assert.equal(result.receipt.totals.chain_fee_ceiling_units, (BigInt(fee) * 2n).toString())
+  assert.equal(result.receipt.totals.actual_chain_fee_units, null)
+  const replay = await reconcileWorkflow(f.f.workflowId, f.f.buyer)
+  assert.equal(replay.idempotent, true); assert.equal(replay.content_hash, result.content_hash)
+  await rejectsCode(() => inspectWorkflowRun(f.f.workflowId, f.f.outsider), 'WORKFLOW_NOT_FOUND')
+  await db.update(schema.settlement_transfers).set({ status: 'submitted' }).where(eq(schema.settlement_transfers.trade_id, f.trade.id))
+  const withdrawn = await reconcileWorkflow(f.f.workflowId, f.f.buyer)
+  assert.equal(withdrawn.completed, false); assert.equal(withdrawn.receipt_persisted, false)
+  assert.equal(withdrawn.saved_receipt?.content_hash, result.content_hash)
+  assert.equal((await db.select().from(schema.workflow_receipts).where(eq(schema.workflow_receipts.run_id, result.run.id))).length, 1)
+})
+
+test('workflow HTTP activation, child preparation and recovery inspect enforce owner/buyer scope and exact references', async () => {
+  const f = await fixture(false, true)
+  const api = await import('@/app/api/workflows/[id]/execute/route')
+  const prepare = (await import('@/app/api/workflows/[id]/nodes/[key]/prepare/route')).POST
+  const response = await api.POST(request(`/api/workflows/${f.workflowId}/execute`, f.buyer, f.activation), context(f.workflowId))
+  assert.equal(response.status, 401)
+  const authorized = await api.POST(request(`/api/workflows/${f.workflowId}/execute`, f.owner, f.activation), context(f.workflowId))
+  assert.equal(authorized.status, 201, await authorized.clone().text())
+  const { run } = await authorized.json()
+  const command = { version: 1, run_id: run.id }, params = { params: Promise.resolve({ id: f.workflowId, key: 'first' }) }
+  const denied = await prepare(request(`/api/workflows/${f.workflowId}/nodes/first/prepare`, f.outsider, command), params)
+  assert.equal(denied.status, 404)
+  const child = await prepare(request(`/api/workflows/${f.workflowId}/nodes/first/prepare`, f.buyer, command), params)
+  assert.equal(child.status, 201, await child.clone().text())
+  const data = await child.json(); assert.equal(data.funds_moved, false); assert.equal(data.route.id, data.node.planned_route_id)
+  assert.equal(data.mandate.id, data.node.mandate_id)
+  const altered = await prepare(request(`/api/workflows/${f.workflowId}/nodes/first/prepare`, f.buyer, { ...command, max_budget: 999 }), params)
+  assert.equal(altered.status, 400)
+  process.env.CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED = 'false'
+  try {
+    const replay = await api.POST(request(`/api/workflows/${f.workflowId}/execute`, f.owner, f.activation), context(f.workflowId))
+    assert.equal(replay.status, 200); assert.equal((await replay.json()).run.id, run.id)
+    const observed = await api.GET(new NextRequest(`http://localhost/api/workflows/${f.workflowId}/execute`, { headers: {
+      Authorization: `Bearer ${jwt({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' })}` } }), context(f.workflowId))
+    assert.equal(observed.status, 200); assert.equal(observed.headers.get('cache-control'), 'private, no-store')
+    assert.equal((await observed.json()).completed, false)
+  } finally { process.env.CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED = 'true' }
+})
+
+
+test('workflow HTTP cookies require CSRF, oversized writes are bounded and cancellation preserves original obligations', async () => {
+  const f = await fixture(), api = await import('@/app/api/workflows/[id]/execute/route')
+  const ownerCookie = jwt({ userId: f.owner, email: `${f.owner}@test.invalid`, role: 'human' })
+  const cookieRequest = (path: string, body: unknown) => new NextRequest(`http://localhost${path}`, { method: 'POST',
+    headers: { Cookie: `auth-token=${ownerCookie}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const denied = await api.POST(cookieRequest(`/api/workflows/${f.workflowId}/execute`, f.activation), context(f.workflowId))
+  assert.equal(denied.status, 403); assert.equal(denied.headers.get('cache-control'), 'private, no-store')
+  const huge = await api.POST(request(`/api/workflows/${f.workflowId}/execute`, f.owner, { ...f.activation, padding: 'x'.repeat(2048) }), context(f.workflowId))
+  assert.equal(huge.status, 413)
+  assert.equal((await db.select().from(schema.workflow_runs).where(eq(schema.workflow_runs.workflow_id, f.workflowId))).length, 0)
+  const run = (await budget.activateWorkflow(f.workflowId, f.owner, f.activation)).run
+  const node = (await budget.prepareWorkflowNode(run.id, 'first', f.buyer)).node
+  const checkout = await execute(request(`/api/routes/${node.route_id}/execute`, f.buyer, { mandate_id: node.mandate_id }), context(node.route_id!))
+  assert.equal(checkout.status, 201, await checkout.clone().text())
+  const { order } = await checkout.json()
+  const prepare = (await import('@/app/api/workflows/[id]/nodes/[key]/prepare/route')).POST
+  assert.equal((await prepare(cookieRequest(`/api/workflows/${f.workflowId}/nodes/second/prepare`, { version: 1, run_id: run.id }), { params: Promise.resolve({ id: f.workflowId, key: 'second' }) })).status, 403)
+  const reconcile = (await import('@/app/api/workflows/[id]/reconcile/route')).POST
+  assert.equal((await reconcile(cookieRequest(`/api/workflows/${f.workflowId}/reconcile`, { version: 1, run_id: run.id }), context(f.workflowId))).status, 403)
+  const cancel = (await import('@/app/api/workflows/[id]/route')).DELETE
+  const cancelled = await cancel(new NextRequest(`http://localhost/api/workflows/${f.workflowId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${ownerCookie}` } }), context(f.workflowId))
+  assert.equal(cancelled.status, 200); assert.equal((await cancelled.json()).funds_state, 'recover_original_children')
+  const rejected = await prepare(request(`/api/workflows/${f.workflowId}/nodes/second/prepare`, f.buyer, { version: 1, run_id: run.id }), { params: Promise.resolve({ id: f.workflowId, key: 'second' }) })
+  assert.equal(rejected.status, 409)
+  const current = await api.GET(new NextRequest(`http://localhost/api/workflows/${f.workflowId}/execute`, { headers: { Authorization: `Bearer ${ownerCookie}` } }), context(f.workflowId))
+  assert.equal(current.status, 200); assert.equal((await current.json()).receipt.totals.unresolved_buyer_minor, 105)
+  const [preserved] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.id, order.id))
+  assert.equal(preserved.capacity_released_at, null)
+  assert.equal((await db.select().from(schema.workflow_reservations).where(eq(schema.workflow_reservations.order_id, order.id))).length, 1)
 })

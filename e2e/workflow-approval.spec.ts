@@ -68,3 +68,60 @@ test('HTTP owner review freezes a private DAG, preserves identity and cannot aut
   expect((await revoked.json()).approval.state).toBe('revoked')
   expect(JSON.parse((await fixture('counts')).stdout)).toEqual({ approvals: 1, orders: 0, trades: 0 })
 })
+
+
+test('built application privately activates stable workflow children and retains original unpaid obligations after cancellation', async ({ request, page }) => {
+  const registered = await request.post('/api/agents/register', { headers: { 'x-forwarded-for': `2001:db8:${(Date.now() % 65535).toString(16)}::b52` },
+    data: { name: `Execution HTTP ${crypto.randomUUID().slice(0, 8)}`, activation_mode: 'autonomous', capabilities: ['code-review'] } })
+  expect(registered.status()).toBe(201)
+  const agent = (await registered.json()).agent
+  const fixture = (mode: string) => promisify(execFile)(process.execPath, ['--conditions=react-server', '--import', 'tsx', 'e2e/fixtures/workflow-approval.ts', mode, agent.id],
+    { env: { ...process.env, JWT_SECRET: process.env.JWT_SECRET || 'clawdmarket-playwright-jwt-secret' }, timeout: 20000 })
+  const owners = JSON.parse((await fixture('owners')).stdout), provider = JSON.parse((await fixture('service')).stdout)
+  const buyerHeaders = { Authorization: `Bearer ${agent.api_key}` }, ownerHeaders = { Authorization: `Bearer ${owners.owner_key}` }
+  const planned = await request.post('/api/workflows/plan', { headers: buyerHeaders, data: {
+    client_reference: `browser-execution-${crypto.randomUUID()}`, objective: 'Privately review two bounded repository steps',
+    max_budget: { amount: '2.00', currency: 'USD' }, deadline_seconds: 300,
+    nodes: ['first', 'second'].map((key, index) => ({ key, objective: `Review the private repository ${key} step`, required_capabilities: ['code-review'],
+      budget: { amount: '1.00', currency: 'USD' }, deadline_seconds: index ? 300 : 120, depends_on: index ? ['first'] : [] })) } })
+  expect(planned.status()).toBe(201)
+  const workflow = (await planned.json()).workflow, path = `/api/workflows/${workflow.id}`
+  const reviewed = await request.post(`${path}/approval`, { headers: ownerHeaders, data: {
+    version: 1, client_reference: `browser-review-${crypto.randomUUID()}`, plan_hash: workflow.plan_hash,
+    expires_at: new Date(Math.floor(Date.now() / 1000) * 1000 + 600000).toISOString(), max_gross_minor: 200, max_chain_fee_units: '2000', private_data: 'selected_provider_only',
+    payment: { rail: 'evm', chain_id: 8453, token_address: `0x${'44'.repeat(20)}`, payer_address: `0x${'11'.repeat(20)}`,
+      treasury_address: process.env.TREASURY_ADDRESS || privateKeyToAccount(`0x${'99'.repeat(32)}`).address,
+      minimum_token_reserve_units: '2000000', minimum_native_reserve_wei: '10000', max_gas_cost_wei: '1000' },
+    nodes: ['first', 'second'].map((key, index) => ({ key, static_input: { private_text: 'WORKFLOW_EXECUTION_BROWSER_PRIVATE' },
+      provider_requirements: { approved_providers: [provider.seller] }, verification: { required: true, methods: ['buyer_review'], acceptance: { version: 1, mode: 'explicit_buyer' } },
+      max_per_attempt_minor: 100, max_retry_minor: 0, max_attempts: 1, max_latency_seconds: 60, max_chain_fee_per_attempt_units: '1000',
+      dependency_inputs: index ? [{ source_node: 'first', artifact_index: 0, target_field: 'upstream' }] : [] })) } })
+  expect(reviewed.status()).toBe(201)
+  const approval = (await reviewed.json()).approval, command = { version: 1, client_reference: `browser-run-${crypto.randomUUID()}`,
+    approval_id: approval.id, contract_hash: approval.contract_hash, authorize_spending: true }
+  expect((await request.post(`${path}/execute`, { headers: buyerHeaders, data: command })).status()).toBe(401)
+  const activated = await request.post(`${path}/execute`, { headers: ownerHeaders, data: command })
+  expect(activated.status()).toBe(201)
+  const { run } = await activated.json(), nodeCommand = { version: 1, run_id: run.id }
+  const prepare = await request.post(`${path}/nodes/first/prepare`, { headers: buyerHeaders, data: nodeCommand })
+  expect(prepare.status()).toBe(201)
+  const child = await prepare.json()
+  const checkout = await request.post(`/api/routes/${child.route.id}/execute`, { headers: buyerHeaders, data: { mandate_id: child.mandate.id } })
+  expect(checkout.status()).toBe(201)
+  expect((await request.post(`${path}/nodes/second/prepare`, { headers: buyerHeaders, data: nodeCommand })).status()).toBe(409)
+  expect((await request.get(`${path}/execute`, { headers: { Authorization: `Bearer ${owners.outsider_key}` } })).status()).toBe(404)
+  await page.goto('/proof')
+  const privateView = await page.evaluate(async ({ path, key }) => {
+    const response = await fetch(`${path}/execute`, { headers: { Authorization: `Bearer ${key}` } })
+    return { status: response.status, headers: response.headers.get('cache-control'), data: await response.json() }
+  }, { path, key: owners.owner_key })
+  expect(privateView.status).toBe(200); expect(privateView.headers).toContain('private, no-store')
+  expect(privateView.data.completed).toBe(false); expect(privateView.data.receipt.totals.unresolved_buyer_minor).toBe(100)
+  const cancelled = await request.delete(path, { headers: buyerHeaders })
+  expect((await cancelled.json()).funds_state).toBe('recover_original_children')
+  const replay = await request.post(`${path}/execute`, { headers: ownerHeaders, data: command })
+  expect(replay.status()).toBe(200); expect((await replay.json()).run.started_at).toBe(run.started_at)
+  const recovered = await request.post(`${path}/nodes/first/prepare`, { headers: buyerHeaders, data: nodeCommand })
+  expect(recovered.status()).toBe(200); expect((await recovered.json()).route.id).toBe(child.route.id)
+  expect(JSON.parse((await fixture('counts')).stdout)).toEqual({ approvals: 1, orders: 1, trades: 1 })
+})

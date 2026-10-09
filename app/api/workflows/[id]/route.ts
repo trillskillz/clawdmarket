@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { workflow_nodes, workflows } from '@/lib/schema'
+import { workflow_nodes, workflows, workflow_runs } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { validateCsrf } from '@/lib/csrf'
 import { workflowDto } from '@/lib/workflow-planning'
@@ -19,7 +19,9 @@ async function owned(id: string, buyerId: string) {
 
 async function response(workflow: typeof workflows.$inferSelect, idempotent?: boolean) {
   const nodes = await db.select().from(workflow_nodes).where(eq(workflow_nodes.workflow_id, workflow.id))
-  return NextResponse.json({ workflow: workflowDto(workflow, nodes), ...(idempotent === undefined ? {} : { idempotent }) }, { headers: { 'Cache-Control': 'no-store' } })
+  const [run] = await db.select({ id: workflow_runs.id }).from(workflow_runs).where(eq(workflow_runs.workflow_id, workflow.id)).limit(1)
+  return NextResponse.json({ workflow: workflowDto(workflow, nodes), funds_moved: false,
+    funds_state: run ? 'recover_original_children' : 'no_funds_moved', ...(idempotent === undefined ? {} : { idempotent }) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

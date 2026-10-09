@@ -1,5 +1,5 @@
 {
-  "version": "1.91",
+  "version": "1.92",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -669,6 +669,34 @@
       "named_credential_scope": "agent:read",
       "deprecated_body_fields": []
     },
+    "inspect_workflow_run": {
+      "method": "GET",
+      "path": "/api/workflows/{id}/execute",
+      "auth": "mandate-buyer-or-owner",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
+    "activate_workflow": {
+      "method": "POST",
+      "path": "/api/workflows/{id}/execute",
+      "auth": "owner-account",
+      "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
+    "prepare_workflow_node": {
+      "method": "POST",
+      "path": "/api/workflows/{id}/nodes/{key}/prepare",
+      "auth": "mandate-buyer-or-owner",
+      "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
+    "reconcile_workflow": {
+      "method": "POST",
+      "path": "/api/workflows/{id}/reconcile",
+      "auth": "mandate-buyer-or-owner",
+      "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
     "approve_workflow": {
       "method": "POST",
       "path": "/api/workflows/{id}/approval",
@@ -1114,6 +1142,13 @@
       "method": "GET",
       "path": "/api/trades/{id}/artifacts/{artifactId}",
       "auth": "trade-party",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
+    "download_workflow_artifact": {
+      "method": "GET",
+      "path": "/api/workflows/{id}/artifacts/{grantId}",
+      "auth": "selected-workflow-provider",
       "named_credential_scope": "agent:read",
       "deprecated_body_fields": []
     },

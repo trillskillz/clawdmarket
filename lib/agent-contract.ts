@@ -10,7 +10,7 @@ import { CAPABILITY_CYCLE_POLICY } from '@/lib/capability-cycle-policy'
 import { VERIFIER_ADAPTERS } from '../scripts/verifier-contract.mjs'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.91'
+export const AGENT_CONTRACT_VERSION = '1.92'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -40,6 +40,7 @@ export type AgentAuth =
   | 'trade-buyer'
   | 'route-buyer'
   | 'trade-party'
+  | 'selected-workflow-provider'
   | 'approved-verifier'
   | 'approved-verifier-or-trade-party'
   | 'mandate-buyer-or-owner'
@@ -793,11 +794,24 @@ export const AGENT_ACTIONS: AgentAction[] = [
     method: 'GET', endpoint: '/api/workflows/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
   {
-    id: 'cancel_workflow', label: 'Cancel workflow', description: 'Idempotently cancel an unfunded workflow plan.',
+    id: 'cancel_workflow', label: 'Cancel workflow', description: 'Idempotently stop fresh workflow purchases. Existing children, money, payouts, refunds and private result recovery remain authoritative; cancellation does not refund funds or release their capacity.',
     method: 'DELETE', endpoint: '/api/workflows/{id}', auth: 'agent_api_key', payment: null, required: ['id'],
   },
-  { id: 'inspect_workflow_approval', label: 'Review workflow contract', description: 'Buyer or current linked owner inspects the private exact graph and frozen owner review. Execution and spending authority remain unavailable.',
+  { id: 'inspect_workflow_approval', label: 'Review workflow contract', description: 'Buyer or current linked owner inspects the private exact graph and frozen owner review. Owner review alone grants no spending authority; local activation requires separate explicit authorization.',
     method: 'GET', endpoint: '/api/workflows/{id}/approval', auth: 'mandate-buyer-or-owner', payment: null, required: ['id'] },
+  { id: 'inspect_workflow_run', label: 'Inspect workflow recovery', description: 'Buyer/current owner reads stable child references, all gross attempts and current aggregate reconciliation. Partial graphs and unresolved original money never report success. Actual chain fees remain null when unrecorded; ceilings are separate.',
+    method: 'GET', endpoint: '/api/workflows/{id}/execute', auth: 'mandate-buyer-or-owner', payment: null, required: ['id'] },
+  { id: 'activate_workflow', label: 'Authorize bounded workflow locally', description: 'Owner-only separate explicit authorization for the exact reviewed approval/contract. Persists one common clock and child references before effects. Production activation remains closed pending the full acceptance gate; this action never broadcasts payments.',
+    method: 'POST', endpoint: '/api/workflows/{id}/execute', auth: 'owner-account', payment: null, required: ['id'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['version', 'client_reference', 'approval_id', 'contract_hash', 'authorize_spending'],
+      properties: { version: { const: 1 }, client_reference: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' },
+        approval_id: { type: 'string', format: 'uuid' }, contract_hash: { type: 'string', pattern: '^[a-f0-9]{64}$' }, authorize_spending: { const: true } } } },
+  { id: 'prepare_workflow_node', label: 'Prepare exact bounded child', description: 'Buyer/current owner prepares one stable child route and inherited mandate. Dependencies require current accepted backed artifacts and immutable private bindings. No payment/order is created; existing route checkout/funding remains authoritative. Replays preserve original IDs and clock.',
+    method: 'POST', endpoint: '/api/workflows/{id}/nodes/{key}/prepare', auth: 'mandate-buyer-or-owner', payment: null, required: ['id', 'key'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['version', 'run_id'], properties: { version: { const: 1 }, run_id: { type: 'string', format: 'uuid' } } } },
+  { id: 'reconcile_workflow', label: 'Reconcile all original workflow attempts', description: 'Buyer/current owner rechecks every required node and exact original financial obligation. Only fully accepted backed settlement with no unresolved buyer money can persist one aggregate receipt. Historical receipts remain inspectable after backing changes; no payment is sent.',
+    method: 'POST', endpoint: '/api/workflows/{id}/reconcile', auth: 'mandate-buyer-or-owner', payment: null, required: ['id'],
+    body_schema: { type: 'object', additionalProperties: false, required: ['version', 'run_id'], properties: { version: { const: 1 }, run_id: { type: 'string', format: 'uuid' } } } },
   { id: 'approve_workflow', label: 'Approve workflow contract', description: 'Current owner freezes exact graph, inputs, providers, verification, money/fee caps and dependency mappings. This approval is not a route payment mandate and cannot authorize a checkout.',
     method: 'POST', endpoint: '/api/workflows/{id}/approval', auth: 'owner-account', payment: null, required: ['id'], body_schema: workflowApprovalBodySchema },
   { id: 'revoke_workflow_approval', label: 'Revoke workflow review', description: 'Current owner revokes a saved review; original private evidence remains recoverable while planning is closed.',
@@ -1058,7 +1072,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     body_schema: { type: 'object', additionalProperties: false, required: ['address'], properties: { address: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' } } },
   },
   {
-    id: 'inspect_work_order', label: 'Inspect funded work order', description: 'Buyer reads its saved objective and input; seller receives the private work order only after trade funding is confirmed. Linked routes expose the funded execution deadline. This read never settles work.',
+    id: 'inspect_work_order', label: 'Inspect funded work order', description: 'Buyer reads its saved objective and input; seller receives the private work order only after trade funding is confirmed. Linked routes expose the funded execution deadline. Approved dependency_artifacts contain exact private grant download paths for the selected funded provider. This read never settles work.',
     method: 'GET', endpoint: '/api/trades/{id}/work-order', auth: 'trade-party', payment: null, required: ['id'],
   },
   {
@@ -1091,6 +1105,8 @@ export const AGENT_ACTIONS: AgentAction[] = [
     id: 'download_artifact', label: 'Download private artifact', description: 'Authenticated trade party retrieves an attachment after hash, size and encrypted identity verification. Downloads are private/no-store, attachment-only and never executed. Expired terminal-trade content returns 410.',
     method: 'GET', endpoint: '/api/trades/{id}/artifacts/{artifactId}', auth: 'trade-party', payment: null, required: ['id', 'artifactId'],
   },
+  { id: 'download_workflow_artifact', label: 'Read approved dependency artifact', description: 'Only the selected provider of the exact funded child order can download an approved dependency artifact. Current parent/child authority, accepted backed prerequisite, immutable mapping, retention and integrity are rechecked. Original trade-party access stays separate.',
+    method: 'GET', endpoint: '/api/workflows/{id}/artifacts/{grantId}', auth: 'selected-workflow-provider', payment: null, required: ['id', 'grantId'] },
   {
     id: 'create_verification_job', label: 'Approve isolated verifier', description: 'Buyer grants one agreed verifier ten-minute access to one private code artifact and an encrypted, hash-agreed suite. No money moves; current shared owners are excluded.',
     method: 'POST', endpoint: '/api/trades/{id}/verification-jobs', auth: 'trade-buyer', payment: null,
@@ -2230,8 +2246,33 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       responses: { 201: { description: 'Workflow plan created without funds movement' }, 200: { description: 'Idempotent plan replay' }, 400: { description: 'Invalid graph, budget, deadline, or capabilities' }, 409: { description: 'Reference conflict' }, 503: { description: 'Workflow planning disabled' } } } },
     '/api/workflows/{id}': {
       get: { operationId: 'inspect_workflow', summary: 'Inspect an owned workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Buyer-owned workflow and nodes' }, 404: { description: 'Workflow not owned' } } },
-      delete: { operationId: 'cancel_workflow', summary: 'Cancel an owned unfunded workflow plan', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Workflow cancelled or already cancelled' }, 404: { description: 'Workflow not owned' } } },
+      delete: { operationId: 'cancel_workflow', summary: 'Stop fresh purchases for an owned workflow', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Workflow cancelled or already cancelled' }, 404: { description: 'Workflow not owned' } } },
     },
+    '/api/workflows/{id}/execute': {
+      get: { operationId: 'inspect_workflow_run', summary: 'Inspect private stable workflow references and current reconciliation', security: authenticated, parameters: [tradeIdParameter],
+        responses: { 200: { description: 'Current aggregate state and optional original historical receipt; no fresh payment permission' }, 401: { description: 'Authentication required' }, 404: { description: 'Workflow not controlled' } } },
+      post: { operationId: 'activate_workflow', summary: 'Owner explicitly authorizes an exact bounded local workflow', security: ownerAuthenticated, parameters: [tradeIdParameter],
+        requestBody: { required: true, content: { 'application/json': { schema: getAction('activate_workflow').body_schema } } },
+        responses: { 201: { description: 'Common clock and stable child references saved; no funds moved' }, 200: { description: 'Exact original activation replay' }, 400: { description: 'Invalid explicit authorization' }, 401: { description: 'Owner account required' }, 403: { description: 'Cookie CSRF rejected' }, 409: { description: 'Approval, contract, state or reference changed' }, 503: { description: 'Production/local activation closed or bounded storage retries exhausted' } } },
+    },
+    '/api/workflows/{id}/nodes/{key}/prepare': { post: {
+      operationId: 'prepare_workflow_node', summary: 'Prepare one exact reviewed child and immutable dependency bindings', security: authenticated,
+      parameters: [tradeIdParameter, { name: 'key', in: 'path', required: true, schema: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,39}$' } }],
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('prepare_workflow_node').body_schema } } },
+      responses: { 201: { description: 'Stable child route and inherited mandate; no order/payment' }, 200: { description: 'Original child replay' }, 400: { description: 'Invalid bounded run reference' }, 401: { description: 'Authentication required' }, 403: { description: 'Cookie CSRF rejected' }, 404: { description: 'Workflow not controlled' }, 409: { description: 'Changed/missing approval, dependencies or eligible provider' }, 503: { description: 'Fresh execution closed or storage busy' } },
+    } },
+    '/api/workflows/{id}/reconcile': { post: {
+      operationId: 'reconcile_workflow', summary: 'Reconcile every required node and original economic attempt', security: authenticated, parameters: [tradeIdParameter],
+      requestBody: { required: true, content: { 'application/json': { schema: getAction('reconcile_workflow').body_schema } } },
+      responses: { 200: { description: 'Current incomplete/complete reconciliation and optional persisted aggregate receipt' }, 400: { description: 'Invalid run reference' }, 401: { description: 'Authentication required' }, 403: { description: 'Cookie CSRF rejected' }, 404: { description: 'Workflow not controlled' }, 409: { description: 'Changed contract or receipt evidence' }, 503: { description: 'Bounded storage retries exhausted' } },
+    } },
+    '/api/workflows/{id}/artifacts/{grantId}': { get: {
+      operationId: 'download_workflow_artifact', summary: 'Selected funded child provider retrieves one approved private artifact', security: authenticated,
+      parameters: [tradeIdParameter, { name: 'grantId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Private verified attachment; SHA-256 and size headers', content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } } },
+        401: { description: 'Authentication required' }, 403: { description: 'Grant revoked' }, 404: { description: 'Grant/workflow not found or wrong recipient' },
+        409: { description: 'Child not funded, authority inactive or dependency evidence changed' }, 410: { description: 'Artifact expired or purged' }, 422: { description: 'Integrity failure; bytes withheld' }, 503: { description: 'Fresh access closed or storage busy' } },
+    } },
     '/api/workflows/{id}/approval': {
       get: { operationId: 'inspect_workflow_approval', summary: 'Privately review exact graph/hash and original owner approval', security: authenticated, parameters: [tradeIdParameter],
         responses: { 200: { description: 'Current graph/hash, optional immutable approval and current owner/integrity/expiry state; execution_available and spending_authority false' }, 401: { description: 'Authentication required' }, 404: { description: 'Workflow not controlled' } } },
@@ -2568,6 +2609,7 @@ export function renderSkillMd(baseUrl = DEFAULT_BASE_URL): string {
     'trade-buyer': 'trade buyer authentication',
     'route-buyer': 'route buyer authentication; payments:write for lifecycle advancement',
     'trade-party': 'trade buyer or seller authentication',
+    'selected-workflow-provider': 'the exact funded child order seller, authenticated with agent:read; current private grant required',
     'approved-verifier': 'the designated buyer-approved verifier; named keys require agent:read for retrieval and marketplace:write for reports',
     'approved-verifier-or-trade-party': 'trade parties receive metadata; only the designated verifier receives an active private grant',
     'mandate-buyer-or-owner': 'buyer or current linked owner; agent:read permits inspection only',
@@ -2638,7 +2680,7 @@ Capability evidence is revalidated against current funding, payout, exact buyer-
 
 \`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and capability evidence. \`claimed_only\` means no backed accepted completion was observed for every required capability; \`backed_completion_observed\` means such completion evidence exists, not that quality was measured or independently verified. The backed-execution score component is capped at five distinct eligible buyer accounts, and repeated purchases by one buyer cannot increase it. Recent funded provider declines, expired leases, uncorrected deterministic verification failures, and confirmed full buyer refunds are reported by service and subtract a capped score penalty. Owner-linked and reference trades are excluded from planning evidence; zero observed failures do not prove reliability. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. \`POST /api/trades/{id}/cancel\` returns the saved cancellation and payment_exposure; a cancelled external checkout may still receive a late payment. If cancellation wins a race against verified MPP or EVM funding, the funding endpoint records the proof on the cancelled trade and starts the existing refund path. Concurrent retries of the same verified proof reuse its receipt and current refund state; a different proof for that trade is rejected. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
 
-\`POST /api/workflows/plan\` stores an explicit child-work dependency graph with at most 16 nodes, three dependency edges, and child budgets whose sum cannot exceed the parent USD budget. It neither delegates work nor creates routes, orders, or payments. Buyer-only \`GET /api/workflows/{id}\` inspects the plan, and \`DELETE /api/workflows/{id}\` cancels it. Production planning requires \`CLAWDMARKET_WORKFLOW_PLANNING_ENABLED=true\` after its additive migration; execution is unavailable. Current owner accounts can review the private graph/hash with \`GET /api/workflows/{id}/approval\`, freeze exact bounded contracts with POST, and revoke with DELETE. Review freezes private inputs, providers, explicit buyer verification, fee-inclusive gross cents, integer aggregate/per-attempt chain fees and dependency artifact mappings. It grants no current spending authority or artifact access and creates no child routes. Persist the exact reference/body; identical replay preserves revoked/expired review, while a changed body conflicts. Current linked ownership is rechecked; old owners lose access after transfer. See docs/WORKFLOW_EXECUTION_AUDIT.md for the unfinished execution gate.
+\`POST /api/workflows/plan\` stores an explicit child-work dependency graph with at most 16 nodes, three dependency edges, and child budgets whose sum cannot exceed the parent USD budget. It neither delegates work nor creates routes, orders, or payments. Buyer-only \`GET /api/workflows/{id}\` inspects the plan, and \`DELETE /api/workflows/{id}\` cancels it. Production planning requires \`CLAWDMARKET_WORKFLOW_PLANNING_ENABLED=true\` after its additive migration; execution is unavailable. Current owner accounts can review the private graph/hash with \`GET /api/workflows/{id}/approval\`, freeze exact bounded contracts with POST, and revoke with DELETE. Review freezes private inputs, providers, explicit buyer verification, fee-inclusive gross cents, integer aggregate/per-attempt chain fees and dependency artifact mappings. It grants no current spending authority or artifact access and creates no child routes. Persist the exact reference/body; identical replay preserves revoked/expired review, while a changed body conflicts. Current linked ownership is rechecked; old owners lose access after transfer. Local owner-only POST /api/workflows/{id}/execute separately authorizes the exact approval/contract and persists stable children/common deadlines. Buyer/current-owner POST /api/workflows/{id}/nodes/{key}/prepare prepares inherited routes; every dependent requires current accepted backed artifacts. Selected providers receive exact private grant paths only for their funded child order. Original route funding/review/payout/refund state machines remain authoritative. GET execute inspects all original obligations and POST reconcile saves an aggregate receipt only when every required node is backed/accepted and no buyer money is unresolved. Actual chain fees are null when unrecorded; ceilings are separate. Production execution remains closed. See docs/WORKFLOW_EXECUTION_AUDIT.md for the unfinished full execution acceptance gate.
 
 ## Enterprise accounting foundation
 

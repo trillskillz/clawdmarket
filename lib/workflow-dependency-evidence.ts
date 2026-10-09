@@ -4,21 +4,22 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from './db'
 import { workflow_runs, workflow_node_runs, workflow_approvals, workflow_nodes, workflows, workflow_reservations,
-  route_plans, route_payment_mandates, service_orders, trades, trade_deliveries, verification_results, private_artifacts, payment_receipts } from './schema'
+  route_plans, route_payment_mandates, service_orders, trades, trade_deliveries, verification_results, private_artifacts, payment_receipts, settlement_transfers } from './schema'
 import { workflowPlanHash } from './workflow-planning'
 import { storedWorkflowContract, workflowOwnerControlsBuyer, workflowTransaction } from './workflow-approval'
 import { canonicalContract } from './structured-verification'
-import { mandateDto, routeAuthorityHash } from './route-payment-mandate'
+import { mandateDto, routeAuthorityHash, RouteMandateError } from './route-payment-mandate'
 import { currentRouteFinancialProof } from './route-lifecycle'
 import { tradeAcceptanceStatus } from './trade-acceptance'
 import { ARTIFACT_MEDIA_TYPES, verifyPrivateArtifactPayload } from './private-artifacts'
 import { findTradeFundingStep } from './route-funding-steps'
+import { payoutAddressForUser } from './external-settlement'
 
 const hash = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 type Node = typeof workflow_node_runs.$inferSelect
-export class WorkflowDependencyError extends Error {
-  constructor(readonly code: string, readonly status = 409) { super(code) }
+export class WorkflowDependencyError extends RouteMandateError {
+  constructor(code: string, status = 409) { super(code, status) }
 }
 const fail = (code: string, status = 409): never => { throw new WorkflowDependencyError(code, status) }
 const integrityEvidence = z.object({ algorithm: z.literal('sha256'), artifacts: z.array(z.object({
@@ -27,7 +28,7 @@ const integrityEvidence = z.object({ algorithm: z.literal('sha256'), artifacts: 
 })).min(1).max(8) })
 
 /** Re-read current financial/acceptance/integrity evidence, never infer backing from a saved receipt. */
-async function prerequisite(source: Source, node: Node, buyerId: string, payment: ReturnType<typeof storedWorkflowContract>['terms']['payment']) {
+export async function currentWorkflowNodeSettlement(source: Source, node: Node, buyerId: string, payment: ReturnType<typeof storedWorkflowContract>['terms']['payment'], requireArtifacts = true) {
   if (!node.route_id || !node.mandate_id || node.route_id !== node.planned_route_id) return fail('WORKFLOW_DEPENDENCY_NOT_READY')
   const [route] = await source.select().from(route_plans).where(eq(route_plans.id, node.route_id)).limit(1)
   const [mandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id, node.mandate_id)).limit(1)
@@ -46,9 +47,12 @@ async function prerequisite(source: Source, node: Node, buyerId: string, payment
     || step.amount_minor !== reservation.amount_minor || step.state !== 'funded') return fail('WORKFLOW_DEPENDENCY_FUNDING_CHANGED')
   const financial = await currentRouteFinancialProof(source, trade)
   const [funding] = await source.select().from(payment_receipts).where(eq(payment_receipts.trade_id, trade.id)).limit(1)
+  const [payout] = await source.select().from(settlement_transfers).where(and(eq(settlement_transfers.trade_id, trade.id), eq(settlement_transfers.kind, 'seller_payout'))).limit(1)
+  const destination = await payoutAddressForUser(trade.seller_id, source)
   if (!financial || !funding || funding.payment_rail !== payment.rail || trade.payment_rail !== payment.rail
     || funding.chain_id !== payment.chain_id || funding.token_address?.toLowerCase() !== payment.token_address
-    || funding.payer_address?.toLowerCase() !== payment.payer_address) return fail('WORKFLOW_DEPENDENCY_BACKING_MISSING')
+    || funding.payer_address?.toLowerCase() !== payment.payer_address || !payout || !destination
+    || payout.from_address.toLowerCase() !== payment.treasury_address || payout.to_address.toLowerCase() !== destination.toLowerCase()) return fail('WORKFLOW_DEPENDENCY_BACKING_MISSING')
   const acceptance = await tradeAcceptanceStatus(trade.id, source)
   if (acceptance.mode !== 'explicit_buyer' || !acceptance.accepted) return fail('WORKFLOW_DEPENDENCY_NOT_ACCEPTED')
   const [delivery] = await source.select().from(trade_deliveries).where(eq(trade_deliveries.trade_id, trade.id)).limit(1)
@@ -57,11 +61,12 @@ async function prerequisite(source: Source, node: Node, buyerId: string, payment
     eq(verification_results.delivery_id, delivery.id), eq(verification_results.content_hash, delivery.content_hash)))
   const integrity = checks.find((check) => check.method === 'artifact_integrity' && check.status === 'passed'
     && check.verifier === 'clawdmarket-deterministic-v1' && check.version === '1')
+  const attached = await source.select().from(private_artifacts).where(eq(private_artifacts.delivery_id, delivery.id))
   let evidence: z.output<typeof integrityEvidence>
-  try { evidence = integrityEvidence.parse(JSON.parse(integrity?.evidence_json || 'null')) }
+  try { evidence = !requireArtifacts && attached.length === 0 ? { algorithm: 'sha256', artifacts: [] }
+    : integrityEvidence.parse(JSON.parse(integrity?.evidence_json || 'null')) }
   catch { return fail('WORKFLOW_DEPENDENCY_ARTIFACT_EVIDENCE_MISSING') }
   if (new Set(evidence.artifacts.map((item) => item.id)).size !== evidence.artifacts.length) return fail('WORKFLOW_DEPENDENCY_ARTIFACT_CHANGED')
-  const attached = await source.select().from(private_artifacts).where(eq(private_artifacts.delivery_id, delivery.id))
   if (attached.length !== evidence.artifacts.length) return fail('WORKFLOW_DEPENDENCY_ARTIFACT_CHANGED')
   // Use the accepted integrity record's original upload order, not database ID sorting.
   const artifacts = []
@@ -75,13 +80,13 @@ async function prerequisite(source: Source, node: Node, buyerId: string, payment
   }
   return { source_node: node.node_key, route_id: route.id, order_id: order.id, trade_id: trade.id,
     delivery_id: delivery.id, delivery_hash: delivery.content_hash, route_hash: node.route_hash!, terms_hash: node.terms_hash!,
-    reservation_id: reservation.id, financial, accepted_checks: checks.map((check) => ({ method: check.method,
+    reservation_id: reservation.id, financial, settlement_binding: { seller_id: trade.seller_id, from_address: payout.from_address.toLowerCase(),
+      to_address: payout.to_address.toLowerCase() }, accepted_checks: checks.map((check) => ({ method: check.method,
       version: check.version, status: check.status, evidence_hash: hash(JSON.parse(check.evidence_json)) })).sort((a, b) => a.method.localeCompare(b.method)), artifacts }
 }
 
 /** Private read foundation. No dependent route, artifact grant, order or spending permission is created. */
-export async function inspectWorkflowDependencies(runId: string, nodeKey: string, userId: string) {
-  return workflowTransaction(async (source) => {
+export async function readWorkflowDependencies(source: Source, runId: string, nodeKey: string, userId: string) {
     const [run] = await source.select().from(workflow_runs).where(eq(workflow_runs.id, runId)).limit(1)
     if (!run || userId !== run.buyer_id && !await workflowOwnerControlsBuyer(userId, run.buyer_id, source)) return fail('WORKFLOW_NOT_FOUND', 404)
     const [approval] = await source.select().from(workflow_approvals).where(eq(workflow_approvals.id, run.approval_id)).limit(1)
@@ -94,14 +99,14 @@ export async function inspectWorkflowDependencies(runId: string, nodeKey: string
     const nodes = await source.select().from(workflow_node_runs).where(eq(workflow_node_runs.run_id, run.id))
     const node = nodes.find((item) => item.node_key === nodeKey), terms = contract.terms.nodes.find((item) => item.key === nodeKey)
     if (!node || !terms) return fail('WORKFLOW_NODE_NOT_FOUND', 404)
-    const bases = new Map<string, Awaited<ReturnType<typeof prerequisite>>>()
+    const bases = new Map<string, Awaited<ReturnType<typeof currentWorkflowNodeSettlement>>>()
     const bindings = []
     for (const mapping of terms.dependency_inputs) {
       const upstream = nodes.find((item) => item.node_key === mapping.source_node)
       const materialized = plannedNodes.find((item) => item.id === upstream?.workflow_node_id)
       if (!upstream || materialized?.node_key !== mapping.source_node || materialized.route_id !== upstream.route_id) return fail('WORKFLOW_DEPENDENCY_NOT_READY')
       let basis = bases.get(mapping.source_node)
-      if (!basis) { basis = await prerequisite(source, upstream, run.buyer_id, contract.terms.payment); bases.set(mapping.source_node, basis) }
+      if (!basis) { basis = await currentWorkflowNodeSettlement(source, upstream, run.buyer_id, contract.terms.payment); bases.set(mapping.source_node, basis) }
       const artifact = basis.artifacts[mapping.artifact_index]
       if (!artifact) return fail('WORKFLOW_DEPENDENCY_ARTIFACT_INDEX_INVALID')
       const binding = { ...mapping, source_route_id: basis.route_id, source_trade_id: basis.trade_id,
@@ -110,5 +115,8 @@ export async function inspectWorkflowDependencies(runId: string, nodeKey: string
     }
     return { workflow_id: run.workflow_id, run_id: run.id, node_key: nodeKey, contract_hash: run.contract_hash,
       bindings, dependency_hash: hash(bindings), execution_available: false, artifact_access_granted: false, funds_moved: false }
-  })
+}
+
+export async function inspectWorkflowDependencies(runId: string, nodeKey: string, userId: string) {
+  return workflowTransaction((source) => readWorkflowDependencies(source, runId, nodeKey, userId))
 }

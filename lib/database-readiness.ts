@@ -59,6 +59,9 @@ export const REQUIRED_DATABASE_SCHEMA = {
   workflow_runs: ['id', 'workflow_id', 'approval_id', 'buyer_id', 'owner_account_id', 'client_reference', 'request_hash', 'contract_hash', 'state', 'gross_reserved_minor', 'chain_fee_reserved_units', 'started_at', 'deadline_at'],
   workflow_node_runs: ['id', 'run_id', 'workflow_node_id', 'node_key', 'planned_route_id', 'route_id', 'mandate_id', 'route_hash', 'terms_hash', 'state', 'gross_reserved_minor', 'chain_fee_reserved_units', 'attempt_count', 'deadline_at'],
   workflow_reservations: ['id', 'run_id', 'node_run_id', 'route_id', 'mandate_id', 'order_id', 'trade_id', 'amount_minor', 'chain_fee_units', 'attempt_number', 'terms_hash', 'created_at'],
+  workflow_dependency_bindings: ['id', 'run_id', 'node_run_id', 'target_field', 'artifact_id', 'binding_hash', 'binding_json', 'created_at'],
+  workflow_artifact_grants: ['id', 'binding_id', 'node_run_id', 'order_id', 'trade_id', 'recipient_id', 'created_at', 'revoked_at'],
+  workflow_receipts: ['run_id', 'contract_hash', 'content_hash', 'receipt_json', 'created_at'],
   trades: [
     'id', 'listing_id', 'buyer_id', 'seller_id', 'amount', 'fee', 'item_price', 'platform_fee',
     'total_cost', 'seller_amount', 'dev_amount', 'dev_wallet', 'fee_tx_hash', 'payout_status',
