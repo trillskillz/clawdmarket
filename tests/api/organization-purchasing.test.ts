@@ -8,7 +8,7 @@ import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
-import { createWalletClient, erc20Abi, http } from 'viem'
+import { createWalletClient, encodeFunctionData, erc20Abi, http, keccak256, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { createLocalTestSchema } from '../helpers/local-schema'
 import { startDisposableWorkflowChain } from '../helpers/disposable-workflow-chain'
@@ -18,20 +18,23 @@ let directory: string, baseUrl: string, db: typeof import('@/lib/db').db, schema
 let domain: typeof import('@/lib/organization-purchasing')
 const server = createServer()
 const payer = privateKeyToAccount(`0x${'18'.repeat(32)}`), treasuryKey = `0x${'97'.repeat(32)}` as const
-let chain: Awaited<ReturnType<typeof startDisposableWorkflowChain>> | undefined
+let chain: Awaited<ReturnType<typeof startDisposableWorkflowChain>> | undefined,enterpriseChain:Awaited<ReturnType<typeof startDisposableWorkflowChain>>|undefined
 before(async () => {
   directory = await mkdtemp(join(tmpdir(), 'clawdmarket-workspace-test-purchasing-'))
   Object.assign(process.env, { TURSO_DATABASE_URL: `file:${join(directory, 'purchasing.db')}`, TURSO_AUTH_TOKEN: '', JWT_SECRET: 'purchasing-tests-only-secret',
     CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED: 'true', CLAWDMARKET_REUSABLE_SERVICES_ENABLED: 'true', CLAWDMARKET_ACCOUNT_CREDIT_ENABLED: 'true',
     EVM_SETTLEMENT_PRIVATE_KEY: treasuryKey, TREASURY_ADDRESS: privateKeyToAccount(treasuryKey).address })
   if (process.env.CLAWDMARKET_TEST_ANVIL_BINARY) chain = await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY, payer.address, treasuryKey, 8453)
+  if(process.env.CLAWDMARKET_TEST_ANVIL_BINARY)enterpriseChain=await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY,payer.address,treasuryKey,1)
+  if(enterpriseChain)process.env.EVM_RPC_URL_1=enterpriseChain.url
   process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId: 8453, chainName: 'Disposable purchasing chain',
-    address: chain?.token || `0x${'44'.repeat(20)}`, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain?.url || 'https://example.invalid' }])
+    address: chain?.token || `0x${'44'.repeat(20)}`, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain?.url || 'https://example.invalid' },{chainId:1,chainName:'Disposable enterprise L1',address:enterpriseChain?.token||`0x${'45'.repeat(20)}`,symbol:'USDC',decimals:6,fixedUsdPrice:1,confirmations:1}])
   db = (await import('@/lib/db')).db; schema = await import('@/lib/schema'); await createLocalTestSchema(db.$client, schema)
   jwt = (await import('@/lib/auth')).generateJWT; domain = await import('@/lib/organization-purchasing')
   const disputeApi = await import('@/app/api/trades/[id]/dispute/route')
   const resolveApi = await import('@/app/api/trades/[id]/resolve/route')
   const spendingApi = await import('@/app/api/organizations/[id]/spending-accounts/route')
+  const spendingPaymentApi=await import('@/app/api/organizations/[id]/spending-accounts/orders/[tradeId]/fund/evm/[action]/route')
   const spendingOrdersApi = await import('@/app/api/organizations/[id]/spending-accounts/orders/route')
   const tradeApi = await import('@/app/api/trades/route')
   const previewApi = await import('@/app/api/trades/preview/route')
@@ -51,6 +54,7 @@ before(async () => {
   const deliverApi = await import('@/app/api/trades/[id]/delivery/route')
   const confirmApi = await import('@/app/api/trades/[id]/confirm/route')
   const intentApi = await import('@/app/api/trades/[id]/fund/evm/intent/route')
+  const claimApi=await import('@/app/api/trades/[id]/fund/evm/claim/route')
   const fundingApi = await import('@/app/api/trades/[id]/fund/evm/route')
   server.on('request', async (incoming, outgoing) => {
     try {
@@ -58,7 +62,8 @@ before(async () => {
       const body = Buffer.concat(chunks).toString(), path = incoming.url!.split('?')[0], parts = path.split('/')
       const request = new NextRequest(baseUrl + incoming.url!, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
       let response: Response
-      if(path.endsWith('/spending-accounts/orders')) response = await spendingOrdersApi[incoming.method as 'GET'|'POST'](request,{params:Promise.resolve({id:parts[3]})})
+      if(path.includes('/spending-accounts/orders/')&&path.includes('/fund/evm/'))response=await spendingPaymentApi[incoming.method as 'GET'|'POST'](request,{params:Promise.resolve({id:parts[3],tradeId:parts[6],action:parts[9]})})
+      else if(path.endsWith('/spending-accounts/orders')) response = await spendingOrdersApi[incoming.method as 'GET'|'POST'](request,{params:Promise.resolve({id:parts[3]})})
       else if(path.endsWith('/spending-accounts')) response = await spendingApi[incoming.method as 'GET'|'POST'|'DELETE'](request,{params:Promise.resolve({id:parts[3]})})
       else if (path === '/api/trades') response = await tradeApi.POST(request)
       else if (path === '/api/trades/preview') response = await previewApi.POST(request)
@@ -77,7 +82,7 @@ before(async () => {
       else if (path === '/api/wallet/deposits') response = await depositsApi[incoming.method as 'POST' | 'PUT'](request)
       else {
         const params = { params: Promise.resolve({ id: parts[3] }) }
-        response = path.endsWith('/dispute') ? await disputeApi.POST(request,params) : path.endsWith('/resolve') ? await resolveApi.POST(request,params) : path.endsWith('/fund/evm/intent') ? await intentApi.POST(request, params) : path.endsWith('/fund/evm') ? await fundingApi.POST(request, params) : path.endsWith('/attempt') ? await attemptApi.POST(request, params) : path.endsWith('/delivery') ? await deliverApi.POST(request, params)
+        response = path.endsWith('/dispute') ? await disputeApi.POST(request,params) : path.endsWith('/resolve') ? await resolveApi.POST(request,params) : path.endsWith('/fund/evm/claim') ? await claimApi.POST(request,params) : path.endsWith('/fund/evm/intent') ? await intentApi.POST(request, params) : path.endsWith('/fund/evm') ? await fundingApi.POST(request, params) : path.endsWith('/attempt') ? await attemptApi.POST(request, params) : path.endsWith('/delivery') ? await deliverApi.POST(request, params)
           : path.endsWith('/confirm') ? await confirmApi.POST(request, params) : await workApi.GET(request, params)
       }
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text())
@@ -85,7 +90,7 @@ before(async () => {
   })
   await new Promise<void>(done => server.listen(0, '127.0.0.1', done)); baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
 })
-after(async () => { await new Promise<void>(done => server.close(() => done())); db?.$client.close(); await chain?.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })
+after(async () => { await new Promise<void>(done => server.close(() => done())); db?.$client.close(); await chain?.stop();await enterpriseChain?.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })
 const token = (actor: string) => jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })
 async function call(path: string, actor: string, method = 'GET', body?: unknown, key = false) {
   const response = await fetch(baseUrl + path, { method, headers: { 'Content-Type': 'application/json', ...(key ? { 'X-ClawdMarket-Agent-Key': actor } : { Authorization: `Bearer ${token(actor)}` }) },
@@ -867,4 +872,182 @@ test('owner history pagination is bounded, tied by original ID, rejects foreign 
   const broken = await call(f.prefix + '/requests', f.owner)
   assert.equal(broken.status, 503); assert.equal(broken.body.error_code, 'PURCHASE_HISTORY_INTEGRITY')
   assert.equal(broken.body.purchases, undefined); assert.deepEqual(await counts(f), { orders: 0, capacity: 0 })
+})
+
+function enterpriseWallet(){assert.ok(enterpriseChain);return createWalletClient({chain:enterpriseChain.client.chain,account:payer,transport:http(enterpriseChain.url)})}
+function externalTerms(mutation={}){
+  const chain=enterpriseChain
+  assert.ok(chain)
+  return {rail:'evm',chain_id:1,token_address:chain.token,payer_address:payer.address,treasury_address:chain.treasury,
+    minimum_token_reserve_units:'1000000',minimum_native_reserve_wei:'1000000000000000',max_gas_cost_wei:'1000000000000000',max_lifetime_gas_cost_wei:'1000000000000000',...mutation}
+}
+async function externalGrant(f:Fixture,mutation={}){return spendingGrant(f,{version:2,payment:externalTerms(),...mutation})}
+async function externalCheckout(f:Fixture,g:Awaited<ReturnType<typeof externalGrant>>,order=privateOrder(g.input.allowed_services[0].provider_share_id!)){
+  const a=await approved(f,{order:{...order,provider_share_id:g.input.allowed_services[0].provider_share_id??undefined}})
+  const result=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout});assert.equal(result.status,201,JSON.stringify(result.body))
+  return {...a,...result.body,paymentPath:g.path+'/orders/'+result.body.trade.id+'/fund/evm'}
+}
+async function signedPurchase(f:Fixture,c:Awaited<ReturnType<typeof externalCheckout>>,key:string){
+  const chain=enterpriseChain
+  assert.ok(chain)
+  const operation=crypto.randomUUID(),body={chain_id:1,token_address:chain.token,payer_address:payer.address,buyer_operation_id:operation}
+  const created=await spend(c.paymentPath+'/intent',key,'POST',body);assert.equal(created.status,201,JSON.stringify(created.body))
+  const intent=created.body.intent,wallet=createWalletClient({chain:chain.client.chain,account:payer,transport:http(chain.url)})
+  const prepared=await wallet.prepareTransactionRequest({to:chain.token,data:encodeFunctionData({abi:erc20Abi,functionName:'transfer',args:[chain.treasury,BigInt(intent.token_amount)]}),gas:70_000n})
+  const raw:Hex=await wallet.signTransaction(prepared)
+  const hash=keccak256(raw),{evmPaymentProofMessage}=await import('@/lib/evm-payment-proof')
+  const signature=await payer.signMessage({message:evmPaymentProofMessage(intent,hash)})
+  const claim={intent_id:intent.id,mandate_id:c.order.organization_spending_account_id,buyer_operation_id:operation,serialized_transaction:raw,payer_signature:signature}
+  return {body,intent,raw,hash,claim,wallet,proof:{intent_id:intent.id,chain_id:1,token_address:chain.token,payer_address:payer.address,tx_hash:hash,payer_signature:signature}}
+}
+
+test('delegated EVM terms require a new reviewed grant; legacy credit and read credentials retain their scope',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  const f=await fixture(),credit=await spendingGrant(f),g=await externalGrant(f)
+  assert.equal(g.account.version,2);assert.equal(g.account.authority,'approved_direct_service_evm');assert.equal(g.account.payment.payer_address,payer.address.toLowerCase())
+  const replay=await call(g.path,f.owner,'POST',g.input);assert.equal(replay.status,200);assert.equal(replay.body.api_key,null)
+  assert.equal((await call(g.path,f.owner,'POST',{...g.input,payment:externalTerms({max_gas_cost_wei:'1'})})).body.error_code,'SPENDING_REFERENCE_CONFLICT')
+  assert.equal((await call(g.path,f.owner,'POST',{...credit.input,payment:externalTerms()})).status,400)
+  const a=await approved(f)
+  assert.equal((await spend(credit.path+'/orders',credit.key,'POST',{service_id:f.service,order:a.checkout})).body.error_code,'SPENDING_EXACT_CREDIT_APPROVAL_REQUIRED')
+  const creditApproval=await approved(f,{order:{...a.input.order,client_reference:crypto.randomUUID(),payment_rail:'credit'}})
+  assert.equal((await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:creditApproval.checkout})).body.error_code,'SPENDING_EXACT_EXTERNAL_APPROVAL_REQUIRED')
+  for(const changed of [{chain_id:8453},{treasury_address:payer.address},{max_gas_cost_wei:'0'},{rail:'mpp'}])assert.ok((await call(g.path,f.owner,'POST',{...g.input,client_reference:crypto.randomUUID(),payment:externalTerms(changed)})).status>=400)
+  assert.deepEqual(await counts(f),{orders:0,capacity:0})
+})
+
+test('delegated EVM checkout enforces fixed wallet terms, reserves, exact bytes, current ceilings and original claims',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  const chain=enterpriseChain
+  const f=await fixture(),g=await externalGrant(f),c=await externalCheckout(f,g),signed=await signedPurchase(f,c,g.key)
+  assert.equal(c.trade.status,'pending');assert.equal(c.order.state,'awaiting_funding')
+  const foreign=await fixture(),other=await externalGrant(foreign)
+  assert.equal((await spend(c.paymentPath+'/intent',other.key,'GET')).status,401)
+  assert.equal((await spend(`/api/trades/${c.trade.id}/fund/evm/intent`,g.key,'GET')).status,401)
+  const [use]=await db.select().from(schema.organization_spending_uses).where(eq(schema.organization_spending_uses.account_id,g.account.id));assert.equal(use.amount_minor,105)
+  const wrongWallet=privateKeyToAccount(`0x${'19'.repeat(32)}`).address
+  const f2=await fixture(),g2=await externalGrant(f2),c2=await externalCheckout(f2,g2)
+  assert.equal((await spend(c2.paymentPath+'/intent',g2.key,'POST',{...signed.body,payer_address:wrongWallet,buyer_operation_id:crypto.randomUUID()})).status,409)
+  assert.equal((await spend(c2.paymentPath+'/intent',g2.key,'POST',{chain_id:1,token_address:chain!.token,payer_address:payer.address})).body.error_code,'INVALID_SPENDING_PAYMENT')
+  const wallet=signed.wallet
+  const invalid=await wallet.signTransaction(await wallet.prepareTransactionRequest({to:chain!.token,data:encodeFunctionData({abi:erc20Abi,functionName:'transfer',args:[payer.address,1_050_000n]}),gas:70_000n}))
+  assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',{...signed.claim,serialized_transaction:invalid})).body.error_code,'BUYER_TRANSACTION_SCOPE_MISMATCH')
+  await db.update(schema.organization_team_budgets).set({max_per_execution_minor:104}).where(eq(schema.organization_team_budgets.team_id,f.team))
+  // A new department ceiling is enforced on an already reserved purchase.
+  const now=new Date();await db.insert(schema.organization_team_budgets).values({team_id:f.team,organization_id:f.id,max_per_execution_minor:104,version:1,created_at:now,updated_at:now}).onConflictDoUpdate({target:schema.organization_team_budgets.team_id,set:{max_per_execution_minor:104}})
+  const restricted=await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim);assert.equal(restricted.body.error_code,'TEAM_PER_EXECUTION_LIMIT',JSON.stringify(restricted.body))
+  await db.update(schema.organization_team_budgets).set({max_per_execution_minor:200}).where(eq(schema.organization_team_budgets.team_id,f.team))
+  const balance=await chain!.balance(payer.address)
+  const {spendingAccountInput,createSpendingAccount}=await import('@/lib/organization-spending-accounts')
+  const f3=await fixture(),reserve=await createSpendingAccount(f3.id,f3.owner,spendingAccountInput.parse({...g.input,client_reference:crypto.randomUUID(),buyer_agent_id:f3.agent,team_id:f3.team,allowed_services:[{service_id:f3.service,provider_share_id:null}],payment:externalTerms({minimum_token_reserve_units:balance.toString()})}))
+  const reserveGrant={...g,key:reserve.api_key!,account:reserve.account,path:`/api/organizations/${f3.id}/spending-accounts`,input:{...g.input,allowed_services:[{service_id:f3.service,provider_share_id:null}]}}
+  const c3=await externalCheckout(f3,reserveGrant),s3=await signedPurchase(f3,c3,reserveGrant.key)
+  assert.equal((await spend(c3.paymentPath+'/claim',reserveGrant.key,'POST',s3.claim)).body.error_code,'BUYER_TOKEN_RESERVE_REQUIRED')
+  const claimed=await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim);assert.equal(claimed.status,200,JSON.stringify(claimed.body));assert.equal(claimed.body.send_allowed,true)
+  assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim)).body.idempotent,true)
+  assert.equal((await spend(c.paymentPath+'/intent',g.key,'GET')).body.claim.tx_hash,signed.hash)
+  const second=await signedPurchase(f2,c2,g2.key)
+  assert.equal((await spend(c2.paymentPath+'/claim',g2.key,'POST',second.claim)).body.error_code,'BUYER_WALLET_PAYMENT_UNRECONCILED')
+  await call(g.path,f.owner,'DELETE',{account_id:g.account.id})
+  assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim)).status,401)
+  const original=await call(`/api/trades/${c.trade.id}/fund/evm/claim`,f.key,'POST',signed.claim,true);assert.equal(original.status,200);assert.equal(original.body.send_allowed,false);assert.equal(original.body.claim.tx_hash,signed.hash)
+  // Reconcile the original broadcast even when the delegation is revoked.
+  await wallet.sendRawTransaction({serializedTransaction:signed.raw});await chain!.client.waitForTransactionReceipt({hash:signed.hash})
+  const recovered=await call(`/api/trades/${c.trade.id}/fund/evm`,f.key,'POST',signed.proof,true);assert.ok([200,202].includes(recovered.status),JSON.stringify(recovered.body))
+  assert.equal(recovered.body.trade.payout_status,'refunded');assert.equal(await chain!.balance(payer.address),balance)
+  const [claim]=await db.select().from(schema.organization_spending_payment_claims).where(eq(schema.organization_spending_payment_claims.trade_id,c.trade.id));assert.equal(claim.state,'confirmed')
+  assert.deepEqual(await counts(f),{orders:1,capacity:0})
+})
+
+test('real delegated EVM private purchase completes provider restart, explicit buyer review and exactly one seller payout',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  const chain=enterpriseChain
+  assert.ok(chain)
+  const f=await privateFixture(),share=await shared(f),g=await externalGrant(f,{allowed_services:[{service_id:f.service,provider_share_id:share.share.id}]})
+  const c=await externalCheckout(f,g),signed=await signedPurchase(f,c,g.key)
+  const buyerBefore=await chain.balance(payer.address),sellerAddress=privateKeyToAccount(`0x${'19'.repeat(32)}`).address,sellerBefore=await chain.balance(sellerAddress)
+  const claimed=await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim);assert.equal(claimed.body.send_allowed,true,JSON.stringify(claimed.body))
+  await signed.wallet.sendRawTransaction({serializedTransaction:signed.raw});await chain.client.waitForTransactionReceipt({hash:signed.hash})
+  const funded=await spend(c.paymentPath+'/proof',g.key,'POST',signed.proof);assert.equal(funded.status,200,JSON.stringify(funded.body));assert.equal(funded.body.trade.status,'escrow_held')
+  assert.equal((await spend(c.paymentPath+'/proof',g.key,'POST',signed.proof)).body.idempotent,true)
+  await call(f.privatePath,f.providerOwner,'DELETE',{share_id:share.share.id})
+  await call(g.path,f.owner,'DELETE',{account_id:g.account.id})
+  const handler=join(directory,`${c.trade.id}.external-handler.mjs`);await writeFile(handler,`export default async()=>({summary:'Reviewed the original delegated private input.',artifact:{result:'Approved delegated review result'}})`)
+  const command=['scripts/provider-worker.mjs','--trade-id',c.trade.id,'--service-id',f.service,'--state-dir',join(directory,c.trade.id),'--handler',handler]
+  const options={cwd:process.cwd(),env:{...process.env,BASE_URL:baseUrl,CLAWDMARKET_PROVIDER_API_KEY:f.providerKey}},run=promisify(execFile)
+  const first=JSON.parse((await run(process.execPath,command,options)).stdout),restarted=JSON.parse((await run(process.execPath,command,options)).stdout)
+  assert.equal(first.state,'delivered');assert.equal(restarted.delivery_id,first.delivery_id)
+  assert.equal((await spend(`/api/trades/${c.trade.id}/confirm`,g.key,'POST',{content_hash:first.content_hash})).status,401)
+  const confirmed=await call(`/api/trades/${c.trade.id}/confirm`,f.key,'POST',{content_hash:first.content_hash},true);assert.equal(confirmed.status,200,JSON.stringify(confirmed.body))
+  assert.equal(await chain.balance(payer.address),buyerBefore-1_050_000n);assert.equal(await chain.balance(sellerAddress),sellerBefore+1_000_000n)
+  const transfers=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,c.trade.id));assert.equal(transfers.length,1);assert.equal(transfers[0].status,'confirmed')
+  const history=await call(g.path,f.owner);assert.equal(history.body.spending_accounts[0].uses[0].trade_id,c.trade.id)
+  const {publicTradeAvailable}=await import('@/lib/public-trade-visibility');assert.equal(await publicTradeAvailable(c.trade.id),false)
+  assert.deepEqual(await counts(f),{orders:1,capacity:0})
+})
+
+test('delegated EVM SIGKILL at intent, claim, broadcast and verified receipt boundaries preserves one original payment and refund',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  const chain=enterpriseChain;assert.ok(chain)
+  for(const operation of ['intent','claim','broadcast','proof'] as const)for(const boundary of operation==='broadcast'?['after'] as const:['before','after'] as const){
+    const f=await fixture(),g=await externalGrant(f),c=await externalCheckout(f,g),buyerBefore=await chain.balance(payer.address)
+    const body:{chain_id:number;token_address:Hex;payer_address:Hex;buyer_operation_id:string}={chain_id:1,token_address:chain.token,payer_address:payer.address,buyer_operation_id:crypto.randomUUID()}
+    let signed:Awaited<ReturnType<typeof signedPurchase>>|undefined
+    if(operation!=='intent')signed=await signedPurchase(f,c,g.key)
+    if(operation==='broadcast'||operation==='proof')assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',signed!.claim)).body.send_allowed,true)
+    if(operation==='proof'){await signed!.wallet.sendRawTransaction({serializedTransaction:signed!.raw});await chain.client.waitForTransactionReceipt({hash:signed!.hash})}
+    const marker=join(directory,`external-${operation}-${boundary}-${f.id}.marker`),args={f,g,c,body,signed:signed?{raw:signed.raw,hash:signed.hash,claim:signed.claim,proof:signed.proof}:null,rpc:chain.url}
+    const code=`(async()=>{const {writeFile}=await import('node:fs/promises'),a=JSON.parse(process.argv[1]);const stop=async()=>{await writeFile(process.argv[2],'boundary');await new Promise(()=>{})};
+      ${boundary==='before'?"const {db}=await import('./lib/db.ts'),proto=Object.getPrototypeOf(db.session),original=proto.transaction;proto.transaction=function(fn,c){return original.call(this,async tx=>{const r=await fn(tx);await stop();return r},c)};":''}
+      ${operation==='broadcast'?"const response=await fetch(a.rpc,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_sendRawTransaction',params:[a.signed.raw]})});const r=await response.json();if(r.result!==a.signed.hash)throw Error('Original broadcast failed');":"const {NextRequest}=await import('next/server'),api=await import('./app/api/organizations/[id]/spending-accounts/orders/[tradeId]/fund/evm/[action]/route.ts'),action='"+operation+"',input=action==='intent'?a.body:action==='claim'?a.signed.claim:a.signed.proof;const response=await api.POST(new NextRequest('http://127.0.0.1'+a.c.paymentPath+'/'+action,{method:'POST',headers:{Authorization:'Bearer '+a.g.key,'Content-Type':'application/json'},body:JSON.stringify(input)}),{params:Promise.resolve({id:a.f.id,tradeId:a.c.trade.id,action})});if(response.status>=400)throw Error(await response.text());"}
+      await stop()})().catch(e=>{console.error(e);process.exitCode=1})`
+    const child=spawn(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify(args),marker],{cwd:process.cwd(),env:process.env,stdio:['ignore','ignore','pipe']})
+    let errors='';child.stderr.on('data',chunk=>{errors+=chunk});const exited=new Promise<void>((done,reject)=>{child.once('exit',()=>done());child.once('error',reject)})
+    try{
+      let reached=false;for(let wait=0;wait<150;wait++){try{await readFile(marker);reached=true;break}catch{}if(child.exitCode!==null)throw Error(errors);await new Promise(done=>setTimeout(done,100))}
+      assert.equal(reached,true,errors);child.kill('SIGKILL');await exited
+      const saved=await spend(c.paymentPath+'/intent',g.key,'GET');assert.equal(saved.status,200)
+      if(operation==='intent'){
+        assert.equal(Boolean(saved.body.intent),boundary==='after')
+        const repeated=await spend(c.paymentPath+'/intent',g.key,'POST',body);assert.equal(repeated.status,boundary==='before'?201:200);if(saved.body.intent)assert.equal(repeated.body.intent.id,saved.body.intent.id)
+        // Prepare bytes for the original durable operation, never replace its intent.
+        const intent=repeated.body.intent
+        const wallet=enterpriseWallet()
+        const raw:Hex=await wallet.signTransaction(await wallet.prepareTransactionRequest({to:chain.token,data:encodeFunctionData({abi:erc20Abi,functionName:'transfer',args:[chain.treasury,BigInt(intent.token_amount)]}),gas:70_000n})),hash=keccak256(raw)
+        const signature=await payer.signMessage({message:(await import('@/lib/evm-payment-proof')).evmPaymentProofMessage(intent,hash)})
+        signed={body,intent,wallet,raw,hash,claim:{intent_id:intent.id,mandate_id:g.account.id,buyer_operation_id:body.buyer_operation_id,serialized_transaction:raw,payer_signature:signature},proof:{intent_id:intent.id,chain_id:1,token_address:chain.token,payer_address:payer.address,tx_hash:hash,payer_signature:signature}}
+      }
+      assert.ok(signed)
+      if(operation==='claim')assert.equal(Boolean(saved.body.claim),boundary==='after')
+      if(operation==='intent'||operation==='claim')assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim)).body.send_allowed,true)
+      if(operation!=='proof'&&operation!=='broadcast'){await signed.wallet.sendRawTransaction({serializedTransaction:signed.raw});await chain.client.waitForTransactionReceipt({hash:signed.hash})}
+      if(operation==='proof'&&boundary==='after'){
+        assert.equal(saved.body.claim.state,'confirmed')
+        // Already funded obligations retain buyer recovery and go through the existing dispute/refund path.
+        assert.equal((await call(`/api/trades/${c.trade.id}/dispute`,`clawdmarket-test-${f.agent}`,'POST',{reason:'Reject the controlled crash acceptance fixture'},true)).status,200)
+        process.env.ADMIN_USER_IDS=f.owner
+        try{const resolved=await call(`/api/trades/${c.trade.id}/resolve`,f.owner,'POST',{resolution:'buyer'});assert.equal(resolved.status,200,JSON.stringify(resolved.body))}finally{delete process.env.ADMIN_USER_IDS}
+      }else{
+        await call(g.path,f.owner,'DELETE',{account_id:g.account.id})
+        const recovered=await call(`/api/trades/${c.trade.id}/fund/evm`,f.key,'POST',signed.proof,true);assert.ok([200,202].includes(recovered.status),JSON.stringify(recovered.body));assert.equal(recovered.body.trade.payout_status,'refunded')
+      }
+      assert.equal(await chain.balance(payer.address),buyerBefore-(operation==='proof'&&boundary==='after'?50_000n:0n))
+      if(operation==='proof'&&boundary==='after'){const next=await approved(f);assert.equal((await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:next.checkout})).body.error_code,'SPENDING_DAILY_LIMIT')}
+      const uses=await db.select().from(schema.organization_spending_uses).where(eq(schema.organization_spending_uses.account_id,g.account.id)),receipts=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,c.trade.id)),claims=await db.select().from(schema.organization_spending_payment_claims).where(eq(schema.organization_spending_payment_claims.trade_id,c.trade.id)),refunds=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,c.trade.id))
+      assert.equal(uses.length,1);assert.equal(uses[0].amount_minor,105);assert.equal(receipts.length,1);assert.equal(receipts[0].tx_hash,signed.hash);assert.equal(claims.length,1);assert.equal(claims[0].state,'confirmed');assert.equal(refunds.length,1);assert.equal(refunds[0].status,'confirmed')
+      assert.deepEqual(await counts(f),{orders:1,capacity:0})
+    }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited}
+  }
+})
+
+test('delegated EVM original gross and worst-case gas exposure cannot be recycled or raced across approvals',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  for(const gasBound of [false,true]){
+    const f=await fixture(),g=await externalGrant(f,{max_daily:'2.10',max_monthly:'2.10',max_lifetime:gasBound?'2.10':'1.05',payment:externalTerms({max_lifetime_gas_cost_wei:gasBound?'1000000000000000':'2000000000000000'})})
+    const a=await approved(f),b=await approved(f),run=promisify(execFile)
+    const code=`(async()=>{const {NextRequest}=await import('next/server'),{resolveSpendingAccount}=await import('./lib/organization-spending-accounts.ts'),{reserveServiceOrder}=await import('./lib/service-order-reservation.ts'),{serviceOrderInput}=await import('./lib/service-definitions.ts'),a=JSON.parse(process.argv[1]);try{const e=await resolveSpendingAccount(new NextRequest('http://127.0.0.1',{headers:{Authorization:'Bearer '+a.key}}),a.org),r=await reserveServiceOrder({serviceId:a.service,principal:{userId:e.buyerId,agentId:e.agentId,kind:'registered-agent',usesCookieAuth:false},request:serviceOrderInput.parse(a.order),organizationSpendingEvidence:e});console.log(JSON.stringify({status:r.idempotent?200:201,body:{order:r.order,trade:r.trade}}))}catch(e){console.log(JSON.stringify({status:e.status||409,body:{error_code:e.code||e.message}}))}finally{(await import('./lib/db.ts')).db.$client.close()}})().catch(e=>{console.error(e);process.exitCode=1})`
+    const results=await Promise.allSettled([a,a,b].map(purchase=>run(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify({org:f.id,key:g.key,service:f.service,order:purchase.checkout})],{cwd:process.cwd(),env:process.env})))
+    const responses=results.map(r=>{if(r.status!=='fulfilled')throw r.reason;const response=JSON.parse(r.value.stdout);if(response.status>=500)console.error(r.value.stderr);return response})
+    assert.equal(responses.filter(r=>r.status===201).length,1,JSON.stringify(responses));assert.ok(responses.some(r=>r.body.error_code===(gasBound?'SPENDING_GAS_LIFETIME_LIMIT':'SPENDING_LIFETIME_LIMIT')),JSON.stringify(responses))
+    const winning=responses.find(r=>r.status===201)!
+    // Unpaid cancellation holds original delegation exposure.
+    const {expireTradePayment}=await import('@/lib/trade-funding');await expireTradePayment(winning.body.trade)
+    assert.equal((await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:(winning.body.trade.client_reference===a.input.order.client_reference?b:a).checkout})).body.error_code,gasBound?'SPENDING_GAS_LIFETIME_LIMIT':'SPENDING_LIFETIME_LIMIT')
+    assert.deepEqual(await counts(f),{orders:1,capacity:0})
+  }
 })

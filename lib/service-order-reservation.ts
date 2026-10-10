@@ -217,7 +217,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       if (verifierFailure) throw new ServiceOrderReservationError(verifierFailure, 'Isolated verifier is unavailable or shares a trade-party owner')
       const purchaseEvidence = request.purchasing_approval_id ? await validatePurchaseApproval(tx, { approvalId: request.purchasing_approval_id,
         buyerId: principal.userId, service, request: { ...request, provider_requirements: request.provider_requirements ?? {} }, totalMinor, rail }) : undefined
-      const spendingPurchase = args.organizationSpendingEvidence ? await validateSpendingPurchase(tx,args.organizationSpendingEvidence,id,principal.userId,{...request,provider_requirements:request.provider_requirements??{}},totalMinor) : undefined
+      const spendingPurchase = args.organizationSpendingEvidence ? await validateSpendingPurchase(tx,args.organizationSpendingEvidence,id,principal.userId,request,totalMinor) : undefined
       const spendContext = { purchaseEvidence, sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: contract.verificationPolicy!.methods,
         ...(args.mandateId ? { retrySpendMinor } : {}) }
       if (principal.agentId) await enforceAgentSpendPolicy(tx, { agentId: principal.agentId, buyerId: principal.userId, totalCost: totalMinor / 100, ...spendContext })

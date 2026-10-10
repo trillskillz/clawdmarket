@@ -257,14 +257,19 @@ test('private-provider contract freezes exact two-owner service shares without e
   assert.match(renderSkillMd(),/Private providers are not public routing\/instant candidates/)
 })
 
-test('organization spending contract uses a distinct key for exactly approved credit orders without general buyer authority',()=>{
+test('organization spending contract separates credit and reviewed external authority without general buyer impersonation',()=>{
   const paths=getAgentOpenApiPaths() as Record<string,any>
   const grant=paths['/api/organizations/{id}/spending-accounts'].post.requestBody.content['application/json'].schema
-  for(const field of ['team_id','cost_center','max_purchase','max_daily','max_monthly','max_lifetime','allowed_services'])assert.ok(grant.required.includes(field))
-  assert.equal(grant.properties.allowed_services.maxItems,20)
+  const [credit,external]=grant.oneOf
+  for(const variant of [credit,external]){for(const field of ['team_id','cost_center','max_purchase','max_daily','max_monthly','max_lifetime','allowed_services'])assert.ok(variant.required.includes(field));assert.equal(variant.properties.allowed_services.maxItems,20);assert.equal(variant.additionalProperties,false)}
+  assert.equal(credit.properties.version.const,1);assert.equal(credit.properties.payment,undefined)
+  assert.equal(external.properties.version.const,2);assert.ok(external.required.includes('payment'))
+  assert.deepEqual(external.properties.payment.properties.chain_id.enum,[1,11155111])
+  for(const field of ['payer_address','treasury_address','token_address','minimum_token_reserve_units','minimum_native_reserve_wei','max_gas_cost_wei','max_lifetime_gas_cost_wei'])assert.ok(external.properties.payment.required.includes(field))
+  for(const suffix of ['intent','claim','proof']){const path=paths['/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/evm/'+suffix];assert.deepEqual(path.post.security,[{OrganizationSpendingKey:[]}]);assert.equal(path.post.operationId,'spending_evm_'+suffix)}
   const order=paths['/api/organizations/{id}/spending-accounts/orders'].post
   assert.deepEqual(order.security,[{OrganizationSpendingKey:[]}])
-  assert.equal(order.requestBody.content['application/json'].schema.properties.order.properties.payment_rail.const,'credit')
+  assert.deepEqual(order.requestBody.content['application/json'].schema.properties.order.properties.payment_rail.enum,['credit','evm'])
   assert.ok(order.requestBody.content['application/json'].schema.properties.order.required.includes('purchasing_approval_id'))
   assert.equal(AGENT_ACTIONS.find(action=>action.id==='spending_account_service_order')!.auth,'organization-spending-key')
   assert.match(renderSkillMd(),/Refunds|without recycling/)

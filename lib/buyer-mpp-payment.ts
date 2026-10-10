@@ -1,3 +1,4 @@
+import { spendingWalletConflict } from './organization-spending-payment'
 import { findTradeFundingStep } from './route-funding-steps'
 import 'server-only'
 import { and, eq, isNull } from 'drizzle-orm'
@@ -132,6 +133,7 @@ export async function claimBuyerMppPayment(tradeId: string, buyerId: string, inp
       fail(reason)
     }
     if (prior) return { claim: prior, send_allowed: true, idempotent: true, state: 'submit_exact_credential' }
+    const spendingConflict=await spendingWalletConflict(tx,checked.chain_id,checked.payer_address,checked.nonce);if(spendingConflict)fail(spendingConflict)
     const [mppActive] = await tx.select({ id: buyer_mpp_payment_claims.intent_id }).from(buyer_mpp_payment_claims)
       .where(and(eq(buyer_mpp_payment_claims.chain_id, checked.chain_id), eq(buyer_mpp_payment_claims.payer_address, checked.payer_address), eq(buyer_mpp_payment_claims.state, 'claimed'))).limit(1)
     const [evmActive] = await tx.select({ id: buyer_evm_payment_claims.intent_id }).from(buyer_evm_payment_claims)

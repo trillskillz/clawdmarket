@@ -368,6 +368,8 @@ export const organization_provider_shares = sqliteTable('organization_provider_s
 
 /** Separate owner-granted direct-service credit credentials; cmo_ read keys retain their old authority. */
 export const organization_spending_accounts = sqliteTable('organization_spending_accounts', {
+  version: integer('version').notNull().default(1),
+  payment_terms_json: text('payment_terms_json'),
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
   owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
@@ -394,6 +396,18 @@ export const organization_spending_uses = sqliteTable('organization_spending_use
   authority_hash: text('authority_hash').notNull(), buyer_id: text('buyer_id').notNull(), amount_minor: integer('amount_minor').notNull(),
   created_at: integer('created_at',{mode:'timestamp_ms'}).notNull(),
 },table=>[index('spending_uses_account_created_idx').on(table.account_id,table.created_at),check('spending_uses_amount_positive',sql`${table.amount_minor}>0`)]);
+
+/** Exact external transaction authority stays separate from historical route claims. */
+export const organization_spending_payment_claims = sqliteTable('organization_spending_payment_claims', {
+  intent_id: text('intent_id').primaryKey().references(()=>evm_payment_intents.id,{onDelete:'restrict'}),
+  account_id: text('account_id').notNull().references(()=>organization_spending_accounts.id,{onDelete:'restrict'}),
+  trade_id: text('trade_id').notNull().unique().references(()=>trades.id,{onDelete:'restrict'}),
+  authority_hash: text('authority_hash').notNull(), chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(),
+  nonce: integer('nonce').notNull(), tx_hash: text('tx_hash').notNull().unique(), maximum_execution_gas_cost_wei: text('maximum_execution_gas_cost_wei').notNull(),
+  state: text('state',{enum:['claimed','confirmed']}).notNull().default('claimed'),
+  created_at: integer('created_at',{mode:'timestamp'}).notNull().$defaultFn(()=>new Date()),
+},table=>[uniqueIndex('spending_payment_claims_wallet_nonce_idx').on(table.chain_id,table.payer_address,table.nonce),
+  uniqueIndex('spending_payment_claims_active_wallet_idx').on(table.chain_id,table.payer_address).where(sql`${table.state}='claimed'`)]);
 
 /** Departmental ceilings are additional restrictions, never delegated purchasing authority. */
 export const organization_team_budgets = sqliteTable('organization_team_budgets', {

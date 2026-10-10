@@ -1,5 +1,11 @@
 # Changelog
 
+## Local HTTP 1.100 — bounded delegated L1 service payments (2026-10-10)
+
+- Add separately reviewed version-2 Ethereum L1/Sepolia service grants with fixed wallet/token/treasury/reserves and original gross/lifetime gas ceilings; preserve version-1 credit fingerprints and read-key scope.
+- Persist original payment operations and exact transaction claims, recheck current authority and wallet reserves, share nonce holds with route EVM/Tempo claims, and recover original verified payments/refunds after revocation without allowance recycling.
+- Show reviewed external terms in private owner inventory. Real private payout, provider restart, seven process-kill boundaries, budget races, migration replay, full predeploy/build and desktop/mobile owner acceptance passed. Local batch 2/10; production remains at released 1.99 with writes closed.
+
 ## Unreleased
 
 ### Local real Tempo workflow acceptance (unchanged HTTP 1.99)
