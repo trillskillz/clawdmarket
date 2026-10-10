@@ -28,7 +28,7 @@ existing transfer counter and crash boundary.
 | Original refund before fallback | `/tmp/clawdmarket-tempo-workflow-refund-focus.log`: fresh chain and its own separate ledger/process, declined prerequisite, dependent blocked, exact confirmed refund before approved fallback, original common deadline, three attempts/six transfers, gross 315 cents, refund 100, payout 200, retained fees 15, no unresolved money and no budget recycling. |
 | Existing EVM gates | `/tmp/clawdmarket-tempo-workflow-predeploy-accepted.log` passes both existing real EVM two-node crash and refund/fallback cases alongside the new Tempo cases. |
 | Shared test schema | `/tmp/clawdmarket-tempo-workflow-shared-schema.log`: complete shared schema and idempotent runtime migration replay; 60 IDs, SQLite integrity `ok`. No new migration. |
-| Honest fees | Each original successful Tempo receipt has type `0x76`, canonical fee token and expected payer. Rounded receipt fees match exact token-balance deltas and the buyer's fee ceiling. Persisted marketplace Tempo fees remain null/`not_recorded`; no measured aggregate is fabricated. |
+| Honest fees | At the original 1.99 checkpoint, each successful Tempo receipt had type `0x76`, canonical fee token and expected payer. Rounded fees matched token-balance deltas and the buyer ceiling while persisted observations stayed null. Local 1.104 adds supported original measurements; see the [fee audit](TEMPO_CHAIN_FEES_AUDIT.md). Historical complete receipts stay immutable. |
 
 The runbook is [WORKFLOW_TEMPO_PROOF.md](WORKFLOW_TEMPO_PROOF.md).
 Final Node 24 predeploy passed **711 cases: 706 passed, five expected skips**,
@@ -62,5 +62,7 @@ Its log is `/tmp/clawdmarket-tempo-workflow-predeploy-accepted.log`.
 No live wallet funds, top-up, hosted-chain transaction, global rollout flag,
 new PR or subsequent deployment was used for this local continuation. Mainnet
 hardfork compatibility, independent provider/validator evidence, production
-quality/calibration, paid canaries, complete persisted Tempo fee observations
-and broader delegated enterprise purchases retain separate gates.
+quality/calibration, paid canaries and broader delegated enterprise purchases
+retain separate gates. Supported local sender-paid pathUSD observations are
+covered by the later [fee audit](TEMPO_CHAIN_FEES_AUDIT.md); this historical
+checkpoint alone did not establish them.

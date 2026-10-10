@@ -45,10 +45,12 @@ leave transactions pending; the test never deletes financial history to mask it.
 Every original transfer receipt must be successful, type `0x76`, with canonical
 pathUSD fee token and the expected payer. Independently calculated rounded
 fee-token costs match exact buyer/treasury token-balance changes and the original
-buyer fee envelope. These checks belong to the test. Persisted marketplace
-receipts truthfully retain `actual_chain_fee_units: null` and
-`chain_fee_measurement: not_recorded` for Tempo. Approved ceilings never become
-measured fees; complete production Tempo fee observations remain separate work.
+buyer fee envelope. The original local 1.99 checkpoint retained null marketplace
+fee observations. Local 1.104 now also persists supported original sender-paid
+pathUSD observations and reconciles buyer/treasury costs separately; see
+[Tempo chain fees](TEMPO_CHAIN_FEES.md). Historical complete receipts stay
+immutable. Approved ceilings never become measured fees, and production fork
+compatibility retains its separate gate.
 
 To run both real-chain economic matrices, first download official Tempo 1.16.0
 and Anvil binaries and verify their release checksums/provenance. Then run with

@@ -1429,3 +1429,45 @@ test('owner original-reference lookup recovers a grant outside the bounded inven
   assert.equal((await call(path+'?client_reference='+crypto.randomUUID(),f.owner)).body.spending_accounts.length,0)
   assert.equal((await call(path,f.owner,'POST',input)).body.api_key,null)
 })
+
+test('a real reverted Tempo refund records its original charged fee without reporting refund completion or replacing the transaction',{skip:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  assert.ok(tempoChain)
+  const chain=tempoChain,f=await fixture(),g=await tempoGrant(f),c=await tempoCheckout(f,g),signed=await signedTempoPurchase(c,g)
+  assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim)).body.send_allowed,true)
+  assert.equal((await tempoPull(c,g,signed)).status,200)
+  const treasuryAccount=TempoAccount.fromSecp256k1(treasuryKey),wallet=createWalletClient({chain:chain.client.chain,account:treasuryAccount,transport:http(chain.url)})
+  const drained=await wallet.writeContract({address:chain.token,abi:erc20Abi,functionName:'transfer',args:[payer.address,(await chain.balance(chain.treasury))-20_000n],feeToken:chain.token})
+  assert.equal((await chain.client.waitForTransactionReceipt({hash:drained,timeout:5000})).status,'success')
+  try{
+    assert.equal((await call(`/api/trades/${c.trade.id}/dispute`,`clawdmarket-test-${f.agent}`,'POST',{reason:'Original controlled refund fee failure'},true)).status,200)
+    const priorAdmin=process.env.ADMIN_USER_IDS;process.env.ADMIN_USER_IDS=f.owner
+    try{
+      const resolution=await call(`/api/trades/${c.trade.id}/resolve`,f.owner,'POST',{resolution:'buyer'})
+      assert.equal(resolution.status,503,JSON.stringify(resolution.body));assert.equal(resolution.body.code,'TRANSFER_PREPARE_FAILED')
+    }finally{if(priorAdmin===undefined)delete process.env.ADMIN_USER_IDS;else process.env.ADMIN_USER_IDS=priorAdmin}
+    const rows=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,c.trade.id));assert.equal(rows.length,1)
+    const original=rows[0];assert.equal(original.kind,'buyer_refund');assert.equal(original.status,'pending');assert.equal(original.token_amount,'1000000')
+    // The original intended transfer remains unchanged; bypass only simulation to observe a genuine charged revert.
+    const nonce=original.nonce!;assert.equal(nonce,await chain.client.getTransactionCount({address:chain.treasury,blockTag:'pending'}));const data=encodeFunctionData({abi:erc20Abi,functionName:'transfer',args:[original.to_address as Hex,BigInt(original.token_amount)]})
+    const calls=[{to:chain.token,data,value:0n}] as const,request=await wallet.prepareTransactionRequest({account:treasuryAccount,calls,nonce,gas:300_000n,nonceKey:0n,feeToken:chain.token})
+    assert.equal(typeof request.maxFeePerGas,'bigint');assert.equal(typeof request.maxPriorityFeePerGas,'bigint')
+    const raw=await treasuryAccount.signTransaction({type:'tempo',chainId:4217,calls,nonce,nonceKey:0n,gas:300_000n,feeToken:chain.token,maxFeePerGas:request.maxFeePerGas!,maxPriorityFeePerGas:request.maxPriorityFeePerGas!}),hash=keccak256(raw)
+    await db.update(schema.settlement_transfers).set({nonce,raw_transaction:raw,tx_hash:hash,status:'prepared'}).where(eq(schema.settlement_transfers.id,original.id))
+    const treasuryBefore=await chain.balance(chain.treasury),buyerBefore=await chain.balance(payer.address),broadcastBefore=tempoBroadcasts
+    const {processSettlementTransfer,settleExternallyFundedTrade}=await import('@/lib/external-settlement')
+    await assert.rejects(processSettlementTransfer(original.id,{waitMs:5000}),(error:any)=>error.code==='TRANSFER_REVERTED'&&error.retryable===false)
+    const receipt=await chain.client.getTransactionReceipt({hash});assert.equal(receipt.status,'reverted')
+    const fee=(receipt.gasUsed*receipt.effectiveGasPrice+999_999_999_999n)/1_000_000_000_000n;assert.ok(fee>0n)
+    assert.equal(await chain.balance(chain.treasury),treasuryBefore-fee);assert.equal(await chain.balance(payer.address),buyerBefore);assert.equal(tempoBroadcasts,broadcastBefore+1)
+    const [failed]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.id,original.id));assert.equal(failed.status,'failed');assert.equal(failed.tx_hash,hash);assert.equal(failed.raw_transaction,raw)
+    const {readChainFeeEvidence}=await import('@/lib/chain-fee-evidence'),evidence=readChainFeeEvidence(failed.chain_fee_evidence_json,{chainId:4217,txHash:hash,payerAddress:chain.treasury})!
+    assert.equal(evidence.model,'tempo_pathusd_sender_fee_v1');assert.equal(evidence.total_fee_units,fee.toString())
+    await assert.rejects(processSettlementTransfer(original.id,{waitMs:5000}),(error:any)=>error.code==='TRANSFER_FAILED');assert.equal(tempoBroadcasts,broadcastBefore+1)
+    const [trade]=await db.select().from(schema.trades).where(eq(schema.trades.id,c.trade.id));assert.equal(trade.status,'disputed');assert.equal(trade.payout_status,'processing')
+    assert.equal((await settleExternallyFundedTrade(trade,0,{process:false})).complete,false);assert.deepEqual(await counts(f),{orders:1,capacity:1})
+  }finally{
+    const buyerWallet=createWalletClient({chain:chain.client.chain,account:TempoAccount.fromSecp256k1(`0x${'18'.repeat(32)}`),transport:http(chain.url)})
+    const restore=await buyerWallet.writeContract({address:chain.token,abi:erc20Abi,functionName:'transfer',args:[chain.treasury,100_000_000n],feeToken:chain.token})
+    assert.equal((await chain.client.waitForTransactionReceipt({hash:restore,timeout:5000})).status,'success')
+  }
+})

@@ -65,6 +65,8 @@ required_files=(
   "app/api/organizations/[id]/teams/[teamId]/budget/route.ts"
   "tests/api/organization-team-budgets.test.ts"
   "migrations/2026-10-09-organization-team-budgets-v1.sql"
+  "docs/TEMPO_CHAIN_FEES.md"
+  "docs/TEMPO_CHAIN_FEES_AUDIT.md"
   "lib/chain-fee-evidence.ts"
   "tests/logic/chain-fee-evidence.test.ts"
   "docs/WORKFLOW_CHAIN_FEES.md"

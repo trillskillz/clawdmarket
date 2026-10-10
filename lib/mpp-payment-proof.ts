@@ -32,5 +32,5 @@ export async function verifyMarketplaceMppHash(trade: typeof trades.$inferSelect
     && log.args.amount === amount && log.args.memo.toLowerCase() === memo)) {
     throw new TradeFundingError('MPP receipt has no exact trade-bound token transfer', 422, 'MPP_PAYMENT_PROOF_INVALID')
   }
-  return { payer, hash: receipt.transactionHash, amount }
+  return { payer, hash: receipt.transactionHash, amount, receipt }
 }
