@@ -2,6 +2,11 @@
 set -euo pipefail
 
 required_files=(
+  "lib/organization-spending-tempo-payment.ts"
+  "lib/mpp-fund-api.ts"
+  "app/api/organizations/[id]/spending-accounts/orders/[tradeId]/fund/mpp/[action]/route.ts"
+  "migrations/2026-10-10-organization-tempo-spending-v3.sql"
+  "docs/ORGANIZATION_TEMPO_SPENDING.md"
   "tests/helpers/disposable-tempo-chain.ts"
   "tests/fixtures/chain/tempo-dev-v1.16.0.json"
   "tests/fixtures/chain/TEMPO_GENESIS.md"

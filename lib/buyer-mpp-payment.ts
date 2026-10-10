@@ -1,3 +1,6 @@
+import { originalSpendingPayment } from './organization-spending-accounts'
+import { PurchasingError } from './organization-purchasing-transaction'
+import { inspectOrganizationTempoIntent,createOrganizationTempoIntent,claimOrganizationTempoPayment,assertOrganizationTempoPull } from './organization-spending-tempo-payment'
 import { spendingWalletConflict } from './organization-spending-payment'
 import { findTradeFundingStep } from './route-funding-steps'
 import 'server-only'
@@ -70,6 +73,7 @@ async function permission(source: Source, trade: Trade, intent?: Intent, validBe
 }
 
 export async function inspectBuyerMppIntent(tradeId: string, buyerId: string) {
+  if(await originalSpendingPayment(db,tradeId))return enterprise(()=>inspectOrganizationTempoIntent(tradeId,buyerId))
   const trade = await ownedTrade(db, tradeId, buyerId)
   const [intent] = await db.select().from(buyer_mpp_payment_intents).where(eq(buyer_mpp_payment_intents.trade_id, tradeId)).limit(1)
   const [claim] = intent ? await db.select().from(buyer_mpp_payment_claims).where(eq(buyer_mpp_payment_claims.intent_id, intent.id)).limit(1) : []
@@ -78,6 +82,7 @@ export async function inspectBuyerMppIntent(tradeId: string, buyerId: string) {
 
 /** Stable operation creates one original challenge; no key, signature, simulation or broadcast. */
 export async function createBuyerMppIntent(tradeId: string, buyerId: string, operationId: string, origin: string) {
+  if(await originalSpendingPayment(db,tradeId))return enterprise(()=>createOrganizationTempoIntent(tradeId,buyerId,operationId,origin))
   return write(tradeId, async (tx) => {
     const trade = await ownedTrade(tx, tradeId, buyerId)
     const [prior] = await tx.select().from(buyer_mpp_payment_intents).where(eq(buyer_mpp_payment_intents.trade_id, tradeId)).limit(1)
@@ -112,6 +117,7 @@ export async function createBuyerMppIntent(tradeId: string, buyerId: string, ope
 }
 
 export async function claimBuyerMppPayment(tradeId: string, buyerId: string, input: ClaimInput) {
+  if(await originalSpendingPayment(db,tradeId))return enterprise(()=>claimOrganizationTempoPayment(tradeId,buyerId,input))
   return write(tradeId, async (tx) => {
     const trade = await ownedTrade(tx, tradeId, buyerId)
     const [intent] = await tx.select().from(buyer_mpp_payment_intents).where(and(eq(buyer_mpp_payment_intents.id, input.intent_id), eq(buyer_mpp_payment_intents.trade_id, tradeId))).limit(1)
@@ -154,6 +160,7 @@ export async function claimBuyerMppPayment(tradeId: string, buyerId: string, inp
 /** Called at the actual SDK broadcast boundary, after authenticated credential validation. */
 export async function assertBuyerMppPull(tradeId: string, payer: string | undefined,
   pull: { serialized_transaction: string; challenge: unknown }, markSubmission: boolean) {
+  if(await originalSpendingPayment(db,tradeId))return enterprise(()=>assertOrganizationTempoPull(tradeId,payer,pull,markSubmission))
   return write(tradeId, async (tx) => {
     const [intent] = await tx.select().from(buyer_mpp_payment_intents).where(eq(buyer_mpp_payment_intents.trade_id, tradeId)).limit(1)
     if (!intent) fail('MPP_MANDATE_PULL_NOT_READY')
@@ -171,3 +178,5 @@ export async function assertBuyerMppPull(tradeId: string, payer: string | undefi
     return claim
   })
 }
+
+async function enterprise<T>(run:()=>Promise<T>){try{return await run()}catch(error){if(error instanceof PurchasingError)throw new BuyerMppPaymentError(error.code,error.status);throw error}}

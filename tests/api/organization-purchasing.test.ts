@@ -10,13 +10,19 @@ import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { createWalletClient, encodeFunctionData, erc20Abi, http, keccak256, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
+import { Account as TempoAccount } from 'viem/tempo'
+import { Credential } from 'mppx'
+import { createBuyerTempoAdapter } from '../../scripts/buyer-tempo-adapter.mjs'
+import { startDisposableTempoChain } from '../helpers/disposable-tempo-chain'
 import { createLocalTestSchema } from '../helpers/local-schema'
 import { startDisposableWorkflowChain } from '../helpers/disposable-workflow-chain'
 import { creditDepositMessage } from '@/lib/credit-proof'
 
 let directory: string, baseUrl: string, db: typeof import('@/lib/db').db, schema: typeof import('@/lib/schema'), jwt: typeof import('@/lib/auth').generateJWT
 let domain: typeof import('@/lib/organization-purchasing')
-const server = createServer()
+const server = createServer(),tempoProxy=createServer()
+let tempoChain:Awaited<ReturnType<typeof startDisposableTempoChain>>|undefined,tempoRpcUrl:string,tempoBroadcasts=0
+let tempoRpcHook:((method:string)=>Promise<void>)|null=null
 const payer = privateKeyToAccount(`0x${'18'.repeat(32)}`), treasuryKey = `0x${'97'.repeat(32)}` as const
 let chain: Awaited<ReturnType<typeof startDisposableWorkflowChain>> | undefined,enterpriseChain:Awaited<ReturnType<typeof startDisposableWorkflowChain>>|undefined
 before(async () => {
@@ -27,6 +33,19 @@ before(async () => {
   if (process.env.CLAWDMARKET_TEST_ANVIL_BINARY) chain = await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY, payer.address, treasuryKey, 8453)
   if(process.env.CLAWDMARKET_TEST_ANVIL_BINARY)enterpriseChain=await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY,payer.address,treasuryKey,1)
   if(enterpriseChain)process.env.EVM_RPC_URL_1=enterpriseChain.url
+  if(process.env.CLAWDMARKET_TEST_TEMPO_BINARY){
+    tempoChain=await startDisposableTempoChain(process.env.CLAWDMARKET_TEST_TEMPO_BINARY,payer.address,treasuryKey)
+    tempoProxy.on('request',async(incoming,outgoing)=>{try{
+      const chunks=[];for await(const chunk of incoming)chunks.push(chunk)
+      const body=Buffer.concat(chunks).toString(),payload=JSON.parse(body),requests=Array.isArray(payload)?payload:[payload]
+      for(const r of requests)if(/^eth_send/.test(r.method))tempoBroadcasts++
+      const response=await fetch(tempoChain!.url,{method:'POST',headers:{'Content-Type':'application/json'},body}),result=await response.text()
+      for(const r of requests)await tempoRpcHook?.(r.method)
+      outgoing.writeHead(response.status,{'Content-Type':'application/json'});outgoing.end(result)
+    }catch{outgoing.writeHead(500);outgoing.end('{}')}})
+    await new Promise<void>(done=>tempoProxy.listen(0,'127.0.0.1',done));tempoRpcUrl=`http://127.0.0.1:${(tempoProxy.address() as {port:number}).port}`
+    Object.assign(process.env,{TEMPO_RPC_URL:tempoRpcUrl,MPP_SECRET_KEY_CURRENT:'disposable-enterprise-tempo-tests-only-secret',MPP_RECIPIENT_ADDRESS:tempoChain.treasury})
+  }
   process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId: 8453, chainName: 'Disposable purchasing chain',
     address: chain?.token || `0x${'44'.repeat(20)}`, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain?.url || 'https://example.invalid' },{chainId:1,chainName:'Disposable enterprise L1',address:enterpriseChain?.token||`0x${'45'.repeat(20)}`,symbol:'USDC',decimals:6,fixedUsdPrice:1,confirmations:1}])
   db = (await import('@/lib/db')).db; schema = await import('@/lib/schema'); await createLocalTestSchema(db.$client, schema)
@@ -35,6 +54,10 @@ before(async () => {
   const resolveApi = await import('@/app/api/trades/[id]/resolve/route')
   const spendingApi = await import('@/app/api/organizations/[id]/spending-accounts/route')
   const spendingPaymentApi=await import('@/app/api/organizations/[id]/spending-accounts/orders/[tradeId]/fund/evm/[action]/route')
+  const spendingTempoApi=await import('@/app/api/organizations/[id]/spending-accounts/orders/[tradeId]/fund/mpp/[action]/route')
+  const mppApi=await import('@/app/api/trades/[id]/fund/mpp/route')
+  const mppIntentApi=await import('@/app/api/trades/[id]/fund/mpp/intent/route')
+  const mppClaimApi=await import('@/app/api/trades/[id]/fund/mpp/claim/route')
   const spendingOrdersApi = await import('@/app/api/organizations/[id]/spending-accounts/orders/route')
   const tradeApi = await import('@/app/api/trades/route')
   const previewApi = await import('@/app/api/trades/preview/route')
@@ -63,6 +86,7 @@ before(async () => {
       const request = new NextRequest(baseUrl + incoming.url!, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
       let response: Response
       if(path.includes('/spending-accounts/orders/')&&path.includes('/fund/evm/'))response=await spendingPaymentApi[incoming.method as 'GET'|'POST'](request,{params:Promise.resolve({id:parts[3],tradeId:parts[6],action:parts[9]})})
+      else if(path.includes('/spending-accounts/orders/')&&path.includes('/fund/mpp/'))response=await spendingTempoApi[incoming.method as 'GET'|'POST'](request,{params:Promise.resolve({id:parts[3],tradeId:parts[6],action:parts[9]})})
       else if(path.endsWith('/spending-accounts/orders')) response = await spendingOrdersApi[incoming.method as 'GET'|'POST'](request,{params:Promise.resolve({id:parts[3]})})
       else if(path.endsWith('/spending-accounts')) response = await spendingApi[incoming.method as 'GET'|'POST'|'DELETE'](request,{params:Promise.resolve({id:parts[3]})})
       else if (path === '/api/trades') response = await tradeApi.POST(request)
@@ -82,7 +106,7 @@ before(async () => {
       else if (path === '/api/wallet/deposits') response = await depositsApi[incoming.method as 'POST' | 'PUT'](request)
       else {
         const params = { params: Promise.resolve({ id: parts[3] }) }
-        response = path.endsWith('/dispute') ? await disputeApi.POST(request,params) : path.endsWith('/resolve') ? await resolveApi.POST(request,params) : path.endsWith('/fund/evm/claim') ? await claimApi.POST(request,params) : path.endsWith('/fund/evm/intent') ? await intentApi.POST(request, params) : path.endsWith('/fund/evm') ? await fundingApi.POST(request, params) : path.endsWith('/attempt') ? await attemptApi.POST(request, params) : path.endsWith('/delivery') ? await deliverApi.POST(request, params)
+        response = path.endsWith('/dispute') ? await disputeApi.POST(request,params) : path.endsWith('/resolve') ? await resolveApi.POST(request,params) : path.endsWith('/fund/mpp/intent') ? await mppIntentApi[incoming.method as 'GET'|'POST'](request,params) : path.endsWith('/fund/mpp/claim') ? await mppClaimApi.POST(request,params) : path.endsWith('/fund/mpp') ? await mppApi.POST(request,params) : path.endsWith('/fund/evm/claim') ? await claimApi.POST(request,params) : path.endsWith('/fund/evm/intent') ? await intentApi.POST(request, params) : path.endsWith('/fund/evm') ? await fundingApi.POST(request, params) : path.endsWith('/attempt') ? await attemptApi.POST(request, params) : path.endsWith('/delivery') ? await deliverApi.POST(request, params)
           : path.endsWith('/confirm') ? await confirmApi.POST(request, params) : await workApi.GET(request, params)
       }
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text())
@@ -90,7 +114,7 @@ before(async () => {
   })
   await new Promise<void>(done => server.listen(0, '127.0.0.1', done)); baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
 })
-after(async () => { await new Promise<void>(done => server.close(() => done())); db?.$client.close(); await chain?.stop();await enterpriseChain?.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })
+after(async () => { await new Promise<void>(done => server.close(() => done())); db?.$client.close(); await chain?.stop();await enterpriseChain?.stop();if(tempoChain){await new Promise<void>(done=>tempoProxy.close(()=>done()));await tempoChain.stop()} if (directory) await rm(directory, { recursive: true, force: true }) })
 const token = (actor: string) => jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })
 async function call(path: string, actor: string, method = 'GET', body?: unknown, key = false) {
   const response = await fetch(baseUrl + path, { method, headers: { 'Content-Type': 'application/json', ...(key ? { 'X-ClawdMarket-Agent-Key': actor } : { Authorization: `Bearer ${token(actor)}` }) },
@@ -995,7 +1019,7 @@ test('delegated EVM SIGKILL at intent, claim, broadcast and verified receipt bou
     const marker=join(directory,`external-${operation}-${boundary}-${f.id}.marker`),args={f,g,c,body,signed:signed?{raw:signed.raw,hash:signed.hash,claim:signed.claim,proof:signed.proof}:null,rpc:chain.url}
     const code=`(async()=>{const {writeFile}=await import('node:fs/promises'),a=JSON.parse(process.argv[1]);const stop=async()=>{await writeFile(process.argv[2],'boundary');await new Promise(()=>{})};
       ${boundary==='before'?"const {db}=await import('./lib/db.ts'),proto=Object.getPrototypeOf(db.session),original=proto.transaction;proto.transaction=function(fn,c){return original.call(this,async tx=>{const r=await fn(tx);await stop();return r},c)};":''}
-      ${operation==='broadcast'?"const response=await fetch(a.rpc,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_sendRawTransaction',params:[a.signed.raw]})});const r=await response.json();if(r.result!==a.signed.hash)throw Error('Original broadcast failed');":"const {NextRequest}=await import('next/server'),api=await import('./app/api/organizations/[id]/spending-accounts/orders/[tradeId]/fund/evm/[action]/route.ts'),action='"+operation+"',input=action==='intent'?a.body:action==='claim'?a.signed.claim:a.signed.proof;const response=await api.POST(new NextRequest('http://127.0.0.1'+a.c.paymentPath+'/'+action,{method:'POST',headers:{Authorization:'Bearer '+a.g.key,'Content-Type':'application/json'},body:JSON.stringify(input)}),{params:Promise.resolve({id:a.f.id,tradeId:a.c.trade.id,action})});if(response.status>=400)throw Error(await response.text());"}
+      ${operation==='broadcast'?"const response=await fetch(a.rpc,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_sendRawTransaction',params:[a.signed.raw]})});const r=await response.json();if(r.result!==a.signed.hash)throw Error('Original broadcast failed');":"const {NextRequest}=await import('next/server'),api=await import('./app/api/organizations/[id]/spending-accounts/orders/[tradeId]/fund/evm/[action]/route.ts'),action='"+operation+"',input=action==='intent'?a.body:action==='claim'?a.signed.claim:a.signed.proof;const response=await api.POST(new NextRequest('http://127.0.0.1'+a.c.paymentPath+'/'+action,{method:'POST',headers:{Authorization:'Bearer '+a.g.key,'Content-Type':'application/json',Host:new URL(a.origin||'http://127.0.0.1').host},body:JSON.stringify(input)}),{params:Promise.resolve({id:a.f.id,tradeId:a.c.trade.id,action})});if(response.status>=400)throw Error(await response.text());"}
       await stop()})().catch(e=>{console.error(e);process.exitCode=1})`
     const child=spawn(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify(args),marker],{cwd:process.cwd(),env:process.env,stdio:['ignore','ignore','pipe']})
     let errors='';child.stderr.on('data',chunk=>{errors+=chunk});const exited=new Promise<void>((done,reject)=>{child.once('exit',()=>done());child.once('error',reject)})
@@ -1049,5 +1073,169 @@ test('delegated EVM original gross and worst-case gas exposure cannot be recycle
     const {expireTradePayment}=await import('@/lib/trade-funding');await expireTradePayment(winning.body.trade)
     assert.equal((await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:(winning.body.trade.client_reference===a.input.order.client_reference?b:a).checkout})).body.error_code,gasBound?'SPENDING_GAS_LIFETIME_LIMIT':'SPENDING_LIFETIME_LIMIT')
     assert.deepEqual(await counts(f),{orders:1,capacity:0})
+  }
+})
+
+function tempoTerms(mutation={}){
+  assert.ok(tempoChain)
+  return {rail:'mpp',chain_id:4217,token_address:tempoChain.token,payer_address:payer.address,treasury_address:tempoChain.treasury,
+    fee_token_address:tempoChain.token,minimum_token_reserve_units:'1000000',minimum_fee_token_reserve_units:'1000000',
+    max_fee_token_cost_units:'10000',max_lifetime_fee_token_cost_units:'10000',...mutation}
+}
+async function tempoGrant(f:Fixture,mutation={}){return spendingGrant(f,{version:3,payment:tempoTerms(),...mutation})}
+async function tempoCheckout(f:Fixture,g:Awaited<ReturnType<typeof tempoGrant>>){
+  const a=await approved(f,{order:{...privateOrder(g.input.allowed_services[0].provider_share_id!),provider_share_id:g.input.allowed_services[0].provider_share_id??undefined,payment_rail:'mpp'}})
+  const result=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout});assert.equal(result.status,201,JSON.stringify(result.body))
+  return {...a,...result.body,paymentPath:g.path+'/orders/'+result.body.trade.id+'/fund/mpp'}
+}
+async function signedTempoPurchase(c:Awaited<ReturnType<typeof tempoCheckout>>,g:Awaited<ReturnType<typeof tempoGrant>>,saved?:any){
+  const operation=saved?.buyer_operation_id??crypto.randomUUID(),created=saved?{status:200,body:{intent:saved}}:await spend(c.paymentPath+'/intent',g.key,'POST',{buyer_operation_id:operation})
+  assert.ok([200,201].includes(created.status),JSON.stringify(created.body))
+  const intent=created.body.intent,adapter=createBuyerTempoAdapter({chainId:4217,rpcUrl:tempoRpcUrl,account:TempoAccount.fromSecp256k1(`0x${'18'.repeat(32)}`)})
+  const raw=await adapter.prepare(intent),hash=keccak256(raw)
+  return {intent,raw,hash,claim:{intent_id:intent.id,mandate_id:g.account.id,buyer_operation_id:operation,serialized_transaction:raw},
+    credential:Credential.serialize({challenge:intent.challenge,payload:{type:'transaction',signature:raw},source:`did:pkh:eip155:4217:${payer.address.toLowerCase()}`}),proof:{tx_hash:hash,payer_address:payer.address}}
+}
+async function tempoPull(c:Awaited<ReturnType<typeof tempoCheckout>>,g:Awaited<ReturnType<typeof tempoGrant>>,s:Awaited<ReturnType<typeof signedTempoPurchase>>){
+  const response=await fetch(baseUrl+c.paymentPath+'/proof',{method:'POST',headers:{Authorization:'Bearer '+g.key,'Payment-Authorization':s.credential}})
+  return {status:response.status,body:await response.json()}
+}
+async function settleTempo(tradeId:string){
+  const rows=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,tradeId));assert.equal(rows.length,1)
+  await (await import('@/lib/external-settlement')).processSettlementTransfer(rows[0].id,{waitMs:5000})
+  const [saved]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.id,rows[0].id));assert.equal(saved.status,'confirmed',saved.last_error??'')
+  return saved
+}
+async function actualTempoFee(hash:Hex){
+  assert.ok(tempoChain);const receipt=await tempoChain.client.waitForTransactionReceipt({hash,timeout:5000});assert.equal(receipt.status,'success')
+  return (receipt.gasUsed*receipt.effectiveGasPrice+999_999_999_999n)/1_000_000_000_000n
+}
+
+test('delegated Tempo requires explicit version-3 authority, fixed fee token and lifetime exposure',{skip:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  const f=await fixture(),g=await tempoGrant(f),credit=await spendingGrant(f)
+  assert.equal(g.account.version,3);assert.equal(g.account.authority,'approved_direct_service_mpp')
+  assert.equal(g.account.payment.fee_token_address,tempoChain!.token);assert.equal((await call(g.path,f.owner,'POST',g.input)).body.api_key,null)
+  for(const payment of [tempoTerms({chain_id:42431}),tempoTerms({fee_token_address:`0x${'45'.repeat(20)}`}),tempoTerms({max_lifetime_fee_token_cost_units:'0'})])assert.ok((await call(g.path,f.owner,'POST',{...g.input,client_reference:crypto.randomUUID(),payment})).status>=400)
+  assert.equal((await call(g.path,f.owner,'POST',{...credit.input,payment:tempoTerms()})).status,400)
+  const a=await approved(f);assert.equal((await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout})).body.error_code,'SPENDING_EXACT_EXTERNAL_APPROVAL_REQUIRED')
+  assert.equal((await spend(`/api/trades/${crypto.randomUUID()}/fund/mpp`,g.key,'POST')).status,401)
+  const bound=await tempoGrant(f,{max_daily:'2.10',max_monthly:'2.10',max_lifetime:'2.10'}),c=await tempoCheckout(f,bound)
+  await (await import('@/lib/trade-funding')).expireTradePayment(c.trade)
+  const second=await approved(f,{order:{...a.input.order,client_reference:crypto.randomUUID(),payment_rail:'mpp'}})
+  assert.equal((await spend(bound.path+'/orders',bound.key,'POST',{service_id:f.service,order:second.checkout})).body.error_code,'SPENDING_FEE_LIFETIME_LIMIT')
+  assert.deepEqual(await counts(f),{orders:1,capacity:0})
+})
+
+test('real Tempo delegated private purchase uses original SDK claim, provider restart and explicit buyer payout',{skip:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  assert.ok(tempoChain)
+  const f=await privateFixture(),share=await shared(f),g=await tempoGrant(f,{allowed_services:[{service_id:f.service,provider_share_id:share.share.id}]}),c=await tempoCheckout(f,g),s=await signedTempoPurchase(c,g)
+  const seller=privateKeyToAccount(`0x${'19'.repeat(32)}`).address,buyerBefore=await tempoChain.balance(payer.address),sellerBefore=await tempoChain.balance(seller),treasuryBefore=await tempoChain.balance(tempoChain.treasury),broadcastBefore=tempoBroadcasts
+  const claimed=await spend(c.paymentPath+'/claim',g.key,'POST',s.claim);assert.equal(claimed.body.send_allowed,true,JSON.stringify(claimed.body))
+  assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',s.claim)).body.idempotent,true)
+  const funded=await tempoPull(c,g,s);assert.equal(funded.status,200,JSON.stringify(funded.body));assert.equal(funded.body.trade.status,'escrow_held')
+  assert.equal(tempoBroadcasts,broadcastBefore+1);assert.equal((await tempoPull(c,g,s)).body.idempotent,true)
+  const [originalClaim]=await db.select().from(schema.organization_spending_mpp_claims).where(eq(schema.organization_spending_mpp_claims.trade_id,c.trade.id))
+  assert.equal(originalClaim.state,'confirmed');assert.ok(originalClaim.first_submission_at);assert.equal(originalClaim.tx_hash,s.hash)
+  await call(f.privatePath,f.providerOwner,'DELETE',{share_id:share.share.id});await call(g.path,f.owner,'DELETE',{account_id:g.account.id})
+  const handler=join(directory,`${c.trade.id}.tempo-handler.mjs`);await writeFile(handler,"export default async()=>({summary:'Reviewed the original private Tempo purchase.',artifact:{result:'Approved Tempo review result'}})")
+  const command=['scripts/provider-worker.mjs','--trade-id',c.trade.id,'--service-id',f.service,'--state-dir',join(directory,c.trade.id),'--handler',handler],options={cwd:process.cwd(),env:{...process.env,BASE_URL:baseUrl,CLAWDMARKET_PROVIDER_API_KEY:f.providerKey}},run=promisify(execFile)
+  const first=JSON.parse((await run(process.execPath,command,options)).stdout),restart=JSON.parse((await run(process.execPath,command,options)).stdout);assert.equal(first.state,'delivered');assert.equal(first.delivery_id,restart.delivery_id)
+  assert.equal((await spend(`/api/trades/${c.trade.id}/confirm`,g.key,'POST',{content_hash:first.content_hash})).status,401)
+  const confirmed=await call(`/api/trades/${c.trade.id}/confirm`,f.key,'POST',{content_hash:first.content_hash},true);assert.ok([200,202].includes(confirmed.status),JSON.stringify(confirmed.body))
+  const payout=await settleTempo(c.trade.id),buyerFee=await actualTempoFee(s.hash),treasuryFee=await actualTempoFee(payout.tx_hash as Hex)
+  assert.equal(await tempoChain.balance(payer.address),buyerBefore-1_050_000n-buyerFee);assert.equal(await tempoChain.balance(seller),sellerBefore+1_000_000n)
+  assert.equal(await tempoChain.balance(tempoChain.treasury),treasuryBefore+50_000n-treasuryFee);assert.equal(tempoBroadcasts,broadcastBefore+2)
+  const {publicTradeAvailable}=await import('@/lib/public-trade-visibility');assert.equal(await publicTradeAvailable(c.trade.id),false);assert.deepEqual(await counts(f),{orders:1,capacity:0})
+})
+
+test('Tempo SDK rechecks department authority after simulation before broadcast; revoked original payment remains refundable',{skip:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  assert.ok(tempoChain)
+  const f=await fixture(),g=await tempoGrant(f),c=await tempoCheckout(f,g),s=await signedTempoPurchase(c,g),before=tempoBroadcasts,buyerBefore=await tempoChain.balance(payer.address)
+  assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',s.claim)).body.send_allowed,true)
+  let closed=false
+  tempoRpcHook=async method=>{if(!closed&&method==='eth_call'){closed=true;const now=new Date();await db.insert(schema.organization_team_budgets).values({team_id:f.team,organization_id:f.id,max_per_execution_minor:104,version:1,created_at:now,updated_at:now})}}
+  let denied;try{denied=await tempoPull(c,g,s)}finally{tempoRpcHook=null}
+  assert.equal(closed,true);assert.ok(denied.status>=400,JSON.stringify(denied.body));assert.equal(tempoBroadcasts,before)
+  const replay=await spend(c.paymentPath+'/claim',g.key,'POST',s.claim);assert.equal(replay.body.send_allowed,false);assert.equal(replay.body.claim.tx_hash,s.hash)
+  await call(g.path,f.owner,'DELETE',{account_id:g.account.id});assert.equal((await spend(c.paymentPath+'/intent',g.key,'GET')).status,401)
+  const original=await call(`/api/trades/${c.trade.id}/fund/mpp/claim`,f.key,'POST',s.claim,true);assert.equal(original.body.send_allowed,false)
+  // The buyer host may already have sent original bytes despite a lost response; the server cannot erase this obligation.
+  await tempoChain.client.sendRawTransaction({serializedTransaction:s.raw});await tempoChain.client.waitForTransactionReceipt({hash:s.hash,timeout:5000})
+  const recovered=await call(`/api/trades/${c.trade.id}/fund/mpp`,f.key,'POST',s.proof,true);assert.equal(recovered.status,202,JSON.stringify(recovered.body));assert.equal(recovered.body.status,'late_payment_refund_processing')
+  const refund=await settleTempo(c.trade.id);assert.equal(refund.kind,'buyer_refund');assert.equal(refund.token_amount,'1050000')
+  assert.equal(await tempoChain.balance(payer.address),buyerBefore-await actualTempoFee(s.hash));assert.equal(tempoBroadcasts,before+1)
+  const [claim]=await db.select().from(schema.organization_spending_mpp_claims).where(eq(schema.organization_spending_mpp_claims.trade_id,c.trade.id));assert.equal(claim.state,'confirmed')
+  assert.deepEqual(await counts(f),{orders:1,capacity:0})
+})
+
+test('delegated Tempo claims reject altered bytes, fee/reserve violations and competing wallet claims',{skip:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  assert.ok(tempoChain)
+  const f=await fixture(),g=await tempoGrant(f),c=await tempoCheckout(f,g),s=await signedTempoPurchase(c,g)
+  const {Transaction}=await import('viem/tempo'),transaction=Transaction.deserialize(s.raw),account=TempoAccount.fromSecp256k1(`0x${'18'.repeat(32)}`)
+  assert.ok('calls' in transaction)
+  for(const mutation of [{feeToken:`0x${'45'.repeat(20)}`},{calls:[{...transaction.calls![0],value:1n}]},{chainId:42431}]){
+    const raw:Hex=await account.signTransaction({...transaction,signature:undefined,...mutation} as any)
+    assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',{...s.claim,serialized_transaction:raw})).body.error_code,'BUYER_TEMPO_TRANSACTION_SCOPE_MISMATCH')
+  }
+  const pricey=await account.signTransaction({...transaction,signature:undefined,maxFeePerGas:10n**18n} as any)
+  assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',{...s.claim,serialized_transaction:pricey})).body.error_code,'BUYER_TEMPO_TRANSACTION_FEE_LIMIT')
+  const balance=await tempoChain.balance(payer.address),reserveFixture=await fixture(),reserve=await tempoGrant(reserveFixture,{payment:tempoTerms({minimum_fee_token_reserve_units:balance.toString()})}),reserveOrder=await tempoCheckout(reserveFixture,reserve),reserveSigned=await signedTempoPurchase(reserveOrder,reserve)
+  assert.equal((await spend(reserveOrder.paymentPath+'/claim',reserve.key,'POST',reserveSigned.claim)).body.error_code,'BUYER_TEMPO_TOKEN_RESERVE_REQUIRED')
+  assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',s.claim)).body.send_allowed,true)
+  const otherFixture=await fixture(),otherGrant=await tempoGrant(otherFixture),otherOrder=await tempoCheckout(otherFixture,otherGrant),other=await signedTempoPurchase(otherOrder,otherGrant)
+  assert.equal((await spend(otherOrder.paymentPath+'/claim',otherGrant.key,'POST',other.claim)).body.error_code,'BUYER_WALLET_PAYMENT_UNRECONCILED')
+  assert.equal((await spend(otherOrder.paymentPath+'/claim',g.key,'POST',s.claim)).status,401)
+  // Close/reconcile the one original claim so later cases share a clean wallet without deleting history.
+  await call(g.path,f.owner,'DELETE',{account_id:g.account.id});await tempoChain.client.sendRawTransaction({serializedTransaction:s.raw});await tempoChain.client.waitForTransactionReceipt({hash:s.hash,timeout:5000})
+  const recovered=await call(`/api/trades/${c.trade.id}/fund/mpp`,f.key,'POST',s.proof,true);assert.equal(recovered.status,202,JSON.stringify(recovered.body));await settleTempo(c.trade.id)
+})
+
+test('delegated Tempo SIGKILL at intent, claim, broadcast and verified receipt commits recovers exact original payment',{skip:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  assert.ok(tempoChain)
+  for(const operation of ['intent','claim','broadcast','proof'] as const)for(const boundary of operation==='broadcast'?['after'] as const:['before','after'] as const){
+    const f=await fixture(),g=await tempoGrant(f),c=await tempoCheckout(f,g),buyerBefore=await tempoChain.balance(payer.address),body={buyer_operation_id:crypto.randomUUID()}
+    let signed:Awaited<ReturnType<typeof signedTempoPurchase>>|undefined
+    if(operation!=='intent')signed=await signedTempoPurchase(c,g)
+    if(operation==='broadcast'||operation==='proof')assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',signed!.claim)).body.send_allowed,true)
+    if(operation==='proof'){await tempoChain.client.sendRawTransaction({serializedTransaction:signed!.raw});await tempoChain.client.waitForTransactionReceipt({hash:signed!.hash,timeout:5000})}
+    const marker=join(directory,`tempo-${operation}-${boundary}-${f.id}.marker`),args={f,g,c,body,signed:signed?{raw:signed.raw,hash:signed.hash,claim:signed.claim,proof:signed.proof}:null,rpc:tempoChain.url,origin:baseUrl}
+    const code=`(async()=>{const {writeFile}=await import('node:fs/promises'),a=JSON.parse(process.argv[1]);const stop=async()=>{await writeFile(process.argv[2],'boundary');await new Promise(()=>{})};
+      ${boundary==='before'?"const {db}=await import('./lib/db.ts'),proto=Object.getPrototypeOf(db.session),original=proto.transaction;proto.transaction=function(fn,c){return original.call(this,async tx=>{const r=await fn(tx);await stop();return r},c)};":''}
+      ${operation==='broadcast'?"const response=await fetch(a.rpc,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_sendRawTransaction',params:[a.signed.raw]})});const r=await response.json();if(r.result!==a.signed.hash)throw Error('Original Tempo broadcast failed');":"const {NextRequest}=await import('next/server'),api=await import('./app/api/organizations/[id]/spending-accounts/orders/[tradeId]/fund/mpp/[action]/route.ts'),action='"+operation+"',input=action==='intent'?a.body:action==='claim'?a.signed.claim:a.signed.proof;const response=await api.POST(new NextRequest(a.origin+a.c.paymentPath+'/'+action,{method:'POST',headers:{Authorization:'Bearer '+a.g.key,'Content-Type':'application/json',Host:new URL(a.origin||'http://127.0.0.1').host},body:JSON.stringify(input)}),{params:Promise.resolve({id:a.f.id,tradeId:a.c.trade.id,action})});if(response.status>=400)throw Error(await response.text());"}
+      await stop()})().catch(e=>{console.error(e);process.exitCode=1})`
+    const child=spawn(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify(args),marker],{cwd:process.cwd(),env:process.env,stdio:['ignore','ignore','pipe']})
+    let errors='';child.stderr.on('data',chunk=>{errors+=chunk});const exited=new Promise<void>((done,reject)=>{child.once('exit',()=>done());child.once('error',reject)})
+    try{
+      let reached=false;for(let wait=0;wait<150;wait++){try{await readFile(marker);reached=true;break}catch{}if(child.exitCode!==null)throw Error(errors);await new Promise(done=>setTimeout(done,100))}
+      assert.equal(reached,true,errors);child.kill('SIGKILL');await exited
+      const saved=await spend(c.paymentPath+'/intent',g.key,'GET');assert.equal(saved.status,200)
+      if(operation==='intent'){
+        assert.equal(Boolean(saved.body.intent),boundary==='after');const repeated=await spend(c.paymentPath+'/intent',g.key,'POST',body);assert.equal(repeated.status,boundary==='before'?201:200,JSON.stringify({operation,boundary,result:repeated.body,origin:saved.body.intent?.origin,baseUrl}))
+        if(saved.body.intent)assert.equal(repeated.body.intent.id,saved.body.intent.id)
+        signed=await signedTempoPurchase(c,g,repeated.body.intent)
+      }
+      assert.ok(signed)
+      if(operation==='claim')assert.equal(Boolean(saved.body.claim),boundary==='after')
+      if(operation==='intent'||operation==='claim')assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim)).body.send_allowed,true)
+      if(operation!=='broadcast'&&operation!=='proof'){await tempoChain.client.sendRawTransaction({serializedTransaction:signed.raw});await tempoChain.client.waitForTransactionReceipt({hash:signed.hash,timeout:5000})}
+      if(operation==='proof'&&boundary==='after'){
+        assert.equal(saved.body.claim.state,'confirmed')
+        assert.equal((await call(`/api/trades/${c.trade.id}/dispute`,`clawdmarket-test-${f.agent}`,'POST',{reason:'Reject the controlled Tempo crash acceptance fixture'},true)).status,200)
+        process.env.ADMIN_USER_IDS=f.owner
+        try{const resolved=await call(`/api/trades/${c.trade.id}/resolve`,f.owner,'POST',{resolution:'buyer'});assert.ok([200,202].includes(resolved.status),JSON.stringify(resolved.body))}finally{delete process.env.ADMIN_USER_IDS}
+      }else{
+        await call(g.path,f.owner,'DELETE',{account_id:g.account.id})
+        let recovered=await call(`/api/trades/${c.trade.id}/fund/mpp`,f.key,'POST',signed.proof,true)
+        for(let attempt=0;recovered.status===409&&recovered.body.code==='PAYMENT_CONFIRMING'&&attempt<20;attempt++){
+          assert.equal(recovered.body.retryable,true);await new Promise(done=>setTimeout(done,200))
+          recovered=await call(`/api/trades/${c.trade.id}/fund/mpp`,f.key,'POST',signed.proof,true)
+        }
+        assert.equal(recovered.status,202,JSON.stringify({operation,boundary,result:recovered.body}))
+      }
+      const refund=await settleTempo(c.trade.id),principal=operation==='proof'&&boundary==='after'?1_000_000n:1_050_000n
+      assert.equal(refund.token_amount,principal.toString());assert.equal(await tempoChain.balance(payer.address),buyerBefore-1_050_000n+principal-await actualTempoFee(signed.hash))
+      const [claim]=await db.select().from(schema.organization_spending_mpp_claims).where(eq(schema.organization_spending_mpp_claims.trade_id,c.trade.id));assert.equal(claim.state,'confirmed');assert.equal(claim.tx_hash,signed.hash)
+      assert.deepEqual(await counts(f),{orders:1,capacity:0})
+    }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited}
   }
 })

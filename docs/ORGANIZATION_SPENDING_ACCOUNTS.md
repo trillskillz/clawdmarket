@@ -86,3 +86,5 @@ mobile privacy/overflow. Legacy migration replay preserves old read credentials
 and original financial/service/order rows. Full predeploy, production build and
 the selected browser matrix are required before acceptance is recorded in
 [the audit](ORGANIZATION_SPENDING_ACCOUNTS_AUDIT.md).
+
+Separately reviewed version-3 Tempo service grants and original SDK claim/recovery are documented in [Tempo service purchasing](ORGANIZATION_TEMPO_SPENDING.md). They do not expand version-1 credit or version-2 L1 authority.

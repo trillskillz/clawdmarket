@@ -260,8 +260,12 @@ test('private-provider contract freezes exact two-owner service shares without e
 test('organization spending contract separates credit and reviewed external authority without general buyer impersonation',()=>{
   const paths=getAgentOpenApiPaths() as Record<string,any>
   const grant=paths['/api/organizations/{id}/spending-accounts'].post.requestBody.content['application/json'].schema
-  const [credit,external]=grant.oneOf
-  for(const variant of [credit,external]){for(const field of ['team_id','cost_center','max_purchase','max_daily','max_monthly','max_lifetime','allowed_services'])assert.ok(variant.required.includes(field));assert.equal(variant.properties.allowed_services.maxItems,20);assert.equal(variant.additionalProperties,false)}
+  const [credit,external,tempo]=grant.oneOf
+  for(const variant of [credit,external,tempo]){for(const field of ['team_id','cost_center','max_purchase','max_daily','max_monthly','max_lifetime','allowed_services'])assert.ok(variant.required.includes(field));assert.equal(variant.properties.allowed_services.maxItems,20);assert.equal(variant.additionalProperties,false)}
+  assert.equal(tempo.properties.version.const,3);assert.equal(tempo.properties.payment.properties.chain_id.const,4217)
+  for(const field of ['fee_token_address','minimum_fee_token_reserve_units','max_fee_token_cost_units','max_lifetime_fee_token_cost_units'])assert.ok(tempo.properties.payment.required.includes(field))
+  for(const suffix of ['intent','claim','proof'])assert.deepEqual(paths['/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/mpp/'+suffix].post.security,[{OrganizationSpendingKey:[]}])
+  assert.equal(paths['/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/mpp/proof'].post.requestBody.required,false)
   assert.equal(credit.properties.version.const,1);assert.equal(credit.properties.payment,undefined)
   assert.equal(external.properties.version.const,2);assert.ok(external.required.includes('payment'))
   assert.deepEqual(external.properties.payment.properties.chain_id.enum,[1,11155111])
@@ -269,7 +273,7 @@ test('organization spending contract separates credit and reviewed external auth
   for(const suffix of ['intent','claim','proof']){const path=paths['/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/evm/'+suffix];assert.deepEqual(path.post.security,[{OrganizationSpendingKey:[]}]);assert.equal(path.post.operationId,'spending_evm_'+suffix)}
   const order=paths['/api/organizations/{id}/spending-accounts/orders'].post
   assert.deepEqual(order.security,[{OrganizationSpendingKey:[]}])
-  assert.deepEqual(order.requestBody.content['application/json'].schema.properties.order.properties.payment_rail.enum,['credit','evm'])
+  assert.deepEqual(order.requestBody.content['application/json'].schema.properties.order.properties.payment_rail.enum,['credit','evm','mpp'])
   assert.ok(order.requestBody.content['application/json'].schema.properties.order.required.includes('purchasing_approval_id'))
   assert.equal(AGENT_ACTIONS.find(action=>action.id==='spending_account_service_order')!.auth,'organization-spending-key')
   assert.match(renderSkillMd(),/Refunds|without recycling/)

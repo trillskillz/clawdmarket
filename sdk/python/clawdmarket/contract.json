@@ -1,5 +1,5 @@
 {
-  "version": "1.100",
+  "version": "1.101",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -1155,6 +1155,34 @@
     "spending_evm_proof": {
       "method": "POST",
       "path": "/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/evm/proof",
+      "auth": "organization-spending-key",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "spending_mpp_intent": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/mpp/intent",
+      "auth": "organization-spending-key",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "spending_mpp_claim": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/mpp/claim",
+      "auth": "organization-spending-key",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "spending_mpp_proof": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/mpp/proof",
+      "auth": "organization-spending-key",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "recover_spending_mpp_intent": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/mpp/intent",
       "auth": "organization-spending-key",
       "named_credential_scope": null,
       "deprecated_body_fields": []

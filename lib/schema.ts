@@ -409,6 +409,25 @@ export const organization_spending_payment_claims = sqliteTable('organization_sp
 },table=>[uniqueIndex('spending_payment_claims_wallet_nonce_idx').on(table.chain_id,table.payer_address,table.nonce),
   uniqueIndex('spending_payment_claims_active_wallet_idx').on(table.chain_id,table.payer_address).where(sql`${table.state}='claimed'`)]);
 
+/** Original reviewed Tempo challenge; separate from route authority and version-2 EVM claims. */
+export const organization_spending_mpp_intents = sqliteTable('organization_spending_mpp_intents', {
+  id:text('id').primaryKey(),trade_id:text('trade_id').notNull().unique().references(()=>trades.id,{onDelete:'restrict'}),
+  buyer_id:text('buyer_id').notNull().references(()=>users.id,{onDelete:'restrict'}),buyer_operation_id:text('buyer_operation_id').notNull().unique(),
+  account_id:text('account_id').notNull().references(()=>organization_spending_accounts.id,{onDelete:'restrict'}),authority_hash:text('authority_hash').notNull(),
+  origin:text('origin').notNull(),chain_id:integer('chain_id').notNull(),payer_address:text('payer_address').notNull(),token_address:text('token_address').notNull(),treasury_address:text('treasury_address').notNull(),
+  token_amount:text('token_amount').notNull(),token_decimals:integer('token_decimals').notNull(),amount_usd:real('amount_usd').notNull(),challenge_json:text('challenge_json').notNull(),expires_at:text('expires_at').notNull(),
+  created_at:integer('created_at',{mode:'timestamp'}).notNull().$defaultFn(()=>new Date()),
+});
+export const organization_spending_mpp_claims = sqliteTable('organization_spending_mpp_claims', {
+  intent_id:text('intent_id').primaryKey().references(()=>organization_spending_mpp_intents.id,{onDelete:'restrict'}),
+  trade_id:text('trade_id').notNull().unique().references(()=>trades.id,{onDelete:'restrict'}),account_id:text('account_id').notNull().references(()=>organization_spending_accounts.id,{onDelete:'restrict'}),
+  authority_hash:text('authority_hash').notNull(),chain_id:integer('chain_id').notNull(),payer_address:text('payer_address').notNull(),nonce:integer('nonce').notNull(),tx_hash:text('tx_hash').notNull().unique(),
+  fee_token_address:text('fee_token_address').notNull(),maximum_fee_token_cost_units:text('maximum_fee_token_cost_units').notNull(),valid_before:integer('valid_before').notNull(),
+  state:text('state',{enum:['claimed','confirmed']}).notNull().default('claimed'),first_submission_at:integer('first_submission_at',{mode:'timestamp'}),
+  created_at:integer('created_at',{mode:'timestamp'}).notNull().$defaultFn(()=>new Date()),
+},table=>[uniqueIndex('spending_mpp_claims_wallet_nonce_idx').on(table.chain_id,table.payer_address,table.nonce),
+  uniqueIndex('spending_mpp_claims_active_wallet_idx').on(table.chain_id,table.payer_address).where(sql`${table.state}='claimed'`)]);
+
 /** Departmental ceilings are additional restrictions, never delegated purchasing authority. */
 export const organization_team_budgets = sqliteTable('organization_team_budgets', {
   team_id: text('team_id').primaryKey().references(() => organization_teams.id, { onDelete: 'restrict' }),
