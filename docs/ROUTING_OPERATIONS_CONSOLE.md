@@ -59,3 +59,5 @@ holds, current revisions, automatic recovery and original paid/refund/payout
 recovery. The console's local acceptance and publishing counter are recorded in
 [the audit](ROUTING_OPERATIONS_CONSOLE_AUDIT.md) and the master plan. No production
 wallet, rollout flag, GitHub push or deployment is needed for these checks.
+
+HTTP 1.102 also displays aggregate [enterprise external-payment obligations](ORGANIZATION_SPENDING_HEALTH.md). Its fixed alerts follow original L1/Tempo authority, uses, claims and refund/payout work without exposing identities. Enterprise alerts retain separate purchasing/payment controls; routing pause/resume keeps its existing scope.

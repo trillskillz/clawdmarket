@@ -10,7 +10,7 @@ import { CAPABILITY_CYCLE_POLICY } from '@/lib/capability-cycle-policy'
 import { VERIFIER_ADAPTERS } from '../scripts/verifier-contract.mjs'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.101'
+export const AGENT_CONTRACT_VERSION = '1.102'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -1618,8 +1618,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       ] } } } },
       responses: { 200: { description: 'Completed or failed call; exact success replay preserves one receipt and charge. Late output remains failed and uncharged' }, 403: { description: 'Worker lease rejected' }, 409: { description: 'Conflicting terminal output' }, 422: { description: 'Output schema failure; no charge' } } } },
     '/api/admin/routing/health': { get: {
-      operationId: 'inspect_routing_health', summary: 'Admin-only aggregate routing alerts and admission state', security: ownerAuthenticated,
-      responses: { 200: { description: 'Private aggregate health, fixed alert codes/counts and current control; no actor IDs or payment values' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator required' }, 500: { description: 'Inspection unavailable; safe error ID returned' } },
+      operationId: 'inspect_routing_health', summary: 'Admin-only aggregate routing and enterprise payment alerts and routing admission state', security: ownerAuthenticated,
+      responses: { 200: { description: 'Private aggregate routing health and organization_spending external obligations: original use/fee exposure, exact claims/receipts, cross-family wallet collisions and 900-second stale claims/transfers. Fixed alert codes/counts and current routing control; no actor IDs, wallets, hashes, credentials or payment values. Enterprise alerts do not change routing admission authority.' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator required' }, 500: { description: 'Inspection unavailable; safe error ID returned' } },
     } },
     '/api/admin/routing/pause': {
       get: { operationId: 'inspect_routing_admission', summary: 'Admin-only durable routing admission control', security: ownerAuthenticated,

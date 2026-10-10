@@ -1,5 +1,6 @@
 import 'server-only'
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { spendingAuthorityHash } from './organization-spending-authority.mjs'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { and, eq, sql } from 'drizzle-orm'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
@@ -29,15 +30,11 @@ export const spendingAccountInput=z.discriminatedUnion('version',[
 export const spendingExternalPaymentInput=externalPayment
 export const spendingOrderInput=z.object({service_id:z.string().uuid(),order:serviceOrderInput}).strict()
 type Account=typeof accounts.$inferSelect
-const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const credentialHash=(key:string)=>hashAgentApiKey(`organization-spend:${key}`)
 const live=(date:Date)=>Number.isFinite(date.getTime())&&date.getTime()>Date.now()
 function writes(){if(!enterpriseFoundationEnabled())throw new PurchasingError('ORGANIZATION_SPENDING_DISABLED',503)}
 function authority(row:Pick<Account,'organization_id'|'owner_account_id'|'buyer_agent_id'|'team_id'|'cost_center'|'client_reference'|'name'|'allowed_services_json'|'max_purchase_minor'|'max_daily_minor'|'max_monthly_minor'|'max_lifetime_minor'|'expires_at'> & {version?:number;payment_terms_json?:string|null}){
-  return digest({version:row.version??1,...(row.version!==undefined&&row.version>=2?{payment_terms_json:row.payment_terms_json}:{}),organization_id:row.organization_id,owner_account_id:row.owner_account_id,buyer_agent_id:row.buyer_agent_id,
-    team_id:row.team_id,cost_center:row.cost_center,client_reference:row.client_reference,name:row.name,allowed_services_json:row.allowed_services_json,
-    max_purchase_minor:row.max_purchase_minor,max_daily_minor:row.max_daily_minor,max_monthly_minor:row.max_monthly_minor,max_lifetime_minor:row.max_lifetime_minor,
-    expires_at:row.expires_at.toISOString()})
+  return spendingAuthorityHash(row)
 }
 async function buyerScope(orgId:string,ownerId:string,agentId:string,source:PurchasingSource){
   const [org]=await source.select().from(organizations).where(eq(organizations.id,orgId)).limit(1)

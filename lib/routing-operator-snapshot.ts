@@ -1,6 +1,7 @@
 import { getRouteControl, inspectRouteFinancialHealth } from './route-control'
 import { routingOperationalAlerts } from './routing-alerts'
 import { inspectRouteReceiptHealth } from './route-receipt-health.mjs'
+import { inspectOrganizationSpendingHealth } from './organization-spending-health.mjs'
 import { inspectCreditHealth } from './credit-health.mjs'
 import 'server-only'
 import { db } from '@/lib/db'
@@ -18,7 +19,7 @@ function countByState(rows: readonly Record<string, unknown>[]) {
 /** Aggregate-only operator snapshot. No account, endpoint, payload, or credential values leave this function. */
 export async function getRoutingOperatorSnapshot() {
   const client = db.$client
-  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, overdueDeliveries, webhooks, settlement, cron, verificationHealth, fundingHealth, creditHealth, receiptHealth, admissionControl, financialHealth, routeProgress] = await Promise.all([
+  const [migrations, services, routes, orders, attempts, attemptHealth, missingAttempts, overdueDeliveries, webhooks, settlement, cron, verificationHealth, fundingHealth, creditHealth, receiptHealth, admissionControl, financialHealth, routeProgress, organizationSpending] = await Promise.all([
     client.execute('SELECT id, applied_at FROM _clawdmarket_migrations ORDER BY applied_at DESC, id DESC LIMIT 8'),
     client.execute('SELECT status AS state, COUNT(*) AS count FROM service_definitions GROUP BY status'),
     client.execute('SELECT state, COUNT(*) AS count FROM route_plans GROUP BY state'),
@@ -62,6 +63,7 @@ export async function getRoutingOperatorSnapshot() {
       (SELECT COUNT(*) FROM route_plans WHERE state = 'reserving' AND service_order_id IS NULL AND updated_at < unixepoch() - 900) AS reserving_overdue_count,
       (SELECT COUNT(*) FROM route_plans r JOIN service_orders o ON o.id = r.service_order_id JOIN trades t ON t.id = o.trade_id
         WHERE t.status = 'pending' AND t.payment_due_at IS NOT NULL AND unixepoch(t.payment_due_at) <= unixepoch()) AS checkout_overdue_count`),
+    inspectOrganizationSpendingHealth(client),
   ])
   const snapshot = {
     checked_at: new Date().toISOString(),
@@ -91,13 +93,14 @@ export async function getRoutingOperatorSnapshot() {
     workers: { webhooks: cron },
     route_funding: fundingHealth,
     account_credit: creditHealth,
+    organization_spending: organizationSpending,
     route_receipts: receiptHealth,
     admission: admissionControl, financial_health: financialHealth,
     route_progress: { reserving_overdue_count: Number(routeProgress.rows[0]?.reserving_overdue_count || 0),
       checkout_overdue_count: Number(routeProgress.rows[0]?.checkout_overdue_count || 0), inactive_mandate_checkout_count: fundingHealth.inactive_checkout_count },
   }
   const controlAlerts = admissionControl.paused ? [{ code: 'ROUTE_ADMISSION_PAUSED', count: 1, severity: 'attention' as const }] : []
-  return { ...snapshot, alerts: [...financialHealth.alerts, ...controlAlerts, ...routingOperationalAlerts(snapshot)] }
+  return { ...snapshot, alerts: [...financialHealth.alerts, ...organizationSpending.alerts, ...controlAlerts, ...routingOperationalAlerts(snapshot)] }
 }
 
 /** Monitoring failure is inspectable without stopping unrelated settlement/RPC checks. */
