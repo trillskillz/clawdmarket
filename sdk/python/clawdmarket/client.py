@@ -9,10 +9,11 @@ import time
 from importlib.resources import files
 from typing import Any, Mapping, TypedDict, cast
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from http.client import HTTPException
 from email.utils import parsedate_to_datetime
+from .enterprise import OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, original_grant_reference, original_tempo_credential
 
 SDK_CONTRACT: dict[str, Any] = json.loads(files("clawdmarket").joinpath("contract.json").read_text())
 JSON = dict[str, Any]
@@ -116,13 +117,15 @@ class ClawdMarketClient:
             params["id"] = record_id
         for name in re.findall(r"\{([^}]+)\}", path):
             value = params.get(name, "")
-            if UUID.fullmatch(value) is None:
+            if not isinstance(value, str) or UUID.fullmatch(value) is None:
                 raise ValueError(f"{name} must be a UUID")
             path = path.replace("{" + name + "}", value)
         return spec["method"], path
 
-    def _open(self, method: str, path: str, body: Mapping[str, Any] | None, accept: str, timeout: float | None = None):
+    def _open(self, method: str, path: str, body: Mapping[str, Any] | None, accept: str, timeout: float | None = None, *, payment_credential: str | None = None):
         headers = {"Authorization": f"Bearer {self._key}", "Accept": accept}
+        if payment_credential is not None:
+            headers['Payment-Authorization'] = original_tempo_credential(payment_credential)
         encoded = None
         if body is not None:
             encoded = json.dumps(body, allow_nan=False, separators=(",", ":")).encode()
@@ -171,10 +174,31 @@ class ClawdMarketClient:
             raise ClawdMarketApiError(response.status, data, seconds)
         return data
 
-    def _call(self, operation: str, record_id: str | None = None, body: Mapping[str, Any] | None = None, *, timeout: float | None = None) -> JSON:
-        method, path = self._path(operation, record_id)
-        with self._open(method, path, body, "application/json", timeout) as response:
+    def _call(self, operation: str, record_id: str | None = None, body: Mapping[str, Any] | None = None, *, timeout: float | None = None,
+              path_parameters: Mapping[str, str] | None = None, query: Mapping[str, str] | None = None, payment_credential: str | None = None) -> JSON:
+        method, path = self._path(operation, record_id, **(path_parameters or {}))
+        if query:
+            path += '?' + urlencode(query)
+        with self._open(method, path, body, "application/json", timeout, payment_credential=payment_credential) as response:
             return self._json(response)
+
+    def inspect_spending_accounts(self, organization_id: str, client_reference: str | None = None) -> JSON:
+        """Current-owner original lookup; no credentials are returned by inspection."""
+        query = None if client_reference is None else {'client_reference': original_grant_reference(client_reference)}
+        return self._call('inspect_spending_accounts', organization_id, query=query)
+
+    def create_spending_account(self, organization_id: str, request: SpendingGrantInput) -> SpendingGrantResult:
+        """Persist the reviewed body/reference first. A replay never reissues the once-only key."""
+        return cast(SpendingGrantResult, self._call('create_spending_account', organization_id, request))
+
+    def revoke_spending_account(self, organization_id: str, account_id: str) -> JSON:
+        if not isinstance(account_id, str) or UUID.fullmatch(account_id) is None:
+            raise ValueError('account_id must be a UUID')
+        return self._call('revoke_spending_account', organization_id, {'account_id': account_id})
+
+    def organization_spending(self, organization_id: str) -> OrganizationSpendingClient:
+        """Distinct cmos_ credential only; returned surface has no general buyer or owner operations."""
+        return OrganizationSpendingClient(self, organization_id)
 
     def plan_route(self, request: JSON) -> JSON:
         return self._call("plan_work", body=request)

@@ -34,6 +34,15 @@ Always reuse the same `client_reference` when retrying a plan request. After a t
 
 Contract 1.83 adds webhook recovery and a [minimal Python client](../python/README.md). Both consume generated operation/auth/scope/lifecycle metadata from the shared machine contract; `pnpm sdk:check` refuses stale generated files. Owner policy updates and automatic wallet signing remain separate from this client.
 
+Local 1.105 adds [enterprise service clients](../../docs/ENTERPRISE_SDK.md).
+Current owner JWTs inspect/create/revoke exact reviewed grants. A separate
+`cmos_` client returns `organizationSpending(organizationId)` for exact approved
+service orders and original L1/Tempo intents, claims and proofs. It generates no
+references or signed bytes and never retries mutations. Explicit saved Tempo
+credential submission may trigger the server's guarded original-byte broadcast;
+revoked payment recovery uses a separate original buyer client. Keys remain
+once-only and HTTP 202 refunds remain unfinished.
+
 ## Private file delivery
 
 On a funded trade, the seller calls `uploadArtifact(tradeId, input)` with a stable `client_reference`, safe attachment name, media type, canonical padded base64, and SHA-256 of the decoded bytes. Leased work also requires its accepted `execution_attempt_id`. Recover uncertain uploads by repeating the same reference and body.

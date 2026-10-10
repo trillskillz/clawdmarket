@@ -1,5 +1,8 @@
 import { SDK_CONTRACT } from './contract.js'
+import { enterpriseId, enterprisePath, originalGrantReference, scopedSpendingClient } from './enterprise.js'
+import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'
+export type { OrganizationSpendingClient, SpendingAccount, SpendingGrantInput, SpendingGrantResult, SpendingHistory, SpendingEvmPayment, SpendingTempoPayment, SpendingOrderInput, SpendingOrderResult, SpendingEvmIntentInput, SpendingEvmClaimInput, SpendingEvmFundingProof } from './enterprise.js'
 
 export type A2ATaskState = 'TASK_STATE_SUBMITTED' | 'TASK_STATE_WORKING' | 'TASK_STATE_COMPLETED' | 'TASK_STATE_FAILED' | 'TASK_STATE_CANCELED' | 'TASK_STATE_INPUT_REQUIRED'
 export type A2ARouteAction = { action: 'route_work'; request: Omit<RouteRequest, 'client_reference'> } | { action: 'route_work'; route_id: string; mandate_id: string } | { action: 'cancel_route'; route_id: string }
@@ -312,18 +315,18 @@ export class ClawdMarketClient {
   private readonly apiKey: string
 
   constructor(options: ClientOptions) {
-    if (!options.apiKey?.trim()) throw new TypeError('apiKey is required')
+    if (!options.apiKey?.trim() || /[\r\n]/.test(options.apiKey)) throw new TypeError('apiKey is required and must be a single line')
     this.apiKey = options.apiKey.trim()
     this.base = originUrl(options.baseUrl || 'https://clawdmkt.com')
     this.fetcher = options.fetch || fetch
   }
 
-  private async request<T>(method: string, path: string, body?: unknown, options: RequestOptions = {}): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown, options: RequestOptions = {}, paymentCredential?: string): Promise<T> {
     let response: Response
     try {
       response = await this.fetcher(new URL(path, this.base), {
         method, redirect: 'error', credentials: 'omit', signal: options.signal,
-        headers: { Authorization: `Bearer ${this.apiKey}`, Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        headers: { Authorization: `Bearer ${this.apiKey}`, Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(paymentCredential === undefined ? {} : { 'Payment-Authorization': paymentCredential }) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       })
     } catch (cause) {
@@ -344,6 +347,27 @@ export class ClawdMarketClient {
     }
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new ClawdMarketTransportError('ClawdMarket returned an invalid JSON response', null)
     return payload as T
+  }
+
+  private enterpriseRequest<T>(operation: EnterpriseOperation, params: { id: string; tradeId?: string }, body?: unknown, options?: RequestOptions, query?: Record<string, string>, paymentCredential?: string): Promise<T> {
+    return this.request<T>(SDK_CONTRACT.operations[operation].method, enterprisePath(operation, params, query), body, options, paymentCredential)
+  }
+
+  /** Current-owner private inspection. Exact original reference can recover a grant beyond the bounded inventory. */
+  inspectSpendingAccounts(organizationId: string, clientReference?: string, options?: RequestOptions) {
+    return this.enterpriseRequest<SpendingHistory>('inspect_spending_accounts', { id: organizationId }, undefined, options,
+      clientReference === undefined ? undefined : { client_reference: originalGrantReference(clientReference) })
+  }
+  /** Persist the exact reviewed body/reference before calling. Replays never reissue the once-only key. */
+  createSpendingAccount(organizationId: string, input: SpendingGrantInput, options?: RequestOptions) {
+    return this.enterpriseRequest<SpendingGrantResult>('create_spending_account', { id: organizationId }, input, options)
+  }
+  revokeSpendingAccount(organizationId: string, accountId: string, options?: RequestOptions) {
+    return this.enterpriseRequest<{ account: import('./enterprise.js').SpendingAccount }>('revoke_spending_account', { id: organizationId }, { account_id: enterpriseId(accountId) }, options)
+  }
+  /** Requires the distinct spending key. The returned surface has no general buyer, provider or owner operations. */
+  organizationSpending(organizationId: string): OrganizationSpendingClient {
+    return scopedSpendingClient(this.apiKey, organizationId, this.enterpriseRequest.bind(this))
   }
 
   /** Read-only canonical recovery after webhook delivery loss, duplication or suppression. */

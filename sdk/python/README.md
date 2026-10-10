@@ -1,5 +1,15 @@
 # ClawdMarket Python recovery client
 
+Local 1.105 adds [enterprise service clients](../../docs/ENTERPRISE_SDK.md).
+Current owner JWTs use `inspect_spending_accounts`, `create_spending_account`
+and `revoke_spending_account`. A separate `cmos_` client returns
+`organization_spending(organization_id)` for exact approved service orders and
+original L1/Tempo intents, claims and proofs. It generates no references or
+signed bytes and never retries mutations. Explicit saved original Tempo
+credential submission may trigger the server's guarded broadcast. Revoked
+payments recover with a separate original buyer client; keys remain once-only
+and HTTP 202 refunds remain unfinished.
+
 This repository client supports Python 3.11+ using the standard library. Install
 with `python3 -m pip install ./sdk/python`, or set `PYTHONPATH=sdk/python` from the
 repository. It has no runtime dependencies and is not published to PyPI.

@@ -914,11 +914,11 @@ async function externalCheckout(f:Fixture,g:Awaited<ReturnType<typeof externalGr
   const result=await spend(g.path+'/orders',g.key,'POST',{service_id:f.service,order:a.checkout});assert.equal(result.status,201,JSON.stringify(result.body))
   return {...a,...result.body,paymentPath:g.path+'/orders/'+result.body.trade.id+'/fund/evm'}
 }
-async function signedPurchase(f:Fixture,c:Awaited<ReturnType<typeof externalCheckout>>,key:string){
+async function signedPurchase(f:Fixture,c:Awaited<ReturnType<typeof externalCheckout>>,key:string,saved?:any){
   const chain=enterpriseChain
   assert.ok(chain)
-  const operation=crypto.randomUUID(),body={chain_id:1,token_address:chain.token,payer_address:payer.address,buyer_operation_id:operation}
-  const created=await spend(c.paymentPath+'/intent',key,'POST',body);assert.equal(created.status,201,JSON.stringify(created.body))
+  const operation=saved?.buyer_operation_id??crypto.randomUUID(),body={chain_id:1,token_address:chain.token,payer_address:payer.address,buyer_operation_id:operation}
+  const created=saved?{status:200,body:{intent:saved}}:await spend(c.paymentPath+'/intent',key,'POST',body);assert.ok([200,201].includes(created.status),JSON.stringify(created.body))
   const intent=created.body.intent,wallet=createWalletClient({chain:chain.client.chain,account:payer,transport:http(chain.url)})
   const prepared=await wallet.prepareTransactionRequest({to:chain.token,data:encodeFunctionData({abi:erc20Abi,functionName:'transfer',args:[chain.treasury,BigInt(intent.token_amount)]}),gas:70_000n})
   const raw:Hex=await wallet.signTransaction(prepared)
@@ -1469,5 +1469,86 @@ test('a real reverted Tempo refund records its original charged fee without repo
     const buyerWallet=createWalletClient({chain:chain.client.chain,account:TempoAccount.fromSecp256k1(`0x${'18'.repeat(32)}`),transport:http(chain.url)})
     const restore=await buyerWallet.writeContract({address:chain.token,abi:erc20Abi,functionName:'transfer',args:[chain.treasury,100_000_000n],feeToken:chain.token})
     assert.equal((await chain.client.waitForTransactionReceipt({hash:restore,timeout:5000})).status,'success')
+  }
+})
+
+// Python runs in a fresh buyer-host process for each operation; no signer or RPC is passed to either SDK.
+async function enterpriseSdkCall(language:'typescript'|'python',key:string,organizationId:string,scope:'owner'|'spending'|'buyer',method:string,args:any[]){
+  if(language==='typescript'){
+    const {ClawdMarketClient,ClawdMarketApiError}=await import('../../sdk/typescript/src/index')
+    const client=new ClawdMarketClient({apiKey:key,baseUrl}),surface=scope==='spending'?client.organizationSpending(organizationId):client
+    try{return {ok:true,result:await (surface as unknown as Record<string,(...args:any[])=>Promise<any>>)[method](...args)}}
+    catch(error){if(error instanceof ClawdMarketApiError)return {ok:false,status:error.status,code:error.code,funds_state:error.fundsState};throw error}
+  }
+  const methods:Record<string,string>={inspectSpendingAccounts:'inspect_spending_accounts',createSpendingAccount:'create_spending_account',revokeSpendingAccount:'revoke_spending_account',orderService:'order_service',getOrder:'get_order',createEvmPaymentIntent:'create_evm_payment_intent',getEvmPaymentIntent:'get_evm_payment_intent',claimEvmPayment:'claim_evm_payment',verifyEvmFunding:'verify_evm_funding',createTempoPaymentIntent:'create_tempo_payment_intent',getTempoPaymentIntent:'get_tempo_payment_intent',claimTempoPayment:'claim_tempo_payment',verifyTempoFunding:'verify_tempo_funding',submitOriginalTempoCredential:'submit_original_tempo_credential',getBuyerEvmPaymentIntent:'get_buyer_evm_payment_intent',getBuyerMppPaymentIntent:'get_buyer_mpp_payment_intent',verifyBuyerEvmFunding:'verify_buyer_evm_funding',verifyBuyerMppFunding:'verify_buyer_mpp_funding'}
+  const pythonArgs=method==='createTempoPaymentIntent'?[args[0],args[1].buyer_operation_id]:args
+  const code=`import json,sys\nfrom clawdmarket import ClawdMarketClient,ClawdMarketApiError\na=json.load(sys.stdin)\nc=ClawdMarketClient(a['key'],a['origin'])\ns=c.organization_spending(a['org']) if a['scope']=='spending' else c\ntry:\n r=getattr(s,a['method'])(*a['args'])\n print(json.dumps({'ok':True,'result':r},allow_nan=False))\nexcept ClawdMarketApiError as e:\n print(json.dumps({'ok':False,'status':e.status,'code':e.code,'funds_state':e.funds_state}))`
+  assert.ok(methods[method],`Unknown fixture SDK method ${method}`)
+  const child=spawn('python3',['-c',code],{cwd:process.cwd(),env:{...process.env,PYTHONPATH:join(process.cwd(),'sdk/python')},stdio:['pipe','pipe','pipe']})
+  let output='',errors='';child.stdout.on('data',chunk=>{output+=chunk});child.stderr.on('data',chunk=>{errors+=chunk})
+  const done=new Promise<void>((resolve,reject)=>{child.once('error',reject);child.once('exit',status=>status===0?resolve():reject(Error(errors||`Python SDK process exited ${status}`)))})
+  child.stdin.end(JSON.stringify({origin:baseUrl,key,org:organizationId,scope,method:methods[method],args:pythonArgs}));await done
+  return JSON.parse(output)
+}
+
+for(const language of ['typescript','python'] as const)test(`enterprise ${language} SDK completes real private L1/Tempo purchases and original revoked-payment recovery`,{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY||!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  for(const rail of ['evm','mpp'] as const)for(const late of [false,true]){
+    const f=await privateFixture(),share=await shared(f),seed=rail==='evm'?await externalGrant(f,{allowed_services:[{service_id:f.service,provider_share_id:share.share.id}]}):await tempoGrant(f,{allowed_services:[{service_id:f.service,provider_share_id:share.share.id}]})
+    const ownerKey=token(f.owner),input={...seed.input,client_reference:crypto.randomUUID(),expected_token_decimals:6,expected_token_usd_price:1}
+    const request=(scope:'owner'|'spending'|'buyer',key:string,method:string,args:any[],organizationId=f.id)=>enterpriseSdkCall(language,key,organizationId,scope,method,args)
+    const ok=async(scope:'owner'|'spending'|'buyer',key:string,method:string,args:any[])=>{const reply=await request(scope,key,method,args);assert.equal(reply.ok,true,JSON.stringify(reply));return reply.result}
+    const granted=await ok('owner',ownerKey,'createSpendingAccount',[f.id,input]);assert.match(granted.api_key,/^cmos_[a-f0-9]{64}$/)
+    const g={...seed,input,key:granted.api_key,account:granted.account}
+    const history=await ok('owner',ownerKey,'inspectSpendingAccounts',[f.id,input.client_reference]);assert.equal(history.spending_accounts.length,1);assert.equal(history.spending_accounts[0].account.id,g.account.id)
+    assert.equal((await ok('owner',ownerKey,'createSpendingAccount',[f.id,input])).api_key,null)
+    const a=await approved(f,{order:{...privateOrder(share.share.id),payment_rail:rail}})
+    const reserved=await ok('spending',g.key,'orderService',[{service_id:f.service,order:a.checkout}]),c={...a,...reserved,paymentPath:g.path+'/orders/'+reserved.trade.id+'/fund/'+rail}
+    assert.equal((await ok('spending',g.key,'getOrder',[c.order.id])).trade.id,c.trade.id)
+    const foreign=await request('spending',g.key,'getOrder',[c.order.id],crypto.randomUUID());assert.ok([401,404].includes(foreign.status));assert.equal(foreign.ok,false)
+    const body=rail==='evm'?{buyer_operation_id:crypto.randomUUID(),chain_id:1,token_address:enterpriseChain!.token,payer_address:payer.address}:{buyer_operation_id:crypto.randomUUID()}
+    const intentMethod=rail==='evm'?'createEvmPaymentIntent':'createTempoPaymentIntent',getMethod=rail==='evm'?'getEvmPaymentIntent':'getTempoPaymentIntent'
+    const intent=await ok('spending',g.key,intentMethod,[c.trade.id,body]);assert.equal(intent.claim_required,true);assert.equal(intent.created,true)
+    const original=await ok('spending',g.key,getMethod,[c.trade.id]);assert.equal(original.intent.id,intent.intent.id);assert.equal(original.intent.buyer_operation_id,body.buyer_operation_id)
+    assert.equal((await ok('spending',g.key,intentMethod,[c.trade.id,body])).created,false)
+    const signed=rail==='evm'?await signedPurchase(f,c,g.key,intent.intent):await signedTempoPurchase(c,g,intent.intent)
+    const claim=await ok('spending',g.key,rail==='evm'?'claimEvmPayment':'claimTempoPayment',[c.trade.id,signed.claim]);assert.equal(claim.send_allowed,true)
+    assert.equal((await ok('spending',g.key,getMethod,[c.trade.id])).claim.tx_hash,signed.hash)
+    const buyerBefore=rail==='evm'?await enterpriseChain!.balance(payer.address):await tempoChain!.balance(payer.address)
+    const broadcastsBefore=tempoBroadcasts
+    if(late)await ok('owner',ownerKey,'revokeSpendingAccount',[f.id,g.account.id])
+    if(rail==='evm'){
+      assert.ok('wallet' in signed);await signed.wallet.sendRawTransaction({serializedTransaction:signed.raw});await enterpriseChain!.client.waitForTransactionReceipt({hash:signed.hash})
+    }else if(late){
+      const wallet=createWalletClient({chain:tempoChain!.client.chain,account:TempoAccount.fromSecp256k1(`0x${'18'.repeat(32)}`),transport:http(tempoRpcUrl)})
+      await wallet.sendRawTransaction({serializedTransaction:signed.raw});await tempoChain!.client.waitForTransactionReceipt({hash:signed.hash})
+    }
+    const funded=late?await ok('buyer',f.key,rail==='evm'?'verifyBuyerEvmFunding':'verifyBuyerMppFunding',[c.trade.id,signed.proof])
+      :rail==='evm'?await ok('spending',g.key,'verifyEvmFunding',[c.trade.id,signed.proof]):await ok('spending',g.key,'submitOriginalTempoCredential',[c.trade.id,(signed as Awaited<ReturnType<typeof signedTempoPurchase>>).credential])
+    if(late){
+      if(rail==='mpp'){assert.equal(funded.status,'late_payment_refund_processing');assert.equal(funded.trade.payout_status,'processing');await settleTempo(c.trade.id)
+        const beforeReconciliation=await ok('buyer',f.key,'getBuyerMppPaymentIntent',[c.trade.id]);assert.equal(beforeReconciliation.trade.payout_status,'processing')
+        const [cancelled]=await db.select().from(schema.trades).where(eq(schema.trades.id,c.trade.id))
+        // Apply the same read-only completion reconciliation used by cron; no transfer is sent.
+        const reconciled=await (await import('@/lib/external-settlement')).refundCancelledExternalTrade(cancelled,{process:false});assert.equal(reconciled.complete,true)}
+      const recovered=await ok('buyer',f.key,rail==='evm'?'getBuyerEvmPaymentIntent':'getBuyerMppPaymentIntent',[c.trade.id]);assert.equal(recovered.intent.id,intent.intent.id);assert.equal(recovered.claim.tx_hash,signed.hash);assert.equal(recovered.trade.payout_status,'refunded')
+      const after=rail==='evm'?await enterpriseChain!.balance(payer.address):await tempoChain!.balance(payer.address)
+      assert.equal(after,buyerBefore-(rail==='mpp'?await actualTempoFee(signed.hash):0n))
+    }else{
+      assert.equal(funded.trade.status,'escrow_held')
+      const beforeProof=tempoBroadcasts
+      assert.equal((await ok('spending',g.key,rail==='evm'?'verifyEvmFunding':'verifyTempoFunding',[c.trade.id,signed.proof])).idempotent,true)
+      if(rail==='mpp')assert.equal(tempoBroadcasts,beforeProof)
+      await ok('owner',ownerKey,'revokeSpendingAccount',[f.id,g.account.id]);await call(f.privatePath,f.providerOwner,'DELETE',{share_id:share.share.id})
+      const handler=join(directory,`${c.trade.id}.${language}.sdk-handler.mjs`);await writeFile(handler,`export default async()=>({summary:'Reviewed the original enterprise SDK purchase.',artifact:{result:'Approved enterprise SDK result'}})`)
+      const command=['scripts/provider-worker.mjs','--trade-id',c.trade.id,'--service-id',f.service,'--state-dir',join(directory,c.trade.id),'--handler',handler],options={cwd:process.cwd(),env:{...process.env,BASE_URL:baseUrl,CLAWDMARKET_PROVIDER_API_KEY:f.providerKey}},run=promisify(execFile)
+      const first=JSON.parse((await run(process.execPath,command,options)).stdout),restarted=JSON.parse((await run(process.execPath,command,options)).stdout);assert.equal(first.state,'delivered');assert.equal(restarted.delivery_id,first.delivery_id)
+      const confirmation=await call(`/api/trades/${c.trade.id}/confirm`,f.key,'POST',{content_hash:first.content_hash},true);assert.equal(confirmation.status,200,JSON.stringify(confirmation.body))
+      if(rail==='mpp')await settleTempo(c.trade.id)
+    }
+    const denied=await request('spending',g.key,getMethod,[c.trade.id]);assert.equal(denied.ok,false);assert.equal(denied.status,401)
+    if(rail==='mpp')assert.equal(tempoBroadcasts,broadcastsBefore+2)
+    const receipts=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,c.trade.id)),transfers=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,c.trade.id)),uses=await db.select().from(schema.organization_spending_uses).where(eq(schema.organization_spending_uses.account_id,g.account.id))
+    assert.equal(receipts.length,1);assert.equal(receipts[0].tx_hash,signed.hash);assert.equal(transfers.length,1);assert.equal(transfers[0].status,'confirmed');assert.equal(transfers[0].kind,late?'buyer_refund':'seller_payout');assert.equal(uses.length,1);assert.equal(uses[0].amount_minor,105)
+    assert.deepEqual(await counts(f),{orders:1,capacity:0})
   }
 })
