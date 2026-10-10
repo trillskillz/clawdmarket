@@ -1343,3 +1343,47 @@ test('enterprise client preserves a revoked Tempo refund hold until original tre
   assert.equal(await tempoChain.balance(payer.address),before-await actualTempoFee(hash))
   assert.deepEqual(await counts(f),{orders:1,capacity:0})
 })
+
+test('operator enterprise audit follows real L1/Tempo obligations, detects corruption and stale claims without leaking identity',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY||!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  const {inspectOrganizationSpendingHealth}=await import('../../lib/organization-spending-health.mjs')
+  for(const rail of ['evm','mpp'] as const){
+    const f=await fixture(),g=rail==='evm'?await externalGrant(f):await tempoGrant(f),c=rail==='evm'?await externalCheckout(f,g):await tempoCheckout(f,g)
+    const signed=rail==='evm'?await signedPurchase(f,c,g.key):await signedTempoPurchase(c,g)
+    const claimed=await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim);assert.equal(claimed.body.send_allowed,true)
+    const healthy=await inspectOrganizationSpendingHealth(db.$client);assert.ok(healthy.pending_claim_count>=1)
+    const baseline={usage:healthy.usage_anomaly_count,claim:healthy.payment_claim_anomaly_count,fee:healthy.fee_exposure_anomaly_count,stale:healthy.stale_claim_count,wallet:healthy.wallet_collision_count}
+    const text=JSON.stringify(healthy);for(const privateValue of [f.id,f.buyer,g.key,g.account.id,payer.address.toLowerCase(),signed.hash])assert.equal(text.includes(privateValue),false)
+    const table=rail==='evm'?schema.organization_spending_payment_claims:schema.organization_spending_mpp_claims
+    await db.update(table).set({created_at:new Date(Date.now()-901_000)}).where(eq(table.trade_id,c.trade.id))
+    const stale=await inspectOrganizationSpendingHealth(db.$client);assert.equal(stale.healthy,false);assert.equal(stale.stale_claim_count,baseline.stale+1);assert.ok(stale.alerts.some((alert:any)=>alert.code==='ORGANIZATION_PAYMENT_UNCONFIRMED'))
+    await db.update(table).set({created_at:new Date()}).where(eq(table.trade_id,c.trade.id))
+    await db.update(schema.organization_spending_accounts).set({max_lifetime_minor:104}).where(eq(schema.organization_spending_accounts.id,g.account.id))
+    const badGrant=await inspectOrganizationSpendingHealth(db.$client);assert.equal(badGrant.usage_anomaly_count,baseline.usage+2)
+    await db.update(schema.organization_spending_accounts).set({max_lifetime_minor:105}).where(eq(schema.organization_spending_accounts.id,g.account.id))
+    const [originalAccount]=await db.select().from(schema.organization_spending_accounts).where(eq(schema.organization_spending_accounts.id,g.account.id))
+    const changedTerms=JSON.parse(originalAccount.payment_terms_json!)
+    changedTerms.payment[rail==='evm'?'max_lifetime_gas_cost_wei':'max_lifetime_fee_token_cost_units']='1'
+    await db.update(schema.organization_spending_accounts).set({payment_terms_json:JSON.stringify(changedTerms)}).where(eq(schema.organization_spending_accounts.id,g.account.id))
+    assert.equal((await inspectOrganizationSpendingHealth(db.$client)).fee_exposure_anomaly_count,baseline.fee+1)
+    await db.update(schema.organization_spending_accounts).set({payment_terms_json:originalAccount.payment_terms_json}).where(eq(schema.organization_spending_accounts.id,g.account.id))
+    if(rail==='evm'){
+      const routeId=crypto.randomUUID(),mandateId=crypto.randomUUID()
+      await db.insert(schema.route_plans).values({id:routeId,buyer_id:f.buyer,client_reference:routeId,objective:'Audit-only collision fixture',required_capabilities:'["code-review"]',max_budget_minor:105,expires_at:new Date(Date.now()+60000)})
+      await db.insert(schema.route_payment_mandates).values({id:mandateId,route_id:routeId,buyer_id:f.buyer,owner_account_id:f.owner,client_reference:mandateId,request_hash:'a'.repeat(64),route_hash:'b'.repeat(64),terms_json:'{}',max_aggregate_minor:105,expires_at:new Date(Date.now()+60000)})
+      // Temporary corrupt cross-family row references the genuine original intent; it never sends.
+      await db.insert(schema.buyer_evm_payment_claims).values({intent_id:signed.intent.id,mandate_id:mandateId,chain_id:1,payer_address:claimed.body.claim.payer_address,nonce:claimed.body.claim.nonce,tx_hash:signed.hash,terms_hash:'a'.repeat(64),maximum_execution_gas_cost_wei:claimed.body.claim.maximum_execution_gas_cost_wei})
+      const collided=await inspectOrganizationSpendingHealth(db.$client);assert.equal(collided.wallet_collision_count,baseline.wallet+1);assert.ok(collided.alerts.some((alert:any)=>alert.code==='ORGANIZATION_WALLET_COLLISION'))
+      await db.delete(schema.buyer_evm_payment_claims).where(eq(schema.buyer_evm_payment_claims.intent_id,signed.intent.id))
+      assert.equal((await inspectOrganizationSpendingHealth(db.$client)).wallet_collision_count,baseline.wallet)
+    }
+    if(rail==='evm'){assert.ok('wallet' in signed);await signed.wallet.sendRawTransaction({serializedTransaction:signed.raw});await enterpriseChain!.client.waitForTransactionReceipt({hash:signed.hash})}
+    else {assert.ok('credential' in signed);const funded=await tempoPull(c,g,signed);assert.equal(funded.status,200,JSON.stringify(funded.body))}
+    if(rail==='evm'){const funded=await spend(c.paymentPath+'/proof',g.key,'POST',signed.proof);assert.equal(funded.status,200,JSON.stringify(funded.body))}
+    assert.equal((await inspectOrganizationSpendingHealth(db.$client)).payment_claim_anomaly_count,baseline.claim)
+    const [receipt]=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,c.trade.id))
+    await db.update(schema.payment_receipts).set({token_amount:'1'}).where(eq(schema.payment_receipts.id,receipt.id))
+    const wrongReceipt=await inspectOrganizationSpendingHealth(db.$client);assert.equal(wrongReceipt.payment_claim_anomaly_count,baseline.claim+1)
+    await db.update(schema.payment_receipts).set({token_amount:receipt.token_amount}).where(eq(schema.payment_receipts.id,receipt.id))
+    assert.equal((await inspectOrganizationSpendingHealth(db.$client)).payment_claim_anomaly_count,baseline.claim)
+  }
+})

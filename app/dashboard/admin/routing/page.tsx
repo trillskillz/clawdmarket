@@ -123,6 +123,12 @@ export default function RoutingOperations() {
         <Counts title="Route progress" counts={snapshot.route_progress} />
         <Counts title="Original route funding" counts={snapshot.route_funding} />
         <Counts title="Backed route receipts" counts={snapshot.route_receipts} />
+        <section className="card min-w-0 space-y-3" aria-labelledby="enterprise-payments-title">
+          <h2 id="enterprise-payments-title" className="text-lg font-semibold">Enterprise payment obligations</h2>
+          <p>{snapshot.organization_spending.healthy ? 'Original external obligations reconcile.' : 'Attention required: inspect original enterprise payments and refund work.'}</p>
+          <dl className="space-y-2">{Object.entries(snapshot.organization_spending).filter(([, value]) => typeof value === 'number').map(([name,value]) => <div key={name} className="flex gap-4"><dt className="min-w-0 flex-1 break-words capitalize">{label(name)}</dt><dd>{String(value)}</dd></div>)}</dl>
+          <p className="text-sm">Original payment recovery and refunds remain available. Routing admission controls apply to routing; enterprise purchasing keeps its separate grant and payment checks.</p>
+        </section>
         <Counts title="Account credit anomalies" counts={{ accounts: snapshot.account_credit.account_anomalies, missing_accounts: snapshot.account_credit.missing_accounts,
           deposits: snapshot.account_credit.deposit_anomalies, unsupported_mints: snapshot.account_credit.mint_anomalies,
           instant_sessions: snapshot.account_credit.instant_session_anomalies, instant_calls: snapshot.account_credit.instant_call_anomalies,

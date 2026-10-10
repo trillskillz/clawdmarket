@@ -52,6 +52,9 @@ test('routing operator health is admin-only and exposes aggregates without priva
   assert.equal(beforeBody.workers.webhooks.status, 'never_observed')
   assert.ok(beforeBody.alerts.some((alert: { code: string }) => alert.code === 'ROUTING_WORKER_UNHEALTHY'))
   assert.equal(beforeBody.financial_health.healthy, true)
+  assert.equal(beforeBody.organization_spending.healthy, true)
+  assert.equal(beforeBody.organization_spending.external_account_count, 0)
+  assert.equal(beforeBody.organization_spending.payment_claim_anomaly_count, 0)
   assert.deepEqual(beforeBody.migrations, [{ id: '2026-10-01-service-provider-protocol-v1', applied_at: '2026-10-01T00:00:00.000Z' }])
   assert.deepEqual(beforeBody.usage.services, {})
   assert.deepEqual(beforeBody.provider_execution, {
@@ -150,6 +153,19 @@ test('monitor health returns fixed aggregate alerts when inspection is unavailab
     assert.deepEqual(outcome.alerts, [{ code: 'ROUTE_MONITOR_UNAVAILABLE', count: 1, severity: 'critical' }])
     assert.equal(JSON.stringify(outcome).includes('missing_route_controls'), false)
   } finally { await db.$client.execute('ALTER TABLE missing_route_controls RENAME TO route_controls') }
+})
+
+test('missing enterprise claim storage makes monitoring unavailable without returning private database details',async()=>{
+  const {getRoutingMonitoringHealth}=await import('@/lib/routing-operator-snapshot')
+  await db.$client.execute('ALTER TABLE organization_spending_mpp_claims RENAME TO unavailable_enterprise_claims')
+  try{
+    const outcome=await getRoutingMonitoringHealth()
+    assert.equal(outcome.healthy,false)
+    assert.deepEqual(outcome.alerts,[{code:'ROUTE_MONITOR_UNAVAILABLE',count:1,severity:'critical'}])
+    const response=await inspect(request('/api/admin/routing/health','routing-admin'))
+    assert.equal(response.status,500);assert.equal(response.headers.get('cache-control'),'private, no-store')
+    const text=await response.text();assert.equal(text.includes('unavailable_enterprise_claims'),false);assert.equal(text.includes('organization_spending_mpp_claims'),false)
+  }finally{await db.$client.execute('ALTER TABLE unavailable_enterprise_claims RENAME TO organization_spending_mpp_claims')}
 })
 
 
