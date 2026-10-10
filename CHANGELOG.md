@@ -1,5 +1,11 @@
 # Changelog
 
+## Local HTTP 1.105 — enterprise SDK service purchasing (2026-10-10)
+
+- Add TypeScript/Python owner original-grant methods and separate organization-bound cmos_ service order/payment clients with typed immutable terms and caller-saved references.
+- Preserve exact original bytes/proofs, once-only keys, guarded explicit Tempo submission, unknown transport state and original buyer recovery after revocation.
+- Full predeploy: 741 cases, 736 passed, five expected skips; 17 Python cases, real private purchases/refunds in both languages, build, four browser journeys and 62-migration integrity passed. Local batch 8/10; no production change.
+
 ## Local HTTP 1.104 — supported original Tempo fee observations (2026-10-10)
 
 - Record sender-paid pathUSD costs from canonical original gas and matching protocol fee transfers, including reverted treasury attempts; preserve null for historical/unsupported models.

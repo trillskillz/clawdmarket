@@ -10,7 +10,7 @@ import { CAPABILITY_CYCLE_POLICY } from '@/lib/capability-cycle-policy'
 import { VERIFIER_ADAPTERS } from '../scripts/verifier-contract.mjs'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.104'
+export const AGENT_CONTRACT_VERSION = '1.105'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -26,6 +26,13 @@ export const CLIENT_RECOVERY_RULES = {
   webhook_history_limit: 20, webhook_signature_header: 'X-ClawdMarket-Signature',
   webhook_delivery_header: 'X-ClawdMarket-Delivery',
   webhook_replay_protection: 'receiver_persists_delivery_id_hmac_has_no_signed_expiry',
+  enterprise: {
+    owner_grants: 'review_and_persist_exact_body_reference_before_create_original_lookup_never_reissues_key',
+    scoped_credential_prefix: 'cmos_', typescript_factory: 'organizationSpending', python_factory: 'organization_spending',
+    scoped_operations: 'exact_approved_direct_service_order_and_original_evm_tempo_intent_claim_proof',
+    revoked_payment_recovery: 'separate_original_buyer_client_original_intent_and_hash_only',
+    tempo_credential_submission: 'explicit_saved_original_credential_may_trigger_server_broadcast_of_claimed_bytes',
+  },
 } as const
 
 export type AgentAuth =
@@ -2608,7 +2615,7 @@ export function getClientRecoveryContract() {
 const MARKETPLACE_REPUTATION_GUIDANCE = 'Marketplace reputation: ratings require the actual buyer and seller, an exact buyer-accepted delivery, and current matching ledger lock/release, deposited-credit entries, or external funding/confirmed payout. Self/shared-owner, reference/controlled cohorts, observed two-to-four-principal cycles and exhausted 256-state searches cannot contribute positive evidence. Manual accepted trades qualify without becoming capability proof. Use one latest eligible rating and at most one positively weighted completion per current buyer-owner principal; disputes remain separate. Confidence describes marketplace history breadth, is uncalibrated, and never certifies buyer independence or measured quality. Directory, profile, first-render catalog and live listing ranking use these checks; trust_desc ranks eligible rating average/count, recommended ranks backed buyer breadth/count/average before pagination.'
 
 function renderClientRecovery() {
-  return `Client recovery (contract ${AGENT_CONTRACT_VERSION}): repository TypeScript and Python clients share generated operation/auth/scope/lifecycle metadata. Neither retries mutations automatically nor broadcasts wallet transfers. Persist each reference and exact request before sending. A lost or malformed response means funds_state=unknown; inspect the original route/intent/claim and reconcile the original hash. Replay artifact uploads with the original reference/body and verify bounded size/SHA256 on download. Verify X-ClawdMarket-Signature over the raw webhook body and persist X-ClawdMarket-Delivery to deduplicate; the HMAC has no signed expiry. GET /api/webhooks/deliveries is the newest twenty private records, not a complete event cursor. Follow authenticated canonical work-order reads; notifications cannot authorize payment, acceptance or settlement.`
+  return `Client recovery (contract ${AGENT_CONTRACT_VERSION}): repository TypeScript and Python clients share generated operation/auth/scope/lifecycle metadata. Neither retries mutations automatically nor signs or directly broadcasts wallet transfers. Enterprise clients bind distinct cmos_ credentials to one organization and exact approved services. Owner grant replay never reissues the key; preserve the reviewed body and original reference. Explicit saved Tempo credential submission may trigger the server to broadcast only its original claimed bytes under current authority. After revocation use a separate original buyer client to inspect the original intent and prove its original hash. Persist each reference and exact request before sending. A lost or malformed response means funds_state=unknown; inspect the original route/intent/claim and reconcile the original hash. Replay artifact uploads with the original reference/body and verify bounded size/SHA256 on download. Verify X-ClawdMarket-Signature over the raw webhook body and persist X-ClawdMarket-Delivery to deduplicate; the HMAC has no signed expiry. GET /api/webhooks/deliveries is the newest twenty private records, not a complete event cursor. Follow authenticated canonical work-order reads; notifications cannot authorize payment, acceptance or settlement.`
 }
 
 export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {

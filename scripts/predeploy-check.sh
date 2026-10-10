@@ -2,6 +2,11 @@
 set -euo pipefail
 
 required_files=(
+  "sdk/typescript/src/enterprise.ts"
+  "sdk/python/clawdmarket/enterprise.py"
+  "tests/sdk/enterprise.test.ts"
+  "docs/ENTERPRISE_SDK.md"
+  "docs/ENTERPRISE_SDK_AUDIT.md"
   "lib/organization-spending-tempo-payment.ts"
   "lib/mpp-fund-api.ts"
   "app/api/organizations/[id]/spending-accounts/orders/[tradeId]/fund/mpp/[action]/route.ts"
