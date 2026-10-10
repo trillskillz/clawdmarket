@@ -2,6 +2,11 @@
 set -euo pipefail
 
 required_files=(
+  "app/routes/[id]/review/page.tsx"
+  "lib/buyer-review-artifact.ts"
+  "docs/BUYER_DELIVERY_REVIEW.md"
+  "e2e/buyer-delivery-review.spec.ts"
+  "tests/security/buyer-review-artifact.test.ts"
   "app/routes/[id]/page.tsx"
   "components/dashboard/RouteRecoveryTab.tsx"
   "docs/BUYER_ROUTE_RECOVERY.md"

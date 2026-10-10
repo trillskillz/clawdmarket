@@ -8,7 +8,7 @@
 
 **Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
 
-**Next:** P3 private buyer delivery review and exact content-hash acceptance over existing result/artifact/lifecycle APIs: review original private output and verification, make one explicit decision on the exact delivery hash, and recover original pending/confirmed payout, capacity and backed receipt without payment signing or replacement work. Private buyer route recovery is locally accepted in HTTP **1.99**, including all original attempts, order-bound unpaid cancellation, lost/conflicting command recovery and real disposable-chain late proof/refund. Human finite-workflow review is accepted over existing HTTP **1.98**, owner enterprise observation/configuration in **1.98**, and routing operations over existing HTTP **1.97**. Contracts **1.97–1.93** complete bounded approved-credit spending accounts, private providers, purchasing approvals, departmental ceilings and EVM workflows. The local publishing counter is **9/10**; no push or deployment is authorized before ten acceptance-complete capabilities. Other checkout paths and public discovery do not inherit these grants. Broader delegated rails/purchases and multi-node Tempo paid proof remain separate. Independent provider participation, production benchmark quality/calibration, paid production canaries and semantic proof retain external prerequisites. Global routing writes remain closed.
+**Next:** Publish and verify the combined **10/10** acceptance-complete batch through HTTP **1.99**, explicitly authorized by the user's 2026-10-10 instruction to push all commits together to GitHub/Vercel after private buyer delivery review. This final capability checks original private output/verification and bounded artifact bytes, binds one explicit acceptance to the exact delivery hash, and recovers original pending/confirmed payout, capacity and backed receipt. Use one PR, required CI and the migration-first Vercel workflow; verify production smoke, contract, readiness, reserves and private desktop/mobile access. After verification, the next substantive local batch resets to **0/10**. Remaining P0 independent-provider participation, production benchmark quality/calibration and paid production canaries require external prerequisites/authorization. Multi-node Tempo proof and broader delegated enterprise rails/purchases remain separate unfinished technical gates. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -122,7 +122,7 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | P1.5 | 3–5, 14 | **Partial; released in 1.90.** Current-backed work discovery, honest unmeasured capability confidence, evaluator-bound private peer benchmark recovery, explicit hierarchy discovery, immutable versioned/private server-checked JSON benchmark observations, bounded backed-cycle exclusions, external isolated Python tests and current-backed buyer reputation with bounded owner-principal feedback are complete. Independent production benchmark quality, confidence calibration and broader reputation quality evidence remain unfinished. Unknown-owner independence and cycles beyond four principals remain unresolved. Continue independent local work on P2.1 bounded workflow execution. |
 | P2.1 | 15 | **Local bounded EVM execution complete (1.93).** Owner-reviewed finite DAGs, inherited gross/fee/runtime caps, private dependency grants, explicit verification/acceptance and all-attempt reconciliation pass real disposable-chain crash/refund/race acceptance. Production activation remains closed; real multi-node Tempo proof and independent production rollout remain separate. |
 | P2.2 | 16 | **Bounded local direct-service enterprise acceptance complete through 1.97.** Department ceilings, explicit purchasing roles/approvals, two-owner private providers and separately bounded approved-credit spending accounts preserve existing authority and original recovery. Viewer/read keys remain read-only. Broader delegated rails/purchases require separate grants and acceptance. |
-| P3 | Website/control plane | **Routing operations (HTTP 1.97), owner enterprise (1.98), human workflow review (existing HTTP 1.98) and private buyer route recovery (1.99) locally accepted.** Original attempts, order-bound unpaid cancellation and real late-payment/refund recovery pass conflict, uncertainty, private mobile and economic regression gates. Next: private buyer delivery review and exact content-hash acceptance over existing result/artifact/lifecycle APIs. No separate UI economic lifecycle. |
+| P3 | Website/control plane | **Local acceptance complete through HTTP 1.99:** routing operations, owner enterprise configuration/history, human workflow review, buyer route recovery, and exact private delivery acceptance. Original attempts, bound unpaid cancellation, inert checked artifacts, lost/conflicting commands, real late refunds and pending/confirmed payout/receipt recovery pass private desktop/mobile and full economic regression. Existing economic lifecycles remain authoritative. Publish/verify the combined 10/10 batch before reopening the next local counter. |
 
 ## Rules for every future batch and release
 
@@ -1800,3 +1800,72 @@ original IDs through lost replies, confirm exactly one payout/capacity release a
 one backed receipt; pending or contradictory settlement must remain unresolved.
 Include private/keyboard/mobile and full economic/build/browser regression. This
 next item is not yet acceptance-complete or counted.
+
+
+### P3 acceptance complete — private buyer delivery review (existing HTTP 1.99)
+
+The substantive batch is **10/10**. `/routes/{id}/review`, linked from original
+route recovery, uses existing private route/result/verification/lifecycle and
+artifact APIs. Original buyer authority remains exclusive; linked human agent
+owners cannot inherit route or acceptance access. No schema/API contract, funding,
+settlement or capacity state machine changed. HTTP stays **1.99**.
+
+Review binds route/order/trade/delivery/content hash and current acceptance across
+reads. It displays original private summary/inline output, recorded verification
+categories and exact-delivery evidence. Provider URLs remain inert text and are
+never retrieved. Fixed same-origin authenticated artifact downloads reject redirects,
+limit bytes/count/time, cross-check size/MIME/hash headers and independently compute
+SHA-256. Text/JSON is inert; binary content has checked size/hash. Missing, expired,
+corrupt or denied bytes invalidate the whole inspection. No new persistent storage,
+remote previews, signing, funding, replacement orders or acceptance retries exist.
+
+Explicit acknowledgment sends one existing version-1 `action:accept` command for
+the exact inspected hash. CSRF, read generations, identity guards, command locking
+and 60-second freshness (including click-time checks) protect the decision. Changed,
+stale, denied or unavailable inspection and lost/conflicting commands require manual
+original-state refresh. Accepted work exposes no new decision. One explicit existing
+`action:observe` pass can recover only already accepted settlement or its original
+backed receipt. Submitted/pending payouts retain held capacity and no receipt;
+contradictory financial evidence remains unresolved under the existing lifecycle.
+
+Built-app actual-chain acceptance passes with public dummy wallets on an unforked
+loopback Anvil: actual route reservation, exact EVM intent/proof/token funding,
+private artifact upload/provider delivery, keyboard buyer acceptance, an aborted
+committed 202 response while mining is paused, manual recovery of the original
+accepted/settling state, original payout mining/cron recovery and receipt persistence.
+Exact balances prove one 950,000-unit seller payout from one 1,000,000-unit buyer
+payment, one original order/trade, one capacity release, one transfer and one backed
+receipt. Original IDs and inspected hash survive response loss. No remote delivery
+request or injected script runs. Desktop/mobile screenshots and overflow checks pass.
+
+Negative browser gates cover changed exact hash (409 with no decision/payout),
+corrupt or unavailable bytes/results, stale inspection, foreign buyer/sign-out,
+linked-owner denial, missing CSRF, fixed private diagnostics and no command retry.
+The existing original late-payment/refund and funded cancellation browser cases
+also pass on the real chain. Artifact security tests reject forged hashes, short,
+corrupt/oversized streams, unsafe identities and metadata beyond the byte limit.
+
+Final acceptance: **709 automated cases: 704 passed, five expected skips**, including
+actual chain financial/crash/race cases, real external isolation and idempotent legacy
+migration replay through ID 60. Typecheck, SDK contract/build, **13 Python client
+cases**, lint and production build pass. **76 browser/API journeys pass without
+retries:** six actual-chain buyer cases plus 70 remaining cases; four retired legacy
+credit/instant cases are expected skips. Initial concurrent full gate had one existing
+workflow fallback `BUYER_HTTP_402`; isolation passed unchanged, and the final full
+rerun alone passed all 704, including that exact refund/fallback scenario. Retain the
+failed log rather than counting it as acceptance.
+
+Evidence: `/tmp/clawdmarket-delivery-review-predeploy-accepted.log`,
+`/tmp/clawdmarket-delivery-review-build.log`,
+`/tmp/clawdmarket-delivery-review-browser-chain.log`,
+`/tmp/clawdmarket-delivery-review-browser-matrix.log`,
+`/tmp/clawdmarket-delivery-review-matrix-schema.log`, and
+`/tmp/clawdmarket-delivery-review-workflow-isolation.log`.
+Runbook: [BUYER_DELIVERY_REVIEW.md](docs/BUYER_DELIVERY_REVIEW.md).
+
+The user explicitly authorized one combined GitHub/Vercel publication once this
+part finished. Wait for required CI, use additive migration-first deployment,
+and verify same-release production smoke/readiness/payment reserves and private
+browser access. Release verification belongs to that combined PR/deployment record;
+then reset the next local substantive batch to 0/10. No live funds or global rollout
+flag changes are authorized by this publication.

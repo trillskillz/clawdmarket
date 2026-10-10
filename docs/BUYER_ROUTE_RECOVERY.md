@@ -39,6 +39,9 @@ refund path; cancellation alone is not a refund. Funded delivery, hash-bound buy
 review, disputes, payout/refund and original result recovery stay under existing
 trade controls. The page links those controls and displays original trade IDs.
 It does not sign/broadcast payment, reserve fallback work or accept delivery.
+**Review original private delivery** opens the separate
+[hash-bound buyer review page](BUYER_DELIVERY_REVIEW.md), using the same original
+buyer authority and existing acceptance/settlement APIs.
 Private input and inspection responses stay in page memory; this page adds no
 persistent storage, query parameters or custom analytics payloads.
 
