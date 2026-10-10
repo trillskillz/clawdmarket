@@ -34,3 +34,5 @@ For the original order, use `/api/organizations/{id}/spending-accounts/orders/{t
 The scoped key cannot authenticate to general buyer APIs, issue approvals, top up, withdraw, accept deliveries or purchase listings/tasks/contracts/routes/workflows. Original provider delivery, explicit buyer acceptance, payout, dispute and refund remain existing state machines. Private service orders remain excluded from public completion proofs.
 
 Acceptance uses the pinned owned disposable Tempo node, public dummy keys and isolated local databases. Real chain balance assertions independently include receipt fees. These observations do not claim that persisted Tempo fee accounting is complete or that production fork compatibility has passed. Production enterprise writes and global routing retain their existing closed gates. See [the acceptance audit](ORGANIZATION_TEMPO_SPENDING_AUDIT.md).
+
+Buyer-host recovery for original approved orders: [BUYER_SPENDING_WORKER.md](BUYER_SPENDING_WORKER.md).

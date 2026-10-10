@@ -90,3 +90,5 @@ reserves, changed department ceilings, private payout, late full refund,
 fee-retaining dispute refund, cross-process gross/gas reservation races and
 SIGKILL at original intent/claim/broadcast/verified-receipt boundaries.
 The master plan records the final acceptance evidence and publishing counter.
+
+Buyer-host recovery for original approved orders: [BUYER_SPENDING_WORKER.md](BUYER_SPENDING_WORKER.md).

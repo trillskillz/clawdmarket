@@ -70,6 +70,8 @@ required_files=(
   "lib/workflow-reconciliation.ts"
   "lib/workflow-execution-http.ts"
   "scripts/buyer-workflow-worker.mjs"
+  "scripts/buyer-spending-worker.mjs"
+  "docs/BUYER_SPENDING_WORKER.md"
   "docs/WORKFLOW_EXECUTION_LOCAL.md"
   "app/api/workflows/[id]/execute/route.ts"
   "app/api/workflows/[id]/nodes/[key]/prepare/route.ts"
@@ -293,6 +295,11 @@ done
 
 if grep -Fqx '/sdk/' .vercelignore; then
   echo "Vercel build excludes the TypeScript SDK source imported by tests/sdk; remove /sdk/ from .vercelignore" >&2
+  exit 1
+fi
+
+if ! grep -Fqx '!/scripts/buyer-spending-worker.mjs' .vercelignore; then
+  echo "Vercel build excludes the buyer enterprise worker imported by acceptance tests" >&2
   exit 1
 fi
 

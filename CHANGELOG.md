@@ -1,5 +1,10 @@
 # Changelog
 
+## Local buyer-host enterprise payment recovery (unchanged HTTP 1.101; 2026-10-10)
+
+- Add a private reviewed original-order client for L1 and Tempo with durable shared wallet locking, exact intent/claim/signed-byte recovery and original buyer hash reconciliation after revocation. Pending refunds keep the wallet held until confirmation.
+- Prove real separate processes, lost intent/claim/RPC/SDK responses, SIGKILL and confirmed original refunds on disposable nodes. Full predeploy passed 726 cases (721 passed, five expected skips). Local batch 4/10; no production change.
+
 ## Local HTTP 1.101 — bounded delegated Tempo service payments (2026-10-10)
 
 - Add separate version-3 reviewed Tempo grants with immutable fee-token terms, unrecycled gross/lifetime fee exposure, original SDK challenges and exact unsponsored transaction claims; preserve credit/L1 grants.
