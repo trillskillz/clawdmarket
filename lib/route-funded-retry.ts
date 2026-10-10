@@ -10,6 +10,7 @@ import { routeExecutionEnabled } from './routing-feature-flags'
 import { serviceSupportsRoute } from './route-service-eligibility'
 import type { RouteCandidate } from './route-planning'
 import type { RequestPrincipal } from './request-principal'
+import { workflowTransaction } from './workflow-approval'
 
 export type RouteRetryCommand = { version: 1; mandate_id: string; previous_trade_id: string; retry_operation_id: string }
 export async function inspectFundedRouteRetry(routeId: string, buyerId: string) {
@@ -38,7 +39,9 @@ export async function reserveFundedRouteRetry(routeId: string, principal: Reques
     return retryResponse(plan, prior, true)
   }
   if (!routeExecutionEnabled(principal.userId)) throw new RouteRetryError('ROUTE_EXECUTION_DISABLED', 503)
-  const terms = await freshRouteRetryTerms(command.mandate_id, plan)
+  // Workflow counters and their ledger must describe one committed snapshot.
+  // Another child may reserve while this read-only retry preflight is running.
+  const terms = await workflowTransaction((tx) => freshRouteRetryTerms(command.mandate_id, plan, tx))
   const steps = await listRouteFundingSteps(db, routeId)
   if (steps.length >= terms.max_attempts) throw new RouteRetryError('MANDATE_ATTEMPTS_EXHAUSTED')
   await assertRouteRetryReconciled(db, routeId, command.previous_trade_id, principal.userId)

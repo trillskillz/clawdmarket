@@ -1,0 +1,7 @@
+.page textarea { display: block; width: 100%; min-height: 240px; margin-top: 10px; padding: 12px; border: 1px solid var(--site-line); background: var(--site-surface); color: var(--site-ink); font: 12px/1.6 'JetBrains Mono', monospace; }
+.page textarea:focus-visible { outline: 2px solid var(--site-signal); outline-offset: 4px; }
+.page pre { margin-top: 16px; padding: 16px; border: 1px solid var(--site-line); white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.6 'JetBrains Mono', monospace; }
+.terms { margin-top: 24px; }
+.terms > * + * { margin-top: 20px; }
+.page .check { display: flex; align-items: flex-start; gap: 12px; margin: 24px 0; }
+.page .check input { width: 20px; height: 20px; min-height: 20px; flex: none; margin-top: 4px; }

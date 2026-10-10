@@ -2,6 +2,10 @@
 set -euo pipefail
 
 required_files=(
+  "app/workflows/[id]/review/page.tsx"
+  "components/dashboard/WorkflowReviewsTab.tsx"
+  "docs/WORKFLOW_OWNER_REVIEW.md"
+  "e2e/workflow-owner-review.spec.ts"
   "app/organizations/[id]/page.tsx"
   "components/dashboard/EnterpriseTab.tsx"
   "lib/organization-purchase-history.ts"
