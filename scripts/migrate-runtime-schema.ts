@@ -872,6 +872,7 @@ async function main() {
       await ensureColumns(database,'organization_spending_accounts',{version:'INTEGER NOT NULL DEFAULT 1',payment_terms_json:'TEXT'})
       await database.executeMultiple(await readFile(new URL('../migrations/2026-10-10-organization-external-spending-v2.sql',import.meta.url),'utf8'))
     }})
+    migrations.push({id:'2026-10-10-organization-tempo-spending-v3',run:async(database:Client)=>{await database.executeMultiple(await readFile(new URL('../migrations/2026-10-10-organization-tempo-spending-v3.sql',import.meta.url),'utf8'))}})
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',

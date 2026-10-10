@@ -2,7 +2,7 @@ import 'server-only'
 import { and, eq, isNull, or } from 'drizzle-orm'
 import { createPublicClient, erc20Abi, http, parseUnits, type Address } from 'viem'
 import { db } from './db'
-import { buyer_evm_payment_claims, buyer_mpp_payment_claims, evm_payment_intents, organization_spending_payment_claims as claims, payment_receipts } from './schema'
+import { buyer_evm_payment_claims, buyer_mpp_payment_claims, evm_payment_intents, organization_spending_payment_claims as claims, payment_receipts, organization_spending_mpp_claims } from './schema'
 import { originalSpendingPayment, spendingFundingEligibility, spendingPaymentTerms } from './organization-spending-accounts'
 import { purchasingTransaction, PurchasingError, type PurchasingSource } from './organization-purchasing-transaction'
 import { inspectSignedEvmPayment, assertBuyerWalletReserve } from './buyer-signed-transaction.mjs'
@@ -15,13 +15,16 @@ import type { BuyerPaymentClaimInput } from './buyer-payment-claim'
 /** Cross-family wallet collisions are checked in the same transaction as the immutable claim. */
 export async function spendingWalletConflict(source:PurchasingSource,chain:number,payer:string,nonce:number){
   const [row]=await source.select().from(claims).where(and(eq(claims.chain_id,chain),eq(claims.payer_address,payer),or(eq(claims.state,'claimed'),eq(claims.nonce,nonce)))).limit(1)
-  return row?(row.state==='claimed'?'BUYER_WALLET_PAYMENT_UNRECONCILED':'BUYER_WALLET_NONCE_ALREADY_CLAIMED'):null
+  if(row)return row.state==='claimed'?'BUYER_WALLET_PAYMENT_UNRECONCILED':'BUYER_WALLET_NONCE_ALREADY_CLAIMED'
+  const [tempo]=await source.select().from(organization_spending_mpp_claims).where(and(eq(organization_spending_mpp_claims.chain_id,chain),eq(organization_spending_mpp_claims.payer_address,payer),or(eq(organization_spending_mpp_claims.state,'claimed'),eq(organization_spending_mpp_claims.nonce,nonce)))).limit(1)
+  return tempo?(tempo.state==='claimed'?'BUYER_WALLET_PAYMENT_UNRECONCILED':'BUYER_WALLET_NONCE_ALREADY_CLAIMED'):null
 }
 export async function claimSpendingEvmPayment(tradeId:string,buyerId:string,input:BuyerPaymentClaimInput){
   return purchasingTransaction(async tx=>{
     const original=await originalSpendingPayment(tx,tradeId)
-    if(!original||original.trade.buyer_id!==buyerId||original.account.id!==input.mandate_id||original.trade.payment_rail!=='evm')throw new PurchasingError('BUYER_PAYMENT_SCOPE_MISMATCH')
+    if(!original||original.account.version!==2||original.trade.buyer_id!==buyerId||original.account.id!==input.mandate_id||original.trade.payment_rail!=='evm')throw new PurchasingError('BUYER_PAYMENT_SCOPE_MISMATCH')
     const {account,trade}=original,{payment,token_decimals,token_usd_price}=spendingPaymentTerms(account)
+    if(payment.rail!=='evm')throw new PurchasingError('SPENDING_PAYMENT_TERMS_MISMATCH')
     const [intent]=await tx.select().from(evm_payment_intents).where(and(eq(evm_payment_intents.id,input.intent_id),eq(evm_payment_intents.trade_id,tradeId))).limit(1)
     if(!intent||!intent.buyer_operation_id||intent.buyer_operation_id!==input.buyer_operation_id)throw new PurchasingError('BUYER_OPERATION_CONFLICT')
     if(intent.token_decimals!==token_decimals||intent.token_usd_price!==token_usd_price||intent.token_amount!==parseUnits((trade.total_cost/token_usd_price).toFixed(token_decimals),token_decimals).toString())throw new PurchasingError('SPENDING_PAYMENT_TERMS_MISMATCH')
@@ -65,6 +68,7 @@ export async function claimSpendingEvmPayment(tradeId:string,buyerId:string,inpu
   })
 }
 export async function recordSpendingPayment(source:PurchasingSource,tradeId:string){
+  await (await import('./organization-spending-tempo-payment')).recordOrganizationTempoPayment(source,tradeId)
   const [intent]=await source.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id,tradeId)).limit(1)
   const [receipt]=await source.select().from(payment_receipts).where(eq(payment_receipts.trade_id,tradeId)).limit(1)
   if(intent?.tx_hash&&receipt?.tx_hash===intent.tx_hash&&receipt.payment_rail==='evm'&&receipt.chain_id===intent.chain_id

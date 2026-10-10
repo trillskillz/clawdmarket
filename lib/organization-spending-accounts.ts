@@ -22,8 +22,9 @@ const creditAccountInput=z.object({version:z.literal(1),client_reference:referen
   max_purchase:money,max_daily:money,max_monthly:money,max_lifetime:money,
   expires_at:z.string().datetime({offset:true}).transform(value=>new Date(value))}).strict()
 const externalPayment=routeMandatePaymentInput.options[0].extend({chain_id:z.union([z.literal(1),z.literal(11155111)]),max_lifetime_gas_cost_wei:z.string().regex(/^[1-9][0-9]{0,77}$/)}).strict()
+const tempoPayment=routeMandatePaymentInput.options[1].extend({chain_id:z.literal(4217),max_lifetime_fee_token_cost_units:z.string().regex(/^[1-9][0-9]{0,77}$/)}).strict()
 export const spendingAccountInput=z.discriminatedUnion('version',[
-  creditAccountInput,creditAccountInput.extend({version:z.literal(2),payment:externalPayment}).strict(),
+  creditAccountInput,creditAccountInput.extend({version:z.literal(2),payment:externalPayment}).strict(),creditAccountInput.extend({version:z.literal(3),payment:tempoPayment}).strict(),
 ])
 export const spendingExternalPaymentInput=externalPayment
 export const spendingOrderInput=z.object({service_id:z.string().uuid(),order:serviceOrderInput}).strict()
@@ -33,7 +34,7 @@ const credentialHash=(key:string)=>hashAgentApiKey(`organization-spend:${key}`)
 const live=(date:Date)=>Number.isFinite(date.getTime())&&date.getTime()>Date.now()
 function writes(){if(!enterpriseFoundationEnabled())throw new PurchasingError('ORGANIZATION_SPENDING_DISABLED',503)}
 function authority(row:Pick<Account,'organization_id'|'owner_account_id'|'buyer_agent_id'|'team_id'|'cost_center'|'client_reference'|'name'|'allowed_services_json'|'max_purchase_minor'|'max_daily_minor'|'max_monthly_minor'|'max_lifetime_minor'|'expires_at'> & {version?:number;payment_terms_json?:string|null}){
-  return digest({version:row.version??1,...(row.version===2?{payment_terms_json:row.payment_terms_json}:{}),organization_id:row.organization_id,owner_account_id:row.owner_account_id,buyer_agent_id:row.buyer_agent_id,
+  return digest({version:row.version??1,...(row.version!==undefined&&row.version>=2?{payment_terms_json:row.payment_terms_json}:{}),organization_id:row.organization_id,owner_account_id:row.owner_account_id,buyer_agent_id:row.buyer_agent_id,
     team_id:row.team_id,cost_center:row.cost_center,client_reference:row.client_reference,name:row.name,allowed_services_json:row.allowed_services_json,
     max_purchase_minor:row.max_purchase_minor,max_daily_minor:row.max_daily_minor,max_monthly_minor:row.max_monthly_minor,max_lifetime_minor:row.max_lifetime_minor,
     expires_at:row.expires_at.toISOString()})
@@ -56,8 +57,8 @@ export async function currentSpendingAccount(row:Account,source:PurchasingSource
   let allowed:z.output<typeof allowedService>[]
   try{allowed=creditAccountInput.shape.allowed_services.parse(JSON.parse(row.allowed_services_json));if(authority(row)!==row.authority_hash)throw Error('authority changed')}
   catch{throw new PurchasingError('SPENDING_AUTHORITY_INVALID')}
-  if(row.version===1 ? row.payment_terms_json!==null : row.version!==2)throw new PurchasingError('SPENDING_AUTHORITY_INVALID')
-  if(row.version===2)spendingPaymentTerms(row)
+  if(row.version===1 ? row.payment_terms_json!==null : ![2,3].includes(row.version))throw new PurchasingError('SPENDING_AUTHORITY_INVALID')
+  if(row.version>=2)spendingPaymentTerms(row)
   const assignment=await buyerScope(row.organization_id,row.owner_account_id,row.buyer_agent_id,source)
   if(assignment.team_id!==row.team_id||assignment.cost_center!==row.cost_center)throw new PurchasingError('SPENDING_BUYER_SCOPE_CHANGED')
   return allowed
@@ -66,8 +67,8 @@ export function spendingAccountDto(row:Account){
   return {version:row.version,id:row.id,organization_id:row.organization_id,buyer_agent_id:row.buyer_agent_id,team_id:row.team_id,cost_center:row.cost_center,name:row.name,
     allowed_services:JSON.parse(row.allowed_services_json),max_purchase:(row.max_purchase_minor/100).toFixed(2),max_daily:(row.max_daily_minor/100).toFixed(2),
     max_monthly:(row.max_monthly_minor/100).toFixed(2),max_lifetime:(row.max_lifetime_minor/100).toFixed(2),state:row.state,expires_at:row.expires_at,created_at:row.created_at,
-    revoked_at:row.revoked_at,credential_prefix:row.credential_prefix,authority:row.version===2?'approved_direct_service_evm' as const:'approved_direct_service_credit' as const,
-    ...(row.version===2?{payment:spendingPaymentTerms(row).payment}: {})}
+    revoked_at:row.revoked_at,credential_prefix:row.credential_prefix,authority:row.version===3?'approved_direct_service_mpp' as const:row.version===2?'approved_direct_service_evm' as const:'approved_direct_service_credit' as const,
+    ...(row.version>=2?{payment:spendingPaymentTerms(row).payment}: {})}
 }
 async function owned(orgId:string,actor:string,source:PurchasingSource){
   const [org]=await source.select().from(organizations).where(and(eq(organizations.id,orgId),eq(organizations.owner_account_id,actor))).limit(1)
@@ -79,7 +80,7 @@ export async function createSpendingAccount(orgId:string,actor:string,input:z.ou
     await owned(orgId,actor,tx)
     const assignment=await buyerScope(orgId,actor,input.buyer_agent_id,tx)
     if(assignment.team_id!==input.team_id||assignment.cost_center!==input.cost_center)throw new PurchasingError('SPENDING_BUYER_SCOPE_CHANGED')
-    const proposed={version:input.version,payment_terms_json:input.version===2?canonicalContract({payment:input.payment,...externalPaymentContract(input.payment)}):null,organization_id:orgId,owner_account_id:actor,buyer_agent_id:input.buyer_agent_id,team_id:assignment.team_id,cost_center:assignment.cost_center,
+    const proposed={version:input.version,payment_terms_json:input.version===1?null:canonicalContract({payment:input.payment,...externalPaymentContract(input.payment)}),organization_id:orgId,owner_account_id:actor,buyer_agent_id:input.buyer_agent_id,team_id:assignment.team_id,cost_center:assignment.cost_center,
       client_reference:input.client_reference,name:input.name,allowed_services_json:JSON.stringify(input.allowed_services),
       max_purchase_minor:input.max_purchase,max_daily_minor:input.max_daily,max_monthly_minor:input.max_monthly,max_lifetime_minor:input.max_lifetime,expires_at:input.expires_at}
     const hash=authority(proposed),[prior]=await tx.select().from(accounts).where(and(eq(accounts.organization_id,orgId),eq(accounts.client_reference,input.client_reference))).limit(1)
@@ -123,7 +124,7 @@ export async function validateSpendingPurchase(source:PurchasingSource,evidence:
   const [row]=await source.select().from(accounts).where(and(eq(accounts.id,evidence.accountId),eq(accounts.credential_hash,evidence.credentialHash))).limit(1)
   if(!row||row.organization_id!==evidence.organizationId||buyerId!==evidence.buyerId||row.buyer_agent_id!==evidence.agentId)throw new PurchasingError('SPENDING_BUYER_SCOPE_CHANGED')
   writes();const allowed=await currentSpendingAccount(row,source)
-  if(order.payment_rail!==(row.version===2?'evm':'credit')||!order.purchasing_approval_id)throw new PurchasingError(row.version===2?'SPENDING_EXACT_EXTERNAL_APPROVAL_REQUIRED':'SPENDING_EXACT_CREDIT_APPROVAL_REQUIRED')
+  if(order.payment_rail!==spendingRail(row)||!order.purchasing_approval_id)throw new PurchasingError(row.version>=2?'SPENDING_EXACT_EXTERNAL_APPROVAL_REQUIRED':'SPENDING_EXACT_CREDIT_APPROVAL_REQUIRED')
   if(!allowed.some(service=>service.service_id===serviceId&&service.provider_share_id===(order.provider_share_id??null)))throw new PurchasingError('SPENDING_SERVICE_SCOPE_MISMATCH')
   if(!Number.isSafeInteger(totalMinor)||totalMinor<1)throw new PurchasingError('SPENDING_AMOUNT_INVALID')
   const invalid=await source.all(sql`SELECT u.order_id FROM organization_spending_uses u
@@ -132,7 +133,7 @@ export async function validateSpendingPurchase(source:PurchasingSource,evidence:
     WHERE u.account_id=${row.id} AND (o.id IS NULL OR t.id IS NULL OR approval.order_id IS NULL
       OR o.organization_spending_account_id IS NOT ${row.id} OR o.trade_id<>t.id
       OR u.authority_hash<>${row.authority_hash} OR u.buyer_id<>${buyerId} OR o.buyer_id<>${buyerId} OR t.buyer_id<>${buyerId}
-      OR o.payment_rail<>${row.version===2?'evm':'credit'} OR t.payment_rail<>o.payment_rail OR u.amount_minor<>CAST(ROUND(t.total_cost*100) AS INTEGER)
+      OR o.payment_rail<>${spendingRail(row)} OR t.payment_rail<>o.payment_rail OR u.amount_minor<>CAST(ROUND(t.total_cost*100) AS INTEGER)
       OR approval.amount_minor<>u.amount_minor OR approval.trade_id<>t.id OR approval.buyer_id<>${buyerId}
       OR u.created_at<>o.created_at*1000) LIMIT 1`)
   const orphan=await source.all(sql`SELECT o.id FROM service_orders o WHERE o.organization_spending_account_id=${row.id}
@@ -146,9 +147,11 @@ export async function validateSpendingPurchase(source:PurchasingSource,evidence:
     if(!Number.isSafeInteger(spent)||spent<0)throw new PurchasingError('SPENDING_USAGE_INVALID')
     if(spent+(alreadyReserved&&code!=='SPENDING_PURCHASE_LIMIT'?0:totalMinor)>limit)throw new PurchasingError(code)
   }
-  if(row.version===2){const payment=spendingPaymentTerms(row).payment
+  if(row.version>=2){const payment=spendingPaymentTerms(row).payment
     const count=Number(usage.count)+(alreadyReserved?0:1)
-    if(!Number.isSafeInteger(count)||count<1||BigInt(count)*BigInt(payment.max_gas_cost_wei)>BigInt(payment.max_lifetime_gas_cost_wei))throw new PurchasingError('SPENDING_GAS_LIFETIME_LIMIT')
+    if(!Number.isSafeInteger(count)||count<1)throw new PurchasingError('SPENDING_USAGE_INVALID')
+    if(payment.rail==='evm'?BigInt(count)*BigInt(payment.max_gas_cost_wei)>BigInt(payment.max_lifetime_gas_cost_wei)
+      :BigInt(count)*BigInt(payment.max_fee_token_cost_units)>BigInt(payment.max_lifetime_fee_token_cost_units))throw new PurchasingError(payment.rail==='evm'?'SPENDING_GAS_LIFETIME_LIMIT':'SPENDING_FEE_LIFETIME_LIMIT')
     const frozen=spendingPaymentTerms(row),configured=externalPaymentContract(payment)
     if(frozen.token_decimals!==configured.token_decimals||frozen.token_usd_price!==configured.token_usd_price)throw new PurchasingError('SPENDING_PAYMENT_TERMS_MISMATCH')
   }
@@ -159,16 +162,16 @@ export async function consumeSpendingPurchase(source:PurchasingSource,validated:
     order_id:orderId,trade_id:tradeId,created_at:createdAt})
 }
 
-function externalPaymentContract(payment:z.output<typeof externalPayment>){
-  const {max_lifetime_gas_cost_wei:_,...terms}=payment
+function externalPaymentContract(payment:z.output<typeof externalPayment>|z.output<typeof tempoPayment>){
+  const terms=payment.rail==='evm'?externalPayment.omit({max_lifetime_gas_cost_wei:true}).parse(paymentWithoutLifetime(payment)):tempoPayment.omit({max_lifetime_fee_token_cost_units:true}).parse(paymentWithoutLifetime(payment))
   try{return paymentContract(terms)}catch(error){if(error instanceof RouteMandateError)throw new PurchasingError(error.code);throw error}
 }
 export function spendingPaymentTerms(row:Account){
   try{
-    if(row.version!==2||authority(row)!==row.authority_hash)throw Error('invalid grant')
-    const raw=JSON.parse(row.payment_terms_json!),payment=externalPayment.parse(raw.payment)
-    if(canonicalContract({payment,token_decimals:raw.token_decimals,token_usd_price:raw.token_usd_price})!==row.payment_terms_json
-      ||!Number.isInteger(raw.token_decimals)||raw.token_decimals<0||raw.token_decimals>36||!Number.isFinite(raw.token_usd_price)||raw.token_usd_price<=0)throw Error('invalid terms')
+    if(![2,3].includes(row.version)||authority(row)!==row.authority_hash)throw Error('invalid grant')
+    const raw=JSON.parse(row.payment_terms_json!),payment=row.version===2?externalPayment.parse(raw.payment):tempoPayment.parse(raw.payment)
+    if(canonicalContract({payment,token_decimals:raw.token_decimals,token_usd_price:raw.token_usd_price,...(payment.rail==='mpp'?{fee_token_decimals:raw.fee_token_decimals}:{})})!==row.payment_terms_json
+      ||payment.rail==='mpp'&&raw.fee_token_decimals!==6||!Number.isInteger(raw.token_decimals)||raw.token_decimals<0||raw.token_decimals>36||!Number.isFinite(raw.token_usd_price)||raw.token_usd_price<=0)throw Error('invalid terms')
     return {payment,token_decimals:raw.token_decimals as number,token_usd_price:raw.token_usd_price as number}
   }catch{throw new PurchasingError('SPENDING_AUTHORITY_INVALID')}
 }
@@ -181,7 +184,7 @@ export async function originalSpendingPayment(source:PurchasingSource,tradeId:st
   const [trade]=await source.select().from(trades).where(eq(trades.id,tradeId)).limit(1)
   if(!account||!use||!trade||use.account_id!==account.id||use.trade_id!==tradeId||use.authority_hash!==account.authority_hash
     ||trade.buyer_id!==use.buyer_id||order.buyer_id!==use.buyer_id||use.amount_minor!==Math.round(trade.total_cost*100))throw new PurchasingError('SPENDING_USAGE_INVALID')
-  return {account,order,use,trade,...(account.version===2?spendingPaymentTerms(account):{})}
+  return {account,order,use,trade,...(account.version>=2?spendingPaymentTerms(account):{})}
 }
 export async function spendingFundingEligibility(trade:typeof trades.$inferSelect,source:PurchasingSource=db,
   actual?:{rail:string;chainId:number;tokenAddress:string;payerAddress:string;treasuryAddress?:string}){
@@ -189,7 +192,7 @@ export async function spendingFundingEligibility(trade:typeof trades.$inferSelec
     const original=await originalSpendingPayment(source,trade.id)
     if(!original)return null
     const {account,order}=original
-    if(account.version!==2)return 'SPENDING_EXACT_CREDIT_APPROVAL_REQUIRED'
+    if(account.version<2)return 'SPENDING_EXACT_CREDIT_APPROVAL_REQUIRED'
     const {payment}=spendingPaymentTerms(account)
     const evidence=issueOrganizationSpendingEvidence({accountId:account.id,organizationId:account.organization_id,buyerId:trade.buyer_id,agentId:account.buyer_agent_id,credentialHash:account.credential_hash})
     await validateSpendingPurchase(source,evidence,order.service_id,trade.buyer_id,{payment_rail:order.payment_rail,purchasing_approval_id:order.purchasing_approval_id!,provider_share_id:order.private_provider_share_id??undefined},Math.round(trade.total_cost*100),true)
@@ -197,4 +200,10 @@ export async function spendingFundingEligibility(trade:typeof trades.$inferSelec
       ||actual.payerAddress.toLowerCase()!==payment.payer_address||actual.treasuryAddress&&actual.treasuryAddress.toLowerCase()!==payment.treasury_address))return 'SPENDING_PAYMENT_TERMS_MISMATCH'
     return null
   }catch(error){if(error instanceof PurchasingError)return error.code;throw error}
+}
+
+function spendingRail(row:Account){return row.version===1?'credit':spendingPaymentTerms(row).payment.rail}
+function paymentWithoutLifetime(payment:z.output<typeof externalPayment>|z.output<typeof tempoPayment>){
+  if(payment.rail==='evm'){const {max_lifetime_gas_cost_wei:_,...terms}=payment;return terms}
+  const {max_lifetime_fee_token_cost_units:_,...terms}=payment;return terms
 }

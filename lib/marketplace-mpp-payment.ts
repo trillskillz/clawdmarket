@@ -1,3 +1,4 @@
+import { originalSpendingPayment } from './organization-spending-accounts'
 import { findTradeFundingStep } from './route-funding-steps'
 import 'server-only'
 import { AsyncLocalStorage } from 'node:async_hooks'
@@ -56,7 +57,7 @@ export async function assertMarketplaceMppPullAllowed(tradeId: string, payer?: s
     || await serviceFundingEligibility(trade)
   if (reason) throw new TradeFundingError('Current checkout authority does not permit a new broadcast', 409, reason)
   const step = await findTradeFundingStep(db, tradeId)
-  if (step) {
+  if (step || await originalSpendingPayment(db,tradeId)) {
     if (!pull) throw new TradeFundingError('MPP mandate pull funding requires the original claimed credential', 409, 'MPP_MANDATE_PULL_NOT_READY')
     if (markSubmission) {
       const rpcUrl = getTempoRpcUrl()

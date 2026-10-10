@@ -1,5 +1,11 @@
 # Changelog
 
+## Local HTTP 1.101 — bounded delegated Tempo service payments (2026-10-10)
+
+- Add separate version-3 reviewed Tempo grants with immutable fee-token terms, unrecycled gross/lifetime fee exposure, original SDK challenges and exact unsponsored transaction claims; preserve credit/L1 grants.
+- Recheck current authority/reserves at the actual SDK broadcast, share wallet/nonce holds across rails, and recover original verified receipts/refunds after revocation.
+- Real private payout, provider restart, seven process-kill boundaries, full predeploy/build, migration 62 replay and owner desktop/mobile acceptance passed. Local batch 3/10; production remains 1.99 with writes closed.
+
 ## Local HTTP 1.100 — bounded delegated L1 service payments (2026-10-10)
 
 - Add separately reviewed version-2 Ethereum L1/Sepolia service grants with fixed wallet/token/treasury/reserves and original gross/lifetime gas ceilings; preserve version-1 credit fingerprints and read-key scope.
