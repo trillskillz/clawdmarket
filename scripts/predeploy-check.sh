@@ -280,6 +280,11 @@ if grep -Fqx '/sdk/' .vercelignore; then
   exit 1
 fi
 
+if ! grep -Fqx '!/scripts/buyer-workflow-worker.mjs' .vercelignore; then
+  echo "Vercel build excludes the buyer workflow worker imported by acceptance tests; include it in .vercelignore" >&2
+  exit 1
+fi
+
 if command -v rg >/dev/null 2>&1; then
   proxy_has_passthrough() {
     rg -q "startsWith\('/api/'\)|NextResponse\.next\(\)" proxy.ts

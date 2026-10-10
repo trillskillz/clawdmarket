@@ -32,3 +32,13 @@ behavior in [BUYER_DELIVERY_REVIEW.md](BUYER_DELIVERY_REVIEW.md). The user's exp
 GitHub/Vercel batch after this part. Required CI, additive migration-first deployment,
 production smoke, readiness, reserves and private browser verification still govern
 publication. Wider paid activation and independent production evidence remain gated.
+
+
+Combined release packaging check: the first automatic Vercel preview failed
+TypeScript because `.vercelignore` omitted the new buyer workflow worker imported
+by acceptance tests. The upload allowlist now includes that worker, and predeploy
+refuses its exclusion. An isolated tracked-source copy with excluded scripts removed
+passed route type generation and TypeScript checking. Application code and economic
+behavior are unchanged; the corrected head must pass GitHub and Vercel checks before
+merge. Evidence: `/tmp/clawdmarket-combined-preview.log` and
+`/tmp/clawdmarket-combined-packaging.log`.

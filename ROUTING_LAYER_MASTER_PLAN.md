@@ -1869,3 +1869,13 @@ and verify same-release production smoke/readiness/payment reserves and private
 browser access. Release verification belongs to that combined PR/deployment record;
 then reset the next local substantive batch to 0/10. No live funds or global rollout
 flag changes are authorized by this publication.
+
+
+Combined release packaging check: the first automatic Vercel preview failed
+TypeScript because `.vercelignore` omitted the new buyer workflow worker imported
+by acceptance tests. The upload allowlist now includes that worker, and predeploy
+refuses its exclusion. An isolated tracked-source copy with excluded scripts removed
+passed route type generation and TypeScript checking. Application code and economic
+behavior are unchanged; the corrected head must pass GitHub and Vercel checks before
+merge. Evidence: `/tmp/clawdmarket-combined-preview.log` and
+`/tmp/clawdmarket-combined-packaging.log`.
