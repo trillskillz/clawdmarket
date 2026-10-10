@@ -134,3 +134,14 @@ Missing/unsupported fee models remain null. Only complete Ethereum L1 native
 fees are measured; this evidence does not claim an actual multi-node Tempo run.
 Observations cannot change reviewed chain/payer or exceed the original buyer
 fee ceiling. See [WORKFLOW_CHAIN_FEES.md](WORKFLOW_CHAIN_FEES.md).
+
+
+## Subsequent real Tempo acceptance — unchanged HTTP 1.99
+
+The [Tempo proof](WORKFLOW_TEMPO_PROOF.md) now executes both a real two-node
+crash/recovery loop and declined-provider refund/fallback on a pinned disposable
+Tempo node. Original transfers, private bindings, receipts, gross/fee ceilings
+and capacity match exact TIP-20 balances. Marketplace Tempo fee observations
+remain null/`not_recorded`; local receipt/balance assertions do not fabricate a
+persisted measured model. Production activation and mainnet fork compatibility
+remain separate gates.

@@ -2,6 +2,11 @@
 set -euo pipefail
 
 required_files=(
+  "tests/helpers/disposable-tempo-chain.ts"
+  "tests/fixtures/chain/tempo-dev-v1.16.0.json"
+  "tests/fixtures/chain/TEMPO_GENESIS.md"
+  "tests/fixtures/chain/TEMPO_LICENSE_MIT.txt"
+  "docs/WORKFLOW_TEMPO_PROOF.md"
   "app/routes/[id]/review/page.tsx"
   "lib/buyer-review-artifact.ts"
   "docs/BUYER_DELIVERY_REVIEW.md"

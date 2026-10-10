@@ -37,5 +37,8 @@ released capacity. Pure tests exercise blob arithmetic, beyond-64-bit units,
 unknown models, absent metadata and identity/arithmetic tampering. Migration 56 replay and full predeploy pass (660 cases: 655 passed, five
 skipped), with real EVM and isolated verification enabled. Six final focused
 cases, final typecheck/lint, production build and 17 selected Chromium journeys
-pass. Evidence paths are recorded in the master plan. Production workflow execution remains closed; P2.1 remains unfinished
-until its remaining adverse/retry/crash gate passes. No early publishing (0/10).
+pass. Evidence paths are recorded in the master plan. This historical 1.93 checkpoint preceded the completed EVM adverse/retry/crash
+gate and production release through 1.99. The subsequent [real Tempo proof](WORKFLOW_TEMPO_PROOF.md)
+checks fees independently against token balances while persisted Tempo fee
+observations remain explicitly unmeasured. Production workflow execution remains
+closed; the master plan records current acceptance and publishing status.

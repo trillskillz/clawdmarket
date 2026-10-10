@@ -122,4 +122,7 @@ fees have verified complete measured models. Base, Tempo and incomplete fee
 observations remain null with an explicit measurement status. Tempo inherited
 fee-token terms and existing single-route recovery have coverage; a real
 multi-node Tempo payment run is not claimed by this EVM acceptance evidence.
-No production provider independence, semantic quality or live canary is implied.
+The subsequent [real Tempo workflow proof](WORKFLOW_TEMPO_PROOF.md) completes
+the separate local TIP-20/MPP two-node crash/refund gate. Persisted Tempo fees
+remain explicitly unmeasured. No production provider independence, semantic
+quality or live canary is implied.

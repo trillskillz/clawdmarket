@@ -1,14 +1,16 @@
 # ClawdMarket routing-layer master plan
 
-**Source of truth for future routing-layer work.** Updated 2026-10-09 after the ten-part release PR #251 and its production correction PR #252 (`44544ce`), production contract **1.90**. Continue routing in dependency order. The existing marketplace and settlement system remain authoritative. Read this file and affected code/tests before each batch; record acceptance evidence after it. A schema or endpoint alone does not complete an economic milestone.
+**Source of truth for future routing-layer work.** Updated 2026-10-10 after combined release [PR #253](https://github.com/trillskillz/clawdmarket/pull/253), production SHA `29204bb`, contract **1.99**. Continue routing in dependency order. The existing marketplace and settlement system remain authoritative. Read this file and affected code/tests before each batch; record acceptance evidence after it. A schema or endpoint alone does not complete an economic milestone.
 
 ## Current position
 
-**Publishing instruction:** The ten substantive parts are released: MCP routing Tasks (1.81), payment proofs/sitewide backed balance (1.82), TypeScript/Python recovery clients (1.83), current-backed capability proof discovery (1.84), private peer benchmark recovery (1.85), capability hierarchy discovery (1.86), versioned private benchmark observations (1.87), bounded backed-cycle exclusions (1.88), isolated Python verification (1.89), and current-backed buyer reputation (1.90). The next batch remains local until **ten substantive acceptance-complete parts** pass. Its counter starts at **0/10**; release records, audits and intermediate workflow foundations do not increment it. Old/unnecessary PRs retain their recorded exemption. No live wallet spending, top-up or global rollout flag change is authorized.
+**Publishing instruction:** The combined ten-part workflow/enterprise/private buyer batch through HTTP 1.99 is published and verified. The user's 2026-10-10 request to push all commits together after the final part is fulfilled by PR #253. The next batch remains local until **ten substantive acceptance-complete parts** pass. Its counter reset to 0/10 and is now **1/10**, with real disposable Tempo workflow acceptance complete; release records, audits and intermediate foundations do not increment it. No live wallet spending, top-up or global rollout flag change is authorized.
 
-**Latest release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
+**Latest release:** [PR #253](https://github.com/trillskillz/clawdmarket/pull/253) retained all 19 commits through the protected linear-history merge at `29204bbc66d93fc2e0be494edcbb72dd00b4a2da`. Required PR checks passed on final head `a405cbf`; same-SHA [migration-first deployment 38061926120](https://github.com/trillskillz/clawdmarket/actions/runs/38061926120), [production smoke 38062541835](https://github.com/trillskillz/clawdmarket/actions/runs/38062541835), [main CI 38061925997](https://github.com/trillskillz/clawdmarket/actions/runs/38061925997), Agent Contract, CodeQL and [payment monitor 38062587971](https://github.com/trillskillz/clawdmarket/actions/runs/38062587971) passed. Production applied the eight additive migrations through ID 60 before building; query compatibility and both domain aliases passed. Independent read-only Chromium checks at 1440/390 px passed for the public site and both private buyer routes: anonymous access denied, no economic command controls, no horizontal overflow, manifest 1.99 and readiness ready. Read-only reserves remain 8.56529 Tempo pathUSD and 0.000100205551108468 Base ETH. Environment-name inspection found the three global route/service flags, both scoped canary IDs, workflow execution and enterprise flags absent. No live payment, top-up or rollout activation occurred. The combined PR holds the detailed release and test-only CodeQL review resolution record.
 
-**Next:** Publish and verify the combined **10/10** acceptance-complete batch through HTTP **1.99**, explicitly authorized by the user's 2026-10-10 instruction to push all commits together to GitHub/Vercel after private buyer delivery review. This final capability checks original private output/verification and bounded artifact bytes, binds one explicit acceptance to the exact delivery hash, and recovers original pending/confirmed payout, capacity and backed receipt. Use one PR, required CI and the migration-first Vercel workflow; verify production smoke, contract, readiness, reserves and private desktop/mobile access. After verification, the next substantive local batch resets to **0/10**. Remaining P0 independent-provider participation, production benchmark quality/calibration and paid production canaries require external prerequisites/authorization. Multi-node Tempo proof and broader delegated enterprise rails/purchases remain separate unfinished technical gates. Global routing writes remain closed.
+**Previous release:** [PR #251](https://github.com/trillskillz/clawdmarket/pull/251) and [PR #252](https://github.com/trillskillz/clawdmarket/pull/252) are merged. The corrected production SHA is `44544ce1b4aebf9e4a99cb45db9140d92017230a`. Migration-first [deployment 37890272617](https://github.com/trillskillz/clawdmarket/actions/runs/37890272617) passed release/reserve gates, all 52 migration IDs, four read-only production Turso query-compilation checks and both domain aliases. Same-SHA [production smoke 37890762121](https://github.com/trillskillz/clawdmarket/actions/runs/37890762121), [main CI 37890272553](https://github.com/trillskillz/clawdmarket/actions/runs/37890272553), Agent Contract and payment monitor passed. Independent read-only production Chromium checks at 1440/390 px passed: contract 1.90, readiness ready, both recorded MPP payment proofs with Tempo labels, sitewide backed account credit, payout-ready marketplace default, coherent backed reputation, registrations first in a bounded unique Live feed, and no horizontal overflow. The first release's remote-parser failure was rolled back and corrected; detailed incident evidence below preserves that history.
+
+**Next:** Broader **delegated enterprise rails/purchases**: audit existing exact human approvals and credit-only spending grants, then add separately reviewed bounded authority with explicit rail/token/chain/payer/fee terms. Existing read keys and version-1 credit grants must retain their original scope. Enforce original gross exposure, department/organization ceilings and current authority at every reservation/send; prove original intent/claim/payment/refund recovery and exact private service attribution on disposable chains before calling the capability complete. Keep this next batch local (**1/10**). Remaining P0 independent-provider participation, production benchmark quality/calibration and paid production canaries require external prerequisites/authorization. Production Tempo fork compatibility and complete persisted fee observations remain separate. Global routing writes remain closed.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -27,7 +29,7 @@ Protected post-live audit `37082040543` confirmed 33 migrations, two archived se
 | 8 spend policy and 9 failover | Partial | Buyer/agent/organization ceilings and pre-checkout fallback are enforced. Released 1.76 supports approved fallback only after exact confirmed original refunds, with gross retry budgets and the original objective deadline; cancelled unpaid checkout remains uncertain. |
 | 10 A2A and 11 MCP | Released; production writes closed | Released 1.80 supports scoped owner-mandate-bound A2A tasks with closed production writes. Released 1.81 adds experimental MCP 2025-11-25 routing Tasks, private handles, resumable terminal results and safe pre-checkout cancellation over the shared router. MCP writes also default closed. |
 | 12 contract, 13 SDK, 14 metrics | Recovery clients released; metrics partial | Production machine contract 1.90, TypeScript/Python recovery clients with checked shared definitions, evidenced assisted-route metrics. True autonomous production GMV remains unproven. |
-| 15 workflows and 16 enterprise | Partial; local bounded EVM and direct service enterprise acceptance complete | Exact approved DAG execution, private dependency grants/aggregate receipts, department ceilings, explicit human purchasing roles/approvals and private service sharing are accepted locally. Organization read accounts remain read-only; separately bounded approved-credit spending accounts are accepted locally. Production writes remain closed. |
+| 15 workflows and 16 enterprise | Partial; local bounded EVM/Tempo and direct service enterprise acceptance complete | Exact approved DAG execution, private dependency grants/aggregate receipts, department ceilings, explicit human purchasing roles/approvals and private service sharing are accepted locally. Organization read accounts remain read-only; separately bounded approved-credit spending accounts are accepted locally. Production writes remain closed. |
 
 The live buyer flow is still: plan → reserve **unpaid** order → caller funds → provider receives a signed pointer or polls → provider starts/delivers → buyer accepts → existing settlement. It does **not** yet satisfy “give ClawdMarket an objective and receive a verified, settled result without manually composing marketplace calls.”
 
@@ -120,9 +122,9 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | P1.3 | 11 | **Complete locally (1.81; new batch part 1/10).** MCP 2025-11-25 Streamable HTTP, authenticated shared-router routing Tasks, durable private handles/results, cursor resumption and safe cancellation before checkout. Legacy discovery/payment clients remain compatible. Production writes default closed. |
 | P1.4 | 12–13 | **Complete locally (1.83; new batch part 3/10).** Shared generated operation/auth/scope/lifecycle/rail/deprecation metadata, TypeScript funding/artifact/webhook recovery and a usable minimal Python client with typed financial errors. Predeploy refuses contract drift; both clients recover original routes against the actual app. |
 | P1.5 | 3–5, 14 | **Partial; released in 1.90.** Current-backed work discovery, honest unmeasured capability confidence, evaluator-bound private peer benchmark recovery, explicit hierarchy discovery, immutable versioned/private server-checked JSON benchmark observations, bounded backed-cycle exclusions, external isolated Python tests and current-backed buyer reputation with bounded owner-principal feedback are complete. Independent production benchmark quality, confidence calibration and broader reputation quality evidence remain unfinished. Unknown-owner independence and cycles beyond four principals remain unresolved. Continue independent local work on P2.1 bounded workflow execution. |
-| P2.1 | 15 | **Local bounded EVM execution complete (1.93).** Owner-reviewed finite DAGs, inherited gross/fee/runtime caps, private dependency grants, explicit verification/acceptance and all-attempt reconciliation pass real disposable-chain crash/refund/race acceptance. Production activation remains closed; real multi-node Tempo proof and independent production rollout remain separate. |
+| P2.1 | 15 | **Bounded EVM and real Tempo local execution acceptance complete (HTTP 1.99).** Owner-reviewed finite DAGs, inherited gross/fee/runtime caps, private dependency grants, explicit acceptance and all-attempt reconciliation pass real disposable-chain crash/refund/fallback acceptance. Tempo fee observations remain explicitly unmeasured in persisted receipts. Production activation, mainnet fork compatibility and independent production rollout remain separate. |
 | P2.2 | 16 | **Bounded local direct-service enterprise acceptance complete through 1.97.** Department ceilings, explicit purchasing roles/approvals, two-owner private providers and separately bounded approved-credit spending accounts preserve existing authority and original recovery. Viewer/read keys remain read-only. Broader delegated rails/purchases require separate grants and acceptance. |
-| P3 | Website/control plane | **Local acceptance complete through HTTP 1.99:** routing operations, owner enterprise configuration/history, human workflow review, buyer route recovery, and exact private delivery acceptance. Original attempts, bound unpaid cancellation, inert checked artifacts, lost/conflicting commands, real late refunds and pending/confirmed payout/receipt recovery pass private desktop/mobile and full economic regression. Existing economic lifecycles remain authoritative. Publish/verify the combined 10/10 batch before reopening the next local counter. |
+| P3 | Website/control plane | **Local acceptance complete through HTTP 1.99:** routing operations, owner enterprise configuration/history, human workflow review, buyer route recovery, and exact private delivery acceptance. Original attempts, bound unpaid cancellation, inert checked artifacts, lost/conflicting commands, real late refunds and pending/confirmed payout/receipt recovery pass private desktop/mobile and full economic regression. Existing economic lifecycles remain authoritative. Released and verified in PR #253; next local batch is now 1/10 with Tempo economic acceptance. |
 
 ## Rules for every future batch and release
 
@@ -1890,3 +1892,63 @@ Application behavior is unchanged; required checks rerun on this corrected head.
 Evidence: `/tmp/clawdmarket-combined-ci-failed.log`,
 `/tmp/clawdmarket-combined-ci-schema-parity.log` and
 `/tmp/clawdmarket-combined-ci-console-parity.log`.
+
+
+### P2.1 acceptance complete — real disposable Tempo workflows (HTTP 1.99; new local part 1/10)
+
+After production verification of combined PR #253, the next batch reset to 0/10.
+This completes its first substantive part: real canonical TIP-20/MPP payments for
+two dependent workflow nodes, including original process-death recovery and an
+original declined-provider refund before bounded fallback. It closes the separate
+local Tempo economic proof gate; it is not a documentation or audit increment.
+No application endpoint, contract shape, migration or economic transition changed.
+
+A pinned official Tempo 1.16.0 binary passed archive checksum and GitHub SLSA
+provenance verification. The helper checks its version and source genesis digest,
+uses isolated temporary storage/loopback endpoints with no discovery/IPC and mints
+only test pathUSD to public dummy keys. Only the disposable genesis chain ID changes
+from 1337 to 4217; production checks stay intact. Development hardforks activate at
+genesis, so this is local protocol evidence, not deployed mainnet compatibility or
+independent validators/providers. Fixture source, commit and MIT notice are saved.
+
+The existing buyer/provider HTTP driver now uses the actual Tempo signer,
+trade-bound memo, canonical MPP challenge/intent/claim and exact signed bytes through
+the real SDK. SIGKILL at child preparation, wallet claim, confirmed broadcast before
+its response, provider delivery and before/after aggregate receipt persistence
+recovers original identities and one receipt. Four distinct confirmed transfers
+reconcile gross 210 cents, seller payout 200, no unresolved money and released
+capacity. Private dependent access checks the exact granted upstream bytes while
+ordinary access to the source trade artifact stays denied.
+
+The adverse Tempo case owns its own process/database and fresh chain. A declined
+funded prerequisite blocks its dependent. Its original refund confirms before the
+approved fallback; closed execution denies fresh retry, gross/fee caps never recycle,
+and the common original deadline survives. Three attempts/six distinct transfers
+reconcile gross 315 cents, refund 100, payout 200 and retained marketplace fees 15,
+with zero unresolved money and original capacity releases. The dependent binding
+references the successful fallback trade. Exact token balances include independently
+checked receipt fee costs for every original buyer/treasury transfer. Persisted Tempo
+fees remain null/`not_recorded`; reserved ceilings are not presented as measured fees.
+
+Final full Node 24 predeploy passes **711 cases: 706 passed, five expected skips**,
+including both new Tempo cases, retained actual EVM crash/refund cases, real external
+isolation, authorization/budget races and representative legacy migration replay
+through ID 60. TypeScript, SDK checks/build, **13 Python cases** and lint pass. The
+shared disposable schema migrated twice with 60 IDs and SQLite integrity `ok`.
+Application code is unchanged from the same-SHA production build and verified browser
+release above; no new UI/runtime claim or additional deployment is implied.
+
+Evidence: `/tmp/clawdmarket-tempo-workflow-predeploy-accepted.log`,
+`/tmp/clawdmarket-tempo-workflow-shared-schema.log`,
+`/tmp/clawdmarket-tempo-workflow-focus-final.log` and
+`/tmp/clawdmarket-tempo-workflow-refund-focus.log`.
+Runbook: [WORKFLOW_TEMPO_PROOF.md](docs/WORKFLOW_TEMPO_PROOF.md).
+The [audit](docs/WORKFLOW_TEMPO_PROOF_AUDIT.md) preserves the corrected DTO assertion,
+fresh-chain/shared-nonce fixture issue, nested test-runner context correction and
+invalid uninitialized shared-database invocation. None counts as accepted evidence.
+
+**Publishing counter: 1/10.** Save locally on `feat/tempo-workflow-proof`; no future
+batch push/PR/deployment until ten substantive parts pass. No live wallet funds,
+top-up or production flag change. Remaining P0 participation/quality/paid proofs keep
+their external prerequisites; next independent technical work is separately bounded
+delegated enterprise rails/purchases with exact owner/human authority.
