@@ -454,7 +454,11 @@ export class ClawdMarketClient {
   advanceRoute(routeId: string, command: RouteAdvanceCommand, options?: RequestOptions) { return this.request<RouteLifecycle>('POST', `${routePath(routeId)}/advance`, command, options) }
   getRouteResult(routeId: string, options?: RequestOptions) { return this.request<PrivateRouteResult>('GET', `${routePath(routeId)}/result`, undefined, options) }
 
-  cancelRoute(routeId: string, options?: RequestOptions) { return this.request<CancelledRoute>('DELETE', routePath(routeId), undefined, options) }
+  cancelRoute(routeId: string, options?: RequestOptions & { expectedServiceOrderId?: string | null }) {
+    const { expectedServiceOrderId, ...requestOptions } = options || {}
+    return this.request<CancelledRoute>('DELETE', routePath(routeId), expectedServiceOrderId === undefined ? undefined
+      : { expected_service_order_id: expectedServiceOrderId }, requestOptions)
+  }
 
   getSpendingPolicy(options?: RequestOptions) { return this.request<SpendingPolicySnapshot>('GET', '/api/spending-policy', undefined, options) }
 

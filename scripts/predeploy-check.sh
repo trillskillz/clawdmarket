@@ -2,6 +2,12 @@
 set -euo pipefail
 
 required_files=(
+  "app/routes/[id]/page.tsx"
+  "components/dashboard/RouteRecoveryTab.tsx"
+  "docs/BUYER_ROUTE_RECOVERY.md"
+  "e2e/buyer-route-recovery.spec.ts"
+  "e2e/fixtures/buyer-route-browser.ts"
+  "tests/api/route-cancellation-precondition.test.ts"
   "app/workflows/[id]/review/page.tsx"
   "components/dashboard/WorkflowReviewsTab.tsx"
   "docs/WORKFLOW_OWNER_REVIEW.md"

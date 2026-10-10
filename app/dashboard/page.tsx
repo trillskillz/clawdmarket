@@ -15,6 +15,7 @@ import AdminTab from '@/components/dashboard/AdminTab';
 import AgentOwnershipTab from '@/components/dashboard/AgentOwnershipTab';
 import EnterpriseTab from '@/components/dashboard/EnterpriseTab';
 import WorkflowReviewsTab from '@/components/dashboard/WorkflowReviewsTab';
+import RouteRecoveryTab from '@/components/dashboard/RouteRecoveryTab';
 import styles from './dashboard.module.css';
 
 interface User {
@@ -28,8 +29,8 @@ interface User {
   avatar_emoji?: string;
 }
 
-type DashboardTab = 'listings' | 'trades' | 'contracts' | 'api-keys' | 'agent-ownership' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'enterprise' | 'workflow-reviews' | 'admin';
-const PUBLIC_DASHBOARD_TABS = new Set<DashboardTab>(['listings', 'trades', 'contracts', 'api-keys', 'agent-ownership', 'webhooks', 'wallet', 'analytics', 'profile', 'enterprise', 'workflow-reviews']);
+type DashboardTab = 'listings' | 'trades' | 'contracts' | 'api-keys' | 'agent-ownership' | 'webhooks' | 'wallet' | 'analytics' | 'profile' | 'enterprise' | 'workflow-reviews' | 'route-recovery' | 'admin';
+const PUBLIC_DASHBOARD_TABS = new Set<DashboardTab>(['listings', 'trades', 'contracts', 'api-keys', 'agent-ownership', 'webhooks', 'wallet', 'analytics', 'profile', 'enterprise', 'workflow-reviews', 'route-recovery']);
 const TAB_DETAILS: Record<DashboardTab, { title: string; description: string }> = {
   listings: { title: 'Your services', description: 'Publish and manage the capabilities available to buyers.' },
   trades: { title: 'Trade history', description: 'Track funded work, delivery, and settlement in one place.' },
@@ -41,6 +42,7 @@ const TAB_DETAILS: Record<DashboardTab, { title: string; description: string }> 
   'agent-ownership': { title: 'Agent ownership', description: 'Recover and transfer the agents linked to your account.' },
   webhooks: { title: 'Webhooks', description: 'Deliver marketplace events to your own systems.' },
   enterprise: { title: 'Enterprise', description: 'Manage organization limits, departments and original purchasing history.' },
+  'route-recovery': { title: 'Route recovery', description: 'Inspect original buyer attempts and recover unpaid cancellation.' },
   'workflow-reviews': { title: 'Workflow review', description: 'Review exact finite workflow terms and preserve original recovery.' },
   admin: { title: 'Administration', description: 'Review operational controls and moderation tools.' },
 };
@@ -268,6 +270,7 @@ export default function DashboardPage() {
     { id: 'analytics' as const, label: 'Analytics', group: 'Account' },
     { id: 'profile' as const, label: 'Profile', group: 'Account' },
     { id: 'enterprise' as const, label: 'Enterprise', group: 'Account' },
+    { id: 'route-recovery' as const, label: 'Route Recovery', group: 'Account' },
     { id: 'workflow-reviews' as const, label: 'Workflow Review', group: 'Account' },
     { id: 'api-keys' as const, label: 'API Keys', group: 'Integrations' },
     { id: 'agent-ownership' as const, label: 'Agent Ownership', group: 'Integrations' },
@@ -393,6 +396,7 @@ export default function DashboardPage() {
           <WebhooksTab webhooks={webhooksData} loading={loading} onRefresh={fetchData} getCsrfToken={getCsrfToken} />
         )}
         {activeTab === 'enterprise' && <EnterpriseTab />}
+        {activeTab === 'route-recovery' && <RouteRecoveryTab />}
         {activeTab === 'workflow-reviews' && <WorkflowReviewsTab />}
         {activeTab === 'admin' && isAdmin && (
           <AdminTab getCsrfToken={getCsrfToken} />
