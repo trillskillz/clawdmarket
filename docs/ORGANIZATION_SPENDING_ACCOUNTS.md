@@ -88,3 +88,5 @@ the selected browser matrix are required before acceptance is recorded in
 [the audit](ORGANIZATION_SPENDING_ACCOUNTS_AUDIT.md).
 
 Separately reviewed version-3 Tempo service grants and original SDK claim/recovery are documented in [Tempo service purchasing](ORGANIZATION_TEMPO_SPENDING.md). They do not expand version-1 credit or version-2 L1 authority.
+
+Owner UI wallet creation and original-reference recovery are described in [OWNER_SPENDING_REVIEW.md](OWNER_SPENDING_REVIEW.md). The optional reviewed metadata guard leaves existing grants and keys unchanged.

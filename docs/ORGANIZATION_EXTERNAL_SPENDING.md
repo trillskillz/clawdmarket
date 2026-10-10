@@ -92,3 +92,5 @@ SIGKILL at original intent/claim/broadcast/verified-receipt boundaries.
 The master plan records the final acceptance evidence and publishing counter.
 
 Buyer-host recovery for original approved orders: [BUYER_SPENDING_WORKER.md](BUYER_SPENDING_WORKER.md).
+
+The owner can explicitly review and issue configured L1 grants through the [private spending UI](OWNER_SPENDING_REVIEW.md), retaining the original reviewed reference across lost replies and reload.
