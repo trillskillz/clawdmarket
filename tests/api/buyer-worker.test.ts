@@ -11,10 +11,13 @@ import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, erc20Abi, keccak256, parseTransaction, recoverTransactionAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
+import { Account as TempoAccount } from 'viem/tempo'
 import { createLocalTestSchema } from '../helpers/local-schema'
 import { startDisposableWorkflowChain } from '../helpers/disposable-workflow-chain'
+import { startDisposableTempoChain } from '../helpers/disposable-tempo-chain'
 import { runBuyerFunding } from '../../scripts/buyer-worker.mjs'
 import { createBuyerEvmAdapter } from '../../scripts/buyer-evm-adapter.mjs'
+import { createBuyerTempoAdapter } from '../../scripts/buyer-tempo-adapter.mjs'
 import { buyerWalletReference, withBuyerWalletLock } from '../../scripts/buyer-wallet-lock.mjs'
 import { runBuyerRoute } from '../../scripts/buyer-route-worker.mjs'
 import { runBuyerWorkflow } from '../../scripts/buyer-workflow-worker.mjs'
@@ -57,8 +60,9 @@ before(async () => {
       if (realChainUrl) {
         const response = await fetch(realChainUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })
         const value = await response.json()
-        if (input.method === 'eth_sendRawTransaction' && value.result && !value.error) broadcastCalls++
-        if (realRpcHook) await realRpcHook(input.method, value.result)
+        const sentHash = input.method === 'eth_sendRawTransactionSync' ? value.result?.transactionHash : value.result
+        if (['eth_sendRawTransaction', 'eth_sendRawTransactionSync'].includes(input.method) && sentHash && !value.error) broadcastCalls++
+        if (realRpcHook) await realRpcHook(input.method, sentHash)
         outgoing.setHeader('Content-Type', 'application/json'); outgoing.end(JSON.stringify(value)); return
       }
       let result: unknown
@@ -114,6 +118,7 @@ before(async () => {
   jwt = (await import('@/lib/auth')).generateJWT
   const mandate = await import('@/app/api/routes/[id]/mandate/route'), execute = await import('@/app/api/routes/[id]/execute/route'), getRoute = await import('@/app/api/routes/[id]/route')
   const intent = await import('@/app/api/trades/[id]/fund/evm/intent/route'), claim = await import('@/app/api/trades/[id]/fund/evm/claim/route'), fund = await import('@/app/api/trades/[id]/fund/evm/route')
+  const mppIntent = await import('@/app/api/trades/[id]/fund/mpp/intent/route'), mppClaim = await import('@/app/api/trades/[id]/fund/mpp/claim/route'), mppFund = await import('@/app/api/trades/[id]/fund/mpp/route')
   const advance = await import('@/app/api/routes/[id]/advance/route'), work = await import('@/app/api/trades/[id]/work-order/route')
   const retry = await import('@/app/api/routes/[id]/retry/route')
   const attempt = await import('@/app/api/trades/[id]/work-order/attempt/route'), delivery = await import('@/app/api/trades/[id]/delivery/route')
@@ -133,7 +138,8 @@ before(async () => {
         : path.endsWith('/prepare') ? (await import('@/app/api/workflows/[id]/nodes/[key]/prepare/route')).POST
         : path.endsWith('/reconcile') ? (await import('@/app/api/workflows/[id]/reconcile/route')).POST
         : path.includes('/artifacts/') ? (await import('@/app/api/workflows/[id]/artifacts/[grantId]/route')).GET : null
-      const handler = workflowHandler || (path === '/api/mcp' ? (await import('@/app/api/mcp/route')).POST : path === '/api/a2a' ? (await import('@/app/api/a2a/route')).POST : path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
+      const handler = workflowHandler || (path.endsWith('/fund/mpp/intent') ? mppIntent[incoming.method as 'GET' | 'POST'] : path.endsWith('/fund/mpp/claim') ? mppClaim.POST : path.endsWith('/fund/mpp') ? mppFund.POST
+        : path === '/api/mcp' ? (await import('@/app/api/mcp/route')).POST : path === '/api/a2a' ? (await import('@/app/api/a2a/route')).POST : path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
         : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : path.endsWith('/retry') ? retry[incoming.method as 'GET' | 'POST'] : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST']
           : path.endsWith('/dispute') ? dispute.POST : path.endsWith('/resolve') ? resolveTrade.POST
           : path.endsWith('/work-order') ? work.GET : path.endsWith('/attempt') ? attempt.POST : path.endsWith('/delivery') ? delivery.POST
@@ -878,6 +884,9 @@ test('workflow HTTP loop pays and settles two exact dependent nodes across buyer
 test('workflow HTTP loop on disposable EVM settles exact token transfers across buyer/provider process deaths', {
   skip: !process.env.CLAWDMARKET_TEST_ANVIL_BINARY && 'Set CLAWDMARKET_TEST_ANVIL_BINARY to a verified local Anvil binary', timeout: 60_000,
 }, () => workflowHttpLoop(true))
+test('workflow HTTP loop on disposable Tempo settles exact TIP-20 transfers across buyer/provider process deaths', {
+  skip: !process.env.CLAWDMARKET_TEST_TEMPO_BINARY && 'Set CLAWDMARKET_TEST_TEMPO_BINARY to a verified Tempo 1.16.0 binary', timeout: 90_000,
+}, () => workflowHttpLoop('tempo'))
 
 async function killBuyerAtBoundary(args: string[], environment: NodeJS.ProcessEnv, install: (reach: () => Promise<void>) => () => void) {
   let ready!: () => void, release!: () => void
@@ -910,8 +919,10 @@ async function reviewedWorkflow(f: Fixture, api: (method:string, path:string, bo
       { key: 'review', objective: 'Review the exact approved private upstream attachment', required_capabilities: ['code-review'], budget: { amount: '1.05', currency: 'USD' }, deadline_seconds: 600, depends_on: ['source'] }] })
   const { approval } = await api('POST', `/api/workflows/${workflow.id}/approval`, { version: 1, client_reference: `paid-review-${f.routeId}`, plan_hash: workflow.plan_hash,
     expires_at: new Date(Math.floor(Date.now() / 1000) * 1000 + 900_000).toISOString(), max_gross_minor: retry ? 315 : 210, max_chain_fee_units: (BigInt(chainFee) * (retry ? 3n : 2n)).toString(),
-    private_data: 'selected_provider_only', payment: { rail: 'evm', chain_id: chainId, token_address: token, payer_address: f.account.address.toLowerCase(),
-      treasury_address: treasuryAddress, minimum_token_reserve_units: '5000000', minimum_native_reserve_wei: '1000000', max_gas_cost_wei: chainFee },
+    private_data: 'selected_provider_only', payment: { rail: chainId === 4217 ? 'mpp' : 'evm', chain_id: chainId, token_address: token, payer_address: f.account.address.toLowerCase(),
+      treasury_address: treasuryAddress, minimum_token_reserve_units: '5000000', ...(chainId === 4217
+        ? { fee_token_address: token, minimum_fee_token_reserve_units: '100000', max_fee_token_cost_units: chainFee }
+        : { minimum_native_reserve_wei: '1000000', max_gas_cost_wei: chainFee }) },
     nodes: ['source', 'review'].map((key) => ({ key, static_input: { private_text: `private-${key}-input` }, provider_requirements: { approved_providers: key === 'review' && f.fallbackSellerId ? [f.fallbackSellerId] : retry ? [f.sellerId, f.fallbackSellerId!] : [f.sellerId] },
       verification: workflowPolicy, max_per_attempt_minor: 105, max_retry_minor: retry && key === 'source' ? 105 : 0, max_attempts: retry && key === 'source' ? 2 : 1, max_latency_seconds: 60,
       max_chain_fee_per_attempt_units: chainFee, dependency_inputs: key === 'review' ? [{ source_node: 'source', artifact_index: 0, target_field: 'upstream' }] : [] })) })
@@ -920,18 +931,22 @@ async function reviewedWorkflow(f: Fixture, api: (method:string, path:string, bo
   return { workflow, approval, command, activated, run }
 }
 
-async function workflowHttpLoop(realChain: boolean) {
-  const f = await fixture(undefined, {}, true), count = broadcastCalls, chainId = realChain ? 1 : 8453
-  const chainFee = realChain ? '10000000000000000' : '1000000000000'
+async function workflowHttpLoop(mode: boolean | 'tempo') {
+  const isTempo = mode === 'tempo', realChain = mode !== false
+  const f = await fixture(undefined, {}, true), count = broadcastCalls, chainId = isTempo ? 4217 : realChain ? 1 : 8453
+  const chainFee = isTempo ? '10000' : realChain ? '10000000000000000' : '1000000000000'
   const previousToken = token, previousConfig = process.env.EVM_ACCEPTED_TOKENS
-  const chain = realChain ? await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY!, f.account.address) : null
+  const mppEnvironment = new Map(['TEMPO_RPC_URL', 'MPP_SECRET_KEY_CURRENT', 'MPP_RECIPIENT_ADDRESS'].map((name) => [name, process.env[name]]))
+  const chain = isTempo ? await startDisposableTempoChain(process.env.CLAWDMARKET_TEST_TEMPO_BINARY!, f.account.address)
+    : realChain ? await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY!, f.account.address) : null
+  const account = isTempo ? TempoAccount.fromSecp256k1(f.dummyKey) : f.account
   const payoutAddress = `0x${'22'.repeat(20)}` as const, downstreamPayout = `0x${'33'.repeat(20)}` as const
   try {
   await db.update(schema.service_definitions).set({ price_minor: 100 }).where(eq(schema.service_definitions.id, f.fallbackServiceId!))
   if (chain) {
     token = chain.token; realChainUrl = chain.url
-    process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId, chainName: 'Disposable local EVM', address: token, symbol: 'TEST', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl }])
-    f.adapter = createBuyerEvmAdapter({ chainId, rpcUrl, account: f.account })
+    if (isTempo) Object.assign(process.env, { TEMPO_RPC_URL: rpcUrl, MPP_SECRET_KEY_CURRENT: 'disposable-tempo-workflow-tests-only-secret', MPP_RECIPIENT_ADDRESS: treasury })
+    else process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId, chainName: 'Disposable local EVM', address: token, symbol: 'TEST', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl }])
     await db.update(schema.payout_addresses).set({ address: payoutAddress }).where(eq(schema.payout_addresses.user_id, f.sellerId))
     await db.update(schema.payout_addresses).set({ address: downstreamPayout }).where(eq(schema.payout_addresses.user_id, f.fallbackSellerId!))
   }
@@ -949,7 +964,8 @@ async function workflowHttpLoop(realChain: boolean) {
     contract_hash: approval.contract_hash, chain_id: chainId, rpc_url: rpcUrl }
   const rootFile = join(directory, `${run.id}.workflow-approval.json`), stateDirectory = join(directory, `${run.id}.workflow-state`)
   await writeFile(rootFile, JSON.stringify(workflowApproval), { mode: 0o600 })
-  const options = { approval: workflowApproval, apiKey: f.apiKey, stateDirectory, account: f.account, adapter: f.adapter }
+  const adapter = isTempo ? createBuyerTempoAdapter({ chainId, rpcUrl, account }) : chain ? createBuyerEvmAdapter({ chainId, rpcUrl, account }) : f.adapter
+  const options = { approval: workflowApproval, apiKey: f.apiKey, stateDirectory, account, adapter }
   const buyerEnvironment = { ...process.env, CLAWDMARKET_BUYER_PRIVATE_KEY: f.dummyKey, CLAWDMARKET_BUYER_API_KEY: f.apiKey }
   const buyerArgs = ['scripts/buyer-workflow-worker.mjs', rootFile, stateDirectory]
   await killBuyerAtBoundary(buyerArgs, buyerEnvironment, holdBuyerApiResponse((path, response) => path.endsWith('/nodes/source/prepare') && response.ok))
@@ -980,7 +996,7 @@ async function workflowHttpLoop(realChain: boolean) {
   assert.equal(broadcastCalls, count)
   if (chain) {
     await killBuyerAtBoundary(buyerArgs, buyerEnvironment, (reach) => {
-      realRpcHook = async (method, hash) => { if (method === 'eth_sendRawTransaction' && hash) await reach() }
+      realRpcHook = async (method, hash) => { if (['eth_sendRawTransaction', 'eth_sendRawTransactionSync'].includes(method) && hash) await reach() }
       return () => { realRpcHook = null }
     })
     assert.equal(broadcastCalls, count + 1)
@@ -1095,7 +1111,7 @@ async function workflowHttpLoop(realChain: boolean) {
   const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId))
   assert.equal(service.active_orders, 0)
   assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.fallbackServiceId!)))[0].active_orders, 0)
-  if (chain) {
+  if (chain && !isTempo && 'buyerNative' in chain) {
     assert.equal(await chain.balance(f.account.address), 97_900_000n)
     assert.equal(await chain.balance(payoutAddress), 1_000_000n)
     assert.equal(await chain.balance(downstreamPayout), 1_000_000n)
@@ -1129,26 +1145,77 @@ async function workflowHttpLoop(realChain: boolean) {
     assert.equal((await api('POST', `/api/workflows/${workflow.id}/reconcile`, { version: 1, run_id: run.id })).content_hash, outcome.content_hash)
     console.info(JSON.stringify({ disposable_evm_workflow: 'passed', nodes: 2, distinct_transfers: 4, gross_buyer_minor: 210, seller_payout_minor: 200, unresolved_buyer_minor: 0, measured_buyer_fee_wei: buyerFees.toString(), measured_treasury_fee_wei: treasuryFees.toString() }))
   }
+  if (chain && isTempo && !('buyerNative' in chain)) {
+    let buyerFees = 0n, treasuryFees = 0n
+    const hashes = new Set<string>()
+    for (const attempt of outcome.receipt.attempts) {
+      assert.equal(attempt.financial.funding.chain_id, 4217)
+      const [funding] = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, attempt.trade_id))
+      assert.equal(funding.payment_rail, 'mpp'); assert.equal(funding.token_address, chain.token)
+      for (const txHash of [attempt.financial.funding.tx_hash, attempt.financial.payout.tx_hash]) {
+        assert.equal(hashes.has(txHash), false); hashes.add(txHash)
+        const receipt = await chain.client.getTransactionReceipt({ hash: txHash })
+        assert.equal(receipt.status, 'success'); assert.equal(receipt.type, '0x76')
+        assert.equal(receipt.feeToken?.toLowerCase(), chain.token); assert.equal(receipt.feePayer?.toLowerCase(), receipt.from.toLowerCase())
+        const fee = (receipt.gasUsed * receipt.effectiveGasPrice + 999_999_999_999n) / 1_000_000_000_000n
+        assert.ok(fee > 0n)
+        if (receipt.from.toLowerCase() === f.account.address.toLowerCase()) buyerFees += fee
+        else { assert.equal(receipt.from.toLowerCase(), treasury); treasuryFees += fee }
+      }
+    }
+    assert.equal(hashes.size, 4); assert.ok(buyerFees <= BigInt(chainFee) * 2n)
+    assert.equal(await chain.balance(f.account.address), 97_900_000n - buyerFees)
+    assert.equal(await chain.balance(payoutAddress), 1_000_000n); assert.equal(await chain.balance(downstreamPayout), 1_000_000n)
+    assert.equal(await chain.balance(treasury as `0x${string}`), 100_100_000n - treasuryFees)
+    assert.equal(outcome.receipt.totals.chain_fee_measurement, 'not_recorded')
+    assert.equal(outcome.receipt.totals.actual_chain_fee_units, null)
+    assert.deepEqual(outcome.receipt.totals.chain_fee_currency, { chain_id: 4217, asset: 'fee_token', unit: 'token_base_units', token_address: chain.token })
+    console.info(JSON.stringify({ disposable_tempo_workflow: 'passed', nodes: 2, distinct_transfers: 4, gross_buyer_minor: 210,
+      seller_payout_minor: 200, unresolved_buyer_minor: 0, independently_checked_buyer_fee_units: buyerFees.toString(), independently_checked_treasury_fee_units: treasuryFees.toString() }))
+  }
   } finally {
     realRpcHook = null; apiHook = null; realChainUrl = null; token = previousToken; process.env.EVM_ACCEPTED_TOKENS = previousConfig
     if (chain) await chain.stop()
+    for (const [name, value] of mppEnvironment) { if (value === undefined) delete process.env[name]; else process.env[name] = value }
   }
 }
 
 test('disposable EVM workflow reconciles an original provider refund before bounded fallback and private dependent settlement', {
   skip: !process.env.CLAWDMARKET_TEST_ANVIL_BINARY && 'Set CLAWDMARKET_TEST_ANVIL_BINARY to a verified local Anvil binary', timeout: 60_000,
+}, () => workflowRefundLoop(false))
+test('disposable Tempo workflow reconciles an original provider refund before bounded fallback and private dependent settlement', {
+  skip: !process.env.CLAWDMARKET_TEST_TEMPO_BINARY && 'Set CLAWDMARKET_TEST_TEMPO_BINARY to a verified Tempo 1.16.0 binary', timeout: 90_000,
 }, async () => {
+  if (process.env.CLAWDMARKET_TEST_TEMPO_REFUND_PROCESS === 'true') return workflowRefundLoop(true)
+  // A fresh chain must have its own durable nonce/outbox history. Do not erase
+  // the first chain's financial records or reuse them against another genesis.
+  const environment: NodeJS.ProcessEnv = { ...process.env, CLAWDMARKET_TEST_TEMPO_REFUND_PROCESS: 'true' }
+  delete environment.NODE_TEST_CONTEXT
+  const result = await promisify(execFile)(process.execPath, ['--conditions=react-server', '--import', 'tsx', '--test',
+    '--test-reporter=spec', '--test-name-pattern=^disposable Tempo workflow reconciles', 'tests/api/buyer-worker.test.ts'], {
+    cwd: resolve('.'), env: environment, timeout: 85_000,
+  })
+  assert.match(result.stdout, /"disposable_tempo_workflow_retry":"passed"/)
+  console.info(result.stdout.trim())
+})
+
+async function workflowRefundLoop(isTempo: boolean) {
   const f = await fixture(undefined, {}), count = broadcastCalls
   const previousToken = token, previousConfig = process.env.EVM_ACCEPTED_TOKENS
   const previousTreasury = process.env.TREASURY_ADDRESS, previousSigner = process.env.EVM_SETTLEMENT_PRIVATE_KEY, previousAdmin = process.env.ADMIN_USER_IDS
-  const dummyTreasuryKey = `0x${'98'.repeat(32)}` as const
-  const chain = await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY!, f.account.address, dummyTreasuryKey)
+  const mppEnvironment = new Map(['TEMPO_RPC_URL', 'MPP_SECRET_KEY_CURRENT', 'MPP_RECIPIENT_ADDRESS'].map((name) => [name, process.env[name]]))
+  const dummyTreasuryKey = `0x${(isTempo ? '99' : '98').repeat(32)}` as const
+  const chainId = isTempo ? 4217 : 1, chainFee = isTempo ? '10000' : '10000000000000000'
+  const chain = isTempo ? await startDisposableTempoChain(process.env.CLAWDMARKET_TEST_TEMPO_BINARY!, f.account.address, dummyTreasuryKey)
+    : await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY!, f.account.address, dummyTreasuryKey)
+  const account = isTempo ? TempoAccount.fromSecp256k1(f.dummyKey) : f.account
   try {
     token = chain.token; realChainUrl = chain.url
     process.env.TREASURY_ADDRESS = chain.treasury; process.env.EVM_SETTLEMENT_PRIVATE_KEY = dummyTreasuryKey
-    process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId: 1, chainName: 'Disposable workflow refund EVM', address: token,
+    if (isTempo) Object.assign(process.env, { TEMPO_RPC_URL: rpcUrl, MPP_SECRET_KEY_CURRENT: 'disposable-tempo-workflow-tests-only-secret', MPP_RECIPIENT_ADDRESS: chain.treasury })
+    else process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId: 1, chainName: 'Disposable workflow refund EVM', address: token,
       symbol: 'TEST', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl }])
-    f.adapter = createBuyerEvmAdapter({ chainId: 1, rpcUrl, account: f.account })
+    const adapter = isTempo ? createBuyerTempoAdapter({ chainId, rpcUrl, account }) : createBuyerEvmAdapter({ chainId, rpcUrl, account })
     const payout = `0x${'33'.repeat(20)}` as const
     await db.update(schema.payout_addresses).set({ address: payout }).where(eq(schema.payout_addresses.user_id, f.fallbackSellerId!))
     await db.update(schema.service_definitions).set({ price_minor: 100, estimated_latency_seconds: 40 }).where(eq(schema.service_definitions.id, f.fallbackServiceId!))
@@ -1157,10 +1224,10 @@ test('disposable EVM workflow reconciles an original provider refund before boun
       const response = await fetch(`${baseUrl}${path}`, { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) })
       const value = await response.json(); assert.ok(response.ok, `${path}: ${response.status}: ${JSON.stringify(value)}`); return value
     }
-    const { workflow, approval, run } = await reviewedWorkflow(f, api, 1, '10000000000000000', true, chain.treasury.toLowerCase())
+    const { workflow, approval, run } = await reviewedWorkflow(f, api, chainId, chainFee, true, chain.treasury.toLowerCase())
     const options = { approval: { version: 1, origin: baseUrl, workflow_id: workflow.id, run_id: run.id,
-      contract_hash: approval.contract_hash, chain_id: 1, rpc_url: rpcUrl }, apiKey: f.apiKey,
-      stateDirectory: join(directory, `${run.id}.refund-workflow-state`), account: f.account, adapter: f.adapter }
+      contract_hash: approval.contract_hash, chain_id: chainId, rpc_url: rpcUrl }, apiKey: f.apiKey,
+      stateDirectory: join(directory, `${run.id}.refund-workflow-state`), account, adapter }
     const resumeFunding = async (nodeKey: string, decisions?: unknown) => {
       let result = await runBuyerWorkflow({ ...options, ...(decisions ? { decisions } : {}) })
       for (let attempt = 0; result.nodes.find((node: {node_key:string}) => node.node_key === nodeKey)?.state === 'awaiting_confirmation' && attempt < 5; attempt++) {
@@ -1192,7 +1259,7 @@ test('disposable EVM workflow reconciles an original provider refund before boun
     assert.equal(refunded.completed, false); assert.equal(refunded.receipt_persisted, false)
     assert.equal(refunded.receipt.totals.gross_buyer_minor, 105); assert.equal(refunded.receipt.totals.confirmed_refund_minor, 100)
     assert.equal(refunded.receipt.totals.unresolved_buyer_minor, 0)
-    assert.equal(refunded.receipt.totals.chain_fee_ceiling_units, '10000000000000000')
+    assert.equal(refunded.receipt.totals.chain_fee_ceiling_units, chainFee)
     assert.equal(refunded.receipt.nodes.find((node: {node_key:string}) => node.node_key === 'review').route_id, null)
     process.env.CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED = 'false'
     await assert.rejects(runBuyerWorkflow(options), /BUYER_HTTP_503/)
@@ -1241,18 +1308,43 @@ test('disposable EVM workflow reconciles an original provider refund before boun
     assert.equal(receipt.attempts.length, 3); assert.equal(receipt.totals.gross_buyer_minor, 315)
     assert.equal(receipt.totals.confirmed_refund_minor, 100); assert.equal(receipt.totals.confirmed_seller_payout_minor, 200)
     assert.equal(receipt.totals.gross_marketplace_fee_minor, 15); assert.equal(receipt.totals.unresolved_buyer_minor, 0)
-    assert.equal(receipt.totals.chain_fee_ceiling_units, '30000000000000000'); assert.equal(receipt.totals.chain_fee_measurement, 'measured')
-    assert.equal(broadcastCalls, count + 6); assert.equal(await chain.balance(f.account.address), 97_850_000n)
-    assert.equal(await chain.balance(payout), 2_000_000n); assert.equal(await chain.balance(chain.treasury), 100_150_000n)
-    assert.equal(chain.buyerNative - await chain.client.getBalance({ address: f.account.address }), BigInt(receipt.totals.actual_buyer_chain_fee_units!))
-    assert.equal(chain.treasuryNative - await chain.client.getBalance({ address: chain.treasury }), BigInt(receipt.totals.actual_treasury_chain_fee_units!))
+    assert.equal(receipt.totals.chain_fee_ceiling_units, (BigInt(chainFee) * 3n).toString())
+    assert.equal(receipt.totals.chain_fee_measurement, isTempo ? 'not_recorded' : 'measured')
+    assert.equal(broadcastCalls, count + 6); assert.equal(await chain.balance(payout), 2_000_000n)
+    if ('buyerNative' in chain) {
+      assert.equal(await chain.balance(f.account.address), 97_850_000n); assert.equal(await chain.balance(chain.treasury), 100_150_000n)
+      assert.equal(chain.buyerNative - await chain.client.getBalance({ address: f.account.address }), BigInt(receipt.totals.actual_buyer_chain_fee_units!))
+      assert.equal(chain.treasuryNative - await chain.client.getBalance({ address: chain.treasury }), BigInt(receipt.totals.actual_treasury_chain_fee_units!))
+    } else {
+      const hashes = new Set<string>(); let buyerFees = 0n, treasuryFees = 0n
+      for (const attempt of receipt.attempts) {
+        const [funding] = await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id, attempt.trade_id))
+        assert.equal(funding.payment_rail, 'mpp'); assert.equal(funding.chain_id, 4217); assert.equal(funding.token_address, chain.token)
+        const transfers = await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id, attempt.trade_id))
+        assert.equal(transfers.length, 1); assert.equal(transfers[0].status, 'confirmed')
+        for (const hash of [funding.tx_hash!, transfers[0].tx_hash!]) {
+          assert.equal(hashes.has(hash), false); hashes.add(hash)
+          const proof = await chain.client.getTransactionReceipt({ hash: hash as `0x${string}` })
+          assert.equal(proof.status, 'success'); assert.equal(proof.type, '0x76')
+          assert.equal(proof.feeToken?.toLowerCase(), chain.token); assert.equal(proof.feePayer?.toLowerCase(), proof.from.toLowerCase())
+          const fee = (proof.gasUsed * proof.effectiveGasPrice + 999_999_999_999n) / 1_000_000_000_000n
+          assert.ok(fee > 0n)
+          if (proof.from.toLowerCase() === f.account.address.toLowerCase()) buyerFees += fee
+          else { assert.equal(proof.from.toLowerCase(), chain.treasury.toLowerCase()); treasuryFees += fee }
+        }
+      }
+      assert.equal(hashes.size, 6); assert.ok(buyerFees <= BigInt(chainFee) * 3n)
+      assert.equal(await chain.balance(f.account.address), 97_850_000n - buyerFees)
+      assert.equal(await chain.balance(chain.treasury), 100_150_000n - treasuryFees)
+      assert.equal(receipt.totals.actual_chain_fee_units, null)
+    }
     const replay = await runBuyerWorkflow(options); assert.equal(replay.receipt!.content_hash, complete.receipt!.content_hash)
     assert.equal(broadcastCalls, count + 6)
     for (const serviceId of [f.serviceId, f.fallbackServiceId!]) assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, serviceId)))[0].active_orders, 0)
     const [grant] = await db.select().from(schema.workflow_artifact_grants).where(eq(schema.workflow_artifact_grants.trade_id, dependent.trade_id!))
     const [binding] = await db.select().from(schema.workflow_dependency_bindings).where(eq(schema.workflow_dependency_bindings.id, grant.binding_id))
     assert.equal(JSON.parse(binding.binding_json).source_trade_id, fallback.trade_id)
-    console.info(JSON.stringify({ disposable_evm_workflow_retry: 'passed', original_attempts: 3, transfers: 6, gross_buyer_minor: 315, refund_minor: 100, payout_minor: 200, unresolved_buyer_minor: 0 }))
+    console.info(JSON.stringify({ [isTempo ? 'disposable_tempo_workflow_retry' : 'disposable_evm_workflow_retry']: 'passed', original_attempts: 3, transfers: 6, gross_buyer_minor: 315, refund_minor: 100, payout_minor: 200, unresolved_buyer_minor: 0 }))
   } finally {
     realChainUrl = null; apiHook = null; realRpcHook = null; token = previousToken
     process.env.EVM_ACCEPTED_TOKENS = previousConfig; process.env.CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED = 'true'
@@ -1260,5 +1352,6 @@ test('disposable EVM workflow reconciles an original provider refund before boun
     if (previousSigner === undefined) delete process.env.EVM_SETTLEMENT_PRIVATE_KEY; else process.env.EVM_SETTLEMENT_PRIVATE_KEY = previousSigner
     if (previousAdmin === undefined) delete process.env.ADMIN_USER_IDS; else process.env.ADMIN_USER_IDS = previousAdmin
     await chain.stop()
+    for (const [name, value] of mppEnvironment) { if (value === undefined) delete process.env[name]; else process.env[name] = value }
   }
-})
+}

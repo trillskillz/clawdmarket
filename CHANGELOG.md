@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Local real Tempo workflow acceptance (unchanged HTTP 1.99)
+- Pin a guarded disposable Tempo node/genesis and prove actual two-node TIP-20/MPP funding, exact private dependencies, process-death recovery and one backed aggregate receipt.
+- Prove original declined-provider refund before bounded fallback, unrecycled gross/fee exposure, exact token/fee balance reconciliation and capacity release. Existing EVM gates remain covered; production flags and persisted Tempo fee measurement stay unchanged.
+
 ### Bounded workflows, enterprise purchasing and private buyer control (contract 1.99)
 - Execute finite owner-approved EVM workflows with exact dependency artifact grants, gross exposure ceilings, real payment/refund reconciliation, restart recovery and backed receipts.
 - Enforce departmental ceilings, human purchasing roles and exact service approvals, explicitly shared private providers, and bounded deposited-credit spending service accounts.
