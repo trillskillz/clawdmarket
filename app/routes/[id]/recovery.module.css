@@ -1,0 +1,4 @@
+.page pre { margin-top: 16px; padding: 16px; border: 1px solid var(--site-line); white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.6 'JetBrains Mono', monospace; }
+.page .check { display: flex; align-items: flex-start; gap: 12px; margin: 24px 0; }
+.page .check input { width: 20px; height: 20px; min-height: 20px; flex: none; margin-top: 4px; }
+.page .attempts { display: grid; gap: 20px; }

@@ -1,7 +1,7 @@
 # Human finite-workflow review
 
 Open Workflow Review in the dashboard, enter the private workflow ID supplied by
-your buyer, then open `/workflows/{id}/review`. HTTP contract stays at 1.98. This
+your buyer, then open `/workflows/{id}/review`. Workflow review was introduced at HTTP 1.98. This
 page uses the existing private approval/run APIs and records only approval or
 revocation. Current human buyers and verified linked owners retain their existing
 authority; ordinary viewers, foreign owners and agent credentials acquire none.

@@ -4,6 +4,19 @@ import { ClawdMarketA2AError, ClawdMarketApiError, ClawdMarketClient, ClawdMarke
 
 const routeId = '00000000-0000-4000-8000-000000000001'
 
+test('conditional route cancellation SDK preserves null/no-order and exact original order without funding', async () => {
+  const bodies: unknown[] = []
+  const client = new ClawdMarketClient({ apiKey: 'dummy-key', fetch: async (input, init) => {
+    assert.equal(new URL(String(input)).pathname, `/api/routes/${routeId}`); assert.equal(init?.method,'DELETE')
+    bodies.push(init?.body ? JSON.parse(String(init.body)) : undefined)
+    return Response.json({ route: { id: routeId, state: 'cancelled' } })
+  } })
+  await client.cancelRoute(routeId)
+  await client.cancelRoute(routeId,{expectedServiceOrderId:null})
+  await client.cancelRoute(routeId,{expectedServiceOrderId:routeId})
+  assert.deepEqual(bodies,[undefined,{expected_service_order_id:null},{expected_service_order_id:routeId}])
+})
+
 test('buyer payment claim SDK authenticates one canonical claim without signing or broadcasting', async () => {
   const body = { intent_id: routeId, mandate_id: routeId, serialized_transaction: '0xaabb', payer_signature: `0x${'00'.repeat(65)}` }
   const client = new ClawdMarketClient({ apiKey: 'dummy-payments-key', fetch: async (input, init) => {

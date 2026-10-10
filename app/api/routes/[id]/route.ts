@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
+import { z } from 'zod'
 import { db } from '@/lib/db'
 import { route_plans, service_orders, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
@@ -9,6 +10,7 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { expireTradePayment } from '@/lib/trade-funding'
 import { linkedRoutePaymentExposure, routePaymentExposure } from '@/lib/route-payment-exposure'
 import { inspectOwnedRoute } from '@/lib/route-inspection'
+import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,11 +37,17 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (principal.usesCookieAuth && !validateCsrf(request)) return failure('CSRF_REJECTED', 'CSRF validation failed', 403)
   try {
     const { id } = await params
+    const parsed = z.object({ expected_service_order_id: z.uuid().nullable().optional() }).strict()
+      .safeParse(await readBoundedJson(request, 1024, 10_000, true))
+    if (!parsed.success) return failure('INVALID_ROUTE_CANCELLATION', 'Cancellation accepts only an optional original order precondition', 400, 'payment_unknown')
+    const expected = parsed.data.expected_service_order_id
     const [cancelled] = await db.update(route_plans).set({ state: 'cancelled', updated_at: new Date() })
-      .where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, principal.userId), eq(route_plans.state, 'planned'))).returning()
+      .where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, principal.userId), eq(route_plans.state, 'planned'),
+        expected === undefined ? undefined : expected === null ? isNull(route_plans.service_order_id) : eq(route_plans.service_order_id, expected))).returning()
     if (cancelled) return NextResponse.json({ route: routePlanDto(cancelled), payment_exposure: null }, { headers: { 'Cache-Control': 'no-store' } })
     const [plan] = await db.select().from(route_plans).where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, principal.userId))).limit(1)
     if (!plan) return failure('ROUTE_NOT_FOUND', 'Route not found', 404)
+    if (expected !== undefined && plan.service_order_id !== expected) return failure('ROUTE_CANCELLATION_TARGET_CHANGED', 'The original checkout changed; inspect it before another cancellation', 409, 'payment_unknown')
     if (plan.state === 'cancelled') {
       const paymentExposure = plan.service_order_id ? await linkedRoutePaymentExposure(plan.service_order_id) : null
       return NextResponse.json({ route: routePlanDto(plan), idempotent: true, payment_exposure: paymentExposure,
@@ -59,6 +67,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
     return failure('ROUTE_ALREADY_EXECUTING', 'Route reservation is in progress; retry cancellation shortly', 409)
   } catch (error) {
+    if (error instanceof ArtifactError) return failure(error.code, error.status === 413 ? 'Cancellation body is too large' : 'Invalid cancellation body', error.status, 'payment_unknown')
     return internalErrorResponse('Route cancellation failed', error)
   }
 }

@@ -194,8 +194,8 @@ class ClawdMarketClient:
     def revoke_route_mandate(self, route_id: str) -> JSON:
         return self._call("revoke_route_mandate", route_id)
 
-    def cancel_route(self, route_id: str) -> JSON:
-        return self._call("cancel_planned_route", route_id)
+    def cancel_route(self, route_id: str, *, precondition: JSON | None = None) -> JSON:
+        return self._call("cancel_planned_route", route_id, precondition)
 
     def inspect_route_lifecycle(self, route_id: str) -> JSON:
         return self._call("inspect_route_lifecycle", route_id)

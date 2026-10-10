@@ -74,6 +74,13 @@ class ClientTests(unittest.TestCase):
         self.assertEqual([c["method"] for c in calls], ["POST", "POST", "DELETE", "GET", "GET"])
         self.assertTrue(all(c["headers"]["Authorization"] == "Bearer dummy-python-key" for c in calls))
 
+    def test_conditional_cancellation_retains_original_order_and_legacy_no_body(self):
+        self.client.cancel_route(ID)
+        self.client.cancel_route(ID, precondition={"expected_service_order_id": None})
+        self.client.cancel_route(ID, precondition={"expected_service_order_id": ID})
+        self.assertEqual([call["body"] for call in self.state["calls"]], [None, {"expected_service_order_id": None}, {"expected_service_order_id": ID}])
+        self.assertTrue(all(call["method"] == "DELETE" for call in self.state["calls"]))
+
     def test_lost_mutation_response_requires_explicit_original_replay(self):
         self.state["reply"] = lambda _call: None
         with self.assertRaises(ClawdMarketTransportError) as error:
