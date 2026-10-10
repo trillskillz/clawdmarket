@@ -7,6 +7,7 @@
 !/scripts/buyer-mpp-worker.mjs
 !/scripts/buyer-route-worker.mjs
 !/scripts/buyer-workflow-worker.mjs
+!/scripts/buyer-spending-worker.mjs
 !/scripts/buyer-tempo-adapter.mjs
 !/scripts/buyer-evm-adapter.mjs
 !/scripts/buyer-payment-journal.mjs

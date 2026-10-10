@@ -18,7 +18,7 @@ export function createBuyerEvmAdapter({ chainId, rpcUrl, account }) {
     return rpc
   }
   return {
-    chainId,
+    chainId, rpcUrl: url.toString(),
     async prepare(intent, signal) {
       const rpc = await checkedClient(signal)
       const transfer = { account, to: intent.token_address, value: 0n, data: encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [intent.treasury_address, BigInt(intent.token_amount)] }) }

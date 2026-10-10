@@ -22,6 +22,7 @@ let directory: string, baseUrl: string, db: typeof import('@/lib/db').db, schema
 let domain: typeof import('@/lib/organization-purchasing')
 const server = createServer(),tempoProxy=createServer()
 let tempoChain:Awaited<ReturnType<typeof startDisposableTempoChain>>|undefined,tempoRpcUrl:string,tempoBroadcasts=0
+let spendingApiHook:((path:string)=>Promise<void>)|null=null
 let tempoRpcHook:((method:string)=>Promise<void>)|null=null
 const payer = privateKeyToAccount(`0x${'18'.repeat(32)}`), treasuryKey = `0x${'97'.repeat(32)}` as const
 let chain: Awaited<ReturnType<typeof startDisposableWorkflowChain>> | undefined,enterpriseChain:Awaited<ReturnType<typeof startDisposableWorkflowChain>>|undefined
@@ -106,13 +107,15 @@ before(async () => {
       else if (path === '/api/wallet/deposits') response = await depositsApi[incoming.method as 'POST' | 'PUT'](request)
       else {
         const params = { params: Promise.resolve({ id: parts[3] }) }
-        response = path.endsWith('/dispute') ? await disputeApi.POST(request,params) : path.endsWith('/resolve') ? await resolveApi.POST(request,params) : path.endsWith('/fund/mpp/intent') ? await mppIntentApi[incoming.method as 'GET'|'POST'](request,params) : path.endsWith('/fund/mpp/claim') ? await mppClaimApi.POST(request,params) : path.endsWith('/fund/mpp') ? await mppApi.POST(request,params) : path.endsWith('/fund/evm/claim') ? await claimApi.POST(request,params) : path.endsWith('/fund/evm/intent') ? await intentApi.POST(request, params) : path.endsWith('/fund/evm') ? await fundingApi.POST(request, params) : path.endsWith('/attempt') ? await attemptApi.POST(request, params) : path.endsWith('/delivery') ? await deliverApi.POST(request, params)
+        response = path.endsWith('/dispute') ? await disputeApi.POST(request,params) : path.endsWith('/resolve') ? await resolveApi.POST(request,params) : path.endsWith('/fund/mpp/intent') ? await mppIntentApi[incoming.method as 'GET'|'POST'](request,params) : path.endsWith('/fund/mpp/claim') ? await mppClaimApi.POST(request,params) : path.endsWith('/fund/mpp') ? await mppApi.POST(request,params) : path.endsWith('/fund/evm/claim') ? await claimApi.POST(request,params) : path.endsWith('/fund/evm/intent') ? await intentApi[incoming.method as 'GET'|'POST'](request, params) : path.endsWith('/fund/evm') ? await fundingApi.POST(request, params) : path.endsWith('/attempt') ? await attemptApi.POST(request, params) : path.endsWith('/delivery') ? await deliverApi.POST(request, params)
           : path.endsWith('/confirm') ? await confirmApi.POST(request, params) : await workApi.GET(request, params)
       }
+      await spendingApiHook?.(path)
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text())
     } catch (error) { outgoing.writeHead(500); outgoing.end(JSON.stringify({ error: String(error) })) }
   })
   await new Promise<void>(done => server.listen(0, '127.0.0.1', done)); baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+  process.env.CLAWDMARKET_CANONICAL_ORIGIN=baseUrl
 })
 after(async () => { await new Promise<void>(done => server.close(() => done())); db?.$client.close(); await chain?.stop();await enterpriseChain?.stop();if(tempoChain){await new Promise<void>(done=>tempoProxy.close(()=>done()));await tempoChain.stop()} if (directory) await rm(directory, { recursive: true, force: true }) })
 const token = (actor: string) => jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })
@@ -1238,4 +1241,105 @@ test('delegated Tempo SIGKILL at intent, claim, broadcast and verified receipt c
       assert.deepEqual(await counts(f),{orders:1,capacity:0})
     }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited}
   }
+})
+
+async function spendingClientApproval(f:Fixture,g:Awaited<ReturnType<typeof spendingGrant>>,c:any){
+  const [use]=await db.select().from(schema.organization_spending_uses).where(eq(schema.organization_spending_uses.order_id,c.order.id))
+  return {version:1,origin:baseUrl,organization_id:f.id,account_id:g.account.id,authority_hash:use.authority_hash,grant_version:g.account.version,buyer_id:f.buyer,
+    order_id:c.order.id,trade_id:c.trade.id,service_id:f.service,purchasing_approval_id:c.approval.id,payment:g.account.payment,token_decimals:6,token_usd_price:1,total_cost:'1.05',max_purchase:'1.05',rpc_url:g.account.version===3?tempoRpcUrl:enterpriseChain!.url}
+}
+async function spendingClientProcess(approval:any,g:Awaited<ReturnType<typeof spendingGrant>>,f:Fixture,stateDirectory:string,mode?:string){
+  const file=join(directory,`${crypto.randomUUID()}.spending-client.json`)
+  await writeFile(file,JSON.stringify(approval),{mode:0o600})
+  const args=['scripts/buyer-spending-worker.mjs',file,stateDirectory,...(mode?[mode]:[])]
+  const output=await promisify(execFile)(process.execPath,args,{cwd:process.cwd(),env:{...process.env,CLAWDMARKET_SPENDING_API_KEY:g.key,CLAWDMARKET_BUYER_API_KEY:f.key,CLAWDMARKET_BUYER_PRIVATE_KEY:`0x${'18'.repeat(32)}`}})
+  assert.equal(output.stdout.includes(g.key),false);assert.equal(output.stdout.includes(f.key),false);assert.equal(output.stdout.includes('18'.repeat(32)),false)
+  return JSON.parse(output.stdout)
+}
+
+test('buyer enterprise client prepares privately and funds original L1/Tempo orders across separate process restarts',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY||!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  for(const rail of ['evm','mpp'] as const){
+    const f=await fixture(),g=rail==='evm'?await externalGrant(f):await tempoGrant(f),c=rail==='evm'?await externalCheckout(f,g):await tempoCheckout(f,g),approval=await spendingClientApproval(f,g,c),state=join(directory,`${c.trade.id}.spending-client`)
+    const prepared=await spendingClientProcess(approval,g,f,state,'--prepare-only');assert.equal(prepared.state,'prepared')
+    const {readdir}=await import('node:fs/promises'),journals=await Promise.all((await readdir(state)).filter(name=>name.endsWith('.json')).map(name=>readFile(join(state,name),'utf8')))
+    assert.ok(journals.some(text=>text.includes(prepared.tx_hash)));for(const text of journals){assert.equal(text.includes(g.key),false);assert.equal(text.includes(f.key),false);assert.equal(text.includes('18'.repeat(32)),false)}
+    const before=tempoBroadcasts
+    const funded=await spendingClientProcess(approval,g,f,state);assert.equal(funded.state,'funded',JSON.stringify(funded));assert.equal(funded.tx_hash,prepared.tx_hash)
+    const repeated=await spendingClientProcess(approval,g,f,state);assert.equal(repeated.state,'funded');assert.equal(repeated.tx_hash,prepared.tx_hash)
+    if(rail==='mpp')assert.equal(tempoBroadcasts,before+1)
+    const receipts=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,c.trade.id));assert.equal(receipts.length,1);assert.equal(receipts[0].tx_hash,prepared.tx_hash)
+  }
+})
+
+test('enterprise client recovers lost claim and SDK responses with original bytes and no replacement signer call',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY||!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  const {runBuyerSpendingFunding}=await import('../../scripts/buyer-spending-worker.mjs'),{createBuyerEvmAdapter}=await import('../../scripts/buyer-evm-adapter.mjs')
+  for(const rail of ['evm','mpp'] as const)for(const lost of ['intent','claim','broadcast'] as const){
+    const f=await fixture(),g=rail==='evm'?await externalGrant(f):await tempoGrant(f),c=rail==='evm'?await externalCheckout(f,g):await tempoCheckout(f,g),approval=await spendingClientApproval(f,g,c),stateDirectory=join(directory,`${c.trade.id}.lost-response-client`)
+    const account=rail==='mpp'?TempoAccount.fromSecp256k1(`0x${'18'.repeat(32)}`):payer,adapter=(rail==='mpp'?createBuyerTempoAdapter:createBuyerEvmAdapter)({chainId:approval.payment.chain_id,rpcUrl:approval.rpc_url,account})
+    const originalPrepare=adapter.prepare;let signs=0;adapter.prepare=async(...args:any[])=>{signs++;return originalPrepare(...args as [any])}
+    let dropped=false
+    const fetcher:typeof fetch=async(url,init)=>{const response=await fetch(url,init);if(!dropped&&(lost==='intent'?String(url).endsWith('/intent')&&init?.method==='POST':lost==='claim'?String(url).endsWith('/claim'):rail==='mpp'&&String(url).endsWith('/proof')&&new Headers(init?.headers).has('Payment-Authorization'))){dropped=true;await response.arrayBuffer();throw Error('Controlled lost response')}return response}
+    if(lost==='broadcast'&&rail==='evm'){assert.ok('broadcast' in adapter);const broadcast=adapter.broadcast;adapter.broadcast=async(...args:any[])=>{await broadcast(...args as [any]);dropped=true;throw Error('Controlled lost broadcast response')}}
+    const options={approval,apiKey:g.key,recoveryApiKey:f.key,stateDirectory,account,adapter,fetcher}
+    await assert.rejects(()=>runBuyerSpendingFunding(options),lost==='broadcast'&&rail==='evm'?/BUYER_BROADCAST_UNCERTAIN_RESUME_SAME_PAYMENT/:/BUYER_REQUEST_UNCERTAIN_RESUME_SAME_PAYMENT/)
+    assert.equal(dropped,true);assert.equal(signs,lost==='intent'?0:1)
+    const recovery=await spendingClientProcess(approval,g,f,stateDirectory);assert.equal(recovery.state,'funded',JSON.stringify(recovery));assert.equal(signs,lost==='intent'?0:1)
+    const receipt=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,c.trade.id));assert.equal(receipt.length,1)
+  }
+})
+
+test('enterprise client rejects changed approval or copied original order before signing and recovers revoked L1 payment by buyer key',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY},async()=>{
+  const {runBuyerSpendingFunding}=await import('../../scripts/buyer-spending-worker.mjs'),{createBuyerEvmAdapter}=await import('../../scripts/buyer-evm-adapter.mjs')
+  const f=await fixture(),g=await externalGrant(f),c=await externalCheckout(f,g),approval=await spendingClientApproval(f,g,c),stateDirectory=join(directory,`${c.trade.id}.revoked-client`),adapter=createBuyerEvmAdapter({chainId:1,rpcUrl:enterpriseChain!.url,account:payer})
+  let signs=0;const prepare=adapter.prepare;adapter.prepare=async(...args:any[])=>{signs++;return prepare(...args as [any])}
+  const options={approval,apiKey:g.key,recoveryApiKey:f.key,stateDirectory,account:payer,adapter}
+  await assert.rejects(()=>runBuyerSpendingFunding({...options,approval:{...approval,authority_hash:'a'.repeat(64)}}),/BUYER_CHECKOUT_SCOPE_MISMATCH/);assert.equal(signs,0)
+  // An invalid read-only review creates no durable wallet obligation; use the same directory.
+  const broadcast=adapter.broadcast;adapter.broadcast=async(...args:any[])=>{const hash=await broadcast(...args as [any]);await call(g.path,f.owner,'DELETE',{account_id:g.account.id});throw Error('Controlled revoked lost response '+hash)}
+  const before=await enterpriseChain!.balance(payer.address)
+  await assert.rejects(()=>runBuyerSpendingFunding(options),/BUYER_BROADCAST_UNCERTAIN_RESUME_SAME_PAYMENT/);assert.equal(signs,1)
+  const recovered=await spendingClientProcess(approval,g,f,options.stateDirectory);assert.equal(recovered.state,'refunded',JSON.stringify(recovered));assert.equal(await enterpriseChain!.balance(payer.address),before)
+  assert.deepEqual(await counts(f),{orders:1,capacity:0})
+})
+
+test('enterprise buyer SIGKILL after claim commit releases the shared lock and resumes original bytes in a fresh process',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY||!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  for(const rail of ['evm','mpp'] as const){
+    const f=await fixture(),g=rail==='evm'?await externalGrant(f):await tempoGrant(f),c=rail==='evm'?await externalCheckout(f,g):await tempoCheckout(f,g),approval=await spendingClientApproval(f,g,c),stateDirectory=join(directory,`${c.trade.id}.killed-client`),file=join(directory,`${c.trade.id}.kill-approval.json`)
+    await writeFile(file,JSON.stringify(approval),{mode:0o600})
+    let release!:()=>void,reached!:()=>void;const arrived=new Promise<void>(done=>reached=done),blocked=new Promise<void>(done=>release=done)
+    spendingApiHook=async path=>{if(path===c.paymentPath+'/claim'){reached();await blocked}}
+    const child=spawn(process.execPath,['scripts/buyer-spending-worker.mjs',file,stateDirectory],{cwd:process.cwd(),detached:true,env:{...process.env,CLAWDMARKET_SPENDING_API_KEY:g.key,CLAWDMARKET_BUYER_API_KEY:f.key,CLAWDMARKET_BUYER_PRIVATE_KEY:`0x${'18'.repeat(32)}`},stdio:['ignore','ignore','pipe']})
+    let errors='';child.stderr.on('data',chunk=>errors+=chunk);const exited=new Promise<void>(done=>child.once('exit',()=>done())),timeout=setTimeout(()=>{if(child.pid)process.kill(-child.pid,'SIGKILL');release()},15000)
+    try{
+      await Promise.race([arrived,exited.then(()=>{throw Error(errors||'Buyer exited before claim commit')})]);assert.ok(child.pid);process.kill(-child.pid,'SIGKILL');await exited;spendingApiHook=null;release()
+      const original=await spend(c.paymentPath+'/intent',g.key,'GET');assert.equal(original.body.claim.state,'claimed');const hash=original.body.claim.tx_hash
+      const resumed=await spendingClientProcess(approval,g,f,stateDirectory);assert.equal(resumed.state,'funded',JSON.stringify(resumed));assert.equal(resumed.tx_hash,hash)
+      const repeated=await spendingClientProcess(approval,g,f,stateDirectory);assert.equal(repeated.tx_hash,hash);assert.equal(repeated.state,'funded')
+      assert.deepEqual(await counts(f),{orders:1,capacity:1})
+    }finally{clearTimeout(timeout);spendingApiHook=null;release();if(child.exitCode===null&&child.signalCode===null&&child.pid)process.kill(-child.pid,'SIGKILL');await exited}
+  }
+})
+
+test('enterprise client preserves a revoked Tempo refund hold until original treasury confirmation',{skip:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  assert.ok(tempoChain)
+  const f=await fixture(),g=await tempoGrant(f),c=await tempoCheckout(f,g),approval=await spendingClientApproval(f,g,c),state=join(directory,`${c.trade.id}.refund-client`)
+  const prepared=await spendingClientProcess(approval,g,f,state,'--prepare-only')
+  const {readdir}=await import('node:fs/promises')
+  const saved=await Promise.all((await readdir(state)).filter(name=>name.endsWith('.json')).map(async name=>JSON.parse(await readFile(join(state,name),'utf8'))))
+  const journal=saved.find(value=>value.trade_id===c.trade.id);assert.ok(journal)
+  const claimed=await spend(c.paymentPath+'/claim',g.key,'POST',{intent_id:journal.intent.id,mandate_id:g.account.id,buyer_operation_id:journal.operation_id,serialized_transaction:journal.serialized_transaction})
+  assert.equal(claimed.status,200);assert.equal(claimed.body.send_allowed,true)
+  assert.equal((await call(g.path,f.owner,'DELETE',{account_id:g.account.id})).status,200)
+  const before=await tempoChain.balance(payer.address),broadcasts=tempoBroadcasts
+  const hash=await tempoChain.client.sendRawTransaction({serializedTransaction:journal.serialized_transaction})
+  assert.equal(hash,prepared.tx_hash)
+  await tempoChain.client.waitForTransactionReceipt({hash,confirmations:1,timeout:10000,pollingInterval:50})
+  const recovered=await spendingClientProcess(approval,g,f,state);assert.equal(recovered.state,'refund_pending',JSON.stringify(recovered));assert.equal(recovered.tx_hash,hash);assert.equal(tempoBroadcasts,broadcasts)
+  const another=await fixture(),grant2=await tempoGrant(another),order2=await tempoCheckout(another,grant2),approval2=await spendingClientApproval(another,grant2,order2)
+  await assert.rejects(()=>spendingClientProcess(approval2,grant2,another,state),/BUYER_WALLET_PAYMENT_UNRECONCILED/)
+  const confirmed=await settleTempo(c.trade.id);assert.equal(confirmed.status,'confirmed')
+  const final=await spendingClientProcess(approval,g,f,state);assert.equal(final.state,'refunded');assert.equal(final.tx_hash,hash)
+  assert.equal(tempoBroadcasts,broadcasts+1) // Only the original treasury refund sends through the proxy.
+  assert.equal(await tempoChain.balance(payer.address),before-await actualTempoFee(hash))
+  assert.deepEqual(await counts(f),{orders:1,capacity:0})
 })
