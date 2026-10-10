@@ -7,6 +7,7 @@ import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts'
 import { assertMarketplaceMppPullAllowed, marketplaceMppCharge, marketplaceMppCredential, marketplaceMppValidationRequest } from '@/lib/marketplace-mpp-payment'
 import { verifyMarketplaceMppHash } from '@/lib/mpp-payment-proof'
 import { parseUnits } from 'viem'
+import { measuredTempoChainFee } from '@/lib/chain-fee-evidence'
 import { db } from '@/lib/db'
 import { payment_receipts, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
@@ -69,10 +70,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       credential?.payload?.type === 'transaction' ? { serialized_transaction: credential.payload.signature, challenge: credential.challenge } : undefined)
     const readiness = getPaymentReadiness()
     if (!readiness.mpp.enabled) return json({ error: 'MPP settlement is not configured', code: 'PAYMENT_RAIL_NOT_CONFIGURED' }, { status: 503 })
+    let verifiedReceipt:Awaited<ReturnType<typeof verifyMarketplaceMppHash>>['receipt']|null=null
     let payer: string, txHash: string, withReceipt = (response: Response): Response => response
     if (proof) {
       const verified = await verifyMarketplaceMppHash(trade, proof.tx_hash as `0x${string}`, proof.payer_address as `0x${string}`)
-      payer = verified.payer; txHash = verified.hash
+      payer = verified.payer; txHash = verified.hash; verifiedReceipt=verified.receipt
     } else {
       const mpp = getMarketplaceMppServer()
       if (!mpp) return json({ error: 'MPP settlement is not configured', code: 'PAYMENT_RAIL_NOT_CONFIGURED' }, { status: 503 })
@@ -95,6 +97,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       withReceipt = (response) => payment.withReceipt(response)
     }
     await assertOrganizationTempoProof(trade.id,txHash,payer)
+    // Optional read-only fee observation cannot grant send permission or replace funding proof.
+    if(!verifiedReceipt)verifiedReceipt=await verifyMarketplaceMppHash(trade,txHash as `0x${string}`,payer as `0x${string}`).then(value=>value.receipt).catch(()=>null)
     const reference = txHash.toLowerCase()
     txHash = reference
     const funding = {
@@ -110,6 +114,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       tokenAmount: parseUnits(trade.total_cost.toFixed(2), 6),
       tokenUsdPrice: 1,
       usdValue: trade.total_cost,
+      chainFeeEvidence:verifiedReceipt?measuredTempoChainFee(readiness.mpp.chainId,verifiedReceipt):null,
     } as const
     let funded
     try {

@@ -15,7 +15,7 @@ import {
 } from 'viem'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { measuredEvmChainFee, serializeChainFeeEvidence } from './chain-fee-evidence'
+import { measuredEvmChainFee, measuredTempoChainFee, serializeChainFeeEvidence } from './chain-fee-evidence'
 import { agents, payment_receipts, payout_addresses, settlement_nonces, settlement_transfers, trades, users } from '@/lib/schema'
 import { findAcceptedToken, getMppRecipientAddress, getTempoRpcUrl, getTreasuryAddress, requireSettlementSigner } from '@/lib/payment-config'
 import { getRpcUrl } from '@/lib/settlement'
@@ -235,7 +235,7 @@ export async function processSettlementTransfer(transferId: string, options: { w
     await db.update(settlement_transfers).set({ status: 'submitted', updated_at: new Date() }).where(eq(settlement_transfers.id, transfer.id))
     const token = findAcceptedToken(transfer.chain_id, transfer.token_address)
     const receipt = await client.waitForTransactionReceipt({ hash: transfer.tx_hash as Hash, confirmations: token?.confirmations || 3, timeout: options.waitMs ?? 45_000 })
-    const feeEvidence = serializeChainFeeEvidence(measuredEvmChainFee(transfer.chain_id, receipt), { chainId: transfer.chain_id, txHash: transfer.tx_hash, payerAddress: transfer.from_address })
+    const feeEvidence = serializeChainFeeEvidence(transfer.chain_id===TEMPO_CHAIN_ID?measuredTempoChainFee(transfer.chain_id,receipt):measuredEvmChainFee(transfer.chain_id, receipt), { chainId: transfer.chain_id, txHash: transfer.tx_hash, payerAddress: transfer.from_address })
     if (receipt.status !== 'success') {
       await db.update(settlement_transfers).set({ status: 'failed', chain_fee_evidence_json: feeEvidence, last_error: 'Settlement transaction reverted', updated_at: new Date() }).where(eq(settlement_transfers.id, transfer.id))
       throw new SettlementError('Settlement transaction reverted', 'TRANSFER_REVERTED', false)

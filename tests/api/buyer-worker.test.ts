@@ -1167,9 +1167,28 @@ async function workflowHttpLoop(mode: boolean | 'tempo') {
     assert.equal(await chain.balance(f.account.address), 97_900_000n - buyerFees)
     assert.equal(await chain.balance(payoutAddress), 1_000_000n); assert.equal(await chain.balance(downstreamPayout), 1_000_000n)
     assert.equal(await chain.balance(treasury as `0x${string}`), 100_100_000n - treasuryFees)
-    assert.equal(outcome.receipt.totals.chain_fee_measurement, 'not_recorded')
-    assert.equal(outcome.receipt.totals.actual_chain_fee_units, null)
+    assert.equal(outcome.receipt.totals.chain_fee_measurement, 'measured')
+    assert.equal(outcome.receipt.totals.actual_buyer_chain_fee_units,buyerFees.toString())
+    assert.equal(outcome.receipt.totals.actual_treasury_chain_fee_units,treasuryFees.toString())
+    assert.equal(outcome.receipt.totals.actual_chain_fee_units,(buyerFees+treasuryFees).toString())
+    for(const attempt of outcome.receipt.attempts){
+      assert.equal(attempt.chain_fee_evidence.funding?.model,'tempo_pathusd_sender_fee_v1')
+      assert.ok(attempt.chain_fee_evidence.transfers.every((fee:{evidence?:{model:string}|null})=>fee.evidence?.model==='tempo_pathusd_sender_fee_v1'))
+    }
     assert.deepEqual(outcome.receipt.totals.chain_fee_currency, { chain_id: 4217, asset: 'fee_token', unit: 'token_base_units', token_address: chain.token })
+    const [feeRecord]=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,fundedRoot.trade_id))
+    const observed=JSON.parse(feeRecord.chain_fee_evidence_json!)
+    for(const change of [{fee_token_address:`0x${'55'.repeat(20)}`},{payer_address:`0x${'55'.repeat(20)}`},{fee_transfer_amount_units:'1'}]){
+      await db.update(schema.payment_receipts).set({chain_fee_evidence_json:JSON.stringify({...observed,...change})}).where(eq(schema.payment_receipts.id,feeRecord.id))
+      const rejected=await fetch(`${baseUrl}/api/workflows/${workflow.id}/execute`,{headers});assert.equal(rejected.status,409);assert.equal((await rejected.json()).error_code,'WORKFLOW_CHAIN_FEE_EVIDENCE_INVALID')
+    }
+    const extraFee=BigInt(chainFee)+1n,expensive={...observed,gas_used:(extraFee*1_000_000_000_000n).toString(),effective_gas_price:'1',execution_fee_units:extraFee.toString(),total_fee_units:extraFee.toString(),fee_transfer_amount_units:extraFee.toString()}
+    await db.update(schema.payment_receipts).set({chain_fee_evidence_json:JSON.stringify(expensive)}).where(eq(schema.payment_receipts.id,feeRecord.id))
+    const excessive=await fetch(`${baseUrl}/api/workflows/${workflow.id}/execute`,{headers});assert.equal(excessive.status,409);assert.equal((await excessive.json()).error_code,'WORKFLOW_CHAIN_FEE_CEILING_EXCEEDED')
+    await db.update(schema.payment_receipts).set({chain_fee_evidence_json:null}).where(eq(schema.payment_receipts.id,feeRecord.id))
+    const changed=await fetch(`${baseUrl}/api/workflows/${workflow.id}/reconcile`,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({version:1,run_id:run.id})});assert.equal(changed.status,409);assert.equal((await changed.json()).error_code,'WORKFLOW_RECEIPT_CURRENT_EVIDENCE_CHANGED')
+    await db.update(schema.payment_receipts).set({chain_fee_evidence_json:feeRecord.chain_fee_evidence_json}).where(eq(schema.payment_receipts.id,feeRecord.id))
+    assert.equal((await api('POST',`/api/workflows/${workflow.id}/reconcile`,{version:1,run_id:run.id})).content_hash,outcome.content_hash)
     console.info(JSON.stringify({ disposable_tempo_workflow: 'passed', nodes: 2, distinct_transfers: 4, gross_buyer_minor: 210,
       seller_payout_minor: 200, unresolved_buyer_minor: 0, independently_checked_buyer_fee_units: buyerFees.toString(), independently_checked_treasury_fee_units: treasuryFees.toString() }))
   }
@@ -1309,7 +1328,7 @@ async function workflowRefundLoop(isTempo: boolean) {
     assert.equal(receipt.totals.confirmed_refund_minor, 100); assert.equal(receipt.totals.confirmed_seller_payout_minor, 200)
     assert.equal(receipt.totals.gross_marketplace_fee_minor, 15); assert.equal(receipt.totals.unresolved_buyer_minor, 0)
     assert.equal(receipt.totals.chain_fee_ceiling_units, (BigInt(chainFee) * 3n).toString())
-    assert.equal(receipt.totals.chain_fee_measurement, isTempo ? 'not_recorded' : 'measured')
+    assert.equal(receipt.totals.chain_fee_measurement, 'measured')
     assert.equal(broadcastCalls, count + 6); assert.equal(await chain.balance(payout), 2_000_000n)
     if ('buyerNative' in chain) {
       assert.equal(await chain.balance(f.account.address), 97_850_000n); assert.equal(await chain.balance(chain.treasury), 100_150_000n)
@@ -1336,7 +1355,10 @@ async function workflowRefundLoop(isTempo: boolean) {
       assert.equal(hashes.size, 6); assert.ok(buyerFees <= BigInt(chainFee) * 3n)
       assert.equal(await chain.balance(f.account.address), 97_850_000n - buyerFees)
       assert.equal(await chain.balance(chain.treasury), 100_150_000n - treasuryFees)
-      assert.equal(receipt.totals.actual_chain_fee_units, null)
+      assert.equal(receipt.totals.actual_buyer_chain_fee_units,buyerFees.toString())
+      assert.equal(receipt.totals.actual_treasury_chain_fee_units,treasuryFees.toString())
+      assert.equal(receipt.totals.actual_chain_fee_units,(buyerFees+treasuryFees).toString())
+      for(const attempt of receipt.attempts){assert.equal(attempt.chain_fee_evidence.funding?.model,'tempo_pathusd_sender_fee_v1');assert.ok(attempt.chain_fee_evidence.transfers.every((fee:{evidence?:{model:string}|null})=>fee.evidence?.model==='tempo_pathusd_sender_fee_v1'))}
     }
     const replay = await runBuyerWorkflow(options); assert.equal(replay.receipt!.content_hash, complete.receipt!.content_hash)
     assert.equal(broadcastCalls, count + 6)

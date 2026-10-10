@@ -1,4 +1,4 @@
-# Recorded workflow chain fees — local contract 1.93
+# Recorded workflow chain fees — local contract 1.104
 
 Migration 56 adds nullable `chain_fee_evidence_json` fields to original payment
 receipts and settlement transfers. Existing records retain null. No amount,
@@ -12,12 +12,19 @@ chain, original transaction and payer. Canonical integer evidence includes block
 identity, gas used, effective gas price, execution fees, blob fees and total native
 wei. Arithmetic and identity are checked before storage and reconciliation.
 
-The supported complete model is Ethereum L1 native fees, chains 1 and 11155111.
+The supported Ethereum model is L1 native fees, chains 1 and 11155111.
 An EIP-4844 receipt requires both blob gas fields. Other models, missing fields,
 historical records and incomplete blob receipts remain unmeasured. Base/Optimism
-L1 and operator charges and Tempo fee-token fees are not inferred from execution
+L1 and operator charges are not inferred from execution
 gas or approved ceilings. Existing pre-send fee/reserve checks continue to bound
 buyer exposure on their supported rails.
+
+Local 1.104 also records the supported sender-paid Tempo pathUSD model on chain
+4217. Original receipt gas, payer and fee token must match exactly one canonical
+protocol fee-manager transfer and upward integer rounding. Missing, sponsored,
+free, cross-token and unsupported models remain null. Successful funding and
+confirmed or reverted original treasury transfers use the existing nullable
+fields. See [Tempo fees](TEMPO_CHAIN_FEES.md) for the pinned model and acceptance.
 
 Workflow reconciliation separates `actual_buyer_chain_fee_units` from
 `actual_treasury_chain_fee_units`, with original per-transaction evidence and an
@@ -39,6 +46,7 @@ skipped), with real EVM and isolated verification enabled. Six final focused
 cases, final typecheck/lint, production build and 17 selected Chromium journeys
 pass. Evidence paths are recorded in the master plan. This historical 1.93 checkpoint preceded the completed EVM adverse/retry/crash
 gate and production release through 1.99. The subsequent [real Tempo proof](WORKFLOW_TEMPO_PROOF.md)
-checks fees independently against token balances while persisted Tempo fee
-observations remain explicitly unmeasured. Production workflow execution remains
+initially checked fees independently while persisted observations stayed null;
+local 1.104 adds supported original observations without rewriting old receipts.
+Production workflow execution remains
 closed; the master plan records current acceptance and publishing status.

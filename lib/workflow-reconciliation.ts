@@ -71,11 +71,11 @@ async function snapshot(source: Source, workflowId: string, userId: string) {
     try {
       if (fundingReceipt) fundingFee = readChainFeeEvidence(fundingReceipt.chain_fee_evidence_json,
         { chainId: fundingReceipt.chain_id || 0, txHash: fundingReceipt.tx_hash, payerAddress: fundingReceipt.payer_address })
-      if (fundingFee && (contract.terms.payment.rail !== 'evm' || fundingFee.chain_id !== contract.terms.payment.chain_id
+      if (fundingFee && ((contract.terms.payment.rail === 'evm' ? fundingFee.model !== 'ethereum_l1_native_v1' : fundingFee.model !== 'tempo_pathusd_sender_fee_v1' || !('fee_token_address' in contract.terms.payment) || fundingFee.fee_token_address !== contract.terms.payment.fee_token_address) || fundingFee.chain_id !== contract.terms.payment.chain_id
         || fundingFee.payer_address !== contract.terms.payment.payer_address)) fail('WORKFLOW_CHAIN_FEE_EVIDENCE_INVALID')
       for (const transfer of transfers) {
         const observed = readChainFeeEvidence(transfer.chain_fee_evidence_json, { chainId: transfer.chain_id, txHash: transfer.tx_hash, payerAddress: transfer.from_address })
-        if (observed && (contract.terms.payment.rail !== 'evm' || observed.chain_id !== contract.terms.payment.chain_id
+        if (observed && ((contract.terms.payment.rail === 'evm' ? observed.model !== 'ethereum_l1_native_v1' : observed.model !== 'tempo_pathusd_sender_fee_v1' || !('fee_token_address' in contract.terms.payment) || observed.fee_token_address !== contract.terms.payment.fee_token_address) || observed.chain_id !== contract.terms.payment.chain_id
           || observed.payer_address !== contract.terms.payment.treasury_address || transfer.token_address.toLowerCase() !== contract.terms.payment.token_address)) fail('WORKFLOW_CHAIN_FEE_EVIDENCE_INVALID')
         transferFees.push({ transfer_id: transfer.id, kind: transfer.kind, status: transfer.status, evidence: observed })
       }

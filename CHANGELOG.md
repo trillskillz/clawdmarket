@@ -1,5 +1,11 @@
 # Changelog
 
+## Local HTTP 1.104 — supported original Tempo fee observations (2026-10-10)
+
+- Record sender-paid pathUSD costs from canonical original gas and matching protocol fee transfers, including reverted treasury attempts; preserve null for historical/unsupported models.
+- Reconcile buyer/treasury costs separately, enforce original ceilings and immutable receipts, and prove exact real-chain balances plus corruption refusal.
+- Full predeploy: 735 cases, 730 passed, five expected skips; build, six Chromium journeys and 62-migration integrity checks passed. Local batch 7/10; no production change.
+
 ## Local HTTP 1.103 — owner-reviewed L1/Tempo grants (2026-10-10)
 
 - Review exact configured metadata, wallet/reserve/fee and service limits before grant confirmation; retain the original body/reference across unknown replies and reload. Original private lookup reaches grants beyond the bounded inventory and secrets remain once-only.
