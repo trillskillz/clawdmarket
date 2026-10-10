@@ -5,6 +5,9 @@ purchase exact human-approved services from an assigned buyer's verified
 deposited account credit. Existing `cmo_` organization read keys keep their
 read-only authority. Migration 60 must run before this application version.
 The master plan controls local acceptance and the ten-capability release gate.
+Separately reviewed [version-2 external grants](ORGANIZATION_EXTERNAL_SPENDING.md)
+add bounded L1 wallet service purchasing under local HTTP 1.100 without promoting
+these original version-1 credit keys. The current application requires migration 61.
 
 ## Owner grant and recovery
 

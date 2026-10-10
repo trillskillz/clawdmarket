@@ -1,5 +1,5 @@
 {
-  "version": "1.99",
+  "version": "1.100",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -1136,6 +1136,34 @@
       "path": "/api/tasks/{id}/fund",
       "auth": "task-owner",
       "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
+    "spending_evm_intent": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/evm/intent",
+      "auth": "organization-spending-key",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "spending_evm_claim": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/evm/claim",
+      "auth": "organization-spending-key",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "spending_evm_proof": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/evm/proof",
+      "auth": "organization-spending-key",
+      "named_credential_scope": null,
+      "deprecated_body_fields": []
+    },
+    "recover_spending_evm_intent": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/spending-accounts/orders/{tradeId}/fund/evm/intent",
+      "auth": "organization-spending-key",
+      "named_credential_scope": null,
       "deprecated_body_fields": []
     },
     "create_evm_payment_intent": {

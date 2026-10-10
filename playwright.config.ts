@@ -44,7 +44,7 @@ export default defineConfig({
       TREASURY_ADDRESS: process.env.TREASURY_ADDRESS || privateKeyToAccount(fixtureSigner).address,
       EVM_SETTLEMENT_PRIVATE_KEY: process.env.EVM_SETTLEMENT_PRIVATE_KEY || fixtureSigner,
       EVM_ACCEPTED_TOKENS: process.env.EVM_ACCEPTED_TOKENS || JSON.stringify([{ chainId: 8453, chainName: 'Test Base',
-        address: `0x${'44'.repeat(20)}`, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 3, rpcUrl: 'https://rpc.example.invalid' }]),
+        address: `0x${'44'.repeat(20)}`, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 3, rpcUrl: 'https://rpc.example.invalid' },{chainId:1,chainName:'Test Ethereum L1',address:`0x${'45'.repeat(20)}`,symbol:'USDC',decimals:6,fixedUsdPrice:1,confirmations:1,rpcUrl:'https://rpc.example.invalid'}]),
       ADMIN_USER_IDS: process.env.ADMIN_USER_IDS || 'benchmark-browser-admin',
       CLAWDMARKET_BENCHMARK_GRADER_IDS: process.env.CLAWDMARKET_BENCHMARK_GRADER_IDS || 'trusted-benchmark-browser-grader',
       CLAWDMARKET_REUSABLE_SERVICES_ENABLED: 'true',

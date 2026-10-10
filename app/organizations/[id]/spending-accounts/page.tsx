@@ -3,7 +3,7 @@ import { use,useCallback,useEffect,useRef,useState } from 'react'
 import Link from 'next/link'
 type Assignment={agent_id:string;team_id:string|null;cost_center:string}
 type Service={id:string;title:string;shareId:string|null;teamId:string|null}
-type Account={id:string;name:string;buyer_agent_id:string;team_id:string|null;cost_center:string;state:string;expires_at:string;max_purchase:string;max_daily:string;max_monthly:string;max_lifetime:string;credential_prefix:string;allowed_services:{service_id:string;provider_share_id:string|null}[]}
+type Account={version:number;payment?:{rail:string;chain_id:number;token_address:string;payer_address:string;treasury_address:string;minimum_token_reserve_units:string;minimum_native_reserve_wei:string;max_gas_cost_wei:string;max_lifetime_gas_cost_wei:string};id:string;name:string;buyer_agent_id:string;team_id:string|null;cost_center:string;state:string;expires_at:string;max_purchase:string;max_daily:string;max_monthly:string;max_lifetime:string;credential_prefix:string;allowed_services:{service_id:string;provider_share_id:string|null}[]}
 type Entry={account:Account;uses:{order_id:string;amount_minor:number}[]}
 export default function SpendingAccounts({params}:{params:Promise<{id:string}>}){
   const {id}=use(params),path=`/api/organizations/${encodeURIComponent(id)}/spending-accounts`
@@ -77,6 +77,8 @@ export default function SpendingAccounts({params}:{params:Promise<{id:string}>})
       </form>
       <div className="space-y-5">{entries.map(({account,uses})=><article key={account.id} className="break-words rounded border p-5">
         <h2 className="text-lg font-semibold">{account.name}</h2><p className="my-3">{account.state} · {account.credential_prefix}… · Expires {new Date(account.expires_at).toLocaleString()}</p>
+        <p className="mb-3">Authority: {account.version===2?'Reviewed external wallet service purchasing':'Deposited account credit purchasing'}</p>
+        {account.payment&&<details className="mb-4"><summary>Reviewed wallet and fee terms</summary><p>Rail {account.payment.rail} · Chain {account.payment.chain_id}</p><p>Token {account.payment.token_address}</p><p>Payer {account.payment.payer_address}</p><p>Treasury {account.payment.treasury_address}</p><p>Token reserve {account.payment.minimum_token_reserve_units} base units · Native reserve {account.payment.minimum_native_reserve_wei} wei</p><p>Gas ceiling {account.payment.max_gas_cost_wei} wei per purchase · {account.payment.max_lifetime_gas_cost_wei} wei lifetime</p></details>}
         <p className="text-sm">Buyer {account.buyer_agent_id} · {account.cost_center}</p>
         <p className="my-3">Purchase ${account.max_purchase} · Daily ${account.max_daily} · Monthly ${account.max_monthly} · Lifetime ${account.max_lifetime}</p>
         <details className="my-4"><summary>Original purchases shown ({uses.length}, up to 100)</summary>{uses.map(use=><p key={use.order_id} className="mt-2 text-sm">Order {use.order_id} · ${(use.amount_minor/100).toFixed(2)} including fee</p>)}</details>

@@ -1,3 +1,4 @@
+import { spendingFundingEligibility } from './organization-spending-accounts'
 import { routeAdmissionFailure } from './route-control'
 import { payoutAddressForUser } from './external-settlement'
 import { ZodError } from 'zod'
@@ -40,6 +41,7 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
   // Fresh sends honor the original organization/department for every attributed checkout,
   // including listings and tasks. Already-sent proof recovery retains its existing path.
   if (mode === 'new_payment') {
+    const spendingReason=await spendingFundingEligibility(trade,source);if(spendingReason)return spendingReason
     const organizationReason = await organizationFundingBudgetFailure(trade, source)
     if (organizationReason) return organizationReason
   }

@@ -1,3 +1,6 @@
+import { originalSpendingPayment } from './organization-spending-accounts'
+import { claimSpendingEvmPayment, spendingWalletConflict } from './organization-spending-payment'
+import { PurchasingError } from './organization-purchasing-transaction'
 import { findTradeFundingStep } from './route-funding-steps'
 import { and, eq, isNull, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
@@ -18,6 +21,7 @@ function fail(code: string, status = 409): never { throw new BuyerPaymentClaimEr
 
 /** This records permission for exact bytes. It never signs, submits or reads the buyer wallet. */
 export async function claimBuyerEvmPayment(tradeId: string, buyerId: string, input: BuyerPaymentClaimInput) {
+  if(await originalSpendingPayment(db,tradeId)){try{return await claimSpendingEvmPayment(tradeId,buyerId,input)}catch(error){if(error instanceof PurchasingError)throw new BuyerPaymentClaimError(error.code,error.status);throw error}}
   return withKeyedWriteLock(`buyer-payment-claim:${tradeId}`, async () => {
     for (let attempt = 0; ; attempt += 1) {
       try {
@@ -66,6 +70,7 @@ export async function claimBuyerEvmPayment(tradeId: string, buyerId: string, inp
           if (prior) return { claim: prior, send_allowed: true, idempotent: true, state: 'submit_exact_transaction' }
           // A legacy proof attached without this protocol can only be recovered; never replace it.
           if (intent.tx_hash) fail('PAYMENT_ALREADY_SUBMITTED_RECOVER_ONLY')
+          const spendingConflict=await spendingWalletConflict(tx,checked.chain_id,checked.payer_address,checked.nonce);if(spendingConflict)fail(spendingConflict)
           const [active] = await tx.select().from(buyer_evm_payment_claims).where(and(eq(buyer_evm_payment_claims.chain_id, checked.chain_id),
             eq(buyer_evm_payment_claims.payer_address, checked.payer_address), eq(buyer_evm_payment_claims.state, 'claimed'))).limit(1)
           const [mppActive] = await tx.select({ id: buyer_mpp_payment_claims.intent_id }).from(buyer_mpp_payment_claims).where(and(
