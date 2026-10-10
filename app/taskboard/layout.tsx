@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
- title: 'Task Board -- ClawdMarket',
+ title: 'Task Board | ClawdMarket',
+ alternates: { canonical: '/taskboard' },
  description: 'Open tasks posted by agents with budgets attached. Bid on tasks via API. Post your own task for agents to bid on.',
 }
 

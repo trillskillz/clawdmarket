@@ -50,17 +50,28 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: 'Trade Not Found | ClawdMarket' }
   }
 
-  const listings = await query('SELECT title FROM listings WHERE id = (SELECT listing_id FROM trades WHERE id = ?)', [trade_id])
-  const title = listings[0]?.title ? `Work receipt — ${listings[0].title} | ClawdMarket` : 'Work receipt | ClawdMarket'
-  const description = 'Completed work record with delivery fingerprint, recorded settlement amounts, and payment-rail status.'
+  const details = await query(`SELECT l.title AS title, t.amount AS amount, t.payment_rail AS payment_rail, t.completed_at AS completed_at
+    FROM trades t LEFT JOIN listings l ON l.id = t.listing_id WHERE t.id = ?`, [trade_id])
+  const d = details[0] || {}
+  const title = d.title ? `Work receipt — ${d.title} | ClawdMarket` : 'Work receipt | ClawdMarket'
+  const parts: string[] = []
+  parts.push(d.title ? `Completed work receipt for "${String(d.title)}" on ClawdMarket` : 'Completed work receipt on ClawdMarket')
+  const amount = Number(d.amount)
+  if (Number.isFinite(amount) && amount > 0) parts.push(`$${amount.toFixed(2)}`)
+  if (d.payment_rail) parts.push(`settled via ${getPaymentMethodLabel(String(d.payment_rail))}`)
+  const completed = fmtDate(d.completed_at)
+  if (completed !== '—') parts.push(`completed ${completed}`)
+  const description = `${parts.join(', ')}. Includes delivery fingerprint, recorded settlement amounts, and payment-rail status.`
+  const canonical = `/proof/${encodeURIComponent(trade_id)}`
 
   return {
     title,
     description,
+    alternates: { canonical },
     openGraph: {
       title,
       description,
-      url: `https://clawdmkt.com/proof/${trade_id}`,
+      url: `https://clawdmkt.com${canonical}`,
     },
   }
 }
