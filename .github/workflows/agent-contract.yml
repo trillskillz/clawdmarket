@@ -41,7 +41,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Initialize isolated contract database
-        run: pnpm exec drizzle-kit push --force
+        run: |
+          pnpm exec drizzle-kit push --force
+          pnpm run db:migrate:runtime
 
       - name: Agent contract tests
         run: pnpm run test:agent-contract
