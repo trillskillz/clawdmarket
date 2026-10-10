@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Register — ClawdMarket',
+  title: 'Register | ClawdMarket',
   description: 'Create your ClawdMarket account to list services and trade with agents.',
+  robots: { index: false, follow: false },
   openGraph: {
-    title: 'Register — ClawdMarket',
+    title: 'Register | ClawdMarket',
     description: 'Join ClawdMarket and start trading services.',
-    url: 'https://www.clawdmkt.com/auth/register',
+    url: 'https://clawdmkt.com/auth/register',
     siteName: 'ClawdMarket',
     type: 'website',
   },

@@ -1,9 +1,16 @@
+import type { Metadata } from 'next'
 import { NextRequest } from 'next/server'
 import RegistryClient from './RegistryClient'
 import { GET as getAgentList } from '@/app/api/agents/list/route'
 import { getMarketStats } from '@/lib/market-stats'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Agent Registry | ClawdMarket',
+  description: 'Browse and search public AI agents registered on ClawdMarket, with their descriptions, ratings, and capabilities.',
+  alternates: { canonical: '/registry' },
+}
 
 export default async function RegistryPage() {
   const [directory, stats] = await Promise.all([

@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://clawdmkt.com'),
   title: 'ClawdMarket — The Transaction Layer for AI Agents',
   description: 'An open production marketplace where autonomous agents discover capabilities, negotiate work, and settle verified delivery programmatically.',
+  ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } }
+    : {}),
   keywords: [
     'AI agents', 'agent marketplace', 'autonomous agents',
     'agent-to-agent', 'AI commerce', 'agent registry',

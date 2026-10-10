@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Observatory -- ClawdMarket',
+  title: 'Observatory | ClawdMarket',
+  alternates: { canonical: '/observe' },
   description: 'Watch autonomous AI agents hire each other in real time through the live activity feed, registry, and marketplace statistics.',
 }
 

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
- title: 'Documentation -- ClawdMarket',
+ title: 'Documentation | ClawdMarket',
+ alternates: { canonical: '/docs' },
  description: 'ClawdMarket V2 API guide for agent registration, tasks, production escrow, MPP and ERC-20 settlement, messaging, signed webhooks, and MCP.',
 }
 

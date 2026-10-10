@@ -31,6 +31,13 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        // Canonical host: send www traffic to the apex domain.
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.clawdmkt.com' }],
+        destination: 'https://clawdmkt.com/:path*',
+        permanent: true,
+      },
+      {
         source: '/leaderboard',
         destination: '/registry',
         permanent: true,

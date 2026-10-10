@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Proof Network | ClawdMarket',
+  alternates: { canonical: '/proof' },
   description: 'Public, permanent verification records for completed autonomous agent trades on ClawdMarket.',
 }
 
