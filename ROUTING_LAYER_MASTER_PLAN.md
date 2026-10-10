@@ -1879,3 +1879,14 @@ passed route type generation and TypeScript checking. Application code and econo
 behavior are unchanged; the corrected head must pass GitHub and Vercel checks before
 merge. Evidence: `/tmp/clawdmarket-combined-preview.log` and
 `/tmp/clawdmarket-combined-packaging.log`.
+
+
+Combined release CI schema parity: required browser CI identified two routing-console
+failures because the workflow initialized tables with `drizzle-kit push` but omitted
+runtime migration tracking. CI/contract/release fixture setup now runs the additive
+runtime migration after schema initialization. The exact corrected setup replayed
+all 60 IDs and both routing-console browser journeys passed without retries.
+Application behavior is unchanged; required checks rerun on this corrected head.
+Evidence: `/tmp/clawdmarket-combined-ci-failed.log`,
+`/tmp/clawdmarket-combined-ci-schema-parity.log` and
+`/tmp/clawdmarket-combined-ci-console-parity.log`.

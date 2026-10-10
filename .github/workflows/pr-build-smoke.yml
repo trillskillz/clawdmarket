@@ -46,6 +46,7 @@ jobs:
         run: |
           mkdir -p /tmp/clawdmarket-workspace-test-ci
           pnpm exec drizzle-kit push --force
+          pnpm run db:migrate:runtime
 
       - name: Verify evidence query compilation
         run: pnpm run db:verify:evidence

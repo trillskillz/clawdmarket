@@ -55,7 +55,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Initialize isolated release database
-        run: pnpm exec drizzle-kit push --force
+        run: |
+          pnpm exec drizzle-kit push --force
+          pnpm run db:migrate:runtime
         env:
           TURSO_DATABASE_URL: file:./ci-deploy.db
 
