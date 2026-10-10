@@ -111,7 +111,7 @@ export default function BuyerRouteRecovery({ params }: { params: Promise<{ id: s
         <label className={recovery.check}><input type="checkbox" checked={checked} disabled={disabled} onChange={event => setChecked(event.target.checked)} />I understand cancellation cannot stop an already sent payment.</label>
         <button disabled={disabled || !checked} onClick={() => void cancel()}>Cancel original unpaid reservation</button>
       </> : <p>This observation does not permit unpaid cancellation. Preserve the original work and reconcile its payment or settlement.</p>}</section>
-      <div className={styles.links}><Link href="/dashboard?tab=trades">Open existing trade controls</Link></div>
+      <div className={styles.links}><Link href={`/routes/${encodeURIComponent(id)}/review`}>Review original private delivery</Link><Link href="/dashboard?tab=trades">Open existing trade controls</Link></div>
       <p>Use the original trade IDs above for existing payment proof, delivery, buyer review, dispute and refund/payout recovery. This page does not sign or send payment, reserve replacement work, retry a purchase or accept delivery.</p>
     </>}
   </main>

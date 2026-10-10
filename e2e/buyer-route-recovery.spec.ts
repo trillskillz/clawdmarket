@@ -57,7 +57,10 @@ test('buyer cancels the original plan once, recovers a lost committed response, 
   await f.fixture('link-agent',agent.id)
   const agentPlan = await request.post('/api/routes/plan', { headers: {Authorization:`Bearer ${agent.api_key}`}, data: {client_reference:`owned-route-${crypto.randomUUID()}`,objective:'Private agent route remains agent-owned',input:{private:'AGENT_ROUTE_PRIVATE_INPUT'},required_capabilities:['code-review'],max_budget:{amount:'1.00',currency:'USD'}} })
   expect(agentPlan.status()).toBe(201)
-  await page.goto(`/routes/${(await agentPlan.json()).route.id}`)
+  const agentRouteId = (await agentPlan.json()).route.id
+  await page.goto(`/routes/${agentRouteId}`)
+  await expect(main.getByRole('alert')).toContainText('original buyer account'); await expect(main).not.toContainText('AGENT_ROUTE_PRIVATE_INPUT')
+  await page.goto(`/routes/${agentRouteId}/review`)
   await expect(main.getByRole('alert')).toContainText('original buyer account'); await expect(main).not.toContainText('AGENT_ROUTE_PRIVATE_INPUT')
   await page.goto(`/routes/${f.route.id}`); await expect(main.getByText(`Route ${f.route.id} · cancelled`, { exact: true })).toBeVisible()
   await context.clearCookies(); await main.getByRole('button', { name: 'Refresh original state' }).click()

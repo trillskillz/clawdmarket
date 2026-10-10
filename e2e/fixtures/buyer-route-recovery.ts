@@ -3,7 +3,7 @@ export {}
 async function main() {
   if (!process.env.TURSO_DATABASE_URL?.startsWith('file:/tmp/clawdmarket-workspace-test-') || process.env.TURSO_AUTH_TOKEN) throw Error('Disposable database required')
   const [mode, id] = process.argv.slice(2)
-  if (!['setup','counts','bump','link-agent'].includes(mode) || !/^[a-f0-9-]{36}$/.test(id || '')) throw Error('Guarded fixture required')
+  if (!['setup','counts','evidence','bump','link-agent'].includes(mode) || !/^[a-f0-9-]{36}$/.test(id || '')) throw Error('Guarded fixture required')
   const { db } = await import('../../lib/db'), schema = await import('../../lib/schema'), { eq } = await import('drizzle-orm')
   const buyer = `route-ui-buyer-${id}`, seller = `route-ui-seller-${id}`, outsider = `route-ui-outsider-${id}`
   try {
@@ -16,12 +16,20 @@ async function main() {
         max_concurrency: 10, status: 'active', verification_policy: JSON.stringify({ required: true, methods: ['buyer_review'], acceptance: { version: 1, mode: 'explicit_buyer' } }) })
       const { generateJWT } = await import('../../lib/auth')
       const key = (user: string) => generateJWT({ userId: user, email: `${user}@test.invalid`, role: 'human' })
-      console.log(JSON.stringify({ buyer, seller, services, buyerKey: key(buyer), outsiderKey: key(outsider) }))
+      console.log(JSON.stringify({ buyer, seller, services, buyerKey: key(buyer), sellerKey: key(seller), outsiderKey: key(outsider) }))
     } else if (mode === 'counts') {
       const orders = await db.select().from(schema.service_orders).where(eq(schema.service_orders.buyer_id,buyer))
       const trades = await db.select().from(schema.trades).where(eq(schema.trades.buyer_id,buyer))
       const services = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.seller_id,seller))
       console.log(JSON.stringify({ orders: orders.length, trades: trades.length, capacity: services.reduce((sum,row)=>sum+row.active_orders,0) }))
+    } else if (mode === 'evidence') {
+      const trades = await db.select().from(schema.trades).where(eq(schema.trades.buyer_id,buyer))
+      const transfers = [], receipts = []
+      for (const trade of trades) {
+        transfers.push(...await db.select({id:schema.settlement_transfers.id,status:schema.settlement_transfers.status,kind:schema.settlement_transfers.kind,tx_hash:schema.settlement_transfers.tx_hash}).from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,trade.id)))
+        receipts.push(...await db.select({route_id:schema.route_receipts.route_id,content_hash:schema.route_receipts.content_hash}).from(schema.route_receipts).where(eq(schema.route_receipts.trade_id,trade.id)))
+      }
+      console.log(JSON.stringify({transfers,receipts}))
     } else if (mode === 'link-agent') {
       const agentId = process.argv[4]
       if (!/^agent_[a-f0-9-]{36}$/.test(agentId || '')) throw Error('Original UI agent required')

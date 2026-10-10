@@ -12,6 +12,7 @@ async function main() {
     process.env.EVM_ACCEPTED_TOKENS = JSON.stringify([{ chainId: 1, chainName: 'Disposable test Ethereum', address: chain.token,
       symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain.url }])
     process.env.CLAWDMARKET_TEST_BUYER_ROUTE_CHAIN = '1'
+    process.env.CRON_SECRET = 'disposable-buyer-route-cron'
     const { db } = await import('../../lib/db'), schema = await import('../../lib/schema'), { createLocalTestSchema } = await import('../../tests/helpers/local-schema')
     try { await createLocalTestSchema(db.$client, schema) } finally { db.$client.close() }
     const run = (args: string[]) => new Promise<number>((resolve,reject) => {
@@ -19,7 +20,7 @@ async function main() {
       child.once('error',reject); child.once('exit',code => resolve(code ?? 1))
     })
     if (await run(['db:migrate:runtime']) !== 0) throw Error('Disposable schema migration failed')
-    process.exitCode = await run(['exec','playwright','test','--retries=0','e2e/buyer-route-recovery.spec.ts'])
+    process.exitCode = await run(['exec','playwright','test','--retries=0','e2e/buyer-route-recovery.spec.ts','e2e/buyer-delivery-review.spec.ts'])
   } finally { await chain.stop() }
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1 })

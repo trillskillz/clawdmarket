@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Bounded workflows, enterprise purchasing and private buyer control (contract 1.99)
+- Execute finite owner-approved EVM workflows with exact dependency artifact grants, gross exposure ceilings, real payment/refund reconciliation, restart recovery and backed receipts.
+- Enforce departmental ceilings, human purchasing roles and exact service approvals, explicitly shared private providers, and bounded deposited-credit spending service accounts.
+- Add private routing incident controls, owner enterprise configuration and original purchase history, and human finite-workflow approval/recovery review.
+- Inspect every original buyer route attempt and condition unpaid cancellation on the exact reviewed order; recover lost commands and original late payments/refunds.
+- Review private provider delivery and independently checked artifact bytes, accept the exact inspected delivery hash, and recover original pending/confirmed payout and backed receipt. Existing payment and settlement state machines remain authoritative; global rollout flags remain closed.
+
 ### Provider completion across restart
 - Provider-operated Node worker with leased attempt acceptance, heartbeats, private durable delivery output, exact replay after restart or lost response, and process locking that releases on SIGKILL.
 - Controlled live route runner now uses separate provider processes and a $0.02 checkout/payout, schema checks, buyer review, and original receipt replay. Server APIs and machine contract remain 1.62.
