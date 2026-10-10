@@ -1,5 +1,10 @@
 # Changelog
 
+## Local HTTP 1.103 — owner-reviewed L1/Tempo grants (2026-10-10)
+
+- Review exact configured metadata, wallet/reserve/fee and service limits before grant confirmation; retain the original body/reference across unknown replies and reload. Original private lookup reaches grants beyond the bounded inventory and secrets remain once-only.
+- Optional paired metadata guards preserve old clients and hashes. Full predeploy passed 731 cases (726 passed, five expected skips), final production build and four private desktop/mobile browser journeys passed. Local batch 6/10; no production change.
+
 ## Local HTTP 1.102 — private enterprise operator observations (2026-10-10)
 
 - Audit original external grant/use/fee exposure, claims/receipts, shared wallet collisions and stale payment/transfer obligations through private admin, monitor and read-only preflight aggregates. Preserve original fingerprints, routing admission and payment recovery.

@@ -36,3 +36,5 @@ The scoped key cannot authenticate to general buyer APIs, issue approvals, top u
 Acceptance uses the pinned owned disposable Tempo node, public dummy keys and isolated local databases. Real chain balance assertions independently include receipt fees. These observations do not claim that persisted Tempo fee accounting is complete or that production fork compatibility has passed. Production enterprise writes and global routing retain their existing closed gates. See [the acceptance audit](ORGANIZATION_TEMPO_SPENDING_AUDIT.md).
 
 Buyer-host recovery for original approved orders: [BUYER_SPENDING_WORKER.md](BUYER_SPENDING_WORKER.md).
+
+The owner can explicitly review and issue Tempo grants through the [private spending UI](OWNER_SPENDING_REVIEW.md), retaining the original reviewed reference across lost replies and reload.

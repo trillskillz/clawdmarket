@@ -25,7 +25,7 @@ const creditAccountInput=z.object({version:z.literal(1),client_reference:referen
 const externalPayment=routeMandatePaymentInput.options[0].extend({chain_id:z.union([z.literal(1),z.literal(11155111)]),max_lifetime_gas_cost_wei:z.string().regex(/^[1-9][0-9]{0,77}$/)}).strict()
 const tempoPayment=routeMandatePaymentInput.options[1].extend({chain_id:z.literal(4217),max_lifetime_fee_token_cost_units:z.string().regex(/^[1-9][0-9]{0,77}$/)}).strict()
 export const spendingAccountInput=z.discriminatedUnion('version',[
-  creditAccountInput,creditAccountInput.extend({version:z.literal(2),payment:externalPayment}).strict(),creditAccountInput.extend({version:z.literal(3),payment:tempoPayment}).strict(),
+  creditAccountInput,creditAccountInput.extend({version:z.literal(2),payment:externalPayment,expected_token_decimals:z.number().int().min(0).max(36).optional(),expected_token_usd_price:z.number().positive().finite().optional()}).strict(),creditAccountInput.extend({version:z.literal(3),payment:tempoPayment,expected_token_decimals:z.literal(6).optional(),expected_token_usd_price:z.literal(1).optional()}).strict(),
 ])
 export const spendingExternalPaymentInput=externalPayment
 export const spendingOrderInput=z.object({service_id:z.string().uuid(),order:serviceOrderInput}).strict()
@@ -61,11 +61,11 @@ export async function currentSpendingAccount(row:Account,source:PurchasingSource
   return allowed
 }
 export function spendingAccountDto(row:Account){
-  return {version:row.version,id:row.id,organization_id:row.organization_id,buyer_agent_id:row.buyer_agent_id,team_id:row.team_id,cost_center:row.cost_center,name:row.name,
+  return {version:row.version,client_reference:row.client_reference,id:row.id,organization_id:row.organization_id,buyer_agent_id:row.buyer_agent_id,team_id:row.team_id,cost_center:row.cost_center,name:row.name,
     allowed_services:JSON.parse(row.allowed_services_json),max_purchase:(row.max_purchase_minor/100).toFixed(2),max_daily:(row.max_daily_minor/100).toFixed(2),
     max_monthly:(row.max_monthly_minor/100).toFixed(2),max_lifetime:(row.max_lifetime_minor/100).toFixed(2),state:row.state,expires_at:row.expires_at,created_at:row.created_at,
     revoked_at:row.revoked_at,credential_prefix:row.credential_prefix,authority:row.version===3?'approved_direct_service_mpp' as const:row.version===2?'approved_direct_service_evm' as const:'approved_direct_service_credit' as const,
-    ...(row.version>=2?{payment:spendingPaymentTerms(row).payment}: {})}
+    ...(row.version>=2?{payment:spendingPaymentTerms(row).payment,token_decimals:spendingPaymentTerms(row).token_decimals,token_usd_price:spendingPaymentTerms(row).token_usd_price}: {})}
 }
 async function owned(orgId:string,actor:string,source:PurchasingSource){
   const [org]=await source.select().from(organizations).where(and(eq(organizations.id,orgId),eq(organizations.owner_account_id,actor))).limit(1)
@@ -80,6 +80,10 @@ export async function createSpendingAccount(orgId:string,actor:string,input:z.ou
     const proposed={version:input.version,payment_terms_json:input.version===1?null:canonicalContract({payment:input.payment,...externalPaymentContract(input.payment)}),organization_id:orgId,owner_account_id:actor,buyer_agent_id:input.buyer_agent_id,team_id:assignment.team_id,cost_center:assignment.cost_center,
       client_reference:input.client_reference,name:input.name,allowed_services_json:JSON.stringify(input.allowed_services),
       max_purchase_minor:input.max_purchase,max_daily_minor:input.max_daily,max_monthly_minor:input.max_monthly,max_lifetime_minor:input.max_lifetime,expires_at:input.expires_at}
+    if(input.version!==1&&(input.expected_token_decimals!==undefined||input.expected_token_usd_price!==undefined)){
+      const frozen=JSON.parse(proposed.payment_terms_json!)
+      if(input.expected_token_decimals!==frozen.token_decimals||input.expected_token_usd_price!==frozen.token_usd_price)throw new PurchasingError('SPENDING_PAYMENT_METADATA_CHANGED')
+    }
     const hash=authority(proposed),[prior]=await tx.select().from(accounts).where(and(eq(accounts.organization_id,orgId),eq(accounts.client_reference,input.client_reference))).limit(1)
     if(prior){if(prior.authority_hash!==hash)throw new PurchasingError('SPENDING_REFERENCE_CONFLICT');return {account:spendingAccountDto(prior),api_key:null,idempotent:true}}
     writes();if(!live(input.expires_at)||input.expires_at.getTime()>Date.now()+30*86400_000)throw new PurchasingError('SPENDING_EXPIRY_INVALID',400)
@@ -102,9 +106,9 @@ export async function revokeSpendingAccount(orgId:string,accountId:string,actor:
     return spendingAccountDto(updated)
   })
 }
-export async function inspectSpendingAccounts(orgId:string,actor:string){
+export async function inspectSpendingAccounts(orgId:string,actor:string,clientReference?:string){
   await owned(orgId,actor,db)
-  const rows=await db.select().from(accounts).where(eq(accounts.organization_id,orgId)).limit(100)
+  const rows=await db.select().from(accounts).where(and(eq(accounts.organization_id,orgId),clientReference===undefined?undefined:eq(accounts.client_reference,clientReference))).limit(100)
   return Promise.all(rows.map(async row=>({account:spendingAccountDto(row),uses:await db.select().from(uses).where(eq(uses.account_id,row.id)).limit(100)})))
 }
 /** This family is not accepted by general account/agent authentication. */

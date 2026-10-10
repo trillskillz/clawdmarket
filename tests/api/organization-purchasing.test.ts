@@ -1387,3 +1387,45 @@ test('operator enterprise audit follows real L1/Tempo obligations, detects corru
     assert.equal((await inspectOrganizationSpendingHealth(db.$client)).payment_claim_anomaly_count,baseline.claim)
   }
 })
+
+test('owner reviewed external metadata rejects drift before creation and recovers the exact original reference without reissuing credentials',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY||!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  const {encodeOwnerGrantReview,decodeOwnerGrantReview,ownerGrantReviewMatches,decimalGrantUnits}=await import('@/lib/organization-spending-review.mjs')
+  for(const version of [2,3]){
+    const f=await fixture(),path=`/api/organizations/${f.id}/spending-accounts`,payment=version===2?externalTerms():tempoTerms()
+    const review={version,client_reference:crypto.randomUUID(),name:'Exactly reviewed owner grant',buyer_agent_id:f.agent,team_id:f.team,cost_center:'ENGINEERING',allowed_services:[{service_id:f.service,provider_share_id:null}],max_purchase:'1.05',max_daily:'1.05',max_monthly:'1.05',max_lifetime:'1.05',expires_at:new Date(Date.now()+3600_000).toISOString(),payment:{...payment,payer_address:payment.payer_address.toLowerCase(),treasury_address:payment.treasury_address.toLowerCase()},expected_token_decimals:6,expected_token_usd_price:1}
+    const saved=encodeOwnerGrantReview(f.id,review,'request_started'),restored=decodeOwnerGrantReview(saved,f.id)
+    assert.deepEqual(restored.grant,review);assert.ok(!saved.includes('api_key'));assert.ok(!saved.includes('private_key'))
+    assert.equal(decimalGrantUnits('0.000001',6),'1');assert.throws(()=>decimalGrantUnits('0.0000001',6));assert.throws(()=>decimalGrantUnits('1e3',6));assert.throws(()=>decimalGrantUnits('0',6,true))
+    const drift=version===2?{...review,expected_token_decimals:18}:{...review,expected_token_usd_price:undefined}
+    const rejected=await call(path,f.owner,'POST',drift);assert.equal(rejected.status,409);assert.equal(rejected.body.error_code,'SPENDING_PAYMENT_METADATA_CHANGED')
+    assert.equal((await call(path,f.owner)).body.spending_accounts.length,0);assert.deepEqual(await counts(f),{orders:0,capacity:0})
+    const committed=await call(path,f.owner,'POST',restored.grant);assert.equal(committed.status,201,JSON.stringify(committed.body));assert.equal(ownerGrantReviewMatches(restored.grant,committed.body.account),true)
+    const inventory=await call(path,f.owner),original=inventory.body.spending_accounts[0].account
+    assert.equal(original.client_reference,review.client_reference);assert.equal(original.token_decimals,6);assert.equal(original.token_usd_price,1);assert.equal(ownerGrantReviewMatches(restored.grant,original),true)
+    assert.equal(ownerGrantReviewMatches({...review,payment:{...review.payment,minimum_token_reserve_units:'1'}},original),false)
+    assert.ok(!JSON.stringify(inventory.body).includes(committed.body.api_key));assert.ok(!JSON.stringify(inventory.body).includes('credential_hash'))
+    const replay=await call(path,f.owner,'POST',restored.grant);assert.equal(replay.status,200);assert.equal(replay.body.account.id,original.id);assert.equal(replay.body.api_key,null)
+    assert.equal((await call(path,f.viewer)).status,404);assert.equal((await call(path,f.owner,'POST',{...review,max_lifetime:'2.10'})).body.error_code,'SPENDING_REFERENCE_CONFLICT')
+    assert.equal((await call(path,f.owner,'DELETE',{account_id:original.id})).status,200)
+    assert.equal(ownerGrantReviewMatches(restored.grant,(await call(path,f.owner)).body.spending_accounts[0].account),true)
+    assert.equal((await call(path,f.owner,'POST',restored.grant)).body.api_key,null)
+    assert.equal((await call(path,f.owner)).body.spending_accounts.length,1);assert.deepEqual(await counts(f),{orders:0,capacity:0})
+    assert.throws(()=>decodeOwnerGrantReview(saved,crypto.randomUUID()));assert.throws(()=>encodeOwnerGrantReview(f.id,{...review,api_key:committed.body.api_key}));assert.throws(()=>decodeOwnerGrantReview(JSON.stringify({...restored,grant:{...review,private_key:'never-store-a-signer'}}),f.id))
+  }
+})
+
+test('owner original-reference lookup recovers a grant outside the bounded inventory without widening private scope',async()=>{
+  const f=await fixture(),{createSpendingAccount,spendingAccountInput}=await import('@/lib/organization-spending-accounts')
+  const input={version:1,client_reference:crypto.randomUUID(),name:'Original bounded grant',buyer_agent_id:f.agent,team_id:f.team,cost_center:'ENGINEERING',allowed_services:[{service_id:f.service,provider_share_id:null}],max_purchase:'1.05',max_daily:'1.05',max_monthly:'1.05',max_lifetime:'1.05',expires_at:new Date(Date.now()+3600_000).toISOString()}
+  // Legitimate existing history bypasses only the per-day HTTP fixture limit.
+  const originals=[]
+  for(let i=0;i<100;i++)originals.push((await createSpendingAccount(f.id,f.owner,spendingAccountInput.parse({...input,client_reference:crypto.randomUUID()}))).account)
+  const path=`/api/organizations/${f.id}/spending-accounts`,created=await call(path,f.owner,'POST',input);assert.equal(created.status,201)
+  const inventory=await call(path,f.owner);assert.equal(inventory.body.spending_accounts.length,100)
+  const listed=new Set(inventory.body.spending_accounts.map((entry:{account:{id:string}})=>entry.account.id)),outside=[...originals,created.body.account].find(account=>!listed.has(account.id));assert.ok(outside)
+  const filtered=await call(path+'?client_reference='+encodeURIComponent(outside.client_reference),f.owner);assert.equal(filtered.status,200);assert.equal(filtered.body.spending_accounts.length,1);assert.equal(filtered.body.spending_accounts[0].account.id,outside.id);assert.ok(!JSON.stringify(filtered.body).includes(created.body.api_key))
+  assert.equal((await call(path+'?client_reference='+input.client_reference,f.viewer)).status,404)
+  assert.equal((await call(path+'?client_reference=short',f.owner)).status,400)
+  assert.equal((await call(path+'?client_reference='+crypto.randomUUID(),f.owner)).body.spending_accounts.length,0)
+  assert.equal((await call(path,f.owner,'POST',input)).body.api_key,null)
+})

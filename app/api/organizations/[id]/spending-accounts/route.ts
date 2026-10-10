@@ -4,7 +4,10 @@ import { purchasingApi,purchasingBody,purchasingResult } from '@/lib/organizatio
 import { createSpendingAccount,inspectSpendingAccounts,revokeSpendingAccount,spendingAccountInput } from '@/lib/organization-spending-accounts'
 export const dynamic='force-dynamic'
 type Context={params:Promise<{id:string}>}
-export async function GET(request:NextRequest,{params}:Context){return purchasingApi(request,false,async actor=>purchasingResult({spending_accounts:await inspectSpendingAccounts((await params).id,actor)}))}
+export async function GET(request:NextRequest,{params}:Context){return purchasingApi(request,false,async actor=>{
+  const reference=request.nextUrl.searchParams.get('client_reference'),original=reference===null?undefined:z.string().trim().min(8).max(200).parse(reference)
+  return purchasingResult({spending_accounts:await inspectSpendingAccounts((await params).id,actor,original)})
+})}
 export async function POST(request:NextRequest,{params}:Context){return purchasingApi(request,true,async actor=>{
   const result=await createSpendingAccount((await params).id,actor,await purchasingBody(request,spendingAccountInput))
   return purchasingResult(result,result.idempotent?200:201)
