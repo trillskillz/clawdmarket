@@ -1,5 +1,11 @@
 # Changelog
 
+## Local HTTP 1.106 — original buyer approval-file review (2026-10-10)
+
+- Inspect the exact private reserved order and its own immutable grant, then explicitly reinspect and confirm a private immutable approval file consumed by the existing funding worker. Review creates no checkout, intent, signature or payment.
+- Real private L1/Tempo files, original worker recovery, changed/revoked scope refusal and provider/review/payout passed. Final predeploy: 747 cases, 742 passed, zero failed, five expected skips; build, seven browser/HTTP cases and 62-migration integrity/query checks passed. Local counter 9/10; the latest user instruction authorizes the combined release now.
+- Preserve current main SEO changes while keeping www API/discovery responses direct, repairing observed deployment alias and payment-monitor failures. No live funds or rollout flags changed.
+
 ## Local HTTP 1.105 — enterprise SDK service purchasing (2026-10-10)
 
 - Add TypeScript/Python owner original-grant methods and separate organization-bound cmos_ service order/payment clients with typed immutable terms and caller-saved references.
