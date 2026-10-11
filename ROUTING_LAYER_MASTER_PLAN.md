@@ -2014,3 +2014,17 @@ Final `/tmp/clawdmarket-buyer-spending-review-predeploy-final.log` passes **747 
 The intervening main SEO commit is preserved. Its all-path www redirect caused the actual production alias-verification and payment-monitor failures. The release repair preserves page canonicalization while keeping API and machine-discovery alias requests direct, with matcher and actual built HTTP coverage. This repair does not increment the substantive counter.
 
 Local batch is 9/10. The user's latest publishing instruction explicitly overrides the ten-part gate for this release: publish all accumulated accepted work together, verify required CI/migration-first Vercel/same-SHA production checks, then continue private enterprise actual fee coverage. No live wallet spending, independent-provider claim or rollout flag activation is included.
+
+
+Combined PR #255 required-CI contention repair: the first GitHub unit gate
+failed two genuine independent-process reservation cases on original-order SELECTs
+with SQLITE_BUSY (run 38102278292). Bounded read-only original replay now retries
+that transient contention before writes and after a failed reservation, retaining
+exact request/approval checks. Persistent contention returns retryable private 503;
+it cannot create a replacement order. A real exclusive SQLite lock regression and
+both original process races pass in
+`/tmp/clawdmarket-tempo-enterprise-ci-contention-focus-accepted.log` (three cases).
+An initial new-test helper typo and a second-lock fixture conflict were corrected;
+those diagnostic runs are not acceptance. Full local and required CI must pass
+again before the authorized merge and migration-first production release. This
+repair does not increment the substantive publishing counter.

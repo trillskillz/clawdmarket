@@ -86,7 +86,7 @@ function sameRequest(prior: NonNullable<Awaited<ReturnType<typeof existingServic
     && (!args.externalOnly || !['ledger', 'credit'].includes(prior.order.payment_rail))
 }
 
-async function replay(args: ReservationArgs) {
+async function replayOnce(args: ReservationArgs) {
   const prior = await existingServiceOrder(args.request.client_reference)
   if (!prior) return null
   if (!sameRequest(prior, args)) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference belongs to another order or rail')
@@ -97,6 +97,19 @@ async function replay(args: ReservationArgs) {
     if (plan?.service_order_id !== prior.order.id) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference is not linked to this route')
   }
   return { ...prior, idempotent: true }
+}
+
+/** Original lookup can overlap another process's commit before any write retry begins. */
+async function replay(args: ReservationArgs) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try { return await replayOnce(args) }
+    catch (error) {
+      if (!sqliteBusy(error)) throw error
+      if (attempt === 5) throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Original order inspection unavailable', 503, true)
+      await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
+    }
+  }
+  throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Original order inspection unavailable', 503, true)
 }
 
 /** Reserves capacity and creates an order in one transaction. External rails remain unpaid. */

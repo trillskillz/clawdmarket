@@ -298,6 +298,27 @@ test('independent processes race exact approval and checkout and recover consume
   assert.deepEqual(await counts(f), { orders: 1, capacity: 1 })
 })
 
+test('original order replay recovers a real SQLite read lock and bounded contention creates no replacement order', async () => {
+  const f=await fixture(),a=await approved(f),created=await buy(f,a.checkout)
+  assert.equal(created.status,201)
+  const {createRequire}=await import('node:module'),require=createRequire(import.meta.url)
+  const sqliteRequire=createRequire(require.resolve('@libsql/client')),Database=sqliteRequire('libsql')
+  const writer=new Database(join(directory,'purchasing.db'))
+  const {reserveServiceOrder}=await import('@/lib/service-order-reservation'),{serviceOrderInput}=await import('@/lib/service-definitions')
+  const args={serviceId:f.service,principal:{userId:f.buyer,agentId:f.agent,kind:'registered-agent' as const,usesCookieAuth:false},request:serviceOrderInput.parse(a.checkout)}
+  let release:ReturnType<typeof setTimeout>|undefined,locked=false
+  try{
+    writer.exec('BEGIN EXCLUSIVE');locked=true
+    await assert.rejects(db.$client.execute('SELECT id FROM service_orders LIMIT 1'),(error:any)=>error.code==='SQLITE_BUSY')
+    await assert.rejects(reserveServiceOrder(args),(error:any)=>error.code==='SERVICE_RESERVATION_UNAVAILABLE'&&error.status===503&&error.retryable===true)
+    release=setTimeout(()=>{writer.exec('ROLLBACK');locked=false},150)
+    const original=await reserveServiceOrder(args)
+    assert.equal(original.idempotent,true);assert.equal(original.order.id,created.body.order.id);assert.equal(original.trade.id,created.body.trade.id)
+    await assert.rejects(reserveServiceOrder({...args,request:{...args.request,objective:'Changed original body'}}),(error:any)=>error.code==='IDEMPOTENCY_CONFLICT')
+    assert.deepEqual(await counts(f),{orders:1,capacity:1})
+  }finally{if(release)clearTimeout(release);if(locked)writer.exec('ROLLBACK');writer.close()}
+})
+
 test('SIGKILL before and after approval/order commits preserves atomic consumption and original references', async () => {
   for (const operation of ['approval', 'checkout'] as const) for (const boundary of ['before', 'after'] as const) {
     const f = await fixture(), q = await quote(f)
