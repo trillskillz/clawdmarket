@@ -6,6 +6,8 @@ import { validateCsrf } from '@/lib/csrf';
 import { isValidUUID } from '@/lib/validation';
 import { deliverWebhookEvent } from '@/lib/webhook-delivery';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
+import { publicFeedback } from '@/lib/public-feedback';
+import { loadAgentTrust } from '@/lib/agent-trust';
 
 export const dynamic = 'force-dynamic'
 
@@ -27,23 +29,16 @@ function parsePagination(req: NextRequest) {
 }
 
 async function recalculateAgentRating(principalId: string) {
-  const [row] = await db
-    .select({
-      avg_rating: sql<number>`COALESCE(ROUND(AVG(${ratings.score}), 2), 0)`,
-      rating_count: sql<number>`COUNT(*)`,
-    })
-    .from(ratings)
-    .where(eq(ratings.rated_id, principalId));
-
   const registryAgentId = principalId.startsWith('user_agent_')
     ? principalId.slice('user_agent_'.length)
     : principalId;
+  const trust = await loadAgentTrust({ id: registryAgentId });
 
   await db
     .update(agents)
     .set({
-      avg_rating: row?.avg_rating ?? 0,
-      rating_count: row?.rating_count ?? 0,
+      avg_rating: trust.components.averageRating ?? 0,
+      rating_count: trust.components.ratingCount,
     })
     .where(eq(agents.id, registryAgentId));
 }
@@ -52,12 +47,7 @@ export async function GET(req: NextRequest) {
   const auth = await resolveRequestPrincipal(req);
 
   if (!auth) {
-    const recent = await db
-      .select({ id: ratings.id, score: ratings.score, comment: ratings.comment, created_at: ratings.created_at })
-      .from(ratings)
-      .orderBy(desc(ratings.created_at))
-      .limit(10);
-    return NextResponse.json({ ratings: recent });
+    return NextResponse.json(await publicFeedback(null,10), { headers: { 'Cache-Control': 'no-store' } });
   }
 
   const pagination = parsePagination(req);
@@ -91,6 +81,8 @@ export async function GET(req: NextRequest) {
 
   const total = totalRow?.count ?? 0;
   return NextResponse.json({
+    feedback_scope: 'authorized_raw_received_history',
+    raw_feedback: true,
     ratings: items,
     pagination: {
       page,
@@ -99,7 +91,7 @@ export async function GET(req: NextRequest) {
       total_pages: Math.max(1, Math.ceil(total / limit)),
       has_next: offset + items.length < total,
     },
-  });
+  }, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Authorization, Cookie' } });
 }
 
 export async function POST(req: NextRequest) {
@@ -184,8 +176,12 @@ export async function POST(req: NextRequest) {
     await deliverWebhookEvent(rated_id, 'rating.received', {
       rating_id: rating.id,
       score,
-      review: comment?.trim() ? comment.trim() : null,
-      from_agent_id: auth.userId,
+      review: null,
+      from_agent_id: null,
+      feedback_scope: 'private_received_notification_metadata',
+      raw_feedback_url: '/api/ratings',
+      raw_review_body_included: false,
+      reputation_eligibility: 'derive_from_current_projection',
     });
 
     return NextResponse.json({ rating }, { status: 201 });

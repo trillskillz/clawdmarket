@@ -14,6 +14,7 @@ type AgentService = {
   agent_id: string
   agent_name: string
   initials: string
+  reputation_v2?: import('@/lib/reputation-v2-model').ReputationV2
   agent_trust: number
   agent_trust_confidence: 'low' | 'medium' | 'high'
   rating_count: number
@@ -83,6 +84,7 @@ function listingToService(listing: any, fallback = false): AgentService {
     agent_id: String(listing.agent_id || listing.seller_id),
     agent_name: name,
     initials: name.split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase() || 'AI',
+    reputation_v2: listing.reputation_v2,
     agent_trust: Math.max(0, Math.min(100, Number(listing.agent_trust || Number(listing.seller_avg_rating || 0) * 20))),
     agent_trust_confidence: ['low', 'medium', 'high'].includes(listing.agent_trust_confidence)
       ? listing.agent_trust_confidence
@@ -104,12 +106,6 @@ function listingToService(listing: any, fallback = false): AgentService {
     is_demo: fallback || String(listing.id).startsWith('demo-'),
     created_at: String(listing.created_at || ''),
   }
-}
-
-function trustColor(score: number) {
-  if (score >= 80) return '#b9ef72'
-  if (score >= 65) return '#f2c35b'
-  return '#7f857d'
 }
 
 export default function MarketplaceClient({ initialStats, initialCatalog, initialPaymentConfig }: { initialStats: MarketStats | null; initialCatalog: { listings: any[]; total: number } | null; initialPaymentConfig: PaymentConfig | null }) {
@@ -402,7 +398,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
             <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
               <option value="newest">Newest</option>
               <option value="recommended">Recommended evidence</option>
-              <option value="trust_desc">Highest trust</option>
+              <option value="trust_desc">Highest eligible stars</option>
               <option value="price_asc">Price: low to high</option>
               <option value="price_desc">Price: high to low</option>
             </select>
@@ -421,7 +417,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
                 <div className={styles.avatar}>{service.initials}</div>
                 <div className={styles.agentIdentity}>
                   <Link href={`/registry/${service.agent_id}`}>{service.agent_name}</Link>
-                  <span>trust {publicTrustLabel(service.agent_trust, service.completed_trades, service.rating_count)} · {service.agent_trust_confidence} confidence<i style={{ background: trustColor(service.agent_trust) }} /></span>
+                  <span>evidence {publicTrustLabel(service.agent_trust, service.completed_trades, service.rating_count, service.reputation_v2)}<i style={{ background: '#7f857d' }} /></span>
                 </div>
                 <span className={service.seller_availability === 'offline' ? styles.unavailable : service.seller_availability === 'unknown' ? styles.unknown : styles.available}>
                   <i />{service.seller_availability === 'online' ? 'online' : service.seller_availability === 'offline' ? 'offline' : service.seller_availability === 'unknown' ? 'not checked in' : service.status}
@@ -438,9 +434,9 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
               </div>
 
               <div className={styles.cardMetrics}>
-                <span><i>CONFIDENCE</i>{service.agent_trust_confidence}</span>
-                <span><i>TRADES</i>{service.completed_trades}</span>
-                <span><i>TRUST</i>{publicTrustLabel(service.agent_trust, service.completed_trades, service.rating_count)}</span>
+                <span><i>BUYER INDEPENDENCE</i>Unverified</span>
+                <span><i>ACCEPTED WORK</i>{service.completed_trades}</span>
+                <span><i>EVIDENCE</i>{publicTrustLabel(service.agent_trust, service.completed_trades, service.rating_count, service.reputation_v2)}</span>
               </div>
 
               <div className={styles.cardAction}>

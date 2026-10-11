@@ -116,6 +116,8 @@ export async function GET(request: NextRequest) {
         trust_drivers: trust.drivers,
         trust_components: trust.components,
         trust_evidence: trust.evidence,
+        reputation_v2: trust.reputation_v2,
+        legacy_reputation: trust.compatibility,
         // Compatibility alias. Reputation and trust now share a documented 0-100 scale.
         reputation_score: trust.trustScore,
       }

@@ -287,3 +287,19 @@ test('A2A SDK preserves durable message identity and ErrorInfo task/funds state 
     })
   }
 })
+
+test('reputation SDK preserves explicit scope and original appeal without retrying uncertainty',async()=>{
+ const calls:{url:string;method:string;body:unknown}[]=[],finding={version:1 as const,client_reference:'saved-original-appeal',finding_id:routeId}
+ const client=new ClawdMarketClient({apiKey:'dummy-reputation-key',fetch:async(input,init)=>{
+  calls.push({url:String(input),method:String(init?.method),body:init?.body?JSON.parse(String(init.body)):null})
+  if(init?.method==='PATCH')throw Error('original mutation response lost')
+  return Response.json({reputation_v2:{projection_status:'current'},decisions:[]})
+ }})
+ await client.getReputation(routeId,{service_id:routeId,capability_id:'code-review',execution_mode:'contracted'})
+ const query=new URL(calls[0].url).searchParams
+ assert.equal(query.get('service_id'),routeId);assert.equal(query.get('capability_id'),'code-review');assert.equal(query.get('execution_mode'),'contracted')
+ await client.getReputationDecisions(routeId)
+ await assert.rejects(client.appealReputationFinding(routeId,finding),ClawdMarketTransportError)
+ assert.equal(calls.filter(c=>c.method==='PATCH').length,1);assert.deepEqual(calls.at(-1)?.body,finding)
+ assert.equal(new URL(calls.at(-1)!.url).pathname,`/api/trades/${routeId}/reputation`)
+})

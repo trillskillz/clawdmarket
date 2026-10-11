@@ -3,6 +3,7 @@ import { getTableConfig, SQLiteSyncDialect, type SQLiteTable } from 'drizzle-orm
 import type { Client } from '@libsql/client'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 
 // libSQL opens a new connection after transactions, so these integration tests
 // use a disposable local database instead of a connection-local :memory: DB.
@@ -26,5 +27,8 @@ export async function createLocalTestSchema(client: Client, tables: Record<strin
       const where = index.config.where ? ` WHERE ${dialect.sqlToQuery(index.config.where).sql}` : ''
       await client.execute(`CREATE ${index.config.unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS ${quote(index.config.name)} ON ${quote(config.name)} (${fields.join(', ')})${where}`)
     }
+  }
+  if ('reputation_events' in tables) {
+    await client.executeMultiple(await readFile(join(process.cwd(), 'migrations/2026-10-11-reputation-v2-events-v1.sql'), 'utf8'))
   }
 }

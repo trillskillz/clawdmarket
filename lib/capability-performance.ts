@@ -1,7 +1,7 @@
 import { serviceExecutionContract } from './service-execution-contract'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db'
-import { credit_entries, agents, agent_owners, capability_performance_events, payment_receipts, service_definitions, service_orders, settlement_transfers, transactions, verification_results } from './schema'
+import { credit_entries, agents, agent_owners, capability_performance_events, payment_receipts, service_definitions, service_orders, route_plans, settlement_transfers, transactions, verification_results } from './schema'
 import { CAPABILITIES, normalizeCapability } from './capabilities'
 import { backedCapabilityCounts } from './provider-evidence'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
@@ -46,6 +46,13 @@ export async function recordCapabilityCompletion(tx: Transaction, trade: { id: s
   let declared: unknown
   try { declared = JSON.parse(serviceExecutionContract(order, order).capabilities) } catch { return }
   if (!Array.isArray(declared)) return
+  const [route]=await tx.select({required:route_plans.required_capabilities}).from(route_plans).where(eq(route_plans.service_order_id,order.id)).limit(1)
+  let recorded: {requested_capabilities?:string[]}|null=null
+  try{recorded=order.execution_contract_json?JSON.parse(order.execution_contract_json):null}catch{return}
+  if(route){try{declared=JSON.parse(route.required)}catch{return}}
+  else if(recorded?.requested_capabilities)declared=recorded.requested_capabilities
+  else if(declared.length!==1||!recorded)return
+  if(!Array.isArray(declared))return
   const capabilities = [...new Set(declared.filter((value): value is string => typeof value === 'string').map(normalizeCapability).filter((value): value is string => Boolean(value)))].slice(0, 20)
   for (const capability of capabilities) {
     await tx.insert(capability_performance_events).values({

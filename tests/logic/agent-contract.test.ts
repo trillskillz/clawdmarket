@@ -44,7 +44,7 @@ test('marketplace reputation advertises bounded owner feedback and history confi
   const paths = getAgentOpenApiPaths() as Record<string, { get: Record<string, unknown> }>
   assert.deepEqual(paths['/api/agents/{id}/trust'].get['x-reputation-evidence'], evidence)
   assert.deepEqual(paths['/api/listings'].get['x-reputation-evidence'], evidence)
-  for (const text of [renderSkillMd(), renderLlmsTxt()]) assert.match(text, /Marketplace reputation: ratings require the actual buyer and seller/)
+  for (const text of [renderSkillMd(), renderLlmsTxt()]) assert.match(text, /Legacy compatibility aggregation.*ratings require the actual buyer and seller/)
 })
 
 test('Python verifier discovery and report schemas agree on finite external checks with mandatory buyer acceptance', () => {
@@ -279,4 +279,15 @@ test('organization spending contract separates credit and reviewed external auth
   assert.match(renderSkillMd(),/Refunds|without recycling/)
   assert.match(renderSkillMd(),/Missing\/contradictory original usage fails closed/)
   assert.match(renderSkillMd(),/Its secret cannot be reissued|secret cannot be reissued/)
+})
+
+
+test('reputation v2 contracts retain separate policy versions, frozen scopes and shadow-only authority',()=>{
+ const manifest=getAgentManifest(),recovery=getClientRecoveryContract(),paths=getAgentOpenApiPaths() as Record<string,any>
+ assert.deepEqual(recovery.reputation_v2,manifest.reputation_v2)
+ assert.equal(manifest.reputation_v2.default_ranking_changed,false);assert.equal(manifest.reputation_v2.public_review_bodies,false)
+ assert.equal(paths['/api/trades/{id}/reputation'].patch.parameters[0].name,'id')
+ assert.ok(paths['/api/agents/{id}/reputation'].get.responses[503])
+ assert.ok(paths['/api/agents/reputation-suggestions'].post.security)
+ for(const text of [renderSkillMd(),renderLlmsTxt()]){assert.match(text,/Public feedback excludes bodies and buyer identities/);assert.match(text,/Default execution ordering is unchanged/);assert.match(text,/representative outcomes gate publication/)}
 })

@@ -67,7 +67,7 @@ async function selectListings(whereClause: any, limit: number, offset: number, s
     .from(listings)
     .leftJoin(users, eq(listings.seller_id, users.id))
     .where(whereClause)
-    .orderBy(getSortOrder(sort))
+    .orderBy(getSortOrder(sort), sql`${listings.id} DESC`)
     .limit(limit)
     .offset(offset);
 }
@@ -221,6 +221,7 @@ export async function GET(req: NextRequest) {
         agent_trust_rating_count: trust?.components.ratingCount ?? 0,
         agent_trust_completed_trades: trust?.components.completedTrades ?? 0,
         agent_trust_evidence: trust?.evidence,
+        reputation_v2: trust?.reputation_v2,
         agent_trust_drivers: trust?.drivers ?? ['No verified marketplace activity'],
         external_payment_ready: Boolean(sellerPayoutAddress && isAddress(sellerPayoutAddress)),
         seller_online: sellerAvailability === null ? null : sellerAvailability === 'online',

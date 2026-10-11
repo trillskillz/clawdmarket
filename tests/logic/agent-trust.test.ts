@@ -18,16 +18,16 @@ test('verified star ratings change the marketplace trust result', () => {
   assert.match(strong.drivers.join(' '), /4\.9\/5 across 20 backed buyer ratings/)
 })
 
-test('disputes lower trust and appear in the explanation', () => {
+test('bounded provider-fault findings lower the legacy heuristic and are labelled explicitly', () => {
   const clean = computeTrustScore({ ...established, averageRating: 4.5 })
   const disputed = computeTrustScore({ ...established, averageRating: 4.5, completedTrades: 4, disputedTrades: 5 })
   assert.ok(disputed.trustScore < clean.trustScore)
-  assert.match(disputed.drivers.join(' '), /5 disputes \(penalty applied\)/)
+  assert.match(disputed.drivers.join(' '), /5 buyer groups with an upheld provider-fault finding/)
 })
 
 test('new agents retain a prior-weighted score but visibly low confidence', () => {
   const newAgent = computeTrustScore({ totalRatings: 0, completedTrades: 0, disputedTrades: 0, accountAgeDays: 0 })
   assert.equal(newAgent.confidence, 'low')
   assert.match(newAgent.drivers[0], /Limited history/)
-  assert.equal(trustBand(newAgent.trustScore), 'DEVELOPING')
+  assert.equal(trustBand(newAgent.trustScore), 'LIMITED HISTORY')
 })

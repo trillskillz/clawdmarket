@@ -119,6 +119,22 @@ test('provider failure releases budget and duplicate failed calls never redispat
  await assert.rejects(call(f),/SESSION_BUDGET_EXHAUSTED/);assert.equal((await credit.creditBalance(f.seller)).available_minor,2)
  assert.equal((await health()).healthy,true)
 })
+test('schema-successful paid instant work has immutable typed evidence and never creates contracted delivery reputation',async()=>{
+ const f=await fixture(),c=await call(f)
+ const settled=await settle(f,c.id)
+ assert.equal(settled.call.state,'completed')
+ const {loadReputationV2Map}=await import('@/lib/reputation-v2')
+ const record=(await loadReputationV2Map([f.seller],{kind:'service_capability_mode',service_id:f.service.id,capability_id:'code-review',execution_mode:'instant'})).get(f.seller)!
+ assert.equal(record.projection_status,'current');assert.equal(record.delivery.accepted,0);assert.equal(record.delivery.weighted_model_estimate,null)
+ assert.equal(record.instant_execution.schema_transport_success,1);assert.equal(record.instant_execution.affects_contracted_delivery,false)
+ const events=await db.select().from(schema.reputation_events).where(eq(schema.reputation_events.source_id,c.id))
+ assert.ok(events.some(e=>e.event_kind==='instant_schema_transport_completed'))
+ assert.ok(!JSON.stringify(record).includes(f.buyer))
+ await db.insert(schema.banned_users).values({user_id:f.buyer,reason:'Controlled moderation fixture',created_at:Date.now()})
+ try{const moderated=(await loadReputationV2Map([f.seller],{kind:'service_capability_mode',service_id:f.service.id,capability_id:'code-review',execution_mode:'instant'})).get(f.seller)!;assert.equal(moderated.instant_execution.schema_transport_success,0);assert.equal(moderated.instant_execution.unknown,1);assert.equal(settled.call.state,'completed')}finally{await db.delete(schema.banned_users).where(eq(schema.banned_users.user_id,f.buyer))}
+
+})
+
 test('capacity is bounded across buyer sessions and cannot be bypassed with duplicate requests',async()=>{
  const f=await fixture(10,1);const second=(await core.openInstantSession(principal(f.buyer),f.service.id,{...f.input,client_reference:crypto.randomUUID()})).session
  const c=await call(f)

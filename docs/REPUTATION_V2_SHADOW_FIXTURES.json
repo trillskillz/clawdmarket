@@ -1,0 +1,993 @@
+{
+  "kind": "controlled_adversarial_fixture_comparison",
+  "representative_production_outcomes": false,
+  "production_observation_gate_met": false,
+  "baseline": "pinned_router_formula_on_controlled_equal_hard_gate_candidates; no_paid_execution",
+  "baseline_ids": [
+    "stale-established",
+    "adverse-only",
+    "difficult-work-mixed",
+    "established-diverse",
+    "one-perfect-review",
+    "repeat-customer-20-jobs",
+    "new-cheap",
+    "platform-outage-unknown"
+  ],
+  "comparisons": [
+    {
+      "mode": "lowest_eligible_price",
+      "policy": {
+        "version": "reputation-v2-shadow-1",
+        "default": "legacy_order_unchanged",
+        "unknown": "separate_unproven_suggestions",
+        "exploration": "explicit_discovery_only; no_execution_authority",
+        "balanced_formula": "0.8 * minimum_required_leaf_lower_quantile + 0.2 / (1 + total_usd_price)",
+        "price": "current_quoted_total; not_observed_quality",
+        "latency": "excluded_from_v2_model; claims_remain_separate"
+      },
+      "suggested_ids": [
+        "new-cheap",
+        "platform-outage-unknown",
+        "adverse-only",
+        "one-perfect-review",
+        "repeat-customer-20-jobs",
+        "stale-established",
+        "difficult-work-mixed",
+        "established-diverse"
+      ],
+      "unproven_ids": [
+        "new-cheap",
+        "platform-outage-unknown"
+      ],
+      "reason_codes": [
+        "hard_gates_preserved",
+        "uncalibrated_shadow_estimate",
+        "stable_id_ties"
+      ],
+      "execution_authority": false
+    },
+    {
+      "mode": "best_supported_history",
+      "policy": {
+        "version": "reputation-v2-shadow-1",
+        "default": "legacy_order_unchanged",
+        "unknown": "separate_unproven_suggestions",
+        "exploration": "explicit_discovery_only; no_execution_authority",
+        "balanced_formula": "0.8 * minimum_required_leaf_lower_quantile + 0.2 / (1 + total_usd_price)",
+        "price": "current_quoted_total; not_observed_quality",
+        "latency": "excluded_from_v2_model; claims_remain_separate"
+      },
+      "suggested_ids": [
+        "established-diverse",
+        "stale-established",
+        "difficult-work-mixed",
+        "one-perfect-review",
+        "repeat-customer-20-jobs",
+        "adverse-only"
+      ],
+      "unproven_ids": [
+        "new-cheap",
+        "platform-outage-unknown"
+      ],
+      "reason_codes": [
+        "hard_gates_preserved",
+        "uncalibrated_shadow_estimate",
+        "stable_id_ties"
+      ],
+      "execution_authority": false
+    },
+    {
+      "mode": "balanced_heuristic",
+      "policy": {
+        "version": "reputation-v2-shadow-1",
+        "default": "legacy_order_unchanged",
+        "unknown": "separate_unproven_suggestions",
+        "exploration": "explicit_discovery_only; no_execution_authority",
+        "balanced_formula": "0.8 * minimum_required_leaf_lower_quantile + 0.2 / (1 + total_usd_price)",
+        "price": "current_quoted_total; not_observed_quality",
+        "latency": "excluded_from_v2_model; claims_remain_separate"
+      },
+      "suggested_ids": [
+        "established-diverse",
+        "stale-established",
+        "difficult-work-mixed",
+        "one-perfect-review",
+        "repeat-customer-20-jobs",
+        "adverse-only"
+      ],
+      "unproven_ids": [
+        "new-cheap",
+        "platform-outage-unknown"
+      ],
+      "reason_codes": [
+        "hard_gates_preserved",
+        "uncalibrated_shadow_estimate",
+        "stable_id_ties"
+      ],
+      "execution_authority": false
+    }
+  ],
+  "comparison_metrics": [
+    {
+      "mode": "lowest_eligible_price",
+      "changed_positions": 8,
+      "established_in_top_three": 0,
+      "new_provider_rank": 1,
+      "new_provider_in_unproven_suggestions": true
+    },
+    {
+      "mode": "best_supported_history",
+      "changed_positions": 5,
+      "established_in_top_three": 1,
+      "new_provider_rank": null,
+      "new_provider_in_unproven_suggestions": true
+    },
+    {
+      "mode": "balanced_heuristic",
+      "changed_positions": 5,
+      "established_in_top_three": 1,
+      "new_provider_rank": null,
+      "new_provider_in_unproven_suggestions": true
+    }
+  ],
+  "candidates": [
+    {
+      "id": "established-diverse",
+      "price": 10,
+      "record": {
+        "policy_version": "reputation-v2-shadow-1",
+        "evidence_eligibility_version": 2,
+        "event_schema_version": 1,
+        "computed_at": "2026-10-11T12:00:00.000Z",
+        "evidence_recorded_as_of": null,
+        "evidence_as_of": "2026-10-11T12:00:00.000Z",
+        "projection_status": "current",
+        "evidence_status": "established",
+        "stale": false,
+        "scope": {
+          "kind": "service_capability_mode",
+          "service_id": "controlled-service",
+          "capability_id": "code-review",
+          "execution_mode": "contracted"
+        },
+        "execution_mode": "contracted",
+        "scope_coverage": {
+          "work_units": 20,
+          "unattributed_work_units": 0,
+          "unknown_service_version": 20,
+          "unknown_agent_version": 20,
+          "known_operator_periods": 0,
+          "continuity": "provider_identity_preserved; transfer_never_resets_history"
+        },
+        "service_versions": [],
+        "software_versions": [],
+        "instant_execution": {
+          "schema_transport_success": 0,
+          "failed_operations": 0,
+          "pending": 0,
+          "unknown": 0,
+          "semantic_quality": "unmeasured",
+          "buyer_acceptance": "not_performed",
+          "affects_contracted_delivery": false
+        },
+        "delivery": {
+          "accepted": 18,
+          "provider_failures": 2,
+          "pending": 0,
+          "unknown": 0,
+          "raw_rate": 0.9,
+          "weighted_model_estimate": {
+            "mean": 0.863636,
+            "lower_quantile": 0.765953,
+            "quantile": 0.1,
+            "mode": "shadow",
+            "calibrated": false
+          }
+        },
+        "deadlines": {
+          "on_time": 0,
+          "eligible": 0,
+          "unknown": 0,
+          "rate": null,
+          "p50_seconds": null,
+          "p95_seconds": null
+        },
+        "satisfaction": {
+          "mean": 5,
+          "eligible_review_count": 18,
+          "reviewed_job_coverage": 1,
+          "subjective": true
+        },
+        "breadth": {
+          "observed_buyer_groups": 20,
+          "decayed_group_weight": 20,
+          "concentration": 0.05
+        },
+        "freshness": {
+          "dated_terminal_observations": 20,
+          "unknown_date_observations": 0
+        },
+        "verification": {},
+        "first_pass": {
+          "jobs_with_failed_check": 0,
+          "interpretation": "operational_check; not_a_second_terminal_failure"
+        },
+        "incidents": {
+          "serious_unremediated": 0,
+          "remediation_policy": "no_automatic_expiry; explicit_superseding_adjudication_required",
+          "pending": 0,
+          "adjudicated": 2,
+          "appealed": 0,
+          "overturned": 0
+        },
+        "value_experience": {
+          "under_1_usd": 0,
+          "1_to_10_usd": 20,
+          "10_to_100_usd": 0,
+          "100_usd_and_up": 0
+        },
+        "limitations": {
+          "calibrated": false,
+          "buyer_independence": "not_verified",
+          "semantic_quality": "unmeasured",
+          "capability_attribution": "whole_job_acceptance; no_independent_component_quality",
+          "private_work": "excluded_from_public_aggregation"
+        }
+      }
+    },
+    {
+      "id": "new-cheap",
+      "price": 0.01,
+      "record": {
+        "policy_version": "reputation-v2-shadow-1",
+        "evidence_eligibility_version": 2,
+        "event_schema_version": 1,
+        "computed_at": "2026-10-11T12:00:00.000Z",
+        "evidence_recorded_as_of": null,
+        "evidence_as_of": null,
+        "projection_status": "current",
+        "evidence_status": "new",
+        "stale": false,
+        "scope": {
+          "kind": "service_capability_mode",
+          "service_id": "controlled-service",
+          "capability_id": "code-review",
+          "execution_mode": "contracted"
+        },
+        "execution_mode": "contracted",
+        "scope_coverage": {
+          "work_units": 0,
+          "unattributed_work_units": 0,
+          "unknown_service_version": 0,
+          "unknown_agent_version": 0,
+          "known_operator_periods": 0,
+          "continuity": "provider_identity_preserved; transfer_never_resets_history"
+        },
+        "service_versions": [],
+        "software_versions": [],
+        "instant_execution": {
+          "schema_transport_success": 0,
+          "failed_operations": 0,
+          "pending": 0,
+          "unknown": 0,
+          "semantic_quality": "unmeasured",
+          "buyer_acceptance": "not_performed",
+          "affects_contracted_delivery": false
+        },
+        "delivery": {
+          "accepted": 0,
+          "provider_failures": 0,
+          "pending": 0,
+          "unknown": 0,
+          "raw_rate": null,
+          "weighted_model_estimate": null
+        },
+        "deadlines": {
+          "on_time": 0,
+          "eligible": 0,
+          "unknown": 0,
+          "rate": null,
+          "p50_seconds": null,
+          "p95_seconds": null
+        },
+        "satisfaction": {
+          "mean": null,
+          "eligible_review_count": 0,
+          "reviewed_job_coverage": null,
+          "subjective": true
+        },
+        "breadth": {
+          "observed_buyer_groups": 0,
+          "decayed_group_weight": 0,
+          "concentration": null
+        },
+        "freshness": {
+          "dated_terminal_observations": 0,
+          "unknown_date_observations": 0
+        },
+        "verification": {},
+        "first_pass": {
+          "jobs_with_failed_check": 0,
+          "interpretation": "operational_check; not_a_second_terminal_failure"
+        },
+        "incidents": {
+          "serious_unremediated": 0,
+          "remediation_policy": "no_automatic_expiry; explicit_superseding_adjudication_required",
+          "pending": 0,
+          "adjudicated": 0,
+          "appealed": 0,
+          "overturned": 0
+        },
+        "value_experience": {
+          "under_1_usd": 0,
+          "1_to_10_usd": 0,
+          "10_to_100_usd": 0,
+          "100_usd_and_up": 0
+        },
+        "limitations": {
+          "calibrated": false,
+          "buyer_independence": "not_verified",
+          "semantic_quality": "unmeasured",
+          "capability_attribution": "whole_job_acceptance; no_independent_component_quality",
+          "private_work": "excluded_from_public_aggregation"
+        }
+      }
+    },
+    {
+      "id": "repeat-customer-20-jobs",
+      "price": 1,
+      "record": {
+        "policy_version": "reputation-v2-shadow-1",
+        "evidence_eligibility_version": 2,
+        "event_schema_version": 1,
+        "computed_at": "2026-10-11T12:00:00.000Z",
+        "evidence_recorded_as_of": null,
+        "evidence_as_of": "2026-10-11T12:00:00.000Z",
+        "projection_status": "current",
+        "evidence_status": "limited",
+        "stale": false,
+        "scope": {
+          "kind": "service_capability_mode",
+          "service_id": "controlled-service",
+          "capability_id": "code-review",
+          "execution_mode": "contracted"
+        },
+        "execution_mode": "contracted",
+        "scope_coverage": {
+          "work_units": 20,
+          "unattributed_work_units": 0,
+          "unknown_service_version": 20,
+          "unknown_agent_version": 20,
+          "known_operator_periods": 0,
+          "continuity": "provider_identity_preserved; transfer_never_resets_history"
+        },
+        "service_versions": [],
+        "software_versions": [],
+        "instant_execution": {
+          "schema_transport_success": 0,
+          "failed_operations": 0,
+          "pending": 0,
+          "unknown": 0,
+          "semantic_quality": "unmeasured",
+          "buyer_acceptance": "not_performed",
+          "affects_contracted_delivery": false
+        },
+        "delivery": {
+          "accepted": 20,
+          "provider_failures": 0,
+          "pending": 0,
+          "unknown": 0,
+          "raw_rate": 1,
+          "weighted_model_estimate": {
+            "mean": 0.666667,
+            "lower_quantile": 0.316228,
+            "quantile": 0.1,
+            "mode": "shadow",
+            "calibrated": false
+          }
+        },
+        "deadlines": {
+          "on_time": 0,
+          "eligible": 0,
+          "unknown": 0,
+          "rate": null,
+          "p50_seconds": null,
+          "p95_seconds": null
+        },
+        "satisfaction": {
+          "mean": 5,
+          "eligible_review_count": 20,
+          "reviewed_job_coverage": 1,
+          "subjective": true
+        },
+        "breadth": {
+          "observed_buyer_groups": 1,
+          "decayed_group_weight": 1,
+          "concentration": 1
+        },
+        "freshness": {
+          "dated_terminal_observations": 20,
+          "unknown_date_observations": 0
+        },
+        "verification": {},
+        "first_pass": {
+          "jobs_with_failed_check": 0,
+          "interpretation": "operational_check; not_a_second_terminal_failure"
+        },
+        "incidents": {
+          "serious_unremediated": 0,
+          "remediation_policy": "no_automatic_expiry; explicit_superseding_adjudication_required",
+          "pending": 0,
+          "adjudicated": 0,
+          "appealed": 0,
+          "overturned": 0
+        },
+        "value_experience": {
+          "under_1_usd": 0,
+          "1_to_10_usd": 20,
+          "10_to_100_usd": 0,
+          "100_usd_and_up": 0
+        },
+        "limitations": {
+          "calibrated": false,
+          "buyer_independence": "not_verified",
+          "semantic_quality": "unmeasured",
+          "capability_attribution": "whole_job_acceptance; no_independent_component_quality",
+          "private_work": "excluded_from_public_aggregation"
+        }
+      }
+    },
+    {
+      "id": "one-perfect-review",
+      "price": 1,
+      "record": {
+        "policy_version": "reputation-v2-shadow-1",
+        "evidence_eligibility_version": 2,
+        "event_schema_version": 1,
+        "computed_at": "2026-10-11T12:00:00.000Z",
+        "evidence_recorded_as_of": null,
+        "evidence_as_of": "2026-10-11T12:00:00.000Z",
+        "projection_status": "current",
+        "evidence_status": "limited",
+        "stale": false,
+        "scope": {
+          "kind": "service_capability_mode",
+          "service_id": "controlled-service",
+          "capability_id": "code-review",
+          "execution_mode": "contracted"
+        },
+        "execution_mode": "contracted",
+        "scope_coverage": {
+          "work_units": 1,
+          "unattributed_work_units": 0,
+          "unknown_service_version": 1,
+          "unknown_agent_version": 1,
+          "known_operator_periods": 0,
+          "continuity": "provider_identity_preserved; transfer_never_resets_history"
+        },
+        "service_versions": [],
+        "software_versions": [],
+        "instant_execution": {
+          "schema_transport_success": 0,
+          "failed_operations": 0,
+          "pending": 0,
+          "unknown": 0,
+          "semantic_quality": "unmeasured",
+          "buyer_acceptance": "not_performed",
+          "affects_contracted_delivery": false
+        },
+        "delivery": {
+          "accepted": 1,
+          "provider_failures": 0,
+          "pending": 0,
+          "unknown": 0,
+          "raw_rate": 1,
+          "weighted_model_estimate": {
+            "mean": 0.666667,
+            "lower_quantile": 0.316228,
+            "quantile": 0.1,
+            "mode": "shadow",
+            "calibrated": false
+          }
+        },
+        "deadlines": {
+          "on_time": 0,
+          "eligible": 0,
+          "unknown": 0,
+          "rate": null,
+          "p50_seconds": null,
+          "p95_seconds": null
+        },
+        "satisfaction": {
+          "mean": 5,
+          "eligible_review_count": 1,
+          "reviewed_job_coverage": 1,
+          "subjective": true
+        },
+        "breadth": {
+          "observed_buyer_groups": 1,
+          "decayed_group_weight": 1,
+          "concentration": 1
+        },
+        "freshness": {
+          "dated_terminal_observations": 1,
+          "unknown_date_observations": 0
+        },
+        "verification": {},
+        "first_pass": {
+          "jobs_with_failed_check": 0,
+          "interpretation": "operational_check; not_a_second_terminal_failure"
+        },
+        "incidents": {
+          "serious_unremediated": 0,
+          "remediation_policy": "no_automatic_expiry; explicit_superseding_adjudication_required",
+          "pending": 0,
+          "adjudicated": 0,
+          "appealed": 0,
+          "overturned": 0
+        },
+        "value_experience": {
+          "under_1_usd": 0,
+          "1_to_10_usd": 1,
+          "10_to_100_usd": 0,
+          "100_usd_and_up": 0
+        },
+        "limitations": {
+          "calibrated": false,
+          "buyer_independence": "not_verified",
+          "semantic_quality": "unmeasured",
+          "capability_attribution": "whole_job_acceptance; no_independent_component_quality",
+          "private_work": "excluded_from_public_aggregation"
+        }
+      }
+    },
+    {
+      "id": "adverse-only",
+      "price": 0.5,
+      "record": {
+        "policy_version": "reputation-v2-shadow-1",
+        "evidence_eligibility_version": 2,
+        "event_schema_version": 1,
+        "computed_at": "2026-10-11T12:00:00.000Z",
+        "evidence_recorded_as_of": null,
+        "evidence_as_of": "2026-10-11T12:00:00.000Z",
+        "projection_status": "current",
+        "evidence_status": "limited",
+        "stale": false,
+        "scope": {
+          "kind": "service_capability_mode",
+          "service_id": "controlled-service",
+          "capability_id": "code-review",
+          "execution_mode": "contracted"
+        },
+        "execution_mode": "contracted",
+        "scope_coverage": {
+          "work_units": 4,
+          "unattributed_work_units": 0,
+          "unknown_service_version": 4,
+          "unknown_agent_version": 4,
+          "known_operator_periods": 0,
+          "continuity": "provider_identity_preserved; transfer_never_resets_history"
+        },
+        "service_versions": [],
+        "software_versions": [],
+        "instant_execution": {
+          "schema_transport_success": 0,
+          "failed_operations": 0,
+          "pending": 0,
+          "unknown": 0,
+          "semantic_quality": "unmeasured",
+          "buyer_acceptance": "not_performed",
+          "affects_contracted_delivery": false
+        },
+        "delivery": {
+          "accepted": 0,
+          "provider_failures": 4,
+          "pending": 0,
+          "unknown": 0,
+          "raw_rate": 0,
+          "weighted_model_estimate": {
+            "mean": 0.166667,
+            "lower_quantile": 0.020852,
+            "quantile": 0.1,
+            "mode": "shadow",
+            "calibrated": false
+          }
+        },
+        "deadlines": {
+          "on_time": 0,
+          "eligible": 0,
+          "unknown": 0,
+          "rate": null,
+          "p50_seconds": null,
+          "p95_seconds": null
+        },
+        "satisfaction": {
+          "mean": null,
+          "eligible_review_count": 0,
+          "reviewed_job_coverage": null,
+          "subjective": true
+        },
+        "breadth": {
+          "observed_buyer_groups": 4,
+          "decayed_group_weight": 4,
+          "concentration": 0.25
+        },
+        "freshness": {
+          "dated_terminal_observations": 4,
+          "unknown_date_observations": 0
+        },
+        "verification": {},
+        "first_pass": {
+          "jobs_with_failed_check": 0,
+          "interpretation": "operational_check; not_a_second_terminal_failure"
+        },
+        "incidents": {
+          "serious_unremediated": 0,
+          "remediation_policy": "no_automatic_expiry; explicit_superseding_adjudication_required",
+          "pending": 0,
+          "adjudicated": 4,
+          "appealed": 0,
+          "overturned": 0
+        },
+        "value_experience": {
+          "under_1_usd": 0,
+          "1_to_10_usd": 4,
+          "10_to_100_usd": 0,
+          "100_usd_and_up": 0
+        },
+        "limitations": {
+          "calibrated": false,
+          "buyer_independence": "not_verified",
+          "semantic_quality": "unmeasured",
+          "capability_attribution": "whole_job_acceptance; no_independent_component_quality",
+          "private_work": "excluded_from_public_aggregation"
+        }
+      }
+    },
+    {
+      "id": "difficult-work-mixed",
+      "price": 5,
+      "record": {
+        "policy_version": "reputation-v2-shadow-1",
+        "evidence_eligibility_version": 2,
+        "event_schema_version": 1,
+        "computed_at": "2026-10-11T12:00:00.000Z",
+        "evidence_recorded_as_of": null,
+        "evidence_as_of": "2026-10-11T12:00:00.000Z",
+        "projection_status": "current",
+        "evidence_status": "developing",
+        "stale": false,
+        "scope": {
+          "kind": "service_capability_mode",
+          "service_id": "controlled-service",
+          "capability_id": "code-review",
+          "execution_mode": "contracted"
+        },
+        "execution_mode": "contracted",
+        "scope_coverage": {
+          "work_units": 6,
+          "unattributed_work_units": 0,
+          "unknown_service_version": 6,
+          "unknown_agent_version": 6,
+          "known_operator_periods": 0,
+          "continuity": "provider_identity_preserved; transfer_never_resets_history"
+        },
+        "service_versions": [],
+        "software_versions": [],
+        "instant_execution": {
+          "schema_transport_success": 0,
+          "failed_operations": 0,
+          "pending": 0,
+          "unknown": 0,
+          "semantic_quality": "unmeasured",
+          "buyer_acceptance": "not_performed",
+          "affects_contracted_delivery": false
+        },
+        "delivery": {
+          "accepted": 4,
+          "provider_failures": 2,
+          "pending": 0,
+          "unknown": 0,
+          "raw_rate": 0.666667,
+          "weighted_model_estimate": {
+            "mean": 0.625,
+            "lower_quantile": 0.40382,
+            "quantile": 0.1,
+            "mode": "shadow",
+            "calibrated": false
+          }
+        },
+        "deadlines": {
+          "on_time": 0,
+          "eligible": 0,
+          "unknown": 0,
+          "rate": null,
+          "p50_seconds": null,
+          "p95_seconds": null
+        },
+        "satisfaction": {
+          "mean": 5,
+          "eligible_review_count": 4,
+          "reviewed_job_coverage": 1,
+          "subjective": true
+        },
+        "breadth": {
+          "observed_buyer_groups": 6,
+          "decayed_group_weight": 6,
+          "concentration": 0.166667
+        },
+        "freshness": {
+          "dated_terminal_observations": 6,
+          "unknown_date_observations": 0
+        },
+        "verification": {},
+        "first_pass": {
+          "jobs_with_failed_check": 0,
+          "interpretation": "operational_check; not_a_second_terminal_failure"
+        },
+        "incidents": {
+          "serious_unremediated": 0,
+          "remediation_policy": "no_automatic_expiry; explicit_superseding_adjudication_required",
+          "pending": 0,
+          "adjudicated": 2,
+          "appealed": 0,
+          "overturned": 0
+        },
+        "value_experience": {
+          "under_1_usd": 0,
+          "1_to_10_usd": 6,
+          "10_to_100_usd": 0,
+          "100_usd_and_up": 0
+        },
+        "limitations": {
+          "calibrated": false,
+          "buyer_independence": "not_verified",
+          "semantic_quality": "unmeasured",
+          "capability_attribution": "whole_job_acceptance; no_independent_component_quality",
+          "private_work": "excluded_from_public_aggregation"
+        }
+      }
+    },
+    {
+      "id": "platform-outage-unknown",
+      "price": 0.1,
+      "record": {
+        "policy_version": "reputation-v2-shadow-1",
+        "evidence_eligibility_version": 2,
+        "event_schema_version": 1,
+        "computed_at": "2026-10-11T12:00:00.000Z",
+        "evidence_recorded_as_of": null,
+        "evidence_as_of": null,
+        "projection_status": "current",
+        "evidence_status": "limited",
+        "stale": false,
+        "scope": {
+          "kind": "service_capability_mode",
+          "service_id": "controlled-service",
+          "capability_id": "code-review",
+          "execution_mode": "contracted"
+        },
+        "execution_mode": "contracted",
+        "scope_coverage": {
+          "work_units": 1,
+          "unattributed_work_units": 0,
+          "unknown_service_version": 1,
+          "unknown_agent_version": 1,
+          "known_operator_periods": 0,
+          "continuity": "provider_identity_preserved; transfer_never_resets_history"
+        },
+        "service_versions": [],
+        "software_versions": [],
+        "instant_execution": {
+          "schema_transport_success": 0,
+          "failed_operations": 0,
+          "pending": 0,
+          "unknown": 0,
+          "semantic_quality": "unmeasured",
+          "buyer_acceptance": "not_performed",
+          "affects_contracted_delivery": false
+        },
+        "delivery": {
+          "accepted": 0,
+          "provider_failures": 0,
+          "pending": 0,
+          "unknown": 1,
+          "raw_rate": null,
+          "weighted_model_estimate": null
+        },
+        "deadlines": {
+          "on_time": 0,
+          "eligible": 0,
+          "unknown": 0,
+          "rate": null,
+          "p50_seconds": null,
+          "p95_seconds": null
+        },
+        "satisfaction": {
+          "mean": null,
+          "eligible_review_count": 0,
+          "reviewed_job_coverage": null,
+          "subjective": true
+        },
+        "breadth": {
+          "observed_buyer_groups": 0,
+          "decayed_group_weight": 0,
+          "concentration": null
+        },
+        "freshness": {
+          "dated_terminal_observations": 0,
+          "unknown_date_observations": 0
+        },
+        "verification": {},
+        "first_pass": {
+          "jobs_with_failed_check": 0,
+          "interpretation": "operational_check; not_a_second_terminal_failure"
+        },
+        "incidents": {
+          "serious_unremediated": 0,
+          "remediation_policy": "no_automatic_expiry; explicit_superseding_adjudication_required",
+          "pending": 0,
+          "adjudicated": 0,
+          "appealed": 0,
+          "overturned": 0
+        },
+        "value_experience": {
+          "under_1_usd": 0,
+          "1_to_10_usd": 0,
+          "10_to_100_usd": 0,
+          "100_usd_and_up": 0
+        },
+        "limitations": {
+          "calibrated": false,
+          "buyer_independence": "not_verified",
+          "semantic_quality": "unmeasured",
+          "capability_attribution": "whole_job_acceptance; no_independent_component_quality",
+          "private_work": "excluded_from_public_aggregation"
+        }
+      }
+    },
+    {
+      "id": "stale-established",
+      "price": 2,
+      "record": {
+        "policy_version": "reputation-v2-shadow-1",
+        "evidence_eligibility_version": 2,
+        "event_schema_version": 1,
+        "computed_at": "2026-10-11T12:00:00.000Z",
+        "evidence_recorded_as_of": null,
+        "evidence_as_of": "2026-04-14T12:00:00.000Z",
+        "projection_status": "current",
+        "evidence_status": "developing",
+        "stale": true,
+        "scope": {
+          "kind": "service_capability_mode",
+          "service_id": "controlled-service",
+          "capability_id": "code-review",
+          "execution_mode": "contracted"
+        },
+        "execution_mode": "contracted",
+        "scope_coverage": {
+          "work_units": 20,
+          "unattributed_work_units": 0,
+          "unknown_service_version": 20,
+          "unknown_agent_version": 20,
+          "known_operator_periods": 0,
+          "continuity": "provider_identity_preserved; transfer_never_resets_history"
+        },
+        "service_versions": [],
+        "software_versions": [],
+        "instant_execution": {
+          "schema_transport_success": 0,
+          "failed_operations": 0,
+          "pending": 0,
+          "unknown": 0,
+          "semantic_quality": "unmeasured",
+          "buyer_acceptance": "not_performed",
+          "affects_contracted_delivery": false
+        },
+        "delivery": {
+          "accepted": 20,
+          "provider_failures": 0,
+          "pending": 0,
+          "unknown": 0,
+          "raw_rate": 1,
+          "weighted_model_estimate": {
+            "mean": 0.857143,
+            "lower_quantile": 0.681292,
+            "quantile": 0.1,
+            "mode": "shadow",
+            "calibrated": false
+          }
+        },
+        "deadlines": {
+          "on_time": 0,
+          "eligible": 0,
+          "unknown": 0,
+          "rate": null,
+          "p50_seconds": null,
+          "p95_seconds": null
+        },
+        "satisfaction": {
+          "mean": 5,
+          "eligible_review_count": 20,
+          "reviewed_job_coverage": 1,
+          "subjective": true
+        },
+        "breadth": {
+          "observed_buyer_groups": 20,
+          "decayed_group_weight": 5,
+          "concentration": 0.05
+        },
+        "freshness": {
+          "dated_terminal_observations": 20,
+          "unknown_date_observations": 0
+        },
+        "verification": {},
+        "first_pass": {
+          "jobs_with_failed_check": 0,
+          "interpretation": "operational_check; not_a_second_terminal_failure"
+        },
+        "incidents": {
+          "serious_unremediated": 0,
+          "remediation_policy": "no_automatic_expiry; explicit_superseding_adjudication_required",
+          "pending": 0,
+          "adjudicated": 0,
+          "appealed": 0,
+          "overturned": 0
+        },
+        "value_experience": {
+          "under_1_usd": 0,
+          "1_to_10_usd": 20,
+          "10_to_100_usd": 0,
+          "100_usd_and_up": 0
+        },
+        "limitations": {
+          "calibrated": false,
+          "buyer_independence": "not_verified",
+          "semantic_quality": "unmeasured",
+          "capability_attribution": "whole_job_acceptance; no_independent_component_quality",
+          "private_work": "excluded_from_public_aggregation"
+        }
+      }
+    }
+  ],
+  "interpretation": [
+    "Best supported history moves the diverse established record above the cheap new provider.",
+    "Repeat-customer twenty-job confidence equals one observed relationship; raw counts remain visible.",
+    "Outage and new-provider unknowns remain separate suggestions, never reliability zero.",
+    "Stale evidence decays; serious findings require explicit remediation.",
+    "No task difficulty, independence, prices or model probabilities are calibrated by these fixtures."
+  ],
+  "longer_ring": {
+    "policy": {
+      "version": 1,
+      "max_edges": 5000,
+      "max_principals": 500,
+      "max_depth": 12,
+      "max_states": 4096,
+      "action": "queue_review_only",
+      "shared_infrastructure": "not_ownership_evidence"
+    },
+    "status": "bounded_analysis_complete",
+    "longer_cycles_beyond_max_depth": "unresolved",
+    "buyer_independence": "not_verified",
+    "edges_examined": 6,
+    "principals_examined": 6,
+    "states_examined": 36,
+    "concerns": [
+      {
+        "kind": "longer_ring",
+        "trade_ids": [
+          "ring-0",
+          "ring-1",
+          "ring-2",
+          "ring-3",
+          "ring-4",
+          "ring-5"
+        ],
+        "interpretation": "screening_signal; not_fraud; authorized_review_required"
+      }
+    ]
+  }
+}

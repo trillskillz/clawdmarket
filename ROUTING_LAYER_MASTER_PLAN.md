@@ -1,3 +1,21 @@
+## Current user priority — Reputation v2 (2026-10-11)
+
+The supplied [Reputation v2 plan](docs/REPUTATION_V2_AGENT_PLAN.md) supersedes
+routing batches until its local implementation and observation requirements are
+met. Work is isolated on `feat/reputation-v2`, based on production main c574e266
+(contract 1.108). Local contract 1.110 is reserved for this capability; accepted
+fee coverage/local 1.109 and the unfinished routed purchasing draft remain in
+the original worktree and are not included here.
+
+The user's latest explicit instruction removes observation as a publication
+requirement: **“go ahead and push as long as everything is working as intended,
+observation isnt a requirement.”** Publish the verified capability through the
+protected GitHub/Vercel process. Local tests and simulations cannot establish
+representative real outcomes; ranking promotion remains gated separately by
+[the runbook](docs/REPUTATION_V2_RUNBOOK.md).
+Existing payment/execution flags and money authority remain unchanged. Continue
+reputation acceptance work before returning to routed purchasing.
+
 # ClawdMarket Routing Layer — Master Plan
 
 **Source of truth for future routing-layer work.** Updated 2026-10-11 for the user's priority Observe repair. The combined release in [PR #255](https://github.com/trillskillz/clawdmarket/pull/255) is production-verified at SHA `6a4d335`, HTTP **1.106**. Read this file and affected code/tests before each batch; record acceptance evidence after it.
@@ -2037,3 +2055,21 @@ untouched. The corrected lock, both process races, following SIGKILL commit reco
 and fresh-funding authority cases all pass (five cases) in
 `/tmp/clawdmarket-tempo-enterprise-ci-contention-isolated-reads.log`. Complete gates
 and the protected PR must rerun on this correction before production publication.
+
+## Reputation v2 local acceptance record — 2026-10-11
+
+Implementation and evidence are isolated on `feat/reputation-v2`, local contract
+1.110. [The audit](docs/REPUTATION_V2_AUDIT.md) maps all six phases and 21 required
+adversarial cases; [the policy](docs/REPUTATION_V2_POLICY.md) records the outcome
+truth table, scopes and constants. Local migration/build/browser/regression gates
+passed: full release **784 cases, 779 passed, zero failed, five expected skips**;
+final affected-area **98/98**, final Chromium **2/2**, Python **18/18**, SDK
+parity/build, lint/typecheck, production build, all 63 migrations and four evidence
+query shapes. The audit records commands, artifacts and diagnostic corrections.
+Neither a synthetic shadow comparison nor the read-only public inventory
+satisfies representative real-outcome coverage. The user's subsequent explicit
+instruction removes observation as a publication requirement; publish after
+protected checks and verify production. Ranking remains shadow-only pending
+reviewed observations. Production is still contract 1.108 until release acceptance
+is recorded. No routing batch increment. Preserve the separate routed purchasing
+draft; execution/payment authority and rollout flags remain unchanged.

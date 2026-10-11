@@ -6,6 +6,20 @@ Preserve the existing payment and settlement state machines. The user's 2026-10-
 
 ## Current publishing gate (2026-10-10)
 
+The user's latest 2026-10-11 priority is the supplied
+[Reputation v2 agent plan](docs/REPUTATION_V2_AGENT_PLAN.md). Implement its phases
+sitewide in this isolated branch, preserving production main c574e266 / HTTP
+1.108 and the separate unfinished routed purchasing branch. The user explicitly
+initially required observation before publication, then explicitly replaced that
+hold on 2026-10-11: **“go ahead and push as long as everything is working as
+intended, observation isnt a requirement.”** Complete release gates, publish one
+capability batch to GitHub/Vercel, and verify exact production SHA/contract on both
+domains. Representative observations remain required for ranking promotion;
+default ranking stays in shadow mode. Report missing real evidence honestly.
+Payment/execution flags and live funds remain untouched. Reputation cannot grant
+spending, accept deliveries or release escrow. This priority supersedes routing
+work and its publishing cadence for this task.
+
 The combined release in PR #255 is production-verified at SHA 6a4d335, HTTP 1.106. The user now prioritizes the Observe Live activity defect before further routing work. Finish and verify registrations, public market payments and caller-only wallet activity in one descending UTC timeline, then publish this focused repair under the existing site-fix publication instruction and verify the production deployment. Accepted private enterprise fee coverage 1.107 remains separately committed in /home/void/Work/clawdmarket on feat/enterprise-chain-fee-coverage (new batch 1/10); its unfinished routed purchasing draft is preserved there and must not enter this repair. After Observe production acceptance, resume separately owner-reviewed enterprise routed public-provider purchasing. Keep the ten-part gate for future routing batches unless the user changes it; audits do not increment it. Do not spend live wallet funds or enable global rollout flags.
 
 ## Historical user priority and publishing exception (2026-10-03)

@@ -7,6 +7,7 @@ import { encryptMessage } from '@/lib/chat-crypto'
 import { deliverWebhookEvent } from '@/lib/webhook-delivery'
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness'
 import { advanceServiceOrder } from '@/lib/service-order-state'
+import { appendReputationDecision, type ReputationDecision } from './reputation-adjudication'
 
 export type TradeResolution = 'buyer' | 'seller' | 'split'
 
@@ -15,6 +16,7 @@ export async function finalizeTradeDispute(
   resolution: TradeResolution,
   splitPercent: number,
   messageSenderId?: string,
+  reputationDecision?: ReputationDecision,
 ) {
   const sellerShare = Math.round(trade.amount * (splitPercent / 100) * 100) / 100
   const buyerShare = Math.round((trade.amount - sellerShare) * 100) / 100
@@ -32,6 +34,7 @@ export async function finalizeTradeDispute(
       .where(and(eq(trades.id, trade.id), eq(trades.status, 'disputed')))
       .returning()
     if (!claimed) return null
+    if (reputationDecision && messageSenderId) await appendReputationDecision(tx,trade.id,messageSenderId,reputationDecision)
     await advanceServiceOrder(tx, trade.id, 'resolved')
 
     if (trade.payment_rail === 'credit') await settleCredit(tx, trade, Math.round(buyerShare * 100))

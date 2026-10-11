@@ -1,9 +1,10 @@
 'use client'
+import ScopedReputation from '@/components/ScopedReputation'
+import ReputationSummary from '@/components/ReputationSummary'
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { hasEarnedTrustEvidence } from '@/lib/trust-presentation'
 import { useParams } from 'next/navigation'
 import BrandMark from '@/components/BrandMark'
 import { trackClientEvent } from '@/lib/client-analytics'
@@ -27,6 +28,7 @@ type SellerProfile = {
   model_id?: string | null
   mpp_endpoint?: string | null
   version?: number
+  reputation_v2?: import('@/lib/reputation-v2-model').ReputationV2
   trust_score?: number
   trust_confidence?: 'low' | 'medium' | 'high'
   trust_evidence_points?: number
@@ -77,12 +79,6 @@ function compactId(value?: string | null) {
   return value.length > 24 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value
 }
 
-function trustTone(score: number) {
-  if (score >= 80) return '#b9ef72'
-  if (score >= 60) return '#f4c76b'
-  return '#ff7954'
-}
-
 function Stars({ score }: { score: number }) {
   return <span className={styles.stars} aria-label={`${score} out of 5 stars`}>{[1, 2, 3, 4, 5].map((star) => <i key={star} className={star <= Math.round(score) ? styles.starOn : undefined}>★</i>)}</span>
 }
@@ -124,17 +120,13 @@ export default function SellerProfilePage() {
   if (loading) return <LoadingProfile />
   if (!seller) return <main className={styles.page}><section className={styles.notFound}><BrandMark size={72} /><span>SELLER LOOKUP / 404</span><h1>Profile unavailable.</h1><p>{error || 'This seller is not present in the marketplace registry.'}</p><Link href="/marketplace">Browse active services <b>→</b></Link></section></main>
 
-  const score = Math.max(0, Math.min(100, Number(seller.trust_score || 0)))
-  const confidence = seller.trust_confidence || seller.trust?.confidence || 'low'
   const completed = Number(seller.completed_trades ?? seller.trust?.components?.completedTrades ?? 0)
-  const earnedTrust = hasEarnedTrustEvidence(completed, seller.rating_count)
-  const totalTrades = Number(seller.total_trades ?? seller.trust?.components?.totalTrades ?? 0)
-  const disputes = Number(seller.trust?.components?.disputedTrades || 0)
-  const completionRate = totalTrades > 0 ? Math.round((completed / totalTrades) * 100) : null
+  const disputes = seller.reputation_v2?.projection_status==='current'?seller.reputation_v2.incidents.pending:'Unknown'
+  const resolved = seller.reputation_v2?seller.reputation_v2.delivery.accepted+seller.reputation_v2.delivery.provider_failures:null
   const rating = Number(seller.avg_rating || 0)
   const listings = seller.active_listings || []
   const capabilities = (seller.capabilities || []).filter((capability) => !capability.endsWith(':verified'))
-  const drivers = seller.trust_drivers || seller.trust?.drivers || ['More verified marketplace activity is needed to establish confidence.']
+  const drivers = seller.reputation_v2?.projection_status==='current'?[`${seller.reputation_v2.delivery.accepted} backed accepted jobs; ${seller.reputation_v2.delivery.provider_failures} finalized provider-fault outcomes.`,`${seller.reputation_v2.delivery.pending} pending and ${seller.reputation_v2.delivery.unknown} unknown outcomes remain outside the terminal denominator.`,`${seller.reputation_v2.breadth.observed_buyer_groups} observed buyer groups; independence is unverified.`, 'Service scope, versions and typed checks determine what this history supports.']:['Reputation evidence is unavailable.']
   const online = Boolean(seller.is_online) && seller.status === 'active'
   const profileKind = seller.profile_kind === 'account_seller' ? 'Account seller' : seller.profile_kind === 'reference' ? 'Reference seller' : 'Registered agent'
   const presence = seller.profile_kind === 'registered_agent'
@@ -165,25 +157,24 @@ export default function SellerProfilePage() {
           </div>
 
           <aside className={styles.trustPanel}>
-            <div className={styles.panelTop}><span>MARKET TRUST</span><b style={{ color: trustTone(score) }}>{earnedTrust ? seller.trust?.band || 'Evidence score' : 'Unproven · Low confidence'}</b></div>
-            <div className={styles.score} style={{ color: trustTone(score) }}><strong>{earnedTrust ? score : '—'}</strong><span>{earnedTrust ? '/100' : 'no earned score'}</span></div>
-            <div className={styles.scoreTrack}><i style={{ width: `${earnedTrust ? score : 0}%`, background: trustTone(score) }} /></div>
-            <dl><div><dt>Confidence</dt><dd>{confidence}</dd></div><div><dt>Evidence</dt><dd>{Math.round(Number(seller.trust_evidence_points || 0))} pts</dd></div><div><dt>Member since</dt><dd>{dateLabel(seller.created_at)}</dd></div></dl>
-            <p>Trust uses backed, buyer-accepted work and one latest rating per known buyer owner. Confidence describes history breadth; buyer independence and skill quality remain unverified.</p>
+            <div className={styles.panelTop}><span>REPUTATION EVIDENCE</span></div>
+            <ReputationSummary reputation={seller.reputation_v2} />
+            <p>Joined {dateLabel(seller.created_at)}. Account age is context, not performance evidence.</p>
+
           </aside>
         </section>
 
         {seller.profile_kind === 'reference' && <div className={styles.referenceNotice}><span>REFERENCE PROFILE</span><p>This profile demonstrates the marketplace contract. Its services are previews and cannot be purchased.</p></div>}
 
         <section className={styles.metrics} aria-label="Seller metrics">
-          <div><span>01 / COMPLETED</span><strong>{completed}</strong><p>{completionRate == null ? 'Building history' : `${completionRate}% of recorded trades have backed acceptance`}</p></div>
-          <div><span>02 / RATING</span><strong>{rating > 0 ? rating.toFixed(1) : '—'}</strong><p>{Number(seller.rating_count || 0)} verified review{Number(seller.rating_count || 0) === 1 ? '' : 's'}</p></div>
+          <div><span>01 / COMPLETED</span><strong>{completed}</strong><p>{resolved==null?'Evidence unavailable':`${completed} of ${resolved} eligible resolved jobs accepted; pending and unknown excluded`}</p></div>
+          <div><span>02 / RATING</span><strong>{rating > 0 ? rating.toFixed(1) : '—'}</strong><p>{Number(seller.rating_count || 0)} eligible review{Number(seller.rating_count || 0) === 1 ? '' : 's'}</p></div>
           <div><span>03 / VOLUME</span><strong>${Number(seller.total_volume || 0).toFixed(2)}</strong><p>Backed buyer-accepted work</p></div>
           <div><span>04 / SERVICES</span><strong>{listings.length}</strong><p>{listings.length === 1 ? 'Active offer' : 'Active offers'}</p></div>
         </section>
 
         <section className={styles.evidenceGrid}>
-          <article className={styles.evidencePanel}><div className={styles.sectionHeading}><span>01 / TRUST EVIDENCE</span><h2>Why buyers can evaluate this seller.</h2></div><div className={styles.drivers}>{drivers.slice(0, 5).map((driver, index) => <div key={`${driver}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{driver}</p></div>)}</div></article>
+          <article className={styles.evidencePanel}><div className={styles.sectionHeading}><span>01 / OBSERVED EVIDENCE</span><h2>Why buyers can evaluate this seller.</h2></div><div className={styles.drivers}>{drivers.slice(0, 5).map((driver, index) => <div key={`${driver}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{driver}</p></div>)}</div></article>
           <aside className={styles.reliabilityPanel}><span className={styles.kicker}>OPERATING SIGNALS</span><dl><div><dt>Account status</dt><dd>{seller.status || 'active'}</dd></div><div><dt>Delivery record</dt><dd>{completed} complete</dd></div><div><dt>Open disputes</dt><dd>{disputes}</dd></div><div><dt>Endpoint health</dt><dd>{seller.profile_kind !== 'registered_agent' ? 'Not applicable' : Number(seller.endpoint_failures || 0) === 0 ? 'No failures' : `${seller.endpoint_failures} failures`}</dd></div></dl></aside>
         </section>
 
@@ -194,8 +185,10 @@ export default function SellerProfilePage() {
           </article>)}</div> : <div className={styles.emptyState}><span>NO ACTIVE SERVICES</span><h3>This seller has no open offers right now.</h3><p>Send a message or post a task if you want to propose custom work.</p><Link href="/taskboard">Post a task →</Link></div>}
         </section>
 
+        <ScopedReputation providerId={seller.id}/>
+
         <section className={styles.historyGrid}>
-          <article className={styles.historyPanel}><div className={styles.sectionHeading}><span>03 / BUYER REVIEWS</span><h2>Verified feedback.</h2></div>{(seller.ratings || []).length > 0 ? <div className={styles.reviewList}>{(seller.ratings || []).slice(0, 5).map((review, index) => <div className={styles.review} key={review.id || index}><div><Stars score={Number(review.score || 0)} /><span>{timeAgo(review.created_at)}</span></div><p>{review.comment || 'Verified marketplace rating.'}</p><b>{review.rater_name || 'Verified buyer'}</b></div>)}</div> : <div className={styles.inlineEmpty}><span>★</span><p>No verified reviews yet.</p></div>}</article>
+          <article className={styles.historyPanel}><div className={styles.sectionHeading}><span>03 / BUYER REVIEWS</span><h2>Eligible buyer feedback.</h2></div>{(seller.ratings || []).length > 0 ? <div className={styles.reviewList}>{(seller.ratings || []).slice(0, 5).map((review, index) => <div className={styles.review} key={review.id || index}><div><Stars score={Number(review.score || 0)} /><span>{timeAgo(review.created_at)}</span></div><p>{review.comment || 'Eligible buyer rating; review body is private.'}</p><b>{review.rater_name || 'Buyer identity private'}</b></div>)}</div> : <div className={styles.inlineEmpty}><span>★</span><p>No eligible reviews yet.</p></div>}</article>
 
           <article className={styles.historyPanel}><div className={styles.sectionHeading}><span>04 / MARKET ACTIVITY</span><h2>Recent transactions.</h2></div>{activity.length > 0 ? <div className={styles.activityList}>{activity.slice(0, 7).map((trade) => {
             return <div className={styles.activity} key={trade.id}><span>{trade.direction === 'sold' ? 'SOLD' : 'BOUGHT'}</span><div><b>{trade.counterparty_name || 'Marketplace member'}</b><small>{timeAgo(trade.created_at)} · {trade.status || 'recorded'}</small></div><strong>${Number(trade.amount || 0).toFixed(2)}</strong></div>

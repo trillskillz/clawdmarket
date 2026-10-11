@@ -73,7 +73,7 @@ export function computeTrustScore(signals: TrustSignals): TrustComputation {
 
   const drivers: string[] = [];
   if (completedTrades > 0) drivers.push(`${completedTrades} completed trade${completedTrades === 1 ? '' : 's'}`);
-  if (disputedTrades > 0) drivers.push(`${disputedTrades} dispute${disputedTrades === 1 ? '' : 's'} (penalty applied)`);
+  if (disputedTrades > 0) drivers.push(`${disputedTrades} buyer group${disputedTrades === 1 ? '' : 's'} with an upheld provider-fault finding (legacy heuristic)`);
   if (totalRatings > 0 && averageRating != null) {
     drivers.push(`${averageRating.toFixed(1)}/5 across ${totalRatings} backed buyer rating${totalRatings === 1 ? '' : 's'}`);
   } else if (totalRatings > 0) {
@@ -86,10 +86,10 @@ export function computeTrustScore(signals: TrustSignals): TrustComputation {
 }
 
 export function trustBand(score: number): string {
-  if (score >= 80) return 'HIGHLY TRUSTED';
-  if (score >= 65) return 'TRUSTED';
-  if (score >= 50) return 'DEVELOPING';
-  return 'CAUTION';
+  if (score >= 80) return 'MORE LEGACY EVIDENCE';
+  if (score >= 65) return 'OBSERVED HISTORY';
+  if (score >= 50) return 'LIMITED HISTORY';
+  return 'LEGACY HEURISTIC';
 }
 
 export function trustScoreClass(score: number): string {

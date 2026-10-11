@@ -7,7 +7,8 @@ import { db } from './db'
 import { route_plans, service_definitions, service_orders, trades } from './schema'
 import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from './buyer-spend-policy'
 import { findTradeFundingStep, listRouteFundingSteps } from './route-funding-steps'
-import { providerRequirementsSchema, providerRequirementFailure } from './provider-requirements'
+import { providerRequirementsSchema, providerRequirementFailure,requiresReputation,reputationRequirementFailure } from './provider-requirements'
+import { loadReputationV2Records } from './reputation-v2'
 import { providerCapabilityEvidence } from './provider-evidence'
 import { serviceExecutionContract } from './service-execution-contract'
 import { serviceContractReadiness } from './service-contract-readiness'
@@ -23,7 +24,7 @@ import { organizationFundingBudgetFailure } from './organization-budgets'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 
-export async function checkProviderRequirements(source: Source, buyerId: string, sellerId: string, capabilities: string[], requirementsJson: string, privateAccess = false) {
+export async function checkProviderRequirements(source: Source, buyerId: string, sellerId: string, capabilities: string[], requirementsJson: string, privateAccess = false,serviceId?:string) {
   if (!privateAccess && sellerId.startsWith('user_agent_')) {
     const visible = await source.all(sql`SELECT id FROM agents WHERE ('user_agent_' || id) = ${sellerId}
       AND status = 'active' AND visibility = 'public' AND archived_at IS NULL LIMIT 1`)
@@ -32,7 +33,11 @@ export async function checkProviderRequirements(source: Source, buyerId: string,
   const requirements = providerRequirementsSchema.parse(JSON.parse(requirementsJson))
   const policy = await loadBuyerSpendPolicy(buyerId, source)
   const evidence = await providerCapabilityEvidence(sellerId, capabilities, source)
-  return providerRequirementFailure(requirements, sellerId, evidence)
+  const records=requiresReputation(requirements)||policy?.policy.provider_requirements&&requiresReputation(policy.policy.provider_requirements)
+    ?[...(await loadReputationV2Records(capabilities.map(capability=>({key:capability,provider_id:sellerId.replace(/^user_agent_/,''),scope:serviceId?{kind:'service_capability_mode',service_id:serviceId,capability_id:capability,execution_mode:'contracted'}:{kind:'provider_history'}})),source)).values()]:[]
+  return reputationRequirementFailure(requirements,records)
+    || (policy?.policy.provider_requirements?reputationRequirementFailure(policy.policy.provider_requirements,records):null)
+    || providerRequirementFailure(requirements, sellerId, evidence)
     || (policy?.policy.provider_requirements ? providerRequirementFailure(policy.policy.provider_requirements, sellerId, evidence) : null)
 }
 
@@ -87,7 +92,7 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     if (plan && !serviceSupportsRoute(service, plan)) return 'ROUTE_STALE_PROVIDER'
     if (plan?.execution_deadline_at && trade.status === 'pending' && (!service.estimated_latency_seconds
       || Date.now() + service.estimated_latency_seconds * 1000 > plan.execution_deadline_at.getTime())) return 'ROUTE_RETRY_DEADLINE_EXCEEDED'
-    const reason = await checkProviderRequirements(source, trade.buyer_id, trade.seller_id, capabilities, order.provider_requirements_json, Boolean(privateShare))
+    const reason = await checkProviderRequirements(source, trade.buyer_id, trade.seller_id, capabilities, order.provider_requirements_json, Boolean(privateShare),order.service_id)
     if (reason) return reason
     const purchaseEvidence = await fundingPurchaseEvidence(order, trade, service, source)
     const policy = await loadBuyerSpendPolicy(trade.buyer_id, source)

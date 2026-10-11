@@ -1,3 +1,4 @@
+import { captureServiceExecutionContract } from '@/lib/service-execution-contract'
 import test, { before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -507,7 +508,8 @@ test('planning separates provider claims from backed completion evidence without
     title: 'Historical translation', description: 'Completed translated document.', price_bankr: 1, status: 'sold' }).returning()
   const [trade] = await db.insert(schema.trades).values({ listing_id: listing.id, buyer_id: 'other-buyer',
     seller_id: sellerId, amount: 1, fee: 0.05, status: 'completed', payment_rail: 'ledger' }).returning()
-  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: serviceId,
+  const [frozenService] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, serviceId))
+  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: serviceId, execution_contract_json: captureServiceExecutionContract(frozenService, ['translation'], ['translation']),
     listing_id: listing.id, trade_id: trade.id, buyer_id: 'other-buyer', client_reference: crypto.randomUUID(),
     objective: 'Translate a historical document', price_minor: 100, payment_rail: 'ledger', state: 'completed' })
   const [delivery] = await db.insert(schema.trade_deliveries).values({ trade_id: trade.id, submitter_id: sellerId,
@@ -515,7 +517,7 @@ test('planning separates provider claims from backed completion evidence without
   await db.insert(schema.verification_results).values({ id: crypto.randomUUID(), trade_id: trade.id,
     delivery_id: delivery.id, content_hash: delivery.content_hash, method: 'buyer_review', verifier: 'buyer',
     version: '1', status: 'passed', evidence_json: '{}' })
-  await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: trade.id })
+  await db.insert(schema.transactions).values(['escrow_lock','escrow_release'].map(type=>({type:type as 'escrow_lock'|'escrow_release',from_user_id:trade.buyer_id,to_user_id:trade.seller_id,amount:1,reference_id:trade.id})))
   const { recordCapabilityCompletion } = await import('@/lib/capability-performance')
   await db.transaction((tx) => recordCapabilityCompletion(tx, trade))
   const observed = await planFor()
@@ -533,7 +535,8 @@ test('planning separates provider claims from backed completion evidence without
     const [anotherTrade] = await db.insert(schema.trades).values({ listing_id: anotherListing.id,
       buyer_id: completionBuyer, seller_id: sellerId, amount: 1, fee: 0.05, status: 'completed',
       payment_rail: 'ledger' }).returning()
-    await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: serviceId,
+    const [frozenService] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, serviceId))
+  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: serviceId, execution_contract_json: captureServiceExecutionContract(frozenService, ['translation'], ['translation']),
       listing_id: anotherListing.id, trade_id: anotherTrade.id, buyer_id: completionBuyer,
       client_reference: crypto.randomUUID(), objective: 'Translate another completed document',
       price_minor: 100, payment_rail: 'ledger', state: 'completed' })
@@ -543,7 +546,7 @@ test('planning separates provider claims from backed completion evidence without
     await db.insert(schema.verification_results).values({ id: crypto.randomUUID(), trade_id: anotherTrade.id,
       delivery_id: anotherDelivery.id, content_hash: anotherDelivery.content_hash,
       method: 'buyer_review', verifier: 'buyer', version: '1', status: 'passed', evidence_json: '{}' })
-    await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: anotherTrade.id })
+    await db.insert(schema.transactions).values(['escrow_lock','escrow_release'].map(type=>({type:type as 'escrow_lock'|'escrow_release',from_user_id:anotherTrade.buyer_id,to_user_id:anotherTrade.seller_id,amount:1,reference_id:anotherTrade.id})))
     await db.transaction((tx) => recordCapabilityCompletion(tx, anotherTrade))
   }
   await recordAnotherCompletion('other-buyer')
@@ -791,4 +794,20 @@ test('structured verification terms filter planning and changed agreed rules blo
   const execution = await executeRoute(request(`/api/routes/${route.id}/execute`, 'other-buyer', 'POST'), { params: Promise.resolve({ id: route.id }) })
   assert.equal(execution.status, 409)
   assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, offered.id))).length, 0)
+})
+
+test('reputation suggestion endpoint preserves hard minimums and price gates without persisting or moving funds',async()=>{
+ const offered=await service('2.00'),{POST}=await import('@/app/api/agents/reputation-suggestions/route')
+ const body={client_reference:crypto.randomUUID(),objective:'Review this repository for security risks',required_capabilities:['security-analysis','code-review'],input:{revision:'abc123'},max_budget:{amount:'3.00',currency:'USD'},deadline_seconds:600}
+ const counts=async()=>Promise.all([schema.route_plans,schema.trades,schema.transactions].map(table=>db.select().from(table).then(rows=>rows.length)))
+ const before=await counts()
+ assert.equal((await POST(new NextRequest('http://localhost/api/agents/reputation-suggestions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}))).status,401)
+ const response=await POST(request('/api/agents/reputation-suggestions','route-buyer','POST',body)),result=await response.json()
+ assert.equal(response.status,200);assert.equal(result.persisted,false);assert.equal(result.funds_moved,false);assert.equal(result.execution_authority,false)
+ assert.ok(result.candidates.some((c:{service_id:string})=>c.service_id===offered.id))
+ assert.ok(result.candidates.every((c:{pricing:{estimated_total:string}})=>Number(c.pricing.estimated_total)<=3))
+ assert.equal(result.reputation_shadow.default_ranking_changed,false);assert.equal(result.reputation_shadow.comparisons.length,3)
+ const blocked=await POST(request('/api/agents/reputation-suggestions','route-buyer','POST',{...body,provider_requirements:{minimum_reputation_buyer_groups:100000}}))
+ assert.deepEqual((await blocked.json()).candidates,[])
+ assert.deepEqual(await counts(),before)
 })

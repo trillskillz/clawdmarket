@@ -18,8 +18,11 @@ import { organizationBudgetForAgent, organizationBudgetUsage } from '@/lib/organ
 import { serviceContractReadiness } from '@/lib/service-contract-readiness'
 import { storedServiceCapabilities } from '@/lib/route-service-eligibility'
 
-import { providerRequirementsSchema, providerRequirementFailure, type ProviderRequirements } from './provider-requirements'
+import { providerRequirementsSchema, providerRequirementFailure,reputationRequirementFailure, type ProviderRequirements } from './provider-requirements'
 import { backedCapabilityCounts, capabilityEvidence } from './provider-evidence'
+import { loadReputationV2Records } from './reputation-v2'
+import { reputationSuggestions } from './reputation-ranking'
+import type { ReputationV2 } from './reputation-v2-model'
 
 export const routePlanInput = z.object({
   provider_requirements: providerRequirementsSchema.default({}),
@@ -46,6 +49,7 @@ export function normalizedCapabilities(input: string[]) {
 
 export type RouteCandidate = {
   service_id: string
+  reputation_v2?: ReputationV2[]
   seller_agent_id: string | null
   pricing: { model: 'fixed'; amount: string; currency: 'USD'; estimated_total: string }
   estimated_latency_seconds: number | null
@@ -212,8 +216,20 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
           : 'No recent provider attempt, uncorrected verification failure, or finalized buyer refund observed; reliability remains unmeasured'],
     })
   }
-  candidates.sort((a, b) => b.score - a.score || a.pricing.estimated_total.localeCompare(b.pricing.estimated_total) || a.service_id.localeCompare(b.service_id))
-  return { capabilities, candidates: candidates.slice(0, 20), examined: Math.min(rows.length, 500), truncated }
+  candidates.sort((a, b) => b.score - a.score || Number(a.pricing.estimated_total)-Number(b.pricing.estimated_total) || a.service_id.localeCompare(b.service_id))
+  const records=await loadReputationV2Records(candidates.flatMap(candidate=>capabilities.map(capability=>({
+    key:`${candidate.service_id}:${capability}`,provider_id:candidate.seller_agent_id??rows.find(s=>s.id===candidate.service_id)!.seller_id,
+    scope:{kind:'service_capability_mode' as const,service_id:candidate.service_id,capability_id:capability,execution_mode:'contracted' as const},
+  }))))
+  for(const candidate of candidates)candidate.reputation_v2=capabilities.map(capability=>records.get(`${candidate.service_id}:${capability}`)!)
+  for(let i=candidates.length-1;i>=0;i--){const c=candidates[i];if(reputationRequirementFailure(input.provider_requirements,c.reputation_v2!)||buyerPolicy?.policy.provider_requirements&&reputationRequirementFailure(buyerPolicy.policy.provider_requirements,c.reputation_v2!))candidates.splice(i,1)}
+  const shadowCandidates=candidates.map(candidate=>({id:candidate.service_id,price:Number(candidate.pricing.estimated_total),
+    reputation:candidate.reputation_v2!.find(r=>r.delivery.weighted_model_estimate===null||r.projection_status!=='current')
+      ?? [...candidate.reputation_v2!].sort((a,b)=>a.delivery.weighted_model_estimate!.lower_quantile-b.delivery.weighted_model_estimate!.lower_quantile)[0]}))
+  const reputation_shadow={baseline_ids:candidates.map(c=>c.service_id),
+    comparisons:['lowest_eligible_price','best_supported_history','balanced_heuristic'].map(mode=>reputationSuggestions(shadowCandidates,mode as 'lowest_eligible_price'|'best_supported_history'|'balanced_heuristic')),
+    capability_aggregation:'least_supported_required_leaf',eligible_candidates:candidates.length,default_ranking_changed:false,execution_authority:false}
+  return { capabilities, candidates: candidates.slice(0, 20), examined: Math.min(rows.length, 500), truncated, reputation_shadow }
 }
 
 export function routePlanDto(plan: typeof route_plans.$inferSelect) {

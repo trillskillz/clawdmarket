@@ -194,7 +194,11 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       const originalRead = (await migrated.execute("SELECT * FROM organization_service_accounts WHERE id='legacy-read-account'")).rows[0]
       assert.equal(originalRead.credential_hash, 'original-read-hmac'); assert.equal(originalRead.credential_prefix, 'cmo_original')
       assert.equal(originalRead.status, 'active'); assert.equal(originalRead.expires_at, 2000); assert.equal(originalRead.created_at, 1000)
-      assert.equal(migrationRows.rows.length, 62)
+      assert.equal(migrationRows.rows.length, 63)
+      const backfill=(await migrated.execute("SELECT * FROM reputation_events WHERE source_type='legacy_trade' AND trade_id='legacy-financial-trade'")).rows
+      assert.equal(backfill.length,1);assert.equal(backfill[0].occurred_at,null);assert.equal(backfill[0].capabilities_json,'[]');assert.equal(backfill[0].public_eligible,0)
+      assert.ok(!JSON.stringify(backfill).includes('original input'));assert.equal(JSON.parse(String(backfill[0].payload_json)).deadline_coverage,'unknown')
+      assert.equal((await migrated.execute("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='trigger' AND name GLOB 'reputation_*_immutable_*'")).rows[0].n,10)
       for (const table of ['organization_spending_mpp_intents','organization_spending_mpp_claims','organization_spending_payment_claims','organization_spending_accounts','organization_spending_uses','organization_provider_shares', 'organization_purchasing_roles', 'organization_purchase_requests', 'organization_purchase_approvals', 'organization_purchase_uses', 'organization_team_budgets', 'organization_team_budget_events', 'organization_contract_attributions']) {
         assert.equal(tableNames.has(table), true)
         assert.equal((await migrated.execute(`SELECT * FROM ${table}`)).rows.length, 0)

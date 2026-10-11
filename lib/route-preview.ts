@@ -7,6 +7,7 @@ export async function previewRoute(input: NormalizedRouteRequest, buyerId: strin
   const planned = await planRoute(input, buyerId)
   return {
     persisted: false,
+    reputation_shadow: planned.reputation_shadow??null,
     funds_moved: false,
     plan: {
       objective: input.objective,

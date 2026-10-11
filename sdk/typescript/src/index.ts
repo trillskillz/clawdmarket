@@ -4,6 +4,14 @@ import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInpu
 export { SDK_CONTRACT } from './contract.js'
 export type { OrganizationSpendingClient, SpendingAccount, SpendingGrantInput, SpendingGrantResult, SpendingHistory, SpendingEvmPayment, SpendingTempoPayment, SpendingOrderInput, SpendingOrderResult, SpendingEvmIntentInput, SpendingEvmClaimInput, SpendingEvmFundingProof } from './enterprise.js'
 
+export type ReputationScope={service_id?:string;capability_id?:string;execution_mode?:'contracted'|'instant';service_version?:string}
+export type ReputationV2={policy_version:string;event_schema_version:number;evidence_eligibility_version:number;computed_at:string;evidence_recorded_as_of:string|null;evidence_as_of:string|null;projection_status:'current'|'unavailable';evidence_status:string;stale:boolean;scope:ReputationScope&{kind:'provider_history'|'service_capability_mode'};
+ delivery:{accepted:number;provider_failures:number;pending:number;unknown:number;raw_rate:number|null;weighted_model_estimate:{mean:number;lower_quantile:number;quantile:number;mode:string;calibrated:false}|null};
+ scope_coverage:{work_units:number;unattributed_work_units:number;unknown_service_version:number;unknown_agent_version:number;known_operator_periods:number;continuity:string};service_versions:{version:string;accepted:number;provider_failures:number}[];software_versions:{version:number;observed_work_units:number}[];
+ instant_execution:{schema_transport_success:number;failed_operations:number;pending:number;unknown:number;semantic_quality:string;buyer_acceptance:string;affects_contracted_delivery:false};
+ satisfaction:{mean:number|null;eligible_review_count:number;reviewed_job_coverage:number|null;subjective:true};breadth:{observed_buyer_groups:number;decayed_group_weight:number;concentration:number|null};
+ deadlines:{on_time:number;eligible:number;unknown:number;rate:number|null;p50_seconds:number|null;p95_seconds:number|null};verification:Record<string,number>;incidents:{pending:number;adjudicated:number;appealed:number;overturned:number;serious_unremediated:number;remediation_policy:string};limitations:{calibrated:false;buyer_independence:string;semantic_quality:string;capability_attribution:string;private_work:string};[key:string]:unknown}
+
 export type A2ATaskState = 'TASK_STATE_SUBMITTED' | 'TASK_STATE_WORKING' | 'TASK_STATE_COMPLETED' | 'TASK_STATE_FAILED' | 'TASK_STATE_CANCELED' | 'TASK_STATE_INPUT_REQUIRED'
 export type A2ARouteAction = { action: 'route_work'; request: Omit<RouteRequest, 'client_reference'> } | { action: 'route_work'; route_id: string; mandate_id: string } | { action: 'cancel_route'; route_id: string }
 export type A2AMessage = { role: 'ROLE_USER'; messageId: string; taskId?: string; contextId?: string; parts: Array<{ text: string } | { data: A2ARouteAction | Record<string, unknown>; mediaType?: 'application/json' }>; metadata?: Record<string, unknown> }
@@ -15,7 +23,7 @@ export type InstantReceipt = { version: 1; id: string; call_id: string; session_
 export type InstantSession = { id: string; service_id: string; buyer_id: string; budget_minor: number; balance_minor: number; held_minor: number; spent_minor: number; refunded_minor: number; available_budget_minor: number; status: 'open' | 'closing' | 'closed'; expires_at: string; contract: Record<string, unknown> }
 export type InstantCall = { id: string; session_id: string; state: 'pending' | 'claimed' | 'completed' | 'failed'; input: Record<string, unknown>; output: Record<string, unknown> | null; receipt: InstantReceipt | null; deadline_at: string; failure_code: string | null }
 
-export type ProviderRequirements = { approved_providers?: string[]; minimum_accepted_completions?: number; minimum_distinct_buyers?: number }
+export type ProviderRequirements = { minimum_reputation_buyer_groups?:number; maximum_provider_fault_findings?:number; no_unresolved_public_cases?:boolean; approved_providers?: string[]; minimum_accepted_completions?: number; minimum_distinct_buyers?: number }
 
 export type Money = { amount: string; currency: 'USD' }
 type RoutePaymentBase = { chain_id: number; token_address: string; payer_address: string; treasury_address: string; minimum_token_reserve_units: string }
@@ -352,6 +360,17 @@ export class ClawdMarketClient {
   private enterpriseRequest<T>(operation: EnterpriseOperation, params: { id: string; tradeId?: string }, body?: unknown, options?: RequestOptions, query?: Record<string, string>, paymentCredential?: string): Promise<T> {
     return this.request<T>(SDK_CONTRACT.operations[operation].method, enterprisePath(operation, params, query), body, options, paymentCredential)
   }
+
+  /** Public evidence only; all three scope fields must be supplied together. */
+  getReputation(agentId:string,scope:ReputationScope={},options?:RequestOptions){
+    const query=new URLSearchParams(Object.entries(scope).filter((entry):entry is [string,string]=>typeof entry[1]==='string'))
+    return this.request<{reputation_v2:ReputationV2}>('GET',`/api/agents/${encodeURIComponent(agentId)}/reputation${query.size?'?'+query.toString():''}`,undefined,options)
+  }
+  /** Existing hard gates apply; this request cannot create a plan or move funds. */
+  reputationSuggestions(input:RouteRequest,options?:RequestOptions){return this.request<Record<string,unknown>>('POST','/api/agents/reputation-suggestions',input,options)}
+  getReputationDecisions(tradeId:string,options?:RequestOptions){return this.request<{decisions:Record<string,unknown>[]}>('GET',`${tradePath(tradeId)}/reputation`,undefined,options)}
+  /** Persist this exact body/reference before sending; inspect on transport uncertainty. */
+  appealReputationFinding(tradeId:string,input:{version:1;client_reference:string;finding_id:string},options?:RequestOptions){return this.request<Record<string,unknown>>('PATCH',`${tradePath(tradeId)}/reputation`,input,options)}
 
   /** Current-owner private inspection. Exact original reference can recover a grant beyond the bounded inventory. */
   inspectSpendingAccounts(organizationId: string, clientReference?: string, options?: RequestOptions) {

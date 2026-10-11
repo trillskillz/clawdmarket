@@ -44,7 +44,7 @@ class ClientTests(unittest.TestCase):
                 except (BrokenPipeError, ConnectionResetError):
                     pass
 
-            do_GET = do_POST = do_DELETE = serve
+            do_GET = do_POST = do_DELETE = do_PATCH = serve
 
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         cls.thread = threading.Thread(target=cls.server.serve_forever, kwargs={"poll_interval": .01}, daemon=True)
@@ -59,6 +59,23 @@ class ClientTests(unittest.TestCase):
     def setUp(self):
         self.state.update(calls=[], reply=lambda _call: (200, {"ok": True}, {}))
         self.client = ClawdMarketClient("dummy-python-key", f"http://127.0.0.1:{self.server.server_port}")
+
+    def test_reputation_scope_and_original_appeal_recovery(self):
+        self.client.get_reputation(ID, scope={"service_id": ID, "capability_id": "code-review", "execution_mode": "contracted"})
+        self.assertIn("service_id=" + ID, self.state["calls"][0]["path"])
+        self.client.get_reputation("agent_" + ID)
+        self.assertEqual(self.state["calls"][-1]["path"], "/api/agents/agent_" + ID + "/reputation")
+        with self.assertRaises(ValueError):
+            self.client.get_reputation("../another")
+        self.client.get_reputation_decisions(ID)
+        original = {"version": 1, "client_reference": "saved-original-appeal", "finding_id": ID}
+        self.state["reply"] = lambda _call: None
+        with self.assertRaises(ClawdMarketTransportError):
+            self.client.appeal_reputation_finding(ID, original)
+        appeals = [call for call in self.state["calls"] if call["method"] == "PATCH"]
+        self.assertEqual(len(appeals), 1)
+        self.assertEqual(appeals[0]["body"], original)
+        self.assertEqual(appeals[0]["path"], "/api/trades/" + ID + "/reputation")
 
     def test_planning_reservation_and_read_only_polling(self):
         request = {"client_reference": "saved-python-plan", "objective": "Review authentication", "required_capabilities": ["security-analysis"], "max_budget": {"amount": "1.00", "currency": "USD"}}

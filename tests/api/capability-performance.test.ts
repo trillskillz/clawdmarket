@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
+import { captureServiceExecutionContract } from '@/lib/service-execution-contract'
 import { createLocalTestSchema } from '../helpers/local-schema'
 
 let directory: string
@@ -42,17 +43,22 @@ async function fixture(sellerAgentId: string, buyerId = 'performance-buyer', pen
   const [listing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code', title: 'Audit authentication', description: 'Audit authentication with structured findings.', price_bankr: 1, status: 'sold' }).returning()
   const [trade] = await db.insert(schema.trades).values({ listing_id: listing.id, buyer_id: buyerId, seller_id: sellerId, amount: 1, fee: 0.05, status: pending ? 'pending_release' : 'completed', payment_rail: 'ledger' }).returning()
   const [service] = await db.insert(schema.service_definitions).values({ id: crypto.randomUUID(), seller_id: sellerId, title: 'Audit authentication', description: 'Audit authentication with structured findings.', capabilities: '["security","code-review"]', price_minor: 100, status: 'active', active_orders: pending ? 1 : 0 }).returning()
-  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: service.id, listing_id: listing.id, trade_id: trade.id, buyer_id: buyerId, client_reference: crypto.randomUUID(), objective: 'Audit the authentication implementation', price_minor: 100, payment_rail: 'ledger', state: pending ? 'verifying' : 'completed' })
+  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: service.id, listing_id: listing.id, trade_id: trade.id, buyer_id: buyerId, client_reference: crypto.randomUUID(), objective: 'Audit the authentication implementation', price_minor: 100, payment_rail: 'ledger', state: pending ? 'verifying' : 'completed', execution_contract_json: captureServiceExecutionContract(service, ['security-analysis','code-review'], ['security-analysis','code-review']) })
   const [delivery] = await db.insert(schema.trade_deliveries).values({ trade_id: trade.id, submitter_id: sellerId, summary: 'Completed the review.', content_hash: crypto.randomUUID(), verification: '{}' }).returning()
   await db.insert(schema.verification_results).values({ id: crypto.randomUUID(), trade_id: trade.id, delivery_id: delivery.id, content_hash: delivery.content_hash, method: 'buyer_review', verifier: 'buyer', version: '1', status: 'passed', evidence_json: '{}' })
   return trade
+}
+
+async function ledgerProof(trade: {id:string;buyer_id:string;seller_id:string;status:string}) {
+  await db.insert(schema.transactions).values({from_user_id:trade.buyer_id,to_user_id:trade.seller_id,amount:1,type:'escrow_lock',reference_id:trade.id})
+  if(trade.status==='completed') await db.insert(schema.transactions).values({from_user_id:trade.buyer_id,to_user_id:trade.seller_id,amount:1,type:'escrow_release',reference_id:trade.id})
 }
 
 test('accepted economically backed service work records canonical capability evidence once', async () => {
   const trade = await fixture('performance-seller')
   await db.transaction((tx) => record(tx, trade))
   assert.deepEqual(await load('performance-seller'), [])
-  await db.insert(schema.transactions).values({ from_user_id: trade.buyer_id, to_user_id: trade.seller_id, amount: 1, type: 'escrow_lock', reference_id: trade.id })
+  await ledgerProof(trade)
   await db.transaction((tx) => record(tx, trade))
   await db.transaction((tx) => record(tx, trade))
   const rows = await db.select().from(schema.capability_performance_events).where(eq(schema.capability_performance_events.trade_id, trade.id))
@@ -69,7 +75,7 @@ test('reference and self-dealing trades cannot create capability evidence', asyn
   const reference = await fixture('reference-seller')
   const selfDealing = await fixture('performance-seller', 'user_agent_performance-seller')
   for (const trade of [reference, selfDealing]) {
-    await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: trade.id })
+    await ledgerProof(trade)
     await db.transaction((tx) => record(tx, trade))
     assert.equal((await db.select().from(schema.capability_performance_events).where(eq(schema.capability_performance_events.trade_id, trade.id))).length, 0)
   }
@@ -77,7 +83,7 @@ test('reference and self-dealing trades cannot create capability evidence', asyn
 
 test('reference trades and ratings do not inflate marketplace trust', async () => {
   const trade = await fixture('reference-seller')
-  await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: trade.id })
+  await ledgerProof(trade)
   await db.insert(schema.ratings).values({ trade_id: trade.id, rater_id: trade.buyer_id, rated_id: trade.seller_id, score: 5 })
   const { loadAgentTrust } = await import('@/lib/agent-trust')
   const trust = await loadAgentTrust({ id: 'reference-seller' })
@@ -95,7 +101,7 @@ test('reference trades and ratings do not inflate marketplace trust', async () =
 test('authoritative completion records evidence atomically with ledger release', async () => {
   const trade = await fixture('performance-seller', 'performance-buyer', true)
   await db.insert(schema.wallets).values({ user_id: trade.buyer_id, balance: 0, escrow: 1 }).onConflictDoUpdate({ target: schema.wallets.user_id, set: { escrow: 1 } })
-  await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: trade.id })
+  await ledgerProof(trade)
   const { finalizeTradeCompletion } = await import('@/lib/trade-escrow')
   const completed = await finalizeTradeCompletion(trade, 'buyer_confirm')
   assert.equal(completed.status, 'completed')
@@ -106,9 +112,10 @@ test('authoritative completion records evidence atomically with ledger release',
 test('malformed legacy capability metadata cannot block settlement', async () => {
   const trade = await fixture('performance-seller', 'performance-buyer', true)
   const [order] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, trade.id))
+  await db.update(schema.service_orders).set({execution_contract_json:null}).where(eq(schema.service_orders.id,order.id))
   await db.update(schema.service_definitions).set({ capabilities: '{broken' }).where(eq(schema.service_definitions.id, order.service_id))
   await db.insert(schema.wallets).values({ user_id: trade.buyer_id, balance: 0, escrow: 1 }).onConflictDoUpdate({ target: schema.wallets.user_id, set: { escrow: 1 } })
-  await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: trade.id })
+  await ledgerProof(trade)
   const { finalizeTradeCompletion } = await import('@/lib/trade-escrow')
   const completed = await finalizeTradeCompletion(trade, 'buyer_confirm')
   assert.equal(completed.status, 'completed')
@@ -126,8 +133,10 @@ async function backed(seller: string, buyer = 'performance-buyer', capabilities?
   if (capabilities) {
     const [order] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, trade.id))
     await db.update(schema.service_definitions).set({ capabilities: JSON.stringify(capabilities) }).where(eq(schema.service_definitions.id, order.service_id))
+    const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, order.service_id))
+    await db.update(schema.service_orders).set({ execution_contract_json: captureServiceExecutionContract(service, capabilities, capabilities) }).where(eq(schema.service_orders.id, order.id))
   }
-  await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: trade.id })
+  await ledgerProof(trade)
   await db.transaction((tx) => record(tx, trade))
   return trade
 }
@@ -234,7 +243,8 @@ test('cycle edges require current funding, matching buyer review, completed orde
       await db.insert(schema.route_plans).values({ id, buyer_id: closing.buyer_id, client_reference: crypto.randomUUID(), objective: 'Controlled cycle fixture', required_capabilities: '["security-analysis"]', max_budget_minor: 200, state: 'completed', service_order_id: order.id, expires_at: new Date() })
       await db.insert(schema.route_origins).values({ route_id: id, channel: 'account', cohort: 'demo' })
     }
-    assert.equal((await load(b))[0].accepted_completion_count, 1, reason)
+    if(reason==='reference') assert.deepEqual(await load(b), [], 'reference buyers cannot supply public evidence')
+    else assert.equal((await load(b))[0].accepted_completion_count, 1, reason)
   }
 })
 
@@ -275,7 +285,7 @@ test('closing a cycle during authoritative settlement still releases escrow and 
   await backed(b, `user_agent_${a}`); await backed(c, `user_agent_${b}`)
   const closing = await fixture(a, `user_agent_${c}`, true)
   await db.insert(schema.wallets).values({ user_id: closing.buyer_id, balance: 0, escrow: 1 })
-  await db.insert(schema.transactions).values({ amount: 1, type: 'escrow_lock', reference_id: closing.id })
+  await ledgerProof(closing)
   const { finalizeTradeCompletion } = await import('@/lib/trade-escrow')
   assert.equal((await finalizeTradeCompletion(closing, 'buyer_confirm')).status, 'completed')
   assert.deepEqual(await load(b), [])
@@ -427,7 +437,7 @@ test('format checks reject fabricated word counts and another agent cannot submi
   const again = await requestChallenge(req(seller), context)
   const valid = { challenge_id: (await again.json()).challenge_id, response: { summary: 'A short summary', word_count: 3 } }
   const raced = await Promise.all([submit(req(seller, valid), context), submit(req(seller, valid), context)])
-  assert.equal(raced.filter((response) => response.status === 200).length, 1)
+  assert.equal(raced.filter((response) => response.status === 200).length, 1, JSON.stringify(await Promise.all(raced.map(async response=>({status:response.status,body:await response.clone().json()})))))
   const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, seller))
   assert.equal(agent.capabilities, '["security-analysis:verified"]') // Historical declaration is preserved, never evidence.
   assert.deepEqual(await load(seller), [])
