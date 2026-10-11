@@ -5,7 +5,7 @@ export type EvidenceTradeAlias = 't' | 'trades' | 'cycle_trade'
 /** Current authoritative links only; unknown accounts remain distinct, unverified identities. */
 export function tradePrincipalSql(party: `${EvidenceTradeAlias}.buyer_id` | `${EvidenceTradeAlias}.seller_id`) {
   return `COALESCE((SELECT principal_owner.user_id FROM agent_owners principal_owner
-    WHERE ('user_agent_' || principal_owner.agent_id) = ${party}), ${party})`
+    WHERE ('user_agent_' || principal_owner.agent_id) = ${party} OR principal_owner.agent_id = ${party}), ${party})`
 }
 
 /** Recorded backing, rechecked on reads; the legacy ledger branch retains lock semantics. */
@@ -37,7 +37,8 @@ export function boundedCycleExclusionSql(trade: EvidenceTradeAlias, edgeSql: str
       SELECT ${tradePrincipalSql('cycle_trade.seller_id')}, cycle_walk.depth + 1
       FROM cycle_walk CROSS JOIN trades cycle_trade ON cycle_trade.buyer_id IN (
         SELECT cycle_walk.principal UNION
-        SELECT ('user_agent_' || member.agent_id) FROM agent_owners member WHERE member.user_id = cycle_walk.principal)
+        SELECT ('user_agent_' || member.agent_id) FROM agent_owners member WHERE member.user_id = cycle_walk.principal UNION
+        SELECT member.agent_id FROM agent_owners member WHERE member.user_id = cycle_walk.principal)
       ${capabilityEvents ? 'CROSS JOIN capability_performance_events cycle_event ON cycle_event.trade_id = cycle_trade.id' : ''}
       WHERE cycle_walk.depth < ${CAPABILITY_CYCLE_POLICY.max_cycle_length - 1}
         AND ${tradePrincipalSql('cycle_trade.buyer_id')} = cycle_walk.principal

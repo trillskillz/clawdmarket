@@ -1,3 +1,5 @@
+import { serviceReputationMap } from './service-reputation'
+import type { ReputationV2 } from './reputation-v2-model'
 import 'server-only'
 import { z } from 'zod'
 import { and, eq, sql } from 'drizzle-orm'
@@ -55,7 +57,7 @@ export function canonicalServiceCapabilities(values: string[]) {
   return [...new Set(values.map((value) => normalizeCapability(value)!).filter(Boolean))]
 }
 
-export async function serviceDefinitionDto(service: typeof service_definitions.$inferSelect, requesterId?: string, privateAccess = false) {
+export async function serviceDefinitionDto(service: typeof service_definitions.$inferSelect, requesterId?: string, privateAccess = false, scopedReputation?:ReputationV2[]) {
   const [payoutAddress, paymentControl, sellerVisible] = await Promise.all([
     payoutAddressForUser(service.seller_id),
     getNewPaymentControl(),
@@ -78,6 +80,8 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   else if (!paymentReady) reasons.push(payoutAddress ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED')
   return {
     id: service.id,
+    reputation_v2_scopes: scopedReputation??(await serviceReputationMap([service])).get(service.id)??[],
+    reputation_scope:'public_service_capability_mode; private_work_excluded',
     seller_agent_id: service.seller_id.startsWith('user_agent_') ? service.seller_id.slice('user_agent_'.length) : null,
     title: service.title,
     description: service.description,

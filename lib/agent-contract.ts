@@ -8,9 +8,11 @@ import { PEER_BENCHMARK_EVIDENCE, TRUSTED_BENCHMARK_EVIDENCE } from '@/lib/bench
 import { CAPABILITY_FAMILIES, getCapabilityHierarchy } from '@/lib/capability-hierarchy'
 import { CAPABILITY_CYCLE_POLICY } from '@/lib/capability-cycle-policy'
 import { VERIFIER_ADAPTERS } from '../scripts/verifier-contract.mjs'
+import { REPUTATION_V2_POLICY } from './reputation-v2-policy'
+import { REPUTATION_RANKING_POLICY } from './reputation-ranking'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.108'
+export const AGENT_CONTRACT_VERSION = '1.110'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -236,6 +238,9 @@ const providerRequirementsBodySchema = {
     approved_providers: { type: 'array', minItems: 1, maxItems: 100, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 200 }, description: 'Seller user IDs or bare agent IDs.' },
     minimum_accepted_completions: { type: 'integer', minimum: 1, maximum: 100000 },
     minimum_distinct_buyers: { type: 'integer', minimum: 1, maximum: 100000 },
+    minimum_reputation_buyer_groups:{type:'integer',minimum:1,maximum:100000},
+    maximum_provider_fault_findings:{type:'integer',minimum:0,maximum:100000},
+    no_unresolved_public_cases:{type:'boolean',description:'Only currently public cases can be checked; an open case is not a guilty finding.'},
   },
 }
 
@@ -439,6 +444,11 @@ const benchmarkReportBody = { type: 'object', additionalProperties: false, requi
 } }
 
 export const AGENT_ACTIONS: AgentAction[] = [
+  {id:'inspect_reputation_v2',label:'Inspect scoped reputation evidence',description:'Public versioned counts, denominators, coverage and subjective feedback. Scope requires service, canonical leaf and mode together. No calibrated probability, private review body or financial authority.',method:'GET',endpoint:'/api/agents/{id}/reputation',auth:'none',payment:null,required:['id'],optional:['service_id','capability_id','execution_mode','service_version']},
+  {id:'reputation_suggestions',label:'Compare eligible reputation suggestions',description:'Authenticated nonpersistent shadow comparison after canonical buyer/provider/payment/capacity/schema/budget gates. Default routing is unchanged; unproven candidates remain separate. Cannot authorize spending or alter mandates.',method:'POST',endpoint:'/api/agents/reputation-suggestions',auth:'agent_api_key',payment:null,body_schema:routePlanBodySchema},
+  {id:'inspect_reputation_decisions',label:'Inspect original reputation decisions',description:'Private administrator or original trade-party history. Appeals/corrections append facts and never change settlement.',method:'GET',endpoint:'/api/trades/{id}/reputation',auth:'trade-party',payment:null,required:['id']},
+  {id:'appeal_reputation_finding',label:'Appeal provider-fault finding',description:'Original seller only; retain the finding ID and original client reference/body. An appeal preserves the finding pending independent administrator review.',method:'PATCH',endpoint:'/api/trades/{id}/reputation',auth:'trade-party',payment:null,required:['id','version','client_reference','finding_id'],body_schema:{type:'object',additionalProperties:false,required:['version','client_reference','finding_id'],properties:{version:{const:1},client_reference:{type:'string',minLength:8,maxLength:128},finding_id:{type:'string',format:'uuid'}}}},
+
   { id: 'list_benchmark_definitions', label: 'Browse versioned benchmarks', description: 'Public immutable suite metadata and current grader availability. Inputs and expected answers are private. Finite JSON observations are uncalibrated and carry no routing or trust weight.', method: 'GET', endpoint: '/api/benchmark-definitions', auth: 'none', payment: null, optional: ['capability', 'page', 'limit'] },
   { id: 'publish_benchmark_definition', label: 'Publish immutable benchmark version', description: 'Admin account only. Bind one exact canonical leaf, an allowlisted active grader and at most twenty private JSON cases. Identical suite_key/version recovers; changed reuse conflicts. No untrusted code executes.', method: 'POST', endpoint: '/api/admin/benchmark-definitions', auth: 'admin-account', payment: null,
     required: ['suite_key', 'version', 'title', 'capability_id', 'grader_agent_id', 'adapter', 'cases'], body_schema: benchmarkDefinitionBody },
@@ -685,7 +695,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     optional: ['page', 'limit', 'search', 'verified', 'family'],
   },
   {
-    id: 'inspect_agent_trust', label: 'Inspect agent trust', description: 'Read marketplace reliability separately from canonical capability completion evidence. An unrated provider has no measured marketplace score.',
+    id: 'inspect_agent_trust', label: 'Inspect agent trust', description:'Legacy score fields are compatibility-only uncalibrated heuristics. reputation_v2 separates terminal work, pending/unknown outcomes, buyer feedback, deadlines, incidents and typed checks.',
     method: 'GET', endpoint: '/api/agents/{id}/trust', auth: 'none', payment: null, required: ['id'],
   },
   {
@@ -1215,7 +1225,7 @@ export const AGENT_MCP_TOOLS = [
         page: { type: 'number', minimum: 1, description: 'Result page (default 1)' },
         limit: { type: 'number', minimum: 1, maximum: 50, description: 'Results per page (default 20)' },
         capability: { type: 'string', description: 'Optional capability or keyword' },
-        verified: { type: 'boolean', description: 'Only return agents with a verified capability' },
+        verified: { type: 'boolean', description: 'Only return agents with current backed buyer-accepted capability work; semantic quality unmeasured' },
       },
     },
   },
@@ -1228,7 +1238,7 @@ export const AGENT_MCP_TOOLS = [
         q: { type: 'string', description: 'Capability, task, or natural language query' },
         page: { type: 'number', minimum: 1, description: 'Result page (default 1)' },
         limit: { type: 'number', minimum: 1, maximum: 50, description: 'Results per page (default 20)' },
-        verified: { type: 'boolean', description: 'Only return agents with a verified capability' },
+        verified: { type: 'boolean', description: 'Only return agents with current backed buyer-accepted capability work; semantic quality unmeasured' },
       },
       required: ['q'],
     },
@@ -1403,6 +1413,7 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
     version: AGENT_CONTRACT_VERSION,
     client_recovery: CLIENT_RECOVERY_RULES,
     marketplace_reputation: REPUTATION_EVIDENCE_POLICY,
+    reputation_v2: {aggregation:REPUTATION_V2_POLICY,ranking:REPUTATION_RANKING_POLICY,contract_version:AGENT_CONTRACT_VERSION,default_ranking_changed:false,legacy_fields:"compatibility_only_uncalibrated_heuristic",public_review_bodies:false},
     isolated_verification: { adapters: VERIFIER_ADAPTERS, execution_host: 'buyer_approved_external_verifier',
       python_entrypoint: 'run(*args)', python_dependencies: 'standard_library_only', python_output: 'finite_json',
       python_artifact: { media_type: 'text/plain', extension: '.py' }, max_runtime_seconds: 30,
@@ -1709,12 +1720,19 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         requestBody: { required: true, content: { 'application/json': { schema: getAction('set_spending_policy').body_schema } } },
         responses: { 200: { description: 'Policy stored or identical replay' }, 400: { description: 'Invalid policy' }, 401: { description: 'Owner account required' }, 403: { description: 'CSRF rejected' }, 404: { description: 'Agent not owned' }, 409: { description: 'Policy version conflict' } } },
     },
+    '/api/agents/{id}/reputation':{get:{operationId:'inspect_reputation_v2',summary:'Inspect public service/canonical-leaf/mode reputation or labelled broad history',
+      'x-reputation-v2':REPUTATION_V2_POLICY,parameters:[{name:'id',in:'path',required:true,schema:{type:'string'}},...['service_id','capability_id','execution_mode','service_version'].map(name=>({name,in:'query',required:false,schema:{type:'string'},description:'Service, capability and mode must be supplied together.'}))],
+      responses:{200:{description:'Additive reputation_v2, eligible counts, pending/unknown denominator coverage, typed verification, version history and uncalibrated shadow estimates.'},400:{description:'Invalid or incomplete scope'},404:{description:'Agent not public'},503:{description:'Explicit unavailable projection, no cached-star fallback'}}}},
+    '/api/agents/reputation-suggestions':{post:{operationId:'reputation_suggestions',summary:'Nonpersistent comparison after existing hard gates; no execution authority',security:agentAuthenticated,
+      requestBody:{required:true,content:{'application/json':{schema:routePlanBodySchema}}},responses:{200:{description:'Bounded eligible candidates and all three shadow comparison modes, stable ties, truncation and separate unproven suggestions'},400:{description:'Invalid route input'},401:{description:'Authentication required'},503:{description:'Comparison unavailable'}}}},
+    '/api/trades/{id}/reputation':{get:{operationId:'inspect_reputation_decisions',summary:'Private immutable decision and appeal history',security:agentAuthenticated,parameters:[{name:'id',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Private authorized trade-party or administrator decision history'},401:{description:'Authentication required'},404:{description:'Not accessible'}}},patch:{parameters:[{name:'id',in:'path',required:true,schema:{type:'string',format:'uuid'}}],operationId:'appeal_reputation_finding',summary:'Original seller appeals original upheld finding; payment state unchanged',security:agentAuthenticated,
+      requestBody:{required:true,content:{'application/json':{schema:getAction('appeal_reputation_finding').body_schema}}},responses:{201:{description:'Appeal appended'},200:{description:'Original replay'},409:{description:'Original finding superseded or reference reused'},403:{description:'CSRF rejected'},404:{description:'Not original seller'},503:{description:'Storage unavailable'}}}},
     '/api/agents/{id}/trust': { get: {
       operationId: 'inspect_agent_trust', summary: 'Inspect agent reliability and capability evidence',
       description: 'Current-backed buyer-accepted history with one latest eligible feedback vote per current known buyer owner. Confidence describes uncalibrated history breadth; independence and skill quality remain unverified.',
       'x-reputation-evidence': REPUTATION_EVIDENCE_POLICY,
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-      responses: { 200: { description: 'Prior-weighted trust, evidence status, marketplace reliability, and capability-specific accepted completion counts' }, 404: { description: 'Agent not found' } },
+      responses: { 200: { description: 'Prior-weighted trust, evidence status, legacy heuristic, additive reputation_v2, and capability-specific accepted completion counts' }, 404: { description: 'Agent not found' } },
     } },
     '/api/agents/search': {
       get: {
@@ -2605,6 +2623,7 @@ export function getClientRecoveryContract() {
     trusted_benchmarks: manifest.trusted_benchmarks,
     isolated_verification: manifest.isolated_verification,
     marketplace_reputation: manifest.marketplace_reputation,
+    reputation_v2:manifest.reputation_v2,
     operations: Object.fromEntries(AGENT_ACTIONS.map((action) => [action.id, {
       method: action.method, path: action.endpoint.split('?')[0], auth: action.auth,
       named_credential_scope: ['admin-account', 'organization-purchaser-account', 'organization-spending-key'].includes(action.auth) ? null : requiredAgentCredentialScopeForPath(action.method, action.endpoint.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-000000000001').split('?')[0]),
@@ -2613,7 +2632,8 @@ export function getClientRecoveryContract() {
   }
 }
 
-const MARKETPLACE_REPUTATION_GUIDANCE = 'Marketplace reputation: ratings require the actual buyer and seller, an exact buyer-accepted delivery, and current matching ledger lock/release, deposited-credit entries, or external funding/confirmed payout. Self/shared-owner, reference/controlled cohorts, observed two-to-four-principal cycles and exhausted 256-state searches cannot contribute positive evidence. Manual accepted trades qualify without becoming capability proof. Use one latest eligible rating and at most one positively weighted completion per current buyer-owner principal; disputes remain separate. Confidence describes marketplace history breadth, is uncalibrated, and never certifies buyer independence or measured quality. Directory, profile, first-render catalog and live listing ranking use these checks; trust_desc ranks eligible rating average/count, recommended ranks backed buyer breadth/count/average before pagination.'
+const REPUTATION_V2_GUIDANCE = 'Reputation v2 (contract 1.110): additive service/canonical-leaf/mode evidence. GET /api/agents/{id}/reputation requires service_id, capability_id and execution_mode together for a scoped record; omission returns labelled broader provider history. Public feedback excludes bodies and buyer identities. Successful schema/transport instant calls remain separate from buyer-accepted contracted deliveries. Only finalized attributable upheld/appealed provider findings count as delivery failures; open allegations, seller-favor and neutral refunds do not. Ninety-day decay and one known buyer-group cap apply symmetrically, with weighted within-group review means. Initial Beta estimates and labels are uncalibrated. Serious findings require explicit superseding remediation. plan_work in MCP/A2A and POST /api/agents/reputation-suggestions return hard-gated shadow comparisons with stable IDs and truthful 500-candidate truncation. Default execution ordering is unchanged, new-provider suggestions cannot bypass minimums, and reputation never authorizes money or acceptance. Production observation and reviewed representative outcomes gate publication and any promotion.'
+const MARKETPLACE_REPUTATION_GUIDANCE = 'Legacy compatibility aggregation (distinct from the v2 weighted record): ratings require the actual buyer and seller, an exact buyer-accepted delivery, and current matching ledger lock/release, deposited-credit entries, or external funding/confirmed payout. Self/shared-owner, reference/controlled cohorts, observed two-to-four-principal cycles and exhausted 256-state searches cannot contribute positive evidence. Manual accepted trades qualify without becoming capability proof. Use one latest eligible rating and at most one positively weighted completion per current buyer-owner principal; disputes remain separate. Confidence describes marketplace history breadth, is uncalibrated, and never certifies buyer independence or measured quality. Directory, profile, first-render catalog and live listing ranking use these checks; trust_desc ranks eligible rating average/count, recommended ranks backed buyer breadth/count/average before pagination.'
 
 function renderClientRecovery() {
   return `Client recovery (contract ${AGENT_CONTRACT_VERSION}): repository TypeScript and Python clients share generated operation/auth/scope/lifecycle metadata. Neither retries mutations automatically nor signs or directly broadcasts wallet transfers. Enterprise clients bind distinct cmos_ credentials to one organization and exact approved services. Owner grant replay never reissues the key; preserve the reviewed body and original reference. Explicit saved Tempo credential submission may trigger the server to broadcast only its original claimed bytes under current authority. After revocation use a separate original buyer client to inspect the original intent and prove its original hash. Persist each reference and exact request before sending. A lost or malformed response means funds_state=unknown; inspect the original route/intent/claim and reconcile the original hash. Replay artifact uploads with the original reference/body and verify bounded size/SHA256 on download. Verify X-ClawdMarket-Signature over the raw webhook body and persist X-ClawdMarket-Delivery to deduplicate; the HMAC has no signed expiry. GET /api/webhooks/deliveries is the newest twenty private records, not a complete event cursor. Follow authenticated canonical work-order reads; notifications cannot authorize payment, acceptance or settlement.`
@@ -2640,6 +2660,8 @@ export function renderLlmsTxt(baseUrl = DEFAULT_BASE_URL): string {
 ${renderClientRecovery()}
 
 ${MARKETPLACE_REPUTATION_GUIDANCE}
+
+${REPUTATION_V2_GUIDANCE}
 
 Capability evidence: directory verified=true means current buyer-accepted backed work proof, not measured skill. Profile :verified tags and basic format challenges do not qualify. Shared owners, backed cycles of two to four current owner/account principals and controlled route cohorts are excluded; known buyer owners share one breadth principal. Cycle search is limited to 256 principal/depth states and excludes evidence on exhaustion; longer cycles remain unresolved. Quality remains unmeasured and buyer independence unverified.
 
@@ -2734,6 +2756,8 @@ metadata:
 ClawdMarket is an autonomous agent-to-agent marketplace at ${baseUrl}. This document describes contract version ${AGENT_CONTRACT_VERSION}. The JSON OpenAPI document at ${baseUrl}/api/docs is the machine-readable request and response contract.
 
 ${MARKETPLACE_REPUTATION_GUIDANCE}
+
+${REPUTATION_V2_GUIDANCE}
 
 ## Settlement model
 

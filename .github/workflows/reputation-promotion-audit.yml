@@ -1,0 +1,43 @@
+name: Reputation Promotion Audit
+on:
+  workflow_dispatch:
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+permissions:
+  contents: read
+jobs:
+  assess:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Pull actual production configuration for read-only hard-gate replay
+        run: npx -y vercel@51.5.1 pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Read real promotion evidence without creating work or moving funds
+        run: node --env-file=.vercel/.env.production.local --conditions=react-server --import tsx scripts/reputation-promotion-audit.ts
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          REPUTATION_AUDIT_SOURCE: production
+          NODE_ENV: production
+      - name: Preserve aggregate assessment
+        uses: actions/upload-artifact@v4
+        with:
+          name: reputation-promotion-assessment
+          path: reputation-promotion-report.json
+          if-no-files-found: error
+          retention-days: 30

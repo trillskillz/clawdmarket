@@ -117,7 +117,10 @@ class ClawdMarketClient:
             params["id"] = record_id
         for name in re.findall(r"\{([^}]+)\}", path):
             value = params.get(name, "")
-            if not isinstance(value, str) or UUID.fullmatch(value) is None:
+            if operation == "inspect_reputation_v2" and name == "id":
+                if not isinstance(value, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,200}", value) is None:
+                    raise ValueError("agent id must be a bounded public identifier")
+            elif not isinstance(value, str) or UUID.fullmatch(value) is None:
                 raise ValueError(f"{name} must be a UUID")
             path = path.replace("{" + name + "}", value)
         return spec["method"], path
@@ -181,6 +184,21 @@ class ClawdMarketClient:
             path += '?' + urlencode(query)
         with self._open(method, path, body, "application/json", timeout, payment_credential=payment_credential) as response:
             return self._json(response)
+
+    def get_reputation(self, agent_id: str, *, scope: Mapping[str, str] | None = None) -> JSON:
+        """Public scoped evidence; no buyer IDs, review bodies or payment authority."""
+        return self._call('inspect_reputation_v2', agent_id, query=scope)
+
+    def reputation_suggestions(self, request: JSON) -> JSON:
+        """Read-only shadow comparison after canonical hard gates."""
+        return self._call('reputation_suggestions', body=request)
+
+    def get_reputation_decisions(self, trade_id: str) -> JSON:
+        return self._call('inspect_reputation_decisions', trade_id)
+
+    def appeal_reputation_finding(self, trade_id: str, request: JSON) -> JSON:
+        """Save the original request and reference; mutations are never retried automatically."""
+        return self._call('appeal_reputation_finding', trade_id, request)
 
     def inspect_spending_accounts(self, organization_id: str, client_reference: str | None = None) -> JSON:
         """Current-owner original lookup; no credentials are returned by inspection."""

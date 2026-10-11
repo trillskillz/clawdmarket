@@ -8,6 +8,7 @@ import { createClient } from '@libsql/client'
 import { NextRequest } from 'next/server'
 import { privateKeyToAccount } from 'viem/accounts'
 import { createLocalTestSchema } from '../helpers/local-schema'
+import { captureServiceExecutionContract } from '@/lib/service-execution-contract'
 import type { ProviderRequirements } from '@/lib/provider-requirements'
 
 let directory: string
@@ -80,12 +81,14 @@ async function checkout(f: Fixture, requirements: ProviderRequirements = {}) {
 async function completion(f: Fixture, buyerId = f.pastBuyer) {
   const [listing] = await db.insert(schema.listings).values({ seller_id: f.sellerId, category: 'skills', title: 'Historical review', description: 'Accepted historical review', price_bankr: 1, status: 'sold' }).returning()
   const [trade] = await db.insert(schema.trades).values({ listing_id: listing.id, buyer_id: buyerId, seller_id: f.sellerId, amount: 1, fee: 0.05, total_cost: 1.05, status: 'completed', payment_rail: 'ledger' }).returning()
-  await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: f.id, listing_id: listing.id, trade_id: trade.id, buyer_id: buyerId,
+  const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.id))
+  const capabilities = JSON.parse(service.capabilities)
+  await db.insert(schema.service_orders).values({ execution_contract_json:captureServiceExecutionContract(service,capabilities,capabilities), id: crypto.randomUUID(), service_id: f.id, listing_id: listing.id, trade_id: trade.id, buyer_id: buyerId,
     client_reference: crypto.randomUUID(), objective: 'Review historical code', price_minor: 100, payment_rail: 'ledger', state: 'completed' })
   const [delivery] = await db.insert(schema.trade_deliveries).values({ trade_id: trade.id, submitter_id: f.sellerId, summary: 'Historical code review.', content_hash: crypto.randomUUID(), verification: '{}' }).returning()
   await db.insert(schema.verification_results).values({ id: crypto.randomUUID(), trade_id: trade.id, delivery_id: delivery.id, content_hash: delivery.content_hash,
     method: 'buyer_review', verifier: 'buyer', version: '1', status: 'passed', evidence_json: '{}' })
-  await db.insert(schema.transactions).values({ type: 'escrow_lock', amount: 1, reference_id: trade.id })
+  await db.insert(schema.transactions).values(['escrow_lock','escrow_release'].map(type=>({type:type as 'escrow_lock'|'escrow_release',from_user_id:trade.buyer_id,to_user_id:trade.seller_id,amount:1,reference_id:trade.id})))
   const { recordCapabilityCompletion } = await import('@/lib/capability-performance')
   await db.transaction((tx) => recordCapabilityCompletion(tx, trade))
   return trade

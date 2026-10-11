@@ -1,8 +1,10 @@
 import { db } from '@/lib/db';
-import { backedReputationTradeSql, eligibleReputationTradeSql, rankedBuyerFeedbackSql } from './reputation-evidence-sql';
+import { backedReputationTradeSql, eligibleReputationTradeSql,resolvedReputationTradeSql, rankedBuyerFeedbackSql } from './reputation-evidence-sql';
 import { tradePrincipalSql } from './trade-evidence-sql';
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy';
 import { computeTrustScore, trustBand, type TrustComputation } from '@/lib/trust-score';
+import { loadReputationV2Map, PROVIDER_FAULT_SQL } from './reputation-v2';
+import { unavailableReputation, type ReputationV2 } from './reputation-v2-model';
 
 export interface AgentTrustInput {
   id: string;
@@ -12,6 +14,8 @@ export interface AgentTrustInput {
 }
 
 export interface AgentTrustSnapshot extends TrustComputation {
+  reputation_v2: ReputationV2;
+  compatibility: { model: 'legacy_uncalibrated_heuristic'; calibrated: false };
   band: string;
   evidence: typeof REPUTATION_EVIDENCE_POLICY;
   components: {
@@ -21,6 +25,8 @@ export interface AgentTrustSnapshot extends TrustComputation {
     negativeRatings: number;
     completedTrades: number;
     disputedTrades: number;
+    openCases: number;
+    providerFaultFindings: number;
     totalTrades: number;
     recentRatings90d: number;
     accountAgeDays: number;
@@ -40,6 +46,7 @@ interface RatingAggregate {
 }
 
 interface TradeAggregate {
+  openCases?: number;
   backedVolume: number;
   distinctBuyers: number;
   completedTrades: number;
@@ -76,6 +83,7 @@ export function computeAgentTrust(
   agent: AgentTrustInput,
   ratings: RatingAggregate,
   trades: TradeAggregate,
+  reputationV2?: ReputationV2,
 ): AgentTrustSnapshot {
   // Cached profile aggregates can include imported/historical ratings. Only
   // ratings joined to an evidence-backed trade contribute to trust.
@@ -98,6 +106,8 @@ export function computeAgentTrust(
     ...trust,
     evidence: REPUTATION_EVIDENCE_POLICY,
     band: trustBand(trust.trustScore),
+    reputation_v2: reputationV2 ?? unavailableReputation({ kind: 'provider_history' }),
+    compatibility: { model: 'legacy_uncalibrated_heuristic', calibrated: false },
     components: {
       averageRating,
       ratingCount,
@@ -105,6 +115,8 @@ export function computeAgentTrust(
       negativeRatings: ratings.negativeRatings,
       completedTrades: trades.completedTrades,
       disputedTrades: trades.disputedTrades,
+      openCases: trades.openCases ?? 0,
+      providerFaultFindings: trades.disputedTrades,
       totalTrades: trades.totalTrades,
       recentRatings90d: ratings.recentRatings90d,
       accountAgeDays: age,
@@ -138,12 +150,14 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
     {
       sql: `WITH observations AS MATERIALIZED (
               SELECT CASE WHEN t.seller_id GLOB 'user_agent_*' THEN substr(t.seller_id, 12) ELSE t.seller_id END AS seller_id, t.status, t.resolution, t.amount, ${tradePrincipalSql('t.buyer_id')} AS buyer,
+                CASE WHEN ${resolvedReputationTradeSql('t')} AND ${PROVIDER_FAULT_SQL} THEN 1 ELSE 0 END AS provider_fault,
                 CASE WHEN ${backedReputationTradeSql('t')} THEN 1 ELSE 0 END AS backed
               FROM trades t WHERE t.seller_id IN (${placeholders}) AND ${eligibleReputationTradeSql('t')}
             ) SELECT seller_id, COUNT(*) AS total_trades, SUM(backed) AS completed_trades,
               COUNT(DISTINCT CASE WHEN backed = 1 THEN buyer END) AS distinct_buyers,
               SUM(CASE WHEN backed = 1 THEN amount ELSE 0 END) AS backed_volume,
-              SUM(status = 'disputed' OR resolution IS NOT NULL) AS disputed_trades
+              COUNT(DISTINCT CASE WHEN provider_fault=1 THEN buyer END) AS disputed_trades,
+              SUM(status='disputed') AS open_cases
             FROM observations GROUP BY seller_id`,
       args: principals,
     },
@@ -170,18 +184,21 @@ export async function loadAgentTrustMap(agents: AgentTrustInput[]): Promise<Map<
     const current = tradeMap.get(id) || { completedTrades: 0, disputedTrades: 0, totalTrades: 0, distinctBuyers: 0, backedVolume: 0 };
     current.completedTrades += asFiniteNumber((row as any).completed_trades);
     current.disputedTrades += asFiniteNumber((row as any).disputed_trades);
+    current.openCases = (current.openCases ?? 0) + asFiniteNumber((row as any).open_cases);
     current.totalTrades += asFiniteNumber((row as any).total_trades);
     current.distinctBuyers += asFiniteNumber((row as any).distinct_buyers);
     current.backedVolume += asFiniteNumber((row as any).backed_volume);
     tradeMap.set(id, current);
   }
 
+  const reputationMap = await loadReputationV2Map([...knownIds]);
   return new Map(agents.map((agent) => [
     agent.id,
     computeAgentTrust(
       agent,
       ratingMap.get(agent.id) || { ratingCount: 0, ratingTotal: 0, positiveRatings: 0, negativeRatings: 0, recentRatings90d: 0, distribution: [0, 0, 0, 0, 0] },
       tradeMap.get(agent.id) || { completedTrades: 0, disputedTrades: 0, totalTrades: 0, distinctBuyers: 0, backedVolume: 0 },
+      reputationMap.get(agent.id),
     ),
   ]));
 }

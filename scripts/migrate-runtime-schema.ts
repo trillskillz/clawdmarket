@@ -873,6 +873,11 @@ async function main() {
       await database.executeMultiple(await readFile(new URL('../migrations/2026-10-10-organization-external-spending-v2.sql',import.meta.url),'utf8'))
     }})
     migrations.push({id:'2026-10-10-organization-tempo-spending-v3',run:async(database:Client)=>{await database.executeMultiple(await readFile(new URL('../migrations/2026-10-10-organization-tempo-spending-v3.sql',import.meta.url),'utf8'))}})
+    migrations.push({id:'2026-10-11-reputation-v2-events-v1',run:async(database:Client)=>{
+      // Missing legacy party/date fields stay unknown; no inferred historical facts.
+      await ensureColumns(database,'trades',{seller_id:'TEXT',created_at:'TEXT'})
+      await database.executeMultiple(await readFile(new URL('../migrations/2026-10-11-reputation-v2-events-v1.sql',import.meta.url),'utf8'))
+    }})
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',

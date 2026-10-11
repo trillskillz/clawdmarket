@@ -1,3 +1,5 @@
+import ReputationSummary from '@/components/ReputationSummary'
+import { backedReputationTradeSql } from '@/lib/reputation-evidence-sql'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -97,7 +99,7 @@ export default async function ProofPage({ params }: Props) {
   const buyer = await getParty(String(trade.buyer_id))
   const seller = await getParty(String(trade.seller_id))
 
-  const ratingRows = await query('SELECT score, comment, created_at FROM ratings WHERE trade_id = ? AND rater_id = ? LIMIT 1', [trade_id, trade.buyer_id])
+  const ratingRows = await query(`SELECT r.score, r.created_at FROM ratings r JOIN trades t ON t.id=r.trade_id WHERE r.trade_id=? AND r.rater_id=? AND r.score BETWEEN 1 AND 5 AND ${backedReputationTradeSql('t')} LIMIT 1`, [trade_id, trade.buyer_id])
   const rating = ratingRows[0] || null
 
   // Only the explicit task-to-trade link can identify this job.
@@ -139,7 +141,6 @@ export default async function ProofPage({ params }: Props) {
     rating_count: party.rating_count,
   }))
   const trustMap = await loadAgentTrustMap(parties)
-  const buyerTrust = buyer ? trustMap.get(String(buyer.trust_id)) : null
   const sellerTrust = seller ? trustMap.get(String(seller.trust_id)) : null
 
   return (
@@ -174,14 +175,14 @@ export default async function ProofPage({ params }: Props) {
               <section className={styles.agentBox}>
                 <span>02 / HIRED BY</span>
                 <h3>{buyer?.name || `Agent ${String(trade.buyer_id).slice(0, 8)}`}</h3>
-                <p><strong>TRUST {buyerTrust?.trustScore ?? 0}/100</strong> / {String(buyerTrust?.confidence || 'low').toUpperCase()} CONFIDENCE</p>
+                <p>Buyer acceptance is specific to this delivery.</p>
                 {buyer && <Link href={String(buyer.profile_url)}>View buyer profile →</Link>}
               </section>
               <section className={styles.agentBox}>
                 <span>03 / COMPLETED BY</span>
-                <h3>{seller?.name || `Agent ${String(trade.seller_id).slice(0, 8)}`}{seller?.avg_rating && Number(seller.avg_rating) >= 4 && ' ✓'}</h3>
-                <p><strong>TRUST {sellerTrust?.trustScore ?? 0}/100</strong> / {String(sellerTrust?.confidence || 'low').toUpperCase()} CONFIDENCE</p>
-                {seller?.benchmark_score && <p>BENCHMARK {Number(seller.benchmark_score).toFixed(0)}/100</p>}
+                <h3>{seller?.name || `Agent ${String(trade.seller_id).slice(0, 8)}`}</h3><ReputationSummary reputation={sellerTrust?.reputation_v2} />
+
+                {seller?.benchmark_score && <p>REPORTED BENCHMARK {Number(seller.benchmark_score).toFixed(0)}/100 · independent quality unmeasured</p>}
                 {seller && <Link href={String(seller.profile_url)}>View seller profile →</Link>}
               </section>
             </div>
@@ -196,8 +197,8 @@ export default async function ProofPage({ params }: Props) {
               <section className={styles.proofPanel}>
                 <p className={styles.panelLabel}>05 / BUYER RATING</p>
                 <p className={styles.ratingStars}>{'★'.repeat(Math.max(1, Math.min(5, Number(rating.score) || 0)))}{'☆'.repeat(5 - Math.max(1, Math.min(5, Number(rating.score) || 0)))}</p>
-                {rating.comment && <p className={styles.ratingText}>{rating.comment}</p>}
-                <p className={styles.ratingBy}>RATED BY {buyer?.name || `AGENT ${String(trade.buyer_id).slice(0, 8)}`}</p>
+
+                <p className={styles.ratingBy}>Eligible buyer feedback</p>
               </section>
             )}
           </div>

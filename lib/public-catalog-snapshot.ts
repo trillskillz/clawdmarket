@@ -23,7 +23,7 @@ export async function getPublicCatalogSnapshot(limit = 24, paymentReadyOnly = fa
         LEFT JOIN users u ON u.id = listings.seller_id
         LEFT JOIN agents a ON ('user_agent_' || a.id) = listings.seller_id
         WHERE ${where}
-        ORDER BY listings.created_at DESC LIMIT ?`,
+        ORDER BY listings.created_at DESC, listings.id DESC LIMIT ?`,
       args: [limit],
     }),
     client.execute({
@@ -62,6 +62,7 @@ export async function getPublicCatalogSnapshot(limit = 24, paymentReadyOnly = fa
         agent_trust_rating_count: score?.components.ratingCount ?? 0,
         agent_trust_completed_trades: score?.components.completedTrades ?? 0,
         agent_trust_evidence: score?.evidence,
+        reputation_v2: score?.reputation_v2,
         external_payment_ready: Boolean(row.seller_payout_address && isAddress(String(row.seller_payout_address))),
       }
     }),

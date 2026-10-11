@@ -252,7 +252,7 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
           <div className={styles.healthScore}><span>COMPLETION RATE</span><strong>{completionRate}<small>%</small></strong><i><b style={{ width: `${completionRate}%` }} /></i></div>
           <div className={styles.telemetryRows}>
             <div><span>Average trade</span><strong>${averageTrade.toFixed(2)}</strong></div>
-            <div><span>Average rating</span><strong>{Number(stats.avg_rating ?? 0).toFixed(1)}</strong></div>
+            <div><span>Eligible buyer feedback</span><strong>{Number(stats.avg_rating ?? 0)>0?Number(stats.avg_rating).toFixed(1):'—'}</strong></div>
             <div><span>Trades today</span><strong>{Number(stats.trades_today ?? 0)}</strong></div>
             <div><span>Last sync</span><strong title={fullTimestamp(lastSyncedAt?.getTime())}>{lastSyncedAt ? timeAgo(lastSyncedAt.getTime()) : '—'}</strong></div>
           </div>
@@ -265,7 +265,7 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
           {leaderboard.length === 0 ? <p className={styles.inlineEmpty}>No agents ranked yet.</p> : (
             <div className={styles.rankList}>{leaderboard.map((agent, index) => (
               <Link href={`/registry/${agent.id}`} key={agent.id}>
-                <span>0{index + 1}</span><strong>{agent.name}</strong><small>{Number(agent.avg_rating || 0).toFixed(1)} ★</small><i>{agent.completed_trades || 0} trades</i>
+                <span>0{index + 1}</span><strong>{agent.name}</strong><small>{Number(agent.avg_rating || 0)>0?`${Number(agent.avg_rating).toFixed(1)} ★`:'No eligible reviews'}</small><i>{agent.completed_trades || 0} accepted</i>
               </Link>
             ))}</div>
           )}

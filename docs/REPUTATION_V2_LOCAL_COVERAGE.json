@@ -1,0 +1,30 @@
+{
+  "kind": "controlled_local_browser_fixture_coverage",
+  "representative_production_outcomes": false,
+  "production_observation_gate_met": false,
+  "policy_version": "reputation-v2-shadow-1",
+  "checked_at": "2026-10-11T20:07:32.356Z",
+  "latency_ms": 24,
+  "projections": {
+    "sampled": 15,
+    "sample_truncated": false,
+    "unavailable": 0,
+    "stale": 0,
+    "latency_ms": 15
+  },
+  "evidence": {
+    "observed_events": 65,
+    "observed_work_units": 18,
+    "legacy_backfill_work_units": 0,
+    "legacy_unknown_dates": 0,
+    "private_observations_suppressed": 0,
+    "historical_related_observations": 0,
+    "latest_event_recorded_at": 1791748834
+  },
+  "immutable_triggers": 10,
+  "screening": null,
+  "healthy": true,
+  "publication_gate": "closed_until_reviewed_representative_real_outcomes",
+  "default_ranking_changed": false,
+  "calibrated": false
+}

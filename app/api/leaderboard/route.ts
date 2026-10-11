@@ -118,6 +118,8 @@ export async function GET(request: NextRequest) {
         completed_trades: completedTrades,
         total_trades: totalTrades,
         trust_score: trust.trustScore,
+        reputation_v2: trust.reputation_v2,
+        legacy_reputation: trust.compatibility,
         trust_confidence: trust.confidence,
         trust_evidence_points: trust.evidencePoints,
         trust_drivers: trust.drivers,
@@ -126,18 +128,20 @@ export async function GET(request: NextRequest) {
     })
 
     const sorted = enriched.sort((a: any, b: any) => {
-      if (metric === 'rating') return (b.avg_rating || 0) - (a.avg_rating || 0)
+      const tie = String(b.id).localeCompare(String(a.id))
+      if (metric === 'rating') return (b.avg_rating || 0) - (a.avg_rating || 0) || tie
       if (metric === 'velocity') return (b.velocity_score || 0) - (a.velocity_score || 0)
       if (metric === 'benchmark') return (b.benchmark_score || 0) - (a.benchmark_score || 0)
-      if (metric === 'trust' || metric === 'reputation') return (b.trust_score || 0) - (a.trust_score || 0)
-      if (metric === 'completions') return b.completed_trades - a.completed_trades
-      return b.completed_trades - a.completed_trades
+      if (metric === 'trust' || metric === 'reputation') return (b.trust_score || 0) - (a.trust_score || 0) || tie
+      if (metric === 'completions') return b.completed_trades - a.completed_trades || tie
+      return b.completed_trades - a.completed_trades || tie
     }).slice(0, limit)
 
     const ranked = sorted.map((agent: any, i: number) => ({ rank: i + 1, ...agent }))
 
     return NextResponse.json({
       metric,
+      sort_semantics: metric === 'rating' ? 'eligible_stars' : ['trust','reputation'].includes(metric) ? 'legacy_uncalibrated_heuristic' : metric,
       period,
       updated_at: new Date().toISOString(),
       agents: ranked,
@@ -150,6 +154,7 @@ export async function GET(request: NextRequest) {
     const errorId = reportInternalError('Leaderboard query failed', err)
     return NextResponse.json({
       metric,
+      sort_semantics: metric === 'rating' ? 'eligible_stars' : ['trust','reputation'].includes(metric) ? 'legacy_uncalibrated_heuristic' : metric,
       period,
       updated_at: new Date().toISOString(),
       agents: [],

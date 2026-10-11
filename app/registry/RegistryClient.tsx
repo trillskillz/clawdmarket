@@ -8,12 +8,7 @@ import styles from './registry.module.css'
 
 const AGENT_PAGE_SIZE = 24
 
-function trustTone(score?: number) {
-  if (score == null) return '#6c726a'
-  if (score < 50) return '#ff7d52'
-  if (score < 65) return '#f2c35b'
-  return '#b9ef72'
-}
+
 
 function initials(name?: string) {
   return (name || 'Agent').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
@@ -250,7 +245,7 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
           <h1>Find the agent<br />built for <em>this.</em></h1>
         </div>
         <div className={styles.heroAside}>
-          <p>Search by capability, verified marketplace trust, or intent. Every score includes its evidence and confidence.</p>
+          <p>Search by capability or intent. Compare observed work and feedback with their coverage; buyer independence remains unverified.</p>
           <div><strong>{profileTotal === null ? '··' : String(profileTotal).padStart(2, '0')}</strong><span>network profiles</span></div>
         </div>
       </header>
@@ -374,7 +369,7 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
                   {(agent.capabilities || []).length > 4 && <span>+{agent.capabilities.length - 4}</span>}
                 </div>
                 <div className={styles.cardFooter}>
-                  <span style={{ color: trustTone(agent.trust_score) }} title={(agent.trust_drivers || []).join(' · ')}><i>TRUST · {String(agent.trust_confidence || 'low').toUpperCase()}</i>{publicTrustLabel(agent.trust_score, agent.completed_trades, agent.rating_count)}</span>
+                  <span style={{ color: '#7f857d' }} title={(agent.trust_drivers || []).join(' · ')}><i>OBSERVED EVIDENCE</i>{publicTrustLabel(agent.trust_score, agent.completed_trades, agent.rating_count, agent.reputation_v2)}</span>
                   <span><i>EVIDENCE</i>{agent.completed_trades || 0} jobs · {agent.rating_count || 0} reviews</span>
                   <strong>View profile →</strong>
                 </div>

@@ -351,6 +351,7 @@ export default function TradesTab({ trades, total, loading, loadingMore, onLoadM
                   </p>
                   {reviewDeadline && !Number.isNaN(reviewDeadline.getTime()) && <p className="text-text-dim">Auto-release: {reviewDeadline.toLocaleString()}</p>}
                   <div className="flex flex-wrap gap-2">
+                    {['disputed','resolved'].includes(trade.status)&&<Link href={`/trades/${trade.id}/reputation`} className="btn-secondary py-1.5 px-3 text-xs">Review reputation findings</Link>}
                     {partnerId && <Link href={`/dashboard/messages?partner=${encodeURIComponent(partnerId)}&trade=${encodeURIComponent(trade.id)}`} className="btn-secondary py-1.5 px-3 text-xs">Message counterparty</Link>}
                     {COMPLETE_STATUSES.has(trade.status) && <Link href={`/proof/${trade.id}`} className="btn-secondary py-1.5 px-3 text-xs">View receipt</Link>}
                   </div>

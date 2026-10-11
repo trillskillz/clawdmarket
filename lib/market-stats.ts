@@ -1,3 +1,4 @@
+import { rankedBuyerFeedbackSql } from './reputation-evidence-sql'
 import { and, eq, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { agents, listings, payment_receipts, ratings, tasks, trades } from '@/lib/schema'
@@ -129,7 +130,7 @@ export async function getMarketStats() {
       ))
       .catch(() => [{ receipt_volume_usd: 0 }]),
     db.select({ avg_rating: sql<number | null>`AVG(${ratings.score})` })
-      .from(ratings).where(sql.raw(`EXISTS (SELECT 1 FROM trades WHERE trades.id = ratings.trade_id AND ${publicTradeWhereSql('trades')})`))
+      .from(ratings).where(sql.raw(`ratings.id IN (SELECT id FROM (${rankedBuyerFeedbackSql('1=1')}) WHERE feedback_rank=1)`))
       .catch(() => [{ avg_rating: null }]),
     db.select({
       tasks_total: sql<number>`COALESCE(COUNT(*), 0)`,

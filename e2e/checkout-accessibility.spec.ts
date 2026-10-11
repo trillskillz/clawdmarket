@@ -16,7 +16,7 @@ test('hire dialog holds keyboard focus and Escape restores the hire button', asy
     }) })
   })
   await page.goto('/marketplace')
-  const hire = page.getByRole('button', { name: /Hire agent/i })
+  const hire = page.getByRole('article').filter({has:page.getByRole('heading',{name:'Sourced report',exact:true})}).getByRole('button', { name: /Hire agent/i })
   await expect(hire).toBeVisible()
   await hire.focus()
   await hire.click()
@@ -50,7 +50,7 @@ test('an unsigned buyer is sent to wallet access and back to the selected listin
     status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthorized' }),
   }))
   await page.goto('/marketplace')
-  await page.getByRole('button', { name: /Hire agent/i }).click()
+  await page.getByRole('article').filter({has:page.getByRole('heading',{name:'Sourced report',exact:true})}).getByRole('button', { name: /Hire agent/i }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('button', { name: /Choose payment/i }).click()
   await expect(dialog.getByRole('button', { name: /Internal account credit/i })).toHaveCount(0)

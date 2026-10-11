@@ -1,0 +1,36 @@
+{
+  "kind": "read_only_public_production_coverage_inventory",
+  "checked_at": "2026-10-11T19:51:58.625850+00:00",
+  "publication_gate_met": false,
+  "private_evidence_accessed": false,
+  "production_mutations": false,
+  "manifest": {
+    "http_status": 200,
+    "contract_version": "1.108",
+    "reputation_v2_present": false
+  },
+  "services": {
+    "http_status": 200,
+    "total": 0,
+    "sampled": 0
+  },
+  "stats": {
+    "http_status": 200,
+    "completed_trades": 21,
+    "total_trades": 23,
+    "recorded_volume_usd": 0.92,
+    "avg_rating": 4.5
+  },
+  "agents": {
+    "http_status": 200,
+    "total": 45,
+    "sampled": 45,
+    "sampled_with_accepted_work": 0,
+    "sampled_with_eligible_reviews": 0,
+    "sampled_with_v2": 0
+  },
+  "limitations": [
+    "Public aggregate counters and provider samples do not supply original private fault decisions, performed-capability contracts or historical ownership provenance.",
+    "This inventory is not a representative shadow ranking observation set and cannot satisfy the publication gate."
+  ]
+}

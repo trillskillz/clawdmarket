@@ -9,6 +9,7 @@ import { validateCsrf } from '@/lib/csrf';
 import { isExternallyFundedTrade } from '@/lib/trade-settlement-readiness';
 import { SettlementError, settleExternallyFundedTrade } from '@/lib/external-settlement';
 import { finalizeTradeDispute, type TradeResolution } from '@/lib/trade-dispute';
+import { appendReputationDecision,reputationDecisionInput,ReputationDecisionError } from '@/lib/reputation-adjudication';
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -25,10 +26,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!authHeader && !validateCsrf(req)) return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
+  const classification = body?.reputation_decision === undefined ? undefined : reputationDecisionInput.safeParse(body.reputation_decision);
+  if (classification && !classification.success) return NextResponse.json({error:'Invalid reputation decision'}, {status:400});
+  const reputationDecision = classification?.success ? classification.data : undefined;
   const resolution = body?.resolution;
   if (!['buyer', 'seller', 'split'].includes(resolution)) {
     return NextResponse.json({ error: 'Invalid resolution' }, { status: 400 });
   }
+  if(resolution==='seller'&&reputationDecision?.responsibility==='provider'&&reputationDecision.status==='upheld')return NextResponse.json({error_code:'REPUTATION_SELLER_FAVOR_CONTRADICTION'},{status:409});
   const splitPercent = resolution === 'split' ? Number(body?.split_percent_to_seller ?? 50) : resolution === 'seller' ? 100 : 0;
   if (!Number.isFinite(splitPercent) || splitPercent < 0 || splitPercent > 100) {
     return NextResponse.json({ error: 'split_percent_to_seller must be between 0 and 100' }, { status: 400 });
@@ -45,7 +50,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     let tradeToFinalize = trade;
     if (externalFunding) {
-      const [claimed] = await db.update(trades)
+      const [claimed] = await db.transaction(async tx => {
+        const [current]=await tx.select().from(trades).where(eq(trades.id,trade.id)).limit(1);
+        if(!current||current.status!=='disputed'||current.resolution!==null&&(current.resolution!==resolution||current.resolution_seller_percent!==splitPercent))throw new ReputationDecisionError('REPUTATION_RESOLUTION_CONFLICT');
+        if (reputationDecision) await appendReputationDecision(tx,trade.id,auth!.userId,reputationDecision);
+        return tx.update(trades)
         .set({ resolution, resolution_seller_percent: splitPercent, payout_status: 'processing' })
         .where(and(
           eq(trades.id, trade.id),
@@ -54,6 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           isNull(trades.resolution_seller_percent),
         ))
         .returning();
+      });
       if (claimed) {
         tradeToFinalize = claimed;
       } else {
@@ -75,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    const finalized = await finalizeTradeDispute(tradeToFinalize, resolution as TradeResolution, splitPercent, auth!.userId);
+    const finalized = await finalizeTradeDispute(tradeToFinalize, resolution as TradeResolution, splitPercent, auth!.userId,reputationDecision);
     if (!finalized) return NextResponse.json({ error: 'Trade already resolved' }, { status: 409 });
 
     return NextResponse.json({
@@ -85,6 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       external_payout_status: externalFunding ? 'complete' : 'not_applicable',
     });
   } catch (error) {
+    if (error instanceof ReputationDecisionError) return NextResponse.json({error_code:error.code}, {status:error.status});
     if (error instanceof SettlementError) {
       return NextResponse.json({ error: error.message, code: error.code, retryable: error.retryable }, { status: error.retryable ? 503 : 409 });
     }

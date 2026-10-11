@@ -96,6 +96,9 @@
       "proxy-addr": "2.0.8",
       "qs": "6.16.0",
       "source-map-js": "1.2.2"
+    },
+    "patchedDependencies": {
+      "@libsql/client@0.18.0": "patches/@libsql__client@0.18.0.patch"
     }
   }
 }

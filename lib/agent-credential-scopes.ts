@@ -50,6 +50,7 @@ export function requiredAgentCredentialScopeForPath(method: string, pathname: st
   if (pathname.startsWith('/api/agents/credentials') || pathname.includes('/ownership')) {
     return 'credentials:write'
   }
+  if(method==='POST'&&pathname==='/api/agents/reputation-suggestions')return 'agent:read'
   if (method === 'GET' || method === 'HEAD') return 'agent:read'
   if (
     pathname.startsWith('/api/instant/sessions/')

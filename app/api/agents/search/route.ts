@@ -10,6 +10,7 @@ import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
 import { PUBLIC_AGENT_WORK_PROOF_SQL } from '@/lib/capability-evidence-sql'
 import { capabilityFamily } from '@/lib/capability-hierarchy'
 import { rawCapabilityFamilyFilter } from '@/lib/capability-family-filter'
+import { agentFeedbackAggregateSql } from '@/lib/reputation-evidence-sql'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,7 +106,8 @@ export async function GET(req: NextRequest) {
         ${verifiedOnly ? `AND ${PUBLIC_AGENT_WORK_PROOF_SQL}` : ''}
         ${familyPredicate ? `AND ${familyPredicate.clause}` : ''}
         AND (${matchConditions.join(' OR ')})
-      ORDER BY match_score DESC, COALESCE(avg_rating, 0) DESC, id DESC
+      ORDER BY match_score DESC, COALESCE(${agentFeedbackAggregateSql('AVG(score)')}, 0) DESC,
+        ${agentFeedbackAggregateSql('COUNT(*)')} DESC, id DESC
       LIMIT ? OFFSET ?
     `
 
@@ -153,6 +155,7 @@ export async function GET(req: NextRequest) {
         trust_drivers: trust.drivers,
         trust_components: trust.components,
         trust_evidence: trust.evidence,
+        reputation_v2: trust.reputation_v2,
         reputation_score: trust.trustScore,
         moltbook_handle: null,
         match_score: Number(row.match_score || 0),

@@ -38,8 +38,8 @@ export async function GET(
   ).catch(() => null),
   client.execute(
    `WITH feedback AS (${rankedBuyerFeedbackSql('r.rated_id IN (?, ?)')})
-    SELECT r.id, r.trade_id, r.rater_id, r.rated_id, r.score, r.comment, r.created_at,
-           COALESCE(a.name, u.name) as rater_name
+    SELECT r.id, r.score, NULL AS comment, r.created_at,
+           NULL AS rater_name
     FROM ratings r
     JOIN feedback ON feedback.id = r.id AND feedback.feedback_rank = 1
     LEFT JOIN agents a ON a.id = r.rater_id OR ('user_agent_' || a.id) = r.rater_id
@@ -210,6 +210,8 @@ export async function GET(
   trust_drivers: trust.drivers,
   trust_components: trust.components,
   trust_evidence: trust.evidence,
+        reputation_v2: trust.reputation_v2,
+        legacy_reputation: trust.compatibility,
   trust: {
    score: trust.trustScore,
    band: trust.band,

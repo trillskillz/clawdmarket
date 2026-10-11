@@ -230,7 +230,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
           sql`${service_definitions.active_orders} < ${service_definitions.max_concurrency}`))
         .returning({ id: service_definitions.id })
       if (!claimed) throw new ServiceOrderReservationError('SERVICE_CAPACITY_OR_PRICE_CHANGED', 'Service capacity or price changed; re-plan before retrying')
-      const requirementFailure = await checkProviderRequirements(tx, principal.userId, service.seller_id, agreedCapabilities, JSON.stringify(request.provider_requirements ?? {}), Boolean(privateShare))
+      const requirementFailure = await checkProviderRequirements(tx, principal.userId, service.seller_id, agreedCapabilities, JSON.stringify(request.provider_requirements ?? {}), Boolean(privateShare),service.id)
       if (requirementFailure) throw new ServiceOrderReservationError(requirementFailure, 'Provider does not satisfy buyer evidence requirements')
       const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, principal.userId, service.seller_id, tx)
       if (verifierFailure) throw new ServiceOrderReservationError(verifierFailure, 'Isolated verifier is unavailable or shares a trade-party owner')
@@ -263,7 +263,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         id: crypto.randomUUID(), service_id: id, listing_id: listing.id, trade_id: trade.id,
         buyer_id: principal.userId, client_reference: reference, objective: request.objective,
         provider_requirements_json: JSON.stringify(request.provider_requirements ?? {}),
-        execution_contract_json: captureServiceExecutionContract(service, agreedCapabilities),
+        execution_contract_json: captureServiceExecutionContract(service, agreedCapabilities, routeId?agreedCapabilities:undefined),
         input_json: JSON.stringify(request.input), price_minor: service.price_minor,
         payment_rail: rail, state: internal ? 'funded' : 'awaiting_funding',
       }).returning()

@@ -32,5 +32,5 @@ test('machine action advertises USD pricing', () => {
 test('zero-history trust is not shown as earned reputation', () => {
   assert.equal(hasEarnedTrustEvidence(0, 0), false)
   assert.equal(publicTrustLabel(60, 0, 0), 'Unproven · Low confidence')
-  assert.equal(publicTrustLabel(72, 1, 0), '72/100')
+  assert.equal(publicTrustLabel(72, 1, 0), '1 accepted · 0 eligible reviews')
 })

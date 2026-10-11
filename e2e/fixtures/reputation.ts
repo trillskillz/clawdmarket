@@ -6,7 +6,15 @@ async function run() {
   const { db } = await import('../../lib/db'), s = await import('../../lib/schema')
   const { and, eq } = await import('drizzle-orm')
   try {
-    if (mode === 'seed') {
+    if(mode==='private-seed'){
+      const seller=crypto.randomUUID(),buyer=crypto.randomUUID(),admin='benchmark-browser-admin'
+      for(const [id,role] of [[seller,'agent'],[buyer,'human'],[admin,'human']] as const)await db.insert(s.users).values({id,email:`${id}@test.invalid`,name:id,password_hash:'unused',role}).onConflictDoNothing()
+      const [listing]=await db.insert(s.listings).values({seller_id:seller,title:'Private review fixture',description:'Owned local browser fixture',category:'skills',price_bankr:1,status:'sold'}).returning()
+      const [trade]=await db.insert(s.trades).values({listing_id:listing.id,buyer_id:buyer,seller_id:seller,amount:1,fee:0.05,payment_rail:'ledger',status:'disputed'}).returning()
+      const {generateJWT}=await import('../../lib/auth')
+      const token=(id:string)=>generateJWT({userId:id,email:`${id}@test.invalid`,role:id===seller?'agent':'human'})
+      process.stdout.write(JSON.stringify({trade:trade.id,adminToken:token(admin),sellerToken:token(seller)}))
+    }else if (mode === 'seed') {
       const good = `agent_${crypto.randomUUID()}`, fake = `agent_${crypto.randomUUID()}`, alias = `agent_${crypto.randomUUID()}`, buyer = `reputation-browser-${crypto.randomUUID()}`, tag = `reputation${crypto.randomUUID().replaceAll('-', '')}`
       for (const [index, id] of [good, fake, alias].entries()) {
         await db.insert(s.agents).values({ id, name: `${tag}${index}`, description: 'Controlled local reputation fixture', capabilities: '["code-review"]', endpoint: '', owner_address: `0x${'11'.repeat(20)}`, api_key: `unused-${id}` })

@@ -1,0 +1,36 @@
+diff --git a/lib-cjs/sqlite3.js b/lib-cjs/sqlite3.js
+index 21a13a83b6f8f8d5057fb9ea7edd97cc8881f955..c3588ed0953e36d69909a2656e3f8c4196fee51a 100644
+--- a/lib-cjs/sqlite3.js
++++ b/lib-cjs/sqlite3.js
+@@ -490,7 +490,12 @@ class Sqlite3Transaction {
+     }
+     async commit() {
+         try {
+-            executeStmt(this.#getDatabase(), "COMMIT", this.#intMode);
++            // libsql 0.5.29 retains the lock of a failed prepared COMMIT
++            // after rollback/close (libsql-js#240). exec finalizes its statement.
++            this.#getDatabase().exec("COMMIT");
++        }
++        catch (error) {
++            throw mapSqliteError(error);
+         }
+         finally {
+             this.#settle();
+diff --git a/lib-esm/sqlite3.js b/lib-esm/sqlite3.js
+index bfeed75499001ad72e43d4919465108d946bb165..a701b6cb786f7d633e51d2a8aad9320ad150f956 100644
+--- a/lib-esm/sqlite3.js
++++ b/lib-esm/sqlite3.js
+@@ -466,7 +466,12 @@ export class Sqlite3Transaction {
+     }
+     async commit() {
+         try {
+-            executeStmt(this.#getDatabase(), "COMMIT", this.#intMode);
++            // libsql 0.5.29 retains the lock of a failed prepared COMMIT
++            // after rollback/close (libsql-js#240). exec finalizes its statement.
++            this.#getDatabase().exec("COMMIT");
++        }
++        catch (error) {
++            throw mapSqliteError(error);
+         }
+         finally {
+             this.#settle();

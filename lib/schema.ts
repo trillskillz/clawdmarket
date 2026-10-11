@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { ROUTE_STATES } from './route-states';
-import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -1868,3 +1868,40 @@ export const mcp_result_streams = sqliteTable('mcp_result_streams', {
   rpc_id_json: text('rpc_id_json').notNull(),
   created_at: integer('created_at').notNull(), expires_at: integer('expires_at').notNull(),
 }, t => [index('mcp_result_stream_agent_expiry').on(t.agent_id, t.expires_at)]);
+
+/** Private immutable observations. Public readers expose aggregate projections only. */
+export const reputation_events = sqliteTable('reputation_events', {
+  id: text('id').primaryKey(), source_type: text('source_type').notNull(), source_id: text('source_id').notNull(), source_revision: text('source_revision').notNull(),
+  trade_id: text('trade_id').notNull(),
+  service_order_id: text('service_order_id'), attempt_id: text('attempt_id'), provider_id: text('provider_id').notNull(), service_id: text('service_id'),
+  capabilities_json: text('capabilities_json').notNull().default('[]'), contract_json: text('contract_json'), agent_version: integer('agent_version'),
+  event_kind: text('event_kind').notNull(), occurred_at: integer('occurred_at'), recorded_at: integer('recorded_at').notNull(),
+  policy_version: integer('policy_version').notNull().default(1), buyer_principal: text('buyer_principal').notNull(), seller_principal: text('seller_principal').notNull(),
+  historical_related: integer('historical_related', { mode: 'boolean' }).notNull(), public_eligible: integer('public_eligible', { mode: 'boolean' }).notNull(),
+  payload_json: text('payload_json').notNull().default('{}'), supersedes_event_id: text('supersedes_event_id'),
+}, table => [uniqueIndex('reputation_event_source_revision_idx').on(table.source_type, table.source_id, table.source_revision),
+  index('reputation_event_provider_trade_idx').on(table.provider_id, table.trade_id), index('reputation_event_trade_kind_idx').on(table.trade_id, table.event_kind)]);
+
+export const reputation_adjudications = sqliteTable('reputation_adjudications', {
+  id: text('id').primaryKey(), trade_id: text('trade_id').notNull().references(() => trades.id, { onDelete: 'restrict' }),
+  actor_id: text('actor_id').notNull().references(() => users.id, { onDelete: 'restrict' }), client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(),
+  responsibility: text('responsibility').notNull(), status: text('status').notNull(), reason: text('reason').notNull(), severity: text('severity').notNull(),
+  supersedes_id: text('supersedes_id').unique().references((): AnySQLiteColumn => reputation_adjudications.id, { onDelete: 'restrict' }),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+}, table => [uniqueIndex('reputation_decision_origin_idx').on(table.trade_id).where(sql`${table.supersedes_id} IS NULL`), uniqueIndex('reputation_decision_reference_idx').on(table.trade_id, table.client_reference), index('reputation_decision_trade_idx').on(table.trade_id, table.created_at)]);
+
+/** Private bounded screening observations. No automated accusation or execution effect. */
+export const reputation_screening_runs=sqliteTable('reputation_screening_runs',{
+ id:text('id').primaryKey(),policy_version:integer('policy_version').notNull(),fingerprint:text('fingerprint').notNull().unique(),
+ status:text('status').notNull(),statistics_json:text('statistics_json').notNull(),created_at:integer('created_at',{mode:'timestamp_ms'}).notNull(),
+});
+export const reputation_screening_cases=sqliteTable('reputation_screening_cases',{
+ id:text('id').primaryKey(),run_id:text('run_id').notNull().references(()=>reputation_screening_runs.id),
+ kind:text('kind').notNull(),trade_ids_json:text('trade_ids_json').notNull(),created_at:integer('created_at',{mode:'timestamp_ms'}).notNull(),
+},t=>[index('reputation_screening_case_run_idx').on(t.run_id)]);
+export const reputation_screening_reviews=sqliteTable('reputation_screening_reviews',{
+ id:text('id').primaryKey(),case_id:text('case_id').notNull().references(()=>reputation_screening_cases.id),
+ actor_id:text('actor_id').notNull().references(()=>users.id),client_reference:text('client_reference').notNull(),request_hash:text('request_hash').notNull(),
+ status:text('status').notNull(),supersedes_id:text('supersedes_id').unique().references(():AnySQLiteColumn=>reputation_screening_reviews.id),
+ created_at:integer('created_at',{mode:'timestamp_ms'}).notNull(),
+},t=>[uniqueIndex('reputation_screening_review_origin_idx').on(t.case_id).where(sql`${t.supersedes_id} IS NULL`),uniqueIndex('reputation_screening_review_reference_idx').on(t.case_id,t.client_reference)]);

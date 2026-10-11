@@ -1,3 +1,4 @@
+import { serviceReputationMap } from '@/lib/service-reputation'
 import { NextRequest, NextResponse } from 'next/server'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
@@ -31,6 +32,8 @@ export async function GET(request: NextRequest) {
   if (familyInput && !family) return NextResponse.json({ success: false, error_code: 'UNKNOWN_CAPABILITY_FAMILY', message: 'Use a family ID from /api/capabilities/hierarchy', retryable: false }, { status: 400 })
   try {
     const conditions = [eq(service_definitions.status, 'active'), eq(service_definitions.visibility, 'public')]
+    const seller=request.nextUrl.searchParams.get('seller_id')
+    if(seller)conditions.push(sql`${service_definitions.seller_id} IN (${seller},${'user_agent_'+seller})`)
     if (family) conditions.push(capabilityFamilyFilter(family, 'service_definitions.capabilities'))
     if (canonicalCapability) conditions.push(sql`EXISTS (SELECT 1 FROM json_each(${capabilityArraySql('service_definitions.capabilities')}) WHERE value = ${canonicalCapability})`)
     conditions.push(sql`(${service_definitions.seller_id} NOT GLOB 'user_agent_*' OR EXISTS (
@@ -41,7 +44,8 @@ export async function GET(request: NextRequest) {
     const [{ total }] = await db.select({ total: sql<number>`COUNT(*)` }).from(service_definitions).where(where)
     const rows = await db.select().from(service_definitions).where(where)
       .orderBy(desc(service_definitions.created_at), desc(service_definitions.id)).limit(limit).offset((page - 1) * limit)
-    return NextResponse.json({ services: await Promise.all(rows.map((service) => serviceDefinitionDto(service))), family: family?.id || null, page, limit, total: Number(total), has_more: page * limit < Number(total) }, { headers: { 'Cache-Control': 'no-store' } })
+    const reputation=await serviceReputationMap(rows)
+    return NextResponse.json({ services: await Promise.all(rows.map((service) => serviceDefinitionDto(service,undefined,false,reputation.get(service.id)??[]))), family: family?.id || null, page, limit, total: Number(total), has_more: page * limit < Number(total) }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return internalErrorResponse('Service directory failed', error)
   }

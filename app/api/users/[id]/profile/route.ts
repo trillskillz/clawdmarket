@@ -4,6 +4,7 @@ import { users, trades, listings, ratings } from '@/lib/schema';
 import { isValidUUID } from '@/lib/validation';
 import { eq, sql } from 'drizzle-orm';
 import { FALLBACK_AGENTS } from '@/lib/fallback-agents';
+import { unavailableReputation } from '@/lib/reputation-v2-model';
 import { loadAgentTrust } from '@/lib/agent-trust';
 
 export const dynamic = 'force-dynamic'
@@ -47,6 +48,7 @@ export async function GET(
           avatar_url: fallback.avatar_url,
           avatar_emoji: null,
           trust_score: null,
+          reputation_v2: unavailableReputation({kind:'provider_history'}),
           trust_confidence: 'low',
           trust_drivers: ['No verified activity yet'],
           trust_evidence_points: 0,
@@ -86,11 +88,13 @@ export async function GET(
         ...user,
         joined: user.created_at,
         trust_score: trust.trustScore,
+        reputation_v2: trust.reputation_v2,
+        legacy_reputation: trust.compatibility,
         trust_confidence: trust.confidence,
         trust_drivers: trust.drivers,
         trust_evidence_points: trust.evidencePoints,
         stats: {
-          completed_trades_as_seller: stats?.completed_trades_as_seller || 0,
+          completed_trades_as_seller: trust.components.completedTrades,
           disputed_trades_as_seller: stats?.disputed_trades_as_seller || 0,
           active_listings: stats?.active_listings || 0,
           average_rating: trust.components.averageRating,
