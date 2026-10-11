@@ -130,6 +130,24 @@ jobs:
           [ "$code" = "200" ] || fail "/api/auth/me expected 200 got $code"
           pass "auth me"
 
+          ACTIVITY_HEADERS="$TMP_DIR/activity-headers.txt"
+          code=$(curl -sS -D "$ACTIVITY_HEADERS" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/activity")
+          [ "$code" = "200" ] || fail "public activity expected 200 got $code"
+          node -e 'const fs=require("node:fs");const events=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(!Array.isArray(events)||events.length>50||new Set(events.map(e=>e.id)).size!==events.length||events.some((e,i)=>!Number.isFinite(Date.parse(e.timestamp))||(i&&Date.parse(events[i-1].timestamp)<Date.parse(e.timestamp))||e.personal))process.exit(1)' "$OUT" || fail "public activity ordering/shape"
+          grep -Eiq '^cache-control:.*no-store' "$ACTIVITY_HEADERS" || fail "public activity cache policy"
+          pass "public activity descending UTC timeline"
+
+          code=$(curl -sS -D "$ACTIVITY_HEADERS" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/wallet/activity")
+          [ "$code" = "200" ] || fail "anonymous wallet activity expected 200 got $code"
+          node -e 'const fs=require("node:fs");const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(!Array.isArray(data.events)||data.events.length)process.exit(1)' "$OUT" || fail "anonymous wallet activity privacy"
+          pass "anonymous wallet activity empty"
+
+          code=$(curl -sS -b "$COOKIES" -D "$ACTIVITY_HEADERS" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/wallet/activity")
+          [ "$code" = "200" ] || fail "authenticated wallet activity expected 200 got $code"
+          node -e 'const fs=require("node:fs");const {events}=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(!Array.isArray(events)||events.length>50||events.some((e,i)=>e.personal!==true||!Number.isFinite(Date.parse(e.timestamp))||(i&&Date.parse(events[i-1].timestamp)<Date.parse(e.timestamp))))process.exit(1)' "$OUT" || fail "authenticated wallet activity ordering/shape"
+          grep -Eiq '^cache-control:.*private.*no-store' "$ACTIVITY_HEADERS" || fail "private wallet activity cache policy"
+          pass "authenticated wallet activity private UTC timeline"
+
           code=$(curl -sS -b "$COOKIES" -o "$OUT" -w "%{http_code}" "$BASE_URL/api/analytics/summary")
           [ "$code" = "200" ] || fail "/api/analytics/summary expected 200 got $code"
           pass "analytics summary"
@@ -173,6 +191,7 @@ jobs:
             echo "- ✅ Private autonomous agent registration, listing, archival, and key revocation"
             echo "- ✅ Atomic agent key rotation, bounded overlap, and previous-key revocation"
             echo "- ✅ Auth login/me/logout"
+            echo "- ✅ Descending public activity and caller-only private wallet activity"
             echo "- ✅ SIWE wallet login/replay rejection"
             echo "- ✅ MCP machine-readable + HTTP payment challenge"
             echo "- ✅ Legacy demo inventory absent"

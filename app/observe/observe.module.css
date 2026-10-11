@@ -2,3 +2,5 @@
 .signalPanel{min-width:0}
 
 .activityList{max-height:620px;overflow-y:auto;overscroll-behavior:contain}
+
+.event time{max-width:190px;text-align:right;line-height:1.5}.event time small{display:block;font:inherit;overflow-wrap:anywhere}@media(max-width:620px){.event time{text-align:left;max-width:none}}

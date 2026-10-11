@@ -473,7 +473,7 @@ test('activity keeps all recent public registrations visible without requiring a
   for (const secret of ['Private Registration', 'Archived Registration', 'private-owner-value', 'private-key-']) assert.equal(serialized.includes(secret), false)
 })
 
-test('activity prioritizes newest registrations while retaining recent market events during a busy period', async () => {
+test('activity shows the latest fifty events in strict chronological order during a busy period', async () => {
   const createdAt = new Date(Date.now() + 60_000)
   const registrations = Array.from({ length: 12 }, (_, index) => ({
     id: `priority-registration-${index}`, name: `Priority Agent ${index}`, description: '',
@@ -501,10 +501,10 @@ test('activity prioritizes newest registrations while retaining recent market ev
   const events = await (await getActivity()).json()
   assert.equal(events.length, 50)
   assert.equal(new Set(events.map((event: any) => event.id)).size, 50)
-  assert.deepEqual(events.slice(0, 10).map((event: any) => event.id),
-    registrations.slice(-10).reverse().map((agent) => `registration_${agent.id}`))
-  assert.equal(events.slice(10).every((event: any) => event.type !== 'agent_registered'), true)
-  assert.equal(events[10].id, 'improvement_priority-improvement-9')
+  assert.equal(events.every((event: any, index: number) => index === 0 ||
+    Date.parse(events[index - 1].timestamp) >= Date.parse(event.timestamp)), true)
+  assert.equal(events.some((event: any) => event.type === 'agent_registered'), false)
+  assert.equal(events[0].id, 'improvement_priority-improvement-9')
   assert.equal(events.some((event: any) => event.type === 'trade_created'), true)
   assert.equal(events.some((event: any) => event.type === 'rating_received'), true)
 })

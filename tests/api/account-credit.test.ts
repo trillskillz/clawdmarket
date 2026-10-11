@@ -91,6 +91,24 @@ async function milestoneAction(id: string, milestoneId: string, actor: string, a
   return PATCH(request(`/api/contracts/${id}/milestones/${milestoneId}`, actor, 'PATCH', { action, artifact_bundle: { result: 'Delivered work' } }), { params: Promise.resolve({ id, milestoneId }) })
 }
 
+test('Observe wallet activity appears after verified deposit confirmation using the ledger posting date', async () => {
+  const id = await user(), original = await intent(id, 100)
+  const before = new Date(Date.now() - 20 * 60_000)
+  await db.update(schema.credit_deposits).set({ created_at: before }).where(eq(schema.credit_deposits.id, original.id))
+  const { GET } = await import('@/app/api/wallet/activity/route')
+  assert.deepEqual((await (await GET(request('/api/wallet/activity', id))).json()).events, [])
+  const signed = await proof(original)
+  const confirmed = await deposits.PUT(request('/api/wallet/deposits', id, 'PUT', signed))
+  assert.equal(confirmed.status, 200)
+  const { events } = await (await GET(request('/api/wallet/activity', id))).json()
+  const [entry] = await db.select().from(schema.credit_entries).where(and(eq(schema.credit_entries.user_id, id), eq(schema.credit_entries.reference, original.id)))
+  assert.equal(events.length, 1)
+  assert.equal(events[0].id, `wallet_credit_${entry.id}`)
+  assert.equal(events[0].timestamp, entry.created_at.toISOString())
+  assert.notEqual(events[0].timestamp, before.toISOString())
+  assert.match(events[0].description, /Wallet deposit credited: available \+\$1\.00/)
+})
+
 test('standalone contracts reserve backed credit once and release multiple milestones without touching legacy balances', async () => {
   const buyer = await user(), seller = await user()
   await db.insert(schema.wallets).values({ user_id: buyer, balance: 100000, escrow: 0 })

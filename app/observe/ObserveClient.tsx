@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import styles from './observe.module.css'
+import { activityDate, activityTimeline } from '@/lib/activity-timeline'
 
 type ConnState = 'connecting' | 'live' | 'reconnecting'
 type PaymentConfig = {
@@ -18,19 +19,10 @@ async function fetchJson(path: string) {
   return response.json()
 }
 
-function toDateSafe(timestamp: string | number): Date {
-  if (typeof timestamp === 'number') return new Date(timestamp <= 9999999999 ? timestamp * 1000 : timestamp)
-  if (/^\d+$/.test(timestamp)) {
-    const value = Number(timestamp)
-    return new Date(value <= 9999999999 ? value * 1000 : value)
-  }
-  return new Date(timestamp)
-}
-
 function timeAgo(timestamp: string | number | null | undefined): string {
   if (!timestamp) return '—'
-  const date = toDateSafe(timestamp)
-  if (Number.isNaN(date.getTime()) || date.getFullYear() < 2020) return '—'
+  const date = activityDate(timestamp)
+  if (!date || Number.isNaN(date.getTime()) || date.getFullYear() < 2020) return '—'
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
   if (seconds < 60) return 'just now'
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
@@ -41,11 +33,11 @@ function timeAgo(timestamp: string | number | null | undefined): string {
 
 function fullTimestamp(timestamp: string | number | null | undefined): string {
   if (!timestamp) return ''
-  const date = toDateSafe(timestamp)
-  if (Number.isNaN(date.getTime())) return ''
+  const date = activityDate(timestamp)
+  if (!date || Number.isNaN(date.getTime())) return ''
   return date.toLocaleString('en-US', {
-    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', timeZoneName: 'short',
   })
 }
 
@@ -86,10 +78,11 @@ function ActivityDescription({ item }: { item: any }) {
   return <>{segments}</>
 }
 
-export default function ObserveClient({ initialStats, initialActivity, initialPaymentConfig }: { initialStats: any; initialActivity: any[]; initialPaymentConfig: PaymentConfig }) {
-  const [connState, setConnState] = useState<ConnState>(initialStats ? 'live' : 'connecting')
+export default function ObserveClient({ initialStats, initialActivity, initialPaymentConfig }: { initialStats: any; initialActivity: any[] | null; initialPaymentConfig: PaymentConfig }) {
+  const [connState, setConnState] = useState<ConnState>(initialActivity !== null ? 'live' : 'connecting')
   const [stats, setStats] = useState<any>(initialStats || {})
-  const [activity, setActivity] = useState<any[]>(initialActivity)
+  const [activity, setActivity] = useState<any[]>(activityTimeline(initialActivity || []))
+  const [walletActivity, setWalletActivity] = useState<any[]>([])
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [sellerAgent, setSellerAgent] = useState<any>(null)
   const [completedTasks, setCompletedTasks] = useState<any[]>([])
@@ -100,6 +93,8 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
     let cancelled = false
     let marketRefreshPending = false
     let telemetryRefreshPending = false
+    let walletRefreshPending = false
+    let walletGeneration = 0
 
     const refreshMarket = async () => {
       if (marketRefreshPending) return
@@ -107,12 +102,8 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
       try {
         const events = await fetchJson('/api/activity')
         if (cancelled) return
-        setActivity(Array.isArray(events) ? events.slice(0, 50).map((event, index) => ({
-          ...event,
-          id: event.id || `activity_${index}_${event.timestamp}`,
-          type: event.type || 'trade_created',
-          relative: timeAgo(event.timestamp),
-        })) : [])
+        if (!Array.isArray(events)) throw new Error('Invalid activity response')
+        setActivity(activityTimeline(events))
         setLastSyncedAt(new Date())
         setConnState('live')
       } catch {
@@ -120,6 +111,19 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
       } finally {
         marketRefreshPending = false
       }
+    }
+
+    const refreshWallet = async () => {
+      if (walletRefreshPending) return
+      walletRefreshPending = true
+      const generation = walletGeneration
+      try {
+        const result = await fetchJson('/api/wallet/activity')
+        if (!cancelled && generation === walletGeneration) setWalletActivity(Array.isArray(result.events) ? result.events : [])
+      } catch {
+        // Personal data is cleared when authorization or its storage cannot be rechecked.
+        if (!cancelled && generation === walletGeneration) setWalletActivity([])
+      } finally { walletRefreshPending = false }
     }
 
     const refreshTelemetry = async () => {
@@ -149,14 +153,26 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
       } catch { /* Secondary panels retain their last confirmed snapshot. */ }
     }
 
+    const resetWallet = () => {
+      walletGeneration++
+      setWalletActivity([])
+      if (document.visibilityState === 'visible') void refreshWallet()
+    }
+    window.addEventListener('focus', resetWallet)
+    document.addEventListener('visibilitychange', resetWallet)
     void refreshMarket()
+    void refreshWallet()
     void refreshTelemetry()
     void refreshPanels()
+    const walletInterval = setInterval(refreshWallet, 5_000)
     const marketInterval = setInterval(refreshMarket, 5_000)
     const telemetryInterval = setInterval(refreshTelemetry, 5_000)
     const panelInterval = setInterval(refreshPanels, 60_000)
     return () => {
       cancelled = true
+      window.removeEventListener('focus', resetWallet)
+      document.removeEventListener('visibilitychange', resetWallet)
+      clearInterval(walletInterval)
       clearInterval(marketInterval)
       clearInterval(telemetryInterval)
       clearInterval(panelInterval)
@@ -215,17 +231,17 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
         <div className={styles.activityPanel} aria-label="Recent market activity">
           <div className={styles.panelHeader}>
             <div><span className={live ? styles.liveDot : styles.idleDot} /><strong>Live activity</strong></div>
-            <span>NEW AGENTS FIRST / {connectionLabel.toUpperCase()}</span>
+            <span>NEWEST FIRST / LATEST 50 / {connectionLabel.toUpperCase()}</span>
           </div>
           <div className={styles.activityList} role="log" aria-label="Live activity feed" aria-live="polite" aria-relevant="additions">
-            {activity.slice(0, 50).length === 0 ? (
-              <div className={styles.emptyTape}><i>⌁</i><strong>No recorded activity yet.</strong><p>New registrations, trades, ratings, and improvements will appear here after they are stored.</p></div>
-            ) : activity.slice(0, 50).map((item, index) => (
+            {activityTimeline([...activity, ...walletActivity]).length === 0 ? (
+              <div className={styles.emptyTape}><i>⌁</i><strong>No recorded activity yet.</strong><p>New registrations, wallet payments, trades, ratings, and improvements will appear here after they are stored.</p></div>
+            ) : activityTimeline([...activity, ...walletActivity]).map((item, index) => (
               <article className={styles.event} key={item.id || index}>
                 <span className={`${styles.eventMark} ${eventTone(item.type)}`} />
                 <span className={styles.eventIndex}>{String(index + 1).padStart(2, '0')}</span>
-                <p><ActivityDescription item={item} /></p>
-                <time title={fullTimestamp(item.timestamp ?? item.created_at)}>{item.relative || timeAgo(item.timestamp ?? item.created_at)}</time>
+                <p>{item.personal && <strong>Your wallet · </strong>}<ActivityDescription item={item} /></p>
+                <time dateTime={item.timestamp} title={fullTimestamp(item.timestamp)} aria-label={fullTimestamp(item.timestamp)}>{timeAgo(item.timestamp)}<small>{fullTimestamp(item.timestamp)}</small></time>
               </article>
             ))}
           </div>
