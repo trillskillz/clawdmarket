@@ -28,7 +28,7 @@ function timeAgo(timestamp: string | number | null | undefined): string {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
   if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit', timeZone: 'UTC' })
 }
 
 function fullTimestamp(timestamp: string | number | null | undefined): string {
