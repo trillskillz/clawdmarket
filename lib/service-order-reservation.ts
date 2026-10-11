@@ -4,6 +4,9 @@ import { isolatedVerifierEligibility } from '@/lib/isolated-verifier-eligibility
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { db } from '@/lib/db'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import * as schema from '@/lib/schema'
 import { listings, route_attempts, route_payment_mandates, route_plans, service_definitions, service_orders, trades, workflow_node_runs } from '@/lib/schema'
 import type { RequestPrincipal } from '@/lib/request-principal'
 import { serviceOrderInput } from '@/lib/service-definitions'
@@ -66,10 +69,10 @@ function referenceConflict(error: unknown) {
   return false
 }
 
-export async function existingServiceOrder(reference: string) {
-  const [order] = await db.select().from(service_orders).where(eq(service_orders.client_reference, reference)).limit(1)
+export async function existingServiceOrder(reference: string, source: typeof db = db) {
+  const [order] = await source.select().from(service_orders).where(eq(service_orders.client_reference, reference)).limit(1)
   if (!order) return null
-  const [trade] = await db.select().from(trades).where(eq(trades.id, order.trade_id)).limit(1)
+  const [trade] = await source.select().from(trades).where(eq(trades.id, order.trade_id)).limit(1)
   return trade ? { order, trade } : null
 }
 
@@ -86,14 +89,14 @@ function sameRequest(prior: NonNullable<Awaited<ReturnType<typeof existingServic
     && (!args.externalOnly || !['ledger', 'credit'].includes(prior.order.payment_rail))
 }
 
-async function replayOnce(args: ReservationArgs) {
-  const prior = await existingServiceOrder(args.request.client_reference)
+async function replayOnce(args: ReservationArgs, source: typeof db) {
+  const prior = await existingServiceOrder(args.request.client_reference, source)
   if (!prior) return null
   if (!sameRequest(prior, args)) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference belongs to another order or rail')
   if (args.request.purchasing_approval_id && !await originalPurchaseOrderMatches(args.request.purchasing_approval_id, args.principal.userId, prior.order.id,
-    { ...args.request, provider_requirements: args.request.provider_requirements ?? {} })) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Approved checkout body changed')
+    { ...args.request, provider_requirements: args.request.provider_requirements ?? {} }, source)) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Approved checkout body changed')
   if (args.routeId) {
-    const [plan] = await db.select({ service_order_id: route_plans.service_order_id }).from(route_plans).where(eq(route_plans.id, args.routeId)).limit(1)
+    const [plan] = await source.select({ service_order_id: route_plans.service_order_id }).from(route_plans).where(eq(route_plans.id, args.routeId)).limit(1)
     if (plan?.service_order_id !== prior.order.id) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference is not linked to this route')
   }
   return { ...prior, idempotent: true }
@@ -102,12 +105,15 @@ async function replayOnce(args: ReservationArgs) {
 /** Original lookup can overlap another process's commit before any write retry begins. */
 async function replay(args: ReservationArgs) {
   for (let attempt = 0; attempt < 6; attempt++) {
-    try { return await replayOnce(args) }
+    // Dispose native failed-read statements without closing any shared financial client.
+    const url = process.env.TURSO_DATABASE_URL?.trim()
+    const client = url?.startsWith('file:') && !url.startsWith('file::memory:') ? createClient({ url }) : null
+    try { return await replayOnce(args, client ? drizzle(client, { schema }) : db) }
     catch (error) {
       if (!sqliteBusy(error)) throw error
       if (attempt === 5) throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Original order inspection unavailable', 503, true)
-      await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
-    }
+    } finally { client?.close() }
+    await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
   }
   throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Original order inspection unavailable', 503, true)
 }

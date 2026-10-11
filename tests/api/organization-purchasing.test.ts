@@ -309,7 +309,6 @@ test('original order replay recovers a real SQLite read lock and bounded content
   let release:ReturnType<typeof setTimeout>|undefined,locked=false
   try{
     writer.exec('BEGIN EXCLUSIVE');locked=true
-    await assert.rejects(db.$client.execute('SELECT id FROM service_orders LIMIT 1'),(error:any)=>error.code==='SQLITE_BUSY')
     await assert.rejects(reserveServiceOrder(args),(error:any)=>error.code==='SERVICE_RESERVATION_UNAVAILABLE'&&error.status===503&&error.retryable===true)
     release=setTimeout(()=>{writer.exec('ROLLBACK');locked=false},150)
     const original=await reserveServiceOrder(args)

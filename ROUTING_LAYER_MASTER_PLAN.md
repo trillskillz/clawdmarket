@@ -2028,3 +2028,14 @@ An initial new-test helper typo and a second-lock fixture conflict were correcte
 those diagnostic runs are not acceptance. Full local and required CI must pass
 again before the authorized merge and migration-first production release. This
 repair does not increment the substantive publishing counter.
+
+
+The first contention-repair full rerun is diagnostic only: 748 cases, 700 passed,
+43 failures, five expected skips. Holding a genuine exclusive SQLite lock exposed
+failed native read statements retained in the shared local client, blocking later
+independent writers. Original local file lookups now use disposable read clients
+closed before each retry; shared financial clients and remote production reads are
+untouched. The corrected lock, both process races, following SIGKILL commit recovery
+and fresh-funding authority cases all pass (five cases) in
+`/tmp/clawdmarket-tempo-enterprise-ci-contention-isolated-reads.log`. Complete gates
+and the protected PR must rerun on this correction before production publication.
