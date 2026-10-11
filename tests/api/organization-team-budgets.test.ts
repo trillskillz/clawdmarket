@@ -183,6 +183,42 @@ test('department lock inspection releases failed SQLite reads and never invokes 
  }finally{if(release)clearTimeout(release);if(locked)writer.exec('ROLLBACK');writer.close()}
 })
 
+test('payment control reads recover local contention and retain the current operator pause',async()=>{
+ const {requireNewPaymentsOpen,NewPaymentsPausedError}=await import('@/lib/payment-control')
+ await db.insert(schema.payment_controls).values({key:'new_payments',paused:1,reason:'operator pause'})
+  .onConflictDoUpdate({target:schema.payment_controls.key,set:{paused:1,reason:'operator pause'}})
+ const {createRequire}=await import('node:module'),require=createRequire(import.meta.url)
+ const sqliteRequire=createRequire(require.resolve('@libsql/client')),Database=sqliteRequire('libsql')
+ const writer=new Database(join(directory,'teams.db'));let locked=false,release:ReturnType<typeof setTimeout>|undefined
+ try{
+  writer.exec('BEGIN EXCLUSIVE');locked=true
+  await assert.rejects(requireNewPaymentsOpen(),(error:unknown)=>error instanceof Error&&/SQLITE_BUSY|database is locked/i.test(String(error.cause)))
+  release=setTimeout(()=>{writer.exec('ROLLBACK');locked=false},150)
+  await assert.rejects(requireNewPaymentsOpen(),NewPaymentsPausedError)
+ }finally{if(release)clearTimeout(release);if(locked)writer.exec('ROLLBACK');writer.close();await db.delete(schema.payment_controls).where(eq(schema.payment_controls.key,'new_payments'))}
+})
+
+test('a blocked native reservation commit rolls back captured facts and recovers one original order and department use',async()=>{
+ const f=await fixture();await set(f)
+ const {createRequire}=await import('node:module'),require=createRequire(import.meta.url)
+ const sqliteRequire=createRequire(require.resolve('@libsql/client')),Database=sqliteRequire('libsql')
+ const reader=new Database(join(directory,'teams.db'));let locked=false,release:ReturnType<typeof setTimeout>|undefined
+ const reference=crypto.randomUUID(),args={serviceId:f.serviceId,principal:f.principal(),externalOnly:true,
+  request:{client_reference:reference,objective:'Review private code within department allowance',input:{},provider_requirements:{},payment_rail:'evm' as const,max_total:105}}
+ try{
+  reader.exec('BEGIN');Array.from(reader.prepare('SELECT id FROM service_definitions LIMIT 1').all());locked=true
+  release=setTimeout(()=>{reader.exec('ROLLBACK');locked=false},150)
+  const created=await reserve(args),original=await reserve(args)
+  assert.equal(created.idempotent,false);assert.equal(original.idempotent,true)
+  assert.equal(original.order.id,created.order.id);assert.equal(original.trade.id,created.trade.id)
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.client_reference,reference))).length,1)
+  assert.equal((await budgets.teamBudgetUsage(f.id,f.teams[0])).reserved_or_spent_today_minor,105)
+  const [service]=await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId));assert.equal(service.active_orders,1)
+  const observations=await db.$client.execute({sql:'SELECT COUNT(DISTINCT trade_id) AS trades FROM reputation_events WHERE service_id=?',args:[f.serviceId]})
+  assert.equal(Number(observations.rows[0].trades),1)
+ }finally{if(release)clearTimeout(release);if(locked)reader.exec('ROLLBACK');reader.close()}
+})
+
 test('concurrent owner changes have one version and archived teams preserve private budget history', async () => {
   const f = await fixture()
   const results = await Promise.all([set(f), set(f, { ...input, max_daily: '2.10' })])

@@ -197,3 +197,25 @@ explicitly superseded it on 2026-10-11: **“go ahead and push as long as everyt
 is working as intended, observation isnt a requirement.”** Protected publication
 is authorized after required checks; default ranking remains shadow-only and
 uncalibrated. No production deployment is claimed until exact-SHA acceptance.
+
+
+Final contention follow-up: protected CI exposed a second pre-transaction read
+race in payment controls, and repeated local stress exposed the native prepared
+COMMIT lock leak documented in
+https://github.com/tursodatabase/libsql-js/issues/240. Closing a failed client
+alone does not resolve that native bug. A pinned pnpm patch uses native `exec`
+for local transaction COMMIT in both CommonJS and ESM, preserving error mapping,
+rollback and pool release. Remote Turso transactions are unaffected. Disposable
+bounded read recovery is shared by organization inspection and payment controls;
+financial callbacks remain outside the read retry. Operator pauses still fail
+closed after read recovery.
+
+The explicit blocked-COMMIT test recovers exactly one original order, capacity,
+department use and immutable trade evidence. The four real contention checks
+(independent processes, exhausted/recovered organization inspection, paused
+payment reads and blocked COMMIT) passed **32/32** across eight fresh-process
+stress rounds. Logs: `/tmp/clawdmarket-reputation-v2-budget-patched-stress-1.log`
+through `-8.log`. Typecheck and lint passed. Complete predeploy checks are rerunning
+with the pinned dependency; no production deployment or promotion is claimed yet.
+The patch should be removed only after a compatible stable upstream fix passes
+these same regressions; do not substitute global WAL or forced garbage collection.

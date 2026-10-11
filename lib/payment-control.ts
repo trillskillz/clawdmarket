@@ -2,6 +2,7 @@ import 'server-only'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { payment_control_events, payment_controls } from '@/lib/schema'
+import { readWithLocalContentionRecovery } from './local-sqlite-read'
 
 export const NEW_PAYMENTS_CONTROL_KEY = 'new_payments'
 export const NEW_PAYMENTS_PAUSED_MESSAGE = 'New marketplace payments are temporarily paused. Existing payments and refunds can still be recovered.'
@@ -11,8 +12,8 @@ export type NewPaymentControl = { paused: boolean; reason: string | null; source
 export async function getNewPaymentControl(): Promise<NewPaymentControl> {
   // An environment override remains available if the admin UI is unreachable.
   // The database is still read so schema drift fails closed on payment starts.
-  const [row] = await db.select().from(payment_controls)
-    .where(eq(payment_controls.key, NEW_PAYMENTS_CONTROL_KEY)).limit(1)
+  const [row] = await readWithLocalContentionRecovery((source) => source.select().from(payment_controls)
+    .where(eq(payment_controls.key, NEW_PAYMENTS_CONTROL_KEY)).limit(1))
   if (process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED === 'true') {
     return { paused: true, reason: 'New payments are temporarily paused by the operator.', source: 'environment' }
   }
