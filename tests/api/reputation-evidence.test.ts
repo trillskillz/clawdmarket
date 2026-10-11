@@ -370,6 +370,8 @@ test('promotion assessment reports real coverage gaps without creating work, mov
  assert.ok(report.blockers.includes('representative_outcome_and_exclusion_review_required'))
  assert.equal(report.measurement_limits.calibrated,false);assert.equal(report.measurement_limits.buyer_independence,'not_verified')
  assert.ok(!JSON.stringify(report).includes(buyer));assert.ok(!JSON.stringify(report).includes('private-review-body'))
+ assert.equal('evidence' in report.health,false);assert.equal('screening' in report.health,false)
+ assert.ok(!JSON.stringify(report).includes('private_observations_suppressed'))
 })
 
 test('received rating webhooks preserve metadata fields while withholding review bodies and buyer identities',async()=>{

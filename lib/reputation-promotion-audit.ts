@@ -25,6 +25,7 @@ export async function inspectReputationPromotion() {
   const records = [...scoped.values()].flat()
   const facts = await db.$client.execute(`SELECT COUNT(*) AS eligible_public_work_units,
     SUM(t.status='disputed') AS open_disputes,
+    MAX((SELECT MAX(e.recorded_at) FROM reputation_events e WHERE e.trade_id=t.id AND e.public_eligible=1)) AS evidence_recorded_as_of,
     SUM(EXISTS(SELECT 1 FROM reputation_adjudications a WHERE a.trade_id=t.id)) AS adjudicated_work_units,
     SUM(EXISTS(SELECT 1 FROM reputation_events e WHERE e.trade_id=t.id AND e.historical_related=1)) AS historical_related_work_units
     FROM trades t WHERE ${eligibleReputationTradeSql('t')}`)
@@ -70,7 +71,12 @@ export async function inspectReputationPromotion() {
     source_commit:process.env.GITHUB_SHA??null, policy_version:REPUTATION_V2_POLICY.aggregation_policy_version,
     baseline_policy:REPUTATION_RANKING_POLICY.default, ranking_policy:REPUTATION_RANKING_POLICY,
     production_source:process.env.REPUTATION_AUDIT_SOURCE==='production', promotion_ready:false,
-    review_status:'pending_representative_evidence_review', blockers, health,
+    review_status:'pending_representative_evidence_review', blockers,
+    // GitHub's aggregate artifact must not disclose private health evidence or
+    // screening/cohort counters. Those remain in the authorized private monitor.
+    health:{policy_version:health.policy_version,checked_at:health.checked_at,
+      healthy:health.healthy,latency_ms:health.latency_ms,projections:health.projections,
+      immutable_triggers:health.immutable_triggers},
     coverage:{active_public_services:Math.min(services.length,500),service_sample_truncated:services.length>500,
       scoped_records:records.length,scopes_with_dated_terminal_evidence:evidenceScopes.length,
       established_scopes:records.filter(r=>r.evidence_status==='established').length,
