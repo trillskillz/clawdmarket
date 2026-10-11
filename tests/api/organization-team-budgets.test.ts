@@ -166,6 +166,23 @@ test('independent agent processes cannot overspend one department or duplicate i
   const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)); assert.equal(service.active_orders, 1)
 })
 
+test('department lock inspection releases failed SQLite reads and never invokes the financial operation before inspection succeeds',async()=>{
+ const f=await fixture(),{withOrganizationBuyerLock}=await import('@/lib/organization-budgets')
+ const {createRequire}=await import('node:module'),require=createRequire(import.meta.url)
+ const sqliteRequire=createRequire(require.resolve('@libsql/client')),Database=sqliteRequire('libsql')
+ const writer=new Database(join(directory,'teams.db'));let invoked=0,locked=false,release:ReturnType<typeof setTimeout>|undefined
+ try{
+  writer.exec('BEGIN EXCLUSIVE');locked=true
+  await assert.rejects(withOrganizationBuyerLock(f.principal().agentId,f.principal().userId,async()=>{invoked++;return 'committed'}),(error:unknown)=>error instanceof Error&&/SQLITE_BUSY|database is locked/i.test(String(error.cause)))
+  assert.equal(invoked,0)
+  release=setTimeout(()=>{writer.exec('ROLLBACK');locked=false},150)
+  assert.equal(await withOrganizationBuyerLock(f.principal().agentId,f.principal().userId,async()=>{invoked++;return 'committed'}),'committed')
+  assert.equal(invoked,1)
+  await assert.rejects(withOrganizationBuyerLock(f.principal().agentId,f.principal().userId,async()=>{invoked++;throw Error('SQLITE_BUSY: financial operation must not be retried by the read guard')}))
+  assert.equal(invoked,2)
+ }finally{if(release)clearTimeout(release);if(locked)writer.exec('ROLLBACK');writer.close()}
+})
+
 test('concurrent owner changes have one version and archived teams preserve private budget history', async () => {
   const f = await fixture()
   const results = await Promise.all([set(f), set(f, { ...input, max_daily: '2.10' })])

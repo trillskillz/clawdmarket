@@ -182,6 +182,16 @@ produces `/tmp/clawdmarket-reputation-v2-local-promotion-report.json`, explicitl
 `production_source=false` and `promotion_ready=false`; it is controlled fixture
 evidence only. The final full protected CI will cover the updated release commit.
 
+The final configuration-head CI additionally caught `SQLITE_BUSY` during the
+department's pre-transaction organization-lock lookup. That local-file lookup now
+uses disposable read clients and six bounded read retries, closing every failed
+statement before retry. Remote production reads and all financial operations stay
+on their original paths; the read guard never retries a financial callback.
+The deterministic exclusive-read-lock recovery and existing two-process
+department ceiling/capacity race pass in **12/12** cases. Genuine lock exhaustion
+invokes no financial operation; recovery invokes it once; a callback's own busy
+error is propagated once. `/tmp/clawdmarket-reputation-v2-budget-contention.log`.
+
 The user initially reconfirmed **“Keep the observation requirement”**, then
 explicitly superseded it on 2026-10-11: **“go ahead and push as long as everything
 is working as intended, observation isnt a requirement.”** Protected publication

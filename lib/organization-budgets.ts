@@ -1,5 +1,8 @@
 import 'server-only'
 import { randomUUID } from 'node:crypto'
+import {createClient} from '@libsql/client'
+import {drizzle} from 'drizzle-orm/libsql'
+import * as schema from './schema'
 import { and, eq, gte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '@/lib/db'
@@ -193,11 +196,31 @@ export async function organizationFundingBudgetFailure(trade: typeof trades.$inf
 /** Local contention guard; the database transaction and budget check remain authoritative across workers. */
 export async function withOrganizationBuyerLock<T>(agentId: string | null | undefined, buyerId: string, operation: () => Promise<T>) {
   if (!agentId) return withKeyedWriteLock(`buyer-trade:${buyerId}`, operation)
-  const [row] = await db.select({ organization_id: organization_agent_assignments.organization_id })
+  const find = (source:typeof db) => source.select({ organization_id: organization_agent_assignments.organization_id })
     .from(organization_agent_assignments)
     .innerJoin(organizations, eq(organizations.id, organization_agent_assignments.organization_id))
     .innerJoin(agent_owners, and(eq(agent_owners.agentId, organization_agent_assignments.agent_id),
       eq(agent_owners.userId, organizations.owner_account_id)))
     .where(eq(organization_agent_assignments.agent_id, agentId)).limit(1)
+  const inspect=async()=>{for(let attempt=0;attempt<6;attempt++){
+    const url=process.env.TURSO_DATABASE_URL?.trim()
+    // A failed native SQLite read must not retain a statement in the shared
+    // financial pool. Current attribution is still rechecked in the transaction.
+    const client=url?.startsWith('file:')&&!url.startsWith('file::memory:')?createClient({url}):null
+    try{
+      const [row]=await find(client?drizzle(client,{schema}):db)
+      return row
+    }catch(error){
+      let cause:unknown=error,busy=false
+      for(let depth=0;cause&&typeof cause==='object'&&depth<6;depth++){
+        if('message' in cause&&/SQLITE_BUSY|database is locked/i.test(String(cause.message))){busy=true;break}
+        cause='cause' in cause?cause.cause:null
+      }
+      if(!busy||attempt===5)throw error
+    }finally{client?.close()}
+    await new Promise(resolve=>setTimeout(resolve,20*2**attempt))
+  }
+  throw new Error('organization_lock_inspection_unavailable')}
+  const row=await inspect()
   return withKeyedWriteLock(row ? `organization-trade:${row.organization_id}` : `buyer-trade:${buyerId}`, operation)
 }
