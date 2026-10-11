@@ -73,6 +73,15 @@ before new readers. Verify the exact production commit/contract on both canonica
 domains and run the protected production checks. Do not infer successful
 production deployment from a GitHub push alone.
 
+Production secrets permit protected main only. `vercel.json` disables Vercel's
+direct Git deployment for main; main pushes still trigger the existing protected
+GitHub deployment workflow, which migrates before building and explicitly deploys
+and aliases both production domains. Feature previews remain enabled. This
+prevents the parallel Git integration from publishing new readers before the
+additive schema exists. [Vercel's documented branch configuration](https://vercel.com/docs/project-configuration/git-configuration)
+controls Git-triggered deployments; the workflow's explicit CLI deployment remains
+the production path.
+
 Event capture and projection/rank shadow observation precede any separately
 reviewed ranking promotion. Preserve current default route order. Future ranking
 promotion must explicitly update the versioned ranking policy and pass its own
