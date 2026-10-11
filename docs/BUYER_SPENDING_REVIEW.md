@@ -14,7 +14,7 @@ On the buyer host, save this request as mode 0600 in a mode 0700 directory:
 }
 ```
 
-Supply the distinct `CLAWDMARKET_SPENDING_API_KEY` through the host environment. Then run:
+URLs must use HTTPS or an HTTP loopback host, without embedded credentials, query strings or fragments. The application origin cannot contain an extra path; the RPC may contain a path. Supply the distinct `CLAWDMARKET_SPENDING_API_KEY` through the host environment. Then run:
 
 ```sh
 node scripts/buyer-spending-review.mjs review PRIVATE/request.json PRIVATE/review.json
