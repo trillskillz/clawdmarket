@@ -33,6 +33,7 @@ function reviewed(approval){
   if(cents(approval.total_cost)>cents(approval.max_purchase))fail('BUYER_SPENDING_APPROVAL_INVALID')
   return payment
 }
+export { reviewed as validateBuyerSpendingApproval }
 /** No checkout, approval creation, delivery acceptance, payout, top-up or replacement signing. */
 export async function runBuyerSpendingFunding({approval,apiKey,recoveryApiKey,stateDirectory,account,adapter,fetcher=fetch,prepareOnly=false}){
   const payment=reviewed(approval),base=origin(approval.origin)

@@ -1552,3 +1552,50 @@ for(const language of ['typescript','python'] as const)test(`enterprise ${langua
     assert.deepEqual(await counts(f),{orders:1,capacity:0})
   }
 })
+
+test('buyer-host original review confirms private L1/Tempo approval files and recovers the same funded worker obligation',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY||!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  const {saveBuyerPaymentJournal}=await import('../../scripts/buyer-payment-journal.mjs'),{stat}=await import('node:fs/promises'),run=promisify(execFile)
+  for(const rail of ['evm','mpp'] as const){
+    const f=await privateFixture(),share=await shared(f),g=rail==='evm'?await externalGrant(f,{allowed_services:[{service_id:f.service,provider_share_id:share.share.id}]}):await tempoGrant(f,{allowed_services:[{service_id:f.service,provider_share_id:share.share.id}]}),c=rail==='evm'?await externalCheckout(f,g):await tempoCheckout(f,g)
+    const privateDirectory=join(directory,`${c.trade.id}.original-review`),requestPath=join(privateDirectory,'request.json'),reviewPath=join(privateDirectory,'review.json'),approvalPath=join(privateDirectory,'approval.json'),state=join(privateDirectory,'worker-state')
+    const request={version:1,origin:baseUrl,organization_id:f.id,order_id:c.order.id,rpc_url:rail==='evm'?enterpriseChain!.url:tempoRpcUrl}
+    await saveBuyerPaymentJournal(requestPath,request)
+    const cli=async(mode:string,inputPath:string,outputPath:string)=>{
+      const result=await run(process.execPath,['scripts/buyer-spending-review.mjs',mode,inputPath,outputPath],{cwd:process.cwd(),env:{...process.env,CLAWDMARKET_SPENDING_API_KEY:g.key,CLAWDMARKET_BUYER_PRIVATE_KEY:'',CLAWDMARKET_BUYER_API_KEY:''}})
+      assert.equal(result.stdout.includes(g.key),false);assert.equal(result.stdout.includes(f.key),false);assert.equal(result.stdout.includes('18'.repeat(32)),false)
+      return JSON.parse(result.stdout)
+    }
+    const before=tempoBroadcasts,first=await cli('review',requestPath,reviewPath);assert.equal(first.state,'review_required');assert.equal(first.created,true)
+    const review=JSON.parse(await readFile(reviewPath,'utf8'));assert.equal(review.approval.authority_hash,(await spendingClientApproval(f,g,c)).authority_hash)
+    assert.equal(review.approval.purchasing_approval_id,c.order.purchasing_approval_id);assert.equal(review.approval.payment.payer_address,payer.address.toLowerCase());assert.equal(review.approval.max_purchase,'1.05')
+    assert.equal((await cli('review',requestPath,reviewPath)).created,false)
+    const [account]=await db.select().from(schema.organization_spending_accounts).where(eq(schema.organization_spending_accounts.id,g.account.id))
+    await db.update(schema.organization_spending_accounts).set({name:'Changed after buyer review'}).where(eq(schema.organization_spending_accounts.id,g.account.id))
+    try{await assert.rejects(cli('confirm',reviewPath,approvalPath),/BUYER_REVIEW_INSPECTION_UNAVAILABLE/);await assert.rejects(readFile(approvalPath),{code:'ENOENT'})}
+    finally{await db.update(schema.organization_spending_accounts).set({name:account.name}).where(eq(schema.organization_spending_accounts.id,g.account.id))}
+    assert.equal((await cli('confirm',reviewPath,approvalPath)).state,'approval_saved')
+    assert.equal((await cli('confirm',reviewPath,approvalPath)).created,false)
+    const approval=JSON.parse(await readFile(approvalPath,'utf8'));assert.deepEqual(approval,review.approval)
+    for(const path of [requestPath,reviewPath,approvalPath]){assert.equal((await stat(path)).mode&0o777,0o600);const bytes=await readFile(path,'utf8');assert.equal(bytes.includes(g.key),false);assert.equal(bytes.includes(f.key),false);assert.equal(bytes.includes('Confidential source input'),false);assert.equal(bytes.includes('credential_hash'),false)}
+    assert.equal((await stat(privateDirectory)).mode&0o777,0o700)
+    assert.equal((await db.select().from(schema.evm_payment_intents).where(eq(schema.evm_payment_intents.trade_id,c.trade.id))).length,0)
+    assert.equal((await db.select().from(schema.organization_spending_mpp_intents).where(eq(schema.organization_spending_mpp_intents.trade_id,c.trade.id))).length,0)
+    assert.equal((await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,c.trade.id))).length,0);assert.equal(tempoBroadcasts,before)
+    const worker=async(mode?:string)=>JSON.parse((await run(process.execPath,['scripts/buyer-spending-worker.mjs',approvalPath,state,...(mode?[mode]:[])],{cwd:process.cwd(),env:{...process.env,CLAWDMARKET_SPENDING_API_KEY:g.key,CLAWDMARKET_BUYER_API_KEY:f.key,CLAWDMARKET_BUYER_PRIVATE_KEY:`0x${'18'.repeat(32)}`}})).stdout)
+    const prepared=await worker('--prepare-only');assert.equal(prepared.state,'prepared');assert.equal(tempoBroadcasts,before)
+    const funded=await worker(),recovered=await worker();assert.equal(funded.state,'funded');assert.equal(funded.tx_hash,prepared.tx_hash);assert.equal(recovered.tx_hash,prepared.tx_hash)
+    if(rail==='mpp')assert.equal(tempoBroadcasts,before+1)
+    await call(g.path,f.owner,'DELETE',{account_id:g.account.id})
+    await assert.rejects(cli('confirm',reviewPath,join(privateDirectory,'closed-approval.json')),/BUYER_REVIEW_SCOPE_UNAVAILABLE/)
+    await assert.rejects(readFile(join(privateDirectory,'closed-approval.json')),{code:'ENOENT'})
+    assert.equal((await worker()).tx_hash,prepared.tx_hash)
+    const handler=join(directory,`${c.trade.id}.reviewed-file-handler.mjs`);await writeFile(handler,`export default async()=>({summary:'Reviewed original buyer-host approved work.',artifact:{result:'Approved buyer-host review result'}})`)
+    const providerArgs=['scripts/provider-worker.mjs','--trade-id',c.trade.id,'--service-id',f.service,'--state-dir',join(directory,c.trade.id),'--handler',handler],providerOptions={cwd:process.cwd(),env:{...process.env,BASE_URL:baseUrl,CLAWDMARKET_PROVIDER_API_KEY:f.providerKey}}
+    const delivered=JSON.parse((await run(process.execPath,providerArgs,providerOptions)).stdout),restarted=JSON.parse((await run(process.execPath,providerArgs,providerOptions)).stdout);assert.equal(restarted.delivery_id,delivered.delivery_id)
+    const confirmed=await call(`/api/trades/${c.trade.id}/confirm`,f.key,'POST',{content_hash:delivered.content_hash},true);assert.ok([200,202].includes(confirmed.status),JSON.stringify(confirmed.body))
+    if(rail==='mpp')await settleTempo(c.trade.id)
+    const receipts=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,c.trade.id)),transfers=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,c.trade.id))
+    assert.equal(receipts.length,1);assert.equal(receipts[0].tx_hash,prepared.tx_hash);assert.equal(transfers.length,1);assert.equal(transfers[0].status,'confirmed')
+    assert.deepEqual(await counts(f),{orders:1,capacity:0})
+  }
+})
