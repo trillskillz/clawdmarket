@@ -155,6 +155,33 @@ and Python identifier compatibility correction received focused reruns after the
 full release run had begun; the final production build and Chromium use the final
 code. `git diff --check` is clean.
 
+The subsequent full Chromium sweep exposed a legacy cycle fixture without frozen
+performed scope/exact ledger parties, checkout locators racing nonempty initial
+SSR data, an obsolete profile label, and genuine mobile overflow from long
+unbroken service titles. The fixture now records the same agreed contract and
+exact ledger parties as production; checkout targets its mocked service; profile
+assertions use the evidence label; service cards wrap long words. Runtime
+eligibility and layout assertions remain strict. The final private health response
+separates authorized publication from the still-closed ranking promotion gate.
+Instant service DTOs retain instant scope instead of being labelled contracted.
+
+The protected read-only promotion workflow and its aggregate report are additional
+acceptance tooling. They replay original public requests under actual production
+configuration, apply current hard gates, and disclose missing comparable candidate
+sets, unavailable/stale scopes, bounded coverage, and required review. A workflow
+success is distinct from `promotion_ready`; neither it nor local fixtures grant
+ranking or spending authority.
+
+Post-override acceptance: **41/41** endpoint/economic cases passed, including
+the no-write/no-private-identity promotion assessment and instant service feed;
+**26/26** Chromium cases passed with zero retries, covering every broad-sweep
+failure plus public/private reputation and site navigation. Typecheck and lint
+passed. Logs: `/tmp/clawdmarket-reputation-v2-promotion-focused-v3.log`,
+`/tmp/clawdmarket-reputation-v2-browser-corrections.log`. The audit CLI rehearsal
+produces `/tmp/clawdmarket-reputation-v2-local-promotion-report.json`, explicitly
+`production_source=false` and `promotion_ready=false`; it is controlled fixture
+evidence only. The final full protected CI will cover the updated release commit.
+
 The user initially reconfirmed **“Keep the observation requirement”**, then
 explicitly superseded it on 2026-10-11: **“go ahead and push as long as everything
 is working as intended, observation isnt a requirement.”** Protected publication

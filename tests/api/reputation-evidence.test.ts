@@ -351,6 +351,7 @@ test('private health reports coverage and missing immutable capture protection w
   process.env.ADMIN_USER_IDS=buyer
   const response=await GET(request()),report=await response.json()
   assert.equal(response.status,200);assert.equal(report.immutable_triggers,10);assert.equal(report.default_ranking_changed,false)
+  assert.equal(report.publication_gate,'authorized_after_release_checks');assert.equal(report.ranking_promotion_gate,'closed_until_reviewed_representative_real_outcomes')
   assert.ok(Number(report.evidence.observed_events)>0);assert.ok(Number(report.evidence.legacy_unknown_dates)>=0)
   assert.ok(response.headers.get('Cache-Control')?.includes('private'))
   assert.ok(!JSON.stringify(report).includes(buyer));assert.equal(report.calibrated,false)
@@ -358,6 +359,17 @@ test('private health reports coverage and missing immutable capture protection w
   await db.$client.execute('DROP TRIGGER reputation_events_immutable_update')
   try{const unhealthy=await GET(request());assert.equal(unhealthy.status,503);assert.equal((await unhealthy.json()).healthy,false)}finally{await db.$client.execute(String(trigger.rows[0].sql))}
  }finally{if(oldAdmin===undefined)delete process.env.ADMIN_USER_IDS;else process.env.ADMIN_USER_IDS=oldAdmin}
+})
+
+test('promotion assessment reports real coverage gaps without creating work, moving funds or exposing source identities',async()=>{
+ const {inspectReputationPromotion}=await import('@/lib/reputation-promotion-audit')
+ const counts=async()=>((await db.$client.execute('SELECT (SELECT COUNT(*) FROM trades) AS trades,(SELECT COUNT(*) FROM transactions) AS transactions,(SELECT COUNT(*) FROM reputation_events) AS events')).rows[0])
+ const before=await counts(),report=await inspectReputationPromotion()
+ assert.deepEqual(await counts(),before);assert.equal(report.promotion_ready,false)
+ assert.equal(report.execution_authority,false);assert.equal(report.default_ranking_changed,false)
+ assert.ok(report.blockers.includes('representative_outcome_and_exclusion_review_required'))
+ assert.equal(report.measurement_limits.calibrated,false);assert.equal(report.measurement_limits.buyer_independence,'not_verified')
+ assert.ok(!JSON.stringify(report).includes(buyer));assert.ok(!JSON.stringify(report).includes('private-review-body'))
 })
 
 test('received rating webhooks preserve metadata fields while withholding review bodies and buyer identities',async()=>{

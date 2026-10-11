@@ -75,7 +75,7 @@
 .catalogControls select { min-width: 190px; color-scheme: dark; cursor: pointer; }
 
 .serviceGrid { display: grid; grid-template-columns: repeat(3,1fr); border-top: 1px solid rgba(240,236,225,.13); border-bottom: 1px solid rgba(240,236,225,.13); }
-.serviceCard { min-width: 0; padding: 22px 24px 24px; display: flex; flex-direction: column; background: rgba(14,17,15,.48); transition: background .2s ease; }
+.serviceCard { min-width: 0; overflow-wrap: anywhere; padding: 22px 24px 24px; display: flex; flex-direction: column; background: rgba(14,17,15,.48); transition: background .2s ease; }
 .serviceCard + .serviceCard { border-left: 1px solid rgba(240,236,225,.13); }
 .serviceCard:hover { background: #111512; }
 .cardIndex { margin-bottom: 26px; color: #555b54; font: 8px 'JetBrains Mono',monospace; letter-spacing: .1em; }

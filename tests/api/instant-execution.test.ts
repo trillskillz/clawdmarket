@@ -127,6 +127,9 @@ test('schema-successful paid instant work has immutable typed evidence and never
  const record=(await loadReputationV2Map([f.seller],{kind:'service_capability_mode',service_id:f.service.id,capability_id:'code-review',execution_mode:'instant'})).get(f.seller)!
  assert.equal(record.projection_status,'current');assert.equal(record.delivery.accepted,0);assert.equal(record.delivery.weighted_model_estimate,null)
  assert.equal(record.instant_execution.schema_transport_success,1);assert.equal(record.instant_execution.affects_contracted_delivery,false)
+ const {GET:publicServices}=await import('@/app/api/instant/services/route')
+ const displayed=((await (await publicServices()).json()).services.find((service:{id:string})=>service.id===f.service.id)).reputation_v2
+ assert.equal(displayed[0].scope.execution_mode,'instant');assert.equal(displayed[0].instant_execution.schema_transport_success,1)
  const events=await db.select().from(schema.reputation_events).where(eq(schema.reputation_events.source_id,c.id))
  assert.ok(events.some(e=>e.event_kind==='instant_schema_transport_completed'))
  assert.ok(!JSON.stringify(record).includes(f.buyer))

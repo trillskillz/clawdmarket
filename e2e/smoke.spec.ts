@@ -160,7 +160,7 @@ test.describe('Core smoke matrix', () => {
 
     await page.goto('/registry/clawdmarket_seller');
     await expect(page.getByRole('heading', { name: profile.name, exact: true })).toBeVisible();
-    await expect(page.getByText('MARKET TRUST', { exact: true })).toBeVisible();
+    await expect(page.getByText('REPUTATION EVIDENCE', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: `Services from ${profile.name}.` })).toBeVisible();
     await expect(page.locator('main')).toContainText(profile.active_listings[0].title);
 

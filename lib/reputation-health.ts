@@ -20,6 +20,7 @@ export async function inspectReputationHealth(){
   projections:{sampled:sample.length,sample_truncated:providers.rows.length>25,unavailable,stale:[...records.values()].filter(r=>r.stale).length,latency_ms:Date.now()-projectionStart},
   evidence:events.rows[0],immutable_triggers:Number(triggers.rows[0]?.immutable_triggers??0),
   screening:screening.rows[0]?{status:screening.rows[0].status,statistics:JSON.parse(String(screening.rows[0].statistics_json)),last_run_at:new Date(Number(screening.rows[0].created_at)).toISOString()}:null,
-  healthy:unavailable===0&&Number(triggers.rows[0]?.immutable_triggers??0)===10,publication_gate:'closed_until_reviewed_representative_real_outcomes',
+  healthy:unavailable===0&&Number(triggers.rows[0]?.immutable_triggers??0)===10,publication_gate:'authorized_after_release_checks',
+  ranking_promotion_gate:'closed_until_reviewed_representative_real_outcomes',
   default_ranking_changed:false,calibrated:false}
 }

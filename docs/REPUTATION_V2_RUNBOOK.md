@@ -78,7 +78,25 @@ reviewed ranking promotion. Preserve current default route order. Future ranking
 promotion must explicitly update the versioned ranking policy and pass its own
 observation/hard-gate review; it is not implicitly enabled by publication.
 
-## Rollback
+## Promotion assessment after production acceptance
+
+Dispatch `.github/workflows/reputation-promotion-audit.yml` on the accepted main
+commit. It pulls the actual production configuration, then performs bounded
+read-only database/projection reads and hard-gate replays of existing public
+requests. It neither creates requests nor sends payments or adjudicates outcomes.
+The aggregate artifact includes source SHA, evidence watermark, scoped coverage,
+original-request replay coverage, three shadow-mode position changes, unproven
+top-three visibility, query latency and explicit review/measurement gaps. It
+withholds source IDs, buyers, ownership groups, task inputs and private bodies.
+
+`promotion_ready=false` is deliberate until representative coverage, rank-change
+and concentration explanations, classification/exclusion review, false-positive
+assessment, and production privacy/health checks have been reviewed. A completed
+audit workflow means the assessment ran, not that promotion passed. Do not remove
+these blockers by changing a constant or counting controlled canaries as real
+evidence. No fixed number of days or jobs replaces that review.
+
+## Reader rollback
 
 Return reader/presentation/ranking code to the preceding known version while
 retaining migration 63, all immutable events, decision and review chains, and
