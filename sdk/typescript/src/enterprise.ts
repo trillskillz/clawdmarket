@@ -26,7 +26,7 @@ export type SpendingOrderInput = { service_id: string; order: {
   input?: Record<string, unknown>; provider_share_id?: string; expected_price?: string; max_total?: string
   provider_requirements?: ProviderRequirements
 } }
-export type SpendingOrderResult = { order: Record<string, unknown>; trade: Record<string, unknown>; use?: Record<string, unknown>; idempotent?: boolean }
+export type SpendingOrderResult = { order: Record<string, unknown>; trade: Record<string, unknown>; use?: Record<string, unknown>; account?: SpendingAccount; idempotent?: boolean }
 export type SpendingEvmIntentInput = { buyer_operation_id: string; chain_id: 1 | 11155111; token_address: string; payer_address: string }
 export type SpendingEvmClaimInput = { intent_id: string; mandate_id: string; buyer_operation_id: string; serialized_transaction: string; payer_signature: string }
 export type SpendingEvmFundingProof = BuyerEvmFundingProof & { chain_id: 1 | 11155111; payer_signature: string }

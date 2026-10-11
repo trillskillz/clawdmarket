@@ -2,6 +2,10 @@
 set -euo pipefail
 
 required_files=(
+  "scripts/buyer-spending-review.mjs"
+  "tests/logic/buyer-spending-review.test.ts"
+  "docs/BUYER_SPENDING_REVIEW.md"
+  "docs/BUYER_SPENDING_REVIEW_AUDIT.md"
   "sdk/typescript/src/enterprise.ts"
   "sdk/python/clawdmarket/enterprise.py"
   "tests/sdk/enterprise.test.ts"
@@ -309,6 +313,11 @@ done
 
 if grep -Fqx '/sdk/' .vercelignore; then
   echo "Vercel build excludes the TypeScript SDK source imported by tests/sdk; remove /sdk/ from .vercelignore" >&2
+  exit 1
+fi
+
+if ! grep -Fqx '!/scripts/buyer-spending-review.mjs' .vercelignore; then
+  echo "Vercel build excludes the buyer enterprise review imported by acceptance tests" >&2
   exit 1
 fi
 

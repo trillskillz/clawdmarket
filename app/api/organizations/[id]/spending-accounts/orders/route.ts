@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server'
 import { and,eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { organization_spending_uses,service_orders,trades } from '@/lib/schema'
-import { spendingOrderInput,resolveSpendingAccount } from '@/lib/organization-spending-accounts'
+import { organization_spending_accounts,organization_spending_uses,service_orders,trades } from '@/lib/schema'
+import { spendingAccountDto,spendingOrderInput,resolveSpendingAccount } from '@/lib/organization-spending-accounts'
 import { purchasingBody,purchasingResult } from '@/lib/organization-purchasing-api'
 import { PurchasingError } from '@/lib/organization-purchasing-transaction'
 import { ArtifactError } from '@/lib/private-artifacts'
@@ -40,6 +40,7 @@ export async function GET(request:NextRequest,{params}:Context){try{
   if(!use)return purchasingResult({error_code:'SPENDING_ORDER_NOT_FOUND'},404)
   const [order]=await db.select().from(service_orders).where(and(eq(service_orders.id,use.order_id),eq(service_orders.buyer_id,evidence.buyerId))).limit(1)
   const [trade]=await db.select().from(trades).where(eq(trades.id,use.trade_id)).limit(1)
-  if(!order||!trade||order.organization_spending_account_id!==evidence.accountId||order.trade_id!==trade.id||trade.buyer_id!==evidence.buyerId)throw new PurchasingError('SPENDING_ORDER_INTEGRITY',503)
-  return purchasingResult({order:serviceOrderDto(order),trade,use})
+  const [account]=await db.select().from(organization_spending_accounts).where(eq(organization_spending_accounts.id,evidence.accountId)).limit(1)
+  if(!order||!trade||!account||account.authority_hash!==use.authority_hash||order.organization_spending_account_id!==evidence.accountId||order.trade_id!==trade.id||trade.buyer_id!==evidence.buyerId)throw new PurchasingError('SPENDING_ORDER_INTEGRITY',503)
+  return purchasingResult({order:serviceOrderDto(order),trade,use,account:spendingAccountDto(account)})
 }catch(error){return failure(error)}}

@@ -2,7 +2,7 @@
 
 `node scripts/buyer-spending-worker.mjs APPROVAL.json PRIVATE_STATE_DIRECTORY [--prepare-only]` funds one already reserved and exactly human-approved organization service order. It supports reviewed version-2 Ethereum L1/Sepolia and version-3 Tempo grants under HTTP 1.101. It creates no checkout or approval, accepts no delivery, signs no payout, and performs no top-up. Provider work and explicit original buyer acceptance remain separate.
 
-Create the immutable approval file on the buyer host after reviewing the owner's original grant and approved reservation. Keep it mode 0600 inside a mode 0700 directory. Required fields are:
+Create the immutable approval file on the buyer host after reviewing the owner's original grant and approved reservation. The [original approval review CLI](BUYER_SPENDING_REVIEW.md) now copies exact private API facts and reinspects them at explicit confirmation. Keep the file mode 0600 inside a mode 0700 directory. Required fields are:
 
 ```json
 {
