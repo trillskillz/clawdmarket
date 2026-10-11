@@ -197,3 +197,15 @@ test('hourly monitor includes routing attention while retaining ordinary settlem
   assert.deepEqual(body.notification, { configured: false, delivered: false })
   assert.equal(JSON.stringify(body.routing_health).includes('private stuck objective'), false)
 })
+
+test('unavailable original fee storage fails private health closed with a fixed monitor alert and no schema details',async()=>{
+  const {getRoutingMonitoringHealth}=await import('@/lib/routing-operator-snapshot')
+  await db.$client.execute('ALTER TABLE payment_receipts RENAME COLUMN chain_fee_evidence_json TO unavailable_original_fee')
+  try{
+    const outcome=await getRoutingMonitoringHealth();assert.equal(outcome.healthy,false)
+    assert.deepEqual(outcome.alerts,[{code:'ROUTE_MONITOR_UNAVAILABLE',count:1,severity:'critical'}])
+    const response=await inspect(request('/api/admin/routing/health','routing-admin'));assert.equal(response.status,500)
+    assert.equal(response.headers.get('cache-control'),'private, no-store')
+    const text=await response.text();for(const privateValue of ['unavailable_original_fee','chain_fee_evidence_json','payment_receipts'])assert.equal(text.includes(privateValue),false)
+  }finally{await db.$client.execute('ALTER TABLE payment_receipts RENAME COLUMN unavailable_original_fee TO chain_fee_evidence_json')}
+})

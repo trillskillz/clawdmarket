@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import styles from './routing.module.css'
+import { formatChainFeeUnits } from '@/lib/chain-fee-format.mjs'
 
 type Snapshot = Awaited<ReturnType<typeof import('@/lib/routing-operator-snapshot').getRoutingOperatorSnapshot>>
 const freshnessMs = 60_000
@@ -128,6 +129,23 @@ export default function RoutingOperations() {
           <p>{snapshot.organization_spending.healthy ? 'Original external obligations reconcile.' : 'Attention required: inspect original enterprise payments and refund work.'}</p>
           <dl className="space-y-2">{Object.entries(snapshot.organization_spending).filter(([, value]) => typeof value === 'number').map(([name,value]) => <div key={name} className="flex gap-4"><dt className="min-w-0 flex-1 break-words capitalize">{label(name)}</dt><dd>{String(value)}</dd></div>)}</dl>
           <p className="text-sm">Original payment recovery and refunds remain available. Routing admission controls apply to routing; enterprise purchasing keeps its separate grant and payment checks.</p>
+        </section>
+        <section className="card min-w-0 space-y-4" aria-labelledby="enterprise-fees-title">
+          <h2 id="enterprise-fees-title" className="text-lg font-semibold">Enterprise chain fees</h2>
+          <p>Measured fees from original payments and treasury attempts, including charged failed attempts. Missing observations leave totals unknown.</p>
+          {snapshot.organization_chain_fees.groups.map(group => <section key={group.chain_id} className="min-w-0 space-y-2">
+            <h3 className="font-semibold">{group.chain_id === 1 ? 'Ethereum' : group.chain_id === 11155111 ? 'Sepolia' : 'Tempo'} · {group.asset}</h3>
+            {(['buyer', 'treasury'] as const).map(role => {
+              const costs = group[role], title = role === 'buyer' ? 'Buyer' : 'Treasury'
+              return <div key={role} className="min-w-0 break-words text-sm">
+                <p>Known {role} fees: {formatChainFeeUnits(costs.known_fee_units,group.decimals)} {group.asset}</p>
+                <p>{title} total: {costs.total_fee_units === null ? 'unknown' : `${formatChainFeeUnits(costs.total_fee_units,group.decimals)} ${group.asset}`}</p>
+                <p>{title} coverage: {costs.coverage} · {costs.measured_count} of {costs.record_count} original records</p>
+                <p>Missing observations: {costs.unmeasured_count} · Invalid observations: {costs.invalid_count}</p>
+              </div>
+            })}
+          </section>)}
+          <p className="text-sm">Buyer and treasury costs remain separate for each asset and chain. These observations grant no payment or recovery authority.</p>
         </section>
         <Counts title="Account credit anomalies" counts={{ accounts: snapshot.account_credit.account_anomalies, missing_accounts: snapshot.account_credit.missing_accounts,
           deposits: snapshot.account_credit.deposit_anomalies, unsupported_mints: snapshot.account_credit.mint_anomalies,

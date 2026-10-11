@@ -1,5 +1,15 @@
 # Changelog
 
+## Local HTTP 1.107 — private enterprise actual chain fee coverage (2026-10-10)
+
+- Show original buyer and treasury fees separately by chain/asset in private health, monitoring, preflight and the responsive console; exact integer subtotals keep incomplete actual totals unknown.
+- Refuse changed original identity/fee ceilings and unavailable storage privately; include charged failed attempts without claiming refund completion. No payment or admission authority changes.
+- Full predeploy: 754 cases, 749 passed, zero failed, five expected skips; real L1/Tempo receipt/balance acceptance, build, all 11 browser journeys and 62-migration integrity/query checks passed. New local batch 1/10; production remains verified PR #255 / HTTP 1.106.
+
+## Production HTTP 1.106 — combined Tempo and enterprise release (2026-10-10)
+
+PR #255 is deployed as `6a4d335` on both production domains. All thirteen commits are retained; migration-first publication through ID 62, required CI, production smoke, payment monitoring and the protected read-only audit passed. Direct API/discovery aliases now preserve page canonicalization. Rollout flags remain closed and no live payment or top-up was executed.
+
 ## Local HTTP 1.106 — original buyer approval-file review (2026-10-10)
 
 - Inspect the exact private reserved order and its own immutable grant, then explicitly reinspect and confirm a private immutable approval file consumed by the existing funding worker. Review creates no checkout, intent, signature or payment.

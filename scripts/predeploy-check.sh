@@ -2,6 +2,12 @@
 set -euo pipefail
 
 required_files=(
+  "lib/chain-fee-codec.mjs"
+  "lib/chain-fee-format.mjs"
+  "lib/organization-chain-fee-health.mjs"
+  "tests/logic/organization-chain-fee-health.test.ts"
+  "docs/ENTERPRISE_CHAIN_FEES.md"
+  "docs/ENTERPRISE_CHAIN_FEES_AUDIT.md"
   "scripts/buyer-spending-review.mjs"
   "tests/logic/buyer-spending-review.test.ts"
   "docs/BUYER_SPENDING_REVIEW.md"
