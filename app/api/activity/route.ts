@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server'
+import { createHash } from 'node:crypto'
+import { activityDate as safeDate, activityTimeline } from '@/lib/activity-timeline'
+import { latestActivitySql } from '@/lib/activity-query'
+import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
+import historicalPayments from '@/lib/historical-mpp-proofs.json'
 import { inArray } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { publicTradeWhereSql } from '@/lib/public-trade-visibility'
@@ -8,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 type ActivityEvent = {
   id: string
-  type: 'trade_created' | 'trade_completed' | 'trade_disputed' | 'trade_confirmed' | 'rating_received' | 'agent_registered' | 'agent_improved'
+  type: 'trade_created' | 'trade_completed' | 'trade_disputed' | 'trade_confirmed' | 'rating_received' | 'agent_registered' | 'agent_improved' | 'account_registered' | 'wallet_payment' | 'wallet_payout' | 'wallet_refund'
   description: string
   buyer_name?: string | null
   seller_name?: string | null
@@ -41,42 +46,10 @@ type RegistrationActivityRow = {
   created_at: unknown
 }
 
-type AccountRegistrationRow = RegistrationActivityRow
+type AccountRegistrationRow = RegistrationActivityRow & { role: string }
 
 function shortId(id?: string | null) {
   return id ? id.slice(0, 8) : 'unknown'
-}
-
-function safeDate(value: unknown): Date | null {
-  if (value == null) return null
-
-  // Raw number: unix seconds (< 1e12) or milliseconds
-  if (typeof value === 'number') {
-    const ms = value < 1e12 ? value * 1000 : value
-    const d = new Date(ms)
-    return isNaN(d.getTime()) ? null : d
-  }
-
-  // Date object — Drizzle may create dates from seconds-as-milliseconds
-  if (value instanceof Date) {
-    if (isNaN(value.getTime())) return null
-    if (value.getFullYear() < 2000 && value.getTime() > 0) {
-      const fixed = new Date(value.getTime() * 1000)
-      if (!isNaN(fixed.getTime()) && fixed.getFullYear() >= 2020 && fixed.getFullYear() <= 2100) return fixed
-    }
-    return value
-  }
-
-  // String — could be ISO or numeric string
-  const str = String(value)
-  if (/^\d+$/.test(str)) {
-    const n = Number(str)
-    const ms = n < 1e12 ? n * 1000 : n
-    const d = new Date(ms)
-    return isNaN(d.getTime()) ? null : d
-  }
-  const d = new Date(str)
-  return isNaN(d.getTime()) ? null : d
 }
 
 function relativeTime(dateValue: Date | string | number) {
@@ -97,60 +70,31 @@ export async function GET() {
   try {
     const client = (db as any).$client
 
-    const [recentTrades, recentRatings, recentRegistrations, recentAgentAccounts] = await Promise.all([
-      client.execute(
-        `SELECT id, status, created_at, completed_at,
-                buyer_id AS buyer_agent_id, seller_id AS seller_agent_id
-         FROM trades
-         WHERE ${publicTradeWhereSql('trades')}
-         ORDER BY CASE
-           WHEN typeof(COALESCE(completed_at, created_at)) IN ('integer', 'real')
-             AND COALESCE(completed_at, created_at) > 9999999999
-             THEN datetime(COALESCE(completed_at, created_at) / 1000, 'unixepoch')
-           WHEN typeof(COALESCE(completed_at, created_at)) IN ('integer', 'real')
-             THEN datetime(COALESCE(completed_at, created_at), 'unixepoch')
-           ELSE datetime(COALESCE(completed_at, created_at))
-         END DESC
-         LIMIT 20`,
-      ).then((result: any) => (result?.rows || []) as TradeActivityRow[]).catch(() => [] as TradeActivityRow[]),
-      client.execute(
-        `SELECT id, score, created_at,
-                rater_id AS rater_agent_id, rated_id AS rated_agent_id
-         FROM ratings
-         WHERE EXISTS (SELECT 1 FROM trades WHERE trades.id = ratings.trade_id AND ${publicTradeWhereSql('trades')})
-         ORDER BY CASE
-           WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
-             THEN datetime(created_at / 1000, 'unixepoch')
-           WHEN typeof(created_at) IN ('integer', 'real') THEN datetime(created_at, 'unixepoch')
-           ELSE datetime(created_at)
-         END DESC
-         LIMIT 20`,
-      ).then((result: any) => (result?.rows || []) as RatingActivityRow[]).catch(() => [] as RatingActivityRow[]),
-      client.execute(
-        `SELECT id, name, created_at
-         FROM agents
-         WHERE visibility = 'public' AND archived_at IS NULL
-           AND status IN ('active', 'inactive')
-         ORDER BY CASE
-           WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
-             THEN datetime(created_at / 1000, 'unixepoch')
-           WHEN typeof(created_at) IN ('integer', 'real') THEN datetime(created_at, 'unixepoch')
-           ELSE datetime(created_at)
-         END DESC, rowid DESC
-         LIMIT 50`,
-      ).then((result: any) => (result?.rows || []) as RegistrationActivityRow[]).catch(() => [] as RegistrationActivityRow[]),
-      client.execute(
-        `SELECT id, name, created_at
-         FROM users
-         WHERE role = 'agent' AND substr(id, 1, 11) <> 'user_agent_' AND COALESCE(is_banned, 0) = 0
-         ORDER BY CASE
-           WHEN typeof(created_at) IN ('integer', 'real') AND created_at > 9999999999
-             THEN datetime(created_at / 1000, 'unixepoch')
-           WHEN typeof(created_at) IN ('integer', 'real') THEN datetime(created_at, 'unixepoch')
-           ELSE datetime(created_at)
-         END DESC, rowid DESC
-         LIMIT 50`,
-      ).then((result: any) => (result?.rows || []) as AccountRegistrationRow[]).catch(() => [] as AccountRegistrationRow[]),
+    const rows = async (query: string, timestamp = 'created_at') =>
+      (await client.execute(latestActivitySql(query, timestamp))).rows as any[]
+    const [recentTrades, recentRatings, recentRegistrations, recentAgentAccounts, improvements, receipts, settlements] = await Promise.all([
+      rows(`SELECT id, status, created_at, completed_at,
+        buyer_id AS buyer_agent_id, seller_id AS seller_agent_id FROM trades
+        WHERE ${publicTradeWhereSql('trades')}`,
+        "CASE WHEN status IN ('completed', 'complete', 'resolved') THEN COALESCE(completed_at, created_at) ELSE created_at END"),
+      rows(`SELECT id, score, created_at, rater_id AS rater_agent_id, rated_id AS rated_agent_id
+        FROM ratings WHERE EXISTS (SELECT 1 FROM trades WHERE trades.id = ratings.trade_id AND ${publicTradeWhereSql('trades')})`),
+      rows(`SELECT id, name, created_at FROM agents WHERE visibility = 'public' AND archived_at IS NULL
+        AND status IN ('active', 'inactive')`),
+      rows(`SELECT id, name, role, created_at FROM users WHERE role IN ('human', 'agent')
+        AND substr(id, 1, 11) <> 'user_agent_' AND id NOT GLOB 'user_wallet_*' AND COALESCE(is_banned, 0) = 0`),
+      rows(`SELECT ai.id, ai.from_version, ai.to_version, ai.created_at, a.name AS agent_name
+        FROM agent_improvements ai JOIN agents a ON a.id = ai.base_agent_id
+        WHERE a.visibility = 'public' AND a.archived_at IS NULL AND a.status IN ('active', 'inactive')`),
+      rows(`SELECT p.id, p.amount, p.currency, p.created_at FROM payment_receipts p JOIN trades t ON t.id = p.trade_id
+        WHERE ${publicTradeWhereSql('t')}
+        UNION ALL SELECT ('platform_' || lower(p.tx_hash)) AS id, p.amount, p.currency, p.created_at
+        FROM payment_receipts p WHERE p.trade_id IS NULL AND p.route = '/api/mcp' AND p.payment_rail = 'mpp'
+          AND p.chain_id = ${TEMPO_CHAIN_ID} AND p.token_address = '${PATHUSD_ADDRESS}' AND p.currency = 'pathUSD'
+          AND p.amount > 0 AND length(p.tx_hash) = 66 AND substr(p.tx_hash, 1, 2) = '0x'
+          AND substr(p.tx_hash, 3) NOT GLOB '*[^a-fA-F0-9]*'`),
+      rows(`SELECT s.id, s.kind, s.usd_amount, s.confirmed_at FROM settlement_transfers s JOIN trades t ON t.id = s.trade_id
+        WHERE s.status = 'confirmed' AND s.tx_hash IS NOT NULL AND s.confirmed_at IS NOT NULL AND ${publicTradeWhereSql('t')}`, 'confirmed_at'),
     ])
 
     const principalIds = new Set<string>()
@@ -164,10 +108,10 @@ export async function GET() {
     })
 
     const principalRows = principalIds.size
-      ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, Array.from(principalIds)))
+      ? await db.select({ id: users.id, name: users.name, role: users.role }).from(users).where(inArray(users.id, Array.from(principalIds)))
       : []
 
-    const nameById = new Map(principalRows.map((principal) => [principal.id, principal.name]))
+    const nameById = new Map(principalRows.map((principal) => [principal.id, principal.role === 'agent' ? principal.name : 'Member']))
 
     const tradeEvents: Array<ActivityEvent & { createdAt: Date }> = recentTrades
       .filter((t: TradeActivityRow) => safeDate(
@@ -180,10 +124,10 @@ export async function GET() {
         let description = `Agent "${buyer}" started a new trade with "${seller}"`
         if (t.status === 'completed' || t.status === 'complete') {
           type = 'trade_completed'
-          description = `Agent "${buyer}" completed a trade with "${seller}"`
+          description = `Agent "${buyer}" completed a trade with "${seller}"${t.completed_at == null ? ' (trade creation date)' : ''}`
         } else if (t.status === 'disputed') {
           type = 'trade_disputed'
-          description = `Trade dispute opened between "${buyer}" and "${seller}"`
+          description = `Trade between "${buyer}" and "${seller}" is disputed (trade creation date)`
         } else if (t.status === 'resolved') {
           type = 'trade_confirmed'
           description = `Trade confirmed and settled between "${buyer}" and "${seller}"`
@@ -247,34 +191,17 @@ export async function GET() {
         const createdAt = safeDate(account.created_at) as Date
         const name = account.name || `Agent ${shortId(account.id)}`
         return {
-          id: `account_registration_${account.id}`,
-          type: 'agent_registered' as const,
-          description: `New agent account "${name}" joined`,
-          agent_name: name,
+          id: account.role === 'human' ? `account_registration_${createHash('sha256').update(account.id).digest('hex')}` : `account_registration_${account.id}`,
+          type: account.role === 'human' ? 'account_registered' as const : 'agent_registered' as const,
+          description: account.role === 'human' ? 'New member account registered' : `New agent account "${name}" joined`,
+          ...(account.role === 'human' ? {} : { agent_name: name }),
           timestamp: createdAt.toISOString(),
           relative: relativeTime(createdAt),
           createdAt,
         }
       })
 
-    // Fetch recent agent improvements
-    const improvementsResult = await client.execute(
-      `SELECT ai.id, ai.from_version, ai.to_version, ai.created_at,
-              a.name as agent_name
-       FROM agent_improvements ai
-       JOIN agents a ON a.id = ai.base_agent_id
-       WHERE a.visibility = 'public' AND a.archived_at IS NULL
-         AND a.status IN ('active', 'inactive')
-       ORDER BY CASE
-         WHEN typeof(ai.created_at) IN ('integer', 'real') AND ai.created_at > 9999999999
-           THEN datetime(ai.created_at / 1000, 'unixepoch')
-         WHEN typeof(ai.created_at) IN ('integer', 'real') THEN datetime(ai.created_at, 'unixepoch')
-         ELSE datetime(ai.created_at)
-       END DESC
-       LIMIT 10`
-    ).catch(() => null)
-
-    const improvementEvents: Array<ActivityEvent & { createdAt: Date }> = (improvementsResult?.rows || [])
+    const improvementEvents: Array<ActivityEvent & { createdAt: Date }> = improvements
       .filter((row: any) => safeDate(row.created_at) !== null)
       .map((row: any) => {
         const createdAt = safeDate(row.created_at) as Date
@@ -291,28 +218,30 @@ export async function GET() {
         }
       })
 
-    // Keep the newest ten registrations visible even during a busy trading period.
-    // Fill the rest with the latest records, then present registrations first.
-    const registrations = [...registrationEvents, ...accountRegistrationEvents]
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    const featuredRegistrations = registrations.slice(0, 10)
-    const featuredIds = new Set(featuredRegistrations.map((event) => event.id))
-    const recentEvents = [...tradeEvents, ...ratingEvents, ...registrations, ...improvementEvents]
-      .filter((event) => !featuredIds.has(event.id))
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    const events = [...featuredRegistrations, ...recentEvents]
-      .slice(0, 50)
-      .sort((a, b) => Number(b.type === 'agent_registered') - Number(a.type === 'agent_registered')
-        || b.createdAt.getTime() - a.createdAt.getTime())
-      .map(({ createdAt: _createdAt, ...event }) => event)
+    const paymentEvents: ActivityEvent[] = [
+      ...historicalPayments.map(proof => ({ id: `wallet_payment_platform_${proof.tx_hash.toLowerCase()}`, type: 'wallet_payment' as const,
+        description: `Platform payment confirmed: ${proof.amount.toFixed(3)} pathUSD (MPP on Tempo)`,
+        timestamp: new Date(proof.created_at * 1000).toISOString(), relative: relativeTime(proof.created_at * 1000) })),
+      ...receipts.map((row: any) => ({ id: `wallet_payment_${row.id}`, type: 'wallet_payment' as const,
+        description: row.id.startsWith('platform_') ? `Platform payment confirmed: ${Number(row.amount).toFixed(3)} pathUSD (MPP on Tempo)`
+          : `Market payment recorded: ${Number(row.amount).toFixed(2)} ${row.currency}`,
+        timestamp: new Date(Number(row.event_at_ms)).toISOString(), relative: relativeTime(Number(row.event_at_ms)) })),
+      ...settlements.map((row: any) => ({ id: `wallet_settlement_${row.id}`,
+        type: row.kind === 'buyer_refund' ? 'wallet_refund' as const : 'wallet_payout' as const,
+        description: `Market ${row.kind === 'buyer_refund' ? 'refund' : 'payout'} confirmed: $${Number(row.usd_amount).toFixed(2)}`,
+        timestamp: new Date(Number(row.event_at_ms)).toISOString(), relative: relativeTime(Number(row.event_at_ms)) })),
+    ]
+    const events = activityTimeline([...tradeEvents, ...ratingEvents, ...registrationEvents,
+      ...accountRegistrationEvents, ...improvementEvents, ...paymentEvents])
+      .map(({ createdAt: _createdAt, ...event }: any) => event)
 
     return NextResponse.json(events, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       },
     })
-  } catch (error) {
-    console.error('Activity fetch error:', error)
-    return NextResponse.json([])
+  } catch {
+    console.error('Activity timeline could not be read')
+    return NextResponse.json({ error: 'Activity temporarily unavailable' }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
   }
 }

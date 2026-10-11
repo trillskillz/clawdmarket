@@ -347,6 +347,8 @@ test('live activity shows new owner-claim and autonomous registrations without r
     await expect(feed.getByRole('link', { name, exact: true })).toBeVisible({ timeout: 12_000 })
     await expect(feed.getByRole('link', { name, exact: true })).toHaveAttribute('href', `/registry/${agent.id}`)
     await expect(feed.getByText(`New agent "${name}" registered`)).toBeVisible()
-    await expect(feed.locator('article').first()).toContainText(`New agent "${name}" registered`)
+    // Registration storage records whole seconds; equal instants use stable IDs.
+    const dates = await feed.locator('article time').evaluateAll(nodes => nodes.map(node => Date.parse(node.getAttribute('datetime')!)))
+    expect(dates.every((date, index) => !index || dates[index - 1] >= date)).toBe(true)
   }
 })
