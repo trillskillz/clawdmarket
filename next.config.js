@@ -31,8 +31,8 @@ const nextConfig = {
   async redirects() {
     return [
       {
-        // Canonical host: send www traffic to the apex domain.
-        source: '/:path*',
+        // Canonical pages retain SEO redirects; existing API/discovery aliases stay direct.
+        source: '/:path((?!api(?:/|$)|\\.well-known(?:/|$)).*)',
         has: [{ type: 'host', value: 'www.clawdmkt.com' }],
         destination: 'https://clawdmkt.com/:path*',
         permanent: true,
