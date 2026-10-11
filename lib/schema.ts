@@ -682,6 +682,7 @@ export const route_payment_mandates = sqliteTable('route_payment_mandates', {
   id: text('id').primaryKey(),
   route_id: text('route_id').notNull().unique().references(() => route_plans.id, { onDelete: 'restrict' }),
   buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  organization_route_authorization_id: text('organization_route_authorization_id'),
   owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   client_reference: text('client_reference').notNull(),
   request_hash: text('request_hash').notNull(), route_hash: text('route_hash').notNull(),
@@ -693,6 +694,37 @@ export const route_payment_mandates = sqliteTable('route_payment_mandates', {
   created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   revoked_at: integer('revoked_at', { mode: 'timestamp' }),
 }, (table) => [uniqueIndex('route_payment_mandates_owner_reference_idx').on(table.owner_account_id, table.client_reference)]);
+
+/** Separate two-human organization authority for an original public-provider L1 route. */
+export const organization_route_authorizations = sqliteTable('organization_route_authorizations', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  route_id: text('route_id').notNull().unique().references(() => route_plans.id, { onDelete: 'restrict' }),
+  mandate_id: text('mandate_id').notNull().unique().references(() => route_payment_mandates.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  team_id: text('team_id').references(() => organization_teams.id, { onDelete: 'restrict' }),
+  cost_center: text('cost_center').notNull(),
+  reviewer_role_id: text('reviewer_role_id').notNull().references(() => organization_purchasing_roles.id, { onDelete: 'restrict' }),
+  reviewer_account_id: text('reviewer_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(), authority_hash: text('authority_hash').notNull(),
+  terms_json: text('terms_json').notNull(),
+  state: text('state', { enum: ['pending', 'approved', 'revoked'] }).notNull().default('pending'),
+  decision_reference: text('decision_reference'), decision_hash: text('decision_hash'),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  approved_at: integer('approved_at', { mode: 'timestamp_ms' }), revoked_at: integer('revoked_at', { mode: 'timestamp_ms' }),
+}, table => [uniqueIndex('organization_route_org_reference_idx').on(table.organization_id, table.client_reference)]);
+
+/** Original gross and reviewed worst-case gas remain charged through cancellation/refund. */
+export const organization_route_uses = sqliteTable('organization_route_uses', {
+  authorization_id: text('authorization_id').primaryKey().references(() => organization_route_authorizations.id, { onDelete: 'restrict' }),
+  order_id: text('order_id').notNull().unique().references(() => service_orders.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(), amount_minor: integer('amount_minor').notNull(),
+  maximum_gas_cost_wei: text('maximum_gas_cost_wei').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+}, table => [check('organization_route_use_amount_positive', sql`${table.amount_minor} > 0`)]);
 
 /** Committed with the economic order, before any buyer wallet side effect. */
 export const route_funding_steps = sqliteTable('route_funding_steps', {
