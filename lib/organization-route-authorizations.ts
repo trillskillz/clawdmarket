@@ -59,6 +59,7 @@ async function organization(id: string, source: PurchasingSource) {
 }
 async function current(row: Grant, plan: Plan, mandate: Mandate, source: PurchasingSource, approved = true) {
   enabled()
+  if (!plan || !mandate) fail('ORGANIZATION_ROUTE_CONTRACT_INVALID')
   const terms = frozen(row), org = await organization(row.organization_id,source)
   if (org.owner_account_id !== row.owner_account_id) fail('ORGANIZATION_ROUTE_OWNER_CHANGED')
   if (!['pending','approved'].includes(row.state) || approved && row.state !== 'approved') fail('ORGANIZATION_ROUTE_APPROVAL_REQUIRED')
@@ -112,7 +113,10 @@ export async function proposeOrganizationRoute(orgId: string, actor: string, inp
       services.push({ id: service.id, seller_id: service.seller_id, contract_hash: purchasingServiceHash(service) })
     }
     if (!services.length || input.mandate.approved_providers.some(provider => !services.some(service => service.seller_id === provider))) fail('ORGANIZATION_ROUTE_CANDIDATES_INVALID')
-    const result = await createRouteMandateInTransaction(source,plan.id,actor,input.mandate)
+    const result = await createRouteMandateInTransaction(source,plan.id,actor,{ ...input.mandate,
+      max_aggregate: (input.mandate.max_aggregate / 100).toFixed(2),
+      max_per_execution: (input.mandate.max_per_execution / 100).toFixed(2),
+      max_retry_budget: (input.mandate.max_retry_budget / 100).toFixed(2) })
     const [mandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,result.mandate.id)).limit(1)
     const identity = { organization_id: orgId, route_id: plan.id, mandate_id: mandate.id, owner_account_id: actor,
       buyer_id: plan.buyer_id, agent_id: agentId, team_id: assignment.team_id, cost_center: assignment.cost_center,

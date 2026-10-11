@@ -28,4 +28,10 @@ Continue the preserved **unaccepted** enterprise routed purchasing draft. Start 
 
 ## Historical user priority and publishing exception (2026-10-03)
 
+The user's latest 2026-10-11 instruction replaces current routing work with
+sitewide reputation v2 implementation and publication. They will paste the plan;
+wait for its actual requirements. The routed purchasing model/API/tests remain
+unaccepted local work. Its first four tests stopped at a fixture with zero eligible
+route candidates; no routing acceptance or batch increment is established.
+
 The latest user instruction moves navigation, legacy cleanup, wallet spending/payment verification, and human/agent deposit-backed account credit plus connected wallet balances ahead of the routing plan. Complete this capability release now, then resume routing. Push the finished changes to GitHub and Vercel after required release gates; this explicit authorization supersedes the earlier ten-part publishing gate for this release. Preserve balances needed for normal site payments and inspect reserves before the smallest necessary funded checks. Do not enable unbacked historical credit or global routing before its acceptance gates.
