@@ -141,6 +141,24 @@ async function backed(seller: string, buyer = 'performance-buyer', capabilities?
   return trade
 }
 
+test('frozen requested scope is exact at the twenty-capability bound and malformed or oversized scope cannot grant proof', async () => {
+  const seller = await provider('frozen-scope-bound')
+  const trade = await backed(seller)
+  const [order] = await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, trade.id))
+  const snapshot = JSON.parse(order.execution_contract_json!)
+  const change = async (scope: unknown) => {
+    await db.update(schema.service_orders).set({ execution_contract_json: JSON.stringify({ ...snapshot, requested_capabilities: scope }) })
+      .where(eq(schema.service_orders.id, order.id))
+    return (await load(seller)).find((row) => row.capability_id === 'security-analysis')?.accepted_completion_count ?? 0
+  }
+  assert.equal(await change([...Array.from({ length: 19 }, (_, i) => `unrequested-${i}`), 'security-analysis']), 1)
+  assert.equal(await change(['security-analysis-extra']), 0)
+  assert.equal(await change({ capability: 'security-analysis' }), 0)
+  assert.equal(await change([...Array.from({ length: 20 }, (_, i) => `unrequested-${i}`), 'security-analysis']), 0)
+  assert.equal(await change(['security-analysis']), 1)
+  assert.equal((await db.select().from(schema.capability_performance_events).where(eq(schema.capability_performance_events.trade_id, trade.id))).length, 2)
+})
+
 test('public capability proof filters ignore claimed tags and recheck current funding and hash-bound buyer review', async () => {
   delete process.env.ANTHROPIC_API_KEY
   const seller = await provider('filter')

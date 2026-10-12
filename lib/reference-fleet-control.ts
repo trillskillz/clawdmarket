@@ -82,9 +82,9 @@ export async function getReferenceFleetExecutionControlEvents(limit = 25) {
   return result.rows
 }
 
-export async function isReferenceFleetAgent(agentId: string | null) {
+export async function isReferenceFleetAgent(agentId: string | null, source: typeof db = db) {
   if (!agentId) return false
-  const result = await db.$client.execute({
+  const result = await source.$client.execute({
     sql: 'SELECT 1 FROM agents WHERE id = ? AND INSTR(description, ?) > 0 LIMIT 1',
     args: [agentId, REFERENCE_FLEET_MARKER],
   })
@@ -96,6 +96,6 @@ export async function isReferenceFleetAgent(agentId: string | null) {
  * task-backed work can be canaried without exposing an unproven service to
  * buyers. A later release must replace this with a health-backed enablement.
  */
-export async function referenceFleetPaidServicePublicationLocked(agentId: string | null) {
-  return isReferenceFleetAgent(agentId)
+export async function referenceFleetPaidServicePublicationLocked(agentId: string | null, source: typeof db = db) {
+  return isReferenceFleetAgent(agentId, source)
 }

@@ -8,6 +8,7 @@ import { planRoute, routePlanInput } from './route-planning'
 import { eligibleReputationTradeSql } from './reputation-evidence-sql'
 import { REPUTATION_V2_POLICY } from './reputation-v2-policy'
 import { REPUTATION_RANKING_POLICY } from './reputation-ranking'
+import { reusableServiceBuyerOrdersEnabled } from './routing-feature-flags'
 
 /** Read-only assessment. Public aggregate artifact contains no source IDs or inputs. */
 export async function inspectReputationPromotion() {
@@ -38,8 +39,9 @@ export async function inspectReputationPromotion() {
   const comparisons: { examined: number; truncated: boolean; eligible_candidates: number;
     modes: { mode: string; changed_positions: number; suggested_candidates: number;
       unproven_candidates: number; unproven_top_three: number }[] }[] = []
-  let invalidRequests = 0, unavailableRequests = 0
+  let invalidRequests = 0, unavailableRequests = 0, closedBuyerRequests = 0
   for (const row of routes.rows.slice(0, 25)) {
+    if (!reusableServiceBuyerOrdersEnabled(String(row.buyer_id))) { closedBuyerRequests++; continue }
     try {
       const request = routePlanInput.safeParse({client_reference:String(row.client_reference),
         objective:String(row.objective), required_capabilities:JSON.parse(String(row.required_capabilities)),
@@ -66,7 +68,7 @@ export async function inspectReputationPromotion() {
   if (!comparisons.some(c=>c.eligible_candidates>1)) blockers.push('no_comparable_real_hard_gated_candidate_sets')
   if (!health.healthy || records.some(r=>r.projection_status!=='current')) blockers.push('projection_health_unavailable')
   if (services.length>500 || routes.rows.length>25 || comparisons.some(c=>c.truncated)) blockers.push('bounded_sample_requires_coverage_review')
-  if (invalidRequests || unavailableRequests) blockers.push('original_request_replay_requires_review')
+  if (invalidRequests || unavailableRequests || closedBuyerRequests) blockers.push('original_request_replay_requires_review')
   return {kind:'read_only_reputation_promotion_assessment', checked_at:new Date().toISOString(),
     source_commit:process.env.GITHUB_SHA??null, policy_version:REPUTATION_V2_POLICY.aggregation_policy_version,
     baseline_policy:REPUTATION_RANKING_POLICY.default, ranking_policy:REPUTATION_RANKING_POLICY,
@@ -83,7 +85,8 @@ export async function inspectReputationPromotion() {
       unavailable_scopes:records.filter(r=>r.projection_status!=='current').length,stale_scopes:records.filter(r=>r.stale).length,
       scoped_projection_latency_ms:scopedProjectionLatency,public_work_units:facts.rows[0],
       original_public_requests:Math.min(routes.rows.length,25),request_sample_truncated:routes.rows.length>25,
-      invalid_original_requests:invalidRequests,unavailable_request_replays:unavailableRequests},
+      invalid_original_requests:invalidRequests,unavailable_request_replays:unavailableRequests,
+      original_buyer_rollout_closed:closedBuyerRequests},
     comparisons,measurement_limits:{scope_counts_are_whole_job_observations:true,
       established_provider_concentration:'requires_review_of_representative_scoped_candidate_sets',
       exclusion_false_positive_rate:'unmeasured_without_reviewed_real_cases',

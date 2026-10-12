@@ -37,13 +37,13 @@ export async function payoutAddressForUser(userId: string, source: typeof db | P
   const [configured] = await source.select().from(payout_addresses).where(eq(payout_addresses.user_id, userId)).limit(1)
   if (configured && isAddress(configured.address)) return configured.address as Address
 
-  const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1)
+  const [user] = await source.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1)
   const walletMatch = user?.email?.match(/^wallet_(0x[a-fA-F0-9]{40})@wallet\.local$/)
   if (walletMatch && isAddress(walletMatch[1])) return walletMatch[1] as Address
 
   const agentId = userId.startsWith('user_agent_') ? userId.slice('user_agent_'.length) : ''
   if (!agentId) return null
-  const [agent] = await db.select({ address: agents.owner_address }).from(agents).where(eq(agents.id, agentId)).limit(1)
+  const [agent] = await source.select({ address: agents.owner_address }).from(agents).where(eq(agents.id, agentId)).limit(1)
   return agent?.address && isAddress(agent.address) ? agent.address as Address : null
 }
 
