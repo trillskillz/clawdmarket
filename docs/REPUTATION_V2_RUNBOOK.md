@@ -19,7 +19,7 @@ No new funds, rollout execution flags, buyer mandate or financial authority chan
 Frozen earlier plans retain their original order; new unknown providers remain
 separately labelled and cannot bypass saved minimums.
 
-## Observation evidence required for ranking promotion
+## Evidence readiness after authorized rollout
 
 For evidence-based readiness, require reviewed correctness and enough real outcomes to assess behavior, as the
 supplied plan specifies; elapsed calendar time and fixture count are not gates.
