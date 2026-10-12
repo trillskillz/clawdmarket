@@ -13,14 +13,19 @@ import { routeAuthorityHash, routeMandateInput, mandateDto, createRouteMandateIn
 import { issuePurchaseEvidence } from './organization-purchase-evidence'
 import { enterpriseFoundationEnabled } from './enterprise-foundation'
 import { money } from './service-order-input'
-import type { RouteCandidate } from './route-planning'
+import { normalizedCapabilities, planOrganizationRouteForReview, routePlanDto, routePlanInput, type RouteCandidate } from './route-planning'
+import { routePlanningEnabled } from './routing-feature-flags'
 
 const hash = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
 const reference = z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/)
 const units = z.string().regex(/^[1-9][0-9]{0,77}$/)
-export const organizationRouteInput = z.object({ version: z.literal(1), client_reference: reference, route_id: z.uuid(),
+export const organizationRouteInput = z.object({ version: z.literal(1), client_reference: reference, route_id: z.uuid().optional(),
+  agent_id: z.uuid().optional(), route_request: routePlanInput.optional(),
   reviewer_role_id: z.uuid(), max_daily: money, max_monthly: money, max_lifetime: money,
   max_lifetime_gas_cost_wei: units, mandate: routeMandateInput }).strict().superRefine((input, context) => {
+  if (input.route_id ? input.agent_id || input.route_request : !input.agent_id || !input.route_request) {
+    context.addIssue({ code: 'custom', message: 'Provide an existing route_id or an agent_id and exact route_request' })
+  }
   if (input.mandate.payment.rail !== 'evm' || input.mandate.payment.chain_id !== 1
     || input.mandate.max_attempts !== 1 || input.mandate.max_retry_budget !== 0
     || input.mandate.max_aggregate > input.max_daily || input.max_daily > input.max_monthly || input.max_monthly > input.max_lifetime
@@ -91,10 +96,27 @@ export async function proposeOrganizationRoute(orgId: string, actor: string, inp
     const [prior] = await source.select().from(grants).where(and(eq(grants.organization_id,orgId),eq(grants.client_reference,input.client_reference))).limit(1)
     if (prior) {
       if (prior.owner_account_id !== actor || prior.request_hash !== requestHash) fail('ORGANIZATION_ROUTE_REFERENCE_CONFLICT')
-      return { authorization: await dto(prior,source), idempotent: true }
+      return { authorization: await dto(prior,source,actor), idempotent: true }
     }
     enabled()
-    const [plan] = await source.select().from(route_plans).where(eq(route_plans.id,input.route_id)).limit(1)
+    let plan: Plan | undefined
+    if (input.route_id) [plan] = await source.select().from(route_plans).where(eq(route_plans.id,input.route_id)).limit(1)
+    else if (input.agent_id && input.route_request) {
+      const buyerId = `user_agent_${input.agent_id}`, request = input.route_request
+      if (!routePlanningEnabled(buyerId)) fail('ROUTE_PLANNING_DISABLED', 503)
+      const planned = await planOrganizationRouteForReview(request,buyerId,orgId,actor)
+      if (!planned.candidates.length) fail('ORGANIZATION_ROUTE_CANDIDATES_INVALID')
+      const [priorPlan] = await source.select().from(route_plans).where(eq(route_plans.client_reference,request.client_reference)).limit(1)
+      if (priorPlan) fail('ORGANIZATION_ROUTE_PLAN_REFERENCE_CONFLICT')
+      const now = new Date()
+      ;[plan] = await source.insert(route_plans).values({ id: randomUUID(), buyer_id: buyerId, client_reference: request.client_reference,
+        objective: request.objective, required_capabilities: JSON.stringify(normalizedCapabilities(request.required_capabilities)),
+        input_json: JSON.stringify(request.input), max_budget_minor: request.max_budget.amount, currency: 'USD',
+        deadline_seconds: request.deadline_seconds ?? null, verification_policy: JSON.stringify(request.verification),
+        payment_policy: JSON.stringify(request.payment_policy), provider_requirements_json: JSON.stringify(request.provider_requirements),
+        retry_policy: JSON.stringify(request.retry_policy), candidates_json: JSON.stringify(planned.candidates),
+        state: 'planned', created_at: now, updated_at: now, expires_at: new Date(now.getTime()+5*60_000) }).returning()
+    }
     if (!plan || !plan.buyer_id.startsWith('user_agent_')) fail('ROUTE_NOT_FOUND',404)
     const [existing] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.route_id,plan.id)).limit(1)
     if (existing) fail('ORGANIZATION_ROUTE_ORIGINAL_MANDATE_REQUIRED')
@@ -128,7 +150,7 @@ export async function proposeOrganizationRoute(orgId: string, actor: string, inp
       authority_hash: authority(identity,terms), terms_json: JSON.stringify(terms), created_at: new Date() }).returning()
     const [bound] = await source.update(route_payment_mandates).set({ organization_route_authorization_id: row.id }).where(eq(route_payment_mandates.id,mandate.id)).returning()
     await current(row,plan,bound,source,false)
-    return { authorization: await dto(row,source), idempotent: false }
+    return { authorization: await dto(row,source,actor), idempotent: false }
   })
 }
 async function access(row: Grant, actor: string, source: PurchasingSource) {
@@ -139,29 +161,34 @@ async function access(row: Grant, actor: string, source: PurchasingSource) {
   if (!mandate) fail('ORGANIZATION_ROUTE_CONTRACT_INVALID')
   await validateOrganizationApprover(source,row.organization_id,row.reviewer_role_id,actor,row.team_id,mandate.max_aggregate_minor)
 }
-async function dto(row: Grant, source: PurchasingSource) {
+async function dto(row: Grant, source: PurchasingSource, actor: string) {
   const terms = frozen(row), [plan] = await source.select().from(route_plans).where(eq(route_plans.id,row.route_id)).limit(1)
   const [mandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,row.mandate_id)).limit(1)
   const [use] = await source.select().from(uses).where(eq(uses.authorization_id,row.id)).limit(1)
   if (!plan || !mandate) fail('ORGANIZATION_ROUTE_CONTRACT_INVALID')
+  if (routeAuthorityHash(plan) !== terms.route_hash || hash(JSON.parse(plan.candidates_json)) !== terms.candidate_hash
+    || mandateDto(mandate).terms_hash !== terms.mandate_terms_hash) fail('ORGANIZATION_ROUTE_SCOPE_CHANGED')
   return { id: row.id, organization_id: row.organization_id, route_id: row.route_id, buyer_id: row.buyer_id, team_id: row.team_id,
     cost_center: row.cost_center, reviewer_account_id: row.reviewer_account_id, client_reference: row.client_reference,
+    viewer_role: actor === row.reviewer_account_id ? 'reviewer' as const : 'owner' as const,
+    review_url: `/organizations/${row.organization_id}/route-authorizations/${row.id}`,
     authority_hash: row.authority_hash, state: row.state, approved_at: row.approved_at, revoked_at: row.revoked_at,
-    route: { objective: plan.objective, input: JSON.parse(plan.input_json), route_hash: terms.route_hash },
+    decision: row.decision_reference ? { version: 1 as const, client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true as const } : null,
+    route: { ...routePlanDto(plan), route_hash: terms.route_hash },
     terms, mandate: mandateDto(mandate), use: use ?? null }
 }
 export async function inspectOrganizationRoute(orgId: string, id: string, actor: string) {
   const [row] = await db.select().from(grants).where(and(eq(grants.id,id),eq(grants.organization_id,orgId))).limit(1)
   if (!row) fail('ORGANIZATION_ROUTE_NOT_FOUND',404)
   await access(row,actor,db)
-  return dto(row,db)
+  return dto(row,db,actor)
 }
 export async function findOrganizationRoute(orgId: string, reference: string, actor: string) {
   const org = await organization(orgId,db)
   if (org.owner_account_id !== actor) fail('ORGANIZATION_NOT_FOUND',404)
   const [row] = await db.select().from(grants).where(and(eq(grants.organization_id,orgId),eq(grants.client_reference,reference))).limit(1)
   if (!row) fail('ORGANIZATION_ROUTE_NOT_FOUND',404)
-  return dto(row,db)
+  return dto(row,db,actor)
 }
 export async function approveOrganizationRoute(orgId: string, id: string, actor: string, input: z.output<typeof organizationRouteDecision>) {
   return purchasingTransaction(async source => {
@@ -172,7 +199,7 @@ export async function approveOrganizationRoute(orgId: string, id: string, actor:
     const decision = hash(input)
     if (row.decision_hash) {
       if (row.decision_hash !== decision) fail('ORGANIZATION_ROUTE_DECISION_CONFLICT')
-      return { authorization: await dto(row,source), idempotent: true }
+      return { authorization: await dto(row,source,actor), idempotent: true }
     }
     if (input.authority_hash !== row.authority_hash) fail('ORGANIZATION_ROUTE_REVIEW_CHANGED')
     const [plan] = await source.select().from(route_plans).where(eq(route_plans.id,row.route_id)).limit(1)
@@ -182,7 +209,7 @@ export async function approveOrganizationRoute(orgId: string, id: string, actor:
     const [approved] = await source.update(grants).set({ state: 'approved', decision_reference: input.client_reference,
       decision_hash: decision, approved_at: new Date() }).where(and(eq(grants.id,row.id),eq(grants.state,'pending'))).returning()
     if (!approved) fail('ORGANIZATION_ROUTE_STATE_CHANGED')
-    return { authorization: await dto(approved,source), idempotent: false }
+    return { authorization: await dto(approved,source,actor), idempotent: false }
   })
 }
 export async function revokeOrganizationRoute(orgId: string, id: string, actor: string) {
@@ -190,9 +217,9 @@ export async function revokeOrganizationRoute(orgId: string, id: string, actor: 
     const [row] = await source.select().from(grants).where(and(eq(grants.id,id),eq(grants.organization_id,orgId))).limit(1)
     if (!row) fail('ORGANIZATION_ROUTE_NOT_FOUND',404)
     await access(row,actor,source)
-    if (row.state === 'revoked') return { authorization: await dto(row,source), idempotent: true }
+    if (row.state === 'revoked') return { authorization: await dto(row,source,actor), idempotent: true }
     const [revoked] = await source.update(grants).set({ state: 'revoked', revoked_at: new Date() }).where(eq(grants.id,row.id)).returning()
-    return { authorization: await dto(revoked,source), idempotent: false }
+    return { authorization: await dto(revoked,source,actor), idempotent: false }
   })
 }
 async function routeGuard<T>(run: () => Promise<T>): Promise<T> {

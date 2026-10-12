@@ -205,6 +205,23 @@ class ClawdMarketClient:
         query = None if client_reference is None else {'client_reference': original_grant_reference(client_reference)}
         return self._call('inspect_spending_accounts', organization_id, query=query)
 
+    def propose_organization_route(self, organization_id: str, request: JSON) -> JSON:
+        """Current owner freezes one L1 route for independent review. Save the exact request first."""
+        return self._call('propose_organization_route', organization_id, request)
+
+    def recover_organization_route(self, organization_id: str, client_reference: str) -> JSON:
+        return self._call('recover_organization_route', organization_id, query={'client_reference': original_grant_reference(client_reference)})
+
+    def inspect_organization_route(self, organization_id: str, authorization_id: str) -> JSON:
+        return self._call('inspect_organization_route', organization_id, path_parameters={'authorizationId': authorization_id})
+
+    def approve_organization_route(self, organization_id: str, authorization_id: str, decision: JSON) -> JSON:
+        """Only the selected independent reviewer; never retries or changes the original hash/reference."""
+        return self._call('approve_organization_route', organization_id, decision, path_parameters={'authorizationId': authorization_id})
+
+    def revoke_organization_route(self, organization_id: str, authorization_id: str) -> JSON:
+        return self._call('revoke_organization_route', organization_id, path_parameters={'authorizationId': authorization_id})
+
     def create_spending_account(self, organization_id: str, request: SpendingGrantInput) -> SpendingGrantResult:
         """Persist the reviewed body/reference first. A replay never reissues the once-only key."""
         return cast(SpendingGrantResult, self._call('create_spending_account', organization_id, request))

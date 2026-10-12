@@ -12,7 +12,7 @@ import { REPUTATION_V2_POLICY } from './reputation-v2-policy'
 import { REPUTATION_RANKING_POLICY } from './reputation-ranking'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.111'
+export const AGENT_CONTRACT_VERSION = '1.112'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -275,6 +275,18 @@ const routePlanBodySchema = {
   },
 }
 
+const organizationRouteBodySchema = {
+  type:'object', additionalProperties:false,
+  required:['version','client_reference','reviewer_role_id','max_daily','max_monthly','max_lifetime','max_lifetime_gas_cost_wei','mandate'],
+  oneOf:[{required:['route_id'],not:{anyOf:[{required:['agent_id']},{required:['route_request']}]}},{required:['agent_id','route_request'],not:{required:['route_id']}}],
+  properties:{version:{const:1},client_reference:routeMandateBodySchema.properties.client_reference,
+    route_id:{type:'string',format:'uuid'},agent_id:{type:'string',format:'uuid'},route_request:routePlanBodySchema,
+    reviewer_role_id:{type:'string',format:'uuid'},max_daily:mandateAmountSchema,max_monthly:mandateAmountSchema,max_lifetime:mandateAmountSchema,
+    max_lifetime_gas_cost_wei:{type:'string',pattern:'^[1-9][0-9]{0,77}$'},
+    mandate:{...routeMandateBodySchema,properties:{...routeMandateBodySchema.properties,max_attempts:{const:1},max_retry_budget:{enum:['0','0.00']},payment:{...routeMandateBodySchema.properties.payment.oneOf[0],properties:{...routeMandateBodySchema.properties.payment.oneOf[0].properties,chain_id:{const:1}}}}},
+  },description:'One public-provider Ethereum L1 execution (chain 1), zero paid retries. Freeze original route, candidates, independent reviewer, gross and original lifetime fee exposure. Only private proposal review may defer the approval threshold; every other hard gate remains enforced.'
+}
+
 const workflowPlanBodySchema = {
   type: 'object', required: ['client_reference', 'objective', 'max_budget', 'deadline_seconds', 'nodes'], additionalProperties: false,
   properties: {
@@ -444,6 +456,11 @@ const benchmarkReportBody = { type: 'object', additionalProperties: false, requi
 } }
 
 export const AGENT_ACTIONS: AgentAction[] = [
+  {id:'propose_organization_route',label:'Propose reviewed organization route',description:'Current owner atomically saves a private frozen route, pending authority and mandate. Does not reserve capacity or move funds. Existing cmos_ keys gain no route scope.',method:'POST',endpoint:'/api/organizations/{id}/route-authorizations',auth:'owner-account',payment:null,required:['id'],body_schema:organizationRouteBodySchema},
+  {id:'recover_organization_route',label:'Recover original route proposal',description:'Current owner looks up the exact original client_reference after a lost reply. No replacement authority or financial commitment.',method:'GET',endpoint:'/api/organizations/{id}/route-authorizations',auth:'owner-account',payment:null,required:['id','client_reference']},
+  {id:'inspect_organization_route',label:'Inspect private route review',description:'Current owner or selected currently authorized reviewer sees original route/candidates and immutable gross, wallet, reserve, fee and expiry terms. Other members and buyer credentials are denied.',method:'GET',endpoint:'/api/organizations/{id}/route-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},
+  {id:'approve_organization_route',label:'Approve exact reviewed route',description:'Only the selected independent current reviewer approves the exact authority hash. Original decision replay never reopens revocation or creates another checkout.',method:'POST',endpoint:'/api/organizations/{id}/route-authorizations/{authorizationId}/approval',auth:'owner-account',payment:null,required:['id','authorizationId'],body_schema:{type:'object',additionalProperties:false,required:['version','client_reference','authority_hash','approve'],properties:{version:{const:1},client_reference:routeMandateBodySchema.properties.client_reference,authority_hash:{type:'string',pattern:'^[a-f0-9]{64}$'},approve:{const:true}}}},
+  {id:'revoke_organization_route',label:'Revoke reviewed route',description:'Current owner or selected authorized reviewer closes fresh spending. Original payment bytes/proof/refund and backed result recovery remain separate; gross and fee exposure never recycle.',method:'DELETE',endpoint:'/api/organizations/{id}/route-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},
   {id:'inspect_reputation_v2',label:'Inspect scoped reputation evidence',description:'Public versioned counts, denominators, coverage and subjective feedback. Scope requires service, canonical leaf and mode together. No calibrated probability, private review body or financial authority.',method:'GET',endpoint:'/api/agents/{id}/reputation',auth:'none',payment:null,required:['id'],optional:['service_id','capability_id','execution_mode','service_version']},
   {id:'reputation_suggestions',label:'Compare eligible reputation suggestions',description:'Authenticated nonpersistent comparison and production best-supported-history ordering after canonical buyer/provider/payment/capacity/schema/budget gates. Unproven candidates remain separate. Cannot authorize spending or alter mandates.',method:'POST',endpoint:'/api/agents/reputation-suggestions',auth:'agent_api_key',payment:null,body_schema:routePlanBodySchema},
   {id:'inspect_reputation_decisions',label:'Inspect original reputation decisions',description:'Private administrator or original trade-party history. Appeals/corrections append facts and never change settlement.',method:'GET',endpoint:'/api/trades/{id}/reputation',auth:'trade-party',payment:null,required:['id']},
@@ -2409,6 +2426,15 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/organizations/{id}/service-accounts/{accountId}': { delete: { operationId: 'revoke_organization_service_account', summary: 'Revoke a read-only organization credential', security: ownerAuthenticated,
       parameters: [tradeIdParameter, { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       responses: { 200: { description: 'Credential revoked or idempotent replay' }, 404: { description: 'Credential not owned' } } } },
+    '/api/organizations/{id}/route-authorizations': {
+      get:{operationId:'recover_organization_route',summary:'Current-owner exact original proposal lookup',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'client_reference',in:'query',required:true,schema:{type:'string',minLength:8,maxLength:128,pattern:'^[A-Za-z0-9._:-]+$'}}],responses:{200:{description:'Private original authority'},401:{description:'Human account required'},404:{description:'Original proposal unavailable'}}},
+      post:{operationId:'propose_organization_route',summary:'Owner freezes one public-provider Ethereum L1 route for independent review',security:ownerAuthenticated,parameters:[tradeIdParameter],requestBody:{required:true,content:{'application/json':{schema:organizationRouteBodySchema}}},responses:{201:{description:'Pending proposal; no funds moved'},200:{description:'Exact original replay'},403:{description:'Independent reviewer required'},409:{description:'Original terms or current eligibility changed'},503:{description:'Writes closed or retryable storage contention'}}},
+    },
+    '/api/organizations/{id}/route-authorizations/{authorizationId}': {
+      get:{operationId:'inspect_organization_route',summary:'Private frozen route review for owner or selected reviewer',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Private original route/candidates, gross and fee ceilings'},401:{description:'Human account required'},404:{description:'Private authority unavailable'}}},
+      delete:{operationId:'revoke_organization_route',summary:'Close fresh spending while preserving original obligations',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Revoked or exact original replay'},401:{description:'Human account required'},404:{description:'Private authority unavailable'}}},
+    },
+    '/api/organizations/{id}/route-authorizations/{authorizationId}/approval': {post:{operationId:'approve_organization_route',summary:'Selected independent reviewer approves the exact original authority hash',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],requestBody:{required:true,content:{'application/json':{schema:getAction('approve_organization_route').body_schema}}},responses:{201:{description:'Approved; no funds moved'},200:{description:'Original decision replay, including revoked state'},403:{description:'Selected independent reviewer required'},409:{description:'Original authority or current eligibility changed'}}}},
     '/api/organizations/{id}/budget': {
       get: { operationId: 'inspect_organization_budget', summary: 'Inspect owner-only budget and current usage', security: ownerAuthenticated,
         parameters: [tradeIdParameter], responses: { 200: { description: 'Current ceilings and conservative reservation usage' }, 404: { description: 'Organization not owned' } } },

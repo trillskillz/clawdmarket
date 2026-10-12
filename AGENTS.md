@@ -6,19 +6,33 @@ Preserve the existing payment and settlement state machines. The user's 2026-10-
 
 ## Current publishing gate (2026-10-12 UTC)
 
-The user's Reputation v2 priority remains active. PR #260 is accepted and deployed
-at main `66858c5`, HTTP 1.110 on both canonical domains. Real compiler checks,
-same-SHA smoke, mobile/desktop Observe and payment readiness/reserves passed.
-The fresh production assessment still lacks active public services, dated scoped
-outcomes and comparable candidates. The user's latest instruction explicitly
-supersedes the observation hold for ranking: **“find a way to promote to production
-regardless.”** Implement and verify a separately versioned production ranking
-policy, then publish through protected CI/migration-first GitHub/Vercel. Keep
-missing measurements and the explicit override visible; do not fabricate evidence
-or claim calibrated readiness. Existing saved plans retain their frozen order.
-Purchasing minimums, payment/execution flags, financial authority and live funds
-remain unchanged. Preserve the separate unfinished routed purchasing worktree.
-After production acceptance, continue the next unfinished routing capability.
+Reputation v2 ranking is production-accepted through PR #261, main `5715083`,
+HTTP 1.111. Exact-head CI, migration-first deployment 38205514998, same-SHA
+smoke 38206187936, both canonical Vercel aliases, independent APIs, desktop/mobile
+Observe and read-only payment readiness/reserves passed. Fresh protected audit
+38267467182 passed all five real compiler queries and reports healthy projections,
+active ranking and the explicit user observation override. Representative outcome
+review and calibration remain pending; empirical promotion_ready=false is truthful.
+Durable evidence: ../clawdmarket-reputation-v2-acceptance-2026-10-12/ACCEPTANCE-1.111.md.
+
+Continue separately reviewed Ethereum L1 public-provider routed purchasing in
+`/home/void/Work/clawdmarket-enterprise-routed-current`. The original draft in
+`/home/void/Work/clawdmarket` stays preserved. Fee coverage is reconciled without
+lowering the production contract or replacing reputation migration 63; new route
+storage is additive migration 64. Routed authority is accepted locally as **2/10** with final full economic, private
+review, client, race/crash, migration, build and regression evidence in
+[the audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md). Continue the separately
+requested sitewide recursive-improvement removal in `clawdmarket-no-recursive-improvement`,
+integrating it with this accepted routing parent. Historical identity, ownership,
+credentials and financial recovery remain authoritative. Reconciliation and
+intermediate foundations do not count.
+
+The user's latest instruction is: **“after this make sure we go back to pushing
+PR's in a batch of 10 at a time.”** After the current work, prepare one PR per
+accepted demonstrable capability and publish in batches of ten completed capability
+PRs. Commits, audits and bookkeeping are not PR/capability counts. Keep normal
+protected CI and migration-first GitHub/Vercel production verification for each
+batch. No live funds or global execution/payment rollout changes are authorized.
 
 Observe is production-verified through HTTP **1.108**, [PR #256](https://github.com/trillskillz/clawdmarket/pull/256), SHA `c574e266b447f97d5f9e007ed47e41471aad7649`. Required CI, migration-first Vercel deployment, same-SHA production smoke and independent desktop/mobile checks on both domains passed. The subsequent sitewide payment audit passed configuration, RPCs, settlement reserves, account credit, original receipts and payout/refund outboxes. A fresh paid canary is not verified: the dedicated buyer holds 0.005573 USDC, below the 0.01 minimum. No live funds, top-up or rollout changes are authorized. See [payment audit](docs/PAYMENT_HEALTH_AUDIT_2026-10-11.md).
 

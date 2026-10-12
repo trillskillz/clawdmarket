@@ -22,6 +22,7 @@ import { buyerWalletReference, withBuyerWalletLock } from '../../scripts/buyer-w
 import { runBuyerRoute } from '../../scripts/buyer-route-worker.mjs'
 import { runBuyerWorkflow } from '../../scripts/buyer-workflow-worker.mjs'
 import { runProviderWork } from '../../scripts/provider-worker.mjs'
+import { ClawdMarketClient, type OrganizationRouteProposal, type OrganizationRouteAuthorization } from '../../sdk/typescript/src/index'
 
 let directory: string, baseUrl: string, rpcUrl: string
 let db: typeof import('@/lib/db').db, schema: typeof import('@/lib/schema'), jwt: typeof import('@/lib/auth').generateJWT
@@ -131,14 +132,18 @@ before(async () => {
       const body = Buffer.concat(chunks).toString(), path = incoming.url!
       requests.push(`${incoming.method} ${path}`)
       const request = new NextRequest(`${baseUrl}${path}`, { method: incoming.method, headers: incoming.headers as Record<string, string>, ...(body ? { body } : {}) })
-      const id = path.split('/')[3], context = { params: Promise.resolve({ id, artifactId: path.split('/')[5] || '', grantId: path.split('/')[5] || '', key: path.split('/')[5] || '' }) }
+      const id = path.split('/')[3], context = { params: Promise.resolve({ id, artifactId: path.split('/')[5] || '', grantId: path.split('/')[5] || '', authorizationId: path.split('?')[0].split('/')[5] || '', key: path.split('/')[5] || '' }) }
       const workflowHandler = !path.startsWith('/api/workflows/') ? null : path === '/api/workflows/plan' ? (await import('@/app/api/workflows/plan/route')).POST
         : path.endsWith('/approval') ? (await import('@/app/api/workflows/[id]/approval/route'))[incoming.method as 'GET' | 'POST' | 'DELETE']
         : path.endsWith('/execute') ? (await import('@/app/api/workflows/[id]/execute/route'))[incoming.method as 'GET' | 'POST']
         : path.endsWith('/prepare') ? (await import('@/app/api/workflows/[id]/nodes/[key]/prepare/route')).POST
         : path.endsWith('/reconcile') ? (await import('@/app/api/workflows/[id]/reconcile/route')).POST
         : path.includes('/artifacts/') ? (await import('@/app/api/workflows/[id]/artifacts/[grantId]/route')).GET : null
-      const handler = workflowHandler || (path.endsWith('/fund/mpp/intent') ? mppIntent[incoming.method as 'GET' | 'POST'] : path.endsWith('/fund/mpp/claim') ? mppClaim.POST : path.endsWith('/fund/mpp') ? mppFund.POST
+      const organizationHandler = !path.startsWith('/api/organizations/') ? null
+        : path.includes('/approval') ? (await import('@/app/api/organizations/[id]/route-authorizations/[authorizationId]/approval/route')).POST
+        : path.split('?')[0].split('/').length === 5 ? (await import('@/app/api/organizations/[id]/route-authorizations/route'))[incoming.method as 'GET'|'POST']
+        : (await import('@/app/api/organizations/[id]/route-authorizations/[authorizationId]/route'))[incoming.method as 'GET'|'DELETE']
+      const handler = organizationHandler || workflowHandler || (path.endsWith('/fund/mpp/intent') ? mppIntent[incoming.method as 'GET' | 'POST'] : path.endsWith('/fund/mpp/claim') ? mppClaim.POST : path.endsWith('/fund/mpp') ? mppFund.POST
         : path === '/api/mcp' ? (await import('@/app/api/mcp/route')).POST : path === '/api/a2a' ? (await import('@/app/api/a2a/route')).POST : path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
         : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : path.endsWith('/retry') ? retry[incoming.method as 'GET' | 'POST'] : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST']
           : path.endsWith('/dispute') ? dispute.POST : path.endsWith('/resolve') ? resolveTrade.POST
@@ -154,12 +159,16 @@ before(async () => {
   process.env.CLAWDMARKET_CANONICAL_ORIGIN = baseUrl
 })
 after(async () => {
+  // Deliberately killed clients can leave a response socket open in this owned
+  // harness. All test operations are finished before disposing those sockets.
+  apiServer.closeAllConnections(); rpcServer.closeAllConnections()
   await Promise.all([new Promise<void>((done) => apiServer.close(() => done())), new Promise<void>((done) => rpcServer.close(() => done()))])
   db?.$client.close(); await rm(directory, { recursive: true, force: true })
 })
 
 async function fixture(reuseDummyKey?: `0x${string}`, retryLimits?: { maxAggregate?: string; maxRetry?: string; maxAttempts?: number }, agentParties = false) {
-  const id = crypto.randomUUID(), buyerId = agentParties ? `user_agent_${id}` : `buyer-${id}`, sellerId = agentParties ? `user_agent_seller_${id}` : `seller-${id}`, serviceId = crypto.randomUUID()
+  // Equal-price unproven providers use stable service IDs in production ranking.
+  const id = crypto.randomUUID(), buyerId = agentParties ? `user_agent_${id}` : `buyer-${id}`, sellerId = agentParties ? `user_agent_seller_${id}` : `seller-${id}`, serviceId = `00000000${id.slice(8)}`
   const ownerId = agentParties ? `owner-${id}` : buyerId, sellerOwnerId = `provider-owner-${id}`
   const dummyKey = reuseDummyKey ?? `0x${(++signerIndex).toString(16).padStart(64, '0')}` as `0x${string}`, account = privateKeyToAccount(dummyKey)
   if (!balances.has(account.address.toLowerCase())) balances.set(account.address.toLowerCase(), { token: 10_000_000n, native: 1_000_000_000_000_000n })
@@ -169,7 +178,7 @@ async function fixture(reuseDummyKey?: `0x${string}`, retryLimits?: { maxAggrega
   await db.insert(schema.service_definitions).values({ id: serviceId, seller_id: sellerId, title: 'Buyer worker fixture', description: 'Return a private structured review for explicit buyer acceptance.',
     capabilities: '["code-review"]', price_minor: 100, status: 'active', estimated_latency_seconds: 30, max_concurrency: 1, provider_protocol: 'leased_v1',
     output_schema: '{"type":"object","properties":{"result":{"type":"string"}}}', verification_policy: JSON.stringify(policy) })
-  const fallbackSellerId = retryLimits ? `fallback-${id}` : undefined, fallbackServiceId = retryLimits ? crypto.randomUUID() : undefined
+  const fallbackSellerId = retryLimits ? `fallback-${id}` : undefined, fallbackServiceId = retryLimits ? `ffffffff${id.slice(8)}` : undefined
   if (fallbackSellerId && fallbackServiceId) {
     await db.insert(schema.users).values({ id: fallbackSellerId, name: fallbackSellerId, email: `${fallbackSellerId}@test.invalid`, password_hash: 'unused', role: 'human' })
     await db.insert(schema.payout_addresses).values({ user_id: fallbackSellerId, address: treasury })
@@ -879,6 +888,163 @@ test('MCP Tasks return one private backed result after canonical funding and rej
   assert.equal(uncertain.status, 503); assert.equal(uncertain.body.error.message, 'MCP_RESULT_BACKING_UNAVAILABLE')
   assert.equal(JSON.stringify(uncertain.body).includes('private-route-result'), false)
 })
+
+async function enterpriseRouteOnOwnedL1(revoked: boolean) {
+  const f=await fixture(undefined,undefined,true)
+  // A fresh chain must not reuse the earlier test's persisted treasury nonce.
+  const treasuryKey=`0x${createHash('sha256').update(`owned-enterprise-treasury:${f.routeId}`).digest('hex')}` as const
+  const treasury=privateKeyToAccount(treasuryKey).address.toLowerCase()
+  const chain=await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY!,f.account.address,treasuryKey)
+  const previousToken=token,previousConfig=process.env.EVM_ACCEPTED_TOKENS,previousEnterprise=process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED
+  const previousTreasury=process.env.TREASURY_ADDRESS,previousTreasuryKey=process.env.EVM_SETTLEMENT_PRIVATE_KEY
+  const payoutAddress=`0x${'22'.repeat(20)}` as const
+  const count=broadcastCalls,run=promisify(execFile)
+  try {
+    token=chain.token;realChainUrl=chain.url
+    process.env.TREASURY_ADDRESS=treasury;process.env.EVM_SETTLEMENT_PRIVATE_KEY=treasuryKey
+    process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='true'
+    process.env.EVM_ACCEPTED_TOKENS=JSON.stringify([{chainId:1,chainName:'Disposable reviewed enterprise L1',address:token,symbol:'USDC',decimals:6,fixedUsdPrice:1,confirmations:1,rpcUrl}])
+    await db.update(schema.payout_addresses).set({address:payoutAddress}).where(eq(schema.payout_addresses.user_id,f.sellerId))
+    const now=new Date(),orgId=crypto.randomUUID(),teamId=crypto.randomUUID(),reviewer=`reviewer-${orgId}`
+    await db.insert(schema.users).values({id:reviewer,name:'Separate reviewer',email:`${reviewer}@test.invalid`,password_hash:'unused'})
+    await db.insert(schema.organizations).values({id:orgId,owner_account_id:f.ownerId,client_reference:orgId,name:'Owned reviewed route fixture',created_at:now,updated_at:now})
+    await db.insert(schema.organization_teams).values({id:teamId,organization_id:orgId,slug:'engineering',name:'Engineering',created_at:now,updated_at:now})
+    await db.insert(schema.organization_agent_assignments).values({agent_id:f.buyerId.slice('user_agent_'.length),organization_id:orgId,team_id:teamId,cost_center:'REVIEWED',assigned_at:now,updated_at:now})
+    const membership=await import('@/lib/organization-membership'),purchasing=await import('@/lib/organization-purchasing')
+    const invitation=await membership.createOrganizationInvitation(orgId,f.ownerId,reviewer,crypto.randomUUID())
+    assert.equal(invitation.kind,'ok');assert.equal((await membership.acceptOrganizationInvitation(invitation.invitation_id!,reviewer)).kind,'ok')
+    const role=await purchasing.grantPurchasingRole(orgId,f.ownerId,purchasing.purchasingRoleInput.parse({version:1,client_reference:crypto.randomUUID(),account_id:reviewer,team_id:teamId,role:'approver',max_purchase:'1.05',expires_at:new Date(Date.now()+3600_000).toISOString()}))
+    await db.insert(schema.buyer_spend_policies).values({buyer_id:f.buyerId,owner_account_id:f.ownerId,policy_json:'{"approval_required_above":50,"max_per_execution":105}',version:1,created_at:now,updated_at:now})
+    const domain=await import('@/lib/organization-route-authorizations')
+    const proposalInput:OrganizationRouteProposal={version:1,client_reference:crypto.randomUUID(),agent_id:f.buyerId.slice('user_agent_'.length),
+      route_request:{client_reference:crypto.randomUUID(),objective:'Review original private code under the exact enterprise authority',required_capabilities:['code-review'],input:{private_text:'enterprise-original-private-source'},max_budget:{amount:'1.05',currency:'USD'},verification:JSON.parse((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].verification_policy),provider_requirements:{approved_providers:[f.sellerId]},payment_policy:{allowed_rails:['evm']}},
+      reviewer_role_id:role.role.id,max_daily:'1.05',max_monthly:'1.05',max_lifetime:'1.05',max_lifetime_gas_cost_wei:'10000000000000000',
+      mandate:{version:1,client_reference:crypto.randomUUID(),max_aggregate:'1.05',max_per_execution:'1.05',max_retry_budget:'0.00',max_attempts:1,approved_providers:[f.sellerId],max_latency_seconds:60,private_data:'selected_provider_only',expires_at:new Date(Date.now()+600_000).toISOString(),payment:{rail:'evm',chain_id:1,token_address:token,payer_address:f.account.address.toLowerCase(),treasury_address:treasury,minimum_token_reserve_units:'5000000',minimum_native_reserve_wei:'1000000',max_gas_cost_wei:'10000000000000000'}}}
+    const ownerKey=jwt({userId:f.ownerId,email:`${f.ownerId}@test.invalid`,role:'human'})
+    const reviewerKey=jwt({userId:reviewer,email:`${reviewer}@test.invalid`,role:'human'})
+    const accountClient=new ClawdMarketClient({apiKey:ownerKey,baseUrl}),reviewerClient=new ClawdMarketClient({apiKey:reviewerKey,baseUrl})
+    // Both languages exercise the actual API, including uncertain committed replies.
+    const python=async(apiKey:string,method:string,args:unknown[]):Promise<{authorization:OrganizationRouteAuthorization;idempotent?:boolean}>=>{
+      const result=await run('python3',['-c','import json,os; from clawdmarket import ClawdMarketClient; c=ClawdMarketClient(os.environ["OWNED_CLIENT_KEY"],os.environ["OWNED_CLIENT_URL"]); print(json.dumps(getattr(c,os.environ["OWNED_CLIENT_METHOD"])(*json.loads(os.environ["OWNED_CLIENT_ARGS"]))))'],{cwd:resolve('.'),env:{...process.env,PYTHONPATH:resolve('sdk/python'),PYTHONDONTWRITEBYTECODE:'1',OWNED_CLIENT_KEY:apiKey,OWNED_CLIENT_URL:baseUrl,OWNED_CLIENT_METHOD:method,OWNED_CLIENT_ARGS:JSON.stringify(args)},timeout:15_000})
+      return JSON.parse(result.stdout)
+    }
+    const proposeOriginal=()=>revoked?python(ownerKey,'propose_organization_route',[orgId,proposalInput]):accountClient.proposeOrganizationRoute(orgId,proposalInput)
+    const recoverOriginal=()=>revoked?python(ownerKey,'recover_organization_route',[orgId,proposalInput.client_reference]):accountClient.recoverOrganizationRoute(orgId,proposalInput.client_reference)
+    const inspectOriginal=(id:string)=>revoked?python(reviewerKey,'inspect_organization_route',[orgId,id]):reviewerClient.inspectOrganizationRoute(orgId,id)
+    const prefix=`/api/organizations/${orgId}/route-authorizations`
+    let lostProposal=false
+    apiHook=async(path,response)=>{if(path===prefix&&response.status===201&&!lostProposal){lostProposal=true;return true}return false}
+    await assert.rejects(proposeOriginal());apiHook=null
+    assert.equal(lostProposal,true)
+    const recovered=await recoverOriginal(),a=recovered.authorization
+    assert.equal(a.state,'pending');assert.equal(a.viewer_role,'owner')
+    assert.equal(a.route.candidates[0].eligibility.approval_required,true)
+    assert.equal((await proposeOriginal()).idempotent,true)
+    const decision={version:1 as const,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true as const}
+    const approveOriginal=()=>revoked?python(reviewerKey,'approve_organization_route',[orgId,a.id,decision]):reviewerClient.approveOrganizationRoute(orgId,a.id,decision)
+    let lostDecision=false
+    apiHook=async(path,response)=>{if(path===`${prefix}/${a.id}/approval`&&response.status===201&&!lostDecision){lostDecision=true;return true}return false}
+    await assert.rejects(approveOriginal());apiHook=null
+    assert.equal(lostDecision,true)
+    const reviewed=await inspectOriginal(a.id)
+    assert.equal(reviewed.authorization.state,'approved');assert.equal(reviewed.authorization.viewer_role,'reviewer')
+    assert.deepEqual(reviewed.authorization.decision,decision)
+    assert.equal((await approveOriginal()).idempotent,true)
+    f.routeId=a.route_id;f.mandate=a.mandate
+    f.approval={version:1,origin:baseUrl,route_id:f.routeId,mandate_id:a.mandate.id,terms_hash:a.mandate.terms_hash,chain_id:1,rpc_url:rpcUrl}
+    f.adapter=createBuyerEvmAdapter({chainId:1,rpcUrl,account:f.account})
+    const approvalFile=join(directory,`${f.routeId}.enterprise-approval.json`)
+    await writeFile(approvalFile,JSON.stringify(f.approval),{mode:0o600})
+    const buyerArgs=['scripts/buyer-worker.mjs',approvalFile,f.stateDirectory],buyerEnvironment={...process.env,CLAWDMARKET_BUYER_PRIVATE_KEY:f.dummyKey,CLAWDMARKET_BUYER_API_KEY:f.apiKey}
+    await killBuyerAtBoundary(buyerArgs,buyerEnvironment,holdBuyerApiResponse((path,response)=>path.endsWith('/claim')&&response.ok))
+    const original=await journal(f)
+    assert.equal(broadcastCalls,count)
+    if(revoked) {
+      const closed=await python(reviewerKey,'revoke_organization_route',[orgId,a.id]);assert.equal(closed.authorization.state,'revoked')
+      assert.equal((await approveOriginal()).authorization.state,'revoked')
+      const held=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      assert.equal(held.state,'held_recover_existing_payment');assert.equal(held.tx_hash,original.value.tx_hash);assert.equal(broadcastCalls,count)
+      // Model the exact original bytes arriving late after authority closes.
+      await chain.client.sendRawTransaction({serializedTransaction:original.value.serialized_transaction})
+      await chain.client.waitForTransactionReceipt({hash:original.value.tx_hash})
+      const proof={intent_id:original.value.intent.id,chain_id:1,token_address:token,payer_address:f.account.address.toLowerCase(),tx_hash:original.value.tx_hash,payer_signature:original.value.payer_signature}
+      const response=await fetch(`${baseUrl}/api/trades/${original.value.trade_id}/fund/evm`,{method:'POST',signal:AbortSignal.timeout(15_000),headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(proof)})
+      assert.ok([200,202,409].includes(response.status),JSON.stringify(await response.clone().json()))
+      const [refund]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,original.value.trade_id))
+      assert.equal(refund.kind,'buyer_refund')
+      await (await import('@/lib/external-settlement')).processSettlementTransfer(refund.id,{waitMs:5000})
+      await fetch(`${baseUrl}/api/trades/${original.value.trade_id}/fund/evm`,{method:'POST',signal:AbortSignal.timeout(15_000),headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(proof)})
+      assert.equal(await chain.balance(f.account.address),100_000_000n)
+      assert.equal(await chain.balance(treasury as `0x${string}`),100_000_000n)
+      assert.equal((await domain.inspectOrganizationRoute(orgId,a.id,f.ownerId)).use?.amount_minor,105)
+      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].active_orders,0)
+      assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id,f.routeId))).length,0)
+    } else {
+      await killBuyerAtBoundary(buyerArgs,buyerEnvironment,reach=>{realRpcHook=async(method,hash)=>{if(method==='eth_sendRawTransaction'&&hash)await reach()};return()=>{realRpcHook=null}})
+      const funded=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      assert.equal(funded.state,'funded');assert.equal(funded.tx_hash,original.value.tx_hash);assert.equal(broadcastCalls,count+1)
+      const providerKey=jwt({userId:f.sellerId,email:`${f.sellerId}@test.invalid`,role:'human'})
+      const handler=join(directory,`${f.routeId}.enterprise-provider.mjs`),providerState=join(directory,`${f.routeId}.enterprise-provider-state`)
+      await writeFile(handler,"export default async work=>({summary:'Separate provider reviewed the original private source.',artifact:{result:work.input.private_text+'-reviewed'}})",{mode:0o600})
+      const providerArgs=['scripts/provider-worker.mjs','--trade-id',funded.trade_id,'--service-id',f.serviceId,'--handler',handler,'--state-dir',providerState],providerEnvironment={...process.env,BASE_URL:baseUrl,CLAWDMARKET_PROVIDER_API_KEY:providerKey}
+      await run(process.execPath,[...providerArgs,'--prepare-only'],{cwd:resolve('.'),env:providerEnvironment,timeout:30_000})
+      const delivery=JSON.parse((await run(process.execPath,providerArgs,{cwd:resolve('.'),env:providerEnvironment,timeout:30_000})).stdout)
+      assert.equal((await runBuyerRoute(f)).state,'awaiting_buyer')
+      assert.equal((await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,funded.trade_id))).length,0)
+      const decisionFile=join(directory,`${f.routeId}.enterprise-decision.json`)
+      await writeFile(decisionFile,JSON.stringify({version:1,route_id:f.routeId,decision:'accept',content_hash:delivery.content_hash}),{mode:0o600})
+      const routeArgs=['scripts/buyer-route-worker.mjs',approvalFile,f.stateDirectory,decisionFile]
+      let outcome=JSON.parse((await run(process.execPath,routeArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      if(outcome.state==='settling') {
+        const [payout]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,funded.trade_id))
+        await (await import('@/lib/external-settlement')).processSettlementTransfer(payout.id,{waitMs:5000})
+        outcome=JSON.parse((await run(process.execPath,routeArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      }
+      assert.equal(outcome.state,'completed',JSON.stringify(outcome))
+      assert.equal(outcome.receipt.receipt.financial.kind,'confirmed_external');assert.equal(outcome.receipt.receipt.capacity_released,true)
+      assert.equal(await chain.balance(f.account.address),98_950_000n)
+      assert.equal(await chain.balance(payoutAddress as `0x${string}`),1_000_000n)
+      assert.equal(await chain.balance(treasury as `0x${string}`),100_050_000n)
+      const [fundingReceipt]=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,funded.trade_id))
+      const [payout]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,funded.trade_id))
+      const fundingGas=await chain.client.getTransactionReceipt({hash:fundingReceipt.tx_hash as `0x${string}`}),payoutGas=await chain.client.getTransactionReceipt({hash:payout.tx_hash as `0x${string}`})
+      assert.equal(chain.buyerNative-await chain.client.getBalance({address:f.account.address}),fundingGas.gasUsed*fundingGas.effectiveGasPrice)
+      assert.equal(chain.treasuryNative-await chain.client.getBalance({address:treasury as `0x${string}`}),payoutGas.gasUsed*payoutGas.effectiveGasPrice)
+      const replay=JSON.parse((await run(process.execPath,routeArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      assert.deepEqual(replay.receipt,outcome.receipt);assert.equal(broadcastCalls,count+2)
+      assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id,f.routeId))).length,1)
+      assert.equal((await reviewerClient.revokeOrganizationRoute(orgId,a.id)).authorization.state,'revoked')
+      assert.equal((await approveOriginal()).authorization.state,'revoked')
+    }
+    // A real refund or settlement cannot replenish the same buyer's original gross.
+    const nextInput=structuredClone(proposalInput)
+    nextInput.client_reference=crypto.randomUUID();nextInput.mandate.client_reference=crypto.randomUUID()
+    if(!nextInput.route_request)throw Error('Missing original embedded review request')
+    nextInput.route_request.client_reference=crypto.randomUUID()
+    const next=(await accountClient.proposeOrganizationRoute(orgId,nextInput)).authorization
+    await reviewerClient.approveOrganizationRoute(orgId,next.id,{version:1,client_reference:crypto.randomUUID(),authority_hash:next.authority_hash,approve:true})
+    const previousBroadcast=broadcastCalls
+    const exhausted=await fetch(`${baseUrl}/api/routes/${next.route_id}/execute`,{method:'POST',headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({mandate_id:next.mandate.id}),signal:AbortSignal.timeout(15000)})
+    assert.equal(exhausted.status,409);assert.equal((await exhausted.json()).error_code,'ORGANIZATION_ROUTE_GROSS_LIMIT')
+    assert.equal((await accountClient.inspectOrganizationRoute(orgId,next.id)).authorization.use,null)
+    assert.equal(broadcastCalls,previousBroadcast)
+    const use=(await domain.inspectOrganizationRoute(orgId,a.id,f.ownerId)).use!
+    assert.equal(use.amount_minor,105);assert.equal(use.maximum_gas_cost_wei,'10000000000000000')
+    assert.equal(JSON.parse(await readFile(original.path,'utf8')).serialized_transaction,original.value.serialized_transaction)
+  } finally {
+    apiHook=null;realRpcHook=null;realChainUrl=null;token=previousToken;process.env.EVM_ACCEPTED_TOKENS=previousConfig
+    process.env.TREASURY_ADDRESS=previousTreasury;process.env.EVM_SETTLEMENT_PRIVATE_KEY=previousTreasuryKey
+    if(previousEnterprise===undefined)delete process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED;else process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=previousEnterprise
+    await chain.stop()
+  }
+}
+
+test('reviewed enterprise L1 route settles once across buyer SIGKILL and provider restart with original gross and fee exposure',{
+  skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY,timeout:90_000,
+},()=>enterpriseRouteOnOwnedL1(false))
+test('revoked enterprise L1 route recovers only original late bytes into a confirmed full refund without restoring send authority',{
+  skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY,timeout:90_000,
+},()=>enterpriseRouteOnOwnedL1(true))
 
 test('workflow HTTP loop pays and settles two exact dependent nodes across buyer/provider process death without duplicate economic work', () => workflowHttpLoop(false))
 test('workflow HTTP loop on disposable EVM settles exact token transfers across buyer/provider process deaths', {

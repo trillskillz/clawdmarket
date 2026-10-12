@@ -1,3 +1,32 @@
+## Current continuation — reviewed enterprise routing (2026-10-12 UTC)
+
+Reputation v2 production ranking is accepted at PR #261 / main `5715083`, HTTP
+1.111. Protected exact-head CI, deployment 38205514998, same-SHA smoke 38206187936,
+both ready production aliases and independent API/Observe/payment reserve checks
+passed. Fresh read-only audit 38267467182 passes all five real compiler shapes:
+production ranking active, healthy projections, ten immutable guards; representative
+scoped observations and calibration still pending. User override remains explicit.
+Acceptance: ../clawdmarket-reputation-v2-acceptance-2026-10-12/ACCEPTANCE-1.111.md.
+
+Next unfinished capability: separately owner-proposed, independently reviewed,
+single-attempt Ethereum L1 public-provider routed purchasing. Preserve original
+payment bytes/proof/refunds, frozen objective/candidates/department, gross and fee
+exposure. Never promote existing direct-service credentials to routing authority.
+The original draft is preserved; reconciliation and implementation proceed in
+`clawdmarket-enterprise-routed-current` from accepted main. Migration 64 appends
+new authority/use storage after immutable reputation migration 63. The capability
+is accepted locally as **2/10**. Full acceptance is recorded in
+[reviewed-route audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md).
+Continue the separately requested recursive-improvement removal as the next
+capability; keep its branch independent and integrate it with this accepted parent.
+
+Latest user cadence: after this work, push **batches of ten completed capability
+PRs**, retaining one demonstrable capability per PR and protected publication /
+migration-first production verification. Commits and audits do not increment it.
+No live funds or global rollout flags change.
+
+## Historical ranking rollout preparation
+
 ## Current user priority — production Reputation v2 ranking (2026-10-12 UTC)
 
 The [supplied v2 plan](docs/REPUTATION_V2_AGENT_PLAN.md) is implemented and deployed
@@ -2198,3 +2227,32 @@ selection/provider restart/delivery/explicit buyer review/payout/receipt, approv
 and wallet races, SIGKILL boundaries, private owner review and client recovery must
 pass before another part is counted. Tempo, private providers and broader products
 retain separate gates. This audit alone does not increment the counter.
+
+
+## 2026-10-12 — Local capability 2/10: independently reviewed enterprise L1 routes (HTTP 1.112)
+
+The linked owner proposes an immutable public-provider route for a selected
+independent reviewer. Review defers only the independent-approval threshold;
+all other purchasing gates remain active. Frozen route/candidate/service hashes,
+owner-linked buyer/organization/department, original mandate, UTC gross windows,
+lifetime gross/gas, expiry and zero paid retries are consumed atomically with one
+order, trade, capacity slot and department reservation. Current approval is
+rechecked before funding. Existing direct-service/read keys gain no route authority.
+Revocation leaves original claimed bytes/proof and full refund recovery available.
+
+The final full gate passes **813 Node cases: 808 passed, zero failures, five expected
+skips**, plus **17 Python cases**, TypeScript, generated SDK parity/build, lint,
+actual disposable L1/Tempo economics, isolated verification and legacy migrations.
+Independent process races and SIGKILL boundaries, real original buyer funding,
+provider restart, explicit acceptance, backed payout/receipt, revoked late refunds,
+shared gross/gas/department ceilings and both clients' lost-reply recovery pass.
+Final production build and three private desktop/mobile Chromium journeys pass.
+Disposable storage retains **64 migrations, integrity ok, zero foreign-key anomalies**,
+five evidence queries and all ten immutable reputation guards. Full evidence and
+corrected fixture diagnostics: [audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md).
+
+Count advances from 1/10 to **2/10**. No push, deployment, live funds or global
+rollout change. Production remains the accepted Reputation v2 release. Continue
+sitewide recursive-improvement retirement as a separate capability, then the
+remaining enterprise routing plan. Ten accepted capability PRs remain the next
+publication gate; commits, audits and reconciliation do not increment the count.

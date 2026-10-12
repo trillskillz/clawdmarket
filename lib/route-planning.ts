@@ -4,7 +4,7 @@ import { and, eq, gte, inArray, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { normalizeCapability } from '@/lib/capabilities'
-import { route_plans, service_definitions, service_execution_attempts, service_orders, trades, verification_results } from '@/lib/schema'
+import { agent_owners, organization_agent_assignments, organizations, route_plans, service_definitions, service_execution_attempts, service_orders, trades, verification_results } from '@/lib/schema'
 import { jsonObject, money, servicePrice } from '@/lib/service-definitions'
 import { getPaymentReadiness } from '@/lib/payment-config'
 import { getNewPaymentControl } from '@/lib/payment-control'
@@ -56,7 +56,7 @@ export type RouteCandidate = {
   estimated_latency_seconds: number | null
   payment_rail: MarketplaceRail
   verification_methods: VerificationPolicy['methods']
-  eligibility: { requirements_satisfied: true; request: ProviderRequirements; saved_policy: ProviderRequirements; confidence: 'backed_completion_observed' | 'unmeasured'; buyer_independence: 'not_verified' }
+  eligibility: { requirements_satisfied: boolean; approval_required?: true; request: ProviderRequirements; saved_policy: ProviderRequirements; confidence: 'backed_completion_observed' | 'unmeasured'; buyer_independence: 'not_verified' }
   evidence_level: 'claimed_only' | 'backed_completion_observed'
   capability_evidence: { capability_id: string; accepted_completion_count: number; distinct_buyer_count: number; measured_quality_score: null }[]
   provider_failures: { provider_declines_90d: number; lease_expiries_90d: number; uncorrected_verification_failures_90d: number; buyer_refund_resolutions_90d: number }
@@ -67,6 +67,23 @@ export type RouteCandidate = {
 
 /** Nonbinding candidate snapshot. Provider claims alone never authorize payment. */
 export async function planRoute(input: NormalizedRouteRequest, buyerId: string) {
+  return planCandidates(input, buyerId, false)
+}
+
+/** Private owner proposal only. Pending approval is visible and never spending evidence. */
+export async function planOrganizationRouteForReview(input: NormalizedRouteRequest, buyerId: string, organizationId: string, ownerId: string) {
+  const [organization] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1)
+  const agentId = buyerId.startsWith('user_agent_') ? buyerId.slice('user_agent_'.length) : ''
+  const [link] = await db.select().from(agent_owners).where(and(eq(agent_owners.agentId, agentId), eq(agent_owners.userId, ownerId))).limit(1)
+  const [assignment] = await db.select().from(organization_agent_assignments).where(eq(organization_agent_assignments.agent_id, agentId)).limit(1)
+  if (!organization || organization.owner_account_id !== ownerId || !link || assignment?.organization_id !== organizationId) {
+    const { PurchasingError } = await import('./organization-purchasing-transaction')
+    throw new PurchasingError('ORGANIZATION_NOT_FOUND', 404)
+  }
+  return planCandidates(input, buyerId, true)
+}
+
+async function planCandidates(input: NormalizedRouteRequest, buyerId: string, review: boolean) {
   const capabilities = normalizedCapabilities(input.required_capabilities)
   if (!reusableServiceBuyerOrdersEnabled(buyerId)) return { capabilities, candidates: [] as RouteCandidate[], examined: 0, truncated: false }
   const rows = await db.select().from(service_definitions).where(and(
@@ -175,8 +192,14 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
     const sellerPayout = Boolean(await payoutAddressForUser(service.seller_id))
     const rail = allowedRails.map((item) => selectMarketplaceRail(item, readiness, sellerPayout)).find(Boolean)
     if (!rail) continue
-    if (buyerPolicy && checkBuyerPolicyConstraints(buyerPolicy.policy, { totalMinor, sellerId: service.seller_id,
-      capabilities: offered, paymentRail: rail, verificationMethods: servicePolicy.methods })) continue
+    const spendContext = { totalMinor, sellerId: service.seller_id, capabilities: offered, paymentRail: rail, verificationMethods: servicePolicy.methods }
+    const approvalRequired = Boolean(buyerPolicy && checkBuyerPolicyConstraints(buyerPolicy.policy, spendContext) === 'BUYER_APPROVAL_REQUIRED')
+    if (buyerPolicy) {
+      // Approval is the only deferrable gate in this private proposal. Check every
+      // other restriction even when the canonical checker reports approval first.
+      const { approval_required_above: _, ...otherConstraints } = buyerPolicy.policy
+      if (checkBuyerPolicyConstraints(review ? otherConstraints : buyerPolicy.policy, spendContext)) continue
+    }
     const priceScore = Math.max(0, 1 - totalMinor / input.max_budget.amount)
     const latencyScore = service.estimated_latency_seconds && input.deadline_seconds
       ? Math.max(0, 1 - service.estimated_latency_seconds / input.deadline_seconds)
@@ -208,9 +231,9 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       verification_methods: servicePolicy.methods,
       evidence_level: backedCount > 0 ? 'backed_completion_observed' : 'claimed_only',
       capability_evidence: evidence,
-      eligibility: { requirements_satisfied: true, request: input.provider_requirements, saved_policy: buyerPolicy?.policy.provider_requirements ?? {}, confidence: backedCount > 0 ? 'backed_completion_observed' : 'unmeasured', buyer_independence: 'not_verified' }, provider_failures: providerFailures, score,
+      eligibility: { requirements_satisfied: !approvalRequired, ...(approvalRequired ? { approval_required: true as const } : {}), request: input.provider_requirements, saved_policy: buyerPolicy?.policy.provider_requirements ?? {}, confidence: backedCount > 0 ? 'backed_completion_observed' : 'unmeasured', buyer_independence: 'not_verified' }, provider_failures: providerFailures, score,
       score_components: components,
-      explanation: ['All required canonical capabilities are claimed', 'Service is currently purchasable',
+      explanation: ['All required canonical capabilities are claimed', approvalRequired ? 'Independent purchasing approval required before checkout' : 'Service is currently purchasable',
         backedCount > 0 ? 'Economically backed buyer-accepted completions observed for every required capability; score uses distinct eligible buyer accounts and quality remains unmeasured'
           : 'Provider capability is not independently verified',
         providerFailurePenalty > 0 ? 'Recent funded provider declines, lease expiries, uncorrected deterministic verification failures, or finalized buyer refunds observed; penalty is capped'

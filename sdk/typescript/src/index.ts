@@ -38,6 +38,14 @@ export type RouteMandateInput = { version: 1; client_reference: string; max_aggr
 export type RouteMandate = { id: string; route_id: string; buyer_id: string; client_reference: string; route_hash: string; terms_hash: string;
   terms: Omit<RouteMandateInput, 'client_reference' | 'payment'> & { payment: RouteMandatePayment | LegacyMppMandatePayment; token_decimals: number; token_usd_price: number; fee_token_decimals?: number };
   state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: boolean }
+export type OrganizationRouteProposal = {version:1;client_reference:string;reviewer_role_id:string;max_daily:string;max_monthly:string;max_lifetime:string;max_lifetime_gas_cost_wei:string;
+  mandate:Omit<RouteMandateInput,'payment'|'max_attempts'|'max_retry_budget'>&{max_attempts:1;max_retry_budget:'0'|'0.00';payment:Extract<RouteMandatePayment,{rail:'evm'}>&{chain_id:1}}
+}&({route_id:string;agent_id?:never;route_request?:never}|{route_id?:never;agent_id:string;route_request:RouteRequest})
+export type OrganizationRouteAuthorization = {id:string;organization_id:string;route_id:string;buyer_id:string;team_id:string|null;cost_center:string;reviewer_account_id:string;
+  viewer_role:'owner'|'reviewer';review_url:string;client_reference:string;authority_hash:string;state:'pending'|'approved'|'revoked';approved_at:string|null;revoked_at:string|null;
+  decision:{version:1;client_reference:string;authority_hash:string;approve:true}|null;
+  route:RoutePlan&{route_hash:string};mandate:RouteMandate;terms:{route_hash:string;candidate_hash:string;mandate_terms_hash:string;max_daily_minor:number;max_monthly_minor:number;max_lifetime_minor:number;max_lifetime_gas_cost_wei:string;services:Array<{id:string;seller_id:string;contract_hash:string}>};
+  use:{authorization_id:string;order_id:string;trade_id:string;authority_hash:string;amount_minor:number;maximum_gas_cost_wei:string;created_at:string}|null}
 export type RouteFundingStep = { id: string; mandate_id: string; route_id: string; order_id: string; trade_id: string; amount_minor: number; terms_hash: string;
   state: 'reserved' | 'funded' | 'rejected'; retry_operation_id?: string; previous_trade_id?: string; attempt_id?: string; created_at: string; updated_at: string }
 export type BuyerEvmPaymentClaimInput = { intent_id: string; mandate_id: string; serialized_transaction: string; payer_signature: string; buyer_operation_id?: string }
@@ -113,7 +121,7 @@ export type RouteCandidate = {
   estimated_latency_seconds: number | null
   payment_rail: 'mpp' | 'evm'
   verification_methods: VerificationMethod[]
-  eligibility: { requirements_satisfied: true; request: ProviderRequirements; saved_policy: ProviderRequirements; confidence: 'backed_completion_observed' | 'unmeasured'; buyer_independence: 'not_verified' }
+  eligibility: { requirements_satisfied: boolean; approval_required?: true; request: ProviderRequirements; saved_policy: ProviderRequirements; confidence: 'backed_completion_observed' | 'unmeasured'; buyer_independence: 'not_verified' }
   evidence_level: 'claimed_only' | 'backed_completion_observed'
   capability_evidence: { capability_id: string; accepted_completion_count: number; distinct_buyer_count: number; measured_quality_score: null }[]
   provider_failures: { provider_declines_90d: number; lease_expiries_90d: number; uncorrected_verification_failures_90d: number; buyer_refund_resolutions_90d: number }
@@ -359,7 +367,7 @@ export class ClawdMarketClient {
     return payload as T
   }
 
-  private enterpriseRequest<T>(operation: EnterpriseOperation, params: { id: string; tradeId?: string }, body?: unknown, options?: RequestOptions, query?: Record<string, string>, paymentCredential?: string): Promise<T> {
+  private enterpriseRequest<T>(operation: EnterpriseOperation, params: { id: string; tradeId?: string; authorizationId?: string }, body?: unknown, options?: RequestOptions, query?: Record<string, string>, paymentCredential?: string): Promise<T> {
     return this.request<T>(SDK_CONTRACT.operations[operation].method, enterprisePath(operation, params, query), body, options, paymentCredential)
   }
 
@@ -373,6 +381,24 @@ export class ClawdMarketClient {
   getReputationDecisions(tradeId:string,options?:RequestOptions){return this.request<{decisions:Record<string,unknown>[]}>('GET',`${tradePath(tradeId)}/reputation`,undefined,options)}
   /** Persist this exact body/reference before sending; inspect on transport uncertainty. */
   appealReputationFinding(tradeId:string,input:{version:1;client_reference:string;finding_id:string},options?:RequestOptions){return this.request<Record<string,unknown>>('PATCH',`${tradePath(tradeId)}/reputation`,input,options)}
+
+  /** Current-owner private inspection. Exact original reference can recover a grant beyond the bounded inventory. */
+  proposeOrganizationRoute(organizationId:string,input:OrganizationRouteProposal,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationRouteAuthorization;idempotent:boolean}>('propose_organization_route',{id:organizationId},input,options)
+  }
+  recoverOrganizationRoute(organizationId:string,clientReference:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationRouteAuthorization}>('recover_organization_route',{id:organizationId},undefined,options,{client_reference:originalGrantReference(clientReference)})
+  }
+  inspectOrganizationRoute(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationRouteAuthorization}>('inspect_organization_route',{id:organizationId,authorizationId},undefined,options)
+  }
+  /** Persist the exact hash/reference before submission; no mutation is retried automatically. */
+  approveOrganizationRoute(organizationId:string,authorizationId:string,input:{version:1;client_reference:string;authority_hash:string;approve:true},options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationRouteAuthorization;idempotent:boolean}>('approve_organization_route',{id:organizationId,authorizationId},input,options)
+  }
+  revokeOrganizationRoute(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationRouteAuthorization;idempotent:boolean}>('revoke_organization_route',{id:organizationId,authorizationId},undefined,options)
+  }
 
   /** Current-owner private inspection. Exact original reference can recover a grant beyond the bounded inventory. */
   inspectSpendingAccounts(organizationId: string, clientReference?: string, options?: RequestOptions) {

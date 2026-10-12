@@ -16,7 +16,7 @@ import { serviceSupportsRoute, storedServiceCapabilities } from './route-service
 import { checkServiceInput } from './verification-policy'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 import { isolatedVerifierEligibility } from './isolated-verifier-eligibility'
-import { mandateFundingEligibility } from './route-payment-mandate'
+import { mandateFundingEligibility, RouteMandateError } from './route-payment-mandate'
 import { agentFundingPolicyFailure } from './agent-spend-policy'
 import { privateProviderAccess } from './organization-private-providers'
 import { fundingPurchaseEvidence, PurchasingError } from './organization-purchasing'
@@ -94,10 +94,17 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
       || Date.now() + service.estimated_latency_seconds * 1000 > plan.execution_deadline_at.getTime())) return 'ROUTE_RETRY_DEADLINE_EXCEEDED'
     const reason = await checkProviderRequirements(source, trade.buyer_id, trade.seller_id, capabilities, order.provider_requirements_json, Boolean(privateShare),order.service_id)
     if (reason) return reason
-    const purchaseEvidence = await fundingPurchaseEvidence(order, trade, service, source)
+    const directPurchaseEvidence = await fundingPurchaseEvidence(order, trade, service, source)
+    const step = await findTradeFundingStep(source, trade.id)
+    const { organizationRoutePurchaseEvidence } = await import('./organization-route-authorizations')
+    // The original route mandate/use has already passed mandateFundingEligibility.
+    // Recheck the same current independent approval and frozen service contract;
+    // reservation approval must never be inferred from a saved candidate label.
+    const purchaseEvidence = directPurchaseEvidence ?? (step
+      ? await organizationRoutePurchaseEvidence(source,step.route_id,step.mandate_id,service,Math.round(trade.total_cost*100))
+      : undefined)
     const policy = await loadBuyerSpendPolicy(trade.buyer_id, source)
     if (policy) {
-      const step = await findTradeFundingStep(source, trade.id)
       const fundingSteps = step ? await listRouteFundingSteps(source, step.route_id) : []
       const retrySpendMinor = step ? fundingSteps.slice(1).reduce((sum, entry) => sum + entry.amount_minor, 0) : undefined
       const constraint = checkBuyerPolicyConstraints(policy.policy, { totalMinor: Math.round(trade.total_cost * 100), sellerId: trade.seller_id,
@@ -110,7 +117,7 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     }
     return null
   } catch (error) {
-    if (error instanceof PurchasingError) return error.code
+    if (error instanceof PurchasingError || error instanceof RouteMandateError) return error.code
     if (error instanceof SyntaxError || error instanceof ZodError) return 'SERVICE_REQUIREMENTS_INVALID'
     throw error
   }

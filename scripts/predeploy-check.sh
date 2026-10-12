@@ -2,6 +2,17 @@
 set -euo pipefail
 
 required_files=(
+  "lib/organization-route-authorizations.ts"
+  "lib/organization-route-api.ts"
+  "app/api/organizations/[id]/route-authorizations/route.ts"
+  "app/api/organizations/[id]/route-authorizations/[authorizationId]/route.ts"
+  "app/api/organizations/[id]/route-authorizations/[authorizationId]/approval/route.ts"
+  "app/organizations/[id]/route-authorizations/[authorizationId]/page.tsx"
+  "tests/api/organization-route-authorizations.test.ts"
+  "e2e/organization-route-review.spec.ts"
+  "migrations/2026-10-12-organization-route-authorizations-v1.sql"
+  "docs/ORGANIZATION_ROUTED_PURCHASING.md"
+  "docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md"
   "lib/chain-fee-codec.mjs"
   "lib/chain-fee-format.mjs"
   "lib/organization-chain-fee-health.mjs"
