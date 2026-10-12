@@ -1,8 +1,21 @@
-# Reputation v2 policy — shadow version 1
+# Reputation v2 policy — production version 1
 
-Local API contract 1.110; event schema 1; evidence eligibility 2; aggregation
-`reputation-v2-shadow-1`. These versions describe different contracts. Production
-remains 1.108 until the user's observation/publication gate is satisfied.
+API contract 1.111; event schema 1; evidence eligibility 2; aggregation
+`reputation-v2-1`; ranking `reputation-v2-ranking-1`. The user explicitly authorizes
+production ranking before representative observations. This is a rollout override,
+not a claim of empirical calibration or completed outcome/privacy review.
+
+Default new route candidate order is best supported history: the lower model
+quantile of the least-supported requested service/canonical-leaf/contracted scope,
+then current quoted total price and stable service ID. Whole-job evidence remains
+labelled; unrelated services and unknown scope cannot confer support. Current
+unknown/unavailable records remain eligible only after every buyer hard minimum,
+in a separate unproven segment ordered by numeric eligible price then stable ID.
+Null evidence never becomes a zero performance estimate. Existing saved route
+plans retain their frozen candidate order. All three nonpersistent comparison
+modes remain available. Legacy numerical score fields retain their units but do
+not determine the promoted order. Explicit newest, price and eligible-review
+catalog sorts and discovery relevance retain their distinct meaning.
 
 Authoritative financial backing, exact buyer review/delivery hash, frozen order
 consistency, current privacy, current ownership and known historical affiliations
@@ -54,7 +67,7 @@ known feedback dates and a weighted within-group mean, capped at one group's
 influence; an old bad review is not overwritten by a new perfect review. Missing
 feedback contributes no star or failure.
 
-Internal shadow estimates use `Beta(1 + weighted accepted, 1 + weighted failures)`
+Internal uncalibrated estimates use `Beta(1 + weighted accepted, 1 + weighted failures)`
 and its 10th percentile. They are uncalibrated model estimates, not a probability
 of successful hiring or a guaranteed confidence bound. Public no-history and
 undated-only terminal history have no model estimate. Raw accepted/failed counts,
@@ -72,8 +85,8 @@ deadline and a funded submission clock. Unpaid reservation is not commitment.
 Submission time is separate from buyer review/payout delay. p50 latency requires
 10 eligible submissions; p95 requires 20. Unknown clocks remain visible.
 
-The existing default route order remains unchanged. After all existing gates,
-shadow suggestions compare lowest eligible quoted total, best supported history
+The default new route order uses best supported history after all existing gates.
+Nonpersistent comparisons retain lowest eligible quoted total, best supported history
 (minimum required-leaf lower quantile), and an explicit balanced heuristic:
 `0.8 * minimum required-leaf lower quantile + 0.2 / (1 + quoted total USD)`.
 Price is a quote; reported latency and benchmark scores are not measured quality.

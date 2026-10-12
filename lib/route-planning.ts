@@ -21,7 +21,7 @@ import { storedServiceCapabilities } from '@/lib/route-service-eligibility'
 import { providerRequirementsSchema, providerRequirementFailure,reputationRequirementFailure, type ProviderRequirements } from './provider-requirements'
 import { backedCapabilityCounts, capabilityEvidence } from './provider-evidence'
 import { loadReputationV2Records } from './reputation-v2'
-import { reputationSuggestions } from './reputation-ranking'
+import { rankEligibleReputationCandidates, reputationSuggestions } from './reputation-ranking'
 import type { ReputationV2 } from './reputation-v2-model'
 
 export const routePlanInput = z.object({
@@ -50,6 +50,7 @@ export function normalizedCapabilities(input: string[]) {
 export type RouteCandidate = {
   service_id: string
   reputation_v2?: ReputationV2[]
+  reputation_ranking?: { policy_version: string; mode: string; segment: 'supported' | 'unproven'; position: number; model_lower_quantile: number | null; calibrated: false }
   seller_agent_id: string | null
   pricing: { model: 'fixed'; amount: string; currency: 'USD'; estimated_total: string }
   estimated_latency_seconds: number | null
@@ -228,8 +229,24 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
       ?? [...candidate.reputation_v2!].sort((a,b)=>a.delivery.weighted_model_estimate!.lower_quantile-b.delivery.weighted_model_estimate!.lower_quantile)[0]}))
   const reputation_shadow={baseline_ids:candidates.map(c=>c.service_id),
     comparisons:['lowest_eligible_price','best_supported_history','balanced_heuristic'].map(mode=>reputationSuggestions(shadowCandidates,mode as 'lowest_eligible_price'|'best_supported_history'|'balanced_heuristic')),
-    capability_aggregation:'least_supported_required_leaf',eligible_candidates:candidates.length,default_ranking_changed:false,execution_authority:false}
-  return { capabilities, candidates: candidates.slice(0, 20), examined: Math.min(rows.length, 500), truncated, reputation_shadow }
+    capability_aggregation:'least_supported_required_leaf',eligible_candidates:candidates.length,default_ranking_changed:true,execution_authority:false}
+  const reputation_ranking=rankEligibleReputationCandidates(shadowCandidates)
+  const byId=new Map(candidates.map(candidate=>[candidate.service_id,candidate]))
+  const ranked=reputation_ranking.ordered_ids.map(id=>byId.get(id)!)
+  for(const [index,candidate] of ranked.entries()) {
+    const supported=reputation_ranking.supported_ids.includes(candidate.service_id)
+    const record=shadowCandidates.find(item=>item.id===candidate.service_id)!.reputation
+    candidate.reputation_ranking={policy_version:reputation_ranking.policy.version,mode:reputation_ranking.mode,
+      segment:supported?'supported':'unproven',position:index+1,
+      model_lower_quantile:supported?record.delivery.weighted_model_estimate!.lower_quantile:null,calibrated:false}
+    candidate.explanation.push(
+    supported
+      ? 'Ordered by the least-supported requested service/capability history; the model is uncalibrated'
+      : 'No current dated evidence for every requested service/capability; shown separately by eligible price',
+    'Legacy score and provider latency claims do not determine reputation ordering',
+    )
+  }
+  return { capabilities, candidates: ranked.slice(0, 20), examined: Math.min(rows.length, 500), truncated, reputation_shadow, reputation_ranking }
 }
 
 export function routePlanDto(plan: typeof route_plans.$inferSelect) {

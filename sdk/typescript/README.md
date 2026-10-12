@@ -133,3 +133,14 @@ retains unlimited TTL (100 handles per agent); result cursors expire after
 15 minutes, after which request the result again using the same handle. See
 [the complete MCP guide](../../docs/MCP_ROUTING_TASKS.md) for headers, scopes,
 replay guarantees, limits, financial errors and lifecycle examples.
+
+### Production reputation ordering
+
+New route plans use best-supported requested service/capability history after the
+canonical eligibility checks. `RouteCandidate.reputation_ranking` records the
+policy version, position and `supported` or `unproven` segment; its model estimate
+is null for unknown/unavailable evidence and is otherwise uncalibrated.
+`reputation_v2` carries the scoped records. Previously saved plans retain their
+frozen ordering and may omit this additive metadata. The three nonpersistent
+comparison modes remain available through `reputationSuggestions`. These fields
+never authorize a purchase or waive a saved buyer minimum.

@@ -2,8 +2,8 @@
 export const REPUTATION_V2_POLICY = {
   event_schema_version: 1,
   evidence_eligibility_version: 2,
-  aggregation_policy_version: 'reputation-v2-shadow-1',
-  mode: 'shadow',
+  aggregation_policy_version: 'reputation-v2-1',
+  mode: 'production',
   half_life_days: 90,
   stale_after_days: 90,
   developing_groups: 5,

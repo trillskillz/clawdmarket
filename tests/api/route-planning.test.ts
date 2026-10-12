@@ -528,6 +528,37 @@ test('planning separates provider claims from backed completion evidence without
   assert.ok(observed.score > claimed.score)
   assert.ok(observed.explanation.some((item: string) => /quality remains unmeasured/.test(item)))
 
+  // Current backing and dated, frozen performed scope must drive the real
+  // planner, rather than legacy provider breadth or a cheaper unknown service.
+  assert.equal(observed.reputation_ranking?.segment, 'unproven')
+  await db.update(schema.trades).set({ completed_at: new Date(Date.now()-1000) }).where(eq(schema.trades.id, trade.id))
+  const cheapId=crypto.randomUUID()
+  await db.insert(schema.service_definitions).values({ id:cheapId,seller_id:sellerId,
+    title:'Other translation service',description:'Unproven service with the same provider identity.',
+    capabilities:'["translation"]',price_minor:1,status:'active',estimated_latency_seconds:1 })
+  const compute=()=>computePlan(routePlanInput.parse({client_reference:crypto.randomUUID(),
+    objective:'Translate this document for review',required_capabilities:['translation'],
+    max_budget:{amount:'2.00',currency:'USD'}}),buyerId)
+  try {
+    const promoted=await compute(),original=promoted.candidates.find(candidate=>candidate.service_id===serviceId)!
+    const cheap=promoted.candidates.find(candidate=>candidate.service_id===cheapId)!
+    assert.ok(original.score<cheap.score,'legacy heuristic would prefer the cheaper claim')
+    assert.ok(promoted.candidates.indexOf(original)<promoted.candidates.indexOf(cheap))
+    assert.equal(original.reputation_ranking?.segment,'supported')
+    assert.ok(original.reputation_ranking!.model_lower_quantile!>0)
+    assert.equal(cheap.reputation_ranking?.segment,'unproven')
+    assert.equal(cheap.reputation_ranking?.model_lower_quantile,null)
+    assert.equal(promoted.reputation_ranking?.policy.version,'reputation-v2-ranking-1')
+    assert.equal(promoted.reputation_shadow?.default_ranking_changed,true)
+    await db.update(schema.verification_results).set({content_hash:'mismatched-owned-fixture'}).where(eq(schema.verification_results.trade_id,trade.id))
+    const invalidated=await compute(),lost=invalidated.candidates.find(candidate=>candidate.service_id===serviceId)!
+    assert.equal(lost.reputation_ranking?.segment,'unproven')
+    assert.ok(invalidated.candidates.findIndex(candidate=>candidate.service_id===cheapId)<invalidated.candidates.indexOf(lost))
+  } finally {
+    await db.update(schema.verification_results).set({content_hash:delivery.content_hash}).where(eq(schema.verification_results.trade_id,trade.id))
+    await db.update(schema.service_definitions).set({status:'paused'}).where(eq(schema.service_definitions.id,cheapId))
+  }
+
   const recordAnotherCompletion = async (completionBuyer: string) => {
     const [anotherListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
       title: 'Another translation', description: 'Another completed translation.', price_bankr: 1,
@@ -608,7 +639,7 @@ test('planning separates provider claims from backed completion evidence without
   assert.equal(penalized.score_components.provider_failure_penalty, 0.4)
   assert.ok(penalized.score < postOwnershipBaseline.score)
   assert.equal(penalized.evidence_level, 'backed_completion_observed')
-  assert.match(penalized.explanation.at(-1) ?? '', /penalty is capped/)
+  assert.ok(penalized.explanation.some(item=>/penalty is capped/.test(item)))
 
   const [rejectedListing] = await db.insert(schema.listings).values({ seller_id: sellerId, category: 'code',
     title: 'Rejected translation', description: 'Translation awaiting a corrected submission.', price_bankr: 1,
@@ -806,7 +837,9 @@ test('reputation suggestion endpoint preserves hard minimums and price gates wit
  assert.equal(response.status,200);assert.equal(result.persisted,false);assert.equal(result.funds_moved,false);assert.equal(result.execution_authority,false)
  assert.ok(result.candidates.some((c:{service_id:string})=>c.service_id===offered.id))
  assert.ok(result.candidates.every((c:{pricing:{estimated_total:string}})=>Number(c.pricing.estimated_total)<=3))
- assert.equal(result.reputation_shadow.default_ranking_changed,false);assert.equal(result.reputation_shadow.comparisons.length,3)
+ assert.equal(result.reputation_shadow.default_ranking_changed,true);assert.equal(result.reputation_shadow.comparisons.length,3)
+ assert.equal(result.reputation_ranking.policy.status,'production')
+ assert.deepEqual(result.candidates.map((c:{service_id:string})=>c.service_id),result.reputation_ranking.ordered_ids.slice(0,20))
  const blocked=await POST(request('/api/agents/reputation-suggestions','route-buyer','POST',{...body,provider_requirements:{minimum_reputation_buyer_groups:100000}}))
  assert.deepEqual((await blocked.json()).candidates,[])
  assert.deepEqual(await counts(),before)

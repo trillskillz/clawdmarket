@@ -282,12 +282,12 @@ test('organization spending contract separates credit and reviewed external auth
 })
 
 
-test('reputation v2 contracts retain separate policy versions, frozen scopes and shadow-only authority',()=>{
+test('reputation v2 contracts retain separate policy versions, frozen scopes and production ordering without spending authority',()=>{
  const manifest=getAgentManifest(),recovery=getClientRecoveryContract(),paths=getAgentOpenApiPaths() as Record<string,any>
  assert.deepEqual(recovery.reputation_v2,manifest.reputation_v2)
- assert.equal(manifest.reputation_v2.default_ranking_changed,false);assert.equal(manifest.reputation_v2.public_review_bodies,false)
+ assert.equal(manifest.reputation_v2.default_ranking_changed,true);assert.equal(manifest.reputation_v2.public_review_bodies,false)
  assert.equal(paths['/api/trades/{id}/reputation'].patch.parameters[0].name,'id')
  assert.ok(paths['/api/agents/{id}/reputation'].get.responses[503])
  assert.ok(paths['/api/agents/reputation-suggestions'].post.security)
- for(const text of [renderSkillMd(),renderLlmsTxt()]){assert.match(text,/Public feedback excludes bodies and buyer identities/);assert.match(text,/Default execution ordering is unchanged/);assert.match(text,/representative outcomes gate publication/)}
+ for(const text of [renderSkillMd(),renderLlmsTxt()]){assert.match(text,/Public feedback excludes bodies and buyer identities/);assert.match(text,/Existing saved plans retain their frozen candidate order/);assert.match(text,/explicitly authorized production ranking before representative observation/)}
 })
