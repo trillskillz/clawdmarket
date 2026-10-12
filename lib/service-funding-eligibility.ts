@@ -102,6 +102,7 @@ export async function serviceFundingEligibility(trade: typeof trades.$inferSelec
     // reservation approval must never be inferred from a saved candidate label.
     const purchaseEvidence = directPurchaseEvidence ?? (step
       ? await organizationRoutePurchaseEvidence(source,step.route_id,step.mandate_id,service,Math.round(trade.total_cost*100))
+        ?? await (await import('./organization-workflow-authorizations')).organizationWorkflowPurchaseEvidence(source,step.route_id,step.mandate_id,service,Math.round(trade.total_cost*100))
       : undefined)
     const policy = await loadBuyerSpendPolicy(trade.buyer_id, source)
     if (policy) {

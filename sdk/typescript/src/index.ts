@@ -48,6 +48,13 @@ export type OrganizationRouteProposal = OrganizationRouteProposalBase & (
   | {version:4;provider_share_ids:string[];route_id?:never;max_lifetime_fee_token_cost_units:string;mandate:OrganizationRouteMandate&{payment:Extract<RouteMandatePayment,{rail:'mpp'}>&{chain_id:4217}}}
 )
 export type OrganizationRouteProviderConsent = {id:string;service_id:string;organization_id:string;organization_owner_id:string;provider_owner_id:string;provider_agent_id:string;team_id:string|null;offer_reference:string;accept_reference:string;request_hash:string;accept_hash:string;expires_at:string;accepted_at:string;consent_hash:string}
+export type WorkflowApprovalCommand={version:1;client_reference:string;plan_hash:string;expires_at:string;max_gross_minor:number;max_chain_fee_units:string;payment:RouteMandateInput['payment'];private_data:'selected_provider_only';
+  nodes:Array<{key:string;static_input:Record<string,unknown>;provider_requirements:ProviderRequirements & {approved_providers:string[]};verification:VerificationPolicy;max_per_attempt_minor:number;max_retry_minor:number;max_attempts:number;max_latency_seconds:number;max_chain_fee_per_attempt_units:string;dependency_inputs:Array<{source_node:string;artifact_index:number;target_field:string}>}>}
+export type OrganizationWorkflowProposal = {version:1|2;client_reference:string;workflow_id:string;reviewer_role_id:string;approval:WorkflowApprovalCommand;
+  max_daily:string;max_monthly:string;max_lifetime:string;max_lifetime_chain_fee_units:string;private_nodes?:Array<{key:string;provider_share_ids:string[]}>}
+export type OrganizationWorkflowAuthorization = {id:string;organization_id:string;workflow_id:string;buyer_id:string;version:1|2;state:'pending'|'approved'|'revoked';authority_hash:string;
+  approval_id:string;client_reference:string;terms:{contract_hash:string;max_daily_minor:number;max_monthly_minor:number;max_lifetime_minor:number;max_lifetime_chain_fee_units:string;nodes:Array<{key:string;services:Array<{id:string;seller_id:string;contract_hash:string}>;provider_shares:Array<{id:string;consent_hash:string}>}>};
+  contract:{workflow:Record<string,unknown>;terms:WorkflowApprovalCommand;token:Record<string,unknown>};decision:{version:1|2;client_reference:string;authority_hash:string;approve:true}|null;viewer_role:'owner'|'reviewer';review_url:string}
 export type OrganizationRouteAuthorization = {id:string;version:1|2|3|4;organization_id:string;route_id:string;buyer_id:string;team_id:string|null;cost_center:string;reviewer_account_id:string;
   viewer_role:'owner'|'reviewer';review_url:string;client_reference:string;authority_hash:string;state:'pending'|'approved'|'revoked';approved_at:string|null;revoked_at:string|null;
   decision:{version:1|2|3|4;client_reference:string;authority_hash:string;approve:true}|null;
@@ -388,6 +395,23 @@ export class ClawdMarketClient {
   getReputationDecisions(tradeId:string,options?:RequestOptions){return this.request<{decisions:Record<string,unknown>[]}>('GET',`${tradePath(tradeId)}/reputation`,undefined,options)}
   /** Persist this exact body/reference before sending; inspect on transport uncertainty. */
   appealReputationFinding(tradeId:string,input:{version:1;client_reference:string;finding_id:string},options?:RequestOptions){return this.request<Record<string,unknown>>('PATCH',`${tradePath(tradeId)}/reputation`,input,options)}
+
+  proposeOrganizationWorkflow(organizationId:string,input:OrganizationWorkflowProposal,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationWorkflowAuthorization;idempotent:boolean}>('propose_organization_workflow',{id:organizationId},input,options)
+  }
+  recoverOrganizationWorkflow(organizationId:string,clientReference:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationWorkflowAuthorization}>('recover_organization_workflow',{id:organizationId},undefined,options,{client_reference:originalGrantReference(clientReference)})
+  }
+  inspectOrganizationWorkflow(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationWorkflowAuthorization}>('inspect_organization_workflow',{id:organizationId,authorizationId},undefined,options)
+  }
+  /** Persist the exact hash/reference before submission; no mutation is retried automatically. */
+  approveOrganizationWorkflow(organizationId:string,authorizationId:string,input:{version:1|2;client_reference:string;authority_hash:string;approve:true},options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationWorkflowAuthorization;idempotent:boolean}>('approve_organization_workflow',{id:organizationId,authorizationId},input,options)
+  }
+  revokeOrganizationWorkflow(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationWorkflowAuthorization;idempotent:boolean}>('revoke_organization_workflow',{id:organizationId,authorizationId},undefined,options)
+  }
 
   /** Current-owner private inspection. Exact original reference can recover a grant beyond the bounded inventory. */
   proposeOrganizationRoute(organizationId:string,input:OrganizationRouteProposal,options?:RequestOptions){

@@ -2,6 +2,9 @@
 set -euo pipefail
 
 required_files=(
+  "lib/organization-workflow-authorizations.ts"
+  "migrations/2026-10-12-organization-reviewed-workflows-v1.sql"
+  "docs/ORGANIZATION_REVIEWED_WORKFLOWS.md"
   "lib/organization-route-private-consent.ts"
   "docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDERS.md"
   "docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_PLAN.md"

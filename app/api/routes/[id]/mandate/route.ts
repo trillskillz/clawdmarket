@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { resolveAuthenticatedOwnerAccount } from '@/lib/agent-owner-auth'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
+import { isPrivateOrganizationWorkflowRoute } from '@/lib/organization-workflow-authorizations'
 import { isPrivateOrganizationRoute } from '@/lib/organization-route-authorizations'
 import { validateCsrf } from '@/lib/csrf'
 import { createRouteMandate, inspectRouteMandate, revokeRouteMandate, RouteMandateError } from '@/lib/route-payment-mandate'
@@ -17,7 +18,7 @@ async function handle(request: NextRequest, context: Context) {
     if (request.method === 'GET') {
       const principal = await resolveRequestPrincipal(request)
       if (!principal) return reply({ error_code: 'UNAUTHORIZED' }, 401)
-      if (principal.kind === 'registered-agent' && await isPrivateOrganizationRoute(id)) {
+      if (principal.kind === 'registered-agent' && (await isPrivateOrganizationRoute(id) || await isPrivateOrganizationWorkflowRoute(id))) {
         const spending = await resolveRegisteredAgentRequest(request,{requiredScope:'payments:write'})
         if (spending.kind !== 'agent') return reply({error_code:'MANDATE_NOT_FOUND'},404)
       }

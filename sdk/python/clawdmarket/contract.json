@@ -1,5 +1,5 @@
 {
-  "version": "1.115",
+  "version": "1.116",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -290,7 +290,7 @@
       "price": "current_quoted_total; not_observed_quality",
       "latency": "excluded_from_v2_model; claims_remain_separate"
     },
-    "contract_version": "1.115",
+    "contract_version": "1.116",
     "default_ranking_changed": true,
     "legacy_fields": "compatibility_only_uncalibrated_heuristic",
     "public_review_bodies": false
@@ -327,6 +327,41 @@
     "revoke_organization_route": {
       "method": "DELETE",
       "path": "/api/organizations/{id}/route-authorizations/{authorizationId}",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "propose_organization_workflow": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/workflow-authorizations",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "recover_organization_workflow": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/workflow-authorizations",
+      "auth": "owner-account",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
+    "inspect_organization_workflow": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/workflow-authorizations/{authorizationId}",
+      "auth": "owner-account",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
+    "approve_organization_workflow": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/workflow-authorizations/{authorizationId}/approval",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "revoke_organization_workflow": {
+      "method": "DELETE",
+      "path": "/api/organizations/{id}/workflow-authorizations/{authorizationId}",
       "auth": "owner-account",
       "named_credential_scope": "marketplace:write",
       "deprecated_body_fields": []

@@ -137,6 +137,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     const { organizationRoutePrivateShare } = await import('./organization-route-authorizations')
     const resolvePrivateShare = async (source: NonNullable<Parameters<typeof privateProviderAccess>[3]>) => routeId && args.mandateId
       ? await organizationRoutePrivateShare(source,routeId,args.mandateId,service,principal.userId)
+        ?? await (await import('./organization-workflow-authorizations')).organizationWorkflowPrivateShare(source,routeId,args.mandateId,service,principal.userId)
       : await privateProviderAccess(service,principal.userId,request.provider_share_id,source)
     const preliminaryShare = await readWithLocalContentionRecovery(resolvePrivateShare)
     if (service.visibility !== 'public' && !preliminaryShare) throw new ServiceOrderReservationError('PRIVATE_SERVICE_NOT_FOUND','Private route requires independently reviewed consent',404)
@@ -242,7 +243,8 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, principal.userId, service.seller_id, tx)
       if (verifierFailure) throw new ServiceOrderReservationError(verifierFailure, 'Isolated verifier is unavailable or shares a trade-party owner')
       const { organizationRoutePurchaseEvidence } = await import('./organization-route-authorizations')
-      const routePurchaseEvidence = routeId && args.mandateId ? await organizationRoutePurchaseEvidence(tx,routeId,args.mandateId,service,totalMinor) : undefined
+      const routePurchaseEvidence = routeId && args.mandateId ? await organizationRoutePurchaseEvidence(tx,routeId,args.mandateId,service,totalMinor)
+        ?? await (await import('./organization-workflow-authorizations')).organizationWorkflowPurchaseEvidence(tx,routeId,args.mandateId,service,totalMinor) : undefined
       const purchaseEvidence = request.purchasing_approval_id ? await validatePurchaseApproval(tx, { approvalId: request.purchasing_approval_id,
         buyerId: principal.userId, service, request: { ...request, provider_requirements: request.provider_requirements ?? {} }, totalMinor, rail }) : routePurchaseEvidence
       const spendingPurchase = args.organizationSpendingEvidence ? await validateSpendingPurchase(tx,args.organizationSpendingEvidence,id,principal.userId,request,totalMinor) : undefined

@@ -1,6 +1,7 @@
-# Next dependency: independently reviewed enterprise workflows
+# Independently reviewed enterprise workflows — dependency audit and acceptance
 
-Dependency audit only. Not implemented, accepted or counted. This follows the
+The original dependency audit below has now been implemented and accepted as
+capability 6/10, HTTP 1.116; see the final acceptance record at the end. It followed the
 accepted private-provider routed capability (HTTP 1.115, local batch 5/10); no existing
 route grant, direct-service approval or credential becomes workflow authority.
 
@@ -64,3 +65,25 @@ scope or infer permission from this workflow dependency audit.
 Publication retains one demonstrable capability per PR, ten accepted capabilities
 per batch, protected CI, migration-first deployment and exact merged-SHA production
 verification. No live funds, production flags or deployment are included.
+
+
+## Complete local acceptance
+
+HTTP 1.116 on `feat/enterprise-reviewed-workflows` derives from accepted parent
+`0d9bcd4` in `/home/void/Work/clawdmarket-enterprise-reviewed-workflows`. Separate
+L1 v1/Tempo v2 independent grants now bind original workflow approval, frozen
+providers and exact accepted private consent. Internal child evidence and original
+standalone/workflow history share gross and same-currency fees without double count.
+No paid retries; existing workflow/route hashes and original recovery retain meaning.
+
+All six genuine L1/Tempo settlement/refund/downstream-revocation journeys pass;
+seven focused authority/privacy cases include four separate-process financial races
+and ten before/after-commit SIGKILL boundaries. Build, 66 migrations/replay, integrity,
+ten reputation guards and five evidence queries pass. The final forty built browser journeys and complete
+852-case enabled gate pass: 847 passed, zero failed and five expected skips.
+Eighteen Python cases and real both-SDK lost-response recovery pass. This complete
+workflow outcome is accepted as local capability 6/10.
+[Current acceptance record](ORGANIZATION_REVIEWED_WORKFLOW_AUDIT.md).
+
+Next dependency audit: [task-board purchasing](ORGANIZATION_REVIEWED_TASK_PURCHASING_PLAN.md).
+That audit is not another accepted capability.

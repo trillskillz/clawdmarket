@@ -7,41 +7,47 @@ passed. Fresh protected audit 38267467182 passed all five compiler queries and t
 immutable guards. Representative observation/calibration remain pending under the
 explicit user override; empirical promotion_ready=false remains truthful.
 
-The local batch has **5/10** accepted demonstrable capabilities: reconciled private
+The local batch has **6/10** accepted demonstrable capabilities: reconciled private
 enterprise actual fee coverage, independently reviewed L1 public-provider routing
 (`5ae3e92`, HTTP 1.112), recursive-improvement retirement (`3839c32`, HTTP 1.113),
-reviewed Tempo public-provider routing (`eb3b6f8`, HTTP 1.114), and independently
-reviewed private-provider L1/Tempo routing (HTTP 1.115).
-Current integrated branch: `feat/enterprise-routed-private` in
-`/home/void/Work/clawdmarket-enterprise-routed-private`.
+reviewed Tempo public-provider routing (`eb3b6f8`, HTTP 1.114), independently reviewed
+private-provider L1/Tempo routing (`0d9bcd4`, HTTP 1.115), and independently reviewed
+enterprise workflows (HTTP 1.116).
+Current integrated branch: `feat/enterprise-reviewed-workflows` in
+`/home/void/Work/clawdmarket-enterprise-reviewed-workflows`, accepted parent `0d9bcd4`.
 
-Private-provider acceptance passes the fully enabled 838-case Node gate:
-833 passed, zero failed, five expected skips. Eighteen Python tests, SDK parity/build,
-TypeScript, lint, genuine disposable L1/Tempo economics, crash/race recovery and
-legacy migration replay pass. Six final private economic journeys independently
-prove actual payouts, revoked original refunds, last-boundary consent checks,
-shared-wallet exclusion and settled-result recovery after both share/grant
-revocation. Eight focused authority/privacy/crash/race checks pass. Production build
-and seventeen built browser journeys pass. Storage: 65 migrations and replay,
-integrity ok, no foreign-key anomalies, ten immutable reputation guards and five
-working evidence queries. Public v1/v2 hashes, separate fee units, shared original
-gross and historic identity/ownership/credentials retain their meaning. Ordinary
-route DTOs redact private candidates/input; named read-only credentials cannot
-inspect private mandates. Original owner/reviewer review and financial recovery
-retain their scope after revocation.
+Workflow acceptance passes the fully enabled **852-case Node gate**:
+847 passed, zero failed, five expected skips. Eighteen Python tests,
+SDK parity/build, TypeScript, lint, final production build and forty built Chromium
+journeys pass. Six final genuine workflow L1/Tempo journeys prove two dependent
+private providers, buyer/provider process deaths, original artifact handoff, explicit
+buyer acceptance, confirmed payouts, exact revoked late-payment refunds, downstream
+consent denial, shared-wallet exclusion and original backed receipt recovery.
+Both SDKs recover genuinely lost proposal/decision replies over real HTTP.
+Twelve supplemental economic journeys also retain previous private standalone
+acceptance with corrected actual DELETE dispatch. Rejected-claim cancellation
+releases unused capacity while original gross/fee use stays charged; original
+claimed payment recovery retains its scope. Seven focused authority/privacy cases
+include four separate-process gross/fee/department/capacity races and ten genuine
+before/after-commit SIGKILL boundaries. Storage: 66 migrations and replay, preserved
+legacy financial/input/read-credential state, integrity ok, zero foreign-key
+anomalies, ten immutable reputation guards and five working evidence queries.
+Legacy workflow v1/route v1-v4 hashes, separate fee units and historic identities
+retain their meaning. Controlled fixture providers are not production independence
+evidence. Execution remains behind the original closed rollout gates.
 
-Evidence: [private-provider acceptance](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_AUDIT.md),
-[private-provider contract](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDERS.md),
-[Tempo acceptance](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md),
-[retirement acceptance](docs/RECURSIVE_IMPROVEMENT_REMOVAL.md), and
-[fee coverage audit](docs/ENTERPRISE_CHAIN_FEES_AUDIT.md).
+Evidence: [workflow acceptance](docs/ORGANIZATION_REVIEWED_WORKFLOW_AUDIT.md),
+[workflow contract](docs/ORGANIZATION_REVIEWED_WORKFLOWS.md),
+[workflow dependency/acceptance](docs/ORGANIZATION_REVIEWED_WORKFLOW_PLAN.md), and
+[private-provider acceptance](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_AUDIT.md).
 
-Next implement independently reviewed enterprise workflows using
-[the dependency audit](docs/ORGANIZATION_REVIEWED_WORKFLOW_PLAN.md) from this accepted
-parent. Bind original DAG/node/dependency contracts and internally derived child
-consent, with shared standalone/workflow exposure and multi-node real economic
-acceptance. Existing workflow, route, direct-service and read credentials retain
-separate authority. Product/task/contract purchasing remains separately bounded.
+Next implement independently reviewed task-board purchasing using
+[the audited dependencies](docs/ORGANIZATION_REVIEWED_TASK_PURCHASING_PLAN.md).
+Bind the exact accepted bid/workspace and original task trade, separately scoped
+payment claims and shared route/workflow/task exposure. Preserve original task
+delivery, explicit review and late-payment recovery; pending review cannot be
+bypassed through generic task funding. That dependency audit is not another
+capability. Product/listing and contract purchases retain separate authority.
 
 The user's latest cadence is **ten completed capability PRs per publication batch**,
 one demonstrable capability per PR, protected CI, migration-first deployment and
@@ -52,7 +58,7 @@ foundations do not count. No live funds or global rollout changes are authorized
 
 **Source of truth for future routing-layer work.** Updated 2026-10-12 after
 accepted production Reputation v2 HTTP 1.111 and accepted local reviewed public/private
-L1/Tempo routes through HTTP 1.115. Current local batch: **5/10**. Continue routing
+L1/Tempo routes and enterprise workflows through HTTP 1.116. Current local batch: **6/10**. Continue routing
 in dependency order from the current continuation above. Existing marketplace and
 settlement remain authoritative; a schema or endpoint alone does not complete an
 economic milestone.
@@ -63,11 +69,12 @@ economic milestone.
 
 **Payment health audit completed:** Configuration, both mainnet RPCs, reserves, account credit, original receipts, payout/refund queues and 28 public payment-surface browser checks passed. The dedicated canary buyer has only 0.005573 Base USDC; the fresh paid canary remains unverified. No live funds, top-up or rollout changes occurred. [Audit and exact evidence](docs/PAYMENT_HEALTH_AUDIT_2026-10-11.md).
 
-**Next local work:** Independently reviewed enterprise workflows. Private fee
+**Next local work:** Independently reviewed task-board purchasing. Private fee
 coverage, reviewed public L1 routing, recursive-improvement retirement, reviewed
-public Tempo routing and reviewed private-provider routing are accepted locally:
-**5/10**, contract **1.115**. See [private-provider acceptance](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_AUDIT.md)
-and [workflow dependencies](docs/ORGANIZATION_REVIEWED_WORKFLOW_PLAN.md).
+public Tempo routing, reviewed private-provider routing and independently reviewed
+enterprise workflows are accepted locally: **6/10**, contract **1.116**.
+See [workflow acceptance](docs/ORGANIZATION_REVIEWED_WORKFLOW_AUDIT.md) and
+[task-board dependencies](docs/ORGANIZATION_REVIEWED_TASK_PURCHASING_PLAN.md).
 Ten completed capability PRs remain the publication gate. Independent providers,
 representative calibration, paid canaries and production Tempo compatibility retain
 their prerequisites; no live funds or global rollout changes are authorized.
@@ -2326,3 +2333,37 @@ The local counter is **5/10**. The next dependency audit is
 which is not implemented or counted. Publication remains ten accepted capability
 PRs, protected CI, migration-first deployment and exact merged-SHA verification.
 No live funds, production deployment or global flags changed.
+
+## 2026-10-12 — Local capability 6/10: independently reviewed enterprise workflows (HTTP 1.116)
+
+The current owner proposes an exact original DAG with frozen providers and accepted
+private consent; a selected independent current reviewer approves separate L1 v1
+or configured Tempo v2 authority. The assigned spending buyer completes dependent
+original private provider work, accepted artifact handoff and confirmed settlement.
+Internal child evidence and validated original standalone/workflow ledgers share
+gross and same-currency fees without double count or replenishment after refund.
+Current owner/reviewer/department/service/consent changes close fresh commitments;
+original payments, refunds, paid private output and aggregate receipt remain
+recoverable. One attempt per node, zero paid retries. Existing financial states,
+legacy hashes and credential scopes retain their meaning.
+
+Final `/tmp/clawdmarket-reviewed-workflow-predeploy-v2.log` passes **852
+cases: 847 passed, zero failed, five expected skips**, in 1143895.102493 ms,
+with eighteen Python tests, SDK parity/build, TypeScript, lint, actual disposable
+both-rail economics, isolated verifiers and legacy migration/replay. Final economic
+v8 passes six workflow journeys with real both-SDK lost-response recovery; v7 passes
+twelve workflow/private standalone journeys with actual wallet collision and
+cancellation semantics. Focused v9 passes seven cases, four cross-authority
+financial races and ten genuine SIGKILL boundaries. Final build v4 and forty built
+Chromium journeys pass. All 66 migrations/replay, original legacy state, integrity,
+zero FK anomalies, ten immutable reputation guards and five compiler queries pass.
+[Acceptance and diagnostic corrections](docs/ORGANIZATION_REVIEWED_WORKFLOW_AUDIT.md)
+include the old migration-count fixture, DELETE dispatch, race-process isolation
+and lost-network review recovery. Controlled fixtures do not prove independent
+production providers. No live funds, flags, remote push or deployment occurred.
+
+The local counter is **6/10**. Continued with the concrete
+[task-board dependency audit](docs/ORGANIZATION_REVIEWED_TASK_PURCHASING_PLAN.md):
+original accepted bid/workspace, separate payment scope, original task delivery
+and shared validated exposure. It is not implemented or counted. Ten accepted
+capability PRs remain the publication gate.

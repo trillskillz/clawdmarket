@@ -51,6 +51,7 @@ export interface OrganizationSpendingClient {
 }
 
 export type EnterpriseOperation = 'inspect_spending_accounts' | 'create_spending_account' | 'revoke_spending_account'
+  | 'propose_organization_workflow' | 'recover_organization_workflow' | 'inspect_organization_workflow' | 'approve_organization_workflow' | 'revoke_organization_workflow'
   | 'propose_organization_route' | 'recover_organization_route' | 'inspect_organization_route' | 'approve_organization_route' | 'revoke_organization_route'
   | 'spending_account_service_order' | 'inspect_spending_account_order' | 'spending_evm_intent' | 'recover_spending_evm_intent'
   | 'spending_evm_claim' | 'spending_evm_proof' | 'spending_mpp_intent' | 'recover_spending_mpp_intent' | 'spending_mpp_claim' | 'spending_mpp_proof'

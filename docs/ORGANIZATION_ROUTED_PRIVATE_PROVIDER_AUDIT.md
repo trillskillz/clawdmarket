@@ -58,10 +58,13 @@ real owner/reviewer APIs with lost proposal/decision replies.
 Every private journey also creates a second independently reviewed private service
 and route with sufficient gross/fees, its own original accepted share and separate
 buyer journal. Its claimed payer/nonce is denied by the first unreconciled wallet
-obligation, with no broadcast or second claim. The cancelled competing checkout
-correctly retains its own uncertain-payment capacity and original exposure. It is
-not falsely treated as an immediately released order. Original successful/refunded
-service capacity releases exactly once.
+obligation, with no broadcast or second claim. The competing checkout's original
+gross/fee exposure remains charged. The workflow acceptance follow-up corrected
+the HTTP fixture's DELETE dispatch (it previously dispatched GET), and proved
+actual cancellation releases this rejected-claim checkout's unused capacity.
+The original claimed payment keeps its original recovery protection; successful
+or refunded service capacity releases exactly once. The final follow-up evidence
+is recorded in [workflow acceptance](ORGANIZATION_REVIEWED_WORKFLOW_AUDIT.md).
 
 The L1 race revokes the private share during real wallet inspection after current
 claim permission. The buyer worker rechecks the same signed claim immediately before
@@ -105,10 +108,12 @@ assert named case counts. Migration v1 lacked required base tables; the disposab
 base was initialized before v2/replay. Predeploy v1 was stopped for the route privacy
 fix. Predeploy v2 exposed concurrent build/type-generation file deletion; build and
 predeploy mutations were made sequential. Predeploy v3 caught an unreachable variant
-in the new wallet fixture. Economic v2 incorrectly expected uncertain cancellation
-to release the competing original service's capacity; its fixture now uses a
-separate service and explicitly verifies retained uncertain capacity. No financial
-state machine was relaxed to make these checks pass. The final complete gate is
+in the new wallet fixture. Economic v2 introduced a separate competing service.
+The workflow follow-up later found that the fixture dispatched DELETE as GET;
+actual cancellation releases the rejected-claim checkout's capacity while its
+original gross/fee exposure stays charged. The corrected both-rail checks retain
+the original claimed payment's recovery scope. No financial state machine was
+relaxed to make these checks pass. The original complete gate is
 `/tmp/clawdmarket-private-predeploy-v4.log`; it completed successfully with the
 counts above. The diagnostic runs do not contribute to acceptance.
 

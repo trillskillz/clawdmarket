@@ -139,16 +139,19 @@ before(async () => {
         : path.endsWith('/prepare') ? (await import('@/app/api/workflows/[id]/nodes/[key]/prepare/route')).POST
         : path.endsWith('/reconcile') ? (await import('@/app/api/workflows/[id]/reconcile/route')).POST
         : path.includes('/artifacts/') ? (await import('@/app/api/workflows/[id]/artifacts/[grantId]/route')).GET : null
-      const organizationHandler = !path.startsWith('/api/organizations/') ? null
+      const organizationHandler = !path.startsWith('/api/organizations/') ? null : path.includes('/workflow-authorizations')
+        ? path.includes('/approval') ? (await import('@/app/api/organizations/[id]/workflow-authorizations/[authorizationId]/approval/route')).POST
+          : path.split('?')[0].split('/').length===5 ? (await import('@/app/api/organizations/[id]/workflow-authorizations/route'))[incoming.method as 'GET'|'POST']
+          : (await import('@/app/api/organizations/[id]/workflow-authorizations/[authorizationId]/route'))[incoming.method as 'GET'|'DELETE']
         : path.includes('/approval') ? (await import('@/app/api/organizations/[id]/route-authorizations/[authorizationId]/approval/route')).POST
-        : path.split('?')[0].split('/').length === 5 ? (await import('@/app/api/organizations/[id]/route-authorizations/route'))[incoming.method as 'GET'|'POST']
-        : (await import('@/app/api/organizations/[id]/route-authorizations/[authorizationId]/route'))[incoming.method as 'GET'|'DELETE']
+          : path.split('?')[0].split('/').length===5 ? (await import('@/app/api/organizations/[id]/route-authorizations/route'))[incoming.method as 'GET'|'POST']
+          : (await import('@/app/api/organizations/[id]/route-authorizations/[authorizationId]/route'))[incoming.method as 'GET'|'DELETE']
       const handler = organizationHandler || workflowHandler || (path.endsWith('/fund/mpp/intent') ? mppIntent[incoming.method as 'GET' | 'POST'] : path.endsWith('/fund/mpp/claim') ? mppClaim.POST : path.endsWith('/fund/mpp') ? mppFund.POST
         : path === '/api/mcp' ? (await import('@/app/api/mcp/route')).POST : path === '/api/a2a' ? (await import('@/app/api/a2a/route')).POST : path.endsWith('/mandate') ? mandate[incoming.method as 'GET' | 'DELETE'] : path.endsWith('/execute') ? execute.POST : path.endsWith('/intent') ? intent[incoming.method as 'GET' | 'POST']
         : path.endsWith('/claim') ? claim.POST : path.endsWith('/fund/evm') ? fund.POST : path.endsWith('/retry') ? retry[incoming.method as 'GET' | 'POST'] : path.endsWith('/advance') ? advance[incoming.method as 'GET' | 'POST']
           : path.endsWith('/dispute') ? dispute.POST : path.endsWith('/resolve') ? resolveTrade.POST
           : path.endsWith('/work-order') ? work.GET : path.endsWith('/attempt') ? attempt.POST : path.endsWith('/delivery') ? delivery.POST
-            : path.endsWith('/result') ? result.GET : path.endsWith('/artifacts') ? artifacts.POST : path.includes('/artifacts/') ? download.GET : getRoute.GET)
+            : path.endsWith('/result') ? result.GET : path.endsWith('/artifacts') ? artifacts.POST : path.includes('/artifacts/') ? download.GET : getRoute[incoming.method as 'GET'|'DELETE'])
       const response = await handler(request, context)
       if (apiHook && await apiHook(path, response)) { outgoing.destroy(); return }
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()))
@@ -999,7 +1002,7 @@ async function enterpriseRouteOnOwnedL1(revoked: boolean, privateMode=false, sen
       assert.equal((await db.select().from(schema.buyer_evm_payment_claims).where(eq(schema.buyer_evm_payment_claims.mandate_id,another.mandate.id))).length,0)
       const cancelled=await fetch(`${baseUrl}/api/routes/${another.route_id}`,{method:'DELETE',headers:{Authorization:`Bearer ${f.apiKey}`},signal:AbortSignal.timeout(15000)})
       assert.equal(cancelled.status,200)
-      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,competingService)))[0].active_orders,1,'uncertain signed checkout retains its own capacity after cancellation')
+      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,competingService)))[0].active_orders,0,'cancelled checkout with a rejected claim releases unused capacity')
       assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].active_orders,1)
     }
     if(revoked) {
@@ -1141,13 +1144,13 @@ const holdBuyerApiResponse = (predicate: (path: string, response: Response) => b
 }
 
 async function reviewedWorkflow(f: Fixture, api: (method:string, path:string, body?:unknown) => Promise<any>, chainId:number, chainFee:string,
-  retry = false, treasuryAddress = treasury) {
+  retry = false, treasuryAddress = treasury, enterpriseMode = false) {
   const workflowPolicy = { required: true, methods: ['buyer_review', 'schema'], acceptance: { version: 1, mode: 'explicit_buyer' } }
   const { workflow } = await api('POST', '/api/workflows/plan', { client_reference: `paid-workflow-${f.routeId}`,
     objective: 'Review the private upstream result and settle the bounded objective', max_budget: { amount: retry ? '3.15' : '2.10', currency: 'USD' }, deadline_seconds: 600,
     nodes: [{ key: 'source', objective: 'Produce a private structured upstream review', required_capabilities: ['code-review'], budget: { amount: retry ? '2.10' : '1.05', currency: 'USD' }, deadline_seconds: 300 },
       { key: 'review', objective: 'Review the exact approved private upstream attachment', required_capabilities: ['code-review'], budget: { amount: '1.05', currency: 'USD' }, deadline_seconds: 600, depends_on: ['source'] }] })
-  const { approval } = await api('POST', `/api/workflows/${workflow.id}/approval`, { version: 1, client_reference: `paid-review-${f.routeId}`, plan_hash: workflow.plan_hash,
+  const approvalBody = { version: 1, client_reference: `paid-review-${f.routeId}`, plan_hash: workflow.plan_hash,
     expires_at: new Date(Math.floor(Date.now() / 1000) * 1000 + 900_000).toISOString(), max_gross_minor: retry ? 315 : 210, max_chain_fee_units: (BigInt(chainFee) * (retry ? 3n : 2n)).toString(),
     private_data: 'selected_provider_only', payment: { rail: chainId === 4217 ? 'mpp' : 'evm', chain_id: chainId, token_address: token, payer_address: f.account.address.toLowerCase(),
       treasury_address: treasuryAddress, minimum_token_reserve_units: '5000000', ...(chainId === 4217
@@ -1155,13 +1158,59 @@ async function reviewedWorkflow(f: Fixture, api: (method:string, path:string, bo
         : { minimum_native_reserve_wei: '1000000', max_gas_cost_wei: chainFee }) },
     nodes: ['source', 'review'].map((key) => ({ key, static_input: { private_text: `private-${key}-input` }, provider_requirements: { approved_providers: key === 'review' && f.fallbackSellerId ? [f.fallbackSellerId] : retry ? [f.sellerId, f.fallbackSellerId!] : [f.sellerId] },
       verification: workflowPolicy, max_per_attempt_minor: 105, max_retry_minor: retry && key === 'source' ? 105 : 0, max_attempts: retry && key === 'source' ? 2 : 1, max_latency_seconds: 60,
-      max_chain_fee_per_attempt_units: chainFee, dependency_inputs: key === 'review' ? [{ source_node: 'source', artifact_index: 0, target_field: 'upstream' }] : [] })) })
+      max_chain_fee_per_attempt_units: chainFee, dependency_inputs: key === 'review' ? [{ source_node: 'source', artifact_index: 0, target_field: 'upstream' }] : [] })) }
+  let approval:any, organizationAuthorization:any=null
+  if(enterpriseMode){
+    const now=new Date(),orgId=crypto.randomUUID(),teamId=crypto.randomUUID(),reviewer=`workflow-reviewer-${orgId}`
+    await db.insert(schema.users).values({id:reviewer,name:'Workflow reviewer',email:`${reviewer}@test.invalid`,password_hash:'unused'})
+    await db.insert(schema.organizations).values({id:orgId,owner_account_id:f.ownerId,client_reference:orgId,name:'Owned workflow fixture',created_at:now,updated_at:now})
+    await db.insert(schema.organization_teams).values({id:teamId,organization_id:orgId,slug:'engineering',name:'Engineering',created_at:now,updated_at:now})
+    await db.insert(schema.organization_agent_assignments).values({agent_id:f.buyerId.slice('user_agent_'.length),organization_id:orgId,team_id:teamId,cost_center:'WORKFLOW',assigned_at:now,updated_at:now})
+    const membership=await import('@/lib/organization-membership'),purchasing=await import('@/lib/organization-purchasing')
+    const invited=await membership.createOrganizationInvitation(orgId,f.ownerId,reviewer,crypto.randomUUID());assert.equal(invited.kind,'ok');await membership.acceptOrganizationInvitation(invited.invitation_id!,reviewer)
+    const role=await purchasing.grantPurchasingRole(orgId,f.ownerId,purchasing.purchasingRoleInput.parse({version:1,client_reference:crypto.randomUUID(),account_id:reviewer,team_id:teamId,role:'approver',max_purchase:'2.10',expires_at:new Date(Date.now()+3600_000).toISOString()}))
+    await db.insert(schema.buyer_spend_policies).values({buyer_id:f.buyerId,owner_account_id:f.ownerId,policy_json:'{"approval_required_above":50,"max_per_execution":105}',version:1,created_at:now,updated_at:now})
+    const firstShare=await makeReviewedPrivateShare(f,orgId,teamId)
+    // The second provider keeps a separate original service and payout identity.
+    const oldSeller=f.fallbackSellerId!,providerId=`workflow_${orgId}`,seller=`user_agent_${providerId}`
+    const [oldPayout]=await db.select().from(schema.payout_addresses).where(eq(schema.payout_addresses.user_id,oldSeller))
+    await db.insert(schema.users).values({id:seller,name:'Private downstream provider',email:`${seller}@test.invalid`,password_hash:'unused'})
+    await db.insert(schema.agents).values({id:providerId,name:'Private downstream provider',description:'Exact private workflow dependency provider',visibility:'private',capabilities:'["code-review"]',endpoint:'https://example.invalid',owner_address:'',api_key:'unused'})
+    await db.insert(schema.agent_owners).values({agentId:providerId,userId:f.sellerOwnerId,establishedBy:'test'});await db.insert(schema.payout_addresses).values({user_id:seller,address:oldPayout.address})
+    await db.update(schema.service_definitions).set({seller_id:seller}).where(eq(schema.service_definitions.id,f.fallbackServiceId!));f.fallbackSellerId=seller
+    approvalBody.nodes.find(n=>n.key==='review')!.provider_requirements.approved_providers=[seller]
+    const secondShare=await makeReviewedPrivateShare({...f,serviceId:f.fallbackServiceId!,sellerId:seller},orgId,teamId)
+    const ownerKey=jwt({userId:f.ownerId,email:`${f.ownerId}@test.invalid`,role:'human'}),reviewerKey=jwt({userId:reviewer,email:`${reviewer}@test.invalid`,role:'human'})
+    const ownerClient=new ClawdMarketClient({apiKey:ownerKey,baseUrl}),reviewerClient=new ClawdMarketClient({apiKey:reviewerKey,baseUrl})
+    const proposal={version:chainId===4217?2:1,client_reference:crypto.randomUUID(),workflow_id:workflow.id,reviewer_role_id:role.role.id,approval:approvalBody,max_daily:'3.15',max_monthly:'3.15',max_lifetime:'3.15',max_lifetime_chain_fee_units:(BigInt(chainFee)*3n).toString(),private_nodes:[{key:'source',provider_share_ids:[firstShare.id]},{key:'review',provider_share_ids:[secondShare.id]}]}
+    const prefix=`/api/organizations/${orgId}/workflow-authorizations`
+    const python=async(key:string,method:string,args:unknown[]):Promise<{authorization:import('../../sdk/typescript/src/index').OrganizationWorkflowAuthorization;idempotent?:boolean}>=>{
+      const py=await promisify(execFile)('python3',['-c','import json,os; from clawdmarket import ClawdMarketClient; c=ClawdMarketClient(os.environ["WORKFLOW_KEY"],os.environ["WORKFLOW_URL"]); print(json.dumps(getattr(c,os.environ["WORKFLOW_METHOD"])(*json.loads(os.environ["WORKFLOW_ARGS"]))))'],{cwd:resolve('.'),env:{...process.env,PYTHONPATH:resolve('sdk/python'),PYTHONDONTWRITEBYTECODE:'1',WORKFLOW_KEY:key,WORKFLOW_URL:baseUrl,WORKFLOW_METHOD:method,WORKFLOW_ARGS:JSON.stringify(args)},timeout:15000})
+      return JSON.parse(py.stdout)
+    }
+    // Tempo journeys use the real Python SDK for original lost-reply proposal/decision recovery.
+    const proposeOriginal=()=>chainId===4217?python(ownerKey,'propose_organization_workflow',[orgId,proposal]):ownerClient.proposeOrganizationWorkflow(orgId,proposal as import('../../sdk/typescript/src/index').OrganizationWorkflowProposal)
+    const recoverOriginal=()=>chainId===4217?python(ownerKey,'recover_organization_workflow',[orgId,proposal.client_reference]):ownerClient.recoverOrganizationWorkflow(orgId,proposal.client_reference)
+    apiHook=async(path,response)=>path===prefix&&response.status===201
+    await assert.rejects(()=>proposeOriginal());apiHook=null
+    organizationAuthorization=(await recoverOriginal()).authorization
+    const a=organizationAuthorization,decision={version:a.version,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true as const}
+    const approveOriginal=()=>chainId===4217?python(reviewerKey,'approve_organization_workflow',[orgId,a.id,decision]):reviewerClient.approveOrganizationWorkflow(orgId,a.id,decision)
+    const underlying=(await import('@/lib/workflow-approval')).inspectWorkflowApproval
+    await assert.rejects(()=>(import('@/lib/workflow-execution-budget')).then(b=>b.activateWorkflow(workflow.id,f.ownerId,{version:1,client_reference:crypto.randomUUID(),approval_id:a.approval_id,contract_hash:a.terms.contract_hash,authorize_spending:true})),(e:unknown)=>(e as {code?:string}).code==='ORGANIZATION_WORKFLOW_APPROVAL_REQUIRED')
+    apiHook=async(path,response)=>path===`${prefix}/${a.id}/approval`&&response.status===201
+    await assert.rejects(()=>approveOriginal());apiHook=null
+    const recovered=await approveOriginal();assert.equal(recovered.authorization.authority_hash,a.authority_hash);assert.equal(recovered.idempotent,true)
+    assert.equal((await python(reviewerKey,'inspect_organization_workflow',[orgId,a.id])).authorization.authority_hash,a.authority_hash)
+    assert.equal((await python(ownerKey,'propose_organization_workflow',[orgId,proposal])).authorization.id,a.id)
+    approval=(await underlying(workflow.id,f.ownerId)).approval!
+  }else approval=(await api('POST',`/api/workflows/${workflow.id}/approval`,approvalBody)).approval
   const command = { version: 1, client_reference: `paid-execution-${f.routeId}`, approval_id: approval.id, contract_hash: approval.contract_hash, authorize_spending: true }
   const activated = await api('POST', `/api/workflows/${workflow.id}/execute`, command), run = activated.run
-  return { workflow, approval, command, activated, run }
+  return { workflow, approval, command, activated, run, organizationAuthorization }
 }
 
-async function workflowHttpLoop(mode: boolean | 'tempo') {
+async function workflowHttpLoop(mode: boolean | 'tempo', enterpriseMode=false, close:'refund'|'downstream'|false=false) {
   const isTempo = mode === 'tempo', realChain = mode !== false
   const f = await fixture(undefined, {}, true), count = broadcastCalls, chainId = isTempo ? 4217 : realChain ? 1 : 8453
   const chainFee = isTempo ? '10000' : realChain ? '10000000000000000' : '1000000000000'
@@ -1189,7 +1238,7 @@ async function workflowHttpLoop(mode: boolean | 'tempo') {
     assert.ok(response.ok, `${path}: ${response.status}: ${JSON.stringify(value)}`)
     return value
   }
-  const { workflow, approval, command, activated, run } = await reviewedWorkflow(f, api, chainId, chainFee)
+  const { workflow, approval, command, activated, run, organizationAuthorization } = await reviewedWorkflow(f, api, chainId, chainFee,false,treasury,enterpriseMode)
   const workflowApproval = { version: 1, origin: baseUrl, workflow_id: workflow.id, run_id: run.id,
     contract_hash: approval.contract_hash, chain_id: chainId, rpc_url: rpcUrl }
   const rootFile = join(directory, `${run.id}.workflow-approval.json`), stateDirectory = join(directory, `${run.id}.workflow-state`)
@@ -1224,6 +1273,55 @@ async function workflowHttpLoop(mode: boolean | 'tempo') {
   assert.equal(broadcastCalls, count)
   await killBuyerAtBoundary(buyerArgs, buyerEnvironment, holdBuyerApiResponse((path, response) => path.endsWith('/claim') && response.ok))
   assert.equal(broadcastCalls, count)
+  if(organizationAuthorization){
+    const a=organizationAuthorization,[service]=await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)),competingService=crypto.randomUUID()
+    await db.insert(schema.service_definitions).values({...service,id:competingService,active_orders:0})
+    const share=await makeReviewedPrivateShare({...f,serviceId:competingService},a.organization_id,a.team_id)
+    const ownerClient=new ClawdMarketClient({baseUrl,apiKey:jwt({userId:f.ownerId,email:`${f.ownerId}@test.invalid`,role:'human'})}),reviewerClient=new ClawdMarketClient({baseUrl,apiKey:jwt({userId:a.reviewer_account_id,email:`${a.reviewer_account_id}@test.invalid`,role:'human'})})
+    const proposal={version:isTempo?4:3,client_reference:crypto.randomUUID(),agent_id:f.buyerId.slice('user_agent_'.length),provider_share_ids:[share.id],reviewer_role_id:(await db.select().from(schema.organization_workflow_authorizations).where(eq(schema.organization_workflow_authorizations.id,a.id)))[0].reviewer_role_id,
+      route_request:{client_reference:crypto.randomUUID(),objective:'Review a separately approved private standalone objective',required_capabilities:['code-review'],input:{secret:'competing-original'},max_budget:{amount:'1.05',currency:'USD'},verification:JSON.parse(service.verification_policy),provider_requirements:{approved_providers:[f.sellerId]},payment_policy:{allowed_rails:[isTempo?'mpp':'evm']}},
+      max_daily:'3.15',max_monthly:'3.15',max_lifetime:'3.15',...(isTempo?{max_lifetime_fee_token_cost_units:(BigInt(chainFee)*3n).toString()}:{max_lifetime_gas_cost_wei:(BigInt(chainFee)*3n).toString()}),
+      mandate:{version:1,client_reference:crypto.randomUUID(),max_aggregate:'1.05',max_per_execution:'1.05',max_retry_budget:'0.00',max_attempts:1,approved_providers:[f.sellerId],max_latency_seconds:60,private_data:'selected_provider_only',expires_at:new Date(Date.now()+600000).toISOString(),payment:a.contract.terms.payment}}
+    const other=(await ownerClient.proposeOrganizationRoute(a.organization_id,proposal as OrganizationRouteProposal)).authorization
+    await reviewerClient.approveOrganizationRoute(a.organization_id,other.id,{version:other.version,client_reference:crypto.randomUUID(),authority_hash:other.authority_hash,approve:true})
+    const file=join(directory,`${other.id}.collision-approval.json`),state=join(directory,`${other.id}.collision-state`)
+    await writeFile(file,JSON.stringify({version:1,origin:baseUrl,route_id:other.route_id,mandate_id:other.mandate.id,terms_hash:other.mandate.terms_hash,chain_id:chainId,rpc_url:rpcUrl}),{mode:0o600})
+    const worker=isTempo?'scripts/buyer-mpp-worker.mjs':'scripts/buyer-worker.mjs'
+    const prepared=JSON.parse((await promisify(execFile)(process.execPath,[worker,file,state,'--prepare-only'],{cwd:resolve('.'),env:buyerEnvironment,timeout:30000})).stdout);assert.equal(prepared.state,'prepared')
+    const otherJournal=(await journal({...f,routeId:other.route_id,stateDirectory:state})).value
+    const claimed=await fetch(`${baseUrl}/api/trades/${otherJournal.trade_id}/fund/${isTempo?'mpp':'evm'}/claim`,{method:'POST',headers,body:JSON.stringify({intent_id:otherJournal.intent.id,mandate_id:other.mandate.id,buyer_operation_id:otherJournal.operation_id,serialized_transaction:otherJournal.serialized_transaction,...(!isTempo?{payer_signature:otherJournal.payer_signature}:{})})})
+    assert.equal(claimed.status,409);const denial=await claimed.json();assert.equal(denial.code??denial.error_code,'BUYER_WALLET_PAYMENT_UNRECONCILED');assert.equal(broadcastCalls,count)
+    const cancelled=await api('DELETE',`/api/routes/${other.route_id}`);assert.equal(cancelled.route.state,'cancelled')
+    assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,competingService)))[0].active_orders,0)
+    assert.equal((await db.select().from(isTempo?schema.buyer_mpp_payment_claims:schema.buyer_evm_payment_claims).where(eq(isTempo?schema.buyer_mpp_payment_claims.mandate_id:schema.buyer_evm_payment_claims.mandate_id,other.mandate.id))).length,0)
+  }
+  if(close==='refund'){
+    const a=organizationAuthorization!,sharing=await import('@/lib/organization-private-providers'),domain=await import('@/lib/organization-workflow-authorizations')
+    const files=await readdir(stateDirectory),journals=await Promise.all(files.filter(name=>name.endsWith('.json')).map(async name=>JSON.parse(await readFile(join(stateDirectory,name),'utf8'))))
+    const original=journals.find(j=>j.serialized_transaction&&j.route_id===root.route.id);assert.ok(original)
+    await sharing.revokePrivateProvider(a.terms.nodes.find((n:{key:string})=>n.key==='source').provider_shares[0].id,f.sellerOwnerId)
+    await domain.revokeOrganizationWorkflow(a.organization_id,a.id,f.ownerId)
+    const replay=(await domain.inspectOrganizationWorkflow(a.organization_id,a.id,f.ownerId)).decision!
+    assert.equal((await domain.approveOrganizationWorkflow(a.organization_id,a.id,a.reviewer_account_id,replay)).authorization.state,'revoked')
+    // Fresh sends are denied; the original signed payment can still arrive late.
+    const held=await runBuyerWorkflow(options);assert.equal(held.state,'incomplete');assert.equal(held.nodes.find((n:{node_key:string})=>n.node_key==='source').state,'held_recover_existing_payment')
+    assert.equal(broadcastCalls,count)
+    await chain!.client.sendRawTransaction({serializedTransaction:original.serialized_transaction});await chain!.client.waitForTransactionReceipt({hash:original.tx_hash})
+    const proof=isTempo?{payer_address:f.account.address.toLowerCase(),tx_hash:original.tx_hash}:{intent_id:original.intent.id,chain_id:1,token_address:token,payer_address:f.account.address.toLowerCase(),tx_hash:original.tx_hash,payer_signature:original.payer_signature}
+    const path=`/api/trades/${original.trade_id}/fund/${isTempo?'mpp':'evm'}`,response=await fetch(`${baseUrl}${path}`,{method:'POST',headers,body:JSON.stringify(proof)})
+    assert.ok([200,202,409].includes(response.status),await response.clone().text())
+    const [refund]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,original.trade_id));assert.equal(refund.kind,'buyer_refund')
+    await (await import('@/lib/external-settlement')).processSettlementTransfer(refund.id,{waitMs:5000})
+    await fetch(`${baseUrl}${path}`,{method:'POST',headers,body:JSON.stringify(proof)})
+    const [confirmed]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.id,refund.id));assert.equal(confirmed.status,'confirmed')
+    assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].active_orders,0)
+    const history=await domain.organizationWorkflowExposure(db,a.organization_id,f.buyerId,a.contract.terms.payment);assert.equal(history.lifetime,105)
+    assert.equal((isTempo?history.fees:history.gas).toString(),chainFee)
+    const view=await api('GET',`/api/workflows/${workflow.id}/execute`);assert.equal(view.completed,false);assert.equal(view.receipt.totals.confirmed_refund_minor,105)
+    assert.equal(view.receipt.nodes.find((n:{node_key:string})=>n.node_key==='review').route_id,null)
+    if(!isTempo)assert.equal(await chain!.balance(f.account.address),100_000_000n)
+    console.info(JSON.stringify({reviewed_workflow_refund:'passed',rail:isTempo?'Tempo':'L1',original_gross_minor:105}));return
+  }
   if (chain) {
     await killBuyerAtBoundary(buyerArgs, buyerEnvironment, (reach) => {
       realRpcHook = async (method, hash) => { if (['eth_sendRawTransaction', 'eth_sendRawTransactionSync'].includes(method) && hash) await reach() }
@@ -1272,6 +1370,24 @@ async function workflowHttpLoop(mode: boolean | 'tempo') {
   const firstDelivery = JSON.parse(recoveredProvider.stdout)
   const decisions = { version: 1, workflow_id: workflow.id, run_id: run.id,
     decisions: [{ node_key: 'source', decision: 'accept', content_hash: firstDelivery.content_hash }] }
+  if(close==='downstream'){
+    const a=organizationAuthorization!,sharing=await import('@/lib/organization-private-providers'),domain=await import('@/lib/organization-workflow-authorizations')
+    await sharing.revokePrivateProvider(a.terms.nodes.find((n:{key:string})=>n.key==='review').provider_shares[0].id,f.sellerOwnerId)
+    let denied=false
+    for(let i=0;i<5&&!denied;i++){
+      try{await runBuyerWorkflow({...options,decisions})}catch(error){assert.match(String(error),/BUYER_HTTP_409/);denied=true}
+      const [payout]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,fundedRoot.trade_id))
+      if(payout?.status!=='confirmed'&&payout)await (await import('@/lib/external-settlement')).processSettlementTransfer(payout.id,{waitMs:5000})
+    }
+    assert.equal(denied,true);const view=await api('GET',`/api/workflows/${workflow.id}/execute`)
+    assert.equal(view.completed,false);assert.equal(view.receipt.nodes.find((n:{node_key:string})=>n.node_key==='source').phase,'completed')
+    assert.equal(view.receipt.nodes.find((n:{node_key:string})=>n.node_key==='review').route_id,null)
+    assert.equal(view.receipt.totals.gross_buyer_minor,105);assert.equal(view.receipt.totals.confirmed_seller_payout_minor,100);assert.equal(broadcastCalls,count+2)
+    const result=await api('GET',`/api/routes/${root.route.id}/result`);assert.equal(result.content.artifact.result,'workflow-private-upstream');const [backed]=await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id,root.route.id));assert.equal(JSON.parse(backed.receipt_json).financial.kind,'confirmed_external')
+    const history=await domain.organizationWorkflowExposure(db,a.organization_id,f.buyerId,a.contract.terms.payment);assert.equal(history.lifetime,105)
+    assert.equal((await db.select().from(schema.workflow_reservations).where(eq(schema.workflow_reservations.run_id,run.id))).length,1)
+    console.info(JSON.stringify({reviewed_workflow_downstream_revoked:'passed',rail:isTempo?'Tempo':'L1',recovered_paid_upstream:true}));return
+  }
   let progressed = await runBuyerWorkflow({ ...options, decisions })
   if (chain && progressed.nodes.find((node: {node_key:string}) => node.node_key === 'source')?.state === 'settling') {
     assert.equal(progressed.state, 'incomplete'); assert.equal(progressed.unresolved_buyer_minor, 105)
@@ -1334,6 +1450,12 @@ async function workflowHttpLoop(mode: boolean | 'tempo') {
   assert.equal(replay.run.id, run.id); assert.equal(replay.run.started_at, run.started_at)
   const completedReplay = await api('POST', `/api/workflows/${workflow.id}/reconcile`, { version: 1, run_id: run.id })
   assert.equal(completedReplay.content_hash, outcome.content_hash);
+  if(organizationAuthorization){const a=organizationAuthorization,d=await import('@/lib/organization-workflow-authorizations')
+    await d.revokeOrganizationWorkflow(a.organization_id,a.id,f.ownerId)
+    const sharing=await import('@/lib/organization-private-providers')
+    for(const node of a.terms.nodes)for(const share of node.provider_shares)await sharing.revokePrivateProvider(share.id,f.ownerId,a.organization_id)
+    assert.equal((await d.inspectOrganizationWorkflow(a.organization_id,a.id,f.ownerId)).state,'revoked')
+  }
   const workflowReplay = await promisify(execFile)(process.execPath, ['scripts/buyer-workflow-worker.mjs', rootFile, stateDirectory], { cwd: resolve('.'), env: buyerEnvironment, timeout: 30_000 })
   assert.equal(JSON.parse(workflowReplay.stdout).receipt.content_hash, outcome.content_hash); assert.equal(broadcastCalls, count + 4); assert.equal(completedReplay.idempotent, true)
   assert.equal((await db.select().from(schema.workflow_artifact_grants).where(eq(schema.workflow_artifact_grants.trade_id, fundedChild.trade_id!))).length, 1)
@@ -1711,7 +1833,7 @@ async function enterpriseRouteOnOwnedTempo(revoked: boolean, privateMode=false, 
       assert.equal((await db.select().from(schema.buyer_mpp_payment_claims).where(eq(schema.buyer_mpp_payment_claims.mandate_id,another.mandate.id))).length,0)
       const cancelled=await fetch(`${baseUrl}/api/routes/${another.route_id}`,{method:'DELETE',headers:{Authorization:`Bearer ${f.apiKey}`},signal:AbortSignal.timeout(15000)})
       assert.equal(cancelled.status,200)
-      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,competingService)))[0].active_orders,1,'uncertain signed checkout retains its own capacity after cancellation')
+      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,competingService)))[0].active_orders,0,'cancelled checkout with a rejected claim releases unused capacity')
       assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].active_orders,1)
     }
     if(revoked) {
@@ -1853,4 +1975,23 @@ for(const rail of ['L1','Tempo'] as const)test(`private-provider ${rail} consent
   const environment:NodeJS.ProcessEnv={...process.env,CLAWDMARKET_TEST_PRIVATE_SEND_RACE_PROCESS:'true'};delete environment.NODE_TEST_CONTEXT
   const result=await promisify(execFile)(process.execPath,['--conditions=react-server','--import','tsx','--test','--test-reporter=spec','--test-name-pattern='+`^private-provider ${rail} consent revoked`,'tests/api/buyer-worker.test.ts'],{cwd:process.cwd(),env:environment,timeout:90_000})
   assert.match(result.stdout,/ℹ fail 0/);assert.match(result.stdout,/ℹ pass 1/)
+})
+
+for(const rail of ['L1','Tempo'] as const)test(`independently reviewed private enterprise ${rail} workflow settles two dependent providers across process deaths and revoked original receipt recovery`,{
+  skip:rail==='L1'?!process.env.CLAWDMARKET_TEST_ANVIL_BINARY:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY,timeout:110000,
+},async()=>{
+  if(process.env.CLAWDMARKET_TEST_REVIEWED_WORKFLOW_PROCESS===rail)return workflowHttpLoop(rail==='L1'?true:'tempo',true)
+  const env:NodeJS.ProcessEnv={...process.env,CLAWDMARKET_TEST_REVIEWED_WORKFLOW_PROCESS:rail};delete env.NODE_TEST_CONTEXT
+  const result=await promisify(execFile)(process.execPath,['--conditions=react-server','--import','tsx','--test','--test-reporter=spec',`--test-name-pattern=^independently reviewed private enterprise ${rail} workflow`,'tests/api/buyer-worker.test.ts'],{cwd:resolve('.'),env,timeout:105000})
+  assert.match(result.stdout,/ℹ pass 1/);assert.match(result.stdout,/ℹ fail 0/)
+})
+
+for(const rail of ['L1','Tempo'] as const)for(const close of ['refund','downstream'] as const)test(`reviewed private enterprise ${rail} workflow ${close} preserves original recovery and closes fresh child authority`,{
+  skip:rail==='L1'?!process.env.CLAWDMARKET_TEST_ANVIL_BINARY:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY,timeout:110000,
+},async()=>{
+  const marker=`${rail}:${close}`
+  if(process.env.CLAWDMARKET_TEST_REVIEWED_WORKFLOW_PROCESS===marker)return workflowHttpLoop(rail==='L1'?true:'tempo',true,close)
+  const env:NodeJS.ProcessEnv={...process.env,CLAWDMARKET_TEST_REVIEWED_WORKFLOW_PROCESS:marker};delete env.NODE_TEST_CONTEXT
+  const result=await promisify(execFile)(process.execPath,['--conditions=react-server','--import','tsx','--test','--test-reporter=spec',`--test-name-pattern=^reviewed private enterprise ${rail} workflow ${close}`,'tests/api/buyer-worker.test.ts'],{cwd:resolve('.'),env,timeout:105000})
+  assert.match(result.stdout,/ℹ pass 1/);assert.match(result.stdout,/ℹ fail 0/)
 })

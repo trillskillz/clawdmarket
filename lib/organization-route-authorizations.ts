@@ -321,41 +321,11 @@ export async function consumeOrganizationRouteExposure(source: PurchasingSource,
     if (!row) return
     const [mandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,input.mandateId)).limit(1)
     const terms = await current(row,input.plan,mandate,source), payment = mandateDto(mandate).terms.payment
-    const history = await source.select({ use: uses, grant: grants }).from(uses).innerJoin(grants,eq(grants.id,uses.authorization_id))
-      .where(and(eq(grants.organization_id,row.organization_id),eq(grants.buyer_id,row.buyer_id))).limit(10001)
-    if (history.length > 10000) fail('ORGANIZATION_ROUTE_HISTORY_UNAVAILABLE',503)
-    let daily = 0, monthly = 0, lifetime = 0, gas = 0n, fees = 0n
-    const now = new Date(), day = Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()), month = Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1)
-    for (const entry of history) {
-      const priorTerms = frozen(entry.grant)
-      const [step] = await source.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id,entry.use.trade_id)).limit(1)
-      const [order] = await source.select().from(service_orders).where(eq(service_orders.id,entry.use.order_id)).limit(1)
-      const [trade] = await source.select().from(trades).where(eq(trades.id,entry.use.trade_id)).limit(1)
-      const [priorMandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,entry.grant.mandate_id)).limit(1)
-      const priorPayment = priorMandate && mandateDto(priorMandate).terms.payment
-      if (!step || !order || !trade || !priorMandate || !priorPayment
-        || step.order_id !== order.id || step.route_id !== entry.grant.route_id || step.mandate_id !== entry.grant.mandate_id
-        || order.trade_id !== trade.id || trade.buyer_id !== row.buyer_id || order.buyer_id !== row.buyer_id
-        || entry.use.authority_hash !== entry.grant.authority_hash || entry.use.amount_minor !== step.amount_minor
-        || entry.use.amount_minor !== Math.round(trade.total_cost*100) || trade.payment_rail !== priorPayment.rail
-        || step.terms_hash !== mandateDto(priorMandate).terms_hash
-        || !isTempo(priorTerms) && (priorPayment.rail !== 'evm' || priorPayment.chain_id !== 1
-          || entry.use.maximum_gas_cost_wei !== priorPayment.max_gas_cost_wei))
-        fail('ORGANIZATION_ROUTE_USE_INVALID')
-      lifetime += entry.use.amount_minor
-      if (entry.use.created_at.getTime() >= day) daily += entry.use.amount_minor
-      if (entry.use.created_at.getTime() >= month) monthly += entry.use.amount_minor
-      if (isTempo(priorTerms)) {
-        const fee = await originalTempoFee(source,entry.grant,entry.use,priorMandate)
-        if (payment.rail === 'mpp' && 'fee_token_address' in payment && fee.chain_id === payment.chain_id
-          && fee.fee_token_address === payment.fee_token_address) fees += BigInt(fee.maximum_fee_token_cost_units)
-      } else gas += BigInt(entry.use.maximum_gas_cost_wei)
-    }
-    const [orphan] = await source.all(sql`SELECT a.id FROM organization_route_authorizations a JOIN route_funding_steps s ON s.mandate_id=a.mandate_id
-      WHERE a.organization_id=${row.organization_id} AND a.buyer_id=${row.buyer_id} AND a.id<>${row.id}
-      AND NOT EXISTS(SELECT 1 FROM organization_route_uses u WHERE u.authorization_id=a.id AND u.order_id=s.order_id AND u.trade_id=s.trade_id) LIMIT 1`)
-    // Exclude only the step inserted in this transaction immediately before this hook.
-    if (orphan) fail('ORGANIZATION_ROUTE_USE_INVALID')
+    const route = await readOriginalOrganizationRouteExposure(source,row.organization_id,row.buyer_id,payment,row.id)
+    const { organizationWorkflowExposure } = await import('./organization-workflow-authorizations')
+    const workflow = await organizationWorkflowExposure(source,row.organization_id,row.buyer_id,payment)
+    const daily=route.daily+workflow.daily, monthly=route.monthly+workflow.monthly, lifetime=route.lifetime+workflow.lifetime,
+      gas=route.gas+workflow.gas, fees=route.fees+workflow.fees
     for (const [spent,limit] of [[daily,terms.max_daily_minor],[monthly,terms.max_monthly_minor],[lifetime,terms.max_lifetime_minor]])
       if (!Number.isSafeInteger(spent) || spent < 0 || spent + input.totalMinor > limit) fail('ORGANIZATION_ROUTE_GROSS_LIMIT')
     if (isTempo(terms)) {
@@ -366,7 +336,7 @@ export async function consumeOrganizationRouteExposure(source: PurchasingSource,
       if (gas + BigInt(payment.max_gas_cost_wei) > BigInt(terms.max_lifetime_gas_cost_wei)) fail('ORGANIZATION_ROUTE_GAS_LIMIT')
     }
     await source.insert(uses).values({ authorization_id: row.id, order_id: input.orderId, trade_id: input.tradeId,
-      authority_hash: row.authority_hash, amount_minor: input.totalMinor, maximum_gas_cost_wei: payment.rail === 'evm' ? payment.max_gas_cost_wei : '0', created_at: now })
+      authority_hash: row.authority_hash, amount_minor: input.totalMinor, maximum_gas_cost_wei: payment.rail === 'evm' ? payment.max_gas_cost_wei : '0', created_at: new Date() })
     if (isTempo(terms) && payment.rail === 'mpp' && 'fee_token_address' in payment) await source.insert(tempoFees).values({
       authorization_id: row.id, authority_hash: row.authority_hash, chain_id: payment.chain_id,
       fee_token_address: payment.fee_token_address, maximum_fee_token_cost_units: payment.max_fee_token_cost_units })
@@ -394,4 +364,43 @@ export async function organizationRoutePrivateShare(source: PurchasingSource, ro
 export async function isPrivateOrganizationRoute(routeId:string) {
   const [row]=await db.select().from(grants).where(eq(grants.route_id,routeId)).limit(1)
   return !!row && isPrivate(frozen(row))
+}
+
+export async function readOriginalOrganizationRouteExposure(source:PurchasingSource,orgId:string,buyerId:string,payment:ReturnType<typeof mandateDto>['terms']['payment'],currentId='') {
+    const history = await source.select({ use: uses, grant: grants }).from(uses).innerJoin(grants,eq(grants.id,uses.authorization_id))
+      .where(and(eq(grants.organization_id,orgId),eq(grants.buyer_id,buyerId))).limit(10001)
+    if (history.length > 10000) fail('ORGANIZATION_ROUTE_HISTORY_UNAVAILABLE',503)
+    let daily = 0, monthly = 0, lifetime = 0, gas = 0n, fees = 0n
+    const now = new Date(), day = Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()), month = Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1)
+    for (const entry of history) {
+      const priorTerms = frozen(entry.grant)
+      const [step] = await source.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id,entry.use.trade_id)).limit(1)
+      const [order] = await source.select().from(service_orders).where(eq(service_orders.id,entry.use.order_id)).limit(1)
+      const [trade] = await source.select().from(trades).where(eq(trades.id,entry.use.trade_id)).limit(1)
+      const [priorMandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,entry.grant.mandate_id)).limit(1)
+      const priorPayment = priorMandate && mandateDto(priorMandate).terms.payment
+      if (!step || !order || !trade || !priorMandate || !priorPayment
+        || step.order_id !== order.id || step.route_id !== entry.grant.route_id || step.mandate_id !== entry.grant.mandate_id
+        || order.trade_id !== trade.id || trade.buyer_id !== buyerId || order.buyer_id !== buyerId
+        || entry.use.authority_hash !== entry.grant.authority_hash || entry.use.amount_minor !== step.amount_minor
+        || entry.use.amount_minor !== Math.round(trade.total_cost*100) || trade.payment_rail !== priorPayment.rail
+        || step.terms_hash !== mandateDto(priorMandate).terms_hash
+        || !isTempo(priorTerms) && (priorPayment.rail !== 'evm' || priorPayment.chain_id !== 1
+          || entry.use.maximum_gas_cost_wei !== priorPayment.max_gas_cost_wei))
+        fail('ORGANIZATION_ROUTE_USE_INVALID')
+      lifetime += entry.use.amount_minor
+      if (entry.use.created_at.getTime() >= day) daily += entry.use.amount_minor
+      if (entry.use.created_at.getTime() >= month) monthly += entry.use.amount_minor
+      if (isTempo(priorTerms)) {
+        const fee = await originalTempoFee(source,entry.grant,entry.use,priorMandate)
+        if (payment.rail === 'mpp' && 'fee_token_address' in payment && fee.chain_id === payment.chain_id
+          && fee.fee_token_address === payment.fee_token_address) fees += BigInt(fee.maximum_fee_token_cost_units)
+      } else gas += BigInt(entry.use.maximum_gas_cost_wei)
+    }
+    const [orphan] = await source.all(sql`SELECT a.id FROM organization_route_authorizations a JOIN route_funding_steps s ON s.mandate_id=a.mandate_id
+      WHERE a.organization_id=${orgId} AND a.buyer_id=${buyerId} AND a.id<>${currentId}
+      AND NOT EXISTS(SELECT 1 FROM organization_route_uses u WHERE u.authorization_id=a.id AND u.order_id=s.order_id AND u.trade_id=s.trade_id) LIMIT 1`)
+    // Exclude only the step inserted in this transaction immediately before this hook.
+    if (orphan) fail('ORGANIZATION_ROUTE_USE_INVALID')
+    return {daily,monthly,lifetime,gas,fees}
 }
