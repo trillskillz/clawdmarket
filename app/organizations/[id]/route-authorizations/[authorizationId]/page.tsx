@@ -4,18 +4,18 @@ import Link from 'next/link'
 import styles from '@/app/organizations/enterprise.module.css'
 
 type Review = {
-  id:string; organization_id:string; authority_hash:string; state:'pending'|'approved'|'revoked'; viewer_role:'owner'|'reviewer'
+  id:string; version?:1|2; organization_id:string; authority_hash:string; state:'pending'|'approved'|'revoked'; viewer_role:'owner'|'reviewer'
   buyer_id:string; team_id:string|null; cost_center:string
   route:{objective:string; input:Record<string,unknown>; required_capabilities:string[]; candidates:Array<{
     service_id:string; pricing:{estimated_total:string}; explanation:string[]; eligibility:{approval_required?:boolean}
   }>}
-  terms:{max_daily_minor:number; max_monthly_minor:number; max_lifetime_minor:number; max_lifetime_gas_cost_wei:string}
+  terms:{max_daily_minor:number; max_monthly_minor:number; max_lifetime_minor:number; max_lifetime_gas_cost_wei?:string;max_lifetime_fee_token_cost_units?:string}
   mandate:{id:string; expires_at:string; terms_hash:string; terms:{max_aggregate:string; max_per_execution:string;
-    max_attempts:number; max_retry_budget:string; payment:{chain_id:number; token_address:string; payer_address:string;
-      treasury_address:string; minimum_token_reserve_units:string; minimum_native_reserve_wei:string; max_gas_cost_wei:string}}}
-  use:{amount_minor:number;maximum_gas_cost_wei:string}|null
+    max_attempts:number; max_retry_budget:string; payment:{rail?:'evm'|'mpp';chain_id:number; token_address:string; payer_address:string;
+      treasury_address:string; minimum_token_reserve_units:string; minimum_native_reserve_wei?:string; max_gas_cost_wei?:string;fee_token_address?:string;minimum_fee_token_reserve_units?:string;max_fee_token_cost_units?:string}}}
+  use:{amount_minor:number;maximum_gas_cost_wei:string;tempo_fee?:{maximum_fee_token_cost_units:string}}|null
 }
-type Decision={version:1;client_reference:string;authority_hash:string;approve:true}
+type Decision={version:1|2;client_reference:string;authority_hash:string;approve:true}
 const usd=(minor:number)=>`$${(minor/100).toFixed(2)} USD`
 
 export default function OrganizationRouteReview({params}:{params:Promise<{id:string;authorizationId:string}>}) {
@@ -51,8 +51,8 @@ export default function OrganizationRouteReview({params}:{params:Promise<{id:str
       if(approve){
         let saved:Decision|null=decision.current
         if(!saved){const source=sessionStorage.getItem(key);if(source)saved=JSON.parse(source)}
-        if(saved&&(saved.version!==1||saved.approve!==true||saved.authority_hash!==review.authority_hash||!saved.client_reference))throw Error('The original saved decision differs. Inspect its status before continuing.')
-        body=saved??{version:1,client_reference:crypto.randomUUID(),authority_hash:review.authority_hash,approve:true}
+        if(saved&&(saved.version!==(review.version??1)||saved.approve!==true||saved.authority_hash!==review.authority_hash||!saved.client_reference))throw Error('The original saved decision differs. Inspect its status before continuing.')
+        body=saved??{version:review.version??1,client_reference:crypto.randomUUID(),authority_hash:review.authority_hash,approve:true}
         // Save only decision identity, never private work, account tokens or wallet secrets.
         sessionStorage.setItem(key,JSON.stringify(body));decision.current=body
       }
@@ -69,7 +69,7 @@ export default function OrganizationRouteReview({params}:{params:Promise<{id:str
   return <main className={`${styles.page} ${styles.workspace}`}>
     <Link href={`/organizations/${encodeURIComponent(id)}`}>Organization workspace</Link>
     <h1>Review organization route</h1>
-    <p>The owner proposes one Ethereum L1 purchase. The selected independent reviewer approves its exact scope before checkout. Delivery still requires an explicit buyer decision.</p>
+    <p>The owner proposes one L1 or Tempo purchase. The selected independent reviewer approves its exact scope before checkout. Delivery still requires an explicit buyer decision.</p>
     <button disabled={busy} onClick={()=>void load()}>Refresh original review</button>
     {error&&<p role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
     {review&&payment&&<>
@@ -83,9 +83,9 @@ export default function OrganizationRouteReview({params}:{params:Promise<{id:str
         <details><summary>Private work input</summary><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify(review.route.input,null,2)}</pre></details>
       </section>
       <section aria-label="Frozen payment terms"><h2>Frozen payment terms</h2>
-        <dl>{[['Chain',payment.chain_id],['Token',payment.token_address],['Payer',payment.payer_address],['Treasury',payment.treasury_address],['Token reserve (base units)',payment.minimum_token_reserve_units],['Native reserve (wei)',payment.minimum_native_reserve_wei],['Per-payment gas ceiling (wei)',payment.max_gas_cost_wei],['Lifetime gas ceiling (wei)',review.terms.max_lifetime_gas_cost_wei]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+        <dl>{[['Chain',payment.chain_id],['Token',payment.token_address],['Payer',payment.payer_address],['Treasury',payment.treasury_address],['Token reserve (base units)',payment.minimum_token_reserve_units],...(payment.rail==='mpp'?[['Fee token',payment.fee_token_address],['Fee reserve (pathUSD base units)',payment.minimum_fee_token_reserve_units],['Per-payment fee ceiling (pathUSD base units)',payment.max_fee_token_cost_units],['Lifetime fee ceiling (pathUSD base units)',review.terms.max_lifetime_fee_token_cost_units]]:[['Native reserve (wei)',payment.minimum_native_reserve_wei],['Per-payment gas ceiling (wei)',payment.max_gas_cost_wei],['Lifetime gas ceiling (wei)',review.terms.max_lifetime_gas_cost_wei]])].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
         <p>Refunds and cancellation do not replenish gross or reserved fee exposure.</p>
-        {review.use&&<p>Original gross consumed: {usd(review.use.amount_minor)}. Original reserved gas: {review.use.maximum_gas_cost_wei} wei.</p>}
+        {review.use&&<p>Original gross consumed: {usd(review.use.amount_minor)}. {payment.rail==='mpp'?`Original reserved fee: ${review.use.tempo_fee?.maximum_fee_token_cost_units} pathUSD base units.`:`Original reserved gas: ${review.use.maximum_gas_cost_wei} wei.`}</p>}
       </section>
       <section aria-label="Frozen providers"><h2>Frozen providers</h2>{review.route.candidates.map(candidate=><article key={candidate.service_id}>
         <h3>Service {candidate.service_id}</h3><p>Quoted total: ${candidate.pricing.estimated_total} USD</p>

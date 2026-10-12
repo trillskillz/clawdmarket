@@ -726,6 +726,13 @@ export const organization_route_uses = sqliteTable('organization_route_uses', {
   created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 }, table => [check('organization_route_use_amount_positive', sql`${table.amount_minor} > 0`)]);
 
+/** Version-2 Tempo fee units remain separate from version-1 native gas wei. */
+export const organization_route_tempo_fees = sqliteTable('organization_route_tempo_fees', {
+  authorization_id: text('authorization_id').primaryKey().references(() => organization_route_uses.authorization_id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(), chain_id: integer('chain_id').notNull(),
+  fee_token_address: text('fee_token_address').notNull(), maximum_fee_token_cost_units: text('maximum_fee_token_cost_units').notNull(),
+}, table => [check('organization_route_tempo_chain', sql`${table.chain_id} = 4217`)]);
+
 /** Committed with the economic order, before any buyer wallet side effect. */
 export const route_funding_steps = sqliteTable('route_funding_steps', {
   id: text('id').primaryKey(),

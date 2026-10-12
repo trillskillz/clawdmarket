@@ -1,5 +1,5 @@
 {
-  "version": "1.113",
+  "version": "1.114",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -290,7 +290,7 @@
       "price": "current_quoted_total; not_observed_quality",
       "latency": "excluded_from_v2_model; claims_remain_separate"
     },
-    "contract_version": "1.113",
+    "contract_version": "1.114",
     "default_ranking_changed": true,
     "legacy_fields": "compatibility_only_uncalibrated_heuristic",
     "public_review_bodies": false

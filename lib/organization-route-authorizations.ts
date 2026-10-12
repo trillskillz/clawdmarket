@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { db } from './db'
 import { organizations, organization_agent_assignments, agent_owners, agents, users, organization_teams,
   organization_purchasing_roles, organization_route_authorizations as grants, organization_route_uses as uses,
-  route_plans, route_payment_mandates, service_definitions, service_orders, trades, route_funding_steps } from './schema'
+  organization_route_tempo_fees as tempoFees, route_plans, route_payment_mandates, service_definitions, service_orders, trades, route_funding_steps } from './schema'
 import { purchasingTransaction, PurchasingError, type PurchasingSource } from './organization-purchasing-transaction'
 import { purchasingServiceHash, validateOrganizationApprover } from './organization-purchasing'
 import { canonicalContract } from './structured-verification'
@@ -19,31 +19,42 @@ import { routePlanningEnabled } from './routing-feature-flags'
 const hash = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
 const reference = z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/)
 const units = z.string().regex(/^[1-9][0-9]{0,77}$/)
-export const organizationRouteInput = z.object({ version: z.literal(1), client_reference: reference, route_id: z.uuid().optional(),
+const proposalFields = { client_reference: reference, route_id: z.uuid().optional(),
   agent_id: z.uuid().optional(), route_request: routePlanInput.optional(),
   reviewer_role_id: z.uuid(), max_daily: money, max_monthly: money, max_lifetime: money,
-  max_lifetime_gas_cost_wei: units, mandate: routeMandateInput }).strict().superRefine((input, context) => {
+  mandate: routeMandateInput }
+export const organizationRouteInput = z.discriminatedUnion('version', [
+  z.object({ ...proposalFields, version: z.literal(1), max_lifetime_gas_cost_wei: units }).strict(),
+  z.object({ ...proposalFields, version: z.literal(2), max_lifetime_fee_token_cost_units: units }).strict(),
+]).superRefine((input, context) => {
   if (input.route_id ? input.agent_id || input.route_request : !input.agent_id || !input.route_request) {
     context.addIssue({ code: 'custom', message: 'Provide an existing route_id or an agent_id and exact route_request' })
   }
-  if (input.mandate.payment.rail !== 'evm' || input.mandate.payment.chain_id !== 1
-    || input.mandate.max_attempts !== 1 || input.mandate.max_retry_budget !== 0
+  const payment = input.mandate.payment
+  const invalidPayment = input.version === 1
+    ? payment.rail !== 'evm' || payment.chain_id !== 1 || BigInt(payment.max_gas_cost_wei) > BigInt(input.max_lifetime_gas_cost_wei)
+    : payment.rail !== 'mpp' || payment.chain_id !== 4217 || !('fee_token_address' in payment)
+      || payment.fee_token_address !== payment.token_address || BigInt(payment.max_fee_token_cost_units) > BigInt(input.max_lifetime_fee_token_cost_units)
+  if (invalidPayment || input.mandate.max_attempts !== 1 || input.mandate.max_retry_budget !== 0
     || input.mandate.max_aggregate > input.max_daily || input.max_daily > input.max_monthly || input.max_monthly > input.max_lifetime
-    || input.mandate.payment.rail === 'evm' && BigInt(input.mandate.payment.max_gas_cost_wei) > BigInt(input.max_lifetime_gas_cost_wei))
-    context.addIssue({ code: 'custom', message: 'Review one bounded Ethereum L1 execution with no paid retry' })
+  ) context.addIssue({ code: 'custom', message: 'Review one bounded L1 v1 or Tempo v2 execution with explicit original fees and no paid retry' })
 })
-export const organizationRouteDecision = z.object({ version: z.literal(1), client_reference: reference,
+export const organizationRouteDecision = z.object({ version: z.union([z.literal(1), z.literal(2)]), client_reference: reference,
   authority_hash: z.string().regex(/^[a-f0-9]{64}$/), approve: z.literal(true) }).strict()
 type Grant = typeof grants.$inferSelect
 type Plan = typeof route_plans.$inferSelect
 type Mandate = typeof route_payment_mandates.$inferSelect
-type Frozen = { route_hash: string; candidate_hash: string; mandate_terms_hash: string;
-  max_daily_minor: number; max_monthly_minor: number; max_lifetime_minor: number; max_lifetime_gas_cost_wei: string;
+type FrozenBase = { route_hash: string; candidate_hash: string; mandate_terms_hash: string;
+  max_daily_minor: number; max_monthly_minor: number; max_lifetime_minor: number;
   services: { id: string; seller_id: string; contract_hash: string }[] }
+type FrozenTempo = FrozenBase & { version: 2; max_lifetime_fee_token_cost_units: string }
+type Frozen = FrozenBase & { max_lifetime_gas_cost_wei: string } | FrozenTempo
+function isTempo(terms: Frozen): terms is FrozenTempo { return 'version' in terms && terms.version === 2 }
+function version(terms: Frozen) { return isTempo(terms) ? 2 as const : 1 as const }
 function fail(code: string, status = 409): never { throw new PurchasingError(code, status) }
 function enabled() { if (!enterpriseFoundationEnabled()) fail('ORGANIZATION_ROUTE_DISABLED', 503) }
 function authority(row: Pick<Grant,'organization_id'|'route_id'|'mandate_id'|'owner_account_id'|'buyer_id'|'agent_id'|'team_id'|'cost_center'|'reviewer_role_id'|'reviewer_account_id'|'request_hash'>, terms: Frozen) {
-  return hash({ kind: 'organization-route-authority-v1', ...row, terms })
+  return hash({ kind: `organization-route-authority-v${version(terms)}`, ...row, terms })
 }
 function frozen(row: Grant): Frozen {
   try {
@@ -53,7 +64,8 @@ function frozen(row: Grant): Frozen {
       cost_center: row.cost_center, reviewer_role_id: row.reviewer_role_id, reviewer_account_id: row.reviewer_account_id, request_hash: row.request_hash }
     if (authority(identity,terms) !== row.authority_hash || !terms.services.length
       || [terms.max_daily_minor,terms.max_monthly_minor,terms.max_lifetime_minor].some(value => !Number.isSafeInteger(value) || value < 1)
-      || !units.safeParse(terms.max_lifetime_gas_cost_wei).success) fail('ORGANIZATION_ROUTE_CONTRACT_INVALID')
+      || !units.safeParse(isTempo(terms) ? terms.max_lifetime_fee_token_cost_units : terms.max_lifetime_gas_cost_wei).success)
+      fail('ORGANIZATION_ROUTE_CONTRACT_INVALID')
     return terms
   } catch { return fail('ORGANIZATION_ROUTE_CONTRACT_INVALID') }
 }
@@ -66,6 +78,11 @@ async function current(row: Grant, plan: Plan, mandate: Mandate, source: Purchas
   enabled()
   if (!plan || !mandate) fail('ORGANIZATION_ROUTE_CONTRACT_INVALID')
   const terms = frozen(row), org = await organization(row.organization_id,source)
+  const reviewed = mandateDto(mandate).terms
+  if (isTempo(terms) ? reviewed.payment.rail !== 'mpp' || reviewed.payment.chain_id !== 4217
+    || !('fee_token_address' in reviewed.payment) || reviewed.payment.fee_token_address !== reviewed.payment.token_address
+    || reviewed.token_decimals !== 6 || reviewed.token_usd_price !== 1 || reviewed.fee_token_decimals !== 6
+    : reviewed.payment.rail !== 'evm' || reviewed.payment.chain_id !== 1) fail('ORGANIZATION_ROUTE_SCOPE_CHANGED')
   if (org.owner_account_id !== row.owner_account_id) fail('ORGANIZATION_ROUTE_OWNER_CHANGED')
   if (!['pending','approved'].includes(row.state) || approved && row.state !== 'approved') fail('ORGANIZATION_ROUTE_APPROVAL_REQUIRED')
   if (mandate.id !== row.mandate_id || mandate.route_id !== row.route_id || mandate.buyer_id !== row.buyer_id
@@ -73,7 +90,7 @@ async function current(row: Grant, plan: Plan, mandate: Mandate, source: Purchas
     || plan.id !== row.route_id || plan.buyer_id !== row.buyer_id || routeAuthorityHash(plan) !== terms.route_hash
     || hash(JSON.parse(plan.candidates_json)) !== terms.candidate_hash || mandateDto(mandate).terms_hash !== terms.mandate_terms_hash)
     fail('ORGANIZATION_ROUTE_SCOPE_CHANGED')
-  if (row.state === 'approved' && (!row.approved_at || !row.decision_reference || row.decision_hash !== hash({ version: 1, client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true }))) fail('ORGANIZATION_ROUTE_DECISION_INVALID')
+  if (row.state === 'approved' && (!row.approved_at || !row.decision_reference || row.decision_hash !== hash({ version: version(terms), client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true }))) fail('ORGANIZATION_ROUTE_DECISION_INVALID')
   const [assignment] = await source.select().from(organization_agent_assignments).where(eq(organization_agent_assignments.agent_id,row.agent_id)).limit(1)
   const [link] = await source.select().from(agent_owners).where(and(eq(agent_owners.agentId,row.agent_id),eq(agent_owners.userId,row.owner_account_id))).limit(1)
   const [agent] = await source.select().from(agents).where(eq(agents.id,row.agent_id)).limit(1)
@@ -130,7 +147,7 @@ export async function proposeOrganizationRoute(orgId: string, actor: string, inp
     for (const candidate of candidates) {
       const [service] = await source.select().from(service_definitions).where(eq(service_definitions.id,candidate.service_id)).limit(1)
       if (service && !input.mandate.approved_providers.includes(service.seller_id)) continue
-      if (!service || service.visibility !== 'public' || candidate.payment_rail !== 'evm'
+      if (!service || service.visibility !== 'public' || candidate.payment_rail !== input.mandate.payment.rail
         || service.price_minor !== Math.round(Number(candidate.pricing.amount)*100)) fail('ORGANIZATION_ROUTE_CANDIDATES_CHANGED')
       services.push({ id: service.id, seller_id: service.seller_id, contract_hash: purchasingServiceHash(service) })
     }
@@ -145,7 +162,8 @@ export async function proposeOrganizationRoute(orgId: string, actor: string, inp
       reviewer_role_id: reviewer.id, reviewer_account_id: reviewer.account_id, request_hash: requestHash }
     const terms: Frozen = { route_hash: routeAuthorityHash(plan), candidate_hash: hash(candidates), mandate_terms_hash: result.mandate.terms_hash,
       services, max_daily_minor: input.max_daily, max_monthly_minor: input.max_monthly, max_lifetime_minor: input.max_lifetime,
-      max_lifetime_gas_cost_wei: input.max_lifetime_gas_cost_wei }
+      ...(input.version === 1 ? { max_lifetime_gas_cost_wei: input.max_lifetime_gas_cost_wei }
+        : { version: 2 as const, max_lifetime_fee_token_cost_units: input.max_lifetime_fee_token_cost_units }) }
     const [row] = await source.insert(grants).values({ id: randomUUID(), ...identity, client_reference: input.client_reference,
       authority_hash: authority(identity,terms), terms_json: JSON.stringify(terms), created_at: new Date() }).returning()
     const [bound] = await source.update(route_payment_mandates).set({ organization_route_authorization_id: row.id }).where(eq(route_payment_mandates.id,mandate.id)).returning()
@@ -173,9 +191,9 @@ async function dto(row: Grant, source: PurchasingSource, actor: string) {
     viewer_role: actor === row.reviewer_account_id ? 'reviewer' as const : 'owner' as const,
     review_url: `/organizations/${row.organization_id}/route-authorizations/${row.id}`,
     authority_hash: row.authority_hash, state: row.state, approved_at: row.approved_at, revoked_at: row.revoked_at,
-    decision: row.decision_reference ? { version: 1 as const, client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true as const } : null,
+    version: version(terms), decision: row.decision_reference ? { version: version(terms), client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true as const } : null,
     route: { ...routePlanDto(plan), route_hash: terms.route_hash },
-    terms, mandate: mandateDto(mandate), use: use ?? null }
+    terms, mandate: mandateDto(mandate), use: use ? { ...use, ...(isTempo(terms) ? { tempo_fee: await originalTempoFee(source,row,use,mandate) } : {}) } : null }
 }
 export async function inspectOrganizationRoute(orgId: string, id: string, actor: string) {
   const [row] = await db.select().from(grants).where(and(eq(grants.id,id),eq(grants.organization_id,orgId))).limit(1)
@@ -202,6 +220,7 @@ export async function approveOrganizationRoute(orgId: string, id: string, actor:
       return { authorization: await dto(row,source,actor), idempotent: true }
     }
     if (input.authority_hash !== row.authority_hash) fail('ORGANIZATION_ROUTE_REVIEW_CHANGED')
+    if (input.version !== version(frozen(row))) fail('ORGANIZATION_ROUTE_DECISION_VERSION_MISMATCH')
     const [plan] = await source.select().from(route_plans).where(eq(route_plans.id,row.route_id)).limit(1)
     const [mandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,row.mandate_id)).limit(1)
     await current(row,plan,mandate,source,false)
@@ -228,21 +247,33 @@ async function routeGuard<T>(run: () => Promise<T>): Promise<T> {
     throw error
   }
 }
+async function originalTempoFee(source: PurchasingSource, row: Grant, use: typeof uses.$inferSelect, mandate: Mandate) {
+  const terms = frozen(row), payment = mandateDto(mandate).terms.payment
+  const [fee] = await source.select().from(tempoFees).where(eq(tempoFees.authorization_id,row.id)).limit(1)
+  if (!isTempo(terms) || !fee || payment.rail !== 'mpp' || !('fee_token_address' in payment)
+    || fee.chain_id !== 4217 || fee.chain_id !== payment.chain_id || fee.fee_token_address !== payment.fee_token_address
+    || fee.authority_hash !== row.authority_hash || fee.maximum_fee_token_cost_units !== payment.max_fee_token_cost_units
+    || !units.safeParse(fee.maximum_fee_token_cost_units).success || use.maximum_gas_cost_wei !== '0')
+    fail('ORGANIZATION_ROUTE_USE_INVALID')
+  return fee
+}
 export async function validateOrganizationRouteAuthority(source: PurchasingSource, mandate: Mandate, plan: Plan) {
   return routeGuard(async () => {
     const [row] = await source.select().from(grants).where(eq(grants.route_id,plan.id)).limit(1)
     if (!row) { if (mandate.organization_route_authorization_id) fail('ORGANIZATION_ROUTE_CONTRACT_INVALID'); return }
-    await current(row,plan,mandate,source)
+    const terms = await current(row,plan,mandate,source)
     if (plan.service_order_id) {
       const [use] = await source.select().from(uses).where(eq(uses.authorization_id,row.id)).limit(1)
       const [order] = use ? await source.select().from(service_orders).where(eq(service_orders.id,use.order_id)).limit(1) : []
       const [trade] = use ? await source.select().from(trades).where(eq(trades.id,use.trade_id)).limit(1) : []
       const [step] = use ? await source.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id,use.trade_id)).limit(1) : []
       const payment = mandateDto(mandate).terms.payment
-      if (!use || !order || !trade || !step || payment.rail !== 'evm' || use.order_id !== plan.service_order_id || use.authority_hash !== row.authority_hash
+      if (!use || !order || !trade || !step || use.order_id !== plan.service_order_id || use.authority_hash !== row.authority_hash
         || use.amount_minor !== step.amount_minor || use.amount_minor !== Math.round(trade.total_cost*100) || step.order_id !== order.id || order.trade_id !== trade.id
         || order.buyer_id !== row.buyer_id || trade.buyer_id !== row.buyer_id || step.mandate_id !== mandate.id || step.route_id !== plan.id
-        || use.maximum_gas_cost_wei !== payment.max_gas_cost_wei) fail('ORGANIZATION_ROUTE_USE_INVALID')
+        || step.terms_hash !== mandateDto(mandate).terms_hash || trade.payment_rail !== payment.rail
+        || !isTempo(terms) && (payment.rail !== 'evm' || use.maximum_gas_cost_wei !== payment.max_gas_cost_wei)) fail('ORGANIZATION_ROUTE_USE_INVALID')
+      if (isTempo(terms)) await originalTempoFee(source,row,use,mandate)
     }
   })
 }
@@ -257,7 +288,7 @@ export async function organizationRoutePurchaseEvidence(source: PurchasingSource
     const candidate = terms.services.find(entry => entry.id === service.id && entry.seller_id === service.seller_id)
     if (service.visibility !== 'public' || !candidate || candidate.contract_hash !== purchasingServiceHash(service)) fail('ORGANIZATION_ROUTE_SERVICE_CHANGED')
     return issuePurchaseEvidence({ approvalId: row.id, requestHash: row.authority_hash, buyerId: row.buyer_id,
-      totalMinor, sellerId: service.seller_id, paymentRail: 'evm' })
+      totalMinor, sellerId: service.seller_id, paymentRail: mandateDto(mandate).terms.payment.rail })
   })
 }
 export async function consumeOrganizationRouteExposure(source: PurchasingSource, input: { plan: Plan; mandateId: string;
@@ -267,29 +298,35 @@ export async function consumeOrganizationRouteExposure(source: PurchasingSource,
     if (!row) return
     const [mandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,input.mandateId)).limit(1)
     const terms = await current(row,input.plan,mandate,source), payment = mandateDto(mandate).terms.payment
-    if (payment.rail !== 'evm') fail('ORGANIZATION_ROUTE_SCOPE_CHANGED')
     const history = await source.select({ use: uses, grant: grants }).from(uses).innerJoin(grants,eq(grants.id,uses.authorization_id))
       .where(and(eq(grants.organization_id,row.organization_id),eq(grants.buyer_id,row.buyer_id))).limit(10001)
     if (history.length > 10000) fail('ORGANIZATION_ROUTE_HISTORY_UNAVAILABLE',503)
-    let daily = 0, monthly = 0, lifetime = 0, gas = 0n
+    let daily = 0, monthly = 0, lifetime = 0, gas = 0n, fees = 0n
     const now = new Date(), day = Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()), month = Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1)
     for (const entry of history) {
-      frozen(entry.grant)
+      const priorTerms = frozen(entry.grant)
       const [step] = await source.select().from(route_funding_steps).where(eq(route_funding_steps.trade_id,entry.use.trade_id)).limit(1)
       const [order] = await source.select().from(service_orders).where(eq(service_orders.id,entry.use.order_id)).limit(1)
       const [trade] = await source.select().from(trades).where(eq(trades.id,entry.use.trade_id)).limit(1)
       const [priorMandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,entry.grant.mandate_id)).limit(1)
       const priorPayment = priorMandate && mandateDto(priorMandate).terms.payment
-      if (!step || !order || !trade || !priorPayment || priorPayment.rail !== 'evm' || priorPayment.chain_id !== 1
+      if (!step || !order || !trade || !priorMandate || !priorPayment
         || step.order_id !== order.id || step.route_id !== entry.grant.route_id || step.mandate_id !== entry.grant.mandate_id
         || order.trade_id !== trade.id || trade.buyer_id !== row.buyer_id || order.buyer_id !== row.buyer_id
         || entry.use.authority_hash !== entry.grant.authority_hash || entry.use.amount_minor !== step.amount_minor
-        || entry.use.amount_minor !== Math.round(trade.total_cost*100) || entry.use.maximum_gas_cost_wei !== priorPayment.max_gas_cost_wei)
+        || entry.use.amount_minor !== Math.round(trade.total_cost*100) || trade.payment_rail !== priorPayment.rail
+        || step.terms_hash !== mandateDto(priorMandate).terms_hash
+        || !isTempo(priorTerms) && (priorPayment.rail !== 'evm' || priorPayment.chain_id !== 1
+          || entry.use.maximum_gas_cost_wei !== priorPayment.max_gas_cost_wei))
         fail('ORGANIZATION_ROUTE_USE_INVALID')
       lifetime += entry.use.amount_minor
       if (entry.use.created_at.getTime() >= day) daily += entry.use.amount_minor
       if (entry.use.created_at.getTime() >= month) monthly += entry.use.amount_minor
-      gas += BigInt(entry.use.maximum_gas_cost_wei)
+      if (isTempo(priorTerms)) {
+        const fee = await originalTempoFee(source,entry.grant,entry.use,priorMandate)
+        if (payment.rail === 'mpp' && 'fee_token_address' in payment && fee.chain_id === payment.chain_id
+          && fee.fee_token_address === payment.fee_token_address) fees += BigInt(fee.maximum_fee_token_cost_units)
+      } else gas += BigInt(entry.use.maximum_gas_cost_wei)
     }
     const [orphan] = await source.all(sql`SELECT a.id FROM organization_route_authorizations a JOIN route_funding_steps s ON s.mandate_id=a.mandate_id
       WHERE a.organization_id=${row.organization_id} AND a.buyer_id=${row.buyer_id} AND a.id<>${row.id}
@@ -298,8 +335,17 @@ export async function consumeOrganizationRouteExposure(source: PurchasingSource,
     if (orphan) fail('ORGANIZATION_ROUTE_USE_INVALID')
     for (const [spent,limit] of [[daily,terms.max_daily_minor],[monthly,terms.max_monthly_minor],[lifetime,terms.max_lifetime_minor]])
       if (!Number.isSafeInteger(spent) || spent < 0 || spent + input.totalMinor > limit) fail('ORGANIZATION_ROUTE_GROSS_LIMIT')
-    if (gas + BigInt(payment.max_gas_cost_wei) > BigInt(terms.max_lifetime_gas_cost_wei)) fail('ORGANIZATION_ROUTE_GAS_LIMIT')
+    if (isTempo(terms)) {
+      if (payment.rail !== 'mpp' || !('fee_token_address' in payment)) fail('ORGANIZATION_ROUTE_SCOPE_CHANGED')
+      if (fees + BigInt(payment.max_fee_token_cost_units) > BigInt(terms.max_lifetime_fee_token_cost_units)) fail('ORGANIZATION_ROUTE_FEE_TOKEN_LIMIT')
+    } else {
+      if (payment.rail !== 'evm') fail('ORGANIZATION_ROUTE_SCOPE_CHANGED')
+      if (gas + BigInt(payment.max_gas_cost_wei) > BigInt(terms.max_lifetime_gas_cost_wei)) fail('ORGANIZATION_ROUTE_GAS_LIMIT')
+    }
     await source.insert(uses).values({ authorization_id: row.id, order_id: input.orderId, trade_id: input.tradeId,
-      authority_hash: row.authority_hash, amount_minor: input.totalMinor, maximum_gas_cost_wei: payment.max_gas_cost_wei, created_at: now })
+      authority_hash: row.authority_hash, amount_minor: input.totalMinor, maximum_gas_cost_wei: payment.rail === 'evm' ? payment.max_gas_cost_wei : '0', created_at: now })
+    if (isTempo(terms) && payment.rail === 'mpp' && 'fee_token_address' in payment) await source.insert(tempoFees).values({
+      authorization_id: row.id, authority_hash: row.authority_hash, chain_id: payment.chain_id,
+      fee_token_address: payment.fee_token_address, maximum_fee_token_cost_units: payment.max_fee_token_cost_units })
   })
 }

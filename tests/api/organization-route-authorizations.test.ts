@@ -67,15 +67,15 @@ async function fixture() {
   return {id,agent,owner,reviewer,other,seller,buyer,service,team,body,routeId:route.id as string,roleId:role.role.id,prefix:`/api/organizations/${id}/route-authorizations`}
 }
 type Fixture=Awaited<ReturnType<typeof fixture>>
-const ctx=(f:Fixture,authorizationId?:string)=>({params:Promise.resolve({id:f.id,authorizationId:authorizationId!})})
-async function propose(f:Fixture) {
+const ctx=(f:Pick<Fixture,'id'>,authorizationId?:string)=>({params:Promise.resolve({id:f.id,authorizationId:authorizationId!})})
+async function propose(f:Pick<Fixture,'id'|'prefix'|'owner'|'routeId'> & {body:unknown}) {
   const r=await collection.POST(request(f.prefix,f.owner,'POST',f.body),ctx(f));assert.equal(r.status,201,JSON.stringify(await r.clone().json()));const a=(await r.json()).authorization;f.routeId=a.route_id;return a
 }
-async function approve(f:Fixture,a:Awaited<ReturnType<typeof propose>>) {
-  const body={version:1,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true}
+async function approve(f:Pick<Fixture,'id'|'prefix'|'reviewer'>,a:Awaited<ReturnType<typeof propose>>) {
+  const body={version:a.version??1,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true}
   const r=await approval.POST(request(`${f.prefix}/${a.id}/approval`,f.reviewer,'POST',body),ctx(f,a.id));assert.equal(r.status,201,JSON.stringify(await r.clone().json()));return body
 }
-const run=(f:Fixture,mandateId:string)=>execute(request(`/api/routes/${f.routeId}/execute`,f.buyer,'POST',{mandate_id:mandateId}),{params:Promise.resolve({id:f.routeId})})
+const run=(f:Pick<Fixture,'buyer'|'routeId'>,mandateId:string)=>execute(request(`/api/routes/${f.routeId}/execute`,f.buyer,'POST',{mandate_id:mandateId}),{params:Promise.resolve({id:f.routeId})})
 test('owner proposal is inert until the selected independent reviewer approves the original hash; races consume exactly once',async()=>{
   const f=await fixture(),a=await propose(f)
   assert.equal(a.state,'pending');assert.equal(a.mandate.terms.max_aggregate,'2.00')
@@ -232,6 +232,141 @@ test('SIGKILL before and after original proposal, approval and economic commits 
       const original=(await recovered.json()).authorization;f.routeId=original.route_id
       if(grants.length)assert.equal(original.id,grants[0].id)
       const decision=operation==='approve'?body:{version:1,client_reference:grants[0]?.decision_reference??crypto.randomUUID(),authority_hash:original.authority_hash,approve:true}
+      const approved=await approval.POST(request(`${f.prefix}/${original.id}/approval`,f.reviewer,'POST',decision),ctx(f,original.id));assert.ok([200,201].includes(approved.status),await approved.clone().text())
+      const reserved=await run(f,original.mandate.id);assert.ok([200,201].includes(reserved.status),await reserved.clone().text())
+      assert.equal((await db.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,original.id))).length,1)
+    }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited}
+  }
+})
+
+async function tempoFixture() {
+  const f=await fixture()
+  Object.assign(process.env,{MPP_SECRET_KEY_CURRENT:'reviewed-tempo-route-tests-only-secret',MPP_RECIPIENT_ADDRESS:treasury,TEMPO_RPC_URL:'https://rpc.example.invalid'})
+  const {max_lifetime_gas_cost_wei:_,...original}=f.body
+  const pathUSD='0x20c0000000000000000000000000000000000000'
+  return {...f,body:{...original,version:2,max_lifetime_fee_token_cost_units:'10000',
+    route_request:{...original.route_request,payment_policy:{allowed_rails:['mpp']}},
+    mandate:{...original.mandate,payment:{rail:'mpp',chain_id:4217,token_address:pathUSD,payer_address:payer,treasury_address:treasury,
+      minimum_token_reserve_units:'1000000',fee_token_address:pathUSD,minimum_fee_token_reserve_units:'1000000',max_fee_token_cost_units:'10000'}}}}
+}
+test('Tempo v2 independent approval freezes explicit fee units, rejects L1 decision substitution and consumes one original obligation',async()=>{
+  const f=await tempoFixture(),a=await propose(f)
+  assert.equal(a.version,2);assert.equal(a.terms.version,2);assert.equal(a.terms.max_lifetime_fee_token_cost_units,'10000')
+  assert.equal(a.mandate.terms.fee_token_decimals,6);assert.equal(a.mandate.terms.payment.chain_id,4217)
+  assert.equal((await run(f,a.mandate.id)).status,409)
+  const bad=await approval.POST(request(`${f.prefix}/${a.id}/approval`,f.reviewer,'POST',{version:1,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true}),ctx(f,a.id))
+  assert.equal((await bad.json()).error_code,'ORGANIZATION_ROUTE_DECISION_VERSION_MISMATCH')
+  const decision=await approve(f,a);assert.equal(decision.version,2)
+  const results=await Promise.all([run(f,a.mandate.id),run(f,a.mandate.id)])
+  assert.deepEqual(results.map(r=>r.status).sort(),[200,201])
+  const inspected=(await item.GET(request(`${f.prefix}/${a.id}`,f.reviewer,'GET'),ctx(f,a.id)));assert.equal(inspected.status,200)
+  const use=(await inspected.json()).authorization.use;assert.equal(use.amount_minor,105);assert.equal(use.maximum_gas_cost_wei,'0')
+  assert.equal(use.tempo_fee.maximum_fee_token_cost_units,'10000');assert.equal(use.tempo_fee.fee_token_address,f.body.mandate.payment.token_address)
+})
+test('Tempo rejects mismatched rails, chains, fee currencies, fee ceilings and legacy gas terms without saving a plan or mandate',async()=>{
+  const f=await tempoFixture()
+  const variants=[{...f.body,version:1},{...f.body,max_lifetime_fee_token_cost_units:'9999'},
+    {...f.body,mandate:{...f.body.mandate,payment:{...f.body.mandate.payment,chain_id:42431}}},
+    {...f.body,mandate:{...f.body.mandate,payment:{...f.body.mandate.payment,fee_token_address:token}}},
+    {...f.body,mandate:{...f.body.mandate,payment:{rail:'mpp',chain_id:4217,token_address:f.body.mandate.payment.token_address,payer_address:payer,treasury_address:treasury,minimum_token_reserve_units:'0',minimum_native_reserve_wei:'1',max_gas_cost_wei:'10000'}}}]
+  for(const body of variants) {
+    const r=await collection.POST(request(f.prefix,f.owner,'POST',body),ctx(f));assert.equal(r.status,400)
+    assert.equal((await db.select().from(schema.route_plans).where(eq(schema.route_plans.client_reference,f.body.route_request.client_reference))).length,0)
+  }
+})
+test('distinct Tempo grants race under shared gross, fee-token and department limits and roll back all losing exposure',async()=>{
+  for(const limit of ['gross','fee','department'] as const) {
+    const f=await tempoFixture(),second={...f,body:structuredClone(f.body)}
+    for(const candidate of [f,second]){
+      candidate.body.max_daily=limit==='gross'?'2.00':'4.00';candidate.body.max_monthly=candidate.body.max_daily;candidate.body.max_lifetime=candidate.body.max_daily
+      candidate.body.max_lifetime_fee_token_cost_units=limit==='fee'?'10000':'20000'
+    }
+    second.body.client_reference=crypto.randomUUID();second.body.route_request.client_reference=crypto.randomUUID();second.body.mandate.client_reference=crypto.randomUUID()
+    const a=await propose(f),b=await propose(second);await approve(f,a);await approve(second,b)
+    if(limit==='department'){const now=new Date();await db.insert(schema.organization_team_budgets).values({team_id:f.team,organization_id:f.id,max_daily_minor:200,max_monthly_minor:200,version:1,created_at:now,updated_at:now})}
+    const results=await Promise.all([run(f,a.mandate.id),run(second,b.mandate.id)])
+    assert.equal(results.filter(r=>r.status===201).length,1,limit);assert.equal(results.filter(r=>r.status>=400).length,1,limit)
+    const loser=results[0].status>=400?a:b
+    assert.equal((await db.select().from(schema.organization_route_tempo_fees).where(eq(schema.organization_route_tempo_fees.authorization_id,loser.id))).length,0)
+    assert.equal((await db.select().from(schema.route_funding_steps).where(eq(schema.route_funding_steps.route_id,loser.route_id))).length,0)
+    assert.equal((await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id,loser.mandate.id)))[0].reserved_minor,0)
+  }
+})
+test('gross is shared across reviewed L1 and Tempo grants while fee currencies remain separate',async()=>{
+  const l1=await fixture(),tempo={...await tempoFixture()}
+  // Both grants bind the same original buyer and organization, with distinct original routes.
+  tempo.id=l1.id;tempo.agent=l1.agent;tempo.owner=l1.owner;tempo.reviewer=l1.reviewer;tempo.buyer=l1.buyer;tempo.team=l1.team;tempo.seller=l1.seller;tempo.service=l1.service;tempo.prefix=l1.prefix
+  tempo.body.agent_id=l1.agent;tempo.body.reviewer_role_id=l1.body.reviewer_role_id;tempo.body.mandate.approved_providers=[l1.seller];tempo.body.route_request.provider_requirements.approved_providers=[l1.seller]
+  const a=await propose(l1),b=await propose(tempo);await approve(l1,a);await approve(tempo,b)
+  assert.equal((await run(l1,a.mandate.id)).status,201)
+  const blocked=await run(tempo,b.mandate.id);assert.equal((await blocked.json()).error_code,'ORGANIZATION_ROUTE_GROSS_LIMIT')
+  tempo.body.client_reference=crypto.randomUUID();tempo.body.route_request.client_reference=crypto.randomUUID();tempo.body.mandate.client_reference=crypto.randomUUID()
+  tempo.body.max_daily='4.00';tempo.body.max_monthly='4.00';tempo.body.max_lifetime='4.00'
+  const c=await propose(tempo);await approve(tempo,c);assert.equal((await run(tempo,c.mandate.id)).status,201)
+})
+test('missing original Tempo fee evidence fails fresh funding without releasing consumed gross',async()=>{
+  const f=await tempoFixture(),a=await propose(f);await approve(f,a);const r=await run(f,a.mandate.id),trade=(await r.json()).trade
+  assert.equal(r.status,201)
+  await db.delete(schema.organization_route_tempo_fees).where(eq(schema.organization_route_tempo_fees.authorization_id,a.id))
+  const reason=await (await import('@/lib/route-payment-mandate')).mandateFundingEligibility((await db.select().from(schema.trades).where(eq(schema.trades.id,trade.id)))[0])
+  assert.equal(reason,'ORGANIZATION_ROUTE_USE_INVALID')
+  assert.equal((await db.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,a.id))).length,1)
+})
+
+test('Tempo independent proposal and decision processes recover one frozen authority and cannot duplicate economic consumption',async()=>{
+  const f=await tempoFixture(),runFile=promisify(execFile)
+  const code=`(async()=>{const d=await import('./lib/organization-route-authorizations.ts'),a=JSON.parse(process.argv[1]);
+    const r=a.operation==='propose'?await d.proposeOrganizationRoute(a.org,a.actor,d.organizationRouteInput.parse(a.body)):await d.approveOrganizationRoute(a.org,a.id,a.actor,d.organizationRouteDecision.parse(a.body));
+    console.log(JSON.stringify(r));(await import('./lib/db.ts')).db.$client.close()})().catch(e=>{console.error(e);process.exitCode=1})`
+  const race=async(args:unknown)=>Promise.all(Array.from({length:3},async()=>JSON.parse((await runFile(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify(args)],{cwd:process.cwd(),env:process.env,timeout:30000})).stdout)))
+  const proposals=await race({operation:'propose',org:f.id,actor:f.owner,body:f.body})
+  assert.equal(new Set(proposals.map(p=>p.authorization.id)).size,1)
+  assert.equal(new Set(proposals.map(p=>p.authorization.route_id)).size,1)
+  const a=proposals[0].authorization;f.routeId=a.route_id
+  const decisions=await race({operation:'approve',org:f.id,id:a.id,actor:f.reviewer,body:{version:2,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true}})
+  assert.equal(new Set(decisions.map(p=>p.authorization.authority_hash)).size,1)
+  const results=await Promise.all([run(f,a.mandate.id),run(f,a.mandate.id)])
+  assert.deepEqual(results.map(r=>r.status).sort(),[200,201])
+  assert.equal((await db.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,a.id))).length,1)
+})
+
+test('Tempo SIGKILL before and after original proposal, approval and economic commits preserves exact recovery and atomic rollback',async()=>{
+  for(const operation of ['propose','approve','reserve']as const)for(const boundary of ['before','after']as const){
+    const f=await tempoFixture();let a:Awaited<ReturnType<typeof propose>>|undefined
+    if(operation!=='propose')a=await propose(f)
+    if(operation==='reserve'){
+      await approve(f,a!)
+      await db.update(schema.route_plans).set({state:'reserving'}).where(eq(schema.route_plans.id,f.routeId))
+      await (await import('@/lib/route-attempts')).beginRouteAttempt(f.routeId,1,f.service)
+    }
+    const body=operation==='propose'?f.body:{version:2,client_reference:crypto.randomUUID(),authority_hash:a!.authority_hash,approve:true}
+    const marker=join(directory,`${operation}-${boundary}-${f.id}.marker`)
+    const args={operation,boundary,f,a,body}
+    const code=`(async()=>{const a=JSON.parse(process.argv[1]),{writeFile}=await import('node:fs/promises');const stop=async()=>{await writeFile(process.argv[2],'reached');await new Promise(()=>{})};
+      const {db}=await import('./lib/db.ts'),schema=await import('./lib/schema.ts'),{eq}=await import('drizzle-orm');
+      if(a.boundary==='before'){const proto=Object.getPrototypeOf(db.session),original=proto.transaction;proto.transaction=function(fn,c){return original.call(this,async tx=>{const r=await fn(tx);
+        if(a.operation!=='reserve'||(await tx.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,a.a.id))).length)await stop();return r},c)}}
+      const d=await import('./lib/organization-route-authorizations.ts');
+      if(a.operation==='propose')await d.proposeOrganizationRoute(a.f.id,a.f.owner,d.organizationRouteInput.parse(a.body));
+      else if(a.operation==='approve')await d.approveOrganizationRoute(a.f.id,a.a.id,a.f.reviewer,d.organizationRouteDecision.parse(a.body));
+      else {const {reserveServiceOrder}=await import('./lib/service-order-reservation.ts'),{serviceOrderInput}=await import('./lib/service-definitions.ts');await reserveServiceOrder({serviceId:a.f.service,principal:{userId:a.f.buyer,agentId:a.f.agent,kind:'registered-agent',usesCookieAuth:false},routeId:a.f.routeId,attemptNumber:1,externalOnly:true,expectedSellerId:a.f.seller,mandateId:a.a.mandate.id,request:serviceOrderInput.parse({client_reference:'route:'+a.f.routeId+':attempt:1',objective:a.a.route.objective,input:a.a.route.input,payment_rail:'mpp',max_total:'2.00',expected_price:'1.00',provider_requirements:a.a.route.provider_requirements})})}
+      await stop()})().catch(e=>{console.error(e);process.exitCode=1})`
+    const child=spawn(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify(args),marker],{cwd:process.cwd(),env:process.env,stdio:['ignore','ignore','pipe']})
+    let errors='';child.stderr.on('data',chunk=>{errors+=chunk});const exited=new Promise<void>((done,reject)=>{child.once('exit',()=>done());child.once('error',reject)})
+    try{
+      let reached=false;for(let wait=0;wait<150;wait++){try{await readFile(marker);reached=true;break}catch{}if(child.exitCode!==null)throw Error(errors);await new Promise(done=>setTimeout(done,100))}
+      assert.equal(reached,true,errors);child.kill('SIGKILL');await exited
+      const grants=await db.select().from(schema.organization_route_authorizations).where(eq(schema.organization_route_authorizations.organization_id,f.id))
+      if(operation==='propose')assert.equal(grants.length,boundary==='before'?0:1)
+      if(operation==='approve')assert.equal(grants[0].state,boundary==='before'?'pending':'approved')
+      if(operation==='reserve'){
+        assert.equal((await db.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,a!.id))).length,boundary==='before'?0:1)
+        assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.service)))[0].active_orders,boundary==='before'?0:1)
+      }
+      const recovered=await collection.POST(request(f.prefix,f.owner,'POST',f.body),ctx(f));assert.ok([200,201].includes(recovered.status),await recovered.clone().text())
+      const original=(await recovered.json()).authorization;f.routeId=original.route_id
+      if(grants.length)assert.equal(original.id,grants[0].id)
+      const decision=operation==='approve'?body:{version:2,client_reference:grants[0]?.decision_reference??crypto.randomUUID(),authority_hash:original.authority_hash,approve:true}
       const approved=await approval.POST(request(`${f.prefix}/${original.id}/approval`,f.reviewer,'POST',decision),ctx(f,original.id));assert.ok([200,201].includes(approved.status),await approved.clone().text())
       const reserved=await run(f,original.mandate.id);assert.ok([200,201].includes(reserved.status),await reserved.clone().text())
       assert.equal((await db.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,original.id))).length,1)

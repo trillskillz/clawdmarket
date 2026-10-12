@@ -34,7 +34,7 @@ migration-first deployment and same-SHA production verification.
 
 Accepted on reviewed routing parent `5ae3e92`, contract 1.113. The final complete
 release gate passed 815 Node tests: 810 passed, zero failed, five expected skips,
-plus 17 Python tests, TypeScript, generated SDK parity/build, lint, genuine
+plus 18 Python tests, TypeScript, generated SDK parity/build, lint, genuine
 disposable EVM/Tempo economics, crash/race recovery, isolated verification and
 legacy migration. Production build passed. Eleven built Chromium journeys passed,
 including desktop/mobile public surfaces, private route review, peer benchmarks,

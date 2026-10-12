@@ -36,7 +36,7 @@ Evidence collected on 2026-10-12 UTC:
   purchasing and economic authority.
 - `/tmp/clawdmarket-enterprise-route-current-predeploy-v2.log`: **813 Node cases,
   808 passed, zero failed, five expected skips**, 805134.222933 ms. The full
-  gate also passes TypeScript, generated SDK parity/build, all **17 Python client
+  gate also passes TypeScript, generated SDK parity/build, all **18 Python client
   cases**, lint, real disposable EVM/Tempo economics, verifier isolation and legacy
   migration regressions.
 - `/tmp/clawdmarket-enterprise-route-current-build-final.log`: final production

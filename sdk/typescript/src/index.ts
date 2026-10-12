@@ -38,14 +38,18 @@ export type RouteMandateInput = { version: 1; client_reference: string; max_aggr
 export type RouteMandate = { id: string; route_id: string; buyer_id: string; client_reference: string; route_hash: string; terms_hash: string;
   terms: Omit<RouteMandateInput, 'client_reference' | 'payment'> & { payment: RouteMandatePayment | LegacyMppMandatePayment; token_decimals: number; token_usd_price: number; fee_token_decimals?: number };
   state: 'active' | 'revoked'; reserved_amount: string; expires_at: string; created_at: string; revoked_at: string | null; automatic_funded_retry_enabled: boolean }
-export type OrganizationRouteProposal = {version:1;client_reference:string;reviewer_role_id:string;max_daily:string;max_monthly:string;max_lifetime:string;max_lifetime_gas_cost_wei:string;
-  mandate:Omit<RouteMandateInput,'payment'|'max_attempts'|'max_retry_budget'>&{max_attempts:1;max_retry_budget:'0'|'0.00';payment:Extract<RouteMandatePayment,{rail:'evm'}>&{chain_id:1}}
-}&({route_id:string;agent_id?:never;route_request?:never}|{route_id?:never;agent_id:string;route_request:RouteRequest})
-export type OrganizationRouteAuthorization = {id:string;organization_id:string;route_id:string;buyer_id:string;team_id:string|null;cost_center:string;reviewer_account_id:string;
+type OrganizationRouteProposalBase = {client_reference:string;reviewer_role_id:string;max_daily:string;max_monthly:string;max_lifetime:string}
+  & ({route_id:string;agent_id?:never;route_request?:never}|{route_id?:never;agent_id:string;route_request:RouteRequest})
+type OrganizationRouteMandate = Omit<RouteMandateInput,'payment'|'max_attempts'|'max_retry_budget'>&{max_attempts:1;max_retry_budget:'0'|'0.00'}
+export type OrganizationRouteProposal = OrganizationRouteProposalBase & (
+  {version:1;max_lifetime_gas_cost_wei:string;mandate:OrganizationRouteMandate&{payment:Extract<RouteMandatePayment,{rail:'evm'}>&{chain_id:1}}}
+  | {version:2;max_lifetime_fee_token_cost_units:string;mandate:OrganizationRouteMandate&{payment:Extract<RouteMandatePayment,{rail:'mpp'}>&{chain_id:4217}}}
+)
+export type OrganizationRouteAuthorization = {id:string;version:1|2;organization_id:string;route_id:string;buyer_id:string;team_id:string|null;cost_center:string;reviewer_account_id:string;
   viewer_role:'owner'|'reviewer';review_url:string;client_reference:string;authority_hash:string;state:'pending'|'approved'|'revoked';approved_at:string|null;revoked_at:string|null;
-  decision:{version:1;client_reference:string;authority_hash:string;approve:true}|null;
-  route:RoutePlan&{route_hash:string};mandate:RouteMandate;terms:{route_hash:string;candidate_hash:string;mandate_terms_hash:string;max_daily_minor:number;max_monthly_minor:number;max_lifetime_minor:number;max_lifetime_gas_cost_wei:string;services:Array<{id:string;seller_id:string;contract_hash:string}>};
-  use:{authorization_id:string;order_id:string;trade_id:string;authority_hash:string;amount_minor:number;maximum_gas_cost_wei:string;created_at:string}|null}
+  decision:{version:1|2;client_reference:string;authority_hash:string;approve:true}|null;
+  route:RoutePlan&{route_hash:string};mandate:RouteMandate;terms:{route_hash:string;candidate_hash:string;mandate_terms_hash:string;max_daily_minor:number;max_monthly_minor:number;max_lifetime_minor:number;services:Array<{id:string;seller_id:string;contract_hash:string}>}&({max_lifetime_gas_cost_wei:string}|{version:2;max_lifetime_fee_token_cost_units:string});
+  use:{authorization_id:string;order_id:string;trade_id:string;authority_hash:string;amount_minor:number;maximum_gas_cost_wei:string;created_at:string;tempo_fee?:{authorization_id:string;authority_hash:string;chain_id:4217;fee_token_address:string;maximum_fee_token_cost_units:string}}|null}
 export type RouteFundingStep = { id: string; mandate_id: string; route_id: string; order_id: string; trade_id: string; amount_minor: number; terms_hash: string;
   state: 'reserved' | 'funded' | 'rejected'; retry_operation_id?: string; previous_trade_id?: string; attempt_id?: string; created_at: string; updated_at: string }
 export type BuyerEvmPaymentClaimInput = { intent_id: string; mandate_id: string; serialized_transaction: string; payer_signature: string; buyer_operation_id?: string }
@@ -393,7 +397,7 @@ export class ClawdMarketClient {
     return this.enterpriseRequest<{authorization:OrganizationRouteAuthorization}>('inspect_organization_route',{id:organizationId,authorizationId},undefined,options)
   }
   /** Persist the exact hash/reference before submission; no mutation is retried automatically. */
-  approveOrganizationRoute(organizationId:string,authorizationId:string,input:{version:1;client_reference:string;authority_hash:string;approve:true},options?:RequestOptions){
+  approveOrganizationRoute(organizationId:string,authorizationId:string,input:{version:1|2;client_reference:string;authority_hash:string;approve:true},options?:RequestOptions){
     return this.enterpriseRequest<{authorization:OrganizationRouteAuthorization;idempotent:boolean}>('approve_organization_route',{id:organizationId,authorizationId},input,options)
   }
   revokeOrganizationRoute(organizationId:string,authorizationId:string,options?:RequestOptions){

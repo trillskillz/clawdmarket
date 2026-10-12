@@ -82,3 +82,15 @@ restart, explicit original buyer review/payout, revocation before original
 receipt recovery and confirmed original full refunds in both languages.
 Production enablement, independent providers, live funds and broader delegated
 product/routed purchases retain their existing gates.
+
+Ordinary owner/reviewer clients also support separately reviewed public-provider
+routes through `proposeOrganizationRoute`, `recoverOrganizationRoute`,
+`inspectOrganizationRoute`, `approveOrganizationRoute` and `revokeOrganizationRoute`
+(Python uses snake_case). Preserve the complete proposal, original reference,
+authority hash and decision version. Neither language automatically retries a
+mutation. L1 proposals use version 1 and lifetime gas wei; Tempo proposals and
+decisions use version 2 and `max_lifetime_fee_token_cost_units`, chain 4217 and
+explicit original pathUSD reserve/per-payment fee fields. The underlying mandate
+retains version 1. Existing direct-service credentials keep their original scope.
+See [reviewed routes](ORGANIZATION_ROUTED_PURCHASING.md) and
+[Tempo routing](ORGANIZATION_ROUTED_TEMPO_PLAN.md).

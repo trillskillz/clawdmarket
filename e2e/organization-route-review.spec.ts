@@ -57,3 +57,28 @@ test('lost approval reply and reload retain the original decision reference; a c
   await expect(page.getByText('Status: approved')).toBeVisible();expect(commands).toHaveLength(2);expect(commands[1]).toEqual(commands[0])
   await page.reload();await expect(page.getByText('Status: approved')).toBeVisible();await expect(page.getByRole('button',{name:'Approve original route'})).toHaveCount(0)
 })
+
+for(const width of [1440,390])test(`Tempo reviewer inspects fee-token units and preserves its original v2 decision after a lost reply at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:1000})
+  const base=authorization('reviewer'),{max_lifetime_gas_cost_wei:_,...limits}=base.terms
+  const a={...base,version:2,terms:{...limits,version:2,max_lifetime_fee_token_cost_units:'10000'},
+    mandate:{...base.mandate,terms:{...base.mandate.terms,payment:{rail:'mpp',chain_id:4217,token_address:'0x20c0000000000000000000000000000000000000',payer_address:`0x${'11'.repeat(20)}`,treasury_address:`0x${'99'.repeat(20)}`,minimum_token_reserve_units:'5000000',fee_token_address:'0x20c0000000000000000000000000000000000000',minimum_fee_token_reserve_units:'1000000',max_fee_token_cost_units:'10000'}}}}
+  const commands:unknown[]=[];let lose=true
+  await page.route(`**${api}**`,async route=>{
+    if(route.request().method()==='POST'){
+      const body=route.request().postDataJSON();expect(body.version).toBe(2);expect(body.authority_hash).toBe(a.authority_hash);commands.push(body)
+      if(lose){lose=false;return route.abort('failed')}
+      a.state='approved'
+    }
+    await route.fulfill({json:{authorization:a}})
+  })
+  await page.goto(url)
+  await expect(page.getByText('Per-payment fee ceiling (pathUSD base units)',{exact:true})).toBeVisible()
+  await expect(page.getByText('Lifetime fee ceiling (pathUSD base units)',{exact:true})).toBeVisible()
+  await expect(page.getByText('Native reserve (wei)',{exact:true})).toHaveCount(0)
+  const approve=page.getByRole('button',{name:'Approve original route'});await expect(approve).toBeDisabled()
+  await page.getByRole('checkbox').check();await approve.click();await expect(page.getByRole('main').getByRole('alert')).toBeVisible()
+  await page.reload();await page.getByRole('checkbox').check();await approve.click();await expect(page.getByText('Status: approved')).toBeVisible()
+  expect(commands).toHaveLength(2);expect(commands[1]).toEqual(commands[0]);expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
+  expect((await page.evaluate(()=>Object.values(sessionStorage))).join('')).not.toContain('PRIVATE_REVIEW_SOURCE')
+})

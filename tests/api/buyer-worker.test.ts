@@ -1543,3 +1543,176 @@ async function workflowRefundLoop(isTempo: boolean) {
     for (const [name, value] of mppEnvironment) { if (value === undefined) delete process.env[name]; else process.env[name] = value }
   }
 }
+
+async function enterpriseRouteOnOwnedTempo(revoked: boolean) {
+  const f=await fixture(undefined,undefined,true)
+  // This fixture runs in its own process: configured MPP recipient and treasury nonce stay original.
+  const treasuryKey=`0x${'99'.repeat(32)}` as const
+  const treasury=privateKeyToAccount(treasuryKey).address.toLowerCase()
+  const chain=await startDisposableTempoChain(process.env.CLAWDMARKET_TEST_TEMPO_BINARY!,f.account.address,treasuryKey)
+  const previousToken=token,previousConfig=process.env.EVM_ACCEPTED_TOKENS,previousEnterprise=process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED
+  const previousTreasury=process.env.TREASURY_ADDRESS,previousTreasuryKey=process.env.EVM_SETTLEMENT_PRIVATE_KEY
+  const mppEnvironment=new Map(['TEMPO_RPC_URL','MPP_SECRET_KEY_CURRENT','MPP_RECIPIENT_ADDRESS'].map(name=>[name,process.env[name]]))
+  const payoutAddress=`0x${'22'.repeat(20)}` as const
+  const count=broadcastCalls,run=promisify(execFile)
+  try {
+    token=chain.token;realChainUrl=chain.url
+    process.env.TREASURY_ADDRESS=treasury;process.env.EVM_SETTLEMENT_PRIVATE_KEY=treasuryKey
+    process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED='true'
+    Object.assign(process.env,{TEMPO_RPC_URL:rpcUrl,MPP_SECRET_KEY_CURRENT:'disposable-reviewed-tempo-route-tests-only-secret',MPP_RECIPIENT_ADDRESS:treasury})
+    process.env.EVM_ACCEPTED_TOKENS=JSON.stringify([{chainId:1,chainName:'Disposable reviewed enterprise L1',address:token,symbol:'USDC',decimals:6,fixedUsdPrice:1,confirmations:1,rpcUrl}])
+    await db.update(schema.payout_addresses).set({address:payoutAddress}).where(eq(schema.payout_addresses.user_id,f.sellerId))
+    const now=new Date(),orgId=crypto.randomUUID(),teamId=crypto.randomUUID(),reviewer=`reviewer-${orgId}`
+    await db.insert(schema.users).values({id:reviewer,name:'Separate reviewer',email:`${reviewer}@test.invalid`,password_hash:'unused'})
+    await db.insert(schema.organizations).values({id:orgId,owner_account_id:f.ownerId,client_reference:orgId,name:'Owned reviewed route fixture',created_at:now,updated_at:now})
+    await db.insert(schema.organization_teams).values({id:teamId,organization_id:orgId,slug:'engineering',name:'Engineering',created_at:now,updated_at:now})
+    await db.insert(schema.organization_agent_assignments).values({agent_id:f.buyerId.slice('user_agent_'.length),organization_id:orgId,team_id:teamId,cost_center:'REVIEWED',assigned_at:now,updated_at:now})
+    const membership=await import('@/lib/organization-membership'),purchasing=await import('@/lib/organization-purchasing')
+    const invitation=await membership.createOrganizationInvitation(orgId,f.ownerId,reviewer,crypto.randomUUID())
+    assert.equal(invitation.kind,'ok');assert.equal((await membership.acceptOrganizationInvitation(invitation.invitation_id!,reviewer)).kind,'ok')
+    const role=await purchasing.grantPurchasingRole(orgId,f.ownerId,purchasing.purchasingRoleInput.parse({version:1,client_reference:crypto.randomUUID(),account_id:reviewer,team_id:teamId,role:'approver',max_purchase:'1.05',expires_at:new Date(Date.now()+3600_000).toISOString()}))
+    await db.insert(schema.buyer_spend_policies).values({buyer_id:f.buyerId,owner_account_id:f.ownerId,policy_json:'{"approval_required_above":50,"max_per_execution":105}',version:1,created_at:now,updated_at:now})
+    const domain=await import('@/lib/organization-route-authorizations')
+    const proposalInput:OrganizationRouteProposal={version:2,client_reference:crypto.randomUUID(),agent_id:f.buyerId.slice('user_agent_'.length),
+      route_request:{client_reference:crypto.randomUUID(),objective:'Review original private code under the exact enterprise authority',required_capabilities:['code-review'],input:{private_text:'enterprise-original-private-source'},max_budget:{amount:'1.05',currency:'USD'},verification:JSON.parse((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].verification_policy),provider_requirements:{approved_providers:[f.sellerId]},payment_policy:{allowed_rails:['mpp']}},
+      reviewer_role_id:role.role.id,max_daily:'1.05',max_monthly:'1.05',max_lifetime:'1.05',max_lifetime_fee_token_cost_units:'10000',
+      mandate:{version:1,client_reference:crypto.randomUUID(),max_aggregate:'1.05',max_per_execution:'1.05',max_retry_budget:'0.00',max_attempts:1,approved_providers:[f.sellerId],max_latency_seconds:60,private_data:'selected_provider_only',expires_at:new Date(Date.now()+600_000).toISOString(),payment:{rail:'mpp',chain_id:4217,token_address:token,payer_address:f.account.address.toLowerCase(),treasury_address:treasury,minimum_token_reserve_units:'5000000',fee_token_address:token,minimum_fee_token_reserve_units:'1000000',max_fee_token_cost_units:'10000'}}}
+    const ownerKey=jwt({userId:f.ownerId,email:`${f.ownerId}@test.invalid`,role:'human'})
+    const reviewerKey=jwt({userId:reviewer,email:`${reviewer}@test.invalid`,role:'human'})
+    const accountClient=new ClawdMarketClient({apiKey:ownerKey,baseUrl}),reviewerClient=new ClawdMarketClient({apiKey:reviewerKey,baseUrl})
+    // Both languages exercise the actual API, including uncertain committed replies.
+    const python=async(apiKey:string,method:string,args:unknown[]):Promise<{authorization:OrganizationRouteAuthorization;idempotent?:boolean}>=>{
+      const result=await run('python3',['-c','import json,os; from clawdmarket import ClawdMarketClient; c=ClawdMarketClient(os.environ["OWNED_CLIENT_KEY"],os.environ["OWNED_CLIENT_URL"]); print(json.dumps(getattr(c,os.environ["OWNED_CLIENT_METHOD"])(*json.loads(os.environ["OWNED_CLIENT_ARGS"]))))'],{cwd:resolve('.'),env:{...process.env,PYTHONPATH:resolve('sdk/python'),PYTHONDONTWRITEBYTECODE:'1',OWNED_CLIENT_KEY:apiKey,OWNED_CLIENT_URL:baseUrl,OWNED_CLIENT_METHOD:method,OWNED_CLIENT_ARGS:JSON.stringify(args)},timeout:15_000})
+      return JSON.parse(result.stdout)
+    }
+    const proposeOriginal=()=>revoked?python(ownerKey,'propose_organization_route',[orgId,proposalInput]):accountClient.proposeOrganizationRoute(orgId,proposalInput)
+    const recoverOriginal=()=>revoked?python(ownerKey,'recover_organization_route',[orgId,proposalInput.client_reference]):accountClient.recoverOrganizationRoute(orgId,proposalInput.client_reference)
+    const inspectOriginal=(id:string)=>revoked?python(reviewerKey,'inspect_organization_route',[orgId,id]):reviewerClient.inspectOrganizationRoute(orgId,id)
+    const prefix=`/api/organizations/${orgId}/route-authorizations`
+    let lostProposal=false
+    apiHook=async(path,response)=>{if(path===prefix&&response.status===201&&!lostProposal){lostProposal=true;return true}return false}
+    await assert.rejects(proposeOriginal());apiHook=null
+    assert.equal(lostProposal,true)
+    const recovered=await recoverOriginal(),a=recovered.authorization
+    assert.equal(a.state,'pending');assert.equal(a.viewer_role,'owner')
+    assert.equal(a.route.candidates[0].eligibility.approval_required,true)
+    assert.equal((await proposeOriginal()).idempotent,true)
+    const decision={version:2 as const,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true as const}
+    const approveOriginal=()=>revoked?python(reviewerKey,'approve_organization_route',[orgId,a.id,decision]):reviewerClient.approveOrganizationRoute(orgId,a.id,decision)
+    let lostDecision=false
+    apiHook=async(path,response)=>{if(path===`${prefix}/${a.id}/approval`&&response.status===201&&!lostDecision){lostDecision=true;return true}return false}
+    await assert.rejects(approveOriginal());apiHook=null
+    assert.equal(lostDecision,true)
+    const reviewed=await inspectOriginal(a.id)
+    assert.equal(reviewed.authorization.state,'approved');assert.equal(reviewed.authorization.viewer_role,'reviewer')
+    assert.deepEqual(reviewed.authorization.decision,decision)
+    assert.equal((await approveOriginal()).idempotent,true)
+    f.routeId=a.route_id;f.mandate=a.mandate
+    f.approval={version:1,origin:baseUrl,route_id:f.routeId,mandate_id:a.mandate.id,terms_hash:a.mandate.terms_hash,chain_id:4217,rpc_url:rpcUrl}
+    const account=TempoAccount.fromSecp256k1(f.dummyKey),adapter=createBuyerTempoAdapter({chainId:4217,rpcUrl,account})
+    const approvalFile=join(directory,`${f.routeId}.enterprise-approval.json`)
+    await writeFile(approvalFile,JSON.stringify(f.approval),{mode:0o600})
+    const buyerArgs=['scripts/buyer-mpp-worker.mjs',approvalFile,f.stateDirectory],buyerEnvironment={...process.env,CLAWDMARKET_BUYER_PRIVATE_KEY:f.dummyKey,CLAWDMARKET_BUYER_API_KEY:f.apiKey}
+    await killBuyerAtBoundary(buyerArgs,buyerEnvironment,holdBuyerApiResponse(async(path,response)=>{if(response.status>=400)console.info(JSON.stringify({reviewed_tempo_stage:path.split('/').slice(-3).join('/'),status:response.status,error_code:(await response.clone().json()).error_code,error:(await response.clone().json()).error}));return path.endsWith('/claim')&&response.ok}))
+    const original=await journal(f)
+    assert.equal(broadcastCalls,count)
+    if(revoked) {
+      const closed=await python(reviewerKey,'revoke_organization_route',[orgId,a.id]);assert.equal(closed.authorization.state,'revoked')
+      assert.equal((await approveOriginal()).authorization.state,'revoked')
+      const held=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      assert.equal(held.state,'held_recover_existing_payment');assert.equal(held.tx_hash,original.value.tx_hash);assert.equal(broadcastCalls,count)
+      // Model the exact original bytes arriving late after authority closes.
+      await chain.client.sendRawTransaction({serializedTransaction:original.value.serialized_transaction})
+      await chain.client.waitForTransactionReceipt({hash:original.value.tx_hash})
+      const proof={payer_address:f.account.address.toLowerCase(),tx_hash:original.value.tx_hash}
+      const response=await fetch(`${baseUrl}/api/trades/${original.value.trade_id}/fund/mpp`,{method:'POST',signal:AbortSignal.timeout(15_000),headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(proof)})
+      assert.ok([200,202,409].includes(response.status),JSON.stringify(await response.clone().json()))
+      const [refund]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,original.value.trade_id))
+      assert.equal(refund.kind,'buyer_refund')
+      await (await import('@/lib/external-settlement')).processSettlementTransfer(refund.id,{waitMs:5000})
+      await fetch(`${baseUrl}/api/trades/${original.value.trade_id}/fund/mpp`,{method:'POST',signal:AbortSignal.timeout(15_000),headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(proof)})
+      const refunded=(await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.id,refund.id)))[0]
+      const fundingGas=await chain.client.getTransactionReceipt({hash:original.value.tx_hash}),refundGas=await chain.client.getTransactionReceipt({hash:refunded.tx_hash as `0x${string}`})
+      const buyerFee=(fundingGas.gasUsed*fundingGas.effectiveGasPrice+999_999_999_999n)/1_000_000_000_000n,refundFee=(refundGas.gasUsed*refundGas.effectiveGasPrice+999_999_999_999n)/1_000_000_000_000n
+      assert.ok(buyerFee>0n&&refundFee>0n);assert.equal(await chain.balance(f.account.address),100_000_000n-buyerFee);assert.equal(await chain.balance(treasury as `0x${string}`),100_000_000n-refundFee)
+      assert.equal((await domain.inspectOrganizationRoute(orgId,a.id,f.ownerId)).use?.amount_minor,105)
+      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].active_orders,0)
+      assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id,f.routeId))).length,0)
+    } else {
+      await killBuyerAtBoundary(buyerArgs,buyerEnvironment,reach=>{realRpcHook=async(method,hash)=>{if(['eth_sendRawTransaction','eth_sendRawTransactionSync'].includes(method)&&hash)await reach()};return()=>{realRpcHook=null}})
+      const funded=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      assert.equal(funded.state,'funded');assert.equal(funded.tx_hash,original.value.tx_hash);assert.equal(broadcastCalls,count+1)
+      const providerKey=jwt({userId:f.sellerId,email:`${f.sellerId}@test.invalid`,role:'human'})
+      const handler=join(directory,`${f.routeId}.enterprise-provider.mjs`),providerState=join(directory,`${f.routeId}.enterprise-provider-state`)
+      await writeFile(handler,"export default async work=>({summary:'Separate provider reviewed the original private source.',artifact:{result:work.input.private_text+'-reviewed'}})",{mode:0o600})
+      const providerArgs=['scripts/provider-worker.mjs','--trade-id',funded.trade_id,'--service-id',f.serviceId,'--handler',handler,'--state-dir',providerState],providerEnvironment={...process.env,BASE_URL:baseUrl,CLAWDMARKET_PROVIDER_API_KEY:providerKey}
+      await run(process.execPath,[...providerArgs,'--prepare-only'],{cwd:resolve('.'),env:providerEnvironment,timeout:30_000})
+      const delivery=JSON.parse((await run(process.execPath,providerArgs,{cwd:resolve('.'),env:providerEnvironment,timeout:30_000})).stdout)
+      assert.equal((await runBuyerRoute({...f,account,adapter})).state,'awaiting_buyer')
+      assert.equal((await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,funded.trade_id))).length,0)
+      const decisionFile=join(directory,`${f.routeId}.enterprise-decision.json`)
+      await writeFile(decisionFile,JSON.stringify({version:1,route_id:f.routeId,decision:'accept',content_hash:delivery.content_hash}),{mode:0o600})
+      const routeArgs=['scripts/buyer-route-worker.mjs',approvalFile,f.stateDirectory,decisionFile]
+      let outcome=JSON.parse((await run(process.execPath,routeArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      if(outcome.state==='settling') {
+        const [payout]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,funded.trade_id))
+        await (await import('@/lib/external-settlement')).processSettlementTransfer(payout.id,{waitMs:5000})
+        outcome=JSON.parse((await run(process.execPath,routeArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      }
+      assert.equal(outcome.state,'completed',JSON.stringify(outcome))
+      assert.equal(outcome.receipt.receipt.financial.kind,'confirmed_external');assert.equal(outcome.receipt.receipt.capacity_released,true)
+      assert.equal(await chain.balance(payoutAddress as `0x${string}`),1_000_000n)
+      const [fundingReceipt]=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,funded.trade_id))
+      const [payout]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,funded.trade_id))
+      const fundingGas=await chain.client.getTransactionReceipt({hash:fundingReceipt.tx_hash as `0x${string}`}),payoutGas=await chain.client.getTransactionReceipt({hash:payout.tx_hash as `0x${string}`})
+      const buyerFee=(fundingGas.gasUsed*fundingGas.effectiveGasPrice+999_999_999_999n)/1_000_000_000_000n,payoutFee=(payoutGas.gasUsed*payoutGas.effectiveGasPrice+999_999_999_999n)/1_000_000_000_000n
+      assert.ok(buyerFee>0n&&payoutFee>0n);assert.equal(await chain.balance(f.account.address),98_950_000n-buyerFee);assert.equal(await chain.balance(treasury as `0x${string}`),100_050_000n-payoutFee)
+      assert.equal(fundingGas.type,'0x76');assert.equal(payoutGas.type,'0x76');assert.equal(fundingGas.feeToken?.toLowerCase(),token);assert.equal(payoutGas.feeToken?.toLowerCase(),token)
+      const {readChainFeeEvidence}=await import('@/lib/chain-fee-evidence')
+      const measuredFunding=readChainFeeEvidence(fundingReceipt.chain_fee_evidence_json,{chainId:4217,txHash:fundingReceipt.tx_hash,payerAddress:f.account.address}),measuredPayout=readChainFeeEvidence(payout.chain_fee_evidence_json,{chainId:4217,txHash:payout.tx_hash,payerAddress:treasury})
+      assert.equal(measuredFunding?.total_fee_units,buyerFee.toString());assert.equal(measuredPayout?.total_fee_units,payoutFee.toString())
+      const replay=JSON.parse((await run(process.execPath,routeArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      assert.deepEqual(replay.receipt,outcome.receipt);assert.equal(broadcastCalls,count+2)
+      assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id,f.routeId))).length,1)
+      assert.equal((await reviewerClient.revokeOrganizationRoute(orgId,a.id)).authorization.state,'revoked')
+      assert.equal((await approveOriginal()).authorization.state,'revoked')
+    }
+    // A real refund or settlement cannot replenish the same buyer's original gross.
+    const nextInput=structuredClone(proposalInput)
+    nextInput.client_reference=crypto.randomUUID();nextInput.mandate.client_reference=crypto.randomUUID()
+    if(!nextInput.route_request)throw Error('Missing original embedded review request')
+    nextInput.route_request.client_reference=crypto.randomUUID()
+    const next=(await accountClient.proposeOrganizationRoute(orgId,nextInput)).authorization
+    await reviewerClient.approveOrganizationRoute(orgId,next.id,{version:2,client_reference:crypto.randomUUID(),authority_hash:next.authority_hash,approve:true})
+    const previousBroadcast=broadcastCalls
+    const exhausted=await fetch(`${baseUrl}/api/routes/${next.route_id}/execute`,{method:'POST',headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({mandate_id:next.mandate.id}),signal:AbortSignal.timeout(15000)})
+    assert.equal(exhausted.status,409);assert.equal((await exhausted.json()).error_code,'ORGANIZATION_ROUTE_GROSS_LIMIT')
+    assert.equal((await accountClient.inspectOrganizationRoute(orgId,next.id)).authorization.use,null)
+    assert.equal(broadcastCalls,previousBroadcast)
+    const use=(await domain.inspectOrganizationRoute(orgId,a.id,f.ownerId)).use!
+    assert.equal(use.amount_minor,105);assert.equal(use.maximum_gas_cost_wei,'0');assert.equal(use.tempo_fee?.maximum_fee_token_cost_units,'10000')
+    assert.equal(JSON.parse(await readFile(original.path,'utf8')).serialized_transaction,original.value.serialized_transaction)
+  } finally {
+    apiHook=null;realRpcHook=null;realChainUrl=null;token=previousToken;process.env.EVM_ACCEPTED_TOKENS=previousConfig
+    process.env.TREASURY_ADDRESS=previousTreasury;process.env.EVM_SETTLEMENT_PRIVATE_KEY=previousTreasuryKey
+    if(previousEnterprise===undefined)delete process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED;else process.env.CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED=previousEnterprise
+    for(const [name,value] of mppEnvironment){if(value===undefined)delete process.env[name];else process.env[name]=value}
+    await chain.stop()
+  }
+}
+
+test('reviewed enterprise Tempo route settles once across buyer SIGKILL and provider restart with original gross and token fee exposure',{
+  skip:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY,timeout:90_000,
+},()=>isolatedEnterpriseTempo(false))
+test('revoked reviewed enterprise Tempo route recovers its exact original late payment and confirmed full refund without recycling gross or token fees',{
+  skip:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY,timeout:90_000,
+},()=>isolatedEnterpriseTempo(true))
+
+async function isolatedEnterpriseTempo(revoked:boolean) {
+  if(process.env.CLAWDMARKET_TEST_REVIEWED_TEMPO_PROCESS==='true')return enterpriseRouteOnOwnedTempo(revoked)
+  const pattern=revoked?'^revoked reviewed enterprise Tempo':'^reviewed enterprise Tempo route settles'
+  const environment:NodeJS.ProcessEnv={...process.env,CLAWDMARKET_TEST_REVIEWED_TEMPO_PROCESS:'true'}
+  delete environment.NODE_TEST_CONTEXT
+  const result=await promisify(execFile)(process.execPath,['--conditions=react-server','--import','tsx','--test','--test-reporter=spec','--test-name-pattern='+pattern,'tests/api/buyer-worker.test.ts'],{cwd:process.cwd(),env:environment,timeout:90_000})
+  assert.match(result.stdout,/ℹ fail 0/);assert.match(result.stdout,/ℹ pass 1/)
+}

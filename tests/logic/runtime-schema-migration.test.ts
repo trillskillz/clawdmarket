@@ -194,7 +194,9 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       const originalRead = (await migrated.execute("SELECT * FROM organization_service_accounts WHERE id='legacy-read-account'")).rows[0]
       assert.equal(originalRead.credential_hash, 'original-read-hmac'); assert.equal(originalRead.credential_prefix, 'cmo_original')
       assert.equal(originalRead.status, 'active'); assert.equal(originalRead.expires_at, 2000); assert.equal(originalRead.created_at, 1000)
-      assert.equal(migrationRows.rows.length, 64)
+      assert.equal(migrationRows.rows.length, 65)
+      assert.ok(migrationRows.rows.some(row=>row.id==='2026-10-12-organization-routed-tempo-v2'))
+      assert.equal(tableNames.has('organization_route_tempo_fees'),true)
       assert.ok(migrationRows.rows.some(row=>row.id==='2026-10-12-organization-route-authorizations-v1'))
       assert.equal(tableNames.has('organization_route_authorizations'),true)
       assert.equal(tableNames.has('organization_route_uses'),true)

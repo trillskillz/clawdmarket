@@ -7,26 +7,34 @@ passed. Fresh protected audit 38267467182 passed all five compiler queries and t
 immutable guards. Representative observation/calibration remain pending under the
 explicit user override; empirical promotion_ready=false remains truthful.
 
-The local batch has **3/10** accepted demonstrable capabilities: reconciled private
+The local batch has **4/10** accepted demonstrable capabilities: reconciled private
 enterprise actual fee coverage, independently reviewed L1 public-provider routing
-(`5ae3e92`, HTTP 1.112), and sitewide recursive-improvement retirement (HTTP 1.113).
-Retirement is integrated on the accepted routing parent in
-`clawdmarket-no-recursive-improvement`, branch `feat/remove-recursive-improvement`.
-Its final complete gate passed 810 Node tests with zero failures and five expected
-skips, 17 Python tests, SDK parity/build, TypeScript, lint, real disposable-chain
-financial/crash/race checks and legacy migration. Production build and eleven
-built browser journeys passed. Database: 64 migrations, integrity ok, no foreign-key
-anomalies, ten immutable reputation guards and five working evidence queries.
+(`5ae3e92`, HTTP 1.112), recursive-improvement retirement (`3839c32`, HTTP 1.113),
+and separately reviewed Tempo public-provider routing (HTTP 1.114).
+Current integrated branch: `feat/enterprise-routed-tempo` in
+`/home/void/Work/clawdmarket-enterprise-routed-tempo`.
 
-Evidence: [routing audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md),
+Tempo acceptance verifies 819 distinct Node cases with zero failures and five
+expected skips: complete 824-case gate passed 814 and skipped ten, then all five
+opt-in external isolation cases were explicitly enabled and passed. Eighteen
+Python tests, SDK parity/build, TypeScript, lint, genuine disposable L1/Tempo
+financial/crash/race checks and legacy migration pass. Production build and
+thirteen built browser journeys pass. Storage: 65 migrations and replay, integrity
+ok, no foreign-key anomalies, ten immutable reputation guards and five working
+evidence queries. L1 hashes/wei, original payment/refund recovery and historic
+identity/ownership/credentials retain their meaning. Tempo fees use separate units
+and original exposure; gross is shared across both rails.
+
+Evidence: [Tempo acceptance](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md),
+[routing audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md),
 [retirement acceptance](docs/RECURSIVE_IMPROVEMENT_REMOVAL.md), and
 [fee coverage audit](docs/ENTERPRISE_CHAIN_FEES_AUDIT.md).
 
-Next implement separately reviewed Tempo routed authority from this accepted
-parent using [the dependency plan](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md).
-Preserve L1 hashes and fee units, original payment/receipt/refund recovery, existing
-direct-service credential scopes and historical identity/ownership/credentials.
-Private providers/product/task/workflow purchases remain separate gates.
+Next implement separately reviewed private-provider routed authority using
+[the dependency plan](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_PLAN.md) from this
+accepted parent. Preserve original two-owner consent and private inspection;
+existing direct-service/read credentials gain no routed scope. Broader
+product/task/workflow authority remains separate.
 
 The user's latest cadence is **ten completed capability PRs per publication batch**,
 one demonstrable capability per PR, protected CI, migration-first deployment and
@@ -35,7 +43,12 @@ foundations do not count. No live funds or global rollout changes are authorized
 
 # ClawdMarket Routing Layer — Master Plan
 
-**Source of truth for future routing-layer work.** Updated 2026-10-10 after combined release [PR #255](https://github.com/trillskillz/clawdmarket/pull/255), production SHA `6a4d335`, contract **1.106**, and accepted local private enterprise fee coverage **1.107** (new batch **1/10**). Continue routing in dependency order. The existing marketplace and settlement system remain authoritative. Read this file and affected code/tests before each batch; record acceptance evidence after it. A schema or endpoint alone does not complete an economic milestone.
+**Source of truth for future routing-layer work.** Updated 2026-10-12 after
+accepted production Reputation v2 HTTP 1.111 and accepted local reviewed-public
+L1/Tempo routes through HTTP 1.114. Current local batch: **4/10**. Continue routing
+in dependency order from the current continuation above. Existing marketplace and
+settlement remain authoritative; a schema or endpoint alone does not complete an
+economic milestone.
 
 ## Current position
 
@@ -43,7 +56,14 @@ foundations do not count. No live funds or global rollout changes are authorized
 
 **Payment health audit completed:** Configuration, both mainnet RPCs, reserves, account credit, original receipts, payout/refund queues and 28 public payment-surface browser checks passed. The dedicated canary buyer has only 0.005573 Base USDC; the fresh paid canary remains unverified. No live funds, top-up or rollout changes occurred. [Audit and exact evidence](docs/PAYMENT_HEALTH_AUDIT_2026-10-11.md).
 
-**Next local work:** Accepted private enterprise actual fee coverage (originally 1.107) is reconciled onto production main as local **1.109**. Substantive batch count remains **1/10**. The preserved enterprise routed purchasing files are **unaccepted draft**. Continue separately owner-reviewed bounded Ethereum L1 public-provider routes with frozen route/candidates, atomic original grant/use and department exposure, all-attempt fee limits, shared wallet exclusion, actual settled delivery and original revoked-payment/refund recovery. Existing direct-service grants retain their scopes. Broader rails and private providers remain separate gates. Keep ten substantive accepted parts before future routing publication unless the user changes it; audits and foundations do not increment it. Independent provider/quality evidence, paid canaries and production Tempo compatibility remain separate prerequisites.
+**Next local work:** Separately reviewed private-provider routing. Private fee
+coverage, reviewed public L1 routing, recursive-improvement retirement and reviewed
+public Tempo routing are accepted locally: **4/10**, contract **1.114**.
+See [Tempo acceptance](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md) and
+[private-provider dependencies](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_PLAN.md).
+Ten completed capability PRs remain the publication gate. Independent providers,
+representative calibration, paid canaries and production Tempo compatibility retain
+their prerequisites; no live funds or global rollout changes are authorized.
 
 PR #245 (`df5434e`) delivers one usable outcome: a provider-operated worker completes a funded leased order across process restart using its original attempt, private saved output, and exact delivery receipt. All required CI passed on final head `094775c`. Initial deployment `37081504540` and production smoke `37081790749` passed. The user explicitly authorized the configured canary seller and wallets; live run `37081892752` completed one $0.02 Base USDC checkout, provider process restart, schema-checked correlated delivery and idempotent replay, buyer review, confirmed $0.02 seller payout, and capacity release. Handler execution ran on the provider/workflow machine, outside the application. This controlled account pair remains excluded from independent provider evidence and autonomous GMV.
 
@@ -156,7 +176,7 @@ Each item is a shippable, testable milestone. Work in this order unless a fresh 
 | P1.4 | 12–13 | **Complete locally (1.83; new batch part 3/10).** Shared generated operation/auth/scope/lifecycle/rail/deprecation metadata, TypeScript funding/artifact/webhook recovery and a usable minimal Python client with typed financial errors. Predeploy refuses contract drift; both clients recover original routes against the actual app. |
 | P1.5 | 3–5, 14 | **Partial; released in 1.90.** Current-backed work discovery, honest unmeasured capability confidence, evaluator-bound private peer benchmark recovery, explicit hierarchy discovery, immutable versioned/private server-checked JSON benchmark observations, bounded backed-cycle exclusions, external isolated Python tests and current-backed buyer reputation with bounded owner-principal feedback are complete. Independent production benchmark quality, confidence calibration and broader reputation quality evidence remain unfinished. Unknown-owner independence and cycles beyond four principals remain unresolved. Continue independent local work on P2.1 bounded workflow execution. |
 | P2.1 | 15 | **Bounded EVM and real Tempo local execution acceptance complete (HTTP 1.99).** Owner-reviewed finite DAGs, inherited gross/fee/runtime caps, private dependency grants, explicit acceptance and all-attempt reconciliation pass real disposable-chain crash/refund/fallback acceptance. Supported original Tempo fee observations are released through 1.104; historical unmeasured receipts remain immutable. Local 1.107 adds original enterprise fee coverage. Production activation, mainnet fork compatibility and independent production rollout remain separate. |
-| P2.2 | 16 | **Bounded direct-service enterprise acceptance released through 1.106; private fee coverage accepted locally at 1.107.** Department ceilings, explicit purchasing roles/approvals, two-owner private providers and separately reviewed approved-credit/L1/Tempo spending grants preserve original authority and recovery. Viewer/read keys remain read-only. Broader routed/product/task/workflow purchases require separate grants and acceptance. |
+| P2.2 | 16 | **Bounded direct-service enterprise acceptance released through 1.106; private fee coverage and reviewed public-provider L1/Tempo routes accepted locally through 1.114.** Department ceilings, explicit purchasing roles/approvals, two-owner private providers and separately reviewed approved-credit/L1/Tempo spending grants preserve original authority and recovery. Viewer/read keys remain read-only. Private-provider routed/product/task/workflow purchases require separate grants and acceptance. |
 | P3 | Website/control plane | **Local acceptance complete through HTTP 1.99:** routing operations, owner enterprise configuration/history, human workflow review, buyer route recovery, and exact private delivery acceptance. Original attempts, bound unpaid cancellation, inert checked artifacts, lost/conflicting commands, real late refunds and pending/confirmed payout/receipt recovery pass private desktop/mobile and full economic regression. Existing economic lifecycles remain authoritative. Released and verified in PR #253; next local batch is now 1/10 with Tempo economic acceptance. |
 
 ## Rules for every future batch and release
@@ -2226,7 +2246,7 @@ rechecked before funding. Existing direct-service/read keys gain no route author
 Revocation leaves original claimed bytes/proof and full refund recovery available.
 
 The final full gate passes **813 Node cases: 808 passed, zero failures, five expected
-skips**, plus **17 Python cases**, TypeScript, generated SDK parity/build, lint,
+skips**, plus **18 Python cases**, TypeScript, generated SDK parity/build, lint,
 actual disposable L1/Tempo economics, isolated verification and legacy migrations.
 Independent process races and SIGKILL boundaries, real original buyer funding,
 provider restart, explicit acceptance, backed payout/receipt, revoked late refunds,
@@ -2241,3 +2261,34 @@ rollout change. Production remains the accepted Reputation v2 release. Continue
 sitewide recursive-improvement retirement as a separate capability, then the
 remaining enterprise routing plan. Ten accepted capability PRs remain the next
 publication gate; commits, audits and reconciliation do not increment the count.
+
+## 2026-10-12 — Local capability 3/10: retire recursive improvement (HTTP 1.113)
+
+Replacement/lineage writes and reads, current task/ranking/feed/UI surfaces and
+contracts retire together. Historic identity, ownership, credentials and financial
+recovery remain original. Accepted parent `5ae3e92`, retirement `3839c32`: complete
+815-case gate passes 810, zero failures, five expected skips; 18 Python tests,
+build and eleven built browser journeys pass. [Acceptance](docs/RECURSIVE_IMPROVEMENT_REMOVAL.md).
+
+## 2026-10-12 — Local capability 4/10: reviewed public-provider Tempo routes (HTTP 1.114)
+
+Version-2 proposals/decisions bind configured pathUSD fees and preserve original
+version-1 L1 hashes and wei. Migration 65 adds separate original Tempo fee-use
+storage; gross remains shared across rails. Independent reviewer scope, current
+owner/buyer/department, atomic use/capacity and guarded SDK broadcast remain
+required. Original revoked claims, late payments/refunds and backed results recover
+without replacement authority. TypeScript/Python clients and private desktop/mobile
+review preserve exact original references, hashes and versions after lost replies.
+
+Complete gate: 824 Node cases, 814 pass, zero failures, ten skips; all five opt-in
+isolation cases then explicitly enabled and pass. Therefore 819 distinct Node cases
+are verified, with only five expected legacy-credit/Base-wallet skips. Eighteen
+Python tests, SDK parity/build, TypeScript, lint, genuine disposable L1/Tempo
+economics and crash/race recovery pass. Build and thirteen built browser journeys
+pass. Migration/replay: 65, integrity ok, foreign-key anomalies zero, immutable
+reputation guards ten, five evidence queries pass. [Detailed evidence](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md).
+
+The local counter is **4/10**. Continue [private-provider routed authority](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_PLAN.md).
+Publication remains ten completed capability PRs, one outcome per PR, protected
+CI, migration-first deployment and exact merged-SHA production verification.
+No live funds, production deployment or global flags changed.

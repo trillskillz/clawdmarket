@@ -13,26 +13,34 @@ passed. Fresh protected audit 38267467182 passed all five compiler queries and t
 immutable guards. Representative observation/calibration remain pending under the
 explicit user override; empirical promotion_ready=false remains truthful.
 
-The local batch has **3/10** accepted demonstrable capabilities: reconciled private
+The local batch has **4/10** accepted demonstrable capabilities: reconciled private
 enterprise actual fee coverage, independently reviewed L1 public-provider routing
-(`5ae3e92`, HTTP 1.112), and sitewide recursive-improvement retirement (HTTP 1.113).
-Retirement is integrated on the accepted routing parent in
-`clawdmarket-no-recursive-improvement`, branch `feat/remove-recursive-improvement`.
-Its final complete gate passed 810 Node tests with zero failures and five expected
-skips, 17 Python tests, SDK parity/build, TypeScript, lint, real disposable-chain
-financial/crash/race checks and legacy migration. Production build and eleven
-built browser journeys passed. Database: 64 migrations, integrity ok, no foreign-key
-anomalies, ten immutable reputation guards and five working evidence queries.
+(`5ae3e92`, HTTP 1.112), recursive-improvement retirement (`3839c32`, HTTP 1.113),
+and separately reviewed Tempo public-provider routing (HTTP 1.114).
+Current integrated branch: `feat/enterprise-routed-tempo` in
+`/home/void/Work/clawdmarket-enterprise-routed-tempo`.
 
-Evidence: [routing audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md),
+Tempo acceptance verifies 819 distinct Node cases with zero failures and five
+expected skips: complete 824-case gate passed 814 and skipped ten, then all five
+opt-in external isolation cases were explicitly enabled and passed. Eighteen
+Python tests, SDK parity/build, TypeScript, lint, genuine disposable L1/Tempo
+financial/crash/race checks and legacy migration pass. Production build and
+thirteen built browser journeys pass. Storage: 65 migrations and replay, integrity
+ok, no foreign-key anomalies, ten immutable reputation guards and five working
+evidence queries. L1 hashes/wei, original payment/refund recovery and historic
+identity/ownership/credentials retain their meaning. Tempo fees use separate units
+and original exposure; gross is shared across both rails.
+
+Evidence: [Tempo acceptance](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md),
+[routing audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md),
 [retirement acceptance](docs/RECURSIVE_IMPROVEMENT_REMOVAL.md), and
 [fee coverage audit](docs/ENTERPRISE_CHAIN_FEES_AUDIT.md).
 
-Next implement separately reviewed Tempo routed authority from this accepted
-parent using [the dependency plan](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md).
-Preserve L1 hashes and fee units, original payment/receipt/refund recovery, existing
-direct-service credential scopes and historical identity/ownership/credentials.
-Private providers/product/task/workflow purchases remain separate gates.
+Next implement separately reviewed private-provider routed authority using
+[the dependency plan](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_PLAN.md) from this
+accepted parent. Preserve original two-owner consent and private inspection;
+existing direct-service/read credentials gain no routed scope. Broader
+product/task/workflow authority remains separate.
 
 The user's latest cadence is **ten completed capability PRs per publication batch**,
 one demonstrable capability per PR, protected CI, migration-first deployment and

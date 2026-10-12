@@ -58,3 +58,8 @@ Storage is additive runtime migration 64,
 `2026-10-12-organization-route-authorizations-v1.sql`. Reputation migration 63
 and its immutable evidence guards remain in place. Local contract is 1.112;
 production remains the accepted 1.111 release until protected publication.
+
+Local contract 1.114 adds separately reviewed version-2 Tempo proposals and
+decisions with their own fee-token terms; the version-1 L1 hashes and native-wei
+meaning stay original. Gross is shared across both rails, while Tempo fee units
+use additive migration 65. See [Tempo authority and evidence](ORGANIZATION_ROUTED_TEMPO_PLAN.md).

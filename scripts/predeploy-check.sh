@@ -2,6 +2,8 @@
 set -euo pipefail
 
 required_files=(
+  "migrations/2026-10-12-organization-routed-tempo-v2.sql"
+  "docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md"
   "app/api/agents/[id]/lineage/route.ts"
   "e2e/recursive-improvement-retirement.spec.ts"
   "docs/RECURSIVE_IMPROVEMENT_REMOVAL.md"
