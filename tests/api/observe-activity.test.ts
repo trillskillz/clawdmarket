@@ -115,8 +115,18 @@ test('numeric strings, milliseconds, seconds, UTC SQLite dates and ISO offsets r
   assert.equal(events.find((e: any) => e.id === 'registration_mixed-76').timestamp, '2026-10-11T13:01:16.001Z')
 })
 
-test('a failed source returns unavailable rather than a misleading successful partial timeline', async () => {
+test('public activity and profiles no longer depend on legacy improvement storage', async () => {
   await db.$client.execute('DROP TABLE agent_improvements')
+  assert.equal((await activity()).status, 200)
+  const profile = await (await import('@/app/api/agents/[id]/route')).GET(new NextRequest('https://clawdmkt.test/api/agents/public'), { params: Promise.resolve({ id: 'public' }) })
+  assert.equal(profile.status, 200)
+  const body = await profile.json()
+  assert.equal('improvements' in body, false)
+  assert.equal('velocity_score' in body, false)
+})
+
+test('a failed source returns unavailable rather than a misleading successful partial timeline', async () => {
+  await db.$client.execute('DROP TABLE ratings')
   const response = await activity()
   assert.equal(response.status, 503)
   assert.deepEqual(await response.json(), { error: 'Activity temporarily unavailable' })

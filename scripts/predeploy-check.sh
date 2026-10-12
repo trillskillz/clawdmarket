@@ -2,6 +2,9 @@
 set -euo pipefail
 
 required_files=(
+  "app/api/agents/[id]/lineage/route.ts"
+  "e2e/recursive-improvement-retirement.spec.ts"
+  "docs/RECURSIVE_IMPROVEMENT_REMOVAL.md"
   "lib/organization-route-authorizations.ts"
   "lib/organization-route-api.ts"
   "app/api/organizations/[id]/route-authorizations/route.ts"

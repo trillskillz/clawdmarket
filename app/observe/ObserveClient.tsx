@@ -53,7 +53,6 @@ function parseCapabilities(value: unknown): string[] {
 }
 
 function eventTone(type = '') {
-  if (type.includes('improved')) return styles.purple
   if (type.includes('completed') || type.includes('confirmed') || type.includes('rating')) return styles.lime
   if (type.includes('registered')) return styles.blue
   if (type.includes('created')) return styles.amber
@@ -84,7 +83,6 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
   const [activity, setActivity] = useState<any[]>(activityTimeline(initialActivity || []))
   const [walletActivity, setWalletActivity] = useState<any[]>([])
   const [leaderboard, setLeaderboard] = useState<any[]>([])
-  const [sellerAgent, setSellerAgent] = useState<any>(null)
   const [completedTasks, setCompletedTasks] = useState<any[]>([])
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(initialPaymentConfig)
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
@@ -141,14 +139,12 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
 
     const refreshPanels = async () => {
       try {
-        const [leaderboardData, sellerData, taskData] = await Promise.all([
+        const [leaderboardData, taskData] = await Promise.all([
           fetchJson('/api/leaderboard?metric=rating&limit=3'),
-          fetchJson('/api/agents/clawdmarket_seller'),
           fetchJson('/api/tasks?status=completed&limit=3'),
         ])
         if (cancelled) return
         setLeaderboard(leaderboardData.agents || [])
-        if (sellerData && !sellerData.error) setSellerAgent(sellerData)
         setCompletedTasks(taskData.tasks || [])
       } catch { /* Secondary panels retain their last confirmed snapshot. */ }
     }
@@ -186,9 +182,6 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
   const totalTrades = Number(stats.total_trades ?? stats.trade_count ?? 0)
   const completionRate = totalTrades > 0 ? Math.min(100, Math.round((completedTrades / totalTrades) * 100)) : 0
   const averageTrade = completedTrades > 0 ? totalVolume / completedTrades : 0
-  const improvementCount = Number(sellerAgent?.improvement_count || 0)
-  const improvementDelta = Number(sellerAgent?.total_improvement_delta || sellerAgent?.totalImprovementDelta || 0).toFixed(1)
-  const improvementProgress = Math.min((improvementCount / 50) * 100, 100)
   const topAgent = leaderboard[0]
   const settlementRails = [
     ...(paymentConfig.account_credit_enabled ? ['ACCOUNT'] : []),
@@ -235,7 +228,7 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
           </div>
           <div className={styles.activityList} role="log" aria-label="Live activity feed" aria-live="polite" aria-relevant="additions">
             {activityTimeline([...activity, ...walletActivity]).length === 0 ? (
-              <div className={styles.emptyTape}><i>⌁</i><strong>No recorded activity yet.</strong><p>New registrations, wallet payments, trades, ratings, and improvements will appear here after they are stored.</p></div>
+              <div className={styles.emptyTape}><i>⌁</i><strong>No recorded activity yet.</strong><p>New registrations, wallet payments, trades, and ratings will appear here after they are stored.</p></div>
             ) : activityTimeline([...activity, ...walletActivity]).map((item, index) => (
               <article className={styles.event} key={item.id || index}>
                 <span className={`${styles.eventMark} ${eventTone(item.type)}`} />
@@ -281,18 +274,6 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
               </article>
             ))}</div>
           )}
-        </div>
-      </section>
-
-      <section className={styles.loopPanel}>
-        <div className={styles.loopIntro}><span>RECURSIVE IMPROVEMENT</span><h2>The market learns<br />from its own work.</h2><p>Benchmark, improve, re-register, repeat. Every completed cycle makes agent evolution observable.</p></div>
-        <div className={styles.loopMetrics}>
-          <div><span>Current version</span><strong>v{sellerAgent?.version || 1}</strong></div>
-          <div><span>Total delta</span><strong>+{improvementDelta}</strong></div>
-          <div><span>Last improved</span><strong>{sellerAgent?.last_improved_at ? timeAgo(sellerAgent.last_improved_at) : '—'}</strong></div>
-          <div><span>Schedule</span><strong>On demand</strong></div>
-          <i><b style={{ width: `${improvementProgress}%` }} /></i>
-          <p>{improvementCount} / 50 CYCLES <Link href="/registry/clawdmarket_seller">VIEW PROFILE ↗</Link></p>
         </div>
       </section>
 

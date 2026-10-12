@@ -4,41 +4,40 @@ For any request to continue the routing-layer plan, read [ROUTING_LAYER_MASTER_P
 
 Preserve the existing payment and settlement state machines. The user's 2026-10-02 instruction replaces the five-change cadence with outcome-based releases: bundle implementation, tests, contracts, diagnostics, and documentation into one PR per demonstrable capability. Commit count is not a release gate. Do not open separate release PRs for bookkeeping or speculative hardening. The historical implementation record is [docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md](docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md).
 
-## Current publishing gate (2026-10-12 UTC)
+## Current continuation — accepted local batch (2026-10-12 UTC)
 
-Reputation v2 ranking is production-accepted through PR #261, main `5715083`,
-HTTP 1.111. Exact-head CI, migration-first deployment 38205514998, same-SHA
-smoke 38206187936, both canonical Vercel aliases, independent APIs, desktop/mobile
-Observe and read-only payment readiness/reserves passed. Fresh protected audit
-38267467182 passed all five real compiler queries and reports healthy projections,
-active ranking and the explicit user observation override. Representative outcome
-review and calibration remain pending; empirical promotion_ready=false is truthful.
-Durable evidence: ../clawdmarket-reputation-v2-acceptance-2026-10-12/ACCEPTANCE-1.111.md.
+Reputation v2 production ranking is accepted through PR #261, main `5715083`,
+HTTP 1.111. Protected CI, migration-first deployment 38205514998, same-SHA smoke
+38206187936, independent API/desktop/mobile checks and read-only payment readiness
+passed. Fresh protected audit 38267467182 passed all five compiler queries and ten
+immutable guards. Representative observation/calibration remain pending under the
+explicit user override; empirical promotion_ready=false remains truthful.
 
-Continue separately reviewed Ethereum L1 public-provider routed purchasing in
-`/home/void/Work/clawdmarket-enterprise-routed-current`. The original draft in
-`/home/void/Work/clawdmarket` stays preserved. Fee coverage is reconciled without
-lowering the production contract or replacing reputation migration 63; new route
-storage is additive migration 64. Routed authority is accepted locally as **2/10** with final full economic, private
-review, client, race/crash, migration, build and regression evidence in
-[the audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md). Continue the separately
-requested sitewide recursive-improvement removal in `clawdmarket-no-recursive-improvement`,
-integrating it with this accepted routing parent. Historical identity, ownership,
-credentials and financial recovery remain authoritative. Reconciliation and
-intermediate foundations do not count.
+The local batch has **3/10** accepted demonstrable capabilities: reconciled private
+enterprise actual fee coverage, independently reviewed L1 public-provider routing
+(`5ae3e92`, HTTP 1.112), and sitewide recursive-improvement retirement (HTTP 1.113).
+Retirement is integrated on the accepted routing parent in
+`clawdmarket-no-recursive-improvement`, branch `feat/remove-recursive-improvement`.
+Its final complete gate passed 810 Node tests with zero failures and five expected
+skips, 17 Python tests, SDK parity/build, TypeScript, lint, real disposable-chain
+financial/crash/race checks and legacy migration. Production build and eleven
+built browser journeys passed. Database: 64 migrations, integrity ok, no foreign-key
+anomalies, ten immutable reputation guards and five working evidence queries.
 
-The user's latest instruction is: **“after this make sure we go back to pushing
-PR's in a batch of 10 at a time.”** After the current work, prepare one PR per
-accepted demonstrable capability and publish in batches of ten completed capability
-PRs. Commits, audits and bookkeeping are not PR/capability counts. Keep normal
-protected CI and migration-first GitHub/Vercel production verification for each
-batch. No live funds or global execution/payment rollout changes are authorized.
+Evidence: [routing audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md),
+[retirement acceptance](docs/RECURSIVE_IMPROVEMENT_REMOVAL.md), and
+[fee coverage audit](docs/ENTERPRISE_CHAIN_FEES_AUDIT.md).
 
-Observe is production-verified through HTTP **1.108**, [PR #256](https://github.com/trillskillz/clawdmarket/pull/256), SHA `c574e266b447f97d5f9e007ed47e41471aad7649`. Required CI, migration-first Vercel deployment, same-SHA production smoke and independent desktop/mobile checks on both domains passed. The subsequent sitewide payment audit passed configuration, RPCs, settlement reserves, account credit, original receipts and payout/refund outboxes. A fresh paid canary is not verified: the dedicated buyer holds 0.005573 USDC, below the 0.01 minimum. No live funds, top-up or rollout changes are authorized. See [payment audit](docs/PAYMENT_HEALTH_AUDIT_2026-10-11.md).
+Next implement separately reviewed Tempo routed authority from this accepted
+parent using [the dependency plan](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md).
+Preserve L1 hashes and fee units, original payment/receipt/refund recovery, existing
+direct-service credential scopes and historical identity/ownership/credentials.
+Private providers/product/task/workflow purchases remain separate gates.
 
-Accepted private enterprise actual fee coverage, originally local HTTP 1.107, is reconciled with Observe as local **1.109** on `feat/enterprise-chain-fee-coverage`; substantive batch count remains **1/10**. Its full prior economic, build and browser acceptance remains recorded in [fee audit](docs/ENTERPRISE_CHAIN_FEES_AUDIT.md); reconciliation is not another accepted part. Keep ten substantive accepted parts before future routing publication unless the user changes it. Audits and intermediate foundations do not increment the count.
-
-Continue the preserved **unaccepted** enterprise routed purchasing draft. Start with separately owner-reviewed Ethereum L1 public-provider routes. Freeze original route objective/hash, candidates, buyer/organization/team, gross and all-attempt fees, expiry and retry limits; prove atomic original consumption, shared wallet exclusion, real settled delivery and original revoked-payment/refund recovery. Existing direct-service keys retain their scopes. Broader rails/private providers/product/task/workflow purchases remain separate. Independent providers, production quality/calibration, paid canaries and production Tempo fork compatibility retain their prerequisites.
+The user's latest cadence is **ten completed capability PRs per publication batch**,
+one demonstrable capability per PR, protected CI, migration-first deployment and
+exact merged-SHA production verification. Audits, commits and intermediate
+foundations do not count. No live funds or global rollout changes are authorized.
 
 ## Historical user priority and publishing exception (2026-10-03)
 

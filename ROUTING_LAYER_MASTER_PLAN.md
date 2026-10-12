@@ -1,52 +1,37 @@
-## Current continuation — reviewed enterprise routing (2026-10-12 UTC)
+## Current continuation — accepted local batch (2026-10-12 UTC)
 
-Reputation v2 production ranking is accepted at PR #261 / main `5715083`, HTTP
-1.111. Protected exact-head CI, deployment 38205514998, same-SHA smoke 38206187936,
-both ready production aliases and independent API/Observe/payment reserve checks
-passed. Fresh read-only audit 38267467182 passes all five real compiler shapes:
-production ranking active, healthy projections, ten immutable guards; representative
-scoped observations and calibration still pending. User override remains explicit.
-Acceptance: ../clawdmarket-reputation-v2-acceptance-2026-10-12/ACCEPTANCE-1.111.md.
+Reputation v2 production ranking is accepted through PR #261, main `5715083`,
+HTTP 1.111. Protected CI, migration-first deployment 38205514998, same-SHA smoke
+38206187936, independent API/desktop/mobile checks and read-only payment readiness
+passed. Fresh protected audit 38267467182 passed all five compiler queries and ten
+immutable guards. Representative observation/calibration remain pending under the
+explicit user override; empirical promotion_ready=false remains truthful.
 
-Next unfinished capability: separately owner-proposed, independently reviewed,
-single-attempt Ethereum L1 public-provider routed purchasing. Preserve original
-payment bytes/proof/refunds, frozen objective/candidates/department, gross and fee
-exposure. Never promote existing direct-service credentials to routing authority.
-The original draft is preserved; reconciliation and implementation proceed in
-`clawdmarket-enterprise-routed-current` from accepted main. Migration 64 appends
-new authority/use storage after immutable reputation migration 63. The capability
-is accepted locally as **2/10**. Full acceptance is recorded in
-[reviewed-route audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md).
-Continue the separately requested recursive-improvement removal as the next
-capability; keep its branch independent and integrate it with this accepted parent.
+The local batch has **3/10** accepted demonstrable capabilities: reconciled private
+enterprise actual fee coverage, independently reviewed L1 public-provider routing
+(`5ae3e92`, HTTP 1.112), and sitewide recursive-improvement retirement (HTTP 1.113).
+Retirement is integrated on the accepted routing parent in
+`clawdmarket-no-recursive-improvement`, branch `feat/remove-recursive-improvement`.
+Its final complete gate passed 810 Node tests with zero failures and five expected
+skips, 17 Python tests, SDK parity/build, TypeScript, lint, real disposable-chain
+financial/crash/race checks and legacy migration. Production build and eleven
+built browser journeys passed. Database: 64 migrations, integrity ok, no foreign-key
+anomalies, ten immutable reputation guards and five working evidence queries.
 
-Latest user cadence: after this work, push **batches of ten completed capability
-PRs**, retaining one demonstrable capability per PR and protected publication /
-migration-first production verification. Commits and audits do not increment it.
-No live funds or global rollout flags change.
+Evidence: [routing audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md),
+[retirement acceptance](docs/RECURSIVE_IMPROVEMENT_REMOVAL.md), and
+[fee coverage audit](docs/ENTERPRISE_CHAIN_FEES_AUDIT.md).
 
-## Historical ranking rollout preparation
+Next implement separately reviewed Tempo routed authority from this accepted
+parent using [the dependency plan](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md).
+Preserve L1 hashes and fee units, original payment/receipt/refund recovery, existing
+direct-service credential scopes and historical identity/ownership/credentials.
+Private providers/product/task/workflow purchases remain separate gates.
 
-## Current user priority — production Reputation v2 ranking (2026-10-12 UTC)
-
-The [supplied v2 plan](docs/REPUTATION_V2_AGENT_PLAN.md) is implemented and deployed
-through PR #260 / main `66858c5`, HTTP 1.110. Protected deployment and same-SHA
-smoke passed; both canonical domains, current projections, descending UTC
-Observe on desktop/mobile and enabled payment rail reserves were verified.
-Fresh protected audit 38203012661 passed all five real Turso compiler shapes and
-all ten immutable guards. It reports healthy projections but no active public
-services, dated scoped outcomes or comparable candidates; observation remains
-unmeasured, not passed.
-
-The user now explicitly directs **“find a way to promote to production regardless.”**
-This overrides the representative-observation gate for rollout, not the evidence
-facts. Prepare a protected capability release of `reputation-v2-ranking-1` with
-best-supported requested service/capability history, separately labelled unproven
-price ordering, stable ties and every canonical purchasing hard gate. Preserve
-frozen earlier plans and compatibility score units. Expose the override and
-pending measurement review. No funds or execution/payment flags change.
-After production acceptance, continue separately reviewed enterprise routed
-public-provider purchasing; preserve its original unfinished worktree.
+The user's latest cadence is **ten completed capability PRs per publication batch**,
+one demonstrable capability per PR, protected CI, migration-first deployment and
+exact merged-SHA production verification. Audits, commits and intermediate
+foundations do not count. No live funds or global rollout changes are authorized.
 
 # ClawdMarket Routing Layer — Master Plan
 

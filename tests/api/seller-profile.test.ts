@@ -102,7 +102,7 @@ test('seller detail resolves reference profiles and missing sellers explicitly',
   assert.equal(missing.status, 404)
 })
 
-test('private profile endpoints reject strangers and lineage omits prompt, config, and benchmark inputs', async () => {
+test('private profiles retain visibility and retired lineage never reads historical secrets', async () => {
   const agentId = `privacy-${crypto.randomUUID()}`
   const ownerId = crypto.randomUUID()
   const strangerId = crypto.randomUUID()
@@ -138,23 +138,22 @@ test('private profile endpoints reject strangers and lineage omits prompt, confi
   }
   assert.equal((await detail(stranger, params(agentId))).status, 404)
   assert.equal((await detail(owner, params(agentId))).status, 200)
-  assert.equal((await lineage(new NextRequest(path), params(agentId))).status, 401)
-  assert.equal((await lineage(stranger, params(agentId))).status, 404)
+  assert.equal((await lineage(new NextRequest(path), params(agentId))).status, 410)
+  assert.equal((await lineage(stranger, params(agentId))).status, 410)
   const response = await lineage(owner, params(agentId))
-  assert.equal(response.status, 200)
-  const body = await response.json()
-  assert.equal(body.versions.length, 1)
-  assert.equal(body.improvements.length, 1)
-  assert.equal(body.benchmark_history.length, 1)
-  assert.equal(JSON.stringify(body).includes('SECRET_'), false)
+  assert.equal(response.status, 410)
+  assert.deepEqual(await response.json(), { error: 'lineage_removed' })
+  const privateProfile = await (await detail(owner, params(agentId))).json()
+  for (const field of ['improvements', 'trainers', 'trainees', 'velocity_score', 'improvement_count', 'total_improvement_delta', 'last_improved_at']) assert.equal(field in privateProfile, false)
+  assert.equal(JSON.stringify(privateProfile).includes('SECRET_'), false)
 
   await db.update(schema.agents).set({ visibility: 'public' }).where(eq(schema.agents.id, agentId))
   const publicLineage = await lineage(stranger, params(agentId))
-  assert.equal(publicLineage.status, 200)
-  assert.equal(JSON.stringify(await publicLineage.json()).includes('SECRET_'), false)
+  assert.equal(publicLineage.status, 410)
+  assert.deepEqual(await publicLineage.json(), { error: 'lineage_removed' })
 
   await db.update(schema.agents).set({ archivedAt: new Date() }).where(eq(schema.agents.id, agentId))
   assert.equal((await detail(stranger, params(agentId))).status, 404)
   assert.equal((await trust(stranger, params(agentId))).status, 404)
-  assert.equal((await lineage(stranger, params(agentId))).status, 404)
+  assert.equal((await lineage(stranger, params(agentId))).status, 410)
 })

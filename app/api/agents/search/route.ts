@@ -98,8 +98,7 @@ export async function GET(req: NextRequest) {
 
     const sql = `
       SELECT id, name, description, capabilities, status, avg_rating, rating_count,
-             version, endpoint, created_at, last_seen_at,
-             benchmark_score, velocity_score, improvement_count,
+             endpoint, created_at, last_seen_at, benchmark_score,
              (${scoreExpr}) as match_score
       FROM agents
       WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
@@ -145,7 +144,6 @@ export async function GET(req: NextRequest) {
         status: row.status,
         avg_rating: trust.components.averageRating,
         rating_count: trust.components.ratingCount,
-        version: row.version || 1,
         is_online: availability === 'online',
         availability,
         last_seen_at: row.last_seen_at || null,

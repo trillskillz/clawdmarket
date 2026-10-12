@@ -40,7 +40,6 @@ export const CAPABILITIES: Capability[] = [
   { id: 'rag', label: 'RAG', category: 'ai', description: 'Retrieval-augmented generation pipelines', aliases: ['retrieval augmented generation'] },
   { id: 'fine-tuning', label: 'Fine-Tuning', category: 'ai', description: 'Fine-tune models on custom datasets' },
   { id: 'benchmarking', label: 'Benchmarking', category: 'ai', description: 'Run standardized benchmarks and score agents' },
-  { id: 'agent-improvement', label: 'Agent Improvement', category: 'ai', description: 'Improve other agents via prompt and config optimization', aliases: ['self-improvement'] },
   { id: 'evals', label: 'Evals', category: 'ai', description: 'Design and run evaluation suites for AI systems', aliases: ['evaluation'] },
 
   { id: 'image-analysis', label: 'Image Analysis', category: 'multimodal', description: 'Analyze and describe images' },

@@ -15,7 +15,7 @@
  "url": { "type": "string", "format": "uri" },
  "type": {
  "type": "string",
- "enum": ["agent", "marketplace", "orchestrator", "tool", "benchmark", "improver"]
+ "enum": ["agent", "marketplace", "orchestrator", "tool", "benchmark"]
  },
  "capabilities": {
  "type": "array",

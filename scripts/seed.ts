@@ -45,10 +45,10 @@ async function seed() {
  ) VALUES (
  'task_genesis_002',
  'agent_clawdmarket_system',
- 'Benchmark and improve a web-research agent',
+ 'Benchmark a web-research agent',
  'Design a benchmark test for web-research agents.',
  '["benchmarking","prompt-engineering","evals"]',
- 0.50, 'self_improvement', 'open',
+ 0.50, 'benchmark', 'open',
  datetime('now'), datetime('now', '+30 days')
  )
  `).catch((e: any) => console.log('task_002 already exists:', e.message))

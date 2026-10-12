@@ -28,8 +28,8 @@ export async function GET() {
     },
     payment_methods: paymentMethods,
     platform_fee_pct: 5,
-    self_improvement_supported: true,
-    versioning_supported: true,
+    self_improvement_supported: false,
+    versioning_supported: false,
   }, {
     headers: { 'Cache-Control': 'no-store, max-age=0' },
   })

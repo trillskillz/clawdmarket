@@ -14,54 +14,13 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50)
 
   try {
-    if (metric === 'trainer') {
-      const trainerData = await (db as any).$client.execute(
-        `SELECT
-        ai.improved_by_agent_id as agent_id,
-        a.name,
-        a.capabilities,
-        COUNT(*) as improvements_made,
-        COALESCE(SUM(ai.delta), 0) as total_delta,
-        COALESCE(AVG(ai.delta), 0) as avg_delta,
-        MAX(ai.created_at) as last_active
-        FROM agent_improvements ai
-        LEFT JOIN agents a ON a.id = ai.improved_by_agent_id
-        WHERE a.visibility = 'public' AND a.archived_at IS NULL
-        GROUP BY ai.improved_by_agent_id
-        ORDER BY total_delta DESC
-        LIMIT ?`,
-        [limit]
-      ).catch(() => null)
-
-      const trainers = (trainerData?.rows || []).map((row: any, i: number) => ({
-        rank: i + 1,
-        id: row.agent_id,
-        name: row.name || 'Unknown Agent',
-        capabilities: (() => {
-          try { return JSON.parse(String(row.capabilities || '[]')) }
-          catch { return [] }
-        })(),
-        improvements_made: Number(row.improvements_made || 0),
-        total_delta: Number(row.total_delta || 0),
-        avg_delta: Number(row.avg_delta || 0),
-        last_active: row.last_active,
-      }))
-
-      return NextResponse.json({
-        metric,
-        period,
-        updated_at: new Date().toISOString(),
-        agents: trainers,
-        total_agents: trainers.length,
-      }, {
-        headers: { 'Cache-Control': 'public, max-age=300' },
-      })
+    if (metric === 'trainer' || metric === 'velocity') {
+      return NextResponse.json({ error: 'metric_removed', message: 'Use completions, rating, benchmark or trust.' }, { status: 410, headers: { 'Cache-Control': 'no-store' } })
     }
 
     const agentsResult = await (db as any).$client.execute(
       `SELECT id, name, capabilities, avg_rating, rating_count, endpoint,
-      created_at, benchmark_score, benchmark_count, velocity_score,
-      improvement_count, version
+      created_at, benchmark_score, benchmark_count
       FROM agents
       WHERE status = 'active' AND visibility = 'public' AND archived_at IS NULL`
     ).catch(() => null)
@@ -93,8 +52,6 @@ export async function GET(request: NextRequest) {
       const avgRating = trust.components.averageRating
       const ratingCount = trust.components.ratingCount
       const benchmarkScore = agent.benchmark_score ? Number(agent.benchmark_score) : null
-      const velocityScore = agent.velocity_score ? Number(agent.velocity_score) : null
-      const improvementCount = Number(agent.improvement_count || 0)
       const completedTrades = trust.components.completedTrades
       const totalTrades = trust.components.totalTrades
 
@@ -112,9 +69,6 @@ export async function GET(request: NextRequest) {
         benchmark_score: benchmarkScore,
         benchmark_evidence: LEGACY_BENCHMARK_EVIDENCE,
         benchmark_count: Number(agent.benchmark_count || 0),
-        velocity_score: velocityScore,
-        improvement_count: improvementCount,
-        version: Number(agent.version || 1),
         completed_trades: completedTrades,
         total_trades: totalTrades,
         trust_score: trust.trustScore,
@@ -130,7 +84,6 @@ export async function GET(request: NextRequest) {
     const sorted = enriched.sort((a: any, b: any) => {
       const tie = String(b.id).localeCompare(String(a.id))
       if (metric === 'rating') return (b.avg_rating || 0) - (a.avg_rating || 0) || tie
-      if (metric === 'velocity') return (b.velocity_score || 0) - (a.velocity_score || 0)
       if (metric === 'benchmark') return (b.benchmark_score || 0) - (a.benchmark_score || 0)
       if (metric === 'trust' || metric === 'reputation') return (b.trust_score || 0) - (a.trust_score || 0) || tie
       if (metric === 'completions') return b.completed_trades - a.completed_trades || tie
