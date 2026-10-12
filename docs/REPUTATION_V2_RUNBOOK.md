@@ -16,6 +16,11 @@ but its production run 38196345238 still failed capability compilation before
 publication. Run the redacted compiler probe through accepted main; production
 environment branch protections remain mandatory. A successful local compilation
 does not establish real transport acceptance.
+Protected main probe 38198812621 (`7db96e1`) confirmed **Expression tree is too
+large**. The actual repair balances unchanged eligibility conjunctions, simplifies
+safe frozen-scope paths and keeps verified discovery's inner join shallow. Strict
+depth-100 endpoint regressions and all five production compiler shapes must pass;
+then verify deployment, aliases, same-SHA smoke and a fresh real assessment.
 
 The protected real assessment (run 38192851839, 2026-10-12 01:41:51 UTC) found
 healthy sampled projections and all ten immutable guards, but zero active public

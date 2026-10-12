@@ -7,7 +7,10 @@ passed in production, but the protected deployment stopped at capability-query
 compatibility before publishing. Vercel still serves contract 1.108. Continue the
 focused repair: PR #258 merged as `6b7ec9f`, but production run 38196345238 still
 stopped at capability compilation. The next protected diagnostic is on
-`fix/reputation-production-compiler-diagnostics`; accepted
+`fix/reputation-production-compiler-diagnostics` merged as `7db96e1`. Protected
+probe 38198812621 confirmed an expression-depth failure. Continue the actual
+repair on `fix/reputation-capability-expression-depth`, using its strict local
+depth regression and all five real transport compilation gates; accepted
 fee coverage/local 1.109 and the unfinished routed purchasing draft remain in
 the original worktree and are not included here.
 

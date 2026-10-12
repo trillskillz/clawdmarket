@@ -1,17 +1,18 @@
 import { publicTradeWhereSql } from './public-trade-visibility'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 import { boundedCycleExclusionSql, financialBackingSql, tradePrincipalSql, type EvidenceTradeAlias } from './trade-evidence-sql'
+import { balancedSqlAnd } from './sql-predicate'
 
 /** Positive and adverse observations share identity/cohort exclusions, never cycle filtering. */
 export function eligibleReputationTradeSql(trade: EvidenceTradeAlias) {
-  return `${publicTradeWhereSql(trade)} AND ${trade}.buyer_id <> ${trade}.seller_id AND ${trade}.id NOT GLOB 'trade_reference_*'
-    AND ${tradePrincipalSql(`${trade}.buyer_id`)} <> ${tradePrincipalSql(`${trade}.seller_id`)}
-    AND NOT EXISTS (SELECT 1 FROM reputation_events private_history WHERE private_history.trade_id=${trade}.id AND private_history.public_eligible=0)
-    AND NOT EXISTS (SELECT 1 FROM agents ref WHERE (('user_agent_' || ref.id) IN (${trade}.seller_id, ${trade}.buyer_id) OR ref.id IN (${trade}.seller_id, ${trade}.buyer_id))
-      AND instr(ref.description, '${REFERENCE_FLEET_MARKER}') > 0)
-    AND NOT EXISTS (SELECT 1 FROM service_orders cohort_order JOIN route_plans cohort_route ON cohort_route.service_order_id = cohort_order.id
+  return balancedSqlAnd([publicTradeWhereSql(trade), `${trade}.buyer_id <> ${trade}.seller_id`, `${trade}.id NOT GLOB 'trade_reference_*'`,
+    `${tradePrincipalSql(`${trade}.buyer_id`)} <> ${tradePrincipalSql(`${trade}.seller_id`)}`,
+    `NOT EXISTS (SELECT 1 FROM reputation_events private_history WHERE private_history.trade_id=${trade}.id AND private_history.public_eligible=0)`,
+    `NOT EXISTS (SELECT 1 FROM agents ref WHERE (('user_agent_' || ref.id) IN (${trade}.seller_id, ${trade}.buyer_id) OR ref.id IN (${trade}.seller_id, ${trade}.buyer_id))
+      AND instr(ref.description, '${REFERENCE_FLEET_MARKER}') > 0)`,
+    `NOT EXISTS (SELECT 1 FROM service_orders cohort_order JOIN route_plans cohort_route ON cohort_route.service_order_id = cohort_order.id
       JOIN route_origins origin ON origin.route_id = cohort_route.id
-      WHERE cohort_order.trade_id = ${trade}.id AND origin.cohort IN ('canary','demo','reference','nonproduction'))`
+      WHERE cohort_order.trade_id = ${trade}.id AND origin.cohort IN ('canary','demo','reference','nonproduction'))`])
 }
 
 /** Administrative bans invalidate current positive votes, never establish provider fault. */
@@ -20,21 +21,21 @@ export function unmoderatedReputationTradeSql(trade:EvidenceTradeAlias){
 }
 
 export function acceptedBackedTradeSql(trade: EvidenceTradeAlias) {
-  return `${trade}.status IN ('completed','complete') AND ${trade}.amount > 0 AND ${eligibleReputationTradeSql(trade)} AND ${unmoderatedReputationTradeSql(trade)}
-    AND EXISTS (SELECT 1 FROM verification_results review JOIN trade_deliveries delivery
+  return balancedSqlAnd([`${trade}.status IN ('completed','complete')`, `${trade}.amount > 0`, eligibleReputationTradeSql(trade), unmoderatedReputationTradeSql(trade),
+    `EXISTS (SELECT 1 FROM verification_results review JOIN trade_deliveries delivery
       ON delivery.id = review.delivery_id AND delivery.trade_id = review.trade_id AND delivery.content_hash = review.content_hash
-      WHERE review.trade_id = ${trade}.id AND review.method = 'buyer_review' AND review.status = 'passed')
-    AND NOT EXISTS (SELECT 1 FROM service_orders checked_order WHERE checked_order.trade_id = ${trade}.id
-      AND (checked_order.state <> 'completed' OR checked_order.payment_rail <> ${trade}.payment_rail))
-    AND NOT EXISTS (SELECT 1 FROM transactions refunded WHERE refunded.reference_id = ${trade}.id
-      AND refunded.type = 'escrow_refund' AND refunded.amount > 0)
-    AND NOT EXISTS (SELECT 1 FROM settlement_transfers refund WHERE refund.trade_id = ${trade}.id
-      AND refund.kind = 'buyer_refund' AND refund.status IN ('submitted','confirmed'))
-    AND ${financialBackingSql(trade)}
-    AND (${trade}.payment_rail <> 'ledger' OR (EXISTS (SELECT 1 FROM transactions locked WHERE locked.reference_id = ${trade}.id AND locked.type = 'escrow_lock'
+      WHERE review.trade_id = ${trade}.id AND review.method = 'buyer_review' AND review.status = 'passed')`,
+    `NOT EXISTS (SELECT 1 FROM service_orders checked_order WHERE checked_order.trade_id = ${trade}.id
+      AND (checked_order.state <> 'completed' OR checked_order.payment_rail <> ${trade}.payment_rail))`,
+    `NOT EXISTS (SELECT 1 FROM transactions refunded WHERE refunded.reference_id = ${trade}.id
+      AND refunded.type = 'escrow_refund' AND refunded.amount > 0)`,
+    `NOT EXISTS (SELECT 1 FROM settlement_transfers refund WHERE refund.trade_id = ${trade}.id
+      AND refund.kind = 'buyer_refund' AND refund.status IN ('submitted','confirmed'))`,
+    financialBackingSql(trade),
+    `(${trade}.payment_rail <> 'ledger' OR (EXISTS (SELECT 1 FROM transactions locked WHERE locked.reference_id = ${trade}.id AND locked.type = 'escrow_lock'
       AND locked.from_user_id = ${trade}.buyer_id AND round(locked.amount * 100) = round(${trade}.amount * 100))
       AND EXISTS (SELECT 1 FROM transactions released WHERE released.reference_id = ${trade}.id AND released.type = 'escrow_release'
-      AND released.from_user_id = ${trade}.buyer_id AND released.to_user_id = ${trade}.seller_id AND round(released.amount * 100) = round(${trade}.amount * 100))))`
+      AND released.from_user_id = ${trade}.buyer_id AND released.to_user_id = ${trade}.seller_id AND round(released.amount * 100) = round(${trade}.amount * 100))))`])
 }
 
 /** Manual marketplace work also qualifies; no capability claim or service event is inferred. */

@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 import { captureServiceExecutionContract } from '@/lib/service-execution-contract'
 import { createLocalTestSchema } from '../helpers/local-schema'
+import { spawnSync } from 'node:child_process'
 
 let directory: string
 let db: typeof import('@/lib/db').db
@@ -36,6 +37,50 @@ before(async () => {
 after(() => {
   db?.$client.close()
   if (directory) rmSync(directory, { recursive: true, force: true })
+})
+
+test('actual verified search, directory and trust queries compile under a depth limit of 100', async () => {
+  const statements: { sql: string; args: unknown }[] = []
+  const client = db.$client, original = client.execute
+  const priorKey = process.env.ANTHROPIC_API_KEY
+  process.env.ANTHROPIC_API_KEY = ''
+  client.execute = async statement => {
+    const query = typeof statement === 'string' ? { sql: statement, args: [] } : statement
+    if (/^\s*(SELECT|WITH)\b/i.test(query.sql)) statements.push({ sql: query.sql, args: query.args ?? [] })
+    return original.call(client, query.sql, query.args)
+  }
+  try {
+    const { GET: search } = await import('@/app/api/agents/search/route')
+    const { GET: list } = await import('@/app/api/agents/list/route')
+    const { GET: trust } = await import('@/app/api/agents/[id]/trust/route')
+    for (const response of [
+      await search(new NextRequest('http://localhost/api/agents/search?q=security&verified=true&family=family:code')),
+      await search(new NextRequest('http://localhost/api/agents/search?q=security%20research%20data%20analysis%20translation%20writing%20math%20code%20review%20testing%20debugging%20auditing&verified=true&family=family:code')),
+      await list(new NextRequest('http://localhost/api/agents/list?search=security&verified=true&family=family:code')),
+      await trust(new NextRequest('http://localhost/api/agents/performance-seller/trust'), { params: Promise.resolve({ id: 'performance-seller' }) }),
+    ]) {
+      assert.equal(response.status, 200)
+      assert.equal(Boolean((await response.json()).error), false)
+    }
+  } finally {
+    client.execute = original
+    if (priorKey === undefined) delete process.env.ANTHROPIC_API_KEY
+    else process.env.ANTHROPIC_API_KEY = priorKey
+  }
+  assert.ok(statements.some(statement => statement.sql.includes('cycle_walk')))
+  const { backedCapabilityEventSql } = await import('@/lib/capability-evidence-sql')
+  statements.push({ sql: `SELECT e.seller_agent_id, COUNT(*) FROM capability_performance_events e JOIN trades t ON t.id=e.trade_id
+    WHERE ${backedCapabilityEventSql('e', 't')} GROUP BY e.seller_agent_id`, args: [] })
+  const result = spawnSync('python3', ['-c', `
+import json,sqlite3,sys
+connection=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True)
+connection.setlimit(sqlite3.SQLITE_LIMIT_EXPR_DEPTH,100)
+for index,statement in enumerate(json.load(sys.stdin)):
+ try: connection.execute('EXPLAIN '+statement['sql'],statement['args']).fetchall()
+ except sqlite3.DatabaseError as error: raise RuntimeError('query '+str(index)+': '+str(error)) from None
+connection.close()
+`, join(directory, 'capability.db')], { input: JSON.stringify(statements, (_, value) => typeof value === 'bigint' ? value.toString() : value), encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
 })
 
 async function fixture(sellerAgentId: string, buyerId = 'performance-buyer', pending = false) {
@@ -154,7 +199,16 @@ test('frozen requested scope is exact at the twenty-capability bound and malform
   assert.equal(await change([...Array.from({ length: 19 }, (_, i) => `unrequested-${i}`), 'security-analysis']), 1)
   assert.equal(await change(['security-analysis-extra']), 0)
   assert.equal(await change({ capability: 'security-analysis' }), 0)
+  assert.equal(await change([null]), 0)
+  assert.equal(await change([null, 'security-analysis']), 1)
+  for (const malformed of [[], true, 42, 'security-analysis', null, undefined]) assert.equal(await change(malformed), 0)
   assert.equal(await change([...Array.from({ length: 20 }, (_, i) => `unrequested-${i}`), 'security-analysis']), 0)
+  assert.equal(await change(['security-analysis']), 1)
+  snapshot.capabilities = ['security-analysis']
+  assert.equal(await change(undefined), 1)
+  assert.equal(await change(null), 1)
+  assert.equal(await change([]), 0)
+  assert.equal(await change('security-analysis'), 0)
   assert.equal(await change(['security-analysis']), 1)
   assert.equal((await db.select().from(schema.capability_performance_events).where(eq(schema.capability_performance_events.trade_id, trade.id))).length, 2)
 })

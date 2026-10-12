@@ -1,6 +1,6 @@
 import { createClient } from '@libsql/client'
 import { evidenceQueryDiagnostic } from '../lib/evidence-query-diagnostic'
-import { backedCapabilityEventSql } from '../lib/capability-evidence-sql'
+import { backedCapabilityEventSql, PUBLIC_AGENT_WORK_PROOF_SQL } from '../lib/capability-evidence-sql'
 import { backedReputationTradeSql, LISTING_BACKED_BUYER_COUNT_SQL, listingFeedbackAggregateSql, rankedBuyerFeedbackSql } from '../lib/reputation-evidence-sql'
 
 // Compile the actual query shapes through the configured database transport.
@@ -21,6 +21,9 @@ const queries = [
     COALESCE(${listingFeedbackAggregateSql('COUNT(*)')}, 0) DESC LIMIT 1` },
   { name: 'capability_backing', sql: `SELECT e.seller_agent_id, COUNT(*) FROM capability_performance_events e
     JOIN trades t ON t.id = e.trade_id WHERE ${backedCapabilityEventSql('e', 't')} GROUP BY e.seller_agent_id` },
+  { name: 'verified_agent_discovery', sql: `SELECT agents.id FROM agents
+    WHERE agents.visibility='public' AND agents.archived_at IS NULL
+      AND agents.status='active' AND ${PUBLIC_AGENT_WORK_PROOF_SQL} ORDER BY agents.id LIMIT 1` },
 ]
 
 async function main() {

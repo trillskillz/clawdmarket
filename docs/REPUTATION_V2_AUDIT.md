@@ -288,3 +288,37 @@ silently accompany a healthy assessment. A branch probe (38197163271) was reject
 before any steps because the production environment permits accepted main only;
 that protection remains intact. Diagnostic changes must pass protected review
 and run from accepted main before the actual remote query repair is determined.
+
+## Confirmed production compiler cause and depth repair (2026-10-12 UTC)
+
+PR #259 merged as `7db96e1` after every required check passed. Protected read-only
+probe 38198812621 identified the actual compiler error: **Expression tree is too
+large**. The local default depth limit had hidden this production incompatibility;
+the scalar rewrite in PR #258 did not resolve it.
+
+Fixed internal conjunctions now form balanced boolean trees. Frozen capability
+scope reads paths from one safe contract document rather than nesting array
+selection and JSON-validity CASEs. Array type, the twenty-capability bound, exact
+membership, and the single-leaf legacy fallback remain enforced. Verified agent
+discovery applies the same proof predicate in its inner trade join, keeping its
+correlated projection shallow. Every original backing, acceptance/hash, public
+visibility, ownership, historical-related, cohort, moderation and cycle check
+remains present. No financial state machine or ranking policy changed.
+
+The aggregate query's minimum compiling depth falls from **123 to 79**; the
+verified-discovery shape compiles at **84**. A regression records actual verified
+directory, multi-keyword search and trust endpoint queries and compiles them with
+SQLite's runtime expression limit lowered to **100**. This is a controlled test
+limit, not an inferred production setting. The aggregate/discovery shapes also
+pass with official SQLite **3.42** at depth 100. [SQLite limit reference](https://sqlite.org/limits.html).
+
+All **76** focused backing/privacy/cycle/model/provider-requirement cases passed,
+including malformed/null/empty/oversized scope and single-leaf legacy behavior;
+typecheck and focused lint passed. The production compiler gate now covers
+**five** actual shapes, adding verified discovery to feedback, backed reputation,
+market sorting and capability backing. All five compile locally. Full owned
+release, build and exact-head hosted gates plus real transport acceptance remain
+mandatory before publication. Logs:
+`/tmp/clawdmarket-reputation-v2-depth-focused-final.log`,
+`/tmp/clawdmarket-reputation-v2-depth-capability-tests-final.log`, and
+`/tmp/clawdmarket-reputation-v2-sqlite342-depth-{after,discovery}.log`.
