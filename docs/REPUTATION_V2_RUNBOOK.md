@@ -2,41 +2,26 @@
 
 ## Current gate
 
-**Publication authorized after passing required release checks.** The user's
-latest 2026-10-11 instruction explicitly replaces the earlier observation hold:
-**“go ahead and push as long as everything is working as intended, observation
-isnt a requirement.”** Publish one protected capability batch and verify the
-exact production commit/contract. Local checks and simulations remain distinct
-from representative production outcomes. PR #257 merged at main `2ac9771` and
-migration 63 passed in production. Deployment run 38176269055 stopped at the
-capability-proof query compatibility check before publication; Vercel remains
-HTTP 1.108 until the focused repair passes and both aliases are verified.
-PR #258 (`6b7ec9f`) passed required checks and owned payment recovery regressions,
-but its production run 38196345238 still failed capability compilation before
-publication. Run the redacted compiler probe through accepted main; production
-environment branch protections remain mandatory. A successful local compilation
-does not establish real transport acceptance.
-Protected main probe 38198812621 (`7db96e1`) confirmed **Expression tree is too
-large**. The actual repair balances unchanged eligibility conjunctions, simplifies
-safe frozen-scope paths and keeps verified discovery's inner join shallow. Strict
-depth-100 endpoint regressions and all five production compiler shapes must pass;
-then verify deployment, aliases, same-SHA smoke and a fresh real assessment.
+Reputation v2 HTTP 1.110 is accepted in production at `66858c5` after PR #260.
+Deployment 38202094620 and same-SHA smoke 38202637558 passed. Both canonical
+domains, current public projections, desktop/mobile Observe and enabled payment
+readiness/reserves passed independently. Fresh audit 38203012661 passed all five
+real Turso compiler shapes, healthy sampled projections and ten immutable guards.
+It still reports zero active public services, dated scoped terminal outcomes or
+comparable real candidate sets, with three original buyer requests rollout-closed.
 
-The protected real assessment (run 38192851839, 2026-10-12 01:41:51 UTC) found
-healthy sampled projections and all ten immutable guards, but zero active public
-reusable services, zero dated scoped terminal evidence, and no comparable real
-candidate sets. Three stored public requests had unavailable replays; the focused
-repair distinguishes closed original-buyer rollout from actual query failures.
-These are real promotion blockers, not missing fixture volume. Do not manufacture
-work, relax the gates or enable spending to clear them.
-
-No new ranking is promoted. Existing payment/execution flags, budgets, wallet
-reserves, review authority and settlement state machines remain authoritative.
-The separate accepted fee/routed purchasing worktree is preserved, not included.
+The user now explicitly says **“find a way to promote to production regardless.”**
+This replaces the ranking observation hold. Promote versioned production ordering
+under the ordinary protected release checks; do not claim `promotion_ready=true`
+from missing evidence. The audit separately exposes production rollout, explicit
+observation override and pending review with all genuine measurement gaps.
+No new funds, rollout execution flags, buyer mandate or financial authority change.
+Frozen earlier plans retain their original order; new unknown providers remain
+separately labelled and cannot bypass saved minimums.
 
 ## Observation evidence required for ranking promotion
 
-Require reviewed correctness and enough real outcomes to assess behavior, as the
+For evidence-based readiness, require reviewed correctness and enough real outcomes to assess behavior, as the
 supplied plan specifies; elapsed calendar time and fixture count are not gates.
 A reviewer must assess actual provider/service/capability/version/value coverage,
 repeated customers, adverse and neutral outcomes, pending work, ownership
@@ -53,9 +38,9 @@ Resolve unexplained discrepancies and document remaining uncalibrated limitation
 No synthetic observation, canary/demo/reference trade or invented review may fill
 a gap. Unknown control remains unverified.
 
-The authorized release installs v2 event capture and shadow readers before
-ranking promotion. Reviewed real candidate/outcome comparisons may then be
-collected without changing default ranking or financial authority. The supplied
+The accepted 1.110 release installs v2 event capture and shadow readers. The
+separate 1.111 release promotes ordering under the explicit user override. Reviewed
+real candidate/outcome comparisons continue without changing financial authority. The supplied
 screening CLI remains a disposable local rehearsal; production worker scheduling
 is a separate operator step using the private bounded store function. Publication
 does not automatically start a worker or authorize a funded canary.
@@ -102,10 +87,10 @@ additive schema exists. [Vercel's documented branch configuration](https://verce
 controls Git-triggered deployments; the workflow's explicit CLI deployment remains
 the production path.
 
-Event capture and projection/rank shadow observation precede any separately
-reviewed ranking promotion. Preserve current default route order. Future ranking
-promotion must explicitly update the versioned ranking policy and pass its own
-observation/hard-gate review; it is not implicitly enabled by publication.
+Ranking promotion explicitly updates the versioned policy. Verify current
+service/capability scope, unknown segment, stable ties, current backing invalidation
+and preserved purchasing hard gates. Continue collecting representative evidence
+after rollout; the override is not a passed empirical review.
 
 ## Promotion assessment after production acceptance
 
@@ -118,7 +103,8 @@ original-request replay coverage, three shadow-mode position changes, unproven
 top-three visibility, query latency and explicit review/measurement gaps. It
 withholds source IDs, buyers, ownership groups, task inputs and private bodies.
 
-`promotion_ready=false` is deliberate until representative coverage, rank-change
+`promotion_ready=false` continues to describe empirical evidence readiness even
+after authorized production rollout. It is deliberate until representative coverage, rank-change
 and concentration explanations, classification/exclusion review, false-positive
 assessment, and production privacy/health checks have been reviewed. A completed
 audit workflow means the assessment ran, not that promotion passed. Do not remove

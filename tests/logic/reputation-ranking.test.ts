@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {projectReputation,unavailableReputation} from '../../lib/reputation-v2-model'
-import {reputationSuggestions} from '../../lib/reputation-ranking'
+import {rankEligibleReputationCandidates,reputationSuggestions} from '../../lib/reputation-ranking'
 import {reputationRequirementFailure} from '../../lib/provider-requirements'
 const now=Date.parse('2026-10-11T12:00:00Z'),scope={kind:'provider_history' as const}
 const evidence=(outcome:'accepted'|'provider_failure',count=1)=>projectReputation(Array.from({length:count},(_,i)=>({workId:String(i),group:String(i),outcome,at:now,incident:outcome==='provider_failure'?'upheld' as const:null})),scope,now)
@@ -25,4 +25,30 @@ test('explicit buyer requirements fail on unavailable evidence and enforce every
  const pending=projectReputation([{workId:'open',group:'one',outcome:'pending',at:now,openCase:true}],scope,now)
  assert.ok(reputationRequirementFailure({no_unresolved_public_cases:true},[pending]))
  assert.equal(pending.delivery.provider_failures,0)
+})
+
+test('production ordering prefers supported history without treating unknown or unavailable history as failure',()=>{
+ const candidates=[{id:'unknown-z',price:1,reputation:projectReputation([],scope,now)},
+  {id:'supported',price:10,reputation:evidence('accepted',5)},
+  {id:'unknown-a',price:1,reputation:projectReputation([],scope,now)},
+  {id:'unavailable',price:0.01,reputation:unavailableReputation(scope)}]
+ const ranked=rankEligibleReputationCandidates(candidates)
+ assert.deepEqual(ranked.ordered_ids,['supported','unavailable','unknown-a','unknown-z'])
+ assert.deepEqual(ranked.supported_ids,['supported'])
+ assert.deepEqual(ranked.unproven_ids,['unavailable','unknown-a','unknown-z'])
+ assert.equal(ranked.policy.status,'production');assert.equal(ranked.execution_authority,false)
+ assert.equal(ranked.policy.representative_evidence_review,'pending')
+ for(const candidate of candidates.slice(2))assert.equal(candidate.reputation.delivery.weighted_model_estimate,null)
+ assert.deepEqual(rankEligibleReputationCandidates([...candidates].reverse()).ordered_ids,ranked.ordered_ids)
+ assert.deepEqual(rankEligibleReputationCandidates([]).ordered_ids,[])
+})
+
+test('production support is lost when a required scope becomes unavailable; numeric price decides the separate unknown segment',()=>{
+ const original={id:'original',price:10,reputation:evidence('accepted',5)}
+ const cheaper={id:'cheaper',price:2,reputation:projectReputation([],scope,now)}
+ assert.deepEqual(rankEligibleReputationCandidates([cheaper,original]).ordered_ids,['original','cheaper'])
+ const unavailable={...original,reputation:unavailableReputation(scope)}
+ const ranked=rankEligibleReputationCandidates([unavailable,cheaper])
+ assert.deepEqual(ranked.ordered_ids,['cheaper','original']);assert.deepEqual(ranked.supported_ids,[])
+ assert.deepEqual(ranked.unproven_ids,['cheaper','original'])
 })

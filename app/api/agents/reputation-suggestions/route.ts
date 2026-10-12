@@ -13,7 +13,7 @@ export async function POST(req:NextRequest){
  try{
   const raw=await readBoundedJson(req,32768)
   const input=routePlanInput.parse(raw),planned=await planRoute(input,principal.userId)
-  return response({persisted:false,funds_moved:false,execution_authority:false,reputation_shadow:planned.reputation_shadow??null,
+  return response({persisted:false,funds_moved:false,execution_authority:false,reputation_shadow:planned.reputation_shadow??null,reputation_ranking:planned.reputation_ranking??null,
    candidates:planned.candidates,examined:planned.examined,truncated:planned.truncated,comparison_scope:'bounded_current_eligible_candidates; not_global_best'})
  }catch(error){if(error instanceof z.ZodError)return response({error_code:'INVALID_SUGGESTION_QUERY'},400);return response({error_code:'REPUTATION_SUGGESTIONS_UNAVAILABLE'},503)}
 }

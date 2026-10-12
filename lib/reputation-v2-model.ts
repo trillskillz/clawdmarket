@@ -26,7 +26,7 @@ const days = 86400000
 const rounded = (n: number) => Math.round(n * 1000000) / 1000000
 
 // Lanczos log-gamma and continued-fraction incomplete beta. Used only by the
-// documented internal shadow estimate; never presented as a calibrated chance.
+// documented internal model estimate; never presented as a calibrated chance.
 function logGamma(z: number): number {
   const c=[676.5203681218851,-1259.1392167224028,771.3234287776531,-176.6150291621406,12.507343278686905,-0.13857109526572012,9.984369578019572e-6,1.5056327351493116e-7]
   if(z<0.5)return Math.log(Math.PI)-Math.log(Math.sin(Math.PI*z))-logGamma(1-z)
@@ -94,7 +94,7 @@ export function projectReputation(observations: ReputationObservation[], scope: 
     instant_execution:{schema_transport_success:0,failed_operations:0,pending:0,unknown:0,semantic_quality:'unmeasured',buyer_acceptance:'not_performed',affects_contracted_delivery:false},
     delivery:{accepted,provider_failures:providerFailures,pending:facts.filter(o=>o.outcome==='pending').length,unknown:facts.filter(o=>o.outcome==='unknown').length,
       raw_rate:accepted+providerFailures?rounded(accepted/(accepted+providerFailures)):null,
-      weighted_model_estimate:weight?{mean:rounded((1+successes)/(2+weight)),lower_quantile:lowerBetaQuantile(1+successes,1+failures),quantile:policy.ranking_quantile,mode:'shadow',calibrated:false}:null},
+      weighted_model_estimate:weight?{mean:rounded((1+successes)/(2+weight)),lower_quantile:lowerBetaQuantile(1+successes,1+failures),quantile:policy.ranking_quantile,mode:policy.mode,calibrated:false}:null},
     deadlines:{on_time:deadlines.filter(o=>o.deliveryAt!<=o.deadlineAt!).length,eligible:deadlines.length,unknown:facts.filter(o=>o.deliveryAt!=null).length-deadlines.length,
       rate:deadlines.length?rounded(deadlines.filter(o=>o.deliveryAt!<=o.deadlineAt!).length/deadlines.length):null,
       p50_seconds:latencies.length>=policy.latency_minimum_p50?percentile(0.5):null,p95_seconds:latencies.length>=policy.latency_minimum_p95?percentile(0.95):null},

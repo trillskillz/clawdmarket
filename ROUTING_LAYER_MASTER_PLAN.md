@@ -1,27 +1,23 @@
-## Current user priority — Reputation v2 (2026-10-11)
+## Current user priority — production Reputation v2 ranking (2026-10-12 UTC)
 
-The supplied [Reputation v2 plan](docs/REPUTATION_V2_AGENT_PLAN.md) supersedes
-routing batches until its local implementation and observation requirements are
-met. PR #257 merged as main `2ac9771` (contract 1.110); the additive migration
-passed in production, but the protected deployment stopped at capability-query
-compatibility before publishing. Vercel still serves contract 1.108. Continue the
-focused repair: PR #258 merged as `6b7ec9f`, but production run 38196345238 still
-stopped at capability compilation. The next protected diagnostic is on
-`fix/reputation-production-compiler-diagnostics` merged as `7db96e1`. Protected
-probe 38198812621 confirmed an expression-depth failure. Continue the actual
-repair on `fix/reputation-capability-expression-depth`, using its strict local
-depth regression and all five real transport compilation gates; accepted
-fee coverage/local 1.109 and the unfinished routed purchasing draft remain in
-the original worktree and are not included here.
+The [supplied v2 plan](docs/REPUTATION_V2_AGENT_PLAN.md) is implemented and deployed
+through PR #260 / main `66858c5`, HTTP 1.110. Protected deployment and same-SHA
+smoke passed; both canonical domains, current projections, descending UTC
+Observe on desktop/mobile and enabled payment rail reserves were verified.
+Fresh protected audit 38203012661 passed all five real Turso compiler shapes and
+all ten immutable guards. It reports healthy projections but no active public
+services, dated scoped outcomes or comparable candidates; observation remains
+unmeasured, not passed.
 
-The user's latest explicit instruction removes observation as a publication
-requirement: **“go ahead and push as long as everything is working as intended,
-observation isnt a requirement.”** Publish the verified capability through the
-protected GitHub/Vercel process. Local tests and simulations cannot establish
-representative real outcomes; ranking promotion remains gated separately by
-[the runbook](docs/REPUTATION_V2_RUNBOOK.md).
-Existing payment/execution flags and money authority remain unchanged. Continue
-reputation acceptance work before returning to routed purchasing.
+The user now explicitly directs **“find a way to promote to production regardless.”**
+This overrides the representative-observation gate for rollout, not the evidence
+facts. Prepare a protected capability release of `reputation-v2-ranking-1` with
+best-supported requested service/capability history, separately labelled unproven
+price ordering, stable ties and every canonical purchasing hard gate. Preserve
+frozen earlier plans and compatibility score units. Expose the override and
+pending measurement review. No funds or execution/payment flags change.
+After production acceptance, continue separately reviewed enterprise routed
+public-provider purchasing; preserve its original unfinished worktree.
 
 # ClawdMarket Routing Layer — Master Plan
 

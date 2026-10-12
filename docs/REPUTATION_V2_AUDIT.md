@@ -322,3 +322,32 @@ mandatory before publication. Logs:
 `/tmp/clawdmarket-reputation-v2-depth-focused-final.log`,
 `/tmp/clawdmarket-reputation-v2-depth-capability-tests-final.log`, and
 `/tmp/clawdmarket-reputation-v2-sqlite342-depth-{after,discovery}.log`.
+
+## Authorized production ranking promotion (HTTP 1.111; acceptance pending)
+
+The user explicitly directs “find a way to promote to production regardless.”
+This supersedes the real-observation gate for rollout while leaving the missing
+measurements explicit. The preceding 1.110 release is accepted at `66858c5`: all
+five real production compiler shapes, protected deployment 38202094620, same-SHA
+smoke 38202637558 and both canonical domains passed. Mobile/desktop Observe shows
+50 descending, valid UTC events with registrations and public wallet payments.
+Both production rails and settlement reserves passed. Fresh audit 38203012661
+reports healthy projections and ten immutable guards, but no active public
+services, dated scoped outcomes or comparable candidates.
+
+Candidate production policy `reputation-v2-ranking-1` uses least-supported
+requested service/capability history, current quote ties and stable IDs. A distinct
+unproven segment uses numeric price, never zero reliability. Canonical request
+and saved buyer hard minima run first. Current evidence invalidation changes the
+next snapshot; previously saved plans keep their frozen ordering. Candidate
+records persist the policy, segment, position and uncalibrated/null estimate.
+Compatibility score units remain unchanged. Nonpersistent comparisons, private
+health and promotion artifacts report active rollout and explicit observation
+override while `promotion_ready=false` still means representative review is
+unfulfilled. No payment/execution flag, money authority or live funds change.
+
+The real API regression proves that a dated, currently backed frozen-scope
+provider precedes a cheaper unproven service, although the legacy heuristic would
+prefer the cheaper service. A mismatched exact delivery hash removes the support
+and restores explicit unproven price ordering. Separate tests exercise unavailable
+and unknown records, stable ties, empty sets and unchanged hard minima.

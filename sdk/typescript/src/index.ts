@@ -106,6 +106,8 @@ export type RouteState = typeof SDK_CONTRACT.route_states[number]
 
 export type RouteCandidate = {
   service_id: string
+  reputation_v2?: ReputationV2[]
+  reputation_ranking?: { policy_version: string; mode: 'best_supported_history'; segment: 'supported' | 'unproven'; position: number; model_lower_quantile: number | null; calibrated: false }
   seller_agent_id: string | null
   pricing: { model: 'fixed'; amount: string; currency: 'USD'; estimated_total: string }
   estimated_latency_seconds: number | null

@@ -4,21 +4,21 @@ For any request to continue the routing-layer plan, read [ROUTING_LAYER_MASTER_P
 
 Preserve the existing payment and settlement state machines. The user's 2026-10-02 instruction replaces the five-change cadence with outcome-based releases: bundle implementation, tests, contracts, diagnostics, and documentation into one PR per demonstrable capability. Commit count is not a release gate. Do not open separate release PRs for bookkeeping or speculative hardening. The historical implementation record is [docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md](docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md).
 
-## Current publishing gate (2026-10-10)
+## Current publishing gate (2026-10-12 UTC)
 
-The user's latest 2026-10-11 priority is the supplied
-[Reputation v2 agent plan](docs/REPUTATION_V2_AGENT_PLAN.md). Implement its phases
-sitewide in this isolated branch, preserving production main c574e266 / HTTP
-1.108 and the separate unfinished routed purchasing branch. The user explicitly
-initially required observation before publication, then explicitly replaced that
-hold on 2026-10-11: **“go ahead and push as long as everything is working as
-intended, observation isnt a requirement.”** Complete release gates, publish one
-capability batch to GitHub/Vercel, and verify exact production SHA/contract on both
-domains. Representative observations remain required for ranking promotion;
-default ranking stays in shadow mode. Report missing real evidence honestly.
-Payment/execution flags and live funds remain untouched. Reputation cannot grant
-spending, accept deliveries or release escrow. This priority supersedes routing
-work and its publishing cadence for this task.
+The user's Reputation v2 priority remains active. PR #260 is accepted and deployed
+at main `66858c5`, HTTP 1.110 on both canonical domains. Real compiler checks,
+same-SHA smoke, mobile/desktop Observe and payment readiness/reserves passed.
+The fresh production assessment still lacks active public services, dated scoped
+outcomes and comparable candidates. The user's latest instruction explicitly
+supersedes the observation hold for ranking: **“find a way to promote to production
+regardless.”** Implement and verify a separately versioned production ranking
+policy, then publish through protected CI/migration-first GitHub/Vercel. Keep
+missing measurements and the explicit override visible; do not fabricate evidence
+or claim calibrated readiness. Existing saved plans retain their frozen order.
+Purchasing minimums, payment/execution flags, financial authority and live funds
+remain unchanged. Preserve the separate unfinished routed purchasing worktree.
+After production acceptance, continue the next unfinished routing capability.
 
 The combined release in PR #255 is production-verified at SHA 6a4d335, HTTP 1.106. The user now prioritizes the Observe Live activity defect before further routing work. Finish and verify registrations, public market payments and caller-only wallet activity in one descending UTC timeline, then publish this focused repair under the existing site-fix publication instruction and verify the production deployment. Accepted private enterprise fee coverage 1.107 remains separately committed in /home/void/Work/clawdmarket on feat/enterprise-chain-fee-coverage (new batch 1/10); its unfinished routed purchasing draft is preserved there and must not enter this repair. After Observe production acceptance, resume separately owner-reviewed enterprise routed public-provider purchasing. Keep the ten-part gate for future routing batches unless the user changes it; audits do not increment it. Do not spend live wallet funds or enable global rollout flags.
 

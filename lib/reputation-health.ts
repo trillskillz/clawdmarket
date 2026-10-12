@@ -2,6 +2,7 @@ import 'server-only'
 import { db } from './db'
 import { loadReputationV2Map } from './reputation-v2'
 import { REPUTATION_V2_POLICY } from './reputation-v2-policy'
+import { REPUTATION_RANKING_POLICY } from './reputation-ranking'
 /** Private operational aggregates. No buyer/owner IDs, review bodies or contracts. */
 export async function inspectReputationHealth(){
  const start=Date.now()
@@ -21,6 +22,7 @@ export async function inspectReputationHealth(){
   evidence:events.rows[0],immutable_triggers:Number(triggers.rows[0]?.immutable_triggers??0),
   screening:screening.rows[0]?{status:screening.rows[0].status,statistics:JSON.parse(String(screening.rows[0].statistics_json)),last_run_at:new Date(Number(screening.rows[0].created_at)).toISOString()}:null,
   healthy:unavailable===0&&Number(triggers.rows[0]?.immutable_triggers??0)===10,publication_gate:'authorized_after_release_checks',
-  ranking_promotion_gate:'closed_until_reviewed_representative_real_outcomes',
-  default_ranking_changed:false,calibrated:false}
+  ranking_promotion_gate:REPUTATION_RANKING_POLICY.observation_gate,
+  ranking_policy:REPUTATION_RANKING_POLICY,
+  default_ranking_changed:true,calibrated:false}
 }

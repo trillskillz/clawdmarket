@@ -71,8 +71,9 @@ export async function inspectReputationPromotion() {
   if (invalidRequests || unavailableRequests || closedBuyerRequests) blockers.push('original_request_replay_requires_review')
   return {kind:'read_only_reputation_promotion_assessment', checked_at:new Date().toISOString(),
     source_commit:process.env.GITHUB_SHA??null, policy_version:REPUTATION_V2_POLICY.aggregation_policy_version,
-    baseline_policy:REPUTATION_RANKING_POLICY.default, ranking_policy:REPUTATION_RANKING_POLICY,
+    baseline_policy:'legacy_order_unchanged', ranking_policy:REPUTATION_RANKING_POLICY,
     production_source:process.env.REPUTATION_AUDIT_SOURCE==='production', promotion_ready:false,
+    rollout_status:REPUTATION_RANKING_POLICY.status,observation_gate:REPUTATION_RANKING_POLICY.observation_gate,
     review_status:'pending_representative_evidence_review', blockers,
     // GitHub's aggregate artifact must not disclose private health evidence or
     // screening/cohort counters. Those remain in the authorized private monitor.
@@ -93,5 +94,5 @@ export async function inspectReputationPromotion() {
       privacy_failures:'local_regression_passes; production_review_required',
       latency:'single_read_snapshot; not_a_production_percentile',
       buyer_independence:'not_verified',calibrated:false},
-    latency_ms:Date.now()-started,execution_authority:false,default_ranking_changed:false}
+    latency_ms:Date.now()-started,execution_authority:false,default_ranking_changed:true}
 }
