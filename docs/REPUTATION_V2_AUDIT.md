@@ -271,3 +271,20 @@ Twenty fresh processes passed all five lock/rollback/preflight cases each:
 both payout fallbacks against uncommitted transaction state and confirms no
 order is created by inspection. Logs:
 `/tmp/clawdmarket-reputation-v2-all-preflight-stress-{1..20}.log`.
+
+PR #258 merged as `6b7ec9f` after 745 hosted unit passes (45 guarded skips), nine
+MCP passes and 79 browser passes (nine guarded skips). The owned purchasing,
+department and provider-requirement regression passed **82/82**, without skips,
+including real disposable credit/EVM/Tempo payout, refund, SDK and SIGKILL recovery.
+Production run 38196345238 passed the merged release gate, reserve checks and
+migration, but capability compilation still returned `SQLITE_UNKNOWN`; no build
+or publication occurred. The scalar rewrite has not resolved the remote error.
+
+The diagnostic follow-up adds vocabulary-limited compiler reporting with explicit
+URL, credential, private-identifier and numeric redaction. Three diagnostic privacy
+regressions and all four local query compilations pass. The protected read-only
+audit also compiles all evidence queries, so a capability query failure cannot
+silently accompany a healthy assessment. A branch probe (38197163271) was rejected
+before any steps because the production environment permits accepted main only;
+that protection remains intact. Diagnostic changes must pass protected review
+and run from accepted main before the actual remote query repair is determined.

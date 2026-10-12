@@ -11,6 +11,11 @@ from representative production outcomes. PR #257 merged at main `2ac9771` and
 migration 63 passed in production. Deployment run 38176269055 stopped at the
 capability-proof query compatibility check before publication; Vercel remains
 HTTP 1.108 until the focused repair passes and both aliases are verified.
+PR #258 (`6b7ec9f`) passed required checks and owned payment recovery regressions,
+but its production run 38196345238 still failed capability compilation before
+publication. Run the redacted compiler probe through accepted main; production
+environment branch protections remain mandatory. A successful local compilation
+does not establish real transport acceptance.
 
 The protected real assessment (run 38192851839, 2026-10-12 01:41:51 UTC) found
 healthy sampled projections and all ten immutable guards, but zero active public
