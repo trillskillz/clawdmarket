@@ -1,4 +1,5 @@
 import { createClient } from '@libsql/client'
+import { evidenceQueryDiagnostic } from '../lib/evidence-query-diagnostic'
 import { backedCapabilityEventSql } from '../lib/capability-evidence-sql'
 import { backedReputationTradeSql, LISTING_BACKED_BUYER_COUNT_SQL, listingFeedbackAggregateSql, rankedBuyerFeedbackSql } from '../lib/reputation-evidence-sql'
 
@@ -30,11 +31,7 @@ async function main() {
         // Do not emit connection configuration, credentials or database rows.
         const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'QUERY_UNAVAILABLE'
         const message = error instanceof Error ? error.message : ''
-        const diagnostic = message.match(/parser stack overflow|no such (?:column|table|function): [A-Za-z0-9_.]+|ambiguous column name: [A-Za-z0-9_.]+/)
-        // Identifiers may be reported only if they occur in this fixed schema
-        // query. Never print an arbitrary transport message or connection URL.
-        const reason = diagnostic && (diagnostic[0] === 'parser stack overflow' || query.sql.includes(diagnostic[0].split(': ').at(-1)!))
-          ? `; ${diagnostic[0]}` : ''
+        const reason = `; ${evidenceQueryDiagnostic(message, query.sql)}`
         throw new Error(`Evidence query verification failed: ${query.name} (${code}${reason})`)
       }
       console.log(`Evidence query verified: ${query.name}`)

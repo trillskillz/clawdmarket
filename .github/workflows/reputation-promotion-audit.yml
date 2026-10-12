@@ -27,6 +27,11 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Compile evidence queries through the real production transport
+        run: pnpm run db:verify:evidence
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
       - name: Read real promotion evidence without creating work or moving funds
         run: node --env-file=.vercel/.env.production.local --conditions=react-server --import tsx scripts/reputation-promotion-audit.ts
         env:

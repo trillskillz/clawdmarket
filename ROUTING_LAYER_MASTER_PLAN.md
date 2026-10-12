@@ -5,7 +5,9 @@ routing batches until its local implementation and observation requirements are
 met. PR #257 merged as main `2ac9771` (contract 1.110); the additive migration
 passed in production, but the protected deployment stopped at capability-query
 compatibility before publishing. Vercel still serves contract 1.108. Continue the
-focused repair on `fix/reputation-production-query-compatibility`; accepted
+focused repair: PR #258 merged as `6b7ec9f`, but production run 38196345238 still
+stopped at capability compilation. The next protected diagnostic is on
+`fix/reputation-production-compiler-diagnostics`; accepted
 fee coverage/local 1.109 and the unfinished routed purchasing draft remain in
 the original worktree and are not included here.
 
