@@ -219,3 +219,43 @@ through `-8.log`. Typecheck and lint passed. Complete predeploy checks are rerun
 with the pinned dependency; no production deployment or promotion is claimed yet.
 The patch should be removed only after a compatible stable upstream fix passes
 these same regressions; do not substitute global WAL or forced garbage collection.
+
+
+## Protected production assessment and deployment repair (2026-10-12 UTC)
+
+PR #257 passed every required head check (743 unit passes, 45 hosted skips, nine
+MCP passes, 79 browser passes, nine guarded browser skips) and merged as
+`2ac9771`. Final owned local predeploy passed 783/788 cases with zero failures and
+five expected skips; all type/lint/SDK/Python/build checks passed.
+
+Production deployment run 38176269055 passed its release gate, current rail
+reserve checks, additive migration 63 and release-monitor synchronization. It
+stopped safely before publication: buyer feedback, backed reputation and market
+sorting compiled through the real transport; capability backing returned
+`SQLITE_UNKNOWN`. The focused repair replaces correlated table-valued JSON scope
+checks with exact scalar probes over the documented twenty-capability bound.
+Invalid/non-array/oversized scopes cannot grant proof. All original acceptance,
+backing, ownership, historical-affiliation, moderation and bounded-cycle gates
+remain. Compiler diagnostics permit only fixed schema identifiers or the static
+parser-stack error, never arbitrary transport messages, URLs or evidence rows.
+
+The real protected promotion assessment, run 38192851839, reports healthy public
+projections (25 sampled, zero stale/unavailable, ten immutable guards, 443 ms),
+23 eligible public work units, zero active public reusable services, zero scoped
+terminal estimates, and zero comparable candidate sets. Three original requests
+could not be replayed; the repair reports closed buyer rollout separately. This
+is not representative scoped outcome or ranking evidence. `promotion_ready`
+remains false. No flags, funds, classifications or default ranks were changed.
+
+Focused backing/scope/cycle/privacy/provider-policy/model checks passed **73/73**,
+including exact scope membership at index twenty and exclusion of malformed or
+oversized scope while retaining original raw evidence. All four local production
+query shapes compile. Logs: `/tmp/clawdmarket-reputation-v2-production-compatibility-final.log`
+and `/tmp/clawdmarket-reputation-v2-query-compatibility-fixed.log`. The protected
+production compiler and final CI must still pass before Vercel publication.
+
+The audit reporting follow-up passed **44/44** final capability/privacy cases;
+typecheck and lint passed. The final query also compiles with the official
+SQLite 3.42 parser as well as the current native driver. Remote transport
+acceptance remains an explicit protected deployment gate, not inferred from
+these local results. Snapshot: `docs/REPUTATION_V2_PRODUCTION_ASSESSMENT_2026-10-12.json`.

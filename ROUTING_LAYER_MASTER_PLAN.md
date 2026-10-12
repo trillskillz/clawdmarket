@@ -2,8 +2,10 @@
 
 The supplied [Reputation v2 plan](docs/REPUTATION_V2_AGENT_PLAN.md) supersedes
 routing batches until its local implementation and observation requirements are
-met. Work is isolated on `feat/reputation-v2`, based on production main c574e266
-(contract 1.108). Local contract 1.110 is reserved for this capability; accepted
+met. PR #257 merged as main `2ac9771` (contract 1.110); the additive migration
+passed in production, but the protected deployment stopped at capability-query
+compatibility before publishing. Vercel still serves contract 1.108. Continue the
+focused repair on `fix/reputation-production-query-compatibility`; accepted
 fee coverage/local 1.109 and the unfinished routed purchasing draft remain in
 the original worktree and are not included here.
 

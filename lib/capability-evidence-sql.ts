@@ -5,6 +5,26 @@ import { acceptedBackedTradeSql } from './reputation-evidence-sql'
 type TradeAlias = 't' | 'trades' | 'cycle_trade'
 type EventAlias = 'e' | 'capability_performance_events' | 'cycle_event'
 
+// Both service offers and saved route requests are bounded to twenty capabilities.
+// Scalar JSON probes avoid correlated table-valued JSON functions in the remote
+// compiler. Invalid, non-array or oversized scope remains ineligible.
+function capabilityArrayContainsSql(array: string, event: EventAlias) {
+  const safe = `CASE WHEN json_valid(${array}) THEN ${array} ELSE '[]' END`
+  const positions = Array.from({ length: 20 }, (_, i) => `SELECT ${i}${i === 0 ? ' AS ordinal' : ''}`).join(' UNION ALL ')
+  return `EXISTS (SELECT 1 FROM (${positions}) capability_position
+    WHERE json_type(${safe})='array' AND json_array_length(${safe}) BETWEEN 1 AND 20
+      AND json_extract(${safe}, '$[' || capability_position.ordinal || ']')=${event}.capability_id)`
+}
+
+function frozenCapabilitiesSql() {
+  return `CASE WHEN json_valid(scope_order.execution_contract_json) THEN
+    COALESCE(json_extract(scope_order.execution_contract_json,'$.requested_capabilities'),
+      CASE WHEN json_valid(json_extract(scope_order.execution_contract_json,'$.capabilities'))
+        AND json_array_length(json_extract(scope_order.execution_contract_json,'$.capabilities'))=1
+        THEN json_extract(scope_order.execution_contract_json,'$.capabilities') ELSE '[]' END)
+    ELSE '[]' END`
+}
+
 /** Nonrecursive eligibility shared by the observed completion and every graph edge. */
 function backedCompletionSql(event: EventAlias, trade: TradeAlias) {
   return `${publicTradeWhereSql(trade)} AND ${event}.evidence_kind = 'buyer_accepted_completion' AND ${event}.verification_method = 'buyer_review'
@@ -17,8 +37,9 @@ function backedCompletionSql(event: EventAlias, trade: TradeAlias) {
       WHERE seller_owner.agent_id = ${event}.seller_agent_id AND ('user_agent_' || buyer_owner.agent_id) = ${trade}.buyer_id)
     AND EXISTS (SELECT 1 FROM service_orders evidence_order WHERE evidence_order.id = ${event}.service_order_id AND evidence_order.trade_id = ${trade}.id AND evidence_order.payment_rail = ${trade}.payment_rail AND evidence_order.state = 'completed')
     AND NOT EXISTS (SELECT 1 FROM service_orders scope_order WHERE scope_order.id=${event}.service_order_id AND scope_order.execution_contract_json IS NOT NULL
-      AND NOT EXISTS(SELECT 1 FROM route_plans scope_route,json_each(scope_route.required_capabilities) scope_cap WHERE scope_route.service_order_id=scope_order.id AND scope_cap.value=${event}.capability_id)
-      AND NOT EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(scope_order.execution_contract_json) THEN COALESCE(json_extract(scope_order.execution_contract_json,'$.requested_capabilities'),CASE WHEN json_valid(json_extract(scope_order.execution_contract_json,'$.capabilities')) AND json_array_length(json_extract(scope_order.execution_contract_json,'$.capabilities'))=1 THEN json_extract(scope_order.execution_contract_json,'$.capabilities') ELSE '[]' END) ELSE '[]' END) scope_cap WHERE scope_cap.value=${event}.capability_id))
+      AND NOT EXISTS(SELECT 1 FROM route_plans scope_route WHERE scope_route.service_order_id=scope_order.id
+        AND ${capabilityArrayContainsSql('scope_route.required_capabilities', event)})
+      AND NOT ${capabilityArrayContainsSql(frozenCapabilitiesSql(), event)})
     AND EXISTS (SELECT 1 FROM verification_results review JOIN trade_deliveries delivery ON delivery.id = review.delivery_id AND delivery.trade_id = review.trade_id AND delivery.content_hash = review.content_hash
       WHERE review.trade_id = ${trade}.id AND review.method = 'buyer_review' AND review.status = 'passed')
     AND NOT EXISTS (SELECT 1 FROM route_plans evidence_route JOIN route_origins origin ON origin.route_id = evidence_route.id

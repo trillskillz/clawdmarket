@@ -7,8 +7,18 @@ latest 2026-10-11 instruction explicitly replaces the earlier observation hold:
 **“go ahead and push as long as everything is working as intended, observation
 isnt a requirement.”** Publish one protected capability batch and verify the
 exact production commit/contract. Local checks and simulations remain distinct
-from representative production outcomes. Production is c574e266 / HTTP 1.108
-until the release is accepted.
+from representative production outcomes. PR #257 merged at main `2ac9771` and
+migration 63 passed in production. Deployment run 38176269055 stopped at the
+capability-proof query compatibility check before publication; Vercel remains
+HTTP 1.108 until the focused repair passes and both aliases are verified.
+
+The protected real assessment (run 38192851839, 2026-10-12 01:41:51 UTC) found
+healthy sampled projections and all ten immutable guards, but zero active public
+reusable services, zero dated scoped terminal evidence, and no comparable real
+candidate sets. Three stored public requests had unavailable replays; the focused
+repair distinguishes closed original-buyer rollout from actual query failures.
+These are real promotion blockers, not missing fixture volume. Do not manufacture
+work, relax the gates or enable spending to clear them.
 
 No new ranking is promoted. Existing payment/execution flags, budgets, wallet
 reserves, review authority and settlement state machines remain authoritative.

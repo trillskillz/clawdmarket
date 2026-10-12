@@ -1,0 +1,76 @@
+{
+  "kind": "read_only_reputation_promotion_assessment",
+  "checked_at": "2026-10-12T01:41:51.896Z",
+  "source_commit": "2ac9771f0b186634ce2eb1fa2f4fb0f96ce14c8b",
+  "policy_version": "reputation-v2-shadow-1",
+  "baseline_policy": "legacy_order_unchanged",
+  "ranking_policy": {
+    "version": "reputation-v2-shadow-1",
+    "default": "legacy_order_unchanged",
+    "unknown": "separate_unproven_suggestions",
+    "exploration": "explicit_discovery_only; no_execution_authority",
+    "balanced_formula": "0.8 * minimum_required_leaf_lower_quantile + 0.2 / (1 + total_usd_price)",
+    "price": "current_quoted_total; not_observed_quality",
+    "latency": "excluded_from_v2_model; claims_remain_separate"
+  },
+  "production_source": true,
+  "promotion_ready": false,
+  "review_status": "pending_representative_evidence_review",
+  "blockers": [
+    "representative_outcome_and_exclusion_review_required",
+    "rank_change_and_provider_concentration_review_required",
+    "privacy_and_false_positive_review_required",
+    "no_active_public_reusable_services",
+    "no_dated_scoped_terminal_evidence",
+    "no_comparable_real_hard_gated_candidate_sets",
+    "original_request_replay_requires_review"
+  ],
+  "health": {
+    "policy_version": "reputation-v2-shadow-1",
+    "checked_at": "2026-10-12T01:41:51.867Z",
+    "healthy": true,
+    "latency_ms": 443,
+    "projections": {
+      "sampled": 25,
+      "sample_truncated": true,
+      "unavailable": 0,
+      "stale": 0,
+      "latency_ms": 42
+    },
+    "immutable_triggers": 10
+  },
+  "coverage": {
+    "active_public_services": 0,
+    "service_sample_truncated": false,
+    "scoped_records": 0,
+    "scopes_with_dated_terminal_evidence": 0,
+    "established_scopes": 0,
+    "unavailable_scopes": 0,
+    "stale_scopes": 0,
+    "scoped_projection_latency_ms": 0,
+    "public_work_units": {
+      "eligible_public_work_units": 23,
+      "open_disputes": 0,
+      "evidence_recorded_as_of": 1791754381,
+      "adjudicated_work_units": 0,
+      "historical_related_work_units": 0
+    },
+    "original_public_requests": 3,
+    "request_sample_truncated": false,
+    "invalid_original_requests": 0,
+    "unavailable_request_replays": 3
+  },
+  "comparisons": [],
+  "measurement_limits": {
+    "scope_counts_are_whole_job_observations": true,
+    "established_provider_concentration": "requires_review_of_representative_scoped_candidate_sets",
+    "exclusion_false_positive_rate": "unmeasured_without_reviewed_real_cases",
+    "privacy_failures": "local_regression_passes; production_review_required",
+    "latency": "single_read_snapshot; not_a_production_percentile",
+    "buyer_independence": "not_verified",
+    "calibrated": false
+  },
+  "latency_ms": 472,
+  "execution_authority": false,
+  "default_ranking_changed": false
+}
