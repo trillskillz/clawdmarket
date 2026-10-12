@@ -33,8 +33,22 @@ async function main() {
         const diagnostic = message.match(/parser stack overflow|no such (?:column|table|function): [A-Za-z0-9_.]+|ambiguous column name: [A-Za-z0-9_.]+/)
         // Identifiers may be reported only if they occur in this fixed schema
         // query. Never print an arbitrary transport message or connection URL.
+        const fixedErrors = [
+          'circular reference', 'multiple recursive references', 'recursive reference in a subquery',
+          'recursive aggregate queries not supported', 'aggregate functions are not allowed',
+          'HAVING clause on a non-aggregate query', 'too many terms in compound SELECT',
+          'Expression tree is too large', 'query is too complex', 'not authorized',
+          'virtual tables cannot be used in recursive queries', 'out of memory',
+        ]
+        const category = fixedErrors.find(value => message.toLowerCase().includes(value.toLowerCase()))
+        const knownWords = new Set((query.sql + ' SQLite error syntax near cannot be used allowed supported recursive reference references circular multiple aggregate functions queries HAVING clause on a non-aggregate query too many terms compound SELECT Expression tree is large maximum depth complex not authorized virtual tables out of memory exceeded limit parser stack overflow operation unsupported instruction bytecode failed prepare statement invalid misuse internal').toLowerCase().match(/[a-z_][a-z_0-9]*/g))
+        // Only vocabulary from the fixed query or fixed compiler terms survives.
+        // URLs, credentials, arbitrary identifiers and numbers are redacted.
+        const safeMessage = message.slice(0, 1200).replace(/https?:\/\/\S+|libsql:\/\/\S+/gi, '[redacted]')
+          .replace(/[A-Za-z_0-9]+/g, token => knownWords.has(token.toLowerCase()) ? token : '[redacted]')
+          .replace(/\[redacted\](?:\s*\[redacted\])+/g, '[redacted]')
         const reason = diagnostic && (diagnostic[0] === 'parser stack overflow' || query.sql.includes(diagnostic[0].split(': ').at(-1)!))
-          ? `; ${diagnostic[0]}` : ''
+          ? `; ${diagnostic[0]}` : category ? `; ${category}` : `; compiler=${safeMessage}`
         throw new Error(`Evidence query verification failed: ${query.name} (${code}${reason})`)
       }
       console.log(`Evidence query verified: ${query.name}`)
