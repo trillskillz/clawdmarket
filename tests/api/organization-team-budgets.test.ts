@@ -198,6 +198,30 @@ test('payment control reads recover local contention and retain the current oper
  }finally{if(release)clearTimeout(release);if(locked)writer.exec('ROLLBACK');writer.close();await db.delete(schema.payment_controls).where(eq(schema.payment_controls.key,'new_payments'))}
 })
 
+test('seller payout preflight releases failed reads and wallet fallbacks honor the supplied transaction',async()=>{
+ const f=await fixture()
+ const {readWithLocalContentionRecovery}=await import('@/lib/local-sqlite-read')
+ const {payoutAddressForUser}=await import('@/lib/external-settlement')
+ const {createRequire}=await import('node:module'),require=createRequire(import.meta.url)
+ const sqliteRequire=createRequire(require.resolve('@libsql/client')),Database=sqliteRequire('libsql')
+ const writer=new Database(join(directory,'teams.db'));let locked=false,release:ReturnType<typeof setTimeout>|undefined
+ try{
+  writer.exec('BEGIN EXCLUSIVE');locked=true
+  await assert.rejects(readWithLocalContentionRecovery(source=>payoutAddressForUser(f.seller,source)))
+  release=setTimeout(()=>{writer.exec('ROLLBACK');locked=false},150)
+  assert.equal(await readWithLocalContentionRecovery(source=>payoutAddressForUser(f.seller,source)),treasury)
+ }finally{if(release)clearTimeout(release);if(locked)writer.exec('ROLLBACK');writer.close()}
+ const fallback=privateKeyToAccount(`0x${'78'.repeat(32)}`).address
+ await db.transaction(async tx=>{
+  await tx.delete(schema.payout_addresses).where(eq(schema.payout_addresses.user_id,f.seller))
+  await tx.update(schema.users).set({email:`wallet_${fallback}@wallet.local`}).where(eq(schema.users.id,f.seller))
+  assert.equal(await payoutAddressForUser(f.seller,tx),fallback)
+  await tx.update(schema.agents).set({owner_address:fallback}).where(eq(schema.agents.id,f.agents[0]))
+  assert.equal(await payoutAddressForUser(f.buyers[0],tx),fallback)
+ })
+ assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id,f.serviceId))).length,0)
+})
+
 test('a blocked native reservation commit rolls back captured facts and recovers one original order and department use',async()=>{
  const f=await fixture();await set(f)
  const {createRequire}=await import('node:module'),require=createRequire(import.meta.url)

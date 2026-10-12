@@ -14,6 +14,7 @@ import { selectMarketplaceRail } from '@/lib/payment-rail-selection'
 import { getPaymentReadiness } from '@/lib/payment-config'
 import { requireNewPaymentsOpen } from '@/lib/payment-control'
 import { payoutAddressForUser } from '@/lib/external-settlement'
+import { readWithLocalContentionRecovery } from './local-sqlite-read'
 import { isPublicMarketplaceSeller } from '@/lib/listing-visibility'
 import { createLedgerTrade, ensureAdminFeeRecipient } from '@/lib/settlement'
 import { enforceAgentSpendPolicy } from '@/lib/agent-spend-policy'
@@ -128,19 +129,19 @@ export async function reserveServiceOrder(args: ReservationArgs) {
   if (prior) return prior
   if (!reusableServiceBuyerOrdersEnabled(principal.userId)) throw new ServiceOrderReservationError('REUSABLE_SERVICES_DISABLED', 'Reusable service orders are not enabled', 503, true)
   try {
-    const [service] = await db.select().from(service_definitions).where(eq(service_definitions.id, id)).limit(1)
+    const [service] = await readWithLocalContentionRecovery(source => source.select().from(service_definitions).where(eq(service_definitions.id, id)).limit(1))
     if (service && args.expectedSellerId !== undefined && service.seller_id !== args.expectedSellerId) {
       throw new ServiceOrderReservationError('ROUTE_STALE_PROVIDER', 'Service provider changed after route eligibility was checked')
     }
-    if (!service || service.status !== 'active' || service.visibility === 'public' && !await isPublicMarketplaceSeller(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is not active')
-    await privateProviderAccess(service, principal.userId, request.provider_share_id)
+    if (!service || service.status !== 'active' || service.visibility === 'public' && !await readWithLocalContentionRecovery(source => isPublicMarketplaceSeller(service.seller_id, source))) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is not active')
+    await readWithLocalContentionRecovery(source => privateProviderAccess(service, principal.userId, request.provider_share_id, source))
     if (!reusableServiceSellerWritesEnabled(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is outside the active canary', 409)
     const contract = serviceContractReadiness(service)
     if (!contract.executionModeReady) throw new ServiceOrderReservationError('EXECUTION_MODE_UNSUPPORTED', 'Service execution mode is unsupported')
     if (!contract.protocolReady) throw new ServiceOrderReservationError('PROVIDER_PROTOCOL_UNSUPPORTED', 'Service provider protocol is unsupported')
     if (!contract.verificationReady) throw new ServiceOrderReservationError('VERIFICATION_UNSUPPORTED', 'Service verification contract is unsupported')
     if (service.seller_id === principal.userId) throw new ServiceOrderReservationError('SELF_PURCHASE', 'A seller cannot order its own service')
-    if (service.seller_id.startsWith('user_agent_') && await referenceFleetPaidServicePublicationLocked(service.seller_id.slice('user_agent_'.length))) {
+    if (service.seller_id.startsWith('user_agent_') && await readWithLocalContentionRecovery(source => referenceFleetPaidServicePublicationLocked(service.seller_id.slice('user_agent_'.length), source))) {
       throw new ServiceOrderReservationError('REFERENCE_FLEET_PAID_SERVICES_LOCKED', 'Managed reference agents cannot sell paid services')
     }
     const inputCheck = checkServiceInput(request.input, contract.inputSchema)
@@ -148,22 +149,22 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     if (inputCheck.status === 'invalid') throw new ServiceOrderReservationError('SERVICE_INPUT_INVALID', `Order input does not match service schema: ${inputCheck.failure}`, 422)
     if (request.expected_price !== undefined && service.price_minor !== request.expected_price) throw new ServiceOrderReservationError('SERVICE_PRICE_CHANGED', 'Service price changed; re-plan before retrying')
     await requireNewPaymentsOpen()
-    const expired = await db.select({ trade: trades }).from(service_orders)
+    const expired = await readWithLocalContentionRecovery(source => source.select({ trade: trades }).from(service_orders)
       .innerJoin(trades, eq(service_orders.trade_id, trades.id))
       .where(and(eq(service_orders.service_id, id), eq(trades.status, 'pending'), sql`${trades.payment_due_at} <= ${new Date().toISOString()}`))
-      .limit(1_000)
+      .limit(1_000))
     for (const { trade } of expired) await expireTradePayment(trade)
     const feeMinor = Math.round(service.price_minor * 0.05)
     const totalMinor = service.price_minor + feeMinor
     if (request.max_total !== undefined && totalMinor > request.max_total) throw new ServiceOrderReservationError('BUDGET_EXCEEDED', 'Current total exceeds max_total')
     const readiness = getPaymentReadiness()
-    const sellerPayout = await payoutAddressForUser(service.seller_id)
+    const sellerPayout = await readWithLocalContentionRecovery(source => payoutAddressForUser(service.seller_id, source))
     const rail = selectMarketplaceRail(request.payment_rail, readiness, Boolean(sellerPayout))
     if (!rail || externalOnly && ['ledger', 'credit'].includes(rail)) throw new ServiceOrderReservationError(sellerPayout ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED', 'No eligible external payment rail for this seller')
     const internal = rail === 'ledger' || rail === 'credit'
     const feeRecipient = internal && !args.organizationSpendingEvidence ? await ensureAdminFeeRecipient() : null
-    const [workflowChild] = routeId ? await db.select({ id: workflow_node_runs.id, mandate_id: workflow_node_runs.mandate_id }).from(workflow_node_runs)
-      .where(eq(workflow_node_runs.planned_route_id, routeId)).limit(1) : []
+    const [workflowChild] = routeId ? await readWithLocalContentionRecovery(source => source.select({ id: workflow_node_runs.id, mandate_id: workflow_node_runs.mandate_id }).from(workflow_node_runs)
+      .where(eq(workflow_node_runs.planned_route_id, routeId)).limit(1)) : []
     if (workflowChild && (!workflowChild.mandate_id || workflowChild.mandate_id !== args.mandateId)) {
       throw new ServiceOrderReservationError('WORKFLOW_MANDATE_REQUIRED', 'A workflow child requires its inherited mandate')
     }

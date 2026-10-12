@@ -259,3 +259,15 @@ typecheck and lint passed. The final query also compiles with the official
 SQLite 3.42 parser as well as the current native driver. Remote transport
 acceptance remains an explicit protected deployment gate, not inferred from
 these local results. Snapshot: `docs/REPUTATION_V2_PRODUCTION_ASSESSMENT_2026-10-12.json`.
+
+The repair's initial hosted run 38194106287 exposed a separate `SQLITE_BUSY`
+failure in the seller payout lookup before reservation. All remaining pure
+reservation preflight lookups now use the existing bounded, disposable local
+read guard. Payout wallet and agent-address fallbacks honor the supplied read
+client or transaction. Expiry, fee-recipient writes, financial transactions and
+authoritative budget/capacity checks remain outside this read-only retry.
+Twenty fresh processes passed all five lock/rollback/preflight cases each:
+**100/100**, zero failures or skips. A new exclusive-lock regression also checks
+both payout fallbacks against uncommitted transaction state and confirms no
+order is created by inspection. Logs:
+`/tmp/clawdmarket-reputation-v2-all-preflight-stress-{1..20}.log`.
