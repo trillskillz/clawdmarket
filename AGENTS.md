@@ -13,34 +13,41 @@ passed. Fresh protected audit 38267467182 passed all five compiler queries and t
 immutable guards. Representative observation/calibration remain pending under the
 explicit user override; empirical promotion_ready=false remains truthful.
 
-The local batch has **4/10** accepted demonstrable capabilities: reconciled private
+The local batch has **5/10** accepted demonstrable capabilities: reconciled private
 enterprise actual fee coverage, independently reviewed L1 public-provider routing
 (`5ae3e92`, HTTP 1.112), recursive-improvement retirement (`3839c32`, HTTP 1.113),
-and separately reviewed Tempo public-provider routing (HTTP 1.114).
-Current integrated branch: `feat/enterprise-routed-tempo` in
-`/home/void/Work/clawdmarket-enterprise-routed-tempo`.
+reviewed Tempo public-provider routing (`eb3b6f8`, HTTP 1.114), and independently
+reviewed private-provider L1/Tempo routing (HTTP 1.115).
+Current integrated branch: `feat/enterprise-routed-private` in
+`/home/void/Work/clawdmarket-enterprise-routed-private`.
 
-Tempo acceptance verifies 819 distinct Node cases with zero failures and five
-expected skips: complete 824-case gate passed 814 and skipped ten, then all five
-opt-in external isolation cases were explicitly enabled and passed. Eighteen
-Python tests, SDK parity/build, TypeScript, lint, genuine disposable L1/Tempo
-financial/crash/race checks and legacy migration pass. Production build and
-thirteen built browser journeys pass. Storage: 65 migrations and replay, integrity
-ok, no foreign-key anomalies, ten immutable reputation guards and five working
-evidence queries. L1 hashes/wei, original payment/refund recovery and historic
-identity/ownership/credentials retain their meaning. Tempo fees use separate units
-and original exposure; gross is shared across both rails.
+Private-provider acceptance passes the fully enabled 838-case Node gate:
+833 passed, zero failed, five expected skips. Eighteen Python tests, SDK parity/build,
+TypeScript, lint, genuine disposable L1/Tempo economics, crash/race recovery and
+legacy migration replay pass. Six final private economic journeys independently
+prove actual payouts, revoked original refunds, last-boundary consent checks,
+shared-wallet exclusion and settled-result recovery after both share/grant
+revocation. Eight focused authority/privacy/crash/race checks pass. Production build
+and seventeen built browser journeys pass. Storage: 65 migrations and replay,
+integrity ok, no foreign-key anomalies, ten immutable reputation guards and five
+working evidence queries. Public v1/v2 hashes, separate fee units, shared original
+gross and historic identity/ownership/credentials retain their meaning. Ordinary
+route DTOs redact private candidates/input; named read-only credentials cannot
+inspect private mandates. Original owner/reviewer review and financial recovery
+retain their scope after revocation.
 
-Evidence: [Tempo acceptance](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md),
-[routing audit](docs/ORGANIZATION_ROUTED_PURCHASING_AUDIT.md),
+Evidence: [private-provider acceptance](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_AUDIT.md),
+[private-provider contract](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDERS.md),
+[Tempo acceptance](docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md),
 [retirement acceptance](docs/RECURSIVE_IMPROVEMENT_REMOVAL.md), and
 [fee coverage audit](docs/ENTERPRISE_CHAIN_FEES_AUDIT.md).
 
-Next implement separately reviewed private-provider routed authority using
-[the dependency plan](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_PLAN.md) from this
-accepted parent. Preserve original two-owner consent and private inspection;
-existing direct-service/read credentials gain no routed scope. Broader
-product/task/workflow authority remains separate.
+Next implement independently reviewed enterprise workflows using
+[the dependency audit](docs/ORGANIZATION_REVIEWED_WORKFLOW_PLAN.md) from this accepted
+parent. Bind original DAG/node/dependency contracts and internally derived child
+consent, with shared standalone/workflow exposure and multi-node real economic
+acceptance. Existing workflow, route, direct-service and read credentials retain
+separate authority. Product/task/contract purchasing remains separately bounded.
 
 The user's latest cadence is **ten completed capability PRs per publication batch**,
 one demonstrable capability per PR, protected CI, migration-first deployment and

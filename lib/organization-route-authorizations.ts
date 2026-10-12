@@ -1,9 +1,9 @@
 import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from './db'
-import { organizations, organization_agent_assignments, agent_owners, agents, users, organization_teams,
+import { organizations, organization_provider_shares, organization_agent_assignments, agent_owners, agents, users, organization_teams,
   organization_purchasing_roles, organization_route_authorizations as grants, organization_route_uses as uses,
   organization_route_tempo_fees as tempoFees, route_plans, route_payment_mandates, service_definitions, service_orders, trades, route_funding_steps } from './schema'
 import { purchasingTransaction, PurchasingError, type PurchasingSource } from './organization-purchasing-transaction'
@@ -14,6 +14,8 @@ import { issuePurchaseEvidence } from './organization-purchase-evidence'
 import { enterpriseFoundationEnabled } from './enterprise-foundation'
 import { money } from './service-order-input'
 import { normalizedCapabilities, planOrganizationRouteForReview, routePlanDto, routePlanInput, type RouteCandidate } from './route-planning'
+import { privateProviderAccess } from './organization-private-providers'
+import { freezeProviderShare, validateFrozenProviderShare, type FrozenProviderShare } from './organization-route-private-consent'
 import { routePlanningEnabled } from './routing-feature-flags'
 
 const hash = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
@@ -26,20 +28,23 @@ const proposalFields = { client_reference: reference, route_id: z.uuid().optiona
 export const organizationRouteInput = z.discriminatedUnion('version', [
   z.object({ ...proposalFields, version: z.literal(1), max_lifetime_gas_cost_wei: units }).strict(),
   z.object({ ...proposalFields, version: z.literal(2), max_lifetime_fee_token_cost_units: units }).strict(),
+  z.object({ ...proposalFields, version: z.literal(3), provider_share_ids: z.array(z.uuid()).min(1).max(20), max_lifetime_gas_cost_wei: units }).strict(),
+  z.object({ ...proposalFields, version: z.literal(4), provider_share_ids: z.array(z.uuid()).min(1).max(20), max_lifetime_fee_token_cost_units: units }).strict(),
 ]).superRefine((input, context) => {
   if (input.route_id ? input.agent_id || input.route_request : !input.agent_id || !input.route_request) {
     context.addIssue({ code: 'custom', message: 'Provide an existing route_id or an agent_id and exact route_request' })
   }
+  if ('provider_share_ids' in input && (input.route_id || new Set(input.provider_share_ids).size !== input.provider_share_ids.length)) context.addIssue({code:'custom',message:'Private review requires an original embedded route request and distinct accepted shares'})
   const payment = input.mandate.payment
-  const invalidPayment = input.version === 1
+  const invalidPayment = (input.version === 1 || input.version === 3)
     ? payment.rail !== 'evm' || payment.chain_id !== 1 || BigInt(payment.max_gas_cost_wei) > BigInt(input.max_lifetime_gas_cost_wei)
     : payment.rail !== 'mpp' || payment.chain_id !== 4217 || !('fee_token_address' in payment)
       || payment.fee_token_address !== payment.token_address || BigInt(payment.max_fee_token_cost_units) > BigInt(input.max_lifetime_fee_token_cost_units)
   if (invalidPayment || input.mandate.max_attempts !== 1 || input.mandate.max_retry_budget !== 0
     || input.mandate.max_aggregate > input.max_daily || input.max_daily > input.max_monthly || input.max_monthly > input.max_lifetime
-  ) context.addIssue({ code: 'custom', message: 'Review one bounded L1 v1 or Tempo v2 execution with explicit original fees and no paid retry' })
+  ) context.addIssue({ code: 'custom', message: 'Review one bounded L1 or Tempo execution with explicit original fees, independently scoped public/private authority and no paid retry' })
 })
-export const organizationRouteDecision = z.object({ version: z.union([z.literal(1), z.literal(2)]), client_reference: reference,
+export const organizationRouteDecision = z.object({ version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]), client_reference: reference,
   authority_hash: z.string().regex(/^[a-f0-9]{64}$/), approve: z.literal(true) }).strict()
 type Grant = typeof grants.$inferSelect
 type Plan = typeof route_plans.$inferSelect
@@ -48,9 +53,12 @@ type FrozenBase = { route_hash: string; candidate_hash: string; mandate_terms_ha
   max_daily_minor: number; max_monthly_minor: number; max_lifetime_minor: number;
   services: { id: string; seller_id: string; contract_hash: string }[] }
 type FrozenTempo = FrozenBase & { version: 2; max_lifetime_fee_token_cost_units: string }
-type Frozen = FrozenBase & { max_lifetime_gas_cost_wei: string } | FrozenTempo
-function isTempo(terms: Frozen): terms is FrozenTempo { return 'version' in terms && terms.version === 2 }
-function version(terms: Frozen) { return isTempo(terms) ? 2 as const : 1 as const }
+type FrozenPrivateL1 = FrozenBase & { version: 3; provider_shares: FrozenProviderShare[]; max_lifetime_gas_cost_wei: string }
+type FrozenPrivateTempo = FrozenBase & { version: 4; provider_shares: FrozenProviderShare[]; max_lifetime_fee_token_cost_units: string }
+type Frozen = FrozenBase & { max_lifetime_gas_cost_wei: string } | FrozenTempo | FrozenPrivateL1 | FrozenPrivateTempo
+function isTempo(terms: Frozen): terms is FrozenTempo | FrozenPrivateTempo { return 'version' in terms && (terms.version === 2 || terms.version === 4) }
+function isPrivate(terms: Frozen): terms is FrozenPrivateL1 | FrozenPrivateTempo { return 'version' in terms && (terms.version === 3 || terms.version === 4) }
+function version(terms: Frozen) { return 'version' in terms ? terms.version : 1 as const }
 function fail(code: string, status = 409): never { throw new PurchasingError(code, status) }
 function enabled() { if (!enterpriseFoundationEnabled()) fail('ORGANIZATION_ROUTE_DISABLED', 503) }
 function authority(row: Pick<Grant,'organization_id'|'route_id'|'mandate_id'|'owner_account_id'|'buyer_id'|'agent_id'|'team_id'|'cost_center'|'reviewer_role_id'|'reviewer_account_id'|'request_hash'>, terms: Frozen) {
@@ -62,7 +70,7 @@ function frozen(row: Grant): Frozen {
     const identity = { organization_id: row.organization_id, route_id: row.route_id, mandate_id: row.mandate_id,
       owner_account_id: row.owner_account_id, buyer_id: row.buyer_id, agent_id: row.agent_id, team_id: row.team_id,
       cost_center: row.cost_center, reviewer_role_id: row.reviewer_role_id, reviewer_account_id: row.reviewer_account_id, request_hash: row.request_hash }
-    if (authority(identity,terms) !== row.authority_hash || !terms.services.length
+    if (![1,2,3,4].includes(version(terms)) || authority(identity,terms) !== row.authority_hash || !terms.services.length
       || [terms.max_daily_minor,terms.max_monthly_minor,terms.max_lifetime_minor].some(value => !Number.isSafeInteger(value) || value < 1)
       || !units.safeParse(isTempo(terms) ? terms.max_lifetime_fee_token_cost_units : terms.max_lifetime_gas_cost_wei).success)
       fail('ORGANIZATION_ROUTE_CONTRACT_INVALID')
@@ -103,6 +111,10 @@ async function current(row: Grant, plan: Plan, mandate: Mandate, source: Purchas
     if (!team || team.status !== 'active') fail('ORGANIZATION_ROUTE_DEPARTMENT_CHANGED')
   }
   await validateOrganizationApprover(source,row.organization_id,row.reviewer_role_id,row.reviewer_account_id,row.team_id,mandate.max_aggregate_minor)
+  if (isPrivate(terms)) {
+    if (!terms.provider_shares.length || terms.provider_shares.length !== terms.services.length) fail('ORGANIZATION_ROUTE_CONTRACT_INVALID')
+    for (const consent of terms.provider_shares) await validateFrozenProviderShare(source,consent,row.buyer_id,row.organization_id,terms.services)
+  }
   return terms
 }
 export async function proposeOrganizationRoute(orgId: string, actor: string, input: z.output<typeof organizationRouteInput>) {
@@ -121,7 +133,7 @@ export async function proposeOrganizationRoute(orgId: string, actor: string, inp
     else if (input.agent_id && input.route_request) {
       const buyerId = `user_agent_${input.agent_id}`, request = input.route_request
       if (!routePlanningEnabled(buyerId)) fail('ROUTE_PLANNING_DISABLED', 503)
-      const planned = await planOrganizationRouteForReview(request,buyerId,orgId,actor)
+      const planned = await planOrganizationRouteForReview(request,buyerId,orgId,actor,'provider_share_ids' in input ? input.provider_share_ids : undefined,source)
       if (!planned.candidates.length) fail('ORGANIZATION_ROUTE_CANDIDATES_INVALID')
       const [priorPlan] = await source.select().from(route_plans).where(eq(route_plans.client_reference,request.client_reference)).limit(1)
       if (priorPlan) fail('ORGANIZATION_ROUTE_PLAN_REFERENCE_CONFLICT')
@@ -142,13 +154,19 @@ export async function proposeOrganizationRoute(orgId: string, actor: string, inp
     if (!assignment || assignment.organization_id !== orgId) fail('ORGANIZATION_ROUTE_ASSIGNMENT_CHANGED')
     const [reviewer] = await source.select().from(organization_purchasing_roles).where(eq(organization_purchasing_roles.id,input.reviewer_role_id)).limit(1)
     if (!reviewer || reviewer.account_id === actor) fail('ORGANIZATION_ROUTE_INDEPENDENT_REVIEW_REQUIRED',403)
-    const candidates: RouteCandidate[] = JSON.parse(plan.candidates_json), services: Frozen['services'] = []
+    const candidates: RouteCandidate[] = JSON.parse(plan.candidates_json), services: Frozen['services'] = [], providerShares: FrozenProviderShare[] = []
     if (!candidates.length || candidates.length > 20) fail('ORGANIZATION_ROUTE_CANDIDATES_INVALID')
     for (const candidate of candidates) {
       const [service] = await source.select().from(service_definitions).where(eq(service_definitions.id,candidate.service_id)).limit(1)
       if (service && !input.mandate.approved_providers.includes(service.seller_id)) continue
-      if (!service || service.visibility !== 'public' || candidate.payment_rail !== input.mandate.payment.rail
+      if (!service || service.visibility !== ('provider_share_ids' in input ? 'organization' : 'public') || candidate.payment_rail !== input.mandate.payment.rail
         || service.price_minor !== Math.round(Number(candidate.pricing.amount)*100)) fail('ORGANIZATION_ROUTE_CANDIDATES_CHANGED')
+      if ('provider_share_ids' in input) {
+        const [share] = await source.select().from(organization_provider_shares).where(and(eq(organization_provider_shares.service_id,service.id),inArray(organization_provider_shares.id,input.provider_share_ids))).limit(1)
+        const accepted = await privateProviderAccess(service,plan.buyer_id,share?.id,source)
+        if (!accepted || accepted.organization_id !== orgId) fail('ORGANIZATION_ROUTE_PRIVATE_SCOPE_CHANGED')
+        providerShares.push(freezeProviderShare(accepted))
+      }
       services.push({ id: service.id, seller_id: service.seller_id, contract_hash: purchasingServiceHash(service) })
     }
     if (!services.length || input.mandate.approved_providers.some(provider => !services.some(service => service.seller_id === provider))) fail('ORGANIZATION_ROUTE_CANDIDATES_INVALID')
@@ -160,10 +178,14 @@ export async function proposeOrganizationRoute(orgId: string, actor: string, inp
     const identity = { organization_id: orgId, route_id: plan.id, mandate_id: mandate.id, owner_account_id: actor,
       buyer_id: plan.buyer_id, agent_id: agentId, team_id: assignment.team_id, cost_center: assignment.cost_center,
       reviewer_role_id: reviewer.id, reviewer_account_id: reviewer.account_id, request_hash: requestHash }
-    const terms: Frozen = { route_hash: routeAuthorityHash(plan), candidate_hash: hash(candidates), mandate_terms_hash: result.mandate.terms_hash,
+    const baseTerms: FrozenBase = { route_hash: routeAuthorityHash(plan), candidate_hash: hash(candidates), mandate_terms_hash: result.mandate.terms_hash,
       services, max_daily_minor: input.max_daily, max_monthly_minor: input.max_monthly, max_lifetime_minor: input.max_lifetime,
-      ...(input.version === 1 ? { max_lifetime_gas_cost_wei: input.max_lifetime_gas_cost_wei }
-        : { version: 2 as const, max_lifetime_fee_token_cost_units: input.max_lifetime_fee_token_cost_units }) }
+    }
+    if ('provider_share_ids' in input && (providerShares.length !== input.provider_share_ids.length || !providerShares.every(share=>input.provider_share_ids.includes(share.id)))) fail('ORGANIZATION_ROUTE_PRIVATE_SCOPE_CHANGED')
+    const terms: Frozen = input.version === 1 ? {...baseTerms,max_lifetime_gas_cost_wei:input.max_lifetime_gas_cost_wei}
+      : input.version === 2 ? {...baseTerms,version:2,max_lifetime_fee_token_cost_units:input.max_lifetime_fee_token_cost_units}
+      : input.version === 3 ? {...baseTerms,version:3,provider_shares:providerShares,max_lifetime_gas_cost_wei:input.max_lifetime_gas_cost_wei}
+      : {...baseTerms,version:4,provider_shares:providerShares,max_lifetime_fee_token_cost_units:input.max_lifetime_fee_token_cost_units}
     const [row] = await source.insert(grants).values({ id: randomUUID(), ...identity, client_reference: input.client_reference,
       authority_hash: authority(identity,terms), terms_json: JSON.stringify(terms), created_at: new Date() }).returning()
     const [bound] = await source.update(route_payment_mandates).set({ organization_route_authorization_id: row.id }).where(eq(route_payment_mandates.id,mandate.id)).returning()
@@ -192,7 +214,7 @@ async function dto(row: Grant, source: PurchasingSource, actor: string) {
     review_url: `/organizations/${row.organization_id}/route-authorizations/${row.id}`,
     authority_hash: row.authority_hash, state: row.state, approved_at: row.approved_at, revoked_at: row.revoked_at,
     version: version(terms), decision: row.decision_reference ? { version: version(terms), client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true as const } : null,
-    route: { ...routePlanDto(plan), route_hash: terms.route_hash },
+    route: { ...routePlanDto(plan,true), route_hash: terms.route_hash },
     terms, mandate: mandateDto(mandate), use: use ? { ...use, ...(isTempo(terms) ? { tempo_fee: await originalTempoFee(source,row,use,mandate) } : {}) } : null }
 }
 export async function inspectOrganizationRoute(orgId: string, id: string, actor: string) {
@@ -273,6 +295,7 @@ export async function validateOrganizationRouteAuthority(source: PurchasingSourc
         || order.buyer_id !== row.buyer_id || trade.buyer_id !== row.buyer_id || step.mandate_id !== mandate.id || step.route_id !== plan.id
         || step.terms_hash !== mandateDto(mandate).terms_hash || trade.payment_rail !== payment.rail
         || !isTempo(terms) && (payment.rail !== 'evm' || use.maximum_gas_cost_wei !== payment.max_gas_cost_wei)) fail('ORGANIZATION_ROUTE_USE_INVALID')
+      if (isPrivate(terms) && order.private_provider_share_id !== terms.provider_shares.find(value=>value.service_id===order.service_id)?.id) fail('ORGANIZATION_ROUTE_USE_INVALID')
       if (isTempo(terms)) await originalTempoFee(source,row,use,mandate)
     }
   })
@@ -286,7 +309,7 @@ export async function organizationRoutePurchaseEvidence(source: PurchasingSource
     const [mandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,mandateId)).limit(1)
     const terms = await current(row,plan,mandate,source)
     const candidate = terms.services.find(entry => entry.id === service.id && entry.seller_id === service.seller_id)
-    if (service.visibility !== 'public' || !candidate || candidate.contract_hash !== purchasingServiceHash(service)) fail('ORGANIZATION_ROUTE_SERVICE_CHANGED')
+    if (service.visibility !== (isPrivate(terms) ? 'organization' : 'public') || !candidate || candidate.contract_hash !== purchasingServiceHash(service)) fail('ORGANIZATION_ROUTE_SERVICE_CHANGED')
     return issuePurchaseEvidence({ approvalId: row.id, requestHash: row.authority_hash, buyerId: row.buyer_id,
       totalMinor, sellerId: service.seller_id, paymentRail: mandateDto(mandate).terms.payment.rail })
   })
@@ -348,4 +371,27 @@ export async function consumeOrganizationRouteExposure(source: PurchasingSource,
       authorization_id: row.id, authority_hash: row.authority_hash, chain_id: payment.chain_id,
       fee_token_address: payment.fee_token_address, maximum_fee_token_cost_units: payment.max_fee_token_cost_units })
   })
+}
+
+/** Only the immutable reviewed route can supply private reservation consent. */
+export async function organizationRoutePrivateShare(source: PurchasingSource, routeId: string, mandateId: string,
+  service: typeof service_definitions.$inferSelect, buyerId: string) {
+  return routeGuard(async () => {
+    const [row] = await source.select().from(grants).where(eq(grants.route_id,routeId)).limit(1)
+    if (!row) return undefined
+    const [plan] = await source.select().from(route_plans).where(eq(route_plans.id,routeId)).limit(1)
+    const [mandate] = await source.select().from(route_payment_mandates).where(eq(route_payment_mandates.id,mandateId)).limit(1)
+    const terms = await current(row,plan,mandate,source)
+    if (!isPrivate(terms)) return undefined
+    if (row.buyer_id !== buyerId) fail('ORGANIZATION_ROUTE_PRIVATE_SCOPE_CHANGED')
+    const consent = terms.provider_shares.find(value=>value.service_id===service.id)
+    if (!consent || !terms.services.some(value=>value.id===service.id && value.contract_hash===purchasingServiceHash(service))) fail('ORGANIZATION_ROUTE_PRIVATE_SCOPE_CHANGED')
+    return validateFrozenProviderShare(source,consent,buyerId,row.organization_id,terms.services)
+  })
+}
+
+/** Detect original private grant scope without granting fresh spend or denying recovery. */
+export async function isPrivateOrganizationRoute(routeId:string) {
+  const [row]=await db.select().from(grants).where(eq(grants.route_id,routeId)).limit(1)
+  return !!row && isPrivate(frozen(row))
 }

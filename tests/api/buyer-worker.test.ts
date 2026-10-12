@@ -889,7 +889,16 @@ test('MCP Tasks return one private backed result after canonical funding and rej
   assert.equal(JSON.stringify(uncertain.body).includes('private-route-result'), false)
 })
 
-async function enterpriseRouteOnOwnedL1(revoked: boolean) {
+
+async function makeReviewedPrivateShare(f:Fixture,orgId:string,teamId:string) {
+  await db.update(schema.agents).set({visibility:'private'}).where(eq(schema.agents.id,f.sellerId.slice('user_agent_'.length)))
+  await db.update(schema.service_definitions).set({visibility:'organization'}).where(eq(schema.service_definitions.id,f.serviceId))
+  const domain=await import('@/lib/organization-private-providers')
+  const offered=await domain.offerPrivateProvider(f.serviceId,f.sellerOwnerId,domain.providerOfferInput.parse({version:1,client_reference:crypto.randomUUID(),organization_id:orgId,team_id:teamId,expires_at:new Date(Date.now()+3600_000).toISOString()}))
+  return (await domain.acceptPrivateProvider(orgId,offered.share.id,f.ownerId,domain.providerAcceptInput.parse({version:1,client_reference:crypto.randomUUID(),request_hash:offered.share.request_hash}))).share
+}
+
+async function enterpriseRouteOnOwnedL1(revoked: boolean, privateMode=false, sendRace=false) {
   const f=await fixture(undefined,undefined,true)
   // A fresh chain must not reuse the earlier test's persisted treasury nonce.
   const treasuryKey=`0x${createHash('sha256').update(`owned-enterprise-treasury:${f.routeId}`).digest('hex')}` as const
@@ -915,11 +924,13 @@ async function enterpriseRouteOnOwnedL1(revoked: boolean) {
     assert.equal(invitation.kind,'ok');assert.equal((await membership.acceptOrganizationInvitation(invitation.invitation_id!,reviewer)).kind,'ok')
     const role=await purchasing.grantPurchasingRole(orgId,f.ownerId,purchasing.purchasingRoleInput.parse({version:1,client_reference:crypto.randomUUID(),account_id:reviewer,team_id:teamId,role:'approver',max_purchase:'1.05',expires_at:new Date(Date.now()+3600_000).toISOString()}))
     await db.insert(schema.buyer_spend_policies).values({buyer_id:f.buyerId,owner_account_id:f.ownerId,policy_json:'{"approval_required_above":50,"max_per_execution":105}',version:1,created_at:now,updated_at:now})
+    const privateShare=privateMode?await makeReviewedPrivateShare(f,orgId,teamId):null
     const domain=await import('@/lib/organization-route-authorizations')
     const proposalInput:OrganizationRouteProposal={version:1,client_reference:crypto.randomUUID(),agent_id:f.buyerId.slice('user_agent_'.length),
       route_request:{client_reference:crypto.randomUUID(),objective:'Review original private code under the exact enterprise authority',required_capabilities:['code-review'],input:{private_text:'enterprise-original-private-source'},max_budget:{amount:'1.05',currency:'USD'},verification:JSON.parse((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].verification_policy),provider_requirements:{approved_providers:[f.sellerId]},payment_policy:{allowed_rails:['evm']}},
       reviewer_role_id:role.role.id,max_daily:'1.05',max_monthly:'1.05',max_lifetime:'1.05',max_lifetime_gas_cost_wei:'10000000000000000',
       mandate:{version:1,client_reference:crypto.randomUUID(),max_aggregate:'1.05',max_per_execution:'1.05',max_retry_budget:'0.00',max_attempts:1,approved_providers:[f.sellerId],max_latency_seconds:60,private_data:'selected_provider_only',expires_at:new Date(Date.now()+600_000).toISOString(),payment:{rail:'evm',chain_id:1,token_address:token,payer_address:f.account.address.toLowerCase(),treasury_address:treasury,minimum_token_reserve_units:'5000000',minimum_native_reserve_wei:'1000000',max_gas_cost_wei:'10000000000000000'}}}
+    const exactProposal:OrganizationRouteProposal=privateShare?{...proposalInput,version:3,provider_share_ids:[privateShare.id]}:proposalInput
     const ownerKey=jwt({userId:f.ownerId,email:`${f.ownerId}@test.invalid`,role:'human'})
     const reviewerKey=jwt({userId:reviewer,email:`${reviewer}@test.invalid`,role:'human'})
     const accountClient=new ClawdMarketClient({apiKey:ownerKey,baseUrl}),reviewerClient=new ClawdMarketClient({apiKey:reviewerKey,baseUrl})
@@ -928,8 +939,8 @@ async function enterpriseRouteOnOwnedL1(revoked: boolean) {
       const result=await run('python3',['-c','import json,os; from clawdmarket import ClawdMarketClient; c=ClawdMarketClient(os.environ["OWNED_CLIENT_KEY"],os.environ["OWNED_CLIENT_URL"]); print(json.dumps(getattr(c,os.environ["OWNED_CLIENT_METHOD"])(*json.loads(os.environ["OWNED_CLIENT_ARGS"]))))'],{cwd:resolve('.'),env:{...process.env,PYTHONPATH:resolve('sdk/python'),PYTHONDONTWRITEBYTECODE:'1',OWNED_CLIENT_KEY:apiKey,OWNED_CLIENT_URL:baseUrl,OWNED_CLIENT_METHOD:method,OWNED_CLIENT_ARGS:JSON.stringify(args)},timeout:15_000})
       return JSON.parse(result.stdout)
     }
-    const proposeOriginal=()=>revoked?python(ownerKey,'propose_organization_route',[orgId,proposalInput]):accountClient.proposeOrganizationRoute(orgId,proposalInput)
-    const recoverOriginal=()=>revoked?python(ownerKey,'recover_organization_route',[orgId,proposalInput.client_reference]):accountClient.recoverOrganizationRoute(orgId,proposalInput.client_reference)
+    const proposeOriginal=()=>revoked?python(ownerKey,'propose_organization_route',[orgId,exactProposal]):accountClient.proposeOrganizationRoute(orgId,exactProposal)
+    const recoverOriginal=()=>revoked?python(ownerKey,'recover_organization_route',[orgId,exactProposal.client_reference]):accountClient.recoverOrganizationRoute(orgId,exactProposal.client_reference)
     const inspectOriginal=(id:string)=>revoked?python(reviewerKey,'inspect_organization_route',[orgId,id]):reviewerClient.inspectOrganizationRoute(orgId,id)
     const prefix=`/api/organizations/${orgId}/route-authorizations`
     let lostProposal=false
@@ -937,10 +948,12 @@ async function enterpriseRouteOnOwnedL1(revoked: boolean) {
     await assert.rejects(proposeOriginal());apiHook=null
     assert.equal(lostProposal,true)
     const recovered=await recoverOriginal(),a=recovered.authorization
+    assert.equal(a.version,privateMode?3:1);
+    if(privateShare)assert.equal('provider_shares' in a.terms && a.terms.provider_shares[0].id,privateShare.id)
     assert.equal(a.state,'pending');assert.equal(a.viewer_role,'owner')
     assert.equal(a.route.candidates[0].eligibility.approval_required,true)
     assert.equal((await proposeOriginal()).idempotent,true)
-    const decision={version:1 as const,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true as const}
+    const decision={version:exactProposal.version,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true as const}
     const approveOriginal=()=>revoked?python(reviewerKey,'approve_organization_route',[orgId,a.id,decision]):reviewerClient.approveOrganizationRoute(orgId,a.id,decision)
     let lostDecision=false
     apiHook=async(path,response)=>{if(path===`${prefix}/${a.id}/approval`&&response.status===201&&!lostDecision){lostDecision=true;return true}return false}
@@ -959,10 +972,54 @@ async function enterpriseRouteOnOwnedL1(revoked: boolean) {
     await killBuyerAtBoundary(buyerArgs,buyerEnvironment,holdBuyerApiResponse((path,response)=>path.endsWith('/claim')&&response.ok))
     const original=await journal(f)
     assert.equal(broadcastCalls,count)
+    if(privateShare) {
+      // A second independently reviewed private route cannot claim this wallet's
+      // original nonce, even with sufficient gross/fees and its own buyer journal.
+      const competingService=crypto.randomUUID(),[definition]=await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId))
+      await db.insert(schema.service_definitions).values({...definition,id:competingService,title:'Independent competing private wallet service',active_orders:0,max_concurrency:1})
+      const competingShare=await makeReviewedPrivateShare({...f,serviceId:competingService},orgId,teamId)
+      const competing=structuredClone(exactProposal)
+      competing.client_reference=crypto.randomUUID();competing.mandate.client_reference=crypto.randomUUID()
+      competing.max_daily='3.00';competing.max_monthly='3.00';competing.max_lifetime='3.00'
+      competing.max_lifetime_gas_cost_wei='20000000000000000'
+      if(!('provider_share_ids' in competing))throw Error('Private wallet review must bind its original share')
+      competing.provider_share_ids=[competingShare.id]
+      if(!competing.route_request)throw Error('Missing original private request')
+      competing.route_request.client_reference=crypto.randomUUID()
+      const another=(await accountClient.proposeOrganizationRoute(orgId,competing)).authorization
+      await reviewerClient.approveOrganizationRoute(orgId,another.id,{version:competing.version,client_reference:crypto.randomUUID(),authority_hash:another.authority_hash,approve:true})
+      const competingFile=join(directory,`${another.id}.wallet-approval.json`),competingState=join(directory,`${another.id}.wallet-state`)
+      await writeFile(competingFile,JSON.stringify({...f.approval,route_id:another.route_id,mandate_id:another.mandate.id,terms_hash:another.mandate.terms_hash}),{mode:0o600})
+      const prepared=JSON.parse((await run(process.execPath,[buyerArgs[0],competingFile,competingState,'--prepare-only'],{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      assert.equal(prepared.state,'prepared')
+      const secondary=(await journal({...f,routeId:another.route_id,stateDirectory:competingState})).value
+      const collision=await fetch(`${baseUrl}/api/trades/${secondary.trade_id}/fund/evm/claim`,{method:'POST',headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({intent_id:secondary.intent.id,mandate_id:another.mandate.id,buyer_operation_id:secondary.operation_id,serialized_transaction:secondary.serialized_transaction,payer_signature:secondary.payer_signature}),signal:AbortSignal.timeout(15000)})
+      assert.equal(collision.status,409);const denied=await collision.json();assert.equal(denied.code??denied.error_code,'BUYER_WALLET_PAYMENT_UNRECONCILED')
+      assert.equal(broadcastCalls,count)
+      assert.equal((await db.select().from(schema.buyer_evm_payment_claims).where(eq(schema.buyer_evm_payment_claims.mandate_id,another.mandate.id))).length,0)
+      const cancelled=await fetch(`${baseUrl}/api/routes/${another.route_id}`,{method:'DELETE',headers:{Authorization:`Bearer ${f.apiKey}`},signal:AbortSignal.timeout(15000)})
+      assert.equal(cancelled.status,200)
+      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,competingService)))[0].active_orders,1,'uncertain signed checkout retains its own capacity after cancellation')
+      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].active_orders,1)
+    }
     if(revoked) {
-      const closed=await python(reviewerKey,'revoke_organization_route',[orgId,a.id]);assert.equal(closed.authorization.state,'revoked')
-      assert.equal((await approveOriginal()).authorization.state,'revoked')
-      const held=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      let raceReached=false
+      if(privateShare&&sendRace) {
+        realRpcHook=async(method,result)=>{
+          // L1 wallet inspection follows the first valid claim. Tempo's empty
+          // transfer simulation occurs inside the guarded SDK send method.
+          if(!raceReached&&method==='eth_call'&&(typeof result==='string'&&result.length===66)) {
+            raceReached=true;await (await import('@/lib/organization-private-providers')).revokePrivateProvider(privateShare.id,f.sellerOwnerId)
+          }
+        }
+      } else if(privateShare)await (await import('@/lib/organization-private-providers')).revokePrivateProvider(privateShare.id,f.sellerOwnerId)
+      else {const closed=await python(reviewerKey,'revoke_organization_route',[orgId,a.id]);assert.equal(closed.authorization.state,'revoked')}
+      assert.equal((await approveOriginal()).authorization.state,privateShare?'approved':'revoked')
+      let held
+      try {held=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)}
+      catch(error) {if(!sendRace||!raceReached)throw error;realRpcHook=null;held=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)}
+      realRpcHook=null
+      if(sendRace)assert.equal(raceReached,true,'revocation must occur after current claim permission during real wallet/SDK inspection')
       assert.equal(held.state,'held_recover_existing_payment');assert.equal(held.tx_hash,original.value.tx_hash);assert.equal(broadcastCalls,count)
       // Model the exact original bytes arriving late after authority closes.
       await chain.client.sendRawTransaction({serializedTransaction:original.value.serialized_transaction})
@@ -1015,14 +1072,21 @@ async function enterpriseRouteOnOwnedL1(revoked: boolean) {
       assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id,f.routeId))).length,1)
       assert.equal((await reviewerClient.revokeOrganizationRoute(orgId,a.id)).authorization.state,'revoked')
       assert.equal((await approveOriginal()).authorization.state,'revoked')
+      if(privateShare) {
+        await (await import('@/lib/organization-private-providers')).revokePrivateProvider(privateShare.id,f.sellerOwnerId)
+        const recoveredResult=JSON.parse((await run(process.execPath,routeArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+        assert.equal(recoveredResult.state,'completed');assert.deepEqual(recoveredResult.receipt,outcome.receipt)
+        assert.equal(broadcastCalls,count+2,'original backed result recovery must not send another payment')
+      }
     }
     // A real refund or settlement cannot replenish the same buyer's original gross.
-    const nextInput=structuredClone(proposalInput)
+    const nextInput=structuredClone(exactProposal)
     nextInput.client_reference=crypto.randomUUID();nextInput.mandate.client_reference=crypto.randomUUID()
     if(!nextInput.route_request)throw Error('Missing original embedded review request')
     nextInput.route_request.client_reference=crypto.randomUUID()
+    if(privateShare&&'provider_share_ids' in nextInput)nextInput.provider_share_ids=[(await makeReviewedPrivateShare(f,orgId,teamId)).id]
     const next=(await accountClient.proposeOrganizationRoute(orgId,nextInput)).authorization
-    await reviewerClient.approveOrganizationRoute(orgId,next.id,{version:1,client_reference:crypto.randomUUID(),authority_hash:next.authority_hash,approve:true})
+    await reviewerClient.approveOrganizationRoute(orgId,next.id,{version:nextInput.version,client_reference:crypto.randomUUID(),authority_hash:next.authority_hash,approve:true})
     const previousBroadcast=broadcastCalls
     const exhausted=await fetch(`${baseUrl}/api/routes/${next.route_id}/execute`,{method:'POST',headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({mandate_id:next.mandate.id}),signal:AbortSignal.timeout(15000)})
     assert.equal(exhausted.status,409);assert.equal((await exhausted.json()).error_code,'ORGANIZATION_ROUTE_GROSS_LIMIT')
@@ -1544,7 +1608,7 @@ async function workflowRefundLoop(isTempo: boolean) {
   }
 }
 
-async function enterpriseRouteOnOwnedTempo(revoked: boolean) {
+async function enterpriseRouteOnOwnedTempo(revoked: boolean, privateMode=false, sendRace=false) {
   const f=await fixture(undefined,undefined,true)
   // This fixture runs in its own process: configured MPP recipient and treasury nonce stay original.
   const treasuryKey=`0x${'99'.repeat(32)}` as const
@@ -1572,11 +1636,13 @@ async function enterpriseRouteOnOwnedTempo(revoked: boolean) {
     assert.equal(invitation.kind,'ok');assert.equal((await membership.acceptOrganizationInvitation(invitation.invitation_id!,reviewer)).kind,'ok')
     const role=await purchasing.grantPurchasingRole(orgId,f.ownerId,purchasing.purchasingRoleInput.parse({version:1,client_reference:crypto.randomUUID(),account_id:reviewer,team_id:teamId,role:'approver',max_purchase:'1.05',expires_at:new Date(Date.now()+3600_000).toISOString()}))
     await db.insert(schema.buyer_spend_policies).values({buyer_id:f.buyerId,owner_account_id:f.ownerId,policy_json:'{"approval_required_above":50,"max_per_execution":105}',version:1,created_at:now,updated_at:now})
+    const privateShare=privateMode?await makeReviewedPrivateShare(f,orgId,teamId):null
     const domain=await import('@/lib/organization-route-authorizations')
     const proposalInput:OrganizationRouteProposal={version:2,client_reference:crypto.randomUUID(),agent_id:f.buyerId.slice('user_agent_'.length),
       route_request:{client_reference:crypto.randomUUID(),objective:'Review original private code under the exact enterprise authority',required_capabilities:['code-review'],input:{private_text:'enterprise-original-private-source'},max_budget:{amount:'1.05',currency:'USD'},verification:JSON.parse((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].verification_policy),provider_requirements:{approved_providers:[f.sellerId]},payment_policy:{allowed_rails:['mpp']}},
       reviewer_role_id:role.role.id,max_daily:'1.05',max_monthly:'1.05',max_lifetime:'1.05',max_lifetime_fee_token_cost_units:'10000',
       mandate:{version:1,client_reference:crypto.randomUUID(),max_aggregate:'1.05',max_per_execution:'1.05',max_retry_budget:'0.00',max_attempts:1,approved_providers:[f.sellerId],max_latency_seconds:60,private_data:'selected_provider_only',expires_at:new Date(Date.now()+600_000).toISOString(),payment:{rail:'mpp',chain_id:4217,token_address:token,payer_address:f.account.address.toLowerCase(),treasury_address:treasury,minimum_token_reserve_units:'5000000',fee_token_address:token,minimum_fee_token_reserve_units:'1000000',max_fee_token_cost_units:'10000'}}}
+    const exactProposal:OrganizationRouteProposal=privateShare?{...proposalInput,version:4,provider_share_ids:[privateShare.id]}:proposalInput
     const ownerKey=jwt({userId:f.ownerId,email:`${f.ownerId}@test.invalid`,role:'human'})
     const reviewerKey=jwt({userId:reviewer,email:`${reviewer}@test.invalid`,role:'human'})
     const accountClient=new ClawdMarketClient({apiKey:ownerKey,baseUrl}),reviewerClient=new ClawdMarketClient({apiKey:reviewerKey,baseUrl})
@@ -1585,8 +1651,8 @@ async function enterpriseRouteOnOwnedTempo(revoked: boolean) {
       const result=await run('python3',['-c','import json,os; from clawdmarket import ClawdMarketClient; c=ClawdMarketClient(os.environ["OWNED_CLIENT_KEY"],os.environ["OWNED_CLIENT_URL"]); print(json.dumps(getattr(c,os.environ["OWNED_CLIENT_METHOD"])(*json.loads(os.environ["OWNED_CLIENT_ARGS"]))))'],{cwd:resolve('.'),env:{...process.env,PYTHONPATH:resolve('sdk/python'),PYTHONDONTWRITEBYTECODE:'1',OWNED_CLIENT_KEY:apiKey,OWNED_CLIENT_URL:baseUrl,OWNED_CLIENT_METHOD:method,OWNED_CLIENT_ARGS:JSON.stringify(args)},timeout:15_000})
       return JSON.parse(result.stdout)
     }
-    const proposeOriginal=()=>revoked?python(ownerKey,'propose_organization_route',[orgId,proposalInput]):accountClient.proposeOrganizationRoute(orgId,proposalInput)
-    const recoverOriginal=()=>revoked?python(ownerKey,'recover_organization_route',[orgId,proposalInput.client_reference]):accountClient.recoverOrganizationRoute(orgId,proposalInput.client_reference)
+    const proposeOriginal=()=>revoked?python(ownerKey,'propose_organization_route',[orgId,exactProposal]):accountClient.proposeOrganizationRoute(orgId,exactProposal)
+    const recoverOriginal=()=>revoked?python(ownerKey,'recover_organization_route',[orgId,exactProposal.client_reference]):accountClient.recoverOrganizationRoute(orgId,exactProposal.client_reference)
     const inspectOriginal=(id:string)=>revoked?python(reviewerKey,'inspect_organization_route',[orgId,id]):reviewerClient.inspectOrganizationRoute(orgId,id)
     const prefix=`/api/organizations/${orgId}/route-authorizations`
     let lostProposal=false
@@ -1594,10 +1660,12 @@ async function enterpriseRouteOnOwnedTempo(revoked: boolean) {
     await assert.rejects(proposeOriginal());apiHook=null
     assert.equal(lostProposal,true)
     const recovered=await recoverOriginal(),a=recovered.authorization
+    assert.equal(a.version,privateMode?4:2);
+    if(privateShare)assert.equal('provider_shares' in a.terms && a.terms.provider_shares[0].id,privateShare.id)
     assert.equal(a.state,'pending');assert.equal(a.viewer_role,'owner')
     assert.equal(a.route.candidates[0].eligibility.approval_required,true)
     assert.equal((await proposeOriginal()).idempotent,true)
-    const decision={version:2 as const,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true as const}
+    const decision={version:exactProposal.version,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true as const}
     const approveOriginal=()=>revoked?python(reviewerKey,'approve_organization_route',[orgId,a.id,decision]):reviewerClient.approveOrganizationRoute(orgId,a.id,decision)
     let lostDecision=false
     apiHook=async(path,response)=>{if(path===`${prefix}/${a.id}/approval`&&response.status===201&&!lostDecision){lostDecision=true;return true}return false}
@@ -1616,10 +1684,54 @@ async function enterpriseRouteOnOwnedTempo(revoked: boolean) {
     await killBuyerAtBoundary(buyerArgs,buyerEnvironment,holdBuyerApiResponse(async(path,response)=>{if(response.status>=400)console.info(JSON.stringify({reviewed_tempo_stage:path.split('/').slice(-3).join('/'),status:response.status,error_code:(await response.clone().json()).error_code,error:(await response.clone().json()).error}));return path.endsWith('/claim')&&response.ok}))
     const original=await journal(f)
     assert.equal(broadcastCalls,count)
+    if(privateShare) {
+      // A second independently reviewed private route cannot claim this wallet's
+      // original nonce, even with sufficient gross/fees and its own buyer journal.
+      const competingService=crypto.randomUUID(),[definition]=await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId))
+      await db.insert(schema.service_definitions).values({...definition,id:competingService,title:'Independent competing private wallet service',active_orders:0,max_concurrency:1})
+      const competingShare=await makeReviewedPrivateShare({...f,serviceId:competingService},orgId,teamId)
+      const competing=structuredClone(exactProposal)
+      competing.client_reference=crypto.randomUUID();competing.mandate.client_reference=crypto.randomUUID()
+      competing.max_daily='3.00';competing.max_monthly='3.00';competing.max_lifetime='3.00'
+      competing.max_lifetime_fee_token_cost_units='20000'
+      if(!('provider_share_ids' in competing))throw Error('Private wallet review must bind its original share')
+      competing.provider_share_ids=[competingShare.id]
+      if(!competing.route_request)throw Error('Missing original private request')
+      competing.route_request.client_reference=crypto.randomUUID()
+      const another=(await accountClient.proposeOrganizationRoute(orgId,competing)).authorization
+      await reviewerClient.approveOrganizationRoute(orgId,another.id,{version:competing.version,client_reference:crypto.randomUUID(),authority_hash:another.authority_hash,approve:true})
+      const competingFile=join(directory,`${another.id}.wallet-approval.json`),competingState=join(directory,`${another.id}.wallet-state`)
+      await writeFile(competingFile,JSON.stringify({...f.approval,route_id:another.route_id,mandate_id:another.mandate.id,terms_hash:another.mandate.terms_hash}),{mode:0o600})
+      const prepared=JSON.parse((await run(process.execPath,[buyerArgs[0],competingFile,competingState,'--prepare-only'],{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      assert.equal(prepared.state,'prepared')
+      const secondary=(await journal({...f,routeId:another.route_id,stateDirectory:competingState})).value
+      const collision=await fetch(`${baseUrl}/api/trades/${secondary.trade_id}/fund/mpp/claim`,{method:'POST',headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({intent_id:secondary.intent.id,mandate_id:another.mandate.id,buyer_operation_id:secondary.operation_id,serialized_transaction:secondary.serialized_transaction,}),signal:AbortSignal.timeout(15000)})
+      assert.equal(collision.status,409);const denied=await collision.json();assert.equal(denied.code??denied.error_code,'BUYER_WALLET_PAYMENT_UNRECONCILED')
+      assert.equal(broadcastCalls,count)
+      assert.equal((await db.select().from(schema.buyer_mpp_payment_claims).where(eq(schema.buyer_mpp_payment_claims.mandate_id,another.mandate.id))).length,0)
+      const cancelled=await fetch(`${baseUrl}/api/routes/${another.route_id}`,{method:'DELETE',headers:{Authorization:`Bearer ${f.apiKey}`},signal:AbortSignal.timeout(15000)})
+      assert.equal(cancelled.status,200)
+      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,competingService)))[0].active_orders,1,'uncertain signed checkout retains its own capacity after cancellation')
+      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.serviceId)))[0].active_orders,1)
+    }
     if(revoked) {
-      const closed=await python(reviewerKey,'revoke_organization_route',[orgId,a.id]);assert.equal(closed.authorization.state,'revoked')
-      assert.equal((await approveOriginal()).authorization.state,'revoked')
-      const held=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+      let raceReached=false,simulations=0
+      if(privateShare&&sendRace) {
+        realRpcHook=async(method,result)=>{
+          // L1 wallet inspection follows the first valid claim. Tempo's empty
+          // transfer simulation occurs inside the guarded SDK send method.
+          if(!raceReached&&method==='eth_call'&&result==='0x'&&++simulations===5) {
+            raceReached=true;await (await import('@/lib/organization-private-providers')).revokePrivateProvider(privateShare.id,f.sellerOwnerId)
+          }
+        }
+      } else if(privateShare)await (await import('@/lib/organization-private-providers')).revokePrivateProvider(privateShare.id,f.sellerOwnerId)
+      else {const closed=await python(reviewerKey,'revoke_organization_route',[orgId,a.id]);assert.equal(closed.authorization.state,'revoked')}
+      assert.equal((await approveOriginal()).authorization.state,privateShare?'approved':'revoked')
+      let held
+      try {held=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)}
+      catch(error) {if(!sendRace||!raceReached)throw error;realRpcHook=null;held=JSON.parse((await run(process.execPath,buyerArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)}
+      realRpcHook=null
+      if(sendRace) {assert.equal(raceReached,true,'revocation must occur during the final real SDK simulation');assert.equal(simulations,5)}
       assert.equal(held.state,'held_recover_existing_payment');assert.equal(held.tx_hash,original.value.tx_hash);assert.equal(broadcastCalls,count)
       // Model the exact original bytes arriving late after authority closes.
       await chain.client.sendRawTransaction({serializedTransaction:original.value.serialized_transaction})
@@ -1676,14 +1788,21 @@ async function enterpriseRouteOnOwnedTempo(revoked: boolean) {
       assert.equal((await db.select().from(schema.route_receipts).where(eq(schema.route_receipts.route_id,f.routeId))).length,1)
       assert.equal((await reviewerClient.revokeOrganizationRoute(orgId,a.id)).authorization.state,'revoked')
       assert.equal((await approveOriginal()).authorization.state,'revoked')
+      if(privateShare) {
+        await (await import('@/lib/organization-private-providers')).revokePrivateProvider(privateShare.id,f.sellerOwnerId)
+        const recoveredResult=JSON.parse((await run(process.execPath,routeArgs,{cwd:resolve('.'),env:buyerEnvironment,timeout:30_000})).stdout)
+        assert.equal(recoveredResult.state,'completed');assert.deepEqual(recoveredResult.receipt,outcome.receipt)
+        assert.equal(broadcastCalls,count+2,'original backed result recovery must not send another payment')
+      }
     }
     // A real refund or settlement cannot replenish the same buyer's original gross.
-    const nextInput=structuredClone(proposalInput)
+    const nextInput=structuredClone(exactProposal)
     nextInput.client_reference=crypto.randomUUID();nextInput.mandate.client_reference=crypto.randomUUID()
     if(!nextInput.route_request)throw Error('Missing original embedded review request')
     nextInput.route_request.client_reference=crypto.randomUUID()
+    if(privateShare&&'provider_share_ids' in nextInput)nextInput.provider_share_ids=[(await makeReviewedPrivateShare(f,orgId,teamId)).id]
     const next=(await accountClient.proposeOrganizationRoute(orgId,nextInput)).authorization
-    await reviewerClient.approveOrganizationRoute(orgId,next.id,{version:2,client_reference:crypto.randomUUID(),authority_hash:next.authority_hash,approve:true})
+    await reviewerClient.approveOrganizationRoute(orgId,next.id,{version:nextInput.version,client_reference:crypto.randomUUID(),authority_hash:next.authority_hash,approve:true})
     const previousBroadcast=broadcastCalls
     const exhausted=await fetch(`${baseUrl}/api/routes/${next.route_id}/execute`,{method:'POST',headers:{Authorization:`Bearer ${f.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({mandate_id:next.mandate.id}),signal:AbortSignal.timeout(15000)})
     assert.equal(exhausted.status,409);assert.equal((await exhausted.json()).error_code,'ORGANIZATION_ROUTE_GROSS_LIMIT')
@@ -1716,3 +1835,22 @@ async function isolatedEnterpriseTempo(revoked:boolean) {
   const result=await promisify(execFile)(process.execPath,['--conditions=react-server','--import','tsx','--test','--test-reporter=spec','--test-name-pattern='+pattern,'tests/api/buyer-worker.test.ts'],{cwd:process.cwd(),env:environment,timeout:90_000})
   assert.match(result.stdout,/ℹ fail 0/);assert.match(result.stdout,/ℹ pass 1/)
 }
+
+for(const rail of ['L1','Tempo'] as const)for(const revoked of [false,true])test(`private-provider ${rail} routed purchase ${revoked?'revoked share refunds exact late bytes':'settles across buyer/provider restart'} with original consent, gross and fees`,{
+  skip:rail==='L1'?!process.env.CLAWDMARKET_TEST_ANVIL_BINARY:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY,timeout:90_000,
+},async()=>{
+  if(process.env.CLAWDMARKET_TEST_PRIVATE_ROUTE_PROCESS==='true')return rail==='L1'?enterpriseRouteOnOwnedL1(revoked,true):enterpriseRouteOnOwnedTempo(revoked,true)
+  const environment:NodeJS.ProcessEnv={...process.env,CLAWDMARKET_TEST_PRIVATE_ROUTE_PROCESS:'true'};delete environment.NODE_TEST_CONTEXT
+  const pattern=`^private-provider ${rail} routed purchase ${revoked?'revoked share':'settles across'}`
+  const result=await promisify(execFile)(process.execPath,['--conditions=react-server','--import','tsx','--test','--test-reporter=spec','--test-name-pattern='+pattern,'tests/api/buyer-worker.test.ts'],{cwd:process.cwd(),env:environment,timeout:90_000})
+  assert.match(result.stdout,/ℹ fail 0/);assert.match(result.stdout,/ℹ pass 1/)
+})
+
+for(const rail of ['L1','Tempo'] as const)test(`private-provider ${rail} consent revoked during wallet or SDK simulation prevents actual broadcast and preserves the exact late refund`,{
+  skip:rail==='L1'?!process.env.CLAWDMARKET_TEST_ANVIL_BINARY:!process.env.CLAWDMARKET_TEST_TEMPO_BINARY,timeout:90_000,
+},async()=>{
+  if(process.env.CLAWDMARKET_TEST_PRIVATE_SEND_RACE_PROCESS==='true')return rail==='L1'?enterpriseRouteOnOwnedL1(true,true,true):enterpriseRouteOnOwnedTempo(true,true,true)
+  const environment:NodeJS.ProcessEnv={...process.env,CLAWDMARKET_TEST_PRIVATE_SEND_RACE_PROCESS:'true'};delete environment.NODE_TEST_CONTEXT
+  const result=await promisify(execFile)(process.execPath,['--conditions=react-server','--import','tsx','--test','--test-reporter=spec','--test-name-pattern='+`^private-provider ${rail} consent revoked`,'tests/api/buyer-worker.test.ts'],{cwd:process.cwd(),env:environment,timeout:90_000})
+  assert.match(result.stdout,/ℹ fail 0/);assert.match(result.stdout,/ℹ pass 1/)
+})

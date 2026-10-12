@@ -82,3 +82,24 @@ for(const width of [1440,390])test(`Tempo reviewer inspects fee-token units and 
   expect(commands).toHaveLength(2);expect(commands[1]).toEqual(commands[0]);expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
   expect((await page.evaluate(()=>Object.values(sessionStorage))).join('')).not.toContain('PRIVATE_REVIEW_SOURCE')
 })
+
+for(const version of [3,4])for(const width of [1440,390])test(`private-provider v${version} reviewer sees original two-owner consent and recovers its exact decision at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:1000})
+  const base=authorization('reviewer'),share={id:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',service_id:base.route.candidates[0].service_id,organization_owner_id:'PRIVATE_ORGANIZATION_OWNER',provider_owner_id:'PRIVATE_PROVIDER_OWNER',team_id:null,expires_at:new Date(Date.now()+3600000).toISOString(),consent_hash:'c'.repeat(64)}
+  const a={...base,version,terms:{...base.terms,provider_shares:[share],...(version===4?{max_lifetime_fee_token_cost_units:'10000'}:{})},mandate:version===3?base.mandate:{...base.mandate,terms:{...base.mandate.terms,payment:{rail:'mpp',chain_id:4217,token_address:'0x20c0000000000000000000000000000000000000',payer_address:`0x${'11'.repeat(20)}`,treasury_address:`0x${'99'.repeat(20)}`,minimum_token_reserve_units:'5000000',fee_token_address:'0x20c0000000000000000000000000000000000000',minimum_fee_token_reserve_units:'1000000',max_fee_token_cost_units:'10000'}}}}
+  const commands:unknown[]=[];let lose=true,denied=false
+  await page.route(`**${api}**`,async route=>{
+    if(denied)return route.fulfill({status:404,json:{error_code:'ORGANIZATION_ROUTE_NOT_FOUND'}})
+    if(route.request().method()==='POST') {const command=route.request().postDataJSON();expect(command.version).toBe(version);commands.push(command);if(lose){lose=false;return route.abort('failed')}a.state='approved'}
+    await route.fulfill({json:{authorization:a}})
+  })
+  await page.goto(url)
+  await expect(page.getByRole('heading',{name:'Original private provider consent'})).toBeVisible()
+  await expect(page.getByText(share.provider_owner_id,{exact:true})).toBeVisible();await expect(page.getByText(share.organization_owner_id,{exact:true})).toBeVisible();await expect(page.getByText(share.consent_hash,{exact:true})).toBeVisible()
+  if(version===4)await expect(page.getByText('Lifetime fee ceiling (pathUSD base units)',{exact:true})).toBeVisible()
+  await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Approve original route'}).click();await expect(page.getByRole('main').getByRole('alert')).toBeVisible()
+  await page.reload();await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Approve original route'}).click();await expect(page.getByText('Status: approved')).toBeVisible()
+  expect(commands).toHaveLength(2);expect(commands[1]).toEqual(commands[0]);expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
+  const saved=(await page.evaluate(()=>Object.values(sessionStorage))).join('');expect(saved).not.toContain(share.provider_owner_id);expect(saved).not.toContain(share.id);expect(saved).not.toContain('PRIVATE_REVIEW_SOURCE')
+  denied=true;await page.getByRole('button',{name:'Refresh original review'}).click();await expect(page.getByRole('heading',{name:'Original private provider consent'})).toHaveCount(0);await expect(page.getByText(share.provider_owner_id,{exact:true})).toHaveCount(0)
+})

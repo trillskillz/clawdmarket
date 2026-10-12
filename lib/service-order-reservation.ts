@@ -81,7 +81,7 @@ function sameRequest(prior: NonNullable<Awaited<ReturnType<typeof existingServic
   const { request, principal, serviceId } = args
   if(args.organizationSpendingEvidence && prior.order.organization_spending_account_id !== args.organizationSpendingEvidence.accountId) return false
   return (prior.order.purchasing_approval_id ?? null) === (request.purchasing_approval_id ?? null)
-    && (prior.order.private_provider_share_id ?? null) === (request.provider_share_id ?? null)
+    && (Boolean(args.routeId && args.mandateId && !request.provider_share_id) || (prior.order.private_provider_share_id ?? null) === (request.provider_share_id ?? null))
     && prior.order.buyer_id === principal.userId && prior.order.service_id === serviceId
     && prior.order.provider_requirements_json === JSON.stringify(request.provider_requirements ?? {})
     && prior.order.objective === request.objective && prior.order.input_json === JSON.stringify(request.input)
@@ -134,7 +134,12 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       throw new ServiceOrderReservationError('ROUTE_STALE_PROVIDER', 'Service provider changed after route eligibility was checked')
     }
     if (!service || service.status !== 'active' || service.visibility === 'public' && !await readWithLocalContentionRecovery(source => isPublicMarketplaceSeller(service.seller_id, source))) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is not active')
-    await readWithLocalContentionRecovery(source => privateProviderAccess(service, principal.userId, request.provider_share_id, source))
+    const { organizationRoutePrivateShare } = await import('./organization-route-authorizations')
+    const resolvePrivateShare = async (source: NonNullable<Parameters<typeof privateProviderAccess>[3]>) => routeId && args.mandateId
+      ? await organizationRoutePrivateShare(source,routeId,args.mandateId,service,principal.userId)
+      : await privateProviderAccess(service,principal.userId,request.provider_share_id,source)
+    const preliminaryShare = await readWithLocalContentionRecovery(resolvePrivateShare)
+    if (service.visibility !== 'public' && !preliminaryShare) throw new ServiceOrderReservationError('PRIVATE_SERVICE_NOT_FOUND','Private route requires independently reviewed consent',404)
     if (!reusableServiceSellerWritesEnabled(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is outside the active canary', 409)
     const contract = serviceContractReadiness(service)
     if (!contract.executionModeReady) throw new ServiceOrderReservationError('EXECUTION_MODE_UNSUPPORTED', 'Service execution mode is unsupported')
@@ -177,7 +182,8 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     } : request.purchasing_approval_id || request.provider_share_id || args.organizationSpendingEvidence ? purchasingTransaction : db.transaction.bind(db)
     const reserveOnce = () => transaction(async (tx) => {
       const now = new Date()
-      const privateShare = await privateProviderAccess(service, principal.userId, request.provider_share_id, tx)
+      const privateShare = await resolvePrivateShare(tx)
+      if (service.visibility !== 'public' && !privateShare) throw new ServiceOrderReservationError('PRIVATE_SERVICE_NOT_FOUND','Private route requires independently reviewed consent',404)
       const transactionFeeRecipient = internal ? feeRecipient ?? await ensureAdminFeeRecipient(tx) : null
       let retrySpendMinor = 0
       let agreedCapabilities = storedServiceCapabilities(service.capabilities)

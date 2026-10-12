@@ -4,18 +4,18 @@ import Link from 'next/link'
 import styles from '@/app/organizations/enterprise.module.css'
 
 type Review = {
-  id:string; version?:1|2; organization_id:string; authority_hash:string; state:'pending'|'approved'|'revoked'; viewer_role:'owner'|'reviewer'
+  id:string; version?:1|2|3|4; organization_id:string; authority_hash:string; state:'pending'|'approved'|'revoked'; viewer_role:'owner'|'reviewer'
   buyer_id:string; team_id:string|null; cost_center:string
   route:{objective:string; input:Record<string,unknown>; required_capabilities:string[]; candidates:Array<{
     service_id:string; pricing:{estimated_total:string}; explanation:string[]; eligibility:{approval_required?:boolean}
   }>}
-  terms:{max_daily_minor:number; max_monthly_minor:number; max_lifetime_minor:number; max_lifetime_gas_cost_wei?:string;max_lifetime_fee_token_cost_units?:string}
+  terms:{max_daily_minor:number; max_monthly_minor:number; max_lifetime_minor:number; provider_shares?:Array<{id:string;service_id:string;organization_owner_id:string;provider_owner_id:string;team_id:string|null;expires_at:string;consent_hash:string}>;max_lifetime_gas_cost_wei?:string;max_lifetime_fee_token_cost_units?:string}
   mandate:{id:string; expires_at:string; terms_hash:string; terms:{max_aggregate:string; max_per_execution:string;
     max_attempts:number; max_retry_budget:string; payment:{rail?:'evm'|'mpp';chain_id:number; token_address:string; payer_address:string;
       treasury_address:string; minimum_token_reserve_units:string; minimum_native_reserve_wei?:string; max_gas_cost_wei?:string;fee_token_address?:string;minimum_fee_token_reserve_units?:string;max_fee_token_cost_units?:string}}}
   use:{amount_minor:number;maximum_gas_cost_wei:string;tempo_fee?:{maximum_fee_token_cost_units:string}}|null
 }
-type Decision={version:1|2;client_reference:string;authority_hash:string;approve:true}
+type Decision={version:1|2|3|4;client_reference:string;authority_hash:string;approve:true}
 const usd=(minor:number)=>`$${(minor/100).toFixed(2)} USD`
 
 export default function OrganizationRouteReview({params}:{params:Promise<{id:string;authorizationId:string}>}) {
@@ -87,6 +87,11 @@ export default function OrganizationRouteReview({params}:{params:Promise<{id:str
         <p>Refunds and cancellation do not replenish gross or reserved fee exposure.</p>
         {review.use&&<p>Original gross consumed: {usd(review.use.amount_minor)}. {payment.rail==='mpp'?`Original reserved fee: ${review.use.tempo_fee?.maximum_fee_token_cost_units} pathUSD base units.`:`Original reserved gas: ${review.use.maximum_gas_cost_wei} wei.`}</p>}
       </section>
+      {review.terms.provider_shares&&<section aria-label="Original private provider consent"><h2>Original private provider consent</h2>
+        <p>Both owners accepted these exact shares. Consent is checked again before checkout and fresh payment.</p>
+        {review.terms.provider_shares.map(share=><article key={share.id}><h3>Service {share.service_id}</h3>
+          <dl>{[['Share',share.id],['Provider owner',share.provider_owner_id],['Organization owner',share.organization_owner_id],['Shared department',share.team_id??'Organization'],['Share expires (UTC)',share.expires_at],['Consent fingerprint',share.consent_hash]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+        </article>)}</section>}
       <section aria-label="Frozen providers"><h2>Frozen providers</h2>{review.route.candidates.map(candidate=><article key={candidate.service_id}>
         <h3>Service {candidate.service_id}</h3><p>Quoted total: ${candidate.pricing.estimated_total} USD</p>
         {candidate.eligibility.approval_required&&<p>Independent purchasing approval required.</p>}

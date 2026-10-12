@@ -44,11 +44,14 @@ type OrganizationRouteMandate = Omit<RouteMandateInput,'payment'|'max_attempts'|
 export type OrganizationRouteProposal = OrganizationRouteProposalBase & (
   {version:1;max_lifetime_gas_cost_wei:string;mandate:OrganizationRouteMandate&{payment:Extract<RouteMandatePayment,{rail:'evm'}>&{chain_id:1}}}
   | {version:2;max_lifetime_fee_token_cost_units:string;mandate:OrganizationRouteMandate&{payment:Extract<RouteMandatePayment,{rail:'mpp'}>&{chain_id:4217}}}
+  | {version:3;provider_share_ids:string[];route_id?:never;max_lifetime_gas_cost_wei:string;mandate:OrganizationRouteMandate&{payment:Extract<RouteMandatePayment,{rail:'evm'}>&{chain_id:1}}}
+  | {version:4;provider_share_ids:string[];route_id?:never;max_lifetime_fee_token_cost_units:string;mandate:OrganizationRouteMandate&{payment:Extract<RouteMandatePayment,{rail:'mpp'}>&{chain_id:4217}}}
 )
-export type OrganizationRouteAuthorization = {id:string;version:1|2;organization_id:string;route_id:string;buyer_id:string;team_id:string|null;cost_center:string;reviewer_account_id:string;
+export type OrganizationRouteProviderConsent = {id:string;service_id:string;organization_id:string;organization_owner_id:string;provider_owner_id:string;provider_agent_id:string;team_id:string|null;offer_reference:string;accept_reference:string;request_hash:string;accept_hash:string;expires_at:string;accepted_at:string;consent_hash:string}
+export type OrganizationRouteAuthorization = {id:string;version:1|2|3|4;organization_id:string;route_id:string;buyer_id:string;team_id:string|null;cost_center:string;reviewer_account_id:string;
   viewer_role:'owner'|'reviewer';review_url:string;client_reference:string;authority_hash:string;state:'pending'|'approved'|'revoked';approved_at:string|null;revoked_at:string|null;
-  decision:{version:1|2;client_reference:string;authority_hash:string;approve:true}|null;
-  route:RoutePlan&{route_hash:string};mandate:RouteMandate;terms:{route_hash:string;candidate_hash:string;mandate_terms_hash:string;max_daily_minor:number;max_monthly_minor:number;max_lifetime_minor:number;services:Array<{id:string;seller_id:string;contract_hash:string}>}&({max_lifetime_gas_cost_wei:string}|{version:2;max_lifetime_fee_token_cost_units:string});
+  decision:{version:1|2|3|4;client_reference:string;authority_hash:string;approve:true}|null;
+  route:RoutePlan&{route_hash:string};mandate:RouteMandate;terms:{route_hash:string;candidate_hash:string;mandate_terms_hash:string;max_daily_minor:number;max_monthly_minor:number;max_lifetime_minor:number;services:Array<{id:string;seller_id:string;contract_hash:string}>}&({max_lifetime_gas_cost_wei:string}|{version:2;max_lifetime_fee_token_cost_units:string}|{version:3;provider_shares:OrganizationRouteProviderConsent[];max_lifetime_gas_cost_wei:string}|{version:4;provider_shares:OrganizationRouteProviderConsent[];max_lifetime_fee_token_cost_units:string});
   use:{authorization_id:string;order_id:string;trade_id:string;authority_hash:string;amount_minor:number;maximum_gas_cost_wei:string;created_at:string;tempo_fee?:{authorization_id:string;authority_hash:string;chain_id:4217;fee_token_address:string;maximum_fee_token_cost_units:string}}|null}
 export type RouteFundingStep = { id: string; mandate_id: string; route_id: string; order_id: string; trade_id: string; amount_minor: number; terms_hash: string;
   state: 'reserved' | 'funded' | 'rejected'; retry_operation_id?: string; previous_trade_id?: string; attempt_id?: string; created_at: string; updated_at: string }
@@ -397,7 +400,7 @@ export class ClawdMarketClient {
     return this.enterpriseRequest<{authorization:OrganizationRouteAuthorization}>('inspect_organization_route',{id:organizationId,authorizationId},undefined,options)
   }
   /** Persist the exact hash/reference before submission; no mutation is retried automatically. */
-  approveOrganizationRoute(organizationId:string,authorizationId:string,input:{version:1|2;client_reference:string;authority_hash:string;approve:true},options?:RequestOptions){
+  approveOrganizationRoute(organizationId:string,authorizationId:string,input:{version:1|2|3|4;client_reference:string;authority_hash:string;approve:true},options?:RequestOptions){
     return this.enterpriseRequest<{authorization:OrganizationRouteAuthorization;idempotent:boolean}>('approve_organization_route',{id:organizationId,authorizationId},input,options)
   }
   revokeOrganizationRoute(organizationId:string,authorizationId:string,options?:RequestOptions){

@@ -22,6 +22,8 @@ import { providerRequirementsSchema, providerRequirementFailure,reputationRequir
 import { backedCapabilityCounts, capabilityEvidence } from './provider-evidence'
 import { loadReputationV2Records } from './reputation-v2'
 import { rankEligibleReputationCandidates, reputationSuggestions } from './reputation-ranking'
+import { privateProviderAccess } from './organization-private-providers'
+import { type PurchasingSource } from './organization-purchasing-transaction'
 import type { ReputationV2 } from './reputation-v2-model'
 
 export const routePlanInput = z.object({
@@ -49,6 +51,7 @@ export function normalizedCapabilities(input: string[]) {
 
 export type RouteCandidate = {
   service_id: string
+  private_provider?: true
   reputation_v2?: ReputationV2[]
   reputation_ranking?: { policy_version: string; mode: string; segment: 'supported' | 'unproven'; position: number; model_lower_quantile: number | null; calibrated: false }
   seller_agent_id: string | null
@@ -71,22 +74,25 @@ export async function planRoute(input: NormalizedRouteRequest, buyerId: string) 
 }
 
 /** Private owner proposal only. Pending approval is visible and never spending evidence. */
-export async function planOrganizationRouteForReview(input: NormalizedRouteRequest, buyerId: string, organizationId: string, ownerId: string) {
-  const [organization] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1)
+export async function planOrganizationRouteForReview(input: NormalizedRouteRequest, buyerId: string, organizationId: string, ownerId: string, shareIds?: string[], source: PurchasingSource = db) {
+  const [organization] = await source.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1)
   const agentId = buyerId.startsWith('user_agent_') ? buyerId.slice('user_agent_'.length) : ''
-  const [link] = await db.select().from(agent_owners).where(and(eq(agent_owners.agentId, agentId), eq(agent_owners.userId, ownerId))).limit(1)
-  const [assignment] = await db.select().from(organization_agent_assignments).where(eq(organization_agent_assignments.agent_id, agentId)).limit(1)
+  const [link] = await source.select().from(agent_owners).where(and(eq(agent_owners.agentId, agentId), eq(agent_owners.userId, ownerId))).limit(1)
+  const [assignment] = await source.select().from(organization_agent_assignments).where(eq(organization_agent_assignments.agent_id, agentId)).limit(1)
   if (!organization || organization.owner_account_id !== ownerId || !link || assignment?.organization_id !== organizationId) {
     const { PurchasingError } = await import('./organization-purchasing-transaction')
     throw new PurchasingError('ORGANIZATION_NOT_FOUND', 404)
   }
-  return planCandidates(input, buyerId, true)
+  return planCandidates(input, buyerId, true, shareIds, source)
 }
 
-async function planCandidates(input: NormalizedRouteRequest, buyerId: string, review: boolean) {
+async function planCandidates(input: NormalizedRouteRequest, buyerId: string, review: boolean, shareIds?: string[], source: PurchasingSource = db) {
   const capabilities = normalizedCapabilities(input.required_capabilities)
   if (!reusableServiceBuyerOrdersEnabled(buyerId)) return { capabilities, candidates: [] as RouteCandidate[], examined: 0, truncated: false }
-  const rows = await db.select().from(service_definitions).where(and(
+  const rows = shareIds ? await source.select().from(service_definitions).where(and(
+    eq(service_definitions.status,'active'),eq(service_definitions.visibility,'organization'),
+    sql`EXISTS (SELECT 1 FROM organization_provider_shares s WHERE s.service_id=${service_definitions.id} AND s.id IN (${sql.join(shareIds.map(id=>sql`${id}`),sql`,`)}))`,
+  )).orderBy(service_definitions.id).limit(501) : await source.select().from(service_definitions).where(and(
     eq(service_definitions.status, 'active'), eq(service_definitions.visibility, 'public'),
     sql`(${service_definitions.seller_id} NOT GLOB 'user_agent_*' OR EXISTS (
       SELECT 1 FROM agents a WHERE ('user_agent_' || a.id) = ${service_definitions.seller_id}
@@ -168,6 +174,11 @@ async function planCandidates(input: NormalizedRouteRequest, buyerId: string, re
     && (!buyerPolicy?.policy.approved_payment_rails || buyerPolicy.policy.approved_payment_rails.includes(rail)))
   const candidates: RouteCandidate[] = []
   for (const service of rows.slice(0, 500)) {
+    if (shareIds) {
+      const shares = await source.all<{id:string}>(sql`SELECT id FROM organization_provider_shares WHERE service_id=${service.id} AND id IN (${sql.join(shareIds.map(id=>sql`${id}`),sql`,`)})`)
+      if (shares.length !== 1) continue
+      await privateProviderAccess(service,buyerId,String(shares[0].id),source)
+    }
     if (!reusableServiceSellerWritesEnabled(service.seller_id)) continue
     const contract = serviceContractReadiness(service)
     if (!contract.ready) continue
@@ -225,7 +236,7 @@ async function planCandidates(input: NormalizedRouteRequest, buyerId: string, re
       + 0.1 * capacityScore + 0.05 * components.verification + 0.05 * backedExecution
       - 0.05 * providerFailurePenalty) * 10_000) / 10_000
     candidates.push({
-      service_id: service.id, seller_agent_id: agentId,
+      service_id: service.id, seller_agent_id: agentId, ...(shareIds?{private_provider:true as const}:{}),
       pricing: { model: 'fixed', amount: servicePrice(service.price_minor), currency: 'USD', estimated_total: servicePrice(totalMinor) },
       estimated_latency_seconds: service.estimated_latency_seconds, payment_rail: rail,
       verification_methods: servicePolicy.methods,
@@ -272,16 +283,18 @@ async function planCandidates(input: NormalizedRouteRequest, buyerId: string, re
   return { capabilities, candidates: ranked.slice(0, 20), examined: Math.min(rows.length, 500), truncated, reputation_shadow, reputation_ranking }
 }
 
-export function routePlanDto(plan: typeof route_plans.$inferSelect) {
+export function routePlanDto(plan: typeof route_plans.$inferSelect, privateReview = false) {
+  const candidates = JSON.parse(plan.candidates_json) as RouteCandidate[]
+  const redact = !privateReview && candidates.some(candidate=>candidate.private_provider===true)
   return {
     id: plan.id, client_reference: plan.client_reference, objective: plan.objective,
     required_capabilities: JSON.parse(plan.required_capabilities) as string[],
-    input: JSON.parse(plan.input_json) as Record<string, unknown>,
+    input: redact ? {} : JSON.parse(plan.input_json) as Record<string, unknown>,
     max_budget: { amount: servicePrice(plan.max_budget_minor), currency: plan.currency },
     deadline_seconds: plan.deadline_seconds,
     verification: JSON.parse(plan.verification_policy), payment_policy: JSON.parse(plan.payment_policy),
-    provider_requirements: JSON.parse(plan.provider_requirements_json),
-    retry_policy: JSON.parse(plan.retry_policy), candidates: JSON.parse(plan.candidates_json) as RouteCandidate[],
+    provider_requirements: redact ? {} : JSON.parse(plan.provider_requirements_json),
+    retry_policy: JSON.parse(plan.retry_policy), candidates: redact ? [] : candidates,
     state: plan.state, service_order_id: plan.service_order_id, created_at: plan.created_at, expires_at: plan.expires_at,
   }
 }

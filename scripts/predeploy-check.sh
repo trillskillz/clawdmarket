@@ -2,6 +2,9 @@
 set -euo pipefail
 
 required_files=(
+  "lib/organization-route-private-consent.ts"
+  "docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDERS.md"
+  "docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_PLAN.md"
   "migrations/2026-10-12-organization-routed-tempo-v2.sql"
   "docs/ORGANIZATION_ROUTED_TEMPO_PLAN.md"
   "app/api/agents/[id]/lineage/route.ts"

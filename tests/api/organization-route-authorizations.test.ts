@@ -373,3 +373,134 @@ test('Tempo SIGKILL before and after original proposal, approval and economic co
     }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited}
   }
 })
+
+async function privateFixture(tempo=false) {
+  const f=tempo?await tempoFixture():await fixture(),providerAgent=crypto.randomUUID(),providerOwner=`private-owner-${f.id}`,seller=`user_agent_${providerAgent}`
+  await db.insert(schema.users).values([{id:providerOwner,name:'Private provider owner',email:`${providerOwner}@test.invalid`,password_hash:'unused'}, {id:seller,name:'Private provider',email:`${seller}@test.invalid`,password_hash:'unused'}])
+  await db.insert(schema.agents).values({id:providerAgent,name:'Private reviewed provider',description:'Private provider consent fixture',visibility:'private',capabilities:'["code-review"]',endpoint:'https://example.invalid',owner_address:'',api_key:'unused'})
+  await db.insert(schema.agent_owners).values({agentId:providerAgent,userId:providerOwner,establishedBy:'test'})
+  await db.insert(schema.payout_addresses).values({user_id:seller,address:treasury})
+  await db.update(schema.service_definitions).set({seller_id:seller,visibility:'organization'}).where(eq(schema.service_definitions.id,f.service))
+  const domain=await import('@/lib/organization-private-providers')
+  const offered=await domain.offerPrivateProvider(f.service,providerOwner,domain.providerOfferInput.parse({version:1,client_reference:crypto.randomUUID(),organization_id:f.id,team_id:f.team,expires_at:new Date(Date.now()+3600_000).toISOString()}))
+  const accepted=await domain.acceptPrivateProvider(f.id,offered.share.id,f.owner,domain.providerAcceptInput.parse({version:1,client_reference:crypto.randomUUID(),request_hash:offered.share.request_hash}))
+  return {...f,seller,providerOwner,providerAgent,share:accepted.share,body:{...f.body,version:tempo?4:3,provider_share_ids:[accepted.share.id],
+    route_request:{...f.body.route_request,provider_requirements:{approved_providers:[seller]}},mandate:{...f.body.mandate,approved_providers:[seller]}}}
+}
+for(const tempo of [false,true]) {
+  test(`private v${tempo?4:3} review derives exact consent internally, denies public/direct credentials and reserves once under races`,async()=>{
+    const f=await privateFixture(tempo),a=await propose(f)
+    assert.equal(a.version,tempo?4:3);assert.equal(a.terms.provider_shares[0].id,f.share.id)
+    assert.equal(a.terms.provider_shares[0].accept_hash,f.share.accept_hash)
+    assert.equal(a.terms.provider_shares[0].provider_owner_id,f.providerOwner)
+    const routeRead=await (await import('@/app/api/routes/[id]/route')).GET(request(`/api/routes/${f.routeId}`,f.buyer,'GET'),{params:Promise.resolve({id:f.routeId})})
+    assert.equal(routeRead.status,200);const redacted=await routeRead.json();assert.deepEqual(redacted.route.candidates,[]);assert.deepEqual(redacted.route.input,{});assert.deepEqual(redacted.route.provider_requirements,{})
+    assert.doesNotMatch(JSON.stringify(redacted),new RegExp(f.service))
+    const readKey=await (await import('@/lib/agent-named-credentials')).createNamedAgentCredential({agentId:f.agent,name:'Private route read-only regression',scopes:['agent:read'],actorCredentialId:null})
+    assert.equal(readKey.kind,'created');if(readKey.kind!=='created')throw Error('Read fixture unavailable')
+    const deniedMandate=await (await import('@/app/api/routes/[id]/mandate/route')).GET(new NextRequest(`http://localhost/api/routes/${f.routeId}/mandate`,{headers:{Authorization:`Bearer ${readKey.api_key}`}}),{params:Promise.resolve({id:f.routeId})})
+    assert.equal(deniedMandate.status,404);assert.doesNotMatch(await deniedMandate.text(),new RegExp(f.seller))
+    const ordinary=await (await import('@/lib/route-planning')).planRoute((await import('@/lib/route-planning')).routePlanInput.parse(f.body.route_request),f.buyer)
+    assert.equal(ordinary.candidates.length,0,'accepted direct share must not grant ordinary route discovery')
+    for(const actor of [f.other,f.buyer,f.providerOwner]) {
+      const r=await item.GET(request(`${f.prefix}/${a.id}`,actor,'GET'),ctx(f,a.id));assert.ok([401,404].includes(r.status));assert.doesNotMatch(await r.text(),new RegExp(f.share.id))
+    }
+    const wrong=await approval.POST(request(`${f.prefix}/${a.id}/approval`,f.reviewer,'POST',{version:tempo?2:1,client_reference:crypto.randomUUID(),authority_hash:a.authority_hash,approve:true}),ctx(f,a.id))
+    assert.equal((await wrong.json()).error_code,'ORGANIZATION_ROUTE_DECISION_VERSION_MISMATCH')
+    await approve(f,a)
+    const {reserveServiceOrder}=await import('@/lib/service-order-reservation')
+    await assert.rejects(()=>reserveServiceOrder({serviceId:f.service,principal:{userId:f.buyer,agentId:f.agent,kind:'registered-agent',usesCookieAuth:false},routeId:f.routeId,mandateId:a.mandate.id,request:{client_reference:crypto.randomUUID(),objective:a.route.objective,input:a.route.input,payment_rail:tempo?'mpp':'evm',provider_share_id:f.share.id}}),/Approval is for a direct service order/)
+    const results=await Promise.all([run(f,a.mandate.id),run(f,a.mandate.id)])
+    assert.deepEqual(results.map(r=>r.status).sort(),[200,201])
+    const [one,two]=await Promise.all(results.map(r=>r.json()));assert.equal(one.order.id,two.order.id)
+    const [order]=await db.select().from(schema.service_orders).where(eq(schema.service_orders.id,one.order.id));assert.equal(order.private_provider_share_id,f.share.id)
+    assert.equal((await db.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,a.id))).length,1)
+    assert.equal((await (await import('@/lib/service-funding-eligibility')).serviceFundingEligibility(one.trade)),null)
+    await (await import('@/lib/organization-private-providers')).revokePrivateProvider(f.share.id,f.providerOwner)
+    assert.equal((await (await import('@/lib/service-funding-eligibility')).serviceFundingEligibility(one.trade)),'PROVIDER_SHARE_INACTIVE')
+    assert.equal((await item.GET(request(`${f.prefix}/${a.id}`,f.owner,'GET'),ctx(f,a.id))).status,200,'original private review remains recoverable')
+  })
+  test(`private v${tempo?4:3} proposal/approval/reservation refuses missing or changed original consent, owners, expiry and department`,async()=>{
+    for(const phase of ['proposal','approval','reservation'] as const)for(const mutation of ['consent','providerOwner','organizationOwner','expiry','department','service','revoke'] as const) {
+      const f=await privateFixture(tempo),a=phase==='proposal'?null:await propose(f)
+      if(phase==='reservation')await approve(f,a!)
+      if(mutation==='consent')await db.update(schema.organization_provider_shares).set({accept_hash:'a'.repeat(64)}).where(eq(schema.organization_provider_shares.id,f.share.id))
+      if(mutation==='providerOwner')await db.delete(schema.agent_owners).where(eq(schema.agent_owners.agentId,f.providerAgent))
+      if(mutation==='organizationOwner')await db.update(schema.organizations).set({owner_account_id:f.other}).where(eq(schema.organizations.id,f.id))
+      if(mutation==='expiry')await db.update(schema.organization_provider_shares).set({expires_at:new Date(Date.now()+1800_000)}).where(eq(schema.organization_provider_shares.id,f.share.id))
+      if(mutation==='department')await db.update(schema.organization_agent_assignments).set({team_id:null}).where(eq(schema.organization_agent_assignments.agent_id,f.agent))
+      if(mutation==='service')await db.update(schema.service_definitions).set({output_schema:'{"type":"string"}'}).where(eq(schema.service_definitions.id,f.service))
+      if(mutation==='revoke')await (await import('@/lib/organization-private-providers')).revokePrivateProvider(f.share.id,f.providerOwner)
+      const r=phase==='proposal'?await collection.POST(request(f.prefix,f.owner,'POST',f.body),ctx(f))
+        :phase==='approval'?await approval.POST(request(`${f.prefix}/${a!.id}/approval`,f.reviewer,'POST',{version:tempo?4:3,client_reference:crypto.randomUUID(),authority_hash:a!.authority_hash,approve:true}),ctx(f,a!.id))
+        :await run(f,a!.mandate.id)
+      assert.ok(r.status>=400,`${phase}/${mutation}: ${await r.clone().text()}`)
+      assert.equal((await db.select().from(schema.organization_route_uses)).filter(use=>use.authorization_id===a?.id).length,0)
+      assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.service)))[0].active_orders,0)
+    }
+  })
+}
+
+for(const tempo of [false,true])test(`private v${tempo?4:3} SIGKILL before/after proposal, review and reservation recovers exact consent and one obligation`,async()=>{
+  for(const operation of ['propose','approve','reserve']as const)for(const boundary of ['before','after']as const){
+    const f=await privateFixture(tempo);let a:Awaited<ReturnType<typeof propose>>|undefined
+    if(operation!=='propose')a=await propose(f)
+    if(operation==='reserve'){
+      await approve(f,a!)
+      await db.update(schema.route_plans).set({state:'reserving'}).where(eq(schema.route_plans.id,f.routeId))
+      await (await import('@/lib/route-attempts')).beginRouteAttempt(f.routeId,1,f.service)
+    }
+    const body=operation==='propose'?f.body:{version:f.body.version,client_reference:crypto.randomUUID(),authority_hash:a!.authority_hash,approve:true}
+    const marker=join(directory,`${operation}-${boundary}-${f.id}.marker`)
+    const args={operation,boundary,f,a,body}
+    const code=`(async()=>{const a=JSON.parse(process.argv[1]),{writeFile}=await import('node:fs/promises');const stop=async()=>{await writeFile(process.argv[2],'reached');await new Promise(()=>{})};
+      const {db}=await import('./lib/db.ts'),schema=await import('./lib/schema.ts'),{eq}=await import('drizzle-orm');
+      if(a.boundary==='before'){const proto=Object.getPrototypeOf(db.session),original=proto.transaction;proto.transaction=function(fn,c){return original.call(this,async tx=>{const r=await fn(tx);
+        if(a.operation!=='reserve'||(await tx.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,a.a.id))).length)await stop();return r},c)}}
+      const d=await import('./lib/organization-route-authorizations.ts');
+      if(a.operation==='propose')await d.proposeOrganizationRoute(a.f.id,a.f.owner,d.organizationRouteInput.parse(a.body));
+      else if(a.operation==='approve')await d.approveOrganizationRoute(a.f.id,a.a.id,a.f.reviewer,d.organizationRouteDecision.parse(a.body));
+      else {const {reserveServiceOrder}=await import('./lib/service-order-reservation.ts'),{serviceOrderInput}=await import('./lib/service-definitions.ts');await reserveServiceOrder({serviceId:a.f.service,principal:{userId:a.f.buyer,agentId:a.f.agent,kind:'registered-agent',usesCookieAuth:false},routeId:a.f.routeId,attemptNumber:1,externalOnly:true,expectedSellerId:a.f.seller,mandateId:a.a.mandate.id,request:serviceOrderInput.parse({client_reference:'route:'+a.f.routeId+':attempt:1',objective:a.a.route.objective,input:a.a.route.input,payment_rail:a.f.body.mandate.payment.rail,max_total:'2.00',expected_price:'1.00',provider_requirements:a.a.route.provider_requirements})})}
+      await stop()})().catch(e=>{console.error(e);process.exitCode=1})`
+    const child=spawn(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify(args),marker],{cwd:process.cwd(),env:process.env,stdio:['ignore','ignore','pipe']})
+    let errors='';child.stderr.on('data',chunk=>{errors+=chunk});const exited=new Promise<void>((done,reject)=>{child.once('exit',()=>done());child.once('error',reject)})
+    try{
+      let reached=false;for(let wait=0;wait<150;wait++){try{await readFile(marker);reached=true;break}catch{}if(child.exitCode!==null)throw Error(errors);await new Promise(done=>setTimeout(done,100))}
+      assert.equal(reached,true,errors);child.kill('SIGKILL');await exited
+      const grants=await db.select().from(schema.organization_route_authorizations).where(eq(schema.organization_route_authorizations.organization_id,f.id))
+      if(operation==='propose')assert.equal(grants.length,boundary==='before'?0:1)
+      if(operation==='approve')assert.equal(grants[0].state,boundary==='before'?'pending':'approved')
+      if(operation==='reserve'){
+        assert.equal((await db.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,a!.id))).length,boundary==='before'?0:1)
+        assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id,f.service)))[0].active_orders,boundary==='before'?0:1)
+      }
+      const recovered=await collection.POST(request(f.prefix,f.owner,'POST',f.body),ctx(f));assert.ok([200,201].includes(recovered.status),await recovered.clone().text())
+      const original=(await recovered.json()).authorization;f.routeId=original.route_id
+      if(grants.length)assert.equal(original.id,grants[0].id)
+      const decision=operation==='approve'?body:{version:f.body.version,client_reference:grants[0]?.decision_reference??crypto.randomUUID(),authority_hash:original.authority_hash,approve:true}
+      const approved=await approval.POST(request(`${f.prefix}/${original.id}/approval`,f.reviewer,'POST',decision),ctx(f,original.id));assert.ok([200,201].includes(approved.status),await approved.clone().text())
+      const reserved=await run(f,original.mandate.id);assert.ok([200,201].includes(reserved.status),await reserved.clone().text())
+      assert.equal((await db.select().from(schema.organization_route_uses).where(eq(schema.organization_route_uses.authorization_id,original.id))).length,1)
+    }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited}
+  }
+})
+
+for(const tempo of [false,true])test(`private v${tempo?4:3} competing grants enforce shared gross, fee, department and provider capacity limits`,async()=>{
+  for(const limit of ['gross','fee','department','capacity'] as const) {
+    const f=await privateFixture(tempo)
+    const body={...f.body,max_daily:limit==='gross'?'2.00':'4.00',max_monthly:limit==='gross'?'2.00':'4.00',max_lifetime:limit==='gross'?'2.00':'4.00',
+      ...('max_lifetime_gas_cost_wei' in f.body?{max_lifetime_gas_cost_wei:limit==='fee'?'100000000000000':'200000000000000'}:{max_lifetime_fee_token_cost_units:limit==='fee'?'10000':'20000'})}
+    const first={...f,body},second={...f,body:structuredClone(body)}
+    second.body.client_reference=crypto.randomUUID();second.body.route_request.client_reference=crypto.randomUUID();second.body.mandate.client_reference=crypto.randomUUID()
+    const one=await propose(first),two=await propose(second);await approve(first,one);await approve(second,two)
+    if(limit==='department') {const now=new Date();await db.insert(schema.organization_team_budgets).values({team_id:f.team,organization_id:f.id,max_daily_minor:200,max_monthly_minor:200,version:1,created_at:now,updated_at:now})}
+    if(limit==='capacity')await db.update(schema.service_definitions).set({max_concurrency:1}).where(eq(schema.service_definitions.id,f.service))
+    const results=await Promise.all([run(first,one.mandate.id),run(second,two.mandate.id)])
+    assert.equal(results.filter(r=>r.status===201).length,1,limit)
+    assert.equal(results.filter(r=>r.status>=400).length,1,limit)
+    assert.equal((await db.select().from(schema.organization_route_uses)).filter(u=>[one.id,two.id].includes(u.authorization_id)).length,1,limit)
+    const loser=results[0].status>=400?one:two
+    assert.equal((await db.select().from(schema.route_funding_steps).where(eq(schema.route_funding_steps.route_id,loser.route_id))).length,0,limit)
+    assert.equal((await db.select().from(schema.route_payment_mandates).where(eq(schema.route_payment_mandates.id,loser.mandate.id)))[0].reserved_minor,0,limit)
+  }
+})

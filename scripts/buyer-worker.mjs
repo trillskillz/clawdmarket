@@ -177,6 +177,15 @@ export async function runBuyerFunding({ approval, apiKey, stateDirectory = undef
     // No external submission until this marker and the immutable raw bytes are durable.
     journal.submission_started = true; journal.state = 'payment_unknown'; await save()
     signal.throwIfAborted()
+    // Wallet inspection and durable journaling can overlap consent revocation.
+    // Recheck the same signed claim immediately before the actual chain mutation.
+    const finalClaim = await api('POST', `${fundPath}/claim`, { intent_id: journal.intent.id, mandate_id: approval.mandate_id, buyer_operation_id: journal.operation_id,
+      serialized_transaction: journal.serialized_transaction, payer_signature: journal.payer_signature })
+    if (finalClaim.claim?.tx_hash !== journal.tx_hash || finalClaim.claim.intent_id !== journal.intent.id || finalClaim.claim.terms_hash !== approval.terms_hash) fail('BUYER_CLAIM_SCOPE_MISMATCH')
+    if (finalClaim.send_allowed !== true) {
+      if (await reconcile()) return result()
+      return { ...result(), state: 'held_recover_existing_payment' }
+    }
     let submitted
     try { submitted = await adapter.broadcast(journal.serialized_transaction, signal) } catch { fail('BUYER_BROADCAST_UNCERTAIN_RESUME_SAME_PAYMENT') }
     if (submitted?.toLowerCase() !== journal.tx_hash) fail('BUYER_BROADCAST_HASH_MISMATCH')
