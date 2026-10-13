@@ -123,3 +123,15 @@ All 63 cases across purchasing, workflow authorization and reservation eligibili
 pass (31 passes, 32 disposable-chain skips in this focused run); the complete
 gate enables both chain binaries and external isolation before merge.
 Focused log: `/tmp/clawdmarket-route-contention-regressions-final.log`.
+
+A later CI fee race returned storage contention from both workers alongside an
+unavailable local reputation projection. Isolate default local reputation reads
+with the existing read-only helper while preserving caller-supplied transaction
+sources and truthful unavailable projections. Close failed workflow clients before
+the retry delay. Ten repeated two-core fee races pass. A new real SQLite exclusive
+lock regression checks unavailable reputation, resumed committed writes and a
+current projection after release. The final enabled gate now contains 853 Node
+cases; its original five expected skips remain unchanged. Evidence:
+`/tmp/clawdmarket-native-reputation-lock-test.log`,
+`/tmp/clawdmarket-reputation-fee-race-{0,1,2,3,4,5,6,7,8,9}.log` and
+`/tmp/clawdmarket-visual-publication-predeploy.log` (running before merge).

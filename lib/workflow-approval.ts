@@ -151,8 +151,8 @@ async function write<T>(run: (source: Transaction) => Promise<T>): Promise<T> {
       }
       if (!raced) throw error
       if (attempt >= 5) throw new WorkflowApprovalError('WORKFLOW_APPROVAL_STORAGE_BUSY', 503)
-      await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
     } finally { client.close() }
+    await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
   }
 }
 
