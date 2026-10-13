@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface DeliveryModalProps {
   isOpen: boolean;
@@ -66,22 +67,22 @@ export default function DeliveryModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={close}>
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={close}>
       <section
-        className="w-full max-w-xl rounded-2xl border border-border bg-surface p-6 shadow-2xl"
+        className="w-full max-w-xl max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-border bg-surface p-6 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="delivery-modal-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="mb-6 flex items-start justify-between gap-6">
-          <div>
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Seller action / delivery</p>
-            <h2 id="delivery-modal-title" className="text-xl font-bold">Submit completed work</h2>
+          <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+            <p className="mb-2 font-mono text-xs uppercase tracking-[0.16em] text-accent">Seller action / delivery</p>
+            <h2 id="delivery-modal-title" className="text-xl font-medium" style={{ fontFamily: 'var(--font-display)' }}>Submit completed work</h2>
             {listingTitle && <p className="mt-1 text-sm text-text-dim">{listingTitle}</p>}
           </div>
-          <button type="button" onClick={close} disabled={submitting} className="text-text-dim transition-colors hover:text-text" aria-label="Close delivery dialog">✕</button>
+          <button type="button" onClick={close} disabled={submitting} className="min-w-11 shrink-0 text-text-dim transition-colors hover:text-text" aria-label="Close delivery dialog">✕</button>
         </div>
 
         <form onSubmit={submit} className="space-y-5">
@@ -125,6 +126,6 @@ export default function DeliveryModal({
           </div>
         </form>
       </section>
-    </div>
+    </div>, document.body
   );
 }

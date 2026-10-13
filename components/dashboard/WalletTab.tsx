@@ -122,7 +122,7 @@ export default function WalletTab({ wallet, loading, onPayoutSaved }: WalletTabP
         <label htmlFor="payout-address" className="block text-sm font-semibold mb-2">Your account&apos;s seller payout address</label>
         <p className="text-xs text-text-dim mb-3">Your own listings release verified ERC-20 and MPP settlements to this address after buyer approval or dispute resolution. Registered agents have separate payout wallets below.</p>
         <div className="flex flex-col md:flex-row gap-3">
-          <input id="payout-address" value={payoutAddress} onChange={(event) => setPayoutAddress(event.target.value)} placeholder="0x…" required className="flex-1 bg-bg border border-border rounded-lg px-4 py-3 font-mono text-sm" />
+          <input id="payout-address" value={payoutAddress} onChange={(event) => setPayoutAddress(event.target.value)} placeholder="0x…" required className="min-w-0 w-full flex-1 bg-bg border border-border rounded-lg px-4 py-3 font-mono text-sm" />
           <button disabled={payoutBusy} className="btn-primary px-5">{payoutBusy ? 'Saving…' : 'Save payout wallet'}</button>
         </div>
         {payoutNotice && <p className="text-xs mt-3 text-text-dim" role="status">{payoutNotice}</p>}
@@ -132,13 +132,13 @@ export default function WalletTab({ wallet, loading, onPayoutSaved }: WalletTabP
         <h3 className="text-xl font-bold mb-2">Owned agent payout wallets</h3>
         <p className="text-sm text-text-dim mb-4">Each registered agent sells under its own identity. Set its destination here, or let the agent use its API key to set the same payout address.</p>
         <div className="space-y-4">{ownedAgents.map((agent) => (
-          <form key={agent.agent_id} onSubmit={(event) => void saveAgentPayoutAddress(event, agent.agent_id)} className="card">
+          <form key={agent.agent_id} onSubmit={(event) => void saveAgentPayoutAddress(event, agent.agent_id)} className="card min-w-0 [overflow-wrap:anywhere]">
             <label htmlFor={`agent-payout-${agent.agent_id}`} className="block text-sm font-semibold mb-1">{agent.name} payout address</label>
             <p className="text-xs text-text-dim mb-3">{agent.agent_id} · {agent.status}</p>
             <div className="flex flex-col md:flex-row gap-3">
               <input id={`agent-payout-${agent.agent_id}`} value={agentAddresses[agent.agent_id] || ''}
                 onChange={(event) => setAgentAddresses((current) => ({ ...current, [agent.agent_id]: event.target.value }))}
-                placeholder="0x…" required className="flex-1 bg-bg border border-border rounded-lg px-4 py-3 font-mono text-sm" />
+                placeholder="0x…" required className="min-w-0 w-full flex-1 bg-bg border border-border rounded-lg px-4 py-3 font-mono text-sm" />
               <button disabled={agentBusy === agent.agent_id} className="btn-primary px-5">{agentBusy === agent.agent_id ? 'Saving…' : 'Save agent payout wallet'}</button>
             </div>
             {agentNotice[agent.agent_id] && <p className="text-xs mt-3 text-text-dim" role="status">{agentNotice[agent.agent_id]}</p>}

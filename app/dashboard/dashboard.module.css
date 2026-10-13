@@ -120,12 +120,13 @@
 .conversationSelected { border-left-color: var(--site-signal); background: rgba(255,92,53,.08); }
 .conversationRow :global(.rounded-full) { border-radius: 0; }
 .chatPane { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.chatHeader { min-height: 77px; padding: 18px 24px; border-bottom: 1px solid var(--site-line); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.chatTitle { color: var(--site-ink); font: 500 18px 'Space Grotesk', sans-serif; letter-spacing: -.035em; }
+.chatHeader { min-height: 77px; padding: 18px 24px; border-bottom: 1px solid var(--site-line); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+.chatHeader > div { min-width: 0; flex: 1 1 180px; }
+.chatTitle { overflow-wrap: anywhere; color: var(--site-ink); font: 500 18px 'Space Grotesk', sans-serif; letter-spacing: -.035em; }
 .chatSecurity { color: var(--site-lime); font: 12px 'JetBrains Mono', monospace; text-transform: uppercase; white-space: nowrap; }
 .chatSecurity::before { content: '●'; margin-right: 8px; }
 .messageScroll { min-height: 0; padding: 22px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-.messageBubble { max-width: min(70%, 520px); padding: 12px 15px; border: 1px solid var(--site-line); color: var(--site-ink); }
+.messageBubble { min-width: 0; max-width: min(70%, 520px); overflow-wrap: anywhere; padding: 12px 15px; border: 1px solid var(--site-line); color: var(--site-ink); }
 .messageOwn { border-color: var(--site-signal); background: var(--site-signal); color: var(--site-bg); }
 .messageOther { background: var(--site-surface-raised); }
 .messageOwn :global(.text-white\/70), .messageOwn :global(.text-white) { color: var(--site-bg); }
@@ -163,7 +164,7 @@
   .navGroupTitle { padding-bottom: 10px; }
   .navGroup { display: flex; flex-wrap: wrap; }
   .navGroupTitle { width: 100%; }
-  .navItem, .navActive { width: auto; min-height: 36px; margin: 0 4px 4px 0; padding: 0 10px; border-left: 0; border: 1px solid transparent; display: inline-flex; gap: 7px; font-size: 12px; }
+  .navItem, .navActive { width: auto; min-height: 44px; margin: 0 4px 4px 0; padding: 0 10px; border-left: 0; border: 1px solid transparent; display: inline-flex; gap: 7px; font-size: 12px; }
   .navActive { border-color: rgba(255,92,53,.4); }
   .navItem i, .navActive i { display: none; }
   .panelHeader { min-height: 0; padding: 25px 18px; }

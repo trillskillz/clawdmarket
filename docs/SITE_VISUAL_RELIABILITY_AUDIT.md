@@ -190,6 +190,56 @@ without weakening refund, gross, BigInt fee or exact-one retry assertions.
 Evidence: `/tmp/clawdmarket-workflow-read-snapshot-regression.log`,
 `/tmp/clawdmarket-workflow-read-snapshot-control.log`,
 `/tmp/clawdmarket-workflow-retry-read-race-{0,1,2,3,4,5,6,7,8,9}.log` and
-`/tmp/clawdmarket-workflow-retry-read-focused.log`. The enabled 854-case gate is
-running in `/tmp/clawdmarket-workflow-read-snapshot-predeploy.log` before merging
-the necessary follow-up repair PR and finishing this final authorized release.
+`/tmp/clawdmarket-workflow-retry-read-focused.log`. The enabled 854-case gate passes in
+`/tmp/clawdmarket-workflow-read-snapshot-predeploy.log`: 849 passes, five expected
+skips and zero failures (18.3 minutes). Eighteen Python cases, SDK parity/build,
+TypeScript and lint pass. Final build and complete Chromium acceptance pass in
+`/tmp/clawdmarket-workflow-read-snapshot-build.log` and
+`/tmp/clawdmarket-workflow-read-snapshot-browser.log`: 104 passes, nine expected
+environment-dependent skips, zero failures and zero retries.
+
+
+## Final production verification (2026-10-13 UTC)
+
+Repair [PR #262](https://github.com/trillskillz/clawdmarket/pull/262) merged as
+`1b53230c84709fc42f5a10686fae12183d3b0bd0` after all four required checks passed;
+its tree equals accepted review head `497c607`. Required CI 38347284142 passes
+792 Node cases with 62 expected environment-dependent skips, zero failures, and
+104 Chromium cases with nine expected skips and no retries. The enabled local
+gate above additionally exercises both disposable chains and verifier isolation.
+
+[Deployment 38348774805](https://github.com/trillskillz/clawdmarket/actions/runs/38348774805)
+passes its 854-case release gate, read-only readiness/reserve preflight, all three
+additive production migrations, release-monitor synchronization and all five
+production evidence-query checks before artifact deployment. Both aliases point
+to `clawdmarket-a3et7f89n-jacob-millers-projects-09998dbb.vercel.app`.
+[Production smoke 38349820680](https://github.com/trillskillz/clawdmarket/actions/runs/38349820680)
+passes on the same merged SHA: 22 liveness, readiness, authenticated diagnostics,
+wallet/account authentication, agent lifecycle, discovery, payment challenge,
+private activity and create/cleanup checks. No production paid canary or global
+routing rollout is part of this release. Evidence logs:
+`/tmp/clawdmarket-visual-production-deploy-success.log` and
+`/tmp/clawdmarket-visual-production-smoke-success.log`.
+
+Independent live audit covers twelve public routes at 1440, 390 and 320px on
+both `clawdmkt.com` and `www.clawdmkt.com`: 72 HTTP-200 renders, zero horizontal
+overflow, zero elements outside the viewport and zero undersized controls. All
+three bundled font families load with external Google fonts blocked. Each of the
+13 served WOFF2 files on both aliases matches its source signature, size and
+SHA-256: 26 asset checks. Both readiness endpoints return 200 and both OpenAPI
+surfaces report HTTP contract 1.116 with reviewed workflow paths. Final home
+320px, login desktop and marketplace-filter 320px screenshots were visually
+inspected. Only navigation-aborted authentication/prefetch requests were recorded;
+no font requests failed. Evidence: `/tmp/clawdmarket-visual-production-acceptance.json`
+and `/tmp/clawdmarket-visual-audit/production-final-{apex,www}/audit.json` and PNGs.
+
+The user's final publication permission has been used. These completion records
+remain local on `work/local-after-final-production-2026-10-13`; all subsequent
+changes, tests and documentation must accumulate locally until explicit new
+GitHub/Vercel permission. No further publication follows this verification.
+
+
+A new visual-only follow-up was explicitly requested after this completed release.
+The user chose a new follow-up PR and authorized publishing this batch, with all
+subsequent work remaining local. See `SITE_VISUAL_FOLLOWUP_AUDIT.md` for current
+scope and acceptance; the production evidence above remains the prior baseline.

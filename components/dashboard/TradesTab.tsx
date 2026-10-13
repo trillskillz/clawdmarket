@@ -56,7 +56,7 @@ function TradeProgress({ status }: { status: string }) {
         const active = !interrupted && currentStep === step && !COMPLETE_STATUSES.has(status);
         return (
           <div key={label} className={`border-r border-border px-3 py-2 last:border-r-0 ${reached ? 'bg-green-400/5' : ''}`}>
-            <span className={`mr-2 font-mono text-[10px] ${reached ? 'text-green-400' : 'text-text-dim'}`}>{reached ? '✓' : `0${step}`}</span>
+            <span className={`mr-2 font-mono text-xs ${reached ? 'text-green-400' : 'text-text-dim'}`}>{reached ? '✓' : `0${step}`}</span>
             <span className={`text-xs ${active ? 'font-semibold text-text' : reached ? 'text-green-300' : 'text-text-dim'}`}>{label}</span>
           </div>
         );
@@ -259,12 +259,12 @@ export default function TradesTab({ trades, total, loading, loadingMore, onLoadM
               <div id={`trade-${trade.id}`} key={trade.id} className={`card scroll-mt-28 ${isFocused ? 'ring-2 ring-accent/70' : ''}`}>
                 <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold mb-1 flex items-center gap-2">
-                    {trade.listing_title}
-                    {isBuyer && <span className="text-[10px] px-1.5 py-0.5 rounded border border-accent text-accent">YOU BOUGHT</span>}
-                    {isSeller && <span className="text-[10px] px-1.5 py-0.5 rounded border border-green-400 text-green-400">YOU SOLD</span>}
+                  <div className="font-semibold mb-1 flex flex-wrap items-center gap-2">
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{trade.listing_title}</span>
+                    {isBuyer && <span className="text-xs px-1.5 py-0.5 rounded border border-accent text-accent">YOU BOUGHT</span>}
+                    {isSeller && <span className="text-xs px-1.5 py-0.5 rounded border border-green-400 text-green-400">YOU SOLD</span>}
                   </div>
-                  <div className="text-sm text-text-dim">
+                  <div className="text-sm text-text-dim [overflow-wrap:anywhere]">
                     {new Date(trade.created_at).toLocaleDateString()}
                     {' • '}
                     {isBuyer ? `Seller: ${trade.seller_id.slice(0, 8)}...` : `Buyer: ${trade.buyer_name || 'Unknown'}`}
@@ -273,10 +273,10 @@ export default function TradesTab({ trades, total, loading, loadingMore, onLoadM
                 </div>
 
                 <div className="flex flex-col md:items-end gap-2 w-full md:w-auto">
-                  <div className="flex items-center gap-3 justify-between md:justify-end w-full">
+                  <div className="flex flex-wrap items-center gap-3 justify-between md:justify-end w-full">
                     <div className="text-right">
                       <div className="font-mono font-bold text-gold"><PriceWithKas bankr={displayAmount} kasClassName="text-xs text-text-dim" /></div>
-                      <div className="mt-1 font-mono text-[9px] uppercase text-text-dim">{isBuyer ? trade.status === 'pending' ? 'total due' : 'total paid' : 'seller proceeds'}</div>
+                      <div className="mt-1 font-mono text-xs uppercase text-text-dim">{isBuyer ? trade.status === 'pending' ? 'total due' : 'total paid' : 'seller proceeds'}</div>
                     </div>
                     <div className={`text-xs px-2 py-1 rounded-full inline-block text-center min-w-[80px] ${
                       (trade.status === 'completed' || trade.status === 'complete') ? 'bg-green-400/10 text-green-400' :

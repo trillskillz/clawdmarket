@@ -30,16 +30,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none">
+      <div className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-[300] flex flex-col gap-3 pointer-events-none">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`pointer-events-auto px-5 py-3 rounded-lg text-sm font-medium shadow-xl backdrop-blur-sm animate-toast-in ${
+            role={t.type === 'error' ? 'alert' : 'status'}
+            className={`pointer-events-auto min-w-0 break-words [overflow-wrap:anywhere] px-5 py-3 rounded-lg border bg-bg2 text-sm font-medium shadow-xl animate-toast-in ${
               t.type === 'success'
-                ? 'bg-green-500/90 text-white'
+                ? 'border-green-300/40 text-green-300'
                 : t.type === 'error'
-                ? 'bg-red-500/90 text-white'
-                : 'bg-bg2/95 text-text border border-border'
+                ? 'border-red-300/40 text-red-300'
+                : 'text-text border-border'
             }`}
           >
             {t.type === 'success' && '✅ '}

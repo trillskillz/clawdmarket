@@ -85,7 +85,7 @@ export default function ClaimPage() {
     return (
       <div style={styles.page}>
         <div style={styles.card}>
-          <div style={{ color: '#484f58', fontFamily: "'JetBrains Mono', monospace", fontSize: 14 }}>
+          <div style={{ color: 'var(--site-muted)', fontFamily: 'var(--font-mono)', fontSize: 14 }}>
             Verifying claim link...
           </div>
         </div>
@@ -100,7 +100,7 @@ export default function ClaimPage() {
         <div style={styles.card}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, opacity: 0.3 }}><BrandMark size={64} /></div>
           <h1 style={styles.title}>Invalid Claim Link</h1>
-          <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 24 }}>
+          <p style={{ color: 'var(--site-muted)', fontSize: 14, marginBottom: 24 }}>
             {error || 'This claim link is not valid or has expired.'}
           </p>
           <Link href="/" style={styles.link}>Back to ClawdMarket</Link>
@@ -116,8 +116,8 @@ export default function ClaimPage() {
         <div style={styles.card}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><BrandMark size={64} /></div>
           <h1 style={styles.title}>Already Claimed</h1>
-          <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 24 }}>
-            <strong style={{ color: '#e6edf3' }}>{agent.name}</strong> has already been claimed.
+          <p style={{ color: 'var(--site-muted)', fontSize: 14, marginBottom: 24 }}>
+            <strong style={{ color: 'var(--site-ink)' }}>{agent.name}</strong> has already been claimed.
           </p>
           <Link href={`/registry/${agent.agent_id}`} style={styles.link}>
             View Agent Profile
@@ -133,23 +133,23 @@ export default function ClaimPage() {
       <div style={styles.page}>
         <div style={styles.card}>
           <div style={{
-            width: 64, height: 64, borderRadius: '50%', background: 'rgba(34,197,94,0.12)',
+            width: 64, height: 64, borderRadius: '50%', background: 'rgba(185,239,114,0.12)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 20px',
           }}>
             <BrandMark size={52} />
           </div>
-          <h1 style={{ ...styles.title, color: '#22c55e' }}>Agent Claimed!</h1>
-          <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 8 }}>
+          <h1 style={{ ...styles.title, color: 'var(--site-lime)' }}>Agent Claimed!</h1>
+          <p style={{ color: 'var(--site-muted)', fontSize: 14, marginBottom: 8 }}>
             You now administer
           </p>
           <p style={{
-            color: '#e6edf3', fontSize: 20, fontWeight: 700, marginBottom: 24,
-            fontFamily: "'JetBrains Mono', monospace",
+            color: 'var(--site-ink)', fontSize: 20, fontWeight: 700, marginBottom: 24,
+            fontFamily: 'var(--font-display)',
           }}>
             {agent.name}
           </p>
-          <p style={{ color: '#484f58', fontSize: 13, marginBottom: 24 }}>
+          <p style={{ color: 'var(--site-muted)', fontSize: 14, marginBottom: 24 }}>
             Your agent is now active on ClawdMarket. {ownerRecoveryEnabled
               ? 'This account is also linked for credential recovery and guarded ownership transfer.'
               : 'Publish a concrete service before accepting marketplace work.'}
@@ -173,34 +173,34 @@ export default function ClaimPage() {
       <div style={styles.card}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><BrandMark size={64} /></div>
         <h1 style={styles.title}>Claim Your Agent</h1>
-        <p style={{ color: '#8b949e', fontSize: 14, marginBottom: 24 }}>
+        <p style={{ color: 'var(--site-muted)', fontSize: 14, marginBottom: 24 }}>
           An AI agent generated this private claim link to activate its marketplace profile.
         </p>
 
         {/* Agent info card */}
         <div style={{
-          background: '#0a0b0f', border: '1px solid #21262d', borderRadius: 10,
-          padding: 20, marginBottom: 24, textAlign: 'left',
+          background: 'var(--site-bg)', border: '1px solid var(--site-line)', borderRadius: 10,
+          padding: 'clamp(14px, 4vw, 20px)', marginBottom: 24, textAlign: 'left', minWidth: 0,
         }}>
           <div style={{
-            fontSize: 11, color: '#484f58', textTransform: 'uppercase', letterSpacing: '0.05em',
-            fontFamily: "'JetBrains Mono', monospace", marginBottom: 12,
+            fontSize: 12, color: 'var(--site-dim)', textTransform: 'uppercase', letterSpacing: '0.05em',
+            fontFamily: 'var(--font-mono)', marginBottom: 12,
           }}>
             Agent Details
           </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#e6edf3', marginBottom: 6 }}>
+          <div style={{ fontSize: 20, fontWeight: 600, fontFamily: 'var(--font-display)', color: 'var(--site-ink)', marginBottom: 6 }}>
             {agent.name}
           </div>
-          <div style={{ fontSize: 13, color: '#8b949e', lineHeight: 1.6, marginBottom: 12 }}>
+          <div style={{ fontSize: 14, color: 'var(--site-muted)', lineHeight: 1.6, marginBottom: 12 }}>
             {agent.description}
           </div>
           {agent.capabilities.length > 0 && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {agent.capabilities.map((cap, i) => (
                 <span key={i} style={{
-                  fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
-                  color: '#a78bfa', background: 'rgba(167,139,250,0.1)',
-                  padding: '3px 8px', borderRadius: 4,
+                  fontSize: 12, fontFamily: 'var(--font-mono)',
+                  color: 'var(--site-lime)', background: 'rgba(185,239,114,0.1)',
+                  padding: '3px 8px', borderRadius: 4, minWidth: 0, maxWidth: '100%',
                 }}>
                   {cap}
                 </span>
@@ -210,10 +210,10 @@ export default function ClaimPage() {
         </div>
 
         {!accountChecked ? (
-          <p style={{ color: '#8b949e', fontSize: 13 }}>Checking your account…</p>
+          <p style={{ color: 'var(--site-muted)', fontSize: 14 }}>Checking your account…</p>
         ) : !accountEmail ? (
           <div>
-            <p style={{ color: '#8b949e', fontSize: 13, lineHeight: 1.6, marginBottom: 18 }}>
+            <p style={{ color: 'var(--site-muted)', fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>
               Sign in first so this private claim binds the agent to an authenticated account for recovery and future ownership transfer.
             </p>
             <Link href={`/auth/login?next=${encodeURIComponent(`/claim/${code}`)}`} style={styles.primaryButton}>
@@ -222,8 +222,8 @@ export default function ClaimPage() {
           </div>
         ) : <form onSubmit={handleClaim}>
           <label htmlFor="claim-owner-email" style={{
-            display: 'block', fontSize: 12, color: '#8b949e', marginBottom: 6,
-            fontFamily: "'JetBrains Mono', monospace",
+            display: 'block', fontSize: 12, color: 'var(--site-muted)', marginBottom: 6,
+            fontFamily: 'var(--font-mono)',
           }}>
             Administrative contact email
           </label>
@@ -236,16 +236,16 @@ export default function ClaimPage() {
             required
             readOnly={!accountEmail.startsWith('wallet_')}
             style={{
-              width: '100%', padding: '12px 16px', borderRadius: 8,
-              border: '1px solid #21262d', background: '#0a0b0f',
-              color: '#e6edf3', fontSize: 14, outline: 'none',
-              fontFamily: "'JetBrains Mono', monospace",
+              width: '100%', minWidth: 0, minHeight: 44, padding: '12px 16px', borderRadius: 8,
+              border: '1px solid var(--site-line)', background: 'var(--site-bg)',
+              color: 'var(--site-ink)', fontSize: 16,
+              fontFamily: 'var(--font-body)',
               marginBottom: 16, boxSizing: 'border-box',
             }}
           />
 
           {claimError && (
-            <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 12 }}>
+            <div style={{ color: '#ff7959', fontSize: 14, marginBottom: 12 }}>
               {claimError}
             </div>
           )}
@@ -264,7 +264,7 @@ export default function ClaimPage() {
           </button>
         </form>}
 
-        <p style={{ color: '#484f58', fontSize: 11, marginTop: 16, lineHeight: 1.5 }}>
+        <p style={{ color: 'var(--site-dim)', fontSize: 12, marginTop: 16, lineHeight: 1.6 }}>
           The private link authorizes activation; the signed-in account establishes the durable
           recovery owner. Email accounts must use their signed-in email. A declared owner wallet
           must sign the wallet challenge before claiming.
@@ -276,60 +276,78 @@ export default function ClaimPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100vh',
-    background: '#0a0b0f',
+    minHeight: 'calc(100svh - 72px)',
+    background: 'var(--site-bg)',
+    color: 'var(--site-ink)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    padding: 'clamp(24px, 5vw, 48px) 18px',
+    fontFamily: 'var(--font-body)',
   },
   card: {
-    background: '#111318',
-    border: '1px solid #21262d',
+    background: 'var(--site-surface)',
+    border: '1px solid var(--site-line)',
     borderRadius: 16,
-    padding: '40px 32px',
+    padding: 'clamp(24px, 5vw, 40px) clamp(20px, 5vw, 32px)',
     maxWidth: 480,
     width: '100%',
+    minWidth: 0,
+    overflowWrap: 'anywhere',
     textAlign: 'center' as const,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 800,
-    color: '#e6edf3',
+    fontSize: 'clamp(28px, 6vw, 38px)',
+    fontFamily: 'var(--font-display)',
+    fontWeight: 500,
+    lineHeight: 1.15,
+    color: 'var(--site-ink)',
     marginBottom: 8,
-    letterSpacing: '-0.02em',
+    letterSpacing: '-0.04em',
   },
   link: {
-    color: '#a78bfa',
+    display: 'inline-flex',
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: '100%',
+    color: 'var(--site-signal)',
     textDecoration: 'none',
     fontSize: 14,
-    fontFamily: "'JetBrains Mono', monospace",
+    fontFamily: 'var(--font-mono)',
   },
   primaryButton: {
-    display: 'inline-block',
-    padding: '12px 24px',
-    background: '#ff4d4d',
-    color: '#fff',
+    display: 'inline-flex',
+    minHeight: 44,
+    maxWidth: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '12px 20px',
+    background: 'var(--site-signal)',
+    color: 'var(--site-bg)',
     border: 'none',
     borderRadius: 8,
     fontSize: 14,
     fontWeight: 600,
     textDecoration: 'none',
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontFamily: 'var(--font-body)',
     cursor: 'pointer',
   },
   secondaryButton: {
-    display: 'inline-block',
-    padding: '12px 24px',
+    display: 'inline-flex',
+    minHeight: 44,
+    maxWidth: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '12px 20px',
     background: 'transparent',
-    color: '#8b949e',
-    border: '1px solid #21262d',
+    color: 'var(--site-muted)',
+    border: '1px solid var(--site-line)',
     borderRadius: 8,
     fontSize: 14,
     fontWeight: 600,
     textDecoration: 'none',
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    fontFamily: 'var(--font-body)',
     cursor: 'pointer',
   },
 }

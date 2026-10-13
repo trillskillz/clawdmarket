@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useToast } from '@/components/Toast';
 import Image from 'next/image';
 
@@ -170,19 +171,19 @@ export default function ProfileTab({ user, loading, onRefresh, getCsrfToken }: P
         </div>
       </form>
 
-      {showAvatarPicker && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAvatarPicker(false)}>
-          <div className="bg-bg border border-border rounded-xl w-full max-w-2xl p-5" onClick={(e) => e.stopPropagation()}>
+      {showAvatarPicker && createPortal(
+        <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAvatarPicker(false)}>
+          <div className="bg-bg border border-border rounded-xl w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5" role="dialog" aria-modal="true" aria-labelledby="avatar-modal-title" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Choose an Avatar</h3>
-              <button type="button" onClick={() => setShowAvatarPicker(false)} className="text-text-dim hover:text-text">✕</button>
+              <h3 id="avatar-modal-title" className="text-lg font-medium" style={{ fontFamily: 'var(--font-display)' }}>Choose an Avatar</h3>
+              <button type="button" onClick={() => setShowAvatarPicker(false)} className="min-w-11 shrink-0 text-text-dim hover:text-text" aria-label="Close avatar dialog">✕</button>
             </div>
 
             <p className="text-sm text-text-dim mb-3">Click an image or emoji to apply instantly.</p>
 
             <div className="mb-4">
               <div className="text-xs text-text-dim mb-2">Avatar Images</div>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                 {AVATAR_PRESETS.map((url) => (
                   <button
                     key={url}
@@ -198,7 +199,7 @@ export default function ProfileTab({ user, loading, onRefresh, getCsrfToken }: P
 
             <div>
               <div className="text-xs text-text-dim mb-2">Emoji Avatars</div>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                 {EMOJI_PRESETS.map((emoji) => (
                   <button
                     key={emoji}
@@ -212,7 +213,7 @@ export default function ProfileTab({ user, loading, onRefresh, getCsrfToken }: P
               </div>
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
     </div>
   );

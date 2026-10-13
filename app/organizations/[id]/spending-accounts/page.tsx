@@ -109,7 +109,7 @@ export default function SpendingAccounts({params}:{params:Promise<{id:string}>})
     {authorized&&<>
       <form onSubmit={stage} className="mb-8 space-y-4 rounded border p-5">
         <h2 className="text-lg font-semibold">Grant bounded purchasing</h2>
-        <fieldset disabled={busy||Boolean(review)||storageBlocked} className="space-y-4">
+        <fieldset disabled={busy||Boolean(review)||storageBlocked} className="min-w-0 space-y-4">
           <label className="block">Account name<input required value={name} onChange={event=>setName(event.target.value)} className="mt-1 block w-full rounded border bg-transparent p-2"/></label>
           <label className="block">Assigned buyer<select required value={buyer} onChange={event=>{setBuyer(event.target.value);setService('')}} className="mt-1 block w-full rounded border bg-neutral-950 p-2"><option value="">Select a buyer</option>{assignments.map(item=><option key={item.agent_id} value={item.agent_id}>{item.cost_center} · {item.agent_id}</option>)}</select></label>
           {selectedBuyer&&<p className="break-words text-sm">Cost center: {selectedBuyer.cost_center}. Department: {selectedBuyer.team_id||'No department'}.</p>}
