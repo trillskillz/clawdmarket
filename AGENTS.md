@@ -1,35 +1,48 @@
 # ClawdMarket routing work
 
+## Current authorized visual follow-up (2026-10-13)
+
+The user requested a fresh visual audit, chose a new visual follow-up PR, and
+explicitly instructed: "push this but after do not push anymore keep everything
+local". Complete this visual-only batch on `fix/site-visual-followup`, including
+rendered acceptance, required CI, protected publication and production verification
+under the established release workflow. This permission applies only to these
+visual fixes and their audit/policy records. No unrelated routing capability or
+later release is authorized. Once this batch is verified, all further code, tests
+and documentation must stay local until explicit new publication permission.
+Do not push, merge, publish GitHub metadata or deploy a later release automatically.
+The prior completed release and acceptance below are historical evidence.
+
 ## Latest publication policy — local accumulation (2026-10-13 UTC)
 
-The user explicitly renewed permission after the additional repair publication
-was rejected: "ensure that it passes to production after that make sure everything
-stays local". Complete the necessary read-snapshot repair, required checks,
-protected follow-up merge, migration-first deployment and same-SHA verification
-without requesting permission again. The prior rejected command never ran; this
-subsequent instruction authorizes the necessary follow-up to finish production.
-Once verified, all further changes must accumulate locally until new permission.
-Do not push, merge, publish GitHub metadata or deploy a later release automatically.
-Previous exceptions and the ten-capability cadence do not authorize a later release.
+The final authorized production release is complete. PR #231 merged as `9aab6a0`;
+its required read-snapshot repair PR #262 merged as
+`1b53230c84709fc42f5a10686fae12183d3b0bd0`. Migration-first deployment
+38348774805 and same-SHA production smoke 38349820680 passed. Both domains serve
+HTTP contract 1.116, with 72 live desktop/mobile renders passing and all 26 served
+font files matching their recorded hashes. Publication permission for this release
+is now consumed. All further code, tests and documentation must accumulate locally
+until the user explicitly authorizes another publication. Do not push commits,
+merge PRs, edit GitHub publication metadata or deploy to Vercel without new
+permission. Earlier exceptions and the ten-capability cadence do not authorize
+a later release. The current local continuation is
+`work/local-after-final-production-2026-10-13` in this worktree, with no upstream.
 
-PR #231 merged as `9aab6a0` after all four required checks passed, including 104
-Chromium passes with nine expected skips and no retries. Deployment 38345497758
-stopped at its release gate before production migration: a retry preflight took
-a write lock for read-only workflow validation and exhausted bounded contention
-recovery during concurrent retry/root checkout. Production remains `5715083`.
-The narrow read-snapshot correction is local on `fix/workflow-retry-read-snapshot`;
-a follow-up PR is necessary because #231 is already merged, and its publication
-is now explicitly authorized as recorded above. The new
-committed-snapshot regression passes while another writer holds uncommitted
-exposure; its old-write negative control fails with the observed storage-busy
-code. Ten unchanged concurrent retry/root cases and all 41 focused tests pass.
-The enabled 854-case gate is running before protected merge and deployment.
+Final enabled acceptance: 854 Node cases, 849 passed, five expected skips and zero
+failures; 18 Python cases, SDK parity/build, TypeScript, lint and production build
+pass. All 104 runnable Chromium cases pass with nine expected skips and no retries.
+All four required checks passed for both PRs. The read-only preflight regression
+passes under an independent writer's uncommitted exposure; its old-write control
+reproduces storage contention. Ten unchanged retry/root races and all 41 focused
+cases pass. See [visual acceptance](docs/SITE_VISUAL_RELIABILITY_AUDIT.md).
+Routing acceptance stays six capabilities; the next task-board purchasing batch
+must be implemented and validated locally. Rollout gates retain their original scope.
 
 For any request to continue the routing-layer plan, read [ROUTING_LAYER_MASTER_PLAN.md](ROUTING_LAYER_MASTER_PLAN.md) first. Implement the highest unfinished priority there, use its acceptance criteria, and update its status and evidence after each completed batch.
 
 Preserve the existing payment and settlement state machines. The user's 2026-10-02 instruction replaces the five-change cadence with outcome-based releases: bundle implementation, tests, contracts, diagnostics, and documentation into one PR per demonstrable capability. Commit count is not a release gate. Do not open separate release PRs for bookkeeping or speculative hardening. The historical implementation record is [docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md](docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md).
 
-## Current continuation — accepted local batch (2026-10-12 UTC)
+## Historical accepted batch — now published (2026-10-12 UTC)
 
 The user's latest request prioritizes a site visual audit, font/readability fixes,
 and pushing them with the accepted workflow/routing work. This explicitly permits

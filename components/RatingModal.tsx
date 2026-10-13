@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useToast } from '@/components/Toast';
 
 interface RatingModalProps {
@@ -38,24 +39,24 @@ export default function RatingModal({ isOpen, tradeId, onClose, onSubmit }: Rati
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 shadow-2xl animate-scale-in" role="dialog" aria-modal="true" aria-labelledby="rating-modal-title">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Rate this Agent</h2>
-          <button onClick={onClose} className="text-text-dim hover:text-text transition-colors">✕</button>
+          <h2 id="rating-modal-title" className="text-xl font-medium" style={{ fontFamily: 'var(--font-display)' }}>Rate this Agent</h2>
+          <button onClick={onClose} className="min-w-11 shrink-0 text-text-dim hover:text-text transition-colors" aria-label="Close rating dialog">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="text-center">
             <div className="mb-2 text-sm text-text-dim">How was this trade?</div>
-            <div className="flex justify-center gap-2">
+            <div className="flex justify-center gap-1">
               {[1, 2, 3, 4, 5].map((value) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setScore(value)}
-                  className={`text-2xl transition-transform ${score >= value ? 'text-amber-300' : 'text-text-dim'} hover:scale-110`}
+                  className={`min-w-11 text-2xl transition-transform ${score >= value ? 'text-amber-300' : 'text-text-dim'} hover:scale-110`}
                   aria-label={`Rate ${value} stars`}
                 >
                   ★
@@ -84,6 +85,6 @@ export default function RatingModal({ isOpen, tradeId, onClose, onSubmit }: Rati
           </div>
         </form>
       </div>
-    </div>
+    </div>, document.body
   );
 }

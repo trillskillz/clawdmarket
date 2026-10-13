@@ -54,8 +54,8 @@ export default function OwnershipAcceptPage() {
           <>
             <p style={styles.copy}>Ownership of <strong>{result.agent_id}</strong> has moved to this account. Every prior owner and agent credential is now invalid.</p>
             <div style={styles.secret}>
-              <span>NEW PRIMARY KEY — SHOWN ONCE</span>
-              <code>{result.credential.api_key}</code>
+              <span style={styles.secretLabel}>NEW PRIMARY KEY — SHOWN ONCE</span>
+              <code style={styles.secretValue}>{result.credential.api_key}</code>
             </div>
             <p style={styles.warning}>Store this key in a secret manager before leaving this page.</p>
             <Link href="/dashboard" style={styles.link}>Open dashboard</Link>
@@ -69,7 +69,7 @@ export default function OwnershipAcceptPage() {
           <>
             <p style={styles.copy}>Acceptance immediately replaces the primary key and revokes every named credential. This prevents the previous owner from retaining access.</p>
             {error && <p style={styles.error}>{error}</p>}
-            <button disabled={authenticated !== true || loading || !token} onClick={acceptTransfer} style={styles.button}>
+            <button disabled={authenticated !== true || loading || !token} onClick={acceptTransfer} style={{ ...styles.button, opacity: authenticated !== true || loading || !token ? 0.5 : 1, cursor: loading ? 'wait' : 'pointer' }}>
               {loading ? 'Accepting…' : 'Accept and rotate credentials'}
             </button>
           </>
@@ -80,14 +80,16 @@ export default function OwnershipAcceptPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#080a09', color: '#f0ede4' },
-  card: { width: 'min(620px, 100%)', padding: '42px 38px', border: '1px solid rgba(240,236,225,.14)', background: '#0f1210' },
-  eyebrow: { marginTop: 24, color: '#ff6a43', font: "8px 'JetBrains Mono', monospace", letterSpacing: '.12em' },
-  title: { margin: '12px 0 18px', font: "500 42px/1 'Space Grotesk', sans-serif", letterSpacing: '-.05em' },
-  copy: { color: '#92978f', fontSize: 13, lineHeight: 1.7 },
-  button: { marginTop: 25, minHeight: 44, padding: '0 18px', border: 0, display: 'inline-grid', placeItems: 'center', background: '#ff5c35', color: '#080a09', font: "9px 'JetBrains Mono', monospace", textDecoration: 'none', cursor: 'pointer' },
-  secret: { marginTop: 24, padding: 18, border: '1px solid rgba(185,239,114,.3)', display: 'grid', gap: 10, background: '#090b0a' },
-  warning: { marginTop: 12, color: '#e6b768', fontSize: 11 },
-  error: { marginTop: 16, color: '#ff7959', fontSize: 12 },
-  link: { marginTop: 20, display: 'inline-block', color: '#ff7959', font: "9px 'JetBrains Mono', monospace" },
+  page: { minHeight: 'calc(100svh - 72px)', display: 'grid', placeItems: 'center', padding: 'clamp(24px, 5vw, 48px) 18px', background: 'var(--site-bg)', color: 'var(--site-ink)', fontFamily: 'var(--font-body)' },
+  card: { width: 'min(620px, 100%)', minWidth: 0, padding: 'clamp(24px, 5vw, 42px) clamp(20px, 5vw, 38px)', border: '1px solid var(--site-line)', background: 'var(--site-surface)', overflowWrap: 'anywhere' },
+  eyebrow: { marginTop: 24, color: 'var(--site-signal)', fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.6, letterSpacing: '.08em' },
+  title: { margin: '12px 0 18px', fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 6vw, 42px)', fontWeight: 500, lineHeight: 1.1, letterSpacing: '-.04em' },
+  copy: { color: 'var(--site-muted)', fontSize: 14, lineHeight: 1.7 },
+  button: { marginTop: 25, minHeight: 44, maxWidth: '100%', padding: '12px 18px', border: 0, display: 'inline-grid', placeItems: 'center', background: 'var(--site-signal)', color: 'var(--site-bg)', fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.6, fontWeight: 600, textAlign: 'center', textDecoration: 'none', cursor: 'pointer' },
+  secret: { marginTop: 24, minWidth: 0, padding: 'clamp(14px, 4vw, 18px)', border: '1px solid rgba(185,239,114,.3)', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10, background: 'var(--site-bg)' },
+  secretLabel: { color: 'var(--site-lime)', fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.6 },
+  secretValue: { minWidth: 0, color: 'var(--site-ink)', fontFamily: 'var(--font-mono)', fontSize: 14, lineHeight: 1.7, overflowWrap: 'anywhere' },
+  warning: { marginTop: 12, color: '#e6b768', fontSize: 14, lineHeight: 1.7 },
+  error: { marginTop: 16, color: '#ff7959', fontSize: 14, lineHeight: 1.7 },
+  link: { marginTop: 20, display: 'inline-flex', minHeight: 44, maxWidth: '100%', alignItems: 'center', color: 'var(--site-signal)', fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.6 },
 }

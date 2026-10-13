@@ -135,7 +135,7 @@ export default function AnalyticsTab({ analytics, loading, rangeDays, onRangeCha
           <div className="mt-2 grid grid-cols-10 gap-1 items-end h-16">
             {analytics.analytics_events.trend.slice(-10).map((point) => (
               <div key={point.date} className="bg-bg rounded-sm relative group" style={{ height: `${Math.max(8, Math.round((point.count / trendMax) * 100))}%` }}>
-                <span className="hidden group-hover:block absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] bg-black px-1 py-0.5 rounded">{point.count}</span>
+                <span className="hidden group-hover:block absolute -top-6 left-1/2 -translate-x-1/2 text-xs bg-black px-1 py-0.5 rounded">{point.count}</span>
               </div>
             ))}
           </div>

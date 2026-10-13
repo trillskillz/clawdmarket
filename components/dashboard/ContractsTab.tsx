@@ -201,7 +201,7 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
                         <div className="text-sm font-semibold">#{m.milestone_index + 1} {m.title}</div>
                         <div className="text-xs text-text-dim mt-1">Amount: ${Number(m.amount).toFixed(2)} USD</div>
                       </div>
-                      <span className={`text-[11px] px-2 py-1 rounded-full border ${badgeClass(m.state)}`}>{m.state}</span>
+                      <span className={`text-xs px-2 py-1 rounded-full border ${badgeClass(m.state)}`}>{m.state}</span>
                     </div>
 
                     <div className="flex flex-wrap gap-2 mt-3">

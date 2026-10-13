@@ -4,7 +4,7 @@ test.setTimeout(120_000)
 
 const routes=['/','/why','/marketplace','/registry','/taskboard','/work','/observe','/docs','/proof','/auth/login','/auth/register','/auth/forgot-password']
 
-for(const width of [1440,390,320])test(`public typography and layout stay reliable with external fonts unavailable at ${width}px`,async({page},testInfo)=>{
+for(const width of [1440,1024,768,390,320])test(`public typography and layout stay reliable with external fonts unavailable at ${width}px`,async({page},testInfo)=>{
   await page.setViewportSize({width,height:1000})
   await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\//,route=>route.abort())
   const failedFonts:string[]=[]
@@ -18,6 +18,11 @@ for(const width of [1440,390,320])test(`public typography and layout stay reliab
       fontUrls:performance.getEntriesByType('resource').filter(entry=>entry.name.includes('.woff2')).map(entry=>entry.name),
       overflow:document.documentElement.scrollWidth-innerWidth,
       controls:[...document.querySelectorAll('main input:not([type="checkbox"]):not([type="radio"]),main select,main textarea')].filter(element=>element.getBoundingClientRect().width>0).map(element=>parseFloat(getComputedStyle(element).fontSize)),
+      smallText:[...document.querySelectorAll('main *')].filter(element=>{
+        const bounds=element.getBoundingClientRect(),style=getComputedStyle(element)
+        const text=[...element.childNodes].filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent).join('')
+        return bounds.width>0&&bounds.height>0&&style.visibility!=='hidden'&&/[a-z]{2}/i.test(text)&&parseFloat(style.fontSize)<12
+      }).map(element=>element.textContent?.trim().slice(0,50)),
       heading:document.querySelector('main h1')?.getBoundingClientRect().top,
       header:document.querySelector('header')?.getBoundingClientRect().bottom,
       filledControls:[...document.querySelectorAll('main button,main a')].filter(element=>element.getBoundingClientRect().width>0&&getComputedStyle(element).backgroundColor==='rgb(255, 92, 53)').map(element=>({text:element.textContent,color:getComputedStyle(element).color})),
@@ -32,6 +37,7 @@ for(const width of [1440,390,320])test(`public typography and layout stay reliab
     for(const url of actual.fontUrls)expect.soft(new URL(url).origin).toBe(new URL(page.url()).origin)
     expect.soft(failedFonts,`${route}: font resources must succeed`).toEqual([])
     expect.soft(actual.overflow,`${route}: page must fit ${width}px`).toBeLessThanOrEqual(1)
+    expect.soft(actual.smallText,`${route}: status and explanatory text must be readable`).toEqual([])
     if(actual.heading!==undefined&&actual.header!==undefined)expect.soft(actual.heading,`${route}: fixed navigation must not cover the heading`).toBeGreaterThanOrEqual(actual.header)
     if(width<720)for(const size of actual.controls)expect.soft(size,`${route}: mobile fields should avoid browser zoom`).toBeGreaterThanOrEqual(16)
     if(width<=390)for(const selected of actual.selectedFilterWidths)expect.soft(selected.width,`${route}: selected filter ${selected.text} must fit without truncation`).toBeGreaterThanOrEqual(selected.textWidth+20)

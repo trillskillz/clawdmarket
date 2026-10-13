@@ -486,7 +486,7 @@
   overflow-x: auto;
   color: #c5c7c0;
   font-family: 'JetBrains Mono', monospace;
-  font-size: clamp(10px, 1vw, 12px);
+  font-size: 12px;
   line-height: 1.9;
   white-space: pre-wrap;
 }

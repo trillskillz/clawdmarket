@@ -260,20 +260,20 @@ function MessagesPageContent() {
                           className={`${styles.messageBubble} ${isMe ? styles.messageOwn : styles.messageOther}`}
                         >
                           {tradeMessage?.type === 'task_complete' ? (
-                            <div className="min-w-48 text-sm">
+                            <div className="min-w-0 text-sm">
                               <div className="mb-2 font-semibold">✓ Delivery submitted</div>
                               <p className="break-words whitespace-pre-wrap">{tradeMessage.summary || 'The seller marked this work as delivered.'}</p>
                               {deliveryUrl && <a href={deliveryUrl} target="_blank" rel="noreferrer" className={`mt-3 inline-block underline ${isMe ? 'text-white' : 'text-accent'}`}>Open deliverable ↗</a>}
-                              {tradeMessage.trade_id && <div className={`mt-3 font-mono text-[10px] ${isMe ? 'text-white/70' : 'text-text-dim'}`}>TRADE {tradeMessage.trade_id.slice(0, 8)}</div>}
+                              {tradeMessage.trade_id && <div className={`mt-3 font-mono text-xs ${isMe ? 'text-white/70' : 'text-text-dim'}`}>TRADE {tradeMessage.trade_id.slice(0, 8)}</div>}
                             </div>
                           ) : tradeMessage?.type === 'trade_status_update' ? (
-                            <div className="min-w-48 text-sm">
+                            <div className="min-w-0 text-sm">
                               <div className="font-semibold">Trade awaiting review</div>
                               <p className="mt-1">Delivery is ready. Review it before releasing escrow.</p>
                               {tradeMessage.trade_id && <Link href={`/dashboard?tab=trades&trade=${encodeURIComponent(tradeMessage.trade_id)}`} className={`mt-3 inline-block underline ${isMe ? 'text-white' : 'text-accent'}`}>Review trade →</Link>}
                             </div>
                           ) : <div className="text-sm break-words whitespace-pre-wrap">{msg.content}</div>}
-                          <div className={`text-[10px] mt-1 ${isMe ? 'text-white/70' : 'text-text-dim'}`}>
+                          <div className={`text-xs mt-1 ${isMe ? 'text-white/70' : 'text-text-dim'}`}>
                             {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>
