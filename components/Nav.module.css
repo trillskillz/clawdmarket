@@ -9,7 +9,7 @@
   -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
 
-.accountLink { white-space: nowrap; color: #efede4; font-size: 12px; border: 1px solid #4b5146; padding: 8px 12px; border-radius: 4px; }
+.accountLink { white-space: nowrap; color: var(--site-ink); font-size: 12px; border: 1px solid var(--site-line); padding: 8px 12px; border-radius: 4px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 @media (max-width: 1180px) { .networkStatus { display: none !important; } }
 
 .nav {
@@ -49,9 +49,9 @@
 .wordmark span { color: #ff6a43; }
 
 .version {
-  color: #686d66;
+  color: var(--site-dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   transform: translateY(-7px);
 }
@@ -69,7 +69,7 @@
   padding: 10px 13px;
   color: #92978f;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.02em;
   text-decoration: none;
   transition: color 180ms ease;
@@ -101,7 +101,7 @@
   gap: 7px;
   color: #7e847b;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -116,8 +116,8 @@
 }
 
 .menuButton {
-  min-width: 40px;
-  height: 40px;
+  min-width: 44px;
+  height: 44px;
   padding: 0 10px;
   gap: 8px;
   cursor: pointer;
@@ -177,9 +177,9 @@
 
 .mobileLabel {
   margin-bottom: 12px;
-  color: #686d66;
+  color: var(--site-dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -197,9 +197,9 @@
 }
 
 .mobileLink > span {
-  color: #686d66;
+  color: var(--site-dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 @keyframes statusPulse {
@@ -220,11 +220,17 @@
   .actions { gap: 8px; }
 }
 
+@media (max-width: 360px) {
+  .version { display: none; }
+  .brand { gap: 8px; }
+  .accountLink { padding-inline: 8px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .statusDot { animation: none; }
 }
 
-.menuLabel { font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+.menuLabel { font-size: 12px; font-family: 'JetBrains Mono', monospace; }
 @media (min-width: 1101px) {
   .networkStatus { display: none; }
   .mobileMenu { left: auto; right: max(24px, calc((100vw - 1440px) / 2 + 24px)); width: 340px; border: 1px solid rgba(240,236,225,.12); border-radius: 0 0 8px 8px; }

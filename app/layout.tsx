@@ -46,8 +46,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
  return (
  <html lang="en">
  <head>
- <link rel="preconnect" href="https://fonts.googleapis.com" />
- <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+ <link rel="preload" href="/fonts/plus-jakarta-sans-latin-153fc85b7029.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+ <link rel="preload" href="/fonts/space-grotesk-latin-0640890476fc.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+ <link rel="preload" href="/fonts/jetbrains-mono-latin-18be452724bf.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
  <script
  type="application/ld+json"
  dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}

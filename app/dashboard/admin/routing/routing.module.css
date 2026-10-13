@@ -14,7 +14,7 @@
 .page :global(.card) { min-width: 0; border: 1px solid var(--site-line); border-radius: 0; background: var(--site-surface); padding: 24px; box-shadow: none; }
 .page section p + p { margin-top: 12px; }
 .page section p + button { margin-top: 20px; }
-.page :global(.btn-secondary) { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--site-line); border-radius: 0; font: 500 11px 'JetBrains Mono', monospace; }
+.page :global(.btn-secondary) { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--site-line); border-radius: 0; font: 500 12px 'JetBrains Mono', monospace; }
 .page :global(.btn-secondary:hover) { border-color: var(--site-signal); }
 .page :global(.btn-secondary:disabled) { opacity: .45; cursor: not-allowed; }
 .page :global(.btn-secondary:focus-visible), .page summary:focus-visible { outline: 2px solid var(--site-signal); outline-offset: 4px; }

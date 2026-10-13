@@ -20,6 +20,7 @@ for(const tempo of [false,true])for(const width of [1440,390])test(`private work
   return route.fulfill({json:{authorization:a}})
  })
  await page.goto(url);await expect(page.getByRole('heading',{name:'Original workflow graph'})).toBeVisible()
+ const checkboxBounds=await page.getByRole('checkbox').boundingBox();expect(checkboxBounds).not.toBeNull();expect(checkboxBounds!.width).toBeGreaterThanOrEqual(16);expect(checkboxBounds!.width).toBeLessThanOrEqual(24);expect(checkboxBounds!.height).toBeLessThanOrEqual(24)
  await expect(page.getByText('source artifact 0 → upstream')).toBeVisible();await expect(page.getByText('PRIVATE_PROVIDER_OWNER_1',{exact:true})).toBeVisible()
  const approve=page.getByRole('button',{name:'Approve original workflow'});await expect(approve).toBeDisabled();await page.getByRole('checkbox').check();await approve.click()
  await expect(page.locator('main').getByRole('alert')).toContainText('Refresh');await page.reload();await expect(page.getByText('Status: approved')).toBeVisible()

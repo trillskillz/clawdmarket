@@ -1,5 +1,15 @@
 ## Current continuation — accepted local batch (2026-10-12 UTC)
 
+The latest user request puts site visual consistency and font reliability first
+and explicitly authorizes pushing the fixes with the accepted workflow/routing
+work before the ten-capability cadence. Integrated review branch:
+`fix/site-visual-reliability`, worktree `/home/void/Work/clawdmarket-visual-reliability`,
+accepted workflow base `4c4d998`. See
+[visual acceptance](docs/SITE_VISUAL_RELIABILITY_AUDIT.md). Routing acceptance stays
+6/10. The subsequent user instruction explicitly authorizes GitHub/Vercel
+publication after acceptance: required CI, merge, migration-first deployment and
+exact-SHA production verification. Original rollout gates remain closed.
+
 Reputation v2 production ranking is accepted through PR #261, main `5715083`,
 HTTP 1.111. Protected CI, migration-first deployment 38205514998, same-SHA smoke
 38206187936, independent API/desktop/mobile checks and read-only payment readiness
@@ -49,9 +59,10 @@ delivery, explicit review and late-payment recovery; pending review cannot be
 bypassed through generic task funding. That dependency audit is not another
 capability. Product/listing and contract purchases retain separate authority.
 
-The user's latest cadence is **ten completed capability PRs per publication batch**,
+The general cadence is **ten completed capability PRs per publication batch**,
 one demonstrable capability per PR, protected CI, migration-first deployment and
-exact merged-SHA production verification. Audits, commits and intermediate
+exact merged-SHA production verification, subject to the current explicit push
+exception above. Audits, commits and intermediate
 foundations do not count. No live funds or global rollout changes are authorized.
 
 # ClawdMarket Routing Layer — Master Plan
@@ -75,7 +86,8 @@ public Tempo routing, reviewed private-provider routing and independently review
 enterprise workflows are accepted locally: **6/10**, contract **1.116**.
 See [workflow acceptance](docs/ORGANIZATION_REVIEWED_WORKFLOW_AUDIT.md) and
 [task-board dependencies](docs/ORGANIZATION_REVIEWED_TASK_PURCHASING_PLAN.md).
-Ten completed capability PRs remain the publication gate. Independent providers,
+The current explicit visual/workflow push exception overrides the ten-capability
+publication gate for this review branch. Independent providers,
 representative calibration, paid canaries and production Tempo compatibility retain
 their prerequisites; no live funds or global rollout changes are authorized.
 

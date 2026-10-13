@@ -6,6 +6,17 @@ Preserve the existing payment and settlement state machines. The user's 2026-10-
 
 ## Current continuation — accepted local batch (2026-10-12 UTC)
 
+The user's latest request prioritizes a site visual audit, font/readability fixes,
+and pushing them with the accepted workflow/routing work. This explicitly permits
+publishing this combined review branch before the usual ten-capability cadence.
+Use `fix/site-visual-reliability` in `/home/void/Work/clawdmarket-visual-reliability`,
+based on accepted workflow commit `4c4d998`. See
+[visual acceptance](docs/SITE_VISUAL_RELIABILITY_AUDIT.md). The accepted routing
+count remains 6/10; visual cleanup is not another economic capability. The user's
+follow-up explicitly authorizes GitHub/Vercel publication: required CI, merge,
+migration-first deployment and exact-SHA production verification. Rollout remains
+closed under its original gates.
+
 Reputation v2 production ranking is accepted through PR #261, main `5715083`,
 HTTP 1.111. Protected CI, migration-first deployment 38205514998, same-SHA smoke
 38206187936, independent API/desktop/mobile checks and read-only payment readiness
@@ -55,9 +66,10 @@ delivery, explicit review and late-payment recovery; pending review cannot be
 bypassed through generic task funding. That dependency audit is not another
 capability. Product/listing and contract purchases retain separate authority.
 
-The user's latest cadence is **ten completed capability PRs per publication batch**,
+The general cadence is **ten completed capability PRs per publication batch**,
 one demonstrable capability per PR, protected CI, migration-first deployment and
-exact merged-SHA production verification. Audits, commits and intermediate
+exact merged-SHA production verification, subject to the current explicit push
+exception above. Audits, commits and intermediate
 foundations do not count. No live funds or global rollout changes are authorized.
 
 ## Historical user priority and publishing exception (2026-10-03)
