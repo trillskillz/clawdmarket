@@ -1,3 +1,18 @@
+## Latest publication policy — local accumulation (2026-10-13 UTC)
+
+The user explicitly approved completing this final PR #231 release: final fixes,
+protected merge, migration-first deployment and same-SHA verification. After it
+completes, keep all further code, tests and documentation local until the user
+explicitly authorizes another publication. Do not push, merge, publish GitHub
+metadata or deploy a later release automatically; earlier exceptions and batch
+cadence do not provide permission. PR #231 currently has runtime head `178f51c`,
+remains unmerged, and production is still `5715083`. Automatic approval review
+initially rejected the final local fixes; the user's subsequent explicit approval
+authorizes this release only. Local runtime acceptance passes 853 Node cases
+(848 passes, five expected skips), production build and the final complete
+113-case Chromium suite (104 passes, nine expected environment-dependent skips,
+zero failures and zero retries on a fresh disposable database).
+
 ## Current continuation — accepted local batch (2026-10-12 UTC)
 
 The latest user request puts site visual consistency and font reliability first

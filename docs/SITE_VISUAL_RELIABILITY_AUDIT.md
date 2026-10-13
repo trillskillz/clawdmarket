@@ -134,4 +134,32 @@ current projection after release. The final enabled gate now contains 853 Node
 cases; its original five expected skips remain unchanged. Evidence:
 `/tmp/clawdmarket-native-reputation-lock-test.log`,
 `/tmp/clawdmarket-reputation-fee-race-{0,1,2,3,4,5,6,7,8,9}.log` and
-`/tmp/clawdmarket-visual-publication-predeploy.log` (running before merge).
+`/tmp/clawdmarket-visual-publication-predeploy.log`: 853 cases, 848 passes,
+zero failures and five expected skips. Eighteen Python tests, SDK parity/build,
+TypeScript and lint pass. Final production build and 62 Chromium cases pass in
+`/tmp/clawdmarket-visual-publication-build.log` and
+`/tmp/clawdmarket-visual-publication-browser.log` without retries or skips.
+
+Required CI subsequently passed its unit gate and build, then found the smoke
+test's stale 107-row documentation expectation. Five route action rows had brought
+the table to 112, but the five reviewed workflow actions were missing from the
+human reference. Add those rows, yielding 117, and explicitly check all three
+workflow authorization paths. Update route wording to cover both supported rails
+and private providers. Scope the rejected reputation-decision
+alert to the application main content and assert its exact error text, excluding
+Next.js's separate route announcer. These final changes affect browser tests and
+the human documentation and this audit; the accepted financial runtime and full
+Node gate remain unchanged. Give the private reputation browser fixture the same
+test JWT fallback as the server so local admin review remains authenticated.
+
+Final complete Chromium acceptance uses a newly initialized, disposable database
+with all 66 migrations: 104 passed, zero failed, zero retries and nine expected
+environment-dependent skips across 113 cases. An earlier reused database collided
+with the fee-display fixture's unique transaction hash; the clean run preserves
+every original financial and presentation assertion. Evidence:
+`/tmp/clawdmarket-visual-clean-browser-final.log` (4.0 minutes),
+`/tmp/clawdmarket-visual-clean-browser-migrations.log`,
+`/tmp/clawdmarket-visual-local-only-build.log` and
+`/tmp/clawdmarket-visual-local-only-lint.log`. The final built human reference
+contains all 117 rows and the exact workflow paths. No financial runtime changes
+followed the fully enabled 853-case acceptance gate.
