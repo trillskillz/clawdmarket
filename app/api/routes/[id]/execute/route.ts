@@ -139,7 +139,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (exhausted?.service_order_id) return (await linkedResponse(exhausted, true))!
     return failure(lastCode, 'No saved provider remains eligible; create a new plan', 409)
   } catch (error) {
-    if (error instanceof PurchasingError && error.status === 503) return failure('MANDATE_STORAGE_BUSY', 'Retry the original route and mandate after storage contention', 503, true, 'see_trade')
+    if (error instanceof PurchasingError && error.code === 'PURCHASING_STORAGE_BUSY') return failure('MANDATE_STORAGE_BUSY', 'Retry the original route and mandate after storage contention', 503, true, 'see_trade')
     if (error instanceof RouteMandateError || error instanceof ArtifactError) {
       const current = await currentRoute(id, principal.userId)
       return failure(error.code, error.message, error.status, error.code === 'MANDATE_STORAGE_BUSY', current?.service_order_id ? 'see_trade' : 'no_funds_moved')

@@ -19,11 +19,11 @@ async function fetchJson(path: string) {
   return response.json()
 }
 
-function timeAgo(timestamp: string | number | null | undefined): string {
+function timeAgo(timestamp: string | number | null | undefined, now: number): string {
   if (!timestamp) return '—'
   const date = activityDate(timestamp)
   if (!date || Number.isNaN(date.getTime()) || date.getFullYear() < 2020) return '—'
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  const seconds = Math.floor((now - date.getTime()) / 1000)
   if (seconds < 60) return 'just now'
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
@@ -77,7 +77,7 @@ function ActivityDescription({ item }: { item: any }) {
   return <>{segments}</>
 }
 
-export default function ObserveClient({ initialStats, initialActivity, initialPaymentConfig }: { initialStats: any; initialActivity: any[] | null; initialPaymentConfig: PaymentConfig }) {
+export default function ObserveClient({ initialStats, initialActivity, initialPaymentConfig, initialRenderedAt }: { initialStats: any; initialActivity: any[] | null; initialPaymentConfig: PaymentConfig; initialRenderedAt: number }) {
   const [connState, setConnState] = useState<ConnState>(initialActivity !== null ? 'live' : 'connecting')
   const [stats, setStats] = useState<any>(initialStats || {})
   const [activity, setActivity] = useState<any[]>(activityTimeline(initialActivity || []))
@@ -86,6 +86,8 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
   const [completedTasks, setCompletedTasks] = useState<any[]>([])
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(initialPaymentConfig)
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
+  // Hydration uses the server's clock snapshot; successful refreshes advance it.
+  const renderedAt = lastSyncedAt?.getTime() ?? initialRenderedAt
 
   useEffect(() => {
     let cancelled = false
@@ -234,7 +236,7 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
                 <span className={`${styles.eventMark} ${eventTone(item.type)}`} />
                 <span className={styles.eventIndex}>{String(index + 1).padStart(2, '0')}</span>
                 <p>{item.personal && <strong>Your wallet · </strong>}<ActivityDescription item={item} /></p>
-                <time dateTime={item.timestamp} title={fullTimestamp(item.timestamp)} aria-label={fullTimestamp(item.timestamp)}>{timeAgo(item.timestamp)}<small>{fullTimestamp(item.timestamp)}</small></time>
+                <time dateTime={item.timestamp} title={fullTimestamp(item.timestamp)} aria-label={fullTimestamp(item.timestamp)}>{timeAgo(item.timestamp, renderedAt)}<small>{fullTimestamp(item.timestamp)}</small></time>
               </article>
             ))}
           </div>
@@ -247,7 +249,7 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
             <div><span>Average trade</span><strong>${averageTrade.toFixed(2)}</strong></div>
             <div><span>Eligible buyer feedback</span><strong>{Number(stats.avg_rating ?? 0)>0?Number(stats.avg_rating).toFixed(1):'—'}</strong></div>
             <div><span>Trades today</span><strong>{Number(stats.trades_today ?? 0)}</strong></div>
-            <div><span>Last sync</span><strong title={fullTimestamp(lastSyncedAt?.getTime())}>{lastSyncedAt ? timeAgo(lastSyncedAt.getTime()) : '—'}</strong></div>
+            <div><span>Last sync</span><strong title={fullTimestamp(lastSyncedAt?.getTime())}>{lastSyncedAt ? timeAgo(lastSyncedAt.getTime(), renderedAt) : '—'}</strong></div>
           </div>
         </aside>
       </section>
@@ -270,7 +272,7 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
             <div className={styles.taskList}>{completedTasks.map((task) => (
               <article key={task.id}>
                 <div><strong>{task.title}</strong><span>${Number(task.budget_usd || 0).toFixed(2)}</span></div>
-                <p>{parseCapabilities(task.required_capabilities).slice(0, 3).map((capability) => <i key={capability}>{capability}</i>)}<time>{timeAgo(task.created_at)}</time></p>
+                <p>{parseCapabilities(task.required_capabilities).slice(0, 3).map((capability) => <i key={capability}>{capability}</i>)}<time>{timeAgo(task.created_at, renderedAt)}</time></p>
               </article>
             ))}</div>
           )}

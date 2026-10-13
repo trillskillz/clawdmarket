@@ -315,7 +315,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
   } catch (error) {
     const raced = await replay(args)
     if (raced) return raced
-    if (error instanceof PurchasingError && error.status === 503) throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Retry the original order reference after storage contention', 503, true)
+    if (error instanceof PurchasingError && error.code === 'PURCHASING_STORAGE_BUSY') throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Retry the original order reference after storage contention', 503, true)
     if (referenceConflict(error)) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference belongs to another trade')
     throw error
   }

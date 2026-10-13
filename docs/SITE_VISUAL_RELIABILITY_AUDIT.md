@@ -47,6 +47,11 @@ selected payment-readiness choice remains visible at 320px.
 Use dark text for the selected registration role, matching other filled actions.
 Hide the decorative navigation version below 360px so the brand, sign-in and menu
 retain their gutters and usable targets.
+The final browser rerun exposed an intermittent Observe hydration mismatch when
+relative timestamps crossed a minute boundary. Pass the server render clock to
+the client, retain it for hydration, then advance it on successful market refresh.
+Desktop/mobile activity checks deliberately skew the browser clock by two minutes
+and assert no browser errors while preserving the real activity/privacy checks.
 
 ## Verification
 
@@ -108,3 +113,13 @@ lint pass. Logs: `/tmp/clawdmarket-ci-workflow-authority-fixed.log` and
 `/tmp/clawdmarket-route-storage-fixed-{gross,fee,department,capacity}-{0,1,2,3}.log`.
 The complete enabled release gate is rerunning before merge because this repair
 changes database transaction boundaries. No live production funds are involved.
+
+The next CI run caught overly broad 503 mapping in the contention repair and a
+provider-preflight test hook tied to the old shared client. Map only the exact
+`PURCHASING_STORAGE_BUSY` code, preserving `PURCHASING_DISABLED`. Observe the
+actual fresh-client provider read in the test before mutating through a separate
+database connection; retain all original fallback, capacity and no-funds assertions.
+All 63 cases across purchasing, workflow authorization and reservation eligibility
+pass (31 passes, 32 disposable-chain skips in this focused run); the complete
+gate enables both chain binaries and external isolation before merge.
+Focused log: `/tmp/clawdmarket-route-contention-regressions-final.log`.
