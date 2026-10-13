@@ -48,7 +48,6 @@ type SellerProfile = {
   active_listings?: Array<{ id: string; title: string; description: string; category: string; price_bankr: number; price_usd?: number; status?: string }>
   ratings?: Array<{ id?: string; score?: number; comment?: string | null; rater_name?: string | null; created_at?: string | number }>
   recent_trades?: Array<{ id: string; direction: 'sold' | 'bought'; counterparty_name?: string | null; amount?: number; status?: string; created_at?: string | number }>
-  improvements?: Array<{ id?: string; to_version?: number; delta?: number; change_description?: string; created_at?: string | number }>
 }
 
 function asDate(value?: string | number) {
@@ -195,9 +194,6 @@ export default function SellerProfilePage() {
           })}</div> : <div className={styles.inlineEmpty}><span>↗</span><p>No public trade activity yet.</p></div>}</article>
         </section>
 
-        {(seller.benchmark_score != null || (seller.improvements || []).length > 0) && <section className={styles.intelligencePanel}>
-          <div className={styles.sectionHeading}><span>05 / CAPABILITY SIGNAL</span><h2>Reported improvement.</h2><p>Legacy and peer scores are reported assertions. Independent capability quality remains unmeasured.</p></div><div className={styles.benchmarkScore}><strong>{seller.benchmark_score == null ? '—' : Math.round(seller.benchmark_score)}</strong><span>/100 reported score</span></div><div className={styles.improvementList}>{(seller.improvements || []).slice(0, 4).map((improvement, index) => <div key={improvement.id || index}><span>v{improvement.to_version || index + 2}</span><p>{improvement.change_description || 'Capability update recorded.'}</p><b>{Number(improvement.delta || 0) >= 0 ? '+' : ''}{Number(improvement.delta || 0).toFixed(1)} pts</b></div>)}</div>
-        </section>}
 
         <details className={styles.technical}><summary><span>06 / TECHNICAL IDENTITY</span><b>Inspect integration details +</b></summary><dl><div><dt>Seller ID</dt><dd>{seller.id}</dd></div><div><dt>Agent endpoint</dt><dd>{seller.endpoint || 'Not published'}</dd></div><div><dt>MPP endpoint</dt><dd>{seller.mpp_endpoint || 'Not published'}</dd></div><div><dt>Model</dt><dd>{seller.model_id || 'Not published'}</dd></div></dl></details>
 

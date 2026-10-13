@@ -118,11 +118,10 @@ export function paymentContract(payment: Input['payment']) {
   return { token_decimals: 6, token_usd_price: 1 }
 }
 
-export async function createRouteMandate(routeId: string, ownerId: string, raw: unknown) {
+export async function createRouteMandateInTransaction(tx: Source, routeId: string, ownerId: string, raw: unknown) {
   const parsed = routeMandateInput.safeParse(raw)
   if (!parsed.success) throw new RouteMandateError('INVALID_ROUTE_MANDATE', 400)
   const input = parsed.data, requestHash = hash(input)
-  return withKeyedWriteLock(`route-authority:${routeId}`, () => retryTransaction(() => db.transaction(async (tx) => {
     const [plan] = await tx.select().from(route_plans).where(eq(route_plans.id, routeId)).limit(1)
     if (!plan || !await ownerControlsBuyer(ownerId, plan.buyer_id, tx)) throw new RouteMandateError('ROUTE_NOT_FOUND', 404)
     const [prior] = await tx.select().from(route_payment_mandates).where(or(eq(route_payment_mandates.route_id, routeId),
@@ -146,7 +145,11 @@ export async function createRouteMandate(routeId: string, ownerId: string, raw: 
       owner_account_id: ownerId, client_reference, request_hash: requestHash, route_hash: routeAuthorityHash(plan),
       terms_json: JSON.stringify(contract), max_aggregate_minor: input.max_aggregate, expires_at: expiry, created_at: now }).returning()
     return { mandate: mandateDto(row), idempotent: false }
-  })))
+}
+
+export async function createRouteMandate(routeId: string, ownerId: string, raw: unknown) {
+  return withKeyedWriteLock(`route-authority:${routeId}`, () => retryTransaction(() => db.transaction(tx =>
+    createRouteMandateInTransaction(tx, routeId, ownerId, raw))))
 }
 
 export async function inspectRouteMandate(routeId: string, userId: string) {
@@ -174,6 +177,8 @@ async function activeMandate(source: Source, row: Mandate, plan: Plan) {
   const terms = termsOf(row), current = paymentContract(terms.payment)
   if (current.token_decimals !== terms.token_decimals || current.token_usd_price !== terms.token_usd_price
     || current.fee_token_decimals !== terms.fee_token_decimals) throw new RouteMandateError('MANDATE_TOKEN_TERMS_CHANGED')
+  const { validateOrganizationRouteAuthority } = await import('./organization-route-authorizations')
+  await validateOrganizationRouteAuthority(source, row, plan)
   const { validateWorkflowRouteAuthority } = await import('./workflow-execution-budget')
   await validateWorkflowRouteAuthority(source, row, plan, terms)
   return terms
@@ -221,6 +226,8 @@ export async function reserveMandateExposure(source: Source, input: { mandateId:
   if (input.retry) await source.insert(route_retry_funding_steps).values({ ...step, retry_operation_id: input.retry.operationId,
     previous_trade_id: input.retry.previousTradeId, attempt_id: input.retry.attemptId })
   else await source.insert(route_funding_steps).values(step)
+  const { consumeOrganizationRouteExposure } = await import('./organization-route-authorizations')
+  await consumeOrganizationRouteExposure(source, input)
   const { reserveWorkflowExposure } = await import('./workflow-execution-budget')
   await reserveWorkflowExposure(source, { ...input, mandate: row, terms })
 }

@@ -104,7 +104,7 @@ export async function revokePurchasingRole(orgId: string, actor: string, roleId:
     await audit(orgId, actor, 'purchasing_role_revoked', tx); return updated
   })
 }
-function serviceHash(service: typeof service_definitions.$inferSelect) {
+export function purchasingServiceHash(service: typeof service_definitions.$inferSelect) {
   const capabilities = storedServiceCapabilities(service.capabilities)
   if (!capabilities?.length || service.status !== 'active' || !Number.isSafeInteger(service.price_minor) || service.price_minor < 1)
     throw new PurchasingError('PURCHASING_SERVICE_UNAVAILABLE')
@@ -124,7 +124,7 @@ async function currentRequest(row: typeof requests.$inferSelect, source: Purchas
   if (row.requester_role_id) await role(row.requester_role_id, org, row.requester_account_id, 'requester', row.team_id, row.amount_minor, source)
   else if (row.requester_account_id !== org.owner_account_id) throw new PurchasingError('PURCHASING_ROLE_INVALID', 403)
   const [service] = await source.select().from(service_definitions).where(eq(service_definitions.id, row.service_id)).limit(1)
-  if (!service || serviceHash(service) !== row.service_hash) throw new PurchasingError('PURCHASING_QUOTE_CHANGED')
+  if (!service || purchasingServiceHash(service) !== row.service_hash) throw new PurchasingError('PURCHASING_QUOTE_CHANGED')
   const order = JSON.parse(row.order_json) as z.output<typeof serviceOrderInput>
   await privateProviderAccess(service, row.buyer_id, order.provider_share_id, source)
   return { org, service }
@@ -162,7 +162,7 @@ export async function createPurchaseRequest(orgId: string, actor: string, input:
     const proposed = { id: randomUUID(), organization_id: orgId, owner_account_id: org.owner_account_id,
       buyer_id: `user_agent_${input.buyer_agent_id}`, agent_id: input.buyer_agent_id, team_id: assignment.team_id, cost_center: assignment.cost_center,
       service_id: service.id, requester_account_id: actor, requester_role_id: input.requester_role_id, reviewer_role_id: input.reviewer_role_id,
-      client_reference: input.client_reference, request_hash: fingerprint, service_hash: serviceHash(service), order_json: canonical(input.order),
+      client_reference: input.client_reference, request_hash: fingerprint, service_hash: purchasingServiceHash(service), order_json: canonical(input.order),
       amount_minor: amount, payment_rail: input.order.payment_rail, state: 'open' as const, expires_at: input.expires_at,
       created_at: new Date(), cancelled_at: null }
     await currentRequest(proposed, tx)
@@ -251,7 +251,7 @@ export async function validatePurchaseApproval(source: PurchasingSource, args: {
   if (!row || row.buyer_id !== args.buyerId) throw new PurchasingError('PURCHASING_APPROVAL_NOT_FOUND', 404)
   const { org } = await currentRequest(row, source)
   if (row.state !== 'approved' || approval.owner_account_id !== org.owner_account_id || approval.request_hash !== row.request_hash
-    || row.service_id !== args.service.id || row.service_hash !== serviceHash(args.service) || row.amount_minor !== args.totalMinor || row.payment_rail !== args.rail)
+    || row.service_id !== args.service.id || row.service_hash !== purchasingServiceHash(args.service) || row.amount_minor !== args.totalMinor || row.payment_rail !== args.rail)
     throw new PurchasingError('PURCHASING_APPROVAL_MISMATCH')
   if (approval.approver_role_id) await role(approval.approver_role_id, org, approval.approver_account_id, 'approver', row.team_id, row.amount_minor, source)
   else if (approval.approver_account_id !== org.owner_account_id) throw new PurchasingError('PURCHASING_ROLE_INVALID', 403)
@@ -294,4 +294,9 @@ export async function originalPurchaseOrderMatches(approvalId: string, buyerId: 
   const { purchasing_approval_id: ignored, ...order } = request
   void ignored
   return !!row && use.request_hash === row.request_hash && row.order_json === canonical(order)
+}
+
+/** Internal role check shared by separately reviewed organization route authority. */
+export async function validateOrganizationApprover(source: PurchasingSource, organizationId: string, roleId: string, actor: string, teamId: string | null, amount: number) {
+  return role(roleId, await organization(organizationId, source), actor, 'approver', teamId, amount, source)
 }

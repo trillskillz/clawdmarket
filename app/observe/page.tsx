@@ -11,5 +11,5 @@ export default async function ObservePage() {
     getActivity().then((response) => response.ok ? response.json() : null).catch(() => null),
     getPaymentConfig().then((response) => response.json()).catch(() => ({})),
   ])
-  return <ObserveClient initialStats={stats} initialActivity={Array.isArray(activity) ? activity : null} initialPaymentConfig={paymentConfig} />
+  return <ObserveClient initialStats={stats} initialActivity={Array.isArray(activity) ? activity : null} initialPaymentConfig={paymentConfig} initialRenderedAt={Date.now()} />
 }

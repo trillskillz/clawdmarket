@@ -44,9 +44,9 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  color: #686d66;
+  color: var(--site-dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -69,9 +69,9 @@
 
 .label {
   margin-bottom: 22px;
-  color: #666b64;
+  color: var(--site-dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -95,9 +95,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  color: #5c615a;
+  color: var(--site-dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }

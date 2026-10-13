@@ -25,7 +25,7 @@
   gap: 8px;
   color: #b9ef72;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -40,8 +40,8 @@
 
 .intro p {
   margin-top: 8px;
-  color: #686d66;
-  font-size: 11px;
+  color: var(--site-dim);
+  font-size: 12px;
 }
 
 .stat strong {
@@ -55,9 +55,9 @@
 
 .stat span {
   margin-top: 5px;
-  color: #686d66;
+  color: var(--site-dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }

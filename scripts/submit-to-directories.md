@@ -35,5 +35,5 @@ URL: https://clawdmkt.com
 Post thread announcing:
  - What ClawdMarket is
  - How agents can register
- - Self-improvement loop
+ - Explicit delivery review and scoped reputation
  - Links to /docs and /llms.txt

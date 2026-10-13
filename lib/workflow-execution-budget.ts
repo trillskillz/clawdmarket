@@ -11,7 +11,9 @@ import { storedWorkflowContract, workflowOwnerControlsBuyer, workflowTransaction
 import { workflowPlanHash } from './workflow-planning'
 import { canonicalContract } from './structured-verification'
 import { paymentContract, RouteMandateError, routeAuthorityHash, routeMandateInput } from './route-payment-mandate'
-import { planRoute, routePlanInput } from './route-planning'
+import { planOrganizationRouteForReview, planRoute, routePlanInput } from './route-planning'
+import { organizationWorkflowAuthority, reserveOrganizationWorkflowExposure } from './organization-workflow-authorizations'
+import { PurchasingError } from './organization-purchasing-transaction'
 import { providerMatches } from './provider-requirements'
 import { routeAdmissionFailure } from './route-control'
 import { routeExecutionEnabled } from './routing-feature-flags'
@@ -59,7 +61,10 @@ async function current(source: Source, run: Run) {
     || run.started_at.getTime() > Date.now()) fail('WORKFLOW_DEADLINE_CHANGED')
   if (hash(paymentContract(contract.terms.payment)) !== hash(contract.token)) fail('WORKFLOW_TOKEN_TERMS_CHANGED')
   if (await routeAdmissionFailure(source)) fail('ROUTE_EXECUTION_PAUSED', 503)
-  return { approval, contract, nodes }
+  let organizationAuthority
+  try { organizationAuthority = await organizationWorkflowAuthority(source,run.workflow_id) }
+  catch(error){if(error instanceof PurchasingError)return fail(error.code,error.status);throw error}
+  return { approval, contract, nodes, organizationAuthority }
 }
 function nodeContract(node: Node, run: Run, checked: Awaited<ReturnType<typeof current>>, allowBlocked = false) {
   const planned = checked.contract.workflow.nodes.find((item) => item.key === node.node_key)
@@ -130,7 +135,11 @@ export async function prepareWorkflowNode(runId: string, key: string, userId: st
     max_budget: { amount: money(terms.max_per_attempt_minor), currency: 'USD' }, deadline_seconds: planned.deadline_seconds,
     verification: terms.verification, provider_requirements: terms.provider_requirements,
     payment_policy: { allowed_rails: [checked.contract.terms.payment.rail] }, retry_policy: { max_attempts: terms.max_attempts } })
-  const candidates = await planRoute(input, initial.run.buyer_id)
+  const authority = checked.organizationAuthority
+  const reviewedNode = authority?.terms.nodes.find(n=>n.key===key)
+  const candidates = authority ? await planOrganizationRouteForReview(input,initial.run.buyer_id,authority.row.organization_id,authority.row.owner_account_id,
+    reviewedNode!.provider_shares.length ? reviewedNode!.provider_shares.map(s=>s.id) : undefined) : await planRoute(input, initial.run.buyer_id)
+  if (reviewedNode && candidates.candidates.some(c=>!reviewedNode.services.some(s=>s.id===c.service_id))) fail('ORGANIZATION_WORKFLOW_PROVIDER_CHANGED')
   if (!candidates.candidates.length) fail('WORKFLOW_NO_ELIGIBLE_PROVIDER')
   const sellers = await db.select({ id: service_definitions.seller_id }).from(service_definitions)
     .where(inArray(service_definitions.id, candidates.candidates.map((item) => item.service_id)))
@@ -140,6 +149,8 @@ export async function prepareWorkflowNode(runId: string, key: string, userId: st
     const { run, node } = await ownedNode(tx, runId, key, userId)
     if (node.route_id) return { node, idempotent: true }
     const latest = await current(tx, run), bound = nodeContract(node, run, latest)
+    const latestReviewedNode=latest.organizationAuthority?.terms.nodes.find(n=>n.key===key)
+    if(latestReviewedNode && candidates.candidates.some(c=>!latestReviewedNode.services.some(s=>s.id===c.service_id)))fail('ORGANIZATION_WORKFLOW_PROVIDER_CHANGED')
     const dependencies = await assertWorkflowDependencyBindings(tx, run, node)
     if (hash(input.input) !== hash({ ...bound.terms.static_input, ...dependencies.input })) fail('WORKFLOW_DEPENDENCY_CHANGED')
     const expiry = new Date(Math.floor(node.deadline_at.getTime() / 1000) * 1000)
@@ -188,6 +199,8 @@ export async function validateWorkflowRouteAuthority(source: Source, row: Mandat
     || plan.buyer_id !== run.buyer_id || row.owner_account_id !== run.owner_account_id
     || plan.execution_deadline_at?.getTime() !== node.deadline_at.getTime()
     || plan.expires_at.getTime() !== Math.floor(node.deadline_at.getTime() / 1000) * 1000) fail('WORKFLOW_CHILD_CONTRACT_CHANGED')
+  const reviewedNode=checked.organizationAuthority?.terms.nodes.find(n=>n.key===node.node_key)
+  if(reviewedNode && (JSON.parse(plan.candidates_json) as {service_id:string}[]).some(c=>!reviewedNode.services.some(s=>s.id===c.service_id)))fail('ORGANIZATION_WORKFLOW_PROVIDER_CHANGED')
   const { ledger } = await workflowExposureLedger(source, run, checked)
   if (plan.service_order_id) {
     const reservation = ledger.find((entry) => entry.order_id === plan.service_order_id && entry.node_run_id === node.id)
@@ -199,13 +212,14 @@ export async function validateWorkflowRouteAuthority(source: Source, row: Mandat
       || order.buyer_id !== run.buyer_id || Math.round(trade.total_cost * 100) !== reservation!.amount_minor
       || step.order_id !== order.id || step.amount_minor !== reservation!.amount_minor || step.terms_hash !== node.terms_hash
       || step.route_id !== plan.id || step.mandate_id !== row.id) fail('WORKFLOW_FUNDING_RESERVATION_CHANGED')
+    if(reviewedNode && (!reviewedNode.services.some(s=>s.id===order!.service_id)||order!.private_provider_share_id!==(reviewedNode.provider_shares.find(s=>s.service_id===order!.service_id)?.id??null)))fail('ORGANIZATION_WORKFLOW_ORDER_CHANGED')
     const [service] = await source.select().from(service_definitions).where(eq(service_definitions.id, order!.service_id)).limit(1)
     if (!service?.estimated_latency_seconds || Date.now() + service.estimated_latency_seconds * 1000 > node.deadline_at.getTime()) fail('WORKFLOW_NODE_RUNTIME_EXCEEDED')
   }
   return { run, node, checked, ...contract }
 }
 
-export async function workflowExposureLedger(source: Source, run: Run, checked: Awaited<ReturnType<typeof current>>) {
+export async function workflowExposureLedger(source: Source, run: Run, checked: Pick<Awaited<ReturnType<typeof current>>, 'approval'|'contract'|'nodes'>) {
   const ledger = await source.select().from(workflow_reservations).where(eq(workflow_reservations.run_id, run.id)).limit(49)
   if (ledger.length > 48) fail('WORKFLOW_EXPOSURE_INVALID')
   const children = await source.select().from(workflow_node_runs).where(eq(workflow_node_runs.run_id, run.id))
@@ -260,6 +274,8 @@ export async function reserveWorkflowExposure(source: Source, input: { mandate: 
   if (attempts.length >= terms.max_attempts || attempts.slice(1).reduce((sum, entry) => sum + entry.amount_minor, 0)
     + (attempts.length ? input.totalMinor : 0) > terms.max_retry_minor) fail('WORKFLOW_RETRY_BUDGET_EXCEEDED')
   if (feeTotal + fee > BigInt(checked.contract.terms.max_chain_fee_units)) fail('WORKFLOW_CHAIN_FEE_EXCEEDED')
+  try { await reserveOrganizationWorkflowExposure(source,run.workflow_id,input.totalMinor,fee.toString(),input.tradeId) }
+  catch(error){if(error instanceof PurchasingError)return fail(error.code,error.status);throw error}
   const [parent] = await source.update(workflow_runs).set({ gross_reserved_minor: total + input.totalMinor, chain_fee_reserved_units: (feeTotal + fee).toString() })
     .where(and(eq(workflow_runs.id, run.id), eq(workflow_runs.state, 'authorized'), eq(workflow_runs.gross_reserved_minor, total),
       eq(workflow_runs.chain_fee_reserved_units, run.chain_fee_reserved_units))).returning({ id: workflow_runs.id })

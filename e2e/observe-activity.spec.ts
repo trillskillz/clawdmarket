@@ -10,6 +10,13 @@ for (const width of [1440, 390]) {
     const fixture = JSON.parse((await promisify(execFile)(process.execPath, ['--conditions=react-server', '--import', 'tsx', 'e2e/fixtures/observe-activity.ts'],
       { env: { ...process.env, JWT_SECRET: process.env.JWT_SECRET || 'clawdmarket-playwright-jwt-secret' } })).stdout)
     try {
+      const pageErrors: string[] = []
+      page.on('pageerror', error => pageErrors.push(error.message))
+      // Cross a relative-time bucket between server render and browser hydration.
+      await page.addInitScript(() => {
+        const now = Date.now.bind(Date)
+        Date.now = () => now() + 120_000
+      })
       await page.setViewportSize({ width, height: 1000 })
       await page.goto('/observe')
       const feed = page.getByRole('log', { name: 'Live activity feed' })
@@ -27,6 +34,7 @@ for (const width of [1440, 390]) {
         }
       }
       await checkOrder()
+      expect(pageErrors).toEqual([])
       await context.addCookies([{ name: 'auth-token', value: fixture.token, url: 'http://localhost:3000' }])
       await expect(feed.getByText(/Your wallet · Wallet deposit credited: available \+\$9\.00/).last()).toBeVisible({ timeout: 12_000 })
       await checkOrder()
@@ -47,6 +55,7 @@ for (const width of [1440, 390]) {
       expect(await feed.locator('article p').allTextContents()).toEqual(snapshot)
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       expect(overflow).toBeLessThanOrEqual(1)
+      expect(pageErrors).toEqual([])
     } finally {
       await promisify(execFile)(process.execPath, ['--conditions=react-server', '--import', 'tsx', 'e2e/fixtures/observe-activity.ts', 'cleanup', fixture.id],
         { env: { ...process.env, JWT_SECRET: process.env.JWT_SECRET || 'clawdmarket-playwright-jwt-secret' } })

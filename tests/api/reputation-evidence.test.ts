@@ -11,6 +11,35 @@ import { createLocalTestSchema } from '../helpers/local-schema'
 let directory: string, db: typeof import('@/lib/db').db, s: typeof import('@/lib/schema')
 let load: typeof import('@/lib/agent-trust').loadAgentTrust
 const buyer = `rep-buyer-${crypto.randomUUID()}`
+test('a failed local reputation read releases its native statement before financial writes resume', () => {
+  const path = join(tmpdir(), `clawdmarket-workspace-test-reputation-lock-${crypto.randomUUID()}.db`)
+  const code = `(async()=>{
+    const assert=(await import('node:assert/strict')).default;
+    const {db}=await import('./lib/db.ts'),imported=await import('./lib/schema.ts'),schema=imported.default??imported;
+    await (await import('./tests/helpers/local-schema.ts')).createLocalTestSchema(db.$client,schema);
+    const {loadReputationV2Records}=await import('./lib/reputation-v2.ts');
+    const {createRequire}=await import('node:module'),require=createRequire(process.cwd()+'/package.json');
+    const Database=createRequire(require.resolve('@libsql/client'))('libsql');
+    const writer=new Database(process.env.TURSO_DATABASE_URL.slice(5));
+    const requests=[{key:'locked',provider_id:'locked-provider',scope:{kind:'provider_history'}}];
+    try {
+      writer.exec('BEGIN EXCLUSIVE');
+      const unavailable=await loadReputationV2Records(requests);
+      assert.equal(unavailable.get('locked').projection_status,'unavailable');
+      writer.exec('ROLLBACK');
+      await db.transaction(async tx=>tx.insert(schema.users).values({id:'recovered',email:'recovered@test.invalid',password_hash:'unused',name:'Recovered'}));
+      assert.equal((await db.select().from(schema.users)).length,1);
+      assert.equal((await loadReputationV2Records(requests)).get('locked').projection_status,'current');
+      console.log('native reputation lock recovered');
+    } finally { if(writer.inTransaction)writer.exec('ROLLBACK');writer.close();db.$client.close(); }
+  })().catch(error=>{console.error(error);process.exitCode=1})`
+  try {
+    const output = execFileSync(process.execPath, ['--conditions=react-server', '--import', 'tsx', '-e', code], {
+      cwd: process.cwd(), env: { ...process.env, TURSO_DATABASE_URL: `file:${path}` }, timeout: 20_000, encoding: 'utf8', stdio: ['ignore','pipe','pipe'],
+    })
+    assert.match(output, /native reputation lock recovered/)
+  } finally { rmSync(path, { force: true }) }
+})
 before(async () => {
   directory = mkdtempSync(join(tmpdir(), 'clawdmarket-workspace-test-reputation-'))
   process.env.TURSO_DATABASE_URL = `file:${join(directory, 'test.db')}`

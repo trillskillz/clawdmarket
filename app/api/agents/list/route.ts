@@ -55,8 +55,7 @@ export async function GET(request: NextRequest) {
       client.execute({ sql:
       `SELECT id, name, description, capabilities, endpoint,
       owner_address, status, avg_rating, rating_count,
-      created_at, version, benchmark_score, velocity_score,
-      improvement_count, moltbook_handle, is_online, last_seen_at
+      created_at, benchmark_score, moltbook_handle, is_online, last_seen_at
       FROM agents
       WHERE ${whereSql}
       ORDER BY created_at DESC, id DESC
@@ -78,7 +77,6 @@ export async function GET(request: NextRequest) {
 
     const agents = rows.map((row: any) => {
       const benchmarkScore = row.benchmark_score ? Number(row.benchmark_score) : null
-      const velocityScore = row.velocity_score ? Number(row.velocity_score) : null
       const trust = trustMap.get(String(row.id))!
       const availability = getAgentAvailability(row.status, row.last_seen_at)
 
@@ -99,11 +97,8 @@ export async function GET(request: NextRequest) {
         avg_rating: trust.components.averageRating,
         rating_count: trust.components.ratingCount,
         created_at: row.created_at,
-        version: row.version || 1,
         benchmark_score: benchmarkScore,
         benchmark_evidence: LEGACY_BENCHMARK_EVIDENCE,
-        velocity_score: velocityScore,
-        improvement_count: Number(row.improvement_count || 0),
         moltbook_handle: row.moltbook_handle || null,
         is_online: availability === 'online',
         availability,

@@ -42,7 +42,7 @@ import { assertRouteRetryReconciled, RouteRetryError } from './route-retry-recon
 import { listRouteFundingSteps } from './route-funding-steps'
 import { privateProviderAccess } from './organization-private-providers'
 import { validatePurchaseApproval, consumePurchaseApproval, originalPurchaseOrderMatches } from './organization-purchasing'
-import { purchasingTransaction } from './organization-purchasing-transaction'
+import { purchasingTransaction, PurchasingError } from './organization-purchasing-transaction'
 import { workflowTransaction, WorkflowApprovalError } from './workflow-approval'
 import { validateSpendingPurchase, consumeSpendingPurchase } from './organization-spending-accounts'
 import { validOrganizationSpendingEvidence, type OrganizationSpendingEvidence } from './organization-spending-evidence'
@@ -81,7 +81,7 @@ function sameRequest(prior: NonNullable<Awaited<ReturnType<typeof existingServic
   const { request, principal, serviceId } = args
   if(args.organizationSpendingEvidence && prior.order.organization_spending_account_id !== args.organizationSpendingEvidence.accountId) return false
   return (prior.order.purchasing_approval_id ?? null) === (request.purchasing_approval_id ?? null)
-    && (prior.order.private_provider_share_id ?? null) === (request.provider_share_id ?? null)
+    && (Boolean(args.routeId && args.mandateId && !request.provider_share_id) || (prior.order.private_provider_share_id ?? null) === (request.provider_share_id ?? null))
     && prior.order.buyer_id === principal.userId && prior.order.service_id === serviceId
     && prior.order.provider_requirements_json === JSON.stringify(request.provider_requirements ?? {})
     && prior.order.objective === request.objective && prior.order.input_json === JSON.stringify(request.input)
@@ -134,7 +134,13 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       throw new ServiceOrderReservationError('ROUTE_STALE_PROVIDER', 'Service provider changed after route eligibility was checked')
     }
     if (!service || service.status !== 'active' || service.visibility === 'public' && !await readWithLocalContentionRecovery(source => isPublicMarketplaceSeller(service.seller_id, source))) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is not active')
-    await readWithLocalContentionRecovery(source => privateProviderAccess(service, principal.userId, request.provider_share_id, source))
+    const { organizationRoutePrivateShare } = await import('./organization-route-authorizations')
+    const resolvePrivateShare = async (source: NonNullable<Parameters<typeof privateProviderAccess>[3]>) => routeId && args.mandateId
+      ? await organizationRoutePrivateShare(source,routeId,args.mandateId,service,principal.userId)
+        ?? await (await import('./organization-workflow-authorizations')).organizationWorkflowPrivateShare(source,routeId,args.mandateId,service,principal.userId)
+      : await privateProviderAccess(service,principal.userId,request.provider_share_id,source)
+    const preliminaryShare = await readWithLocalContentionRecovery(resolvePrivateShare)
+    if (service.visibility !== 'public' && !preliminaryShare) throw new ServiceOrderReservationError('PRIVATE_SERVICE_NOT_FOUND','Private route requires independently reviewed consent',404)
     if (!reusableServiceSellerWritesEnabled(service.seller_id)) throw new ServiceOrderReservationError('SERVICE_UNAVAILABLE', 'Service is outside the active canary', 409)
     const contract = serviceContractReadiness(service)
     if (!contract.executionModeReady) throw new ServiceOrderReservationError('EXECUTION_MODE_UNSUPPORTED', 'Service execution mode is unsupported')
@@ -174,10 +180,11 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         if (error instanceof WorkflowApprovalError && error.status === 503) throw new ServiceOrderReservationError('WORKFLOW_STORAGE_BUSY', 'Retry the same workflow child reference', 503, true)
         throw error
       }
-    } : request.purchasing_approval_id || request.provider_share_id || args.organizationSpendingEvidence ? purchasingTransaction : db.transaction.bind(db)
+    } : args.mandateId || request.purchasing_approval_id || request.provider_share_id || args.organizationSpendingEvidence ? purchasingTransaction : db.transaction.bind(db)
     const reserveOnce = () => transaction(async (tx) => {
       const now = new Date()
-      const privateShare = await privateProviderAccess(service, principal.userId, request.provider_share_id, tx)
+      const privateShare = await resolvePrivateShare(tx)
+      if (service.visibility !== 'public' && !privateShare) throw new ServiceOrderReservationError('PRIVATE_SERVICE_NOT_FOUND','Private route requires independently reviewed consent',404)
       const transactionFeeRecipient = internal ? feeRecipient ?? await ensureAdminFeeRecipient(tx) : null
       let retrySpendMinor = 0
       let agreedCapabilities = storedServiceCapabilities(service.capabilities)
@@ -235,8 +242,11 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       if (requirementFailure) throw new ServiceOrderReservationError(requirementFailure, 'Provider does not satisfy buyer evidence requirements')
       const verifierFailure = await isolatedVerifierEligibility(contract.verificationPolicy!.isolated_checks, principal.userId, service.seller_id, tx)
       if (verifierFailure) throw new ServiceOrderReservationError(verifierFailure, 'Isolated verifier is unavailable or shares a trade-party owner')
+      const { organizationRoutePurchaseEvidence } = await import('./organization-route-authorizations')
+      const routePurchaseEvidence = routeId && args.mandateId ? await organizationRoutePurchaseEvidence(tx,routeId,args.mandateId,service,totalMinor)
+        ?? await (await import('./organization-workflow-authorizations')).organizationWorkflowPurchaseEvidence(tx,routeId,args.mandateId,service,totalMinor) : undefined
       const purchaseEvidence = request.purchasing_approval_id ? await validatePurchaseApproval(tx, { approvalId: request.purchasing_approval_id,
-        buyerId: principal.userId, service, request: { ...request, provider_requirements: request.provider_requirements ?? {} }, totalMinor, rail }) : undefined
+        buyerId: principal.userId, service, request: { ...request, provider_requirements: request.provider_requirements ?? {} }, totalMinor, rail }) : routePurchaseEvidence
       const spendingPurchase = args.organizationSpendingEvidence ? await validateSpendingPurchase(tx,args.organizationSpendingEvidence,id,principal.userId,request,totalMinor) : undefined
       const spendContext = { purchaseEvidence, sellerId: service.seller_id, capabilities: JSON.parse(service.capabilities) as string[], paymentRail: rail, verificationMethods: contract.verificationPolicy!.methods,
         ...(args.mandateId ? { retrySpendMinor } : {}) }
@@ -268,7 +278,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         input_json: JSON.stringify(request.input), price_minor: service.price_minor,
         payment_rail: rail, state: internal ? 'funded' : 'awaiting_funding',
       }).returning()
-      if (purchaseEvidence) await consumePurchaseApproval(tx, purchaseEvidence, order.id, trade.id)
+      if (purchaseEvidence && request.purchasing_approval_id) await consumePurchaseApproval(tx, purchaseEvidence, order.id, trade.id)
       if (spendingPurchase) await consumeSpendingPurchase(tx,spendingPurchase,order.id,trade.id,order.created_at)
       if (args.mandateId) {
         const [plan] = routeId ? await tx.select().from(route_plans).where(and(eq(route_plans.id, routeId), eq(route_plans.buyer_id, principal.userId))).limit(1) : []
@@ -305,6 +315,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
   } catch (error) {
     const raced = await replay(args)
     if (raced) return raced
+    if (error instanceof PurchasingError && error.code === 'PURCHASING_STORAGE_BUSY') throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Retry the original order reference after storage contention', 503, true)
     if (referenceConflict(error)) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference belongs to another trade')
     throw error
   }

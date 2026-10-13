@@ -151,8 +151,8 @@ async function write<T>(run: (source: Transaction) => Promise<T>): Promise<T> {
       }
       if (!raced) throw error
       if (attempt >= 5) throw new WorkflowApprovalError('WORKFLOW_APPROVAL_STORAGE_BUSY', 503)
-      await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
     } finally { client.close() }
+    await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
   }
 }
 
@@ -160,7 +160,11 @@ export async function approveWorkflow(id: string, ownerId: string, raw: unknown)
   const parsed = workflowApprovalInput.safeParse(raw)
   if (!parsed.success) throw new WorkflowApprovalError('INVALID_WORKFLOW_APPROVAL', 400)
   const input = normalizedInput(parsed.data), requestHash = hash(input)
-  return write(async (tx) => {
+  return write(tx => approveWorkflowInTransaction(tx,id,ownerId,input,requestHash))
+}
+
+export async function approveWorkflowInTransaction(tx: Transaction, id: string, ownerId: string, input: Input, requestHash = hash(normalizedInput(input))) {
+    input = normalizedInput(input)
     const { workflow, nodes } = await graph(tx, id)
     if (!await controls(ownerId, workflow.buyer_id, tx)) throw new WorkflowApprovalError('WORKFLOW_NOT_FOUND', 404)
     const [prior] = await tx.select().from(workflow_approvals).where(or(eq(workflow_approvals.workflow_id, id),
@@ -183,7 +187,6 @@ export async function approveWorkflow(id: string, ownerId: string, raw: unknown)
       owner_account_id: ownerId, client_reference: input.client_reference, request_hash: requestHash, plan_hash: input.plan_hash,
       contract_hash: hash(contract), contract_json: canonicalContract(contract), expires_at: expires, created_at: now }).returning()
     return { approval: await dto(row, tx), idempotent: false }
-  })
 }
 
 export async function inspectWorkflowApproval(id: string, userId: string) {

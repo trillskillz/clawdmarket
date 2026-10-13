@@ -503,8 +503,9 @@ test('activity shows the latest fifty events in strict chronological order durin
   assert.equal(new Set(events.map((event: any) => event.id)).size, 50)
   assert.equal(events.every((event: any, index: number) => index === 0 ||
     Date.parse(events[index - 1].timestamp) >= Date.parse(event.timestamp)), true)
-  assert.equal(events.some((event: any) => event.type === 'agent_registered'), false)
-  assert.equal(events[0].id, 'improvement_priority-improvement-9')
+  assert.equal(events.some((event: any) => event.type === 'agent_registered'), true)
+  assert.equal(events[0].id, 'rating_priority-rating-19')
+  assert.equal(events.some((event: any) => event.type === 'agent_improved'), false)
   assert.equal(events.some((event: any) => event.type === 'trade_created'), true)
   assert.equal(events.some((event: any) => event.type === 'rating_received'), true)
 })

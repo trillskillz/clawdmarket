@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 type ActivityEvent = {
   id: string
-  type: 'trade_created' | 'trade_completed' | 'trade_disputed' | 'trade_confirmed' | 'rating_received' | 'agent_registered' | 'agent_improved' | 'account_registered' | 'wallet_payment' | 'wallet_payout' | 'wallet_refund'
+  type: 'trade_created' | 'trade_completed' | 'trade_disputed' | 'trade_confirmed' | 'rating_received' | 'agent_registered' | 'account_registered' | 'wallet_payment' | 'wallet_payout' | 'wallet_refund'
   description: string
   buyer_name?: string | null
   seller_name?: string | null
@@ -72,7 +72,7 @@ export async function GET() {
 
     const rows = async (query: string, timestamp = 'created_at') =>
       (await client.execute(latestActivitySql(query, timestamp))).rows as any[]
-    const [recentTrades, recentRatings, recentRegistrations, recentAgentAccounts, improvements, receipts, settlements] = await Promise.all([
+    const [recentTrades, recentRatings, recentRegistrations, recentAgentAccounts, receipts, settlements] = await Promise.all([
       rows(`SELECT id, status, created_at, completed_at,
         buyer_id AS buyer_agent_id, seller_id AS seller_agent_id FROM trades
         WHERE ${publicTradeWhereSql('trades')}`,
@@ -83,9 +83,6 @@ export async function GET() {
         AND status IN ('active', 'inactive')`),
       rows(`SELECT id, name, role, created_at FROM users WHERE role IN ('human', 'agent')
         AND substr(id, 1, 11) <> 'user_agent_' AND id NOT GLOB 'user_wallet_*' AND COALESCE(is_banned, 0) = 0`),
-      rows(`SELECT ai.id, ai.from_version, ai.to_version, ai.created_at, a.name AS agent_name
-        FROM agent_improvements ai JOIN agents a ON a.id = ai.base_agent_id
-        WHERE a.visibility = 'public' AND a.archived_at IS NULL AND a.status IN ('active', 'inactive')`),
       rows(`SELECT p.id, p.amount, p.currency, p.created_at FROM payment_receipts p JOIN trades t ON t.id = p.trade_id
         WHERE ${publicTradeWhereSql('t')}
         UNION ALL SELECT ('platform_' || lower(p.tx_hash)) AS id, p.amount, p.currency, p.created_at
@@ -201,23 +198,6 @@ export async function GET() {
         }
       })
 
-    const improvementEvents: Array<ActivityEvent & { createdAt: Date }> = improvements
-      .filter((row: any) => safeDate(row.created_at) !== null)
-      .map((row: any) => {
-        const createdAt = safeDate(row.created_at) as Date
-        const ts = createdAt.toISOString()
-        const name = row.agent_name || 'Unknown Agent'
-        return {
-          id: `improvement_${row.id}`,
-          type: 'agent_improved' as const,
-          description: `${name} improved from v${row.from_version} to v${row.to_version}`,
-          agent_name: name,
-          timestamp: ts,
-          relative: relativeTime(createdAt),
-          createdAt,
-        }
-      })
-
     const paymentEvents: ActivityEvent[] = [
       ...historicalPayments.map(proof => ({ id: `wallet_payment_platform_${proof.tx_hash.toLowerCase()}`, type: 'wallet_payment' as const,
         description: `Platform payment confirmed: ${proof.amount.toFixed(3)} pathUSD (MPP on Tempo)`,
@@ -232,7 +212,7 @@ export async function GET() {
         timestamp: new Date(Number(row.event_at_ms)).toISOString(), relative: relativeTime(Number(row.event_at_ms)) })),
     ]
     const events = activityTimeline([...tradeEvents, ...ratingEvents, ...registrationEvents,
-      ...accountRegistrationEvents, ...improvementEvents, ...paymentEvents])
+      ...accountRegistrationEvents, ...paymentEvents])
       .map(({ createdAt: _createdAt, ...event }: any) => event)
 
     return NextResponse.json(events, {

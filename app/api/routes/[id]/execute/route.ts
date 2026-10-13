@@ -20,6 +20,8 @@ import { serviceSupportsRoute } from '@/lib/route-service-eligibility'
 import { RouteMandateError, validateRouteMandate } from '@/lib/route-payment-mandate'
 import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts'
 import { z } from 'zod'
+import { purchasingTransaction, PurchasingError } from '@/lib/organization-purchasing-transaction'
+import { readWithLocalContentionRecovery } from '@/lib/local-sqlite-read'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +30,7 @@ function failure(error_code: string, message: string, status: number, retryable 
 }
 
 async function currentRoute(id: string, buyerId: string) {
-  return (await db.select().from(route_plans).where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, buyerId))).limit(1))[0]
+  return (await readWithLocalContentionRecovery(source => source.select().from(route_plans).where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, buyerId))).limit(1)))[0]
 }
 
 async function linkedResponse(plan: typeof route_plans.$inferSelect, idempotent: boolean) {
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const mandateId = parsed.data.mandate_id
     let plan = await currentRoute(id, principal.userId)
     if (!plan) return failure('ROUTE_NOT_FOUND', 'Route not found', 404)
-    const [savedMandate] = await db.select({ id: route_payment_mandates.id }).from(route_payment_mandates).where(eq(route_payment_mandates.route_id, id)).limit(1)
+    const [savedMandate] = await readWithLocalContentionRecovery(source => source.select({ id: route_payment_mandates.id }).from(route_payment_mandates).where(eq(route_payment_mandates.route_id, id)).limit(1))
     if (savedMandate && savedMandate.id !== mandateId) return failure('MANDATE_REQUIRED', 'Execution requires the saved buyer mandate', 409, false, plan.service_order_id ? 'see_trade' : 'no_funds_moved')
     const mandate = mandateId ? await validateRouteMandate(mandateId, plan) : null
     const linked = await linkedResponse(plan, true)
@@ -63,14 +65,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (await routeAdmissionFailure()) return failure('ROUTE_EXECUTION_PAUSED', 'New route commitments are paused; recover existing payments and refunds', 503, true)
     if (plan.state !== 'planned' && plan.state !== 'reserving') return failure('ROUTE_NOT_EXECUTABLE', 'Route is not executable', 409)
     if (plan.expires_at <= new Date()) {
-      await db.update(route_plans).set({ state: 'failed', updated_at: new Date() }).where(and(eq(route_plans.id, id), eq(route_plans.state, plan.state)))
+      await purchasingTransaction(async tx => tx.update(route_plans).set({ state: 'failed', updated_at: new Date() }).where(and(eq(route_plans.id, id), eq(route_plans.state, plan!.state))))
       return failure('ROUTE_PLAN_EXPIRED', 'Route plan expired; create a new plan', 410)
     }
     const candidates = JSON.parse(plan.candidates_json) as RouteCandidate[]
     if (!candidates.length) return failure('ROUTE_NO_ELIGIBLE_PROVIDER', 'Plan has no eligible provider', 409)
     if (plan.state === 'planned') {
-      const [claimed] = await db.update(route_plans).set({ state: 'reserving', updated_at: new Date() })
-        .where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, principal.userId), eq(route_plans.state, 'planned'))).returning()
+      const [claimed] = await purchasingTransaction(async tx => tx.update(route_plans).set({ state: 'reserving', updated_at: new Date() })
+        .where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, principal.userId), eq(route_plans.state, 'planned'))).returning())
       plan = claimed || await currentRoute(id, principal.userId)
       if (!plan) return failure('ROUTE_NOT_FOUND', 'Route not found', 404)
       const raced = await linkedResponse(plan, true)
@@ -100,7 +102,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await markRouteAttemptIneligible(id, attemptNumber, lastCode)
         continue
       }
-      const [service] = await db.select().from(service_definitions).where(eq(service_definitions.id, candidate.service_id)).limit(1)
+      const [service] = await readWithLocalContentionRecovery(source => source.select().from(service_definitions).where(eq(service_definitions.id, candidate.service_id)).limit(1))
       if (!service || service.status !== 'active' || service.price_minor !== Math.round(Number(candidate.pricing.amount) * 100)) {
         lastCode = 'ROUTE_STALE_PROVIDER'
         await markRouteAttemptIneligible(id, attemptNumber, lastCode)
@@ -132,11 +134,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await markRouteAttemptIneligible(id, attemptNumber, lastCode)
       }
     }
-    const [exhausted] = await db.update(route_plans).set({ state: 'failed', updated_at: new Date() })
-      .where(and(eq(route_plans.id, id), eq(route_plans.state, 'reserving'))).returning()
+    const [exhausted] = await purchasingTransaction(async tx => tx.update(route_plans).set({ state: 'failed', updated_at: new Date() })
+      .where(and(eq(route_plans.id, id), eq(route_plans.state, 'reserving'))).returning())
     if (exhausted?.service_order_id) return (await linkedResponse(exhausted, true))!
     return failure(lastCode, 'No saved provider remains eligible; create a new plan', 409)
   } catch (error) {
+    if (error instanceof PurchasingError && error.code === 'PURCHASING_STORAGE_BUSY') return failure('MANDATE_STORAGE_BUSY', 'Retry the original route and mandate after storage contention', 503, true, 'see_trade')
     if (error instanceof RouteMandateError || error instanceof ArtifactError) {
       const current = await currentRoute(id, principal.userId)
       return failure(error.code, error.message, error.status, error.code === 'MANDATE_STORAGE_BUSY', current?.service_order_id ? 'see_trade' : 'no_funds_moved')
@@ -145,8 +148,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (raced?.service_order_id) return (await linkedResponse(raced, true))!
     if (error instanceof ServiceOrderReservationError) {
       if (!error.retryable && !['ROUTE_STATE_CHANGED', 'IDEMPOTENCY_CONFLICT'].includes(error.code)) {
-        await db.update(route_plans).set({ state: 'failed', updated_at: new Date() })
-          .where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, principal.userId), eq(route_plans.state, 'reserving')))
+        await purchasingTransaction(async tx => tx.update(route_plans).set({ state: 'failed', updated_at: new Date() })
+          .where(and(eq(route_plans.id, id), eq(route_plans.buyer_id, principal.userId), eq(route_plans.state, 'reserving'))))
       }
       return failure(error.code, error.message, error.status, error.retryable)
     }

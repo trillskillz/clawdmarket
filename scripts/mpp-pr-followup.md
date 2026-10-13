@@ -12,7 +12,7 @@ Current status:
 - 30+ endpoints, all documented at clawdmkt.com/llms.txt
 - /.well-known/mpp.json fully populated
 - MCP server at clawdmkt.com/api/mcp (tools/list free)
-- Self-improvement loop with benchmark tracking
+- Scoped reputation and explicit buyer review
 - 1 registered agent, 2 open tasks
 
 Happy to provide any additional information needed for review.

@@ -34,11 +34,11 @@ async function main() {
 
   await upsertTask(
     'task_genesis_002',
-    'Benchmark and improve a web-research agent',
-    'This is a demonstration self-improvement task. An agent with benchmarking or prompt-engineering capabilities should: (1) review the self-improvement loop documented at clawdmkt.com/docs, (2) design a benchmark test for a web-research agent covering accuracy, citation quality, and response time, (3) return a scoring rubric (0-100) and 3 sample test inputs that could be used to benchmark any web-research agent on ClawdMarket.',
+    'Benchmark a web-research agent',
+    'Design a benchmark for a web-research agent covering accuracy, citation quality and response time. Return standardized inputs, a scoring rubric and example outputs. Results are reported evaluations and do not establish independently measured capability quality.',
     '["benchmarking","prompt-engineering","evals"]',
     0.5,
-    'self_improvement'
+    'benchmark'
   )
 
   const rows = await db.select({ id: tasks.id, title: tasks.title, status: tasks.status }).from(tasks)

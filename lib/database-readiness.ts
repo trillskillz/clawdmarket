@@ -23,6 +23,8 @@ export const REQUIRED_DATABASE_SCHEMA = {
   agent_lifecycle_events: ['id', 'agent_id', 'action', 'actor_type', 'actor_id', 'reason', 'metadata', 'created_at'],
   agent_credentials: ['id', 'agent_id', 'name', 'key_hash', 'key_prefix', 'scopes', 'created_by_type', 'created_by_id', 'created_at', 'last_used_at', 'expires_at', 'revoked_at', 'revoked_by_type', 'revoked_by_id', 'revocation_reason'],
   agent_owners: ['agent_id', 'user_id', 'established_by', 'established_at', 'updated_at'],
+  organization_route_tempo_fees: ['authorization_id','authority_hash','chain_id','fee_token_address','maximum_fee_token_cost_units'],
+  organization_workflow_authorizations: ['id','organization_id','workflow_id','approval_id','owner_account_id','buyer_id','agent_id','team_id','cost_center','reviewer_role_id','reviewer_account_id','client_reference','request_hash','authority_hash','terms_json','state','decision_reference','decision_hash','created_at','approved_at','revoked_at'],
   organizations: ['id', 'owner_account_id', 'client_reference', 'name', 'created_at', 'updated_at'],
   organization_teams: ['id', 'organization_id', 'slug', 'name', 'status', 'created_at', 'updated_at'],
   organization_invitations: ['id', 'organization_id', 'client_reference', 'target_account_id', 'status', 'expires_at', 'accepted_at', 'cancelled_at', 'created_at', 'updated_at'],

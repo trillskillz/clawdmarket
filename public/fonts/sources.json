@@ -1,0 +1,106 @@
+[
+  {
+    "family": "JetBrains Mono",
+    "subset": "cyrillic-ext",
+    "file": "jetbrains-mono-cyrillic-ext-593ccd6fe36e.woff2",
+    "source": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbV2o-flEEny0FZhsfKu5WU4xD2OwG_TA.woff2",
+    "sha256": "593ccd6fe36e299e151aeae4521be9bfe83ac487d96d7cdb44f50be4a04041c7",
+    "bytes": 2028
+  },
+  {
+    "family": "JetBrains Mono",
+    "subset": "cyrillic",
+    "file": "jetbrains-mono-cyrillic-d274604c4075.woff2",
+    "source": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbV2o-flEEny0FZhsfKu5WU4xD_OwG_TA.woff2",
+    "sha256": "d274604c40757f98f07df623a8b8fb5194508a6fa4f5413a7a107f09e3b7452a",
+    "bytes": 12108
+  },
+  {
+    "family": "JetBrains Mono",
+    "subset": "greek",
+    "file": "jetbrains-mono-greek-ee863198077f.woff2",
+    "source": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbV2o-flEEny0FZhsfKu5WU4xD4OwG_TA.woff2",
+    "sha256": "ee863198077f3093ffa81c072581cc4bd608a04e60a8a9c0b846396ce4f14109",
+    "bytes": 9004
+  },
+  {
+    "family": "JetBrains Mono",
+    "subset": "vietnamese",
+    "file": "jetbrains-mono-vietnamese-2288795da89d.woff2",
+    "source": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbV2o-flEEny0FZhsfKu5WU4xD0OwG_TA.woff2",
+    "sha256": "2288795da89dd97e648954b96e22b4501bd85dfc453264460b252f888b582ca2",
+    "bytes": 7504
+  },
+  {
+    "family": "JetBrains Mono",
+    "subset": "latin-ext",
+    "file": "jetbrains-mono-latin-ext-79bfdab9ba46.woff2",
+    "source": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbV2o-flEEny0FZhsfKu5WU4xD1OwG_TA.woff2",
+    "sha256": "79bfdab9ba467e26eea4122e6f2567e188dd8a09a8c730d501fc487c4ab99c6e",
+    "bytes": 15196
+  },
+  {
+    "family": "JetBrains Mono",
+    "subset": "latin",
+    "file": "jetbrains-mono-latin-18be452724bf.woff2",
+    "source": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbV2o-flEEny0FZhsfKu5WU4xD7OwE.woff2",
+    "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e",
+    "bytes": 40404
+  },
+  {
+    "family": "Plus Jakarta Sans",
+    "subset": "cyrillic-ext",
+    "file": "plus-jakarta-sans-cyrillic-ext-c46a510ab439.woff2",
+    "source": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko70yyygA.woff2",
+    "sha256": "c46a510ab43925a55ecfe6c2d5fad0ce1902cd48ab276621d41f7afa42e4daee",
+    "bytes": 1716
+  },
+  {
+    "family": "Plus Jakarta Sans",
+    "subset": "vietnamese",
+    "file": "plus-jakarta-sans-vietnamese-b275d1258601.woff2",
+    "source": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko50yyygA.woff2",
+    "sha256": "b275d1258601dda240fc6a1d4a6cad56e691d898f5cdf1b0e4fd6ca0022d8e40",
+    "bytes": 8352
+  },
+  {
+    "family": "Plus Jakarta Sans",
+    "subset": "latin-ext",
+    "file": "plus-jakarta-sans-latin-ext-38e3b8fd8045.woff2",
+    "source": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko40yyygA.woff2",
+    "sha256": "38e3b8fd8045048eb311d90170a4429ed2c8f405852dc3d91b5af8452758703f",
+    "bytes": 21728
+  },
+  {
+    "family": "Plus Jakarta Sans",
+    "subset": "latin",
+    "file": "plus-jakarta-sans-latin-153fc85b7029.woff2",
+    "source": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+    "sha256": "153fc85b70298beeb1d61a5f723331649e7f23bb77302a66e61cb3e2fbdb5e79",
+    "bytes": 27348
+  },
+  {
+    "family": "Space Grotesk",
+    "subset": "vietnamese",
+    "file": "space-grotesk-vietnamese-8895e3d49825.woff2",
+    "source": "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb54C-s0.woff2",
+    "sha256": "8895e3d49825128bfa5238e4c96e9b432d7a3dadbe5c17c6081267398305dc71",
+    "bytes": 6712
+  },
+  {
+    "family": "Space Grotesk",
+    "subset": "latin-ext",
+    "file": "space-grotesk-latin-ext-952dddb45d2f.woff2",
+    "source": "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPb94C-s0.woff2",
+    "sha256": "952dddb45d2f96f71cbf3b7f510b24379afc3c89ea02fcf89d377b45d62c0166",
+    "bytes": 18940
+  },
+  {
+    "family": "Space Grotesk",
+    "subset": "latin",
+    "file": "space-grotesk-latin-0640890476fc.woff2",
+    "source": "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4Cw.woff2",
+    "sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d",
+    "bytes": 22288
+  }
+]

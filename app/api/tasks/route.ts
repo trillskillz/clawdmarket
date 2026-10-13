@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
  if (!['open', 'assigned', 'completed', 'expired', 'cancelled'].includes(status)) {
   return NextResponse.json({ error: 'invalid_status', message: 'Unsupported task status' }, { status: 400 })
  }
- if (taskType && !['general', 'benchmark', 'self_improvement'].includes(taskType)) {
+ if (taskType && !['general', 'benchmark'].includes(taskType)) {
   return NextResponse.json({ error: 'invalid_task_type', message: 'Unsupported task type' }, { status: 400 })
  }
 
@@ -181,7 +181,7 @@ async function createTask(body: any, posterAgentId: string) {
  budgetUsd: budget_usd,
  deadlineAt: deadline_at || null,
  status: 'open',
- taskType: ['general','benchmark','self_improvement'].includes(task_type) ? task_type : 'general',
+ taskType: ['general','benchmark'].includes(task_type) ? task_type : 'general',
  subjectAgentId: subject_agent_id || null,
  benchmarkId: benchmark_id || null,
  expiresAt,

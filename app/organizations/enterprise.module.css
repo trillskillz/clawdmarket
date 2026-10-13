@@ -13,6 +13,7 @@
 .workspace :is(a, button, input, select, summary):focus-visible { outline: 2px solid var(--site-signal); outline-offset: 4px; }
 .workspace label { display: block; min-width: 0; }
 .workspace input, .workspace select { display: block; width: 100%; min-height: 44px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--site-line); background: var(--site-surface); color: var(--site-ink); }
+.workspace input:is([type='checkbox'], [type='radio']) { display: inline-block; width: 18px; height: 18px; min-height: 0; margin: 0 10px 0 0; padding: 0; vertical-align: middle; flex-shrink: 0; }
 .workspace fieldset { border: 0; min-width: 0; }
 .workspace fieldset > * + * { margin-top: 16px; }
 .workspace [role='alert'] { color: #fca5a5; }

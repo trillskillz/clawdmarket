@@ -19,11 +19,11 @@ async function fetchJson(path: string) {
   return response.json()
 }
 
-function timeAgo(timestamp: string | number | null | undefined): string {
+function timeAgo(timestamp: string | number | null | undefined, now: number): string {
   if (!timestamp) return '—'
   const date = activityDate(timestamp)
   if (!date || Number.isNaN(date.getTime()) || date.getFullYear() < 2020) return '—'
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  const seconds = Math.floor((now - date.getTime()) / 1000)
   if (seconds < 60) return 'just now'
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
@@ -53,7 +53,6 @@ function parseCapabilities(value: unknown): string[] {
 }
 
 function eventTone(type = '') {
-  if (type.includes('improved')) return styles.purple
   if (type.includes('completed') || type.includes('confirmed') || type.includes('rating')) return styles.lime
   if (type.includes('registered')) return styles.blue
   if (type.includes('created')) return styles.amber
@@ -78,16 +77,17 @@ function ActivityDescription({ item }: { item: any }) {
   return <>{segments}</>
 }
 
-export default function ObserveClient({ initialStats, initialActivity, initialPaymentConfig }: { initialStats: any; initialActivity: any[] | null; initialPaymentConfig: PaymentConfig }) {
+export default function ObserveClient({ initialStats, initialActivity, initialPaymentConfig, initialRenderedAt }: { initialStats: any; initialActivity: any[] | null; initialPaymentConfig: PaymentConfig; initialRenderedAt: number }) {
   const [connState, setConnState] = useState<ConnState>(initialActivity !== null ? 'live' : 'connecting')
   const [stats, setStats] = useState<any>(initialStats || {})
   const [activity, setActivity] = useState<any[]>(activityTimeline(initialActivity || []))
   const [walletActivity, setWalletActivity] = useState<any[]>([])
   const [leaderboard, setLeaderboard] = useState<any[]>([])
-  const [sellerAgent, setSellerAgent] = useState<any>(null)
   const [completedTasks, setCompletedTasks] = useState<any[]>([])
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(initialPaymentConfig)
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
+  // Hydration uses the server's clock snapshot; successful refreshes advance it.
+  const renderedAt = lastSyncedAt?.getTime() ?? initialRenderedAt
 
   useEffect(() => {
     let cancelled = false
@@ -141,14 +141,12 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
 
     const refreshPanels = async () => {
       try {
-        const [leaderboardData, sellerData, taskData] = await Promise.all([
+        const [leaderboardData, taskData] = await Promise.all([
           fetchJson('/api/leaderboard?metric=rating&limit=3'),
-          fetchJson('/api/agents/clawdmarket_seller'),
           fetchJson('/api/tasks?status=completed&limit=3'),
         ])
         if (cancelled) return
         setLeaderboard(leaderboardData.agents || [])
-        if (sellerData && !sellerData.error) setSellerAgent(sellerData)
         setCompletedTasks(taskData.tasks || [])
       } catch { /* Secondary panels retain their last confirmed snapshot. */ }
     }
@@ -186,9 +184,6 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
   const totalTrades = Number(stats.total_trades ?? stats.trade_count ?? 0)
   const completionRate = totalTrades > 0 ? Math.min(100, Math.round((completedTrades / totalTrades) * 100)) : 0
   const averageTrade = completedTrades > 0 ? totalVolume / completedTrades : 0
-  const improvementCount = Number(sellerAgent?.improvement_count || 0)
-  const improvementDelta = Number(sellerAgent?.total_improvement_delta || sellerAgent?.totalImprovementDelta || 0).toFixed(1)
-  const improvementProgress = Math.min((improvementCount / 50) * 100, 100)
   const topAgent = leaderboard[0]
   const settlementRails = [
     ...(paymentConfig.account_credit_enabled ? ['ACCOUNT'] : []),
@@ -235,13 +230,13 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
           </div>
           <div className={styles.activityList} role="log" aria-label="Live activity feed" aria-live="polite" aria-relevant="additions">
             {activityTimeline([...activity, ...walletActivity]).length === 0 ? (
-              <div className={styles.emptyTape}><i>⌁</i><strong>No recorded activity yet.</strong><p>New registrations, wallet payments, trades, ratings, and improvements will appear here after they are stored.</p></div>
+              <div className={styles.emptyTape}><i>⌁</i><strong>No recorded activity yet.</strong><p>New registrations, wallet payments, trades, and ratings will appear here after they are stored.</p></div>
             ) : activityTimeline([...activity, ...walletActivity]).map((item, index) => (
               <article className={styles.event} key={item.id || index}>
                 <span className={`${styles.eventMark} ${eventTone(item.type)}`} />
                 <span className={styles.eventIndex}>{String(index + 1).padStart(2, '0')}</span>
                 <p>{item.personal && <strong>Your wallet · </strong>}<ActivityDescription item={item} /></p>
-                <time dateTime={item.timestamp} title={fullTimestamp(item.timestamp)} aria-label={fullTimestamp(item.timestamp)}>{timeAgo(item.timestamp)}<small>{fullTimestamp(item.timestamp)}</small></time>
+                <time dateTime={item.timestamp} title={fullTimestamp(item.timestamp)} aria-label={fullTimestamp(item.timestamp)}>{timeAgo(item.timestamp, renderedAt)}<small>{fullTimestamp(item.timestamp)}</small></time>
               </article>
             ))}
           </div>
@@ -254,7 +249,7 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
             <div><span>Average trade</span><strong>${averageTrade.toFixed(2)}</strong></div>
             <div><span>Eligible buyer feedback</span><strong>{Number(stats.avg_rating ?? 0)>0?Number(stats.avg_rating).toFixed(1):'—'}</strong></div>
             <div><span>Trades today</span><strong>{Number(stats.trades_today ?? 0)}</strong></div>
-            <div><span>Last sync</span><strong title={fullTimestamp(lastSyncedAt?.getTime())}>{lastSyncedAt ? timeAgo(lastSyncedAt.getTime()) : '—'}</strong></div>
+            <div><span>Last sync</span><strong title={fullTimestamp(lastSyncedAt?.getTime())}>{lastSyncedAt ? timeAgo(lastSyncedAt.getTime(), renderedAt) : '—'}</strong></div>
           </div>
         </aside>
       </section>
@@ -277,22 +272,10 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
             <div className={styles.taskList}>{completedTasks.map((task) => (
               <article key={task.id}>
                 <div><strong>{task.title}</strong><span>${Number(task.budget_usd || 0).toFixed(2)}</span></div>
-                <p>{parseCapabilities(task.required_capabilities).slice(0, 3).map((capability) => <i key={capability}>{capability}</i>)}<time>{timeAgo(task.created_at)}</time></p>
+                <p>{parseCapabilities(task.required_capabilities).slice(0, 3).map((capability) => <i key={capability}>{capability}</i>)}<time>{timeAgo(task.created_at, renderedAt)}</time></p>
               </article>
             ))}</div>
           )}
-        </div>
-      </section>
-
-      <section className={styles.loopPanel}>
-        <div className={styles.loopIntro}><span>RECURSIVE IMPROVEMENT</span><h2>The market learns<br />from its own work.</h2><p>Benchmark, improve, re-register, repeat. Every completed cycle makes agent evolution observable.</p></div>
-        <div className={styles.loopMetrics}>
-          <div><span>Current version</span><strong>v{sellerAgent?.version || 1}</strong></div>
-          <div><span>Total delta</span><strong>+{improvementDelta}</strong></div>
-          <div><span>Last improved</span><strong>{sellerAgent?.last_improved_at ? timeAgo(sellerAgent.last_improved_at) : '—'}</strong></div>
-          <div><span>Schedule</span><strong>On demand</strong></div>
-          <i><b style={{ width: `${improvementProgress}%` }} /></i>
-          <p>{improvementCount} / 50 CYCLES <Link href="/registry/clawdmarket_seller">VIEW PROFILE ↗</Link></p>
         </div>
       </section>
 

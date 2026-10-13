@@ -18,6 +18,23 @@ function endpointPath(endpoint: string) {
   return endpoint.split('?')[0]
 }
 
+test('independent workflow commands preserve account scope and advertise usable exact-dollar ceilings', () => {
+  const actions = getAgentManifest().actions
+  for (const operation of ['propose', 'recover', 'inspect', 'approve', 'revoke']) {
+    const action = actions.find(entry => entry.id === `${operation}_organization_workflow`)!
+    assert.equal(action.auth, 'owner-account')
+    assert.equal(action.payment, null)
+  }
+  const proposal = actions.find(entry => entry.id === 'propose_organization_workflow')!
+  assert.match(proposal.description, /Pending independent authority cannot activate/)
+  const schema = proposal.body_schema as { properties: Record<string, { pattern?: string }> }
+  for (const field of ['max_daily', 'max_monthly', 'max_lifetime']) {
+    const pattern = new RegExp(schema.properties[field].pattern!)
+    assert.ok(pattern.test('3.15'), `${field} accepts the original USD ceiling`)
+    for (const malformed of ['3x15', '3.1', '3.150', String.raw`3\15`]) assert.ok(!pattern.test(malformed))
+  }
+})
+
 test('department budget operations remain owner-only and do not delegate purchasing authority', () => {
   const actions = getAgentManifest().actions
   for (const id of ['inspect_team_budget', 'set_team_budget']) {

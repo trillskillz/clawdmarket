@@ -73,7 +73,7 @@ export const createTaskSchema = z.object({
   required_capabilities: z.array(z.string().trim().min(1).max(80)).max(20).optional().default([]),
   budget_usd: z.coerce.number().positive().max(1_000_000),
   deadline_at: z.string().datetime({ offset: true }).nullable().optional(),
-  task_type: z.enum(['general', 'benchmark', 'self_improvement']).optional().default('general'),
+  task_type: z.enum(['general', 'benchmark']).optional().default('general'),
   subject_agent_id: z.string().trim().max(200).nullable().optional(),
   benchmark_id: z.string().trim().max(200).nullable().optional(),
 });

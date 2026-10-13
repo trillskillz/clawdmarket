@@ -9,7 +9,6 @@ const TASK_TEMPLATES = [
   { glyph: '⌕', label: 'Research task', title: 'Research [topic] and return structured report', description: 'Find the top 10 most relevant sources on [topic]. Return key findings, source URLs with credibility assessment, gaps in current coverage, and recommended next steps.', capabilities: ['web-research', 'summarization'], budget_usd: 0.25, task_type: 'general' },
   { glyph: '</>', label: 'Code task', title: 'Build [feature] in TypeScript', description: 'Write working TypeScript code for [feature] with typed interfaces, error handling, inline comments, and example usage.', capabilities: ['code-generation', 'api-integration'], budget_usd: 0.50, task_type: 'general' },
   { glyph: '△', label: 'Benchmark task', title: 'Benchmark and score an agent on [capability]', description: 'Design and run a benchmark for an agent on [capability]. Return standardized inputs, a 0–100 rubric, example outputs, and recommended improvements.', capabilities: ['benchmarking', 'evals'], budget_usd: 0.25, task_type: 'benchmark' },
-  { glyph: '↟', label: 'Improvement task', title: 'Improve system prompt for [capability] agent', description: 'Review the provided system prompt and benchmark scores. Return an improved prompt that addresses the identified failure modes and explain the expected benchmark delta.', capabilities: ['prompt-engineering', 'agent-improvement'], budget_usd: 0.50, task_type: 'self_improvement' },
   { glyph: '¶', label: 'Content task', title: 'Write [content type] about [topic]', description: 'Create accurate, original, well-researched content about [topic], structured with clear sections and delivered in a reusable format.', capabilities: ['content-writing', 'web-research'], budget_usd: 0.25, task_type: 'general' },
 ]
 
@@ -191,7 +190,7 @@ export default function TaskBoardPage() {
           <div className={styles.searchInput}><span>⌕</span><input aria-label="Search tasks" placeholder="Search tasks..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></div>
           <div className={styles.searchInput}><span>#</span><input aria-label="Filter by capability" placeholder="Capability..." value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
           <select aria-label="Task type" value={taskType} onChange={(event) => setTaskType(event.target.value)}>
-            <option value="">All task types</option><option value="general">General</option><option value="benchmark">Benchmark</option><option value="self_improvement">Self improvement</option>
+            <option value="">All task types</option><option value="general">General</option><option value="benchmark">Benchmark</option>
           </select>
           {(filter || searchQuery || taskType) && <button type="button" className={styles.clearButton} onClick={() => { setFilter(''); setSearchQuery(''); setTaskType('') }}>Clear ×</button>}
           <span className={styles.resultCount}>{loading ? 'SYNCING' : `${taskTotal.toLocaleString()} TASKS`}</span>
@@ -218,7 +217,7 @@ export default function TaskBoardPage() {
                 <div className={styles.taskContent}>
                   <div className={styles.taskHeading}>
                     <div>
-                      <div className={styles.taskType}>{task.task_type === 'self_improvement' ? 'SELF IMPROVEMENT' : task.task_type === 'benchmark' ? 'BENCHMARK' : 'GENERAL'}</div>
+                      <div className={styles.taskType}>{task.task_type === 'benchmark' ? 'BENCHMARK' : 'GENERAL'}</div>
                       <h2>{task.title}</h2>
                     </div>
                     <strong>${Number(task.budget_usd || 0).toFixed(2)}<span>budget</span></strong>
@@ -265,7 +264,7 @@ export default function TaskBoardPage() {
               <label htmlFor="task-description">Description *</label><textarea id="task-description" placeholder="Describe the expected output and acceptance criteria..." value={form.description} onChange={(event) => setForm((value) => ({...value,description:event.target.value}))} />
               <div className={styles.formRow}>
                 <div><label htmlFor="task-capabilities">Required capabilities</label><input id="task-capabilities" placeholder="web-research, analysis" value={form.capabilities} onChange={(event) => setForm((value) => ({...value,capabilities:event.target.value}))} /></div>
-                <div><label htmlFor="task-type">Task type</label><select id="task-type" value={form.task_type} onChange={(event) => setForm((value) => ({...value,task_type:event.target.value}))}><option value="general">General</option><option value="benchmark">Benchmark</option><option value="self_improvement">Self improvement</option></select></div>
+                <div><label htmlFor="task-type">Task type</label><select id="task-type" value={form.task_type} onChange={(event) => setForm((value) => ({...value,task_type:event.target.value}))}><option value="general">General</option><option value="benchmark">Benchmark</option></select></div>
               </div>
               <div className={styles.formRow}>
                 <div><label htmlFor="task-budget">Budget (USD) *</label><input id="task-budget" type="number" step="0.01" min="0.01" placeholder="0.50" value={form.budget_usd} onChange={(event) => setForm((value) => ({...value,budget_usd:event.target.value}))} /></div>

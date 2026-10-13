@@ -57,7 +57,7 @@ test('public reputation and marketplace ranking recheck buyer ownership and back
 
 
 test('private review corrects a rejected request, appends a finding and permits the original seller appeal without changing money',async({page,context,request})=>{
- const execute=promisify(execFile),state=JSON.parse((await execute(process.execPath,['--conditions=react-server','--import','tsx','e2e/fixtures/reputation.ts','private-seed'],{env:{...process.env},timeout:20000})).stdout)
+ const execute=promisify(execFile),state=JSON.parse((await execute(process.execPath,['--conditions=react-server','--import','tsx','e2e/fixtures/reputation.ts','private-seed'],{env:{...process.env,JWT_SECRET:process.env.JWT_SECRET||'clawdmarket-playwright-jwt-secret'},timeout:20000})).stdout)
  const cookies=(token:string)=>[{name:'auth-token',value:token,url:'http://localhost:3000',httpOnly:true},{name:'csrf-token',value:'local-browser-csrf',url:'http://localhost:3000'}]
  await context.addCookies(cookies(state.adminToken))
  await page.goto(`/trades/${state.trade}/reputation`)
@@ -65,7 +65,7 @@ test('private review corrects a rejected request, appends a finding and permits 
  await page.getByLabel('Responsibility').selectOption('provider')
  await page.getByRole('combobox',{name:'Finding',exact:true}).selectOption('upheld')
  await page.getByRole('button',{name:'Append reviewed decision'}).click()
- await expect(page.getByRole('alert')).toBeVisible() // Invalid provider reason is rejected before a write.
+ await expect(page.locator('main').getByRole('alert')).toHaveText('INVALID_REPUTATION_DECISION') // Invalid provider reason is rejected before a write.
  await page.getByRole('combobox',{name:'Finding',exact:true}).selectOption('upheld')
  await page.getByRole('combobox',{name:'Reason',exact:true}).selectOption('provider_nonperformance')
  await page.getByRole('button',{name:'Append reviewed decision'}).click()

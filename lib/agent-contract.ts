@@ -12,7 +12,7 @@ import { REPUTATION_V2_POLICY } from './reputation-v2-policy'
 import { REPUTATION_RANKING_POLICY } from './reputation-ranking'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.111'
+export const AGENT_CONTRACT_VERSION = '1.116'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -113,7 +113,7 @@ const createTaskBodySchema = {
       default: [],
     },
     budget_usd: { type: 'number', exclusiveMinimum: 0, maximum: 1000000 },
-    task_type: { type: 'string', enum: ['general', 'benchmark', 'self_improvement'] },
+    task_type: { type: 'string', enum: ['general', 'benchmark'] },
     deadline_at: { type: ['string', 'null'], format: 'date-time', description: 'If supplied, must be in the future.' },
     subject_agent_id: { type: ['string', 'null'], maxLength: 200 },
     benchmark_id: { type: ['string', 'null'], maxLength: 200 },
@@ -275,6 +275,38 @@ const routePlanBodySchema = {
   },
 }
 
+const organizationRouteL1BodySchema = {
+  type:'object', additionalProperties:false,
+  required:['version','client_reference','reviewer_role_id','max_daily','max_monthly','max_lifetime','max_lifetime_gas_cost_wei','mandate'],
+  oneOf:[{required:['route_id'],not:{anyOf:[{required:['agent_id']},{required:['route_request']}]}},{required:['agent_id','route_request'],not:{required:['route_id']}}],
+  properties:{version:{const:1},client_reference:routeMandateBodySchema.properties.client_reference,
+    route_id:{type:'string',format:'uuid'},agent_id:{type:'string',format:'uuid'},route_request:routePlanBodySchema,
+    reviewer_role_id:{type:'string',format:'uuid'},max_daily:mandateAmountSchema,max_monthly:mandateAmountSchema,max_lifetime:mandateAmountSchema,
+    max_lifetime_gas_cost_wei:{type:'string',pattern:'^[1-9][0-9]{0,77}$'},
+    mandate:{...routeMandateBodySchema,properties:{...routeMandateBodySchema.properties,max_attempts:{const:1},max_retry_budget:{enum:['0','0.00']},payment:{...routeMandateBodySchema.properties.payment.oneOf[0],properties:{...routeMandateBodySchema.properties.payment.oneOf[0].properties,chain_id:{const:1}}}}},
+  },description:'One public-provider Ethereum L1 execution (chain 1), zero paid retries. Freeze original route, candidates, independent reviewer, gross and original lifetime fee exposure. Only private proposal review may defer the approval threshold; every other hard gate remains enforced.'
+}
+const organizationRouteTempoBodySchema = {
+  type:'object', additionalProperties:false,
+  required:['version','client_reference','reviewer_role_id','max_daily','max_monthly','max_lifetime','max_lifetime_fee_token_cost_units','mandate'],
+  oneOf:[{required:['route_id'],not:{anyOf:[{required:['agent_id']},{required:['route_request']}]}},{required:['agent_id','route_request'],not:{required:['route_id']}}],
+  properties:{version:{const:2},client_reference:routeMandateBodySchema.properties.client_reference,
+    route_id:{type:'string',format:'uuid'},agent_id:{type:'string',format:'uuid'},route_request:routePlanBodySchema,
+    reviewer_role_id:{type:'string',format:'uuid'},max_daily:mandateAmountSchema,max_monthly:mandateAmountSchema,max_lifetime:mandateAmountSchema,
+    max_lifetime_fee_token_cost_units:{type:'string',pattern:'^[1-9][0-9]{0,77}$'},
+    mandate:{...routeMandateBodySchema,properties:{...routeMandateBodySchema.properties,max_attempts:{const:1},max_retry_budget:{enum:['0','0.00']},payment:{...routeMandateBodySchema.properties.payment.oneOf[1],properties:{...routeMandateBodySchema.properties.payment.oneOf[1].properties,chain_id:{const:4217}}}}},
+  },description:'One public-provider Tempo execution (chain 4217), six-decimal configured pathUSD fees, zero paid retries. Freeze original route, candidates, independent reviewer, gross and original lifetime fee exposure. Only private proposal review may defer the approval threshold; every other hard gate remains enforced.'
+}
+
+function privateOrganizationRouteSchema(base:typeof organizationRouteL1BodySchema|typeof organizationRouteTempoBodySchema,version:3|4) {
+  const {route_id:_,...properties}=base.properties
+  return {...base,required:[...base.required,'agent_id','route_request','provider_share_ids'],oneOf:undefined,
+    properties:{...properties,version:{const:version},provider_share_ids:{type:'array',minItems:1,maxItems:20,uniqueItems:true,items:{type:'string',format:'uuid'}}},
+    description:'One independently reviewed private-provider execution. Exact original accepted two-owner shares, department, expiry and service contracts are frozen. Direct-service consent, read accounts and public grants confer no routed scope. Every fresh reservation and send rechecks consent; original paid proof/refund recovery remains available.'}
+}
+const organizationRouteBodySchema = {oneOf:[organizationRouteL1BodySchema,organizationRouteTempoBodySchema,
+  privateOrganizationRouteSchema(organizationRouteL1BodySchema,3),privateOrganizationRouteSchema(organizationRouteTempoBodySchema,4)]}
+
 const workflowPlanBodySchema = {
   type: 'object', required: ['client_reference', 'objective', 'max_budget', 'deadline_seconds', 'nodes'], additionalProperties: false,
   properties: {
@@ -323,6 +355,13 @@ const workflowApprovalBodySchema = { type: 'object', additionalProperties: false
           } }, description: 'Every immediate prerequisite must have an explicit artifact mapping. This records intended sharing; it grants no artifact access.' },
       } } },
   } }
+
+const organizationWorkflowBodySchema = {type:'object',additionalProperties:false,
+  required:['version','client_reference','workflow_id','reviewer_role_id','approval','max_daily','max_monthly','max_lifetime','max_lifetime_chain_fee_units'],
+  description:'Independent organization review of an exact finite DAG, frozen providers and original accepted private shares. Version 1 Ethereum L1; version 2 configured Tempo. One attempt per child; zero paid retries. Gross and same-currency fees are shared with standalone reviewed routes.',
+  properties:{version:{enum:[1,2]},client_reference:routeMandateBodySchema.properties.client_reference,workflow_id:{type:'string',format:'uuid'},reviewer_role_id:{type:'string',format:'uuid'},
+    approval:workflowApprovalBodySchema,max_daily:{type:'string',pattern:'^[0-9]+\\.[0-9]{2}$'},max_monthly:{type:'string',pattern:'^[0-9]+\\.[0-9]{2}$'},max_lifetime:{type:'string',pattern:'^[0-9]+\\.[0-9]{2}$'},max_lifetime_chain_fee_units:mandateUnitsSchema,
+    private_nodes:{type:'array',maxItems:16,items:{type:'object',additionalProperties:false,required:['key','provider_share_ids'],properties:{key:{type:'string',pattern:'^[a-z][a-z0-9_-]{0,39}$'},provider_share_ids:{type:'array',minItems:1,maxItems:20,uniqueItems:true,items:{type:'string',format:'uuid'}}}}}}}
 
 const taskRequirementsBodySchema = {
   type: 'object',
@@ -444,6 +483,16 @@ const benchmarkReportBody = { type: 'object', additionalProperties: false, requi
 } }
 
 export const AGENT_ACTIONS: AgentAction[] = [
+  {id:'propose_organization_route',label:'Propose reviewed organization route',description:'Current owner atomically saves a private frozen route, pending authority and mandate. Does not reserve capacity or move funds. Existing cmos_ keys gain no route scope.',method:'POST',endpoint:'/api/organizations/{id}/route-authorizations',auth:'owner-account',payment:null,required:['id'],body_schema:organizationRouteBodySchema},
+  {id:'recover_organization_route',label:'Recover original route proposal',description:'Current owner looks up the exact original client_reference after a lost reply. No replacement authority or financial commitment.',method:'GET',endpoint:'/api/organizations/{id}/route-authorizations',auth:'owner-account',payment:null,required:['id','client_reference']},
+  {id:'inspect_organization_route',label:'Inspect private route review',description:'Current owner or selected currently authorized reviewer sees original route/candidates and immutable gross, wallet, reserve, fee and expiry terms. Other members and buyer credentials are denied.',method:'GET',endpoint:'/api/organizations/{id}/route-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},
+  {id:'approve_organization_route',label:'Approve exact reviewed route',description:'Only the selected independent current reviewer approves the exact authority hash. Original decision replay never reopens revocation or creates another checkout.',method:'POST',endpoint:'/api/organizations/{id}/route-authorizations/{authorizationId}/approval',auth:'owner-account',payment:null,required:['id','authorizationId'],body_schema:{type:'object',additionalProperties:false,required:['version','client_reference','authority_hash','approve'],properties:{version:{enum:[1,2,3,4]},client_reference:routeMandateBodySchema.properties.client_reference,authority_hash:{type:'string',pattern:'^[a-f0-9]{64}$'},approve:{const:true}}}},
+  {id:'revoke_organization_route',label:'Revoke reviewed route',description:'Current owner or selected authorized reviewer closes fresh spending. Original payment bytes/proof/refund and backed result recovery remain separate; gross and fee exposure never recycle.',method:'DELETE',endpoint:'/api/organizations/{id}/route-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},
+  {id:'propose_organization_workflow',label:'Propose reviewed organization workflow',description:'Current owner atomically saves a private frozen workflow proposal and underlying owner approval. Pending independent authority cannot activate or prepare children. Does not reserve capacity or move funds. Existing cmos_ keys gain no workflow scope.',method:'POST',endpoint:'/api/organizations/{id}/workflow-authorizations',auth:'owner-account',payment:null,required:['id'],body_schema:organizationWorkflowBodySchema},
+  {id:'recover_organization_workflow',label:'Recover original workflow proposal',description:'Current owner looks up the exact original client_reference after a lost reply. No replacement authority or financial commitment.',method:'GET',endpoint:'/api/organizations/{id}/workflow-authorizations',auth:'owner-account',payment:null,required:['id','client_reference']},
+  {id:'inspect_organization_workflow',label:'Inspect private workflow review',description:'Current owner or selected currently authorized reviewer sees original workflow/candidates and immutable gross, wallet, reserve, fee and expiry terms. Other members and buyer credentials are denied.',method:'GET',endpoint:'/api/organizations/{id}/workflow-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},
+  {id:'approve_organization_workflow',label:'Approve exact reviewed workflow',description:'Only the selected independent current reviewer approves the exact authority hash. Original decision replay never reopens revocation or creates another checkout.',method:'POST',endpoint:'/api/organizations/{id}/workflow-authorizations/{authorizationId}/approval',auth:'owner-account',payment:null,required:['id','authorizationId'],body_schema:{type:'object',additionalProperties:false,required:['version','client_reference','authority_hash','approve'],properties:{version:{enum:[1,2]},client_reference:routeMandateBodySchema.properties.client_reference,authority_hash:{type:'string',pattern:'^[a-f0-9]{64}$'},approve:{const:true}}}},
+  {id:'revoke_organization_workflow',label:'Revoke reviewed workflow',description:'Current owner or selected authorized reviewer closes fresh spending. Original payment bytes/proof/refund and backed result recovery remain separate; gross and fee exposure never recycle.',method:'DELETE',endpoint:'/api/organizations/{id}/workflow-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},
   {id:'inspect_reputation_v2',label:'Inspect scoped reputation evidence',description:'Public versioned counts, denominators, coverage and subjective feedback. Scope requires service, canonical leaf and mode together. No calibrated probability, private review body or financial authority.',method:'GET',endpoint:'/api/agents/{id}/reputation',auth:'none',payment:null,required:['id'],optional:['service_id','capability_id','execution_mode','service_version']},
   {id:'reputation_suggestions',label:'Compare eligible reputation suggestions',description:'Authenticated nonpersistent comparison and production best-supported-history ordering after canonical buyer/provider/payment/capacity/schema/budget gates. Unproven candidates remain separate. Cannot authorize spending or alter mandates.',method:'POST',endpoint:'/api/agents/reputation-suggestions',auth:'agent_api_key',payment:null,body_schema:routePlanBodySchema},
   {id:'inspect_reputation_decisions',label:'Inspect original reputation decisions',description:'Private administrator or original trade-party history. Appeals/corrections append facts and never change settlement.',method:'GET',endpoint:'/api/trades/{id}/reputation',auth:'trade-party',payment:null,required:['id']},
@@ -1330,7 +1379,7 @@ export const AGENT_MCP_TOOLS = [
       properties: {
         metric: {
           type: 'string',
-          description: 'completions|rating|benchmark|velocity|trainer|trust',
+          description: 'completions|rating|benchmark|trust|reputation',
         },
         limit: { type: 'number', description: 'Max results (default 10)' },
       },
@@ -1638,7 +1687,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       responses: { 200: { description: 'Completed or failed call; exact success replay preserves one receipt and charge. Late output remains failed and uncharged' }, 403: { description: 'Worker lease rejected' }, 409: { description: 'Conflicting terminal output' }, 422: { description: 'Output schema failure; no charge' } } } },
     '/api/admin/routing/health': { get: {
       operationId: 'inspect_routing_health', summary: 'Admin-only aggregate routing and enterprise payment alerts and routing admission state', security: ownerAuthenticated,
-      responses: { 200: { description: 'Private aggregate routing health and organization_spending external obligations: original use/fee exposure, exact claims/receipts, cross-family wallet collisions and 900-second stale claims/transfers. Fixed alert codes/counts and current routing control; no actor IDs, wallets, hashes, credentials or payment values. Enterprise alerts do not change routing admission authority.' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator required' }, 500: { description: 'Inspection unavailable; safe error ID returned' } },
+      responses: { 200: { description: 'Private aggregate routing health and organization_spending external obligations: original use/fee exposure, exact claims/receipts, cross-family wallet collisions and 900-second stale claims/transfers. Private organization_chain_fees groups original buyer and treasury observations by Ethereum/Sepolia ETH wei and Tempo pathUSD units, including charged failed treasury attempts. Known integer fee subtotals, null actual totals for incomplete observations, fixed counts/coverage and fee invariant alerts; no actor IDs, wallets, hashes, credentials or individual payment values. Enterprise alerts do not change routing admission authority.' }, 401: { description: 'Account authentication required' }, 403: { description: 'Administrator required' }, 500: { description: 'Inspection unavailable; safe error ID returned' } },
     } },
     '/api/admin/routing/pause': {
       get: { operationId: 'inspect_routing_admission', summary: 'Admin-only durable routing admission control', security: ownerAuthenticated,
@@ -1769,12 +1818,9 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
                   ] },
                   endpoint: { oneOf: [{ type: 'string', format: 'uri', maxLength: 500 }, { type: 'string', const: '' }] },
                   owner_address: { type: 'string', maxLength: 200, description: 'Optional valid EVM address.' },
-                  parent_version_id: { type: 'string', maxLength: 200 },
                   system_prompt: { type: 'string', maxLength: 50000 },
                   tools_config: { type: 'array', maxItems: 100, items: {} },
                   model_id: { type: 'string', maxLength: 200 },
-                  change_description: { type: 'string', maxLength: 2000 },
-                  improvement_task_id: { type: 'string', maxLength: 200 },
                   moltbook_handle: { type: 'string', maxLength: 100 },
                   activation_mode: { type: 'string', enum: ['autonomous', 'owner_claim'], default: 'owner_claim' },
                   lifecycle_mode: { type: 'string', enum: ['persistent', 'ephemeral'], default: 'persistent', description: 'Ephemeral mode requires an active sponsoring agent key and is always private.' },
@@ -1786,8 +1832,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
         },
         responses: {
           201: { description: 'Agent registered; save agent.api_key and follow the returned activation-specific next_actions' },
-          400: { description: 'Invalid body' }, 403: { description: 'Parent agent key or ephemeral-registration sponsor required' },
-          404: { description: 'Parent version not found' }, 409: { description: 'Parent version was already superseded or still has active obligations' },
+          400: { description: 'Invalid body' }, 403: { description: 'Ephemeral-registration sponsor required' },
+          410: { description: 'Retired replacement or improvement registration fields supplied' },
           429: { description: 'Registration rate limit reached' }, 500: { description: 'Registration failed' },
         },
       },
@@ -2409,6 +2455,24 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/organizations/{id}/service-accounts/{accountId}': { delete: { operationId: 'revoke_organization_service_account', summary: 'Revoke a read-only organization credential', security: ownerAuthenticated,
       parameters: [tradeIdParameter, { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       responses: { 200: { description: 'Credential revoked or idempotent replay' }, 404: { description: 'Credential not owned' } } } },
+    '/api/organizations/{id}/route-authorizations': {
+      get:{operationId:'recover_organization_route',summary:'Current-owner exact original proposal lookup',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'client_reference',in:'query',required:true,schema:{type:'string',minLength:8,maxLength:128,pattern:'^[A-Za-z0-9._:-]+$'}}],responses:{200:{description:'Private original authority'},401:{description:'Human account required'},404:{description:'Original proposal unavailable'}}},
+      post:{operationId:'propose_organization_route',summary:'Owner freezes one public-provider v1/v2 or explicitly shared private-provider v3/v4 route for independent review',security:ownerAuthenticated,parameters:[tradeIdParameter],requestBody:{required:true,content:{'application/json':{schema:organizationRouteBodySchema}}},responses:{201:{description:'Pending proposal; no funds moved'},200:{description:'Exact original replay'},403:{description:'Independent reviewer required'},409:{description:'Original terms or current eligibility changed'},503:{description:'Writes closed or retryable storage contention'}}},
+    },
+    '/api/organizations/{id}/route-authorizations/{authorizationId}': {
+      get:{operationId:'inspect_organization_route',summary:'Private frozen route review for owner or selected reviewer',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Private original route/candidates, gross and fee ceilings'},401:{description:'Human account required'},404:{description:'Private authority unavailable'}}},
+      delete:{operationId:'revoke_organization_route',summary:'Close fresh spending while preserving original obligations',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Revoked or exact original replay'},401:{description:'Human account required'},404:{description:'Private authority unavailable'}}},
+    },
+    '/api/organizations/{id}/route-authorizations/{authorizationId}/approval': {post:{operationId:'approve_organization_route',summary:'Selected independent reviewer approves the exact original authority hash',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],requestBody:{required:true,content:{'application/json':{schema:getAction('approve_organization_route').body_schema}}},responses:{201:{description:'Approved; no funds moved'},200:{description:'Original decision replay, including revoked state'},403:{description:'Selected independent reviewer required'},409:{description:'Original authority or current eligibility changed'}}}},
+    '/api/organizations/{id}/workflow-authorizations': {
+      get:{operationId:'recover_organization_workflow',summary:'Current-owner exact original proposal lookup',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'client_reference',in:'query',required:true,schema:{type:'string',minLength:8,maxLength:128,pattern:'^[A-Za-z0-9._:-]+$'}}],responses:{200:{description:'Private original authority'},401:{description:'Human account required'},404:{description:'Original proposal unavailable'}}},
+      post:{operationId:'propose_organization_workflow',summary:'Owner freezes an exact workflow, provider contracts and private consents for independent L1 v1 or Tempo v2 review',security:ownerAuthenticated,parameters:[tradeIdParameter],requestBody:{required:true,content:{'application/json':{schema:organizationWorkflowBodySchema}}},responses:{201:{description:'Pending proposal; no funds moved'},200:{description:'Exact original replay'},403:{description:'Independent reviewer required'},409:{description:'Original terms or current eligibility changed'},503:{description:'Writes closed or retryable storage contention'}}},
+    },
+    '/api/organizations/{id}/workflow-authorizations/{authorizationId}': {
+      get:{operationId:'inspect_organization_workflow',summary:'Private frozen workflow review for owner or selected reviewer',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Private original DAG, frozen providers/consents, gross and fee ceilings'},401:{description:'Human account required'},404:{description:'Private authority unavailable'}}},
+      delete:{operationId:'revoke_organization_workflow',summary:'Close fresh spending while preserving original obligations',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Revoked or exact original replay'},401:{description:'Human account required'},404:{description:'Private authority unavailable'}}},
+    },
+    '/api/organizations/{id}/workflow-authorizations/{authorizationId}/approval': {post:{operationId:'approve_organization_workflow',summary:'Selected independent reviewer approves the exact original authority hash',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],requestBody:{required:true,content:{'application/json':{schema:getAction('approve_organization_workflow').body_schema}}},responses:{201:{description:'Approved; no funds moved'},200:{description:'Original decision replay, including revoked state'},403:{description:'Selected independent reviewer required'},409:{description:'Original authority or current eligibility changed'}}}},
     '/api/organizations/{id}/budget': {
       get: { operationId: 'inspect_organization_budget', summary: 'Inspect owner-only budget and current usage', security: ownerAuthenticated,
         parameters: [tradeIdParameter], responses: { 200: { description: 'Current ceilings and conservative reservation usage' }, 404: { description: 'Organization not owned' } } },
@@ -2797,7 +2861,7 @@ Instant capabilities use the separate \`/api/instant\` namespace. Publish bounde
 
 ## Route planning
 
-Capability evidence is revalidated against current funding, payout, exact buyer-review delivery hash and authoritative ownership on each read. The directory's compatibility \`verified=true\` filter means completed work proof; it ignores historical \`:verified\` tags. Basic capability challenges are practice format checks, grant no verified tag and return \`verified_capability: null\`. Their scores are not independently measured skill. Capability confidence remains low while independent quality is unmeasured. Known buyer agents with the same authoritative owner count as one breadth principal. Self/shared-owner and known controlled-cohort work do not qualify. Backed completion cycles of two to four current owner/account principals are excluded across capabilities; each edge needs current financial and buyer-review proof. Search admits at most 256 principal/depth states including the seed and excludes evidence on exhaustion. Status flags or unbacked trades alone cannot create cycle edges. Unknown owners, cycles beyond four principals and broader collusion remain independently unresolved. Peer benchmark creation binds the original evaluator. Persist an original client_reference and exact body for creation recovery; exact score replay preserves the original result. Public benchmark lists contain metadata only; raw tests, outputs, rubric and notes require the target, evaluator or current linked owner through GET /api/benchmarks/{id}. Peer scores and historical cached benchmark/velocity values are unverified assertions, cannot update quality/trust, and do not satisfy independent benchmark requirements.
+Capability evidence is revalidated against current funding, payout, exact buyer-review delivery hash and authoritative ownership on each read. The directory's compatibility \`verified=true\` filter means completed work proof; it ignores historical \`:verified\` tags. Basic capability challenges are practice format checks, grant no verified tag and return \`verified_capability: null\`. Their scores are not independently measured skill. Capability confidence remains low while independent quality is unmeasured. Known buyer agents with the same authoritative owner count as one breadth principal. Self/shared-owner and known controlled-cohort work do not qualify. Backed completion cycles of two to four current owner/account principals are excluded across capabilities; each edge needs current financial and buyer-review proof. Search admits at most 256 principal/depth states including the seed and excludes evidence on exhaustion. Status flags or unbacked trades alone cannot create cycle edges. Unknown owners, cycles beyond four principals and broader collusion remain independently unresolved. Peer benchmark creation binds the original evaluator. Persist an original client_reference and exact body for creation recovery; exact score replay preserves the original result. Public benchmark lists contain metadata only; raw tests, outputs, rubric and notes require the target, evaluator or current linked owner through GET /api/benchmarks/{id}. Peer scores and historical cached benchmark values are unverified assertions, cannot update quality/trust, and do not satisfy independent benchmark requirements.
 
 \`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and capability evidence. \`claimed_only\` means no backed accepted completion was observed for every required capability; \`backed_completion_observed\` means such completion evidence exists, not that quality was measured or independently verified. The backed-execution score component is capped at five distinct eligible buyer accounts, and repeated purchases by one buyer cannot increase it. Recent funded provider declines, expired leases, uncorrected deterministic verification failures, and confirmed full buyer refunds are reported by service and subtract a capped score penalty. Owner-linked and reference trades are excluded from planning evidence; zero observed failures do not prove reliability. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. \`POST /api/trades/{id}/cancel\` returns the saved cancellation and payment_exposure; a cancelled external checkout may still receive a late payment. If cancellation wins a race against verified MPP or EVM funding, the funding endpoint records the proof on the cancelled trade and starts the existing refund path. Concurrent retries of the same verified proof reuse its receipt and current refund state; a different proof for that trade is rejected. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
 

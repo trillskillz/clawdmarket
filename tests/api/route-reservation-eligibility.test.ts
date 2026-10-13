@@ -121,10 +121,13 @@ test('provider changes after preflight are rejected at reservation and can fall 
   ] as const) {
     const f = await fixture()
     const worker = createClient({ url: process.env.TURSO_DATABASE_URL! })
-    const originalExecute = db.$client.execute.bind(db.$client)
+    // Include fresh read-only clients while mutating through a separate connection
+    // after the actual provider read and before reservation.
+    const clientPrototype = Object.getPrototypeOf(db.$client) as { execute: typeof db.$client.execute }
+    const originalExecute = clientPrototype.execute
     let changed = false
-    Reflect.set(db.$client, 'execute', async (...args: Parameters<typeof db.$client.execute>) => {
-      const result = await originalExecute(...args)
+    Reflect.set(clientPrototype, 'execute', async function (this: typeof db.$client, ...args: Parameters<typeof db.$client.execute>) {
+      const result = await originalExecute.apply(this, args)
       const statement = args[0] as string | { sql: string; args?: unknown[] }
       const query = typeof statement === 'string' ? statement : statement.sql
       if (!changed && query.startsWith('select') && query.includes('from "service_definitions"')
@@ -137,7 +140,7 @@ test('provider changes after preflight are rejected at reservation and can fall 
     })
     let response: Response
     try { response = await run(f) }
-    finally { Reflect.set(db.$client, 'execute', originalExecute); worker.close() }
+    finally { Reflect.set(clientPrototype, 'execute', originalExecute); worker.close() }
     assert.equal(changed, true)
     assert.equal(response.status, 201, `${field}: ${JSON.stringify(await response.clone().json())}`)
     assert.equal((await response.json()).order.service_id, f.secondId)

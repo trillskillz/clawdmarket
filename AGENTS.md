@@ -1,27 +1,101 @@
 # ClawdMarket routing work
 
+## Latest publication policy — local accumulation (2026-10-13 UTC)
+
+The user explicitly approved completing one final publication: the combined
+PR #231 release, including final documentation/browser corrections, protected
+merge, migration-first Vercel deployment and same-SHA verification. Complete this
+release without requesting permission again. After it completes, keep further
+changes local and accumulate them until the user explicitly authorizes another
+GitHub/Vercel publication. Do not push commits, merge PRs, edit GitHub publication
+metadata or deploy a later release without new permission. Previous publication
+exceptions and the ten-capability cadence do not authorize a future release.
+
+PR #231 is currently unmerged at remote head `178f51c`. Its runtime passes the
+enabled 853-case Node gate and final production build. Final complete Chromium
+acceptance passes 104 of 113 cases with nine expected environment-dependent skips,
+zero failures and zero retries on a fresh disposable database. Automatic approval review initially rejected
+their push; the user then explicitly approved this final release only. Production
+remains at `5715083` until the authorized deployment and verification complete.
+
 For any request to continue the routing-layer plan, read [ROUTING_LAYER_MASTER_PLAN.md](ROUTING_LAYER_MASTER_PLAN.md) first. Implement the highest unfinished priority there, use its acceptance criteria, and update its status and evidence after each completed batch.
 
 Preserve the existing payment and settlement state machines. The user's 2026-10-02 instruction replaces the five-change cadence with outcome-based releases: bundle implementation, tests, contracts, diagnostics, and documentation into one PR per demonstrable capability. Commit count is not a release gate. Do not open separate release PRs for bookkeeping or speculative hardening. The historical implementation record is [docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md](docs/ROUTING_LAYER_ENGINEERING_REPORT_2026-09-29.md).
 
-## Current publishing gate (2026-10-12 UTC)
+## Current continuation — accepted local batch (2026-10-12 UTC)
 
-The user's Reputation v2 priority remains active. PR #260 is accepted and deployed
-at main `66858c5`, HTTP 1.110 on both canonical domains. Real compiler checks,
-same-SHA smoke, mobile/desktop Observe and payment readiness/reserves passed.
-The fresh production assessment still lacks active public services, dated scoped
-outcomes and comparable candidates. The user's latest instruction explicitly
-supersedes the observation hold for ranking: **“find a way to promote to production
-regardless.”** Implement and verify a separately versioned production ranking
-policy, then publish through protected CI/migration-first GitHub/Vercel. Keep
-missing measurements and the explicit override visible; do not fabricate evidence
-or claim calibrated readiness. Existing saved plans retain their frozen order.
-Purchasing minimums, payment/execution flags, financial authority and live funds
-remain unchanged. Preserve the separate unfinished routed purchasing worktree.
-After production acceptance, continue the next unfinished routing capability.
+The user's latest request prioritizes a site visual audit, font/readability fixes,
+and pushing them with the accepted workflow/routing work. This explicitly permits
+publishing this combined review branch before the usual ten-capability cadence.
+Use `fix/site-visual-reliability` in `/home/void/Work/clawdmarket-visual-reliability`,
+based on accepted workflow commit `4c4d998`. See
+[visual acceptance](docs/SITE_VISUAL_RELIABILITY_AUDIT.md). The accepted routing
+count remains 6/10; visual cleanup is not another economic capability. The user's
+follow-up explicitly authorizes GitHub/Vercel publication: required CI, merge,
+migration-first deployment and exact-SHA production verification. Rollout remains
+closed under its original gates.
 
-The combined release in PR #255 is production-verified at SHA 6a4d335, HTTP 1.106. The user now prioritizes the Observe Live activity defect before further routing work. Finish and verify registrations, public market payments and caller-only wallet activity in one descending UTC timeline, then publish this focused repair under the existing site-fix publication instruction and verify the production deployment. Accepted private enterprise fee coverage 1.107 remains separately committed in /home/void/Work/clawdmarket on feat/enterprise-chain-fee-coverage (new batch 1/10); its unfinished routed purchasing draft is preserved there and must not enter this repair. After Observe production acceptance, resume separately owner-reviewed enterprise routed public-provider purchasing. Keep the ten-part gate for future routing batches unless the user changes it; audits do not increment it. Do not spend live wallet funds or enable global rollout flags.
+Reputation v2 production ranking is accepted through PR #261, main `5715083`,
+HTTP 1.111. Protected CI, migration-first deployment 38205514998, same-SHA smoke
+38206187936, independent API/desktop/mobile checks and read-only payment readiness
+passed. Fresh protected audit 38267467182 passed all five compiler queries and ten
+immutable guards. Representative observation/calibration remain pending under the
+explicit user override; empirical promotion_ready=false remains truthful.
+
+The local batch has **6/10** accepted demonstrable capabilities: reconciled private
+enterprise actual fee coverage, independently reviewed L1 public-provider routing
+(`5ae3e92`, HTTP 1.112), recursive-improvement retirement (`3839c32`, HTTP 1.113),
+reviewed Tempo public-provider routing (`eb3b6f8`, HTTP 1.114), independently reviewed
+private-provider L1/Tempo routing (`0d9bcd4`, HTTP 1.115), and independently reviewed
+enterprise workflows (HTTP 1.116).
+Current integrated branch: `feat/enterprise-reviewed-workflows` in
+`/home/void/Work/clawdmarket-enterprise-reviewed-workflows`, accepted parent `0d9bcd4`.
+
+Workflow acceptance passes the fully enabled **852-case Node gate**:
+847 passed, zero failed, five expected skips. Eighteen Python tests,
+SDK parity/build, TypeScript, lint, final production build and forty built Chromium
+journeys pass. Six final genuine workflow L1/Tempo journeys prove two dependent
+private providers, buyer/provider process deaths, original artifact handoff, explicit
+buyer acceptance, confirmed payouts, exact revoked late-payment refunds, downstream
+consent denial, shared-wallet exclusion and original backed receipt recovery.
+Both SDKs recover genuinely lost proposal/decision replies over real HTTP.
+Twelve supplemental economic journeys also retain previous private standalone
+acceptance with corrected actual DELETE dispatch. Rejected-claim cancellation
+releases unused capacity while original gross/fee use stays charged; original
+claimed payment recovery retains its scope. Seven focused authority/privacy cases
+include four separate-process gross/fee/department/capacity races and ten genuine
+before/after-commit SIGKILL boundaries. Storage: 66 migrations and replay, preserved
+legacy financial/input/read-credential state, integrity ok, zero foreign-key
+anomalies, ten immutable reputation guards and five working evidence queries.
+Legacy workflow v1/route v1-v4 hashes, separate fee units and historic identities
+retain their meaning. Controlled fixture providers are not production independence
+evidence. Execution remains behind the original closed rollout gates.
+
+Evidence: [workflow acceptance](docs/ORGANIZATION_REVIEWED_WORKFLOW_AUDIT.md),
+[workflow contract](docs/ORGANIZATION_REVIEWED_WORKFLOWS.md),
+[workflow dependency/acceptance](docs/ORGANIZATION_REVIEWED_WORKFLOW_PLAN.md), and
+[private-provider acceptance](docs/ORGANIZATION_ROUTED_PRIVATE_PROVIDER_AUDIT.md).
+
+Next implement independently reviewed task-board purchasing using
+[the audited dependencies](docs/ORGANIZATION_REVIEWED_TASK_PURCHASING_PLAN.md).
+Bind the exact accepted bid/workspace and original task trade, separately scoped
+payment claims and shared route/workflow/task exposure. Preserve original task
+delivery, explicit review and late-payment recovery; pending review cannot be
+bypassed through generic task funding. That dependency audit is not another
+capability. Product/listing and contract purchases retain separate authority.
+
+The general cadence is **ten completed capability PRs per publication batch**,
+one demonstrable capability per PR, protected CI, migration-first deployment and
+exact merged-SHA production verification, subject to the current explicit push
+exception above. Audits, commits and intermediate
+foundations do not count. No live funds or global rollout changes are authorized.
 
 ## Historical user priority and publishing exception (2026-10-03)
+
+The user's latest 2026-10-11 instruction replaces current routing work with
+sitewide reputation v2 implementation and publication. They will paste the plan;
+wait for its actual requirements. The routed purchasing model/API/tests remain
+unaccepted local work. Its first four tests stopped at a fixture with zero eligible
+route candidates; no routing acceptance or batch increment is established.
 
 The latest user instruction moves navigation, legacy cleanup, wallet spending/payment verification, and human/agent deposit-backed account credit plus connected wallet balances ahead of the routing plan. Complete this capability release now, then resume routing. Push the finished changes to GitHub and Vercel after required release gates; this explicit authorization supersedes the earlier ten-part publishing gate for this release. Preserve balances needed for normal site payments and inspect reserves before the smallest necessary funded checks. Do not enable unbacked historical credit or global routing before its acceptance gates.

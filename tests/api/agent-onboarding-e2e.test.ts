@@ -667,46 +667,37 @@ test('the authenticated cleanup worker retires abandoned ephemeral agents', asyn
   assert.equal((await status(request('/api/agents/status', 'GET', undefined, canary.agent.api_key))).status, 401)
 })
 
-test('version publication cannot strand work and never silently republishes a service', async () => {
-  const parent = await registerAgent('Versioned Agent', 'autonomous')
+test('retired replacement registration cannot strand work, expire listings or create an agent', async () => {
+  const parent = await registerAgent('Existing Agent', 'autonomous')
   const serviceResponse = await listing(request('/api/listings', 'POST', {
-    category: 'code',
-    title: 'Versioned code review',
-    description: 'A concrete service that belongs to the current active version.',
-    price_bankr: 3,
+    category: 'code', title: 'Existing code review',
+    description: 'A concrete service that remains owned by the original agent.', price_bankr: 3,
   }, parent.agent.api_key))
   const service = (await serviceResponse.json()).listing
-  const taskResponse = await tasks.POST(request('/api/tasks', 'POST', {
-    title: 'Version blocker task',
-    description: 'Open work must prevent replacement of the authenticated version.',
-    required_capabilities: ['code-review'],
-    budget_usd: 3,
-  }, parent.agent.api_key))
-  const task = await taskResponse.json()
-
-  const blocked = await register(request('/api/agents/register', 'POST', {
-    name: 'Versioned Agent v2',
-    parent_version_id: parent.agent.id,
-    change_description: 'Improve retry handling.',
-  }, parent.agent.api_key))
-  assert.equal(blocked.status, 409)
-  assert.equal((await blocked.json()).error, 'active_obligations')
+  const before = await db.select({ id: schema.agents.id }).from(schema.agents)
+  for (const retired of [{ parent_version_id: parent.agent.id }, { improvement_task_id: 'legacy-task' }, { change_description: 'Legacy replacement' }]) {
+    const response = await register(request('/api/agents/register', 'POST', { name: 'Replacement Agent', ...retired }, parent.agent.api_key))
+    assert.equal(response.status, 410)
+    assert.equal((await response.json()).error, 'recursive_improvement_removed')
+  }
+  assert.equal((await db.select({ id: schema.agents.id }).from(schema.agents)).length, before.length)
   assert.equal((await db.select().from(schema.agents).where(eq(schema.agents.id, parent.agent.id)).get())?.status, 'active')
   assert.equal((await db.select().from(schema.listings).where(eq(schema.listings.id, service.id)).get())?.status, 'active')
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, parent.agent.api_key))).status, 200)
+})
 
-  await db.update(schema.tasks).set({ status: 'cancelled' }).where(eq(schema.tasks.id, task.task_id))
-  const published = await register(request('/api/agents/register', 'POST', {
-    name: 'Versioned Agent v2',
-    parent_version_id: parent.agent.id,
-    change_description: 'Improve retry handling.',
-  }, parent.agent.api_key))
-  assert.equal(published.status, 200)
-  const next = await published.json()
-  assert.equal(next.version, 2)
-  assert.equal(next.next_actions[0].action, 'publish_service')
-  assert.equal((await db.select().from(schema.agents).where(eq(schema.agents.id, parent.agent.id)).get())?.status, 'inactive')
-  assert.equal((await db.select().from(schema.listings).where(eq(schema.listings.id, service.id)).get())?.status, 'expired')
-  const generated = await db.select().from(schema.listings).where(eq(schema.listings.seller_id, `user_agent_${next.agent.id}`))
-  assert.equal(generated.length, 0)
-  assert.equal((await status(request('/api/agents/status', 'GET', undefined, next.agent.api_key))).status, 200)
+test('retired task and leaderboard commands cannot restore recursive improvement authority', async () => {
+  const agent = await registerAgent('Retirement compatibility', 'autonomous')
+  const body = { title: 'Legacy improvement', description: 'Retired automatic replacement request.', required_capabilities: ['code-review'], budget_usd: 3, task_type: 'self_improvement' }
+  const denied = await tasks.POST(request('/api/tasks', 'POST', body, agent.agent.api_key))
+  assert.equal(denied.status, 400)
+  assert.equal((await db.select().from(schema.tasks).where(eq(schema.tasks.posterAgentId, agent.agent.id))).length, 0)
+  for (const metric of ['trainer', 'velocity']) {
+    const response = await (await import('@/app/api/leaderboard/route')).GET(request(`/api/leaderboard?metric=${metric}`))
+    assert.equal(response.status, 410)
+    assert.equal((await response.json()).error, 'metric_removed')
+  }
+  const stats = await (await (await import('@/app/api/stats/route')).GET()).json()
+  assert.equal(stats.self_improvement_supported, false)
+  assert.equal(stats.versioning_supported, false)
 })

@@ -1,0 +1,26 @@
+CREATE TABLE IF NOT EXISTS organization_route_authorizations (
+  id TEXT PRIMARY KEY NOT NULL,
+  organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  route_id TEXT NOT NULL UNIQUE REFERENCES route_plans(id) ON DELETE RESTRICT,
+  mandate_id TEXT NOT NULL UNIQUE REFERENCES route_payment_mandates(id) ON DELETE RESTRICT,
+  owner_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  team_id TEXT REFERENCES organization_teams(id) ON DELETE RESTRICT,
+  cost_center TEXT NOT NULL,
+  reviewer_role_id TEXT NOT NULL REFERENCES organization_purchasing_roles(id) ON DELETE RESTRICT,
+  reviewer_account_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  client_reference TEXT NOT NULL, request_hash TEXT NOT NULL, authority_hash TEXT NOT NULL,
+  terms_json TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending',
+  decision_reference TEXT, decision_hash TEXT,
+  created_at INTEGER NOT NULL, approved_at INTEGER, revoked_at INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS organization_route_org_reference_idx
+  ON organization_route_authorizations(organization_id, client_reference);
+CREATE TABLE IF NOT EXISTS organization_route_uses (
+  authorization_id TEXT PRIMARY KEY NOT NULL REFERENCES organization_route_authorizations(id) ON DELETE RESTRICT,
+  order_id TEXT NOT NULL UNIQUE REFERENCES service_orders(id) ON DELETE RESTRICT,
+  trade_id TEXT NOT NULL UNIQUE REFERENCES trades(id) ON DELETE RESTRICT,
+  authority_hash TEXT NOT NULL, amount_minor INTEGER NOT NULL CHECK(amount_minor > 0),
+  maximum_gas_cost_wei TEXT NOT NULL, created_at INTEGER NOT NULL
+);

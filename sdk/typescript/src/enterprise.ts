@@ -51,9 +51,11 @@ export interface OrganizationSpendingClient {
 }
 
 export type EnterpriseOperation = 'inspect_spending_accounts' | 'create_spending_account' | 'revoke_spending_account'
+  | 'propose_organization_workflow' | 'recover_organization_workflow' | 'inspect_organization_workflow' | 'approve_organization_workflow' | 'revoke_organization_workflow'
+  | 'propose_organization_route' | 'recover_organization_route' | 'inspect_organization_route' | 'approve_organization_route' | 'revoke_organization_route'
   | 'spending_account_service_order' | 'inspect_spending_account_order' | 'spending_evm_intent' | 'recover_spending_evm_intent'
   | 'spending_evm_claim' | 'spending_evm_proof' | 'spending_mpp_intent' | 'recover_spending_mpp_intent' | 'spending_mpp_claim' | 'spending_mpp_proof'
-export type EnterpriseRequest = <T>(operation: EnterpriseOperation, params: { id: string; tradeId?: string }, body?: unknown, options?: RequestOptions, query?: Record<string, string>, paymentCredential?: string) => Promise<T>
+export type EnterpriseRequest = <T>(operation: EnterpriseOperation, params: { id: string; tradeId?: string; authorizationId?: string }, body?: unknown, options?: RequestOptions, query?: Record<string, string>, paymentCredential?: string) => Promise<T>
 
 export function enterpriseId(value: string): string {
   if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new TypeError('enterprise ID must be a UUID')
@@ -67,8 +69,8 @@ export function originalTempoCredential(value: string): string {
   if (typeof value !== 'string' || !/^Payment [\x21-\x7e]+$/.test(value) || value.length > 16_384) throw new TypeError('original Tempo credential must be a bounded single-line Payment header')
   return value
 }
-export function enterprisePath(operation: EnterpriseOperation, params: { id: string; tradeId?: string }, query?: Record<string, string>): string {
-  const path = SDK_CONTRACT.operations[operation].path.replace(/\{([^}]+)\}/g, (_, name: 'id' | 'tradeId') => enterpriseId(params[name] ?? ''))
+export function enterprisePath(operation: EnterpriseOperation, params: { id: string; tradeId?: string; authorizationId?: string }, query?: Record<string, string>): string {
+  const path = SDK_CONTRACT.operations[operation].path.replace(/\{([^}]+)\}/g, (_, name: 'id' | 'tradeId' | 'authorizationId') => enterpriseId(params[name] ?? ''))
   const search = query ? new URLSearchParams(query).toString() : ''
   return path + (search ? `?${search}` : '')
 }

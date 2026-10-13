@@ -1473,6 +1473,7 @@ test('a real reverted Tempo refund records its original charged fee without repo
     assert.equal(typeof request.maxFeePerGas,'bigint');assert.equal(typeof request.maxPriorityFeePerGas,'bigint')
     const raw=await treasuryAccount.signTransaction({type:'tempo',chainId:4217,calls,nonce,nonceKey:0n,gas:300_000n,feeToken:chain.token,maxFeePerGas:request.maxFeePerGas!,maxPriorityFeePerGas:request.maxPriorityFeePerGas!}),hash=keccak256(raw)
     await db.update(schema.settlement_transfers).set({nonce,raw_transaction:raw,tx_hash:hash,status:'prepared'}).where(eq(schema.settlement_transfers.id,original.id))
+    const {inspectOrganizationChainFeeHealth}=await import('../../lib/organization-chain-fee-health.mjs'),feeBaseline=await inspectOrganizationChainFeeHealth(db.$client),priorFees=feeBaseline.groups.find(group=>group.chain_id===4217)!.treasury
     const treasuryBefore=await chain.balance(chain.treasury),buyerBefore=await chain.balance(payer.address),broadcastBefore=tempoBroadcasts
     const {processSettlementTransfer,settleExternallyFundedTrade}=await import('@/lib/external-settlement')
     await assert.rejects(processSettlementTransfer(original.id,{waitMs:5000}),(error:any)=>error.code==='TRANSFER_REVERTED'&&error.retryable===false)
@@ -1482,6 +1483,9 @@ test('a real reverted Tempo refund records its original charged fee without repo
     const [failed]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.id,original.id));assert.equal(failed.status,'failed');assert.equal(failed.tx_hash,hash);assert.equal(failed.raw_transaction,raw)
     const {readChainFeeEvidence}=await import('@/lib/chain-fee-evidence'),evidence=readChainFeeEvidence(failed.chain_fee_evidence_json,{chainId:4217,txHash:hash,payerAddress:chain.treasury})!
     assert.equal(evidence.model,'tempo_pathusd_sender_fee_v1');assert.equal(evidence.total_fee_units,fee.toString())
+    const failedFees=await inspectOrganizationChainFeeHealth(db.$client),charged=failedFees.groups.find(group=>group.chain_id===4217)!.treasury
+    assert.equal(failedFees.invalid_count,feeBaseline.invalid_count);assert.equal(charged.record_count,priorFees.record_count);assert.equal(charged.measured_count,priorFees.measured_count+1)
+    assert.equal(BigInt(charged.known_fee_units),BigInt(priorFees.known_fee_units)+fee);assert.equal(charged.unmeasured_count,priorFees.unmeasured_count-1)
     await assert.rejects(processSettlementTransfer(original.id,{waitMs:5000}),(error:any)=>error.code==='TRANSFER_FAILED');assert.equal(tempoBroadcasts,broadcastBefore+1)
     const [trade]=await db.select().from(schema.trades).where(eq(schema.trades.id,c.trade.id));assert.equal(trade.status,'disputed');assert.equal(trade.payout_status,'processing')
     assert.equal((await settleExternallyFundedTrade(trade,0,{process:false})).complete,false);assert.deepEqual(await counts(f),{orders:1,capacity:1})
@@ -1617,5 +1621,39 @@ test('buyer-host original review confirms private L1/Tempo approval files and re
     const receipts=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,c.trade.id)),transfers=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,c.trade.id))
     assert.equal(receipts.length,1);assert.equal(receipts[0].tx_hash,prepared.tx_hash);assert.equal(transfers.length,1);assert.equal(transfers[0].status,'confirmed')
     assert.deepEqual(await counts(f),{orders:1,capacity:0})
+  }
+})
+
+test('enterprise original fee coverage reconciles real L1 and Tempo buyer/refund costs and refuses corrupted observations',{skip:!process.env.CLAWDMARKET_TEST_ANVIL_BINARY||!process.env.CLAWDMARKET_TEST_TEMPO_BINARY},async()=>{
+  const {inspectOrganizationChainFeeHealth}=await import('../../lib/organization-chain-fee-health.mjs'),{readChainFeeEvidence}=await import('@/lib/chain-fee-evidence')
+  for(const rail of ['evm','mpp'] as const){
+    const chainId=rail==='evm'?1:4217,baseline=await inspectOrganizationChainFeeHealth(db.$client),prior=baseline.groups.find(group=>group.chain_id===chainId)!
+    const f=await fixture(),g=rail==='evm'?await externalGrant(f):await tempoGrant(f),c=rail==='evm'?await externalCheckout(f,g):await tempoCheckout(f,g),signed=rail==='evm'?await signedPurchase(f,c,g.key):await signedTempoPurchase(c,g)
+    assert.equal((await spend(c.paymentPath+'/claim',g.key,'POST',signed.claim)).body.send_allowed,true)
+    const originalChain=rail==='evm'?enterpriseChain!:tempoChain!,buyerBefore=rail==='evm'?await originalChain.client.getBalance({address:payer.address}):await originalChain.balance(payer.address)
+    await call(g.path,f.owner,'DELETE',{account_id:g.account.id})
+    if(rail==='evm'){assert.ok('wallet' in signed);await signed.wallet.sendRawTransaction({serializedTransaction:signed.raw})}
+    else await tempoChain!.client.sendRawTransaction({serializedTransaction:signed.raw})
+    const actualBuyer=await originalChain.client.waitForTransactionReceipt({hash:signed.hash}),buyerFee=rail==='evm'?actualBuyer.gasUsed*actualBuyer.effectiveGasPrice:(actualBuyer.gasUsed*actualBuyer.effectiveGasPrice+999999999999n)/1000000000000n
+    const treasuryBefore=rail==='evm'?await originalChain.client.getBalance({address:originalChain.treasury}):await originalChain.balance(originalChain.treasury)
+    const refunded=await call(`/api/trades/${c.trade.id}/fund/${rail}`,f.key,'POST',signed.proof,true);assert.ok([200,202].includes(refunded.status),JSON.stringify(refunded.body))
+    if(rail==='mpp')await settleTempo(c.trade.id)
+    const [receipt]=await db.select().from(schema.payment_receipts).where(eq(schema.payment_receipts.trade_id,c.trade.id)),[transfer]=await db.select().from(schema.settlement_transfers).where(eq(schema.settlement_transfers.trade_id,c.trade.id))
+    assert.equal(transfer.status,'confirmed');assert.equal(transfer.kind,'buyer_refund')
+    const storedBuyer=readChainFeeEvidence(receipt.chain_fee_evidence_json,{chainId,txHash:signed.hash,payerAddress:payer.address})!,storedTreasury=readChainFeeEvidence(transfer.chain_fee_evidence_json,{chainId,txHash:transfer.tx_hash,payerAddress:transfer.from_address})!
+    assert.equal(storedBuyer.total_fee_units,buyerFee.toString())
+    const treasuryFee=BigInt(storedTreasury.total_fee_units),buyerAfter=rail==='evm'?await originalChain.client.getBalance({address:payer.address}):await originalChain.balance(payer.address),treasuryAfter=rail==='evm'?await originalChain.client.getBalance({address:originalChain.treasury}):await originalChain.balance(originalChain.treasury)
+    assert.equal(buyerAfter,buyerBefore-buyerFee);assert.equal(treasuryAfter,treasuryBefore-treasuryFee-(rail==='mpp'?1_050_000n:0n))
+    const observed=await inspectOrganizationChainFeeHealth(db.$client),group=observed.groups.find(item=>item.chain_id===chainId)!
+    assert.equal(observed.invalid_count,baseline.invalid_count);assert.equal(group.buyer.record_count,prior.buyer.record_count+1);assert.equal(group.treasury.record_count,prior.treasury.record_count+1)
+    assert.equal(BigInt(group.buyer.known_fee_units),BigInt(prior.buyer.known_fee_units)+buyerFee);assert.equal(BigInt(group.treasury.known_fee_units),BigInt(prior.treasury.known_fee_units)+treasuryFee)
+    for(const value of [f.id,g.key,g.account.id,signed.hash,payer.address.toLowerCase(),originalChain.treasury.toLowerCase()])assert.equal(JSON.stringify(observed).includes(value),false)
+    await db.update(schema.payment_receipts).set({chain_fee_evidence_json:JSON.stringify({...storedBuyer,tx_hash:`0x${'ff'.repeat(32)}`})}).where(eq(schema.payment_receipts.id,receipt.id))
+    try{const corrupt=await inspectOrganizationChainFeeHealth(db.$client);assert.equal(corrupt.invalid_count,baseline.invalid_count+1);assert.ok(corrupt.alerts.some(alert=>alert.code==='ORGANIZATION_CHAIN_FEE_INVARIANT'));assert.equal(corrupt.groups.find(item=>item.chain_id===chainId)!.buyer.total_fee_units,null)}
+    finally{await db.update(schema.payment_receipts).set({chain_fee_evidence_json:receipt.chain_fee_evidence_json}).where(eq(schema.payment_receipts.id,receipt.id))}
+    await db.update(schema.payment_receipts).set({chain_fee_evidence_json:null}).where(eq(schema.payment_receipts.id,receipt.id))
+    try{const missing=await inspectOrganizationChainFeeHealth(db.$client),coverage=missing.groups.find(item=>item.chain_id===chainId)!.buyer;assert.equal(missing.invalid_count,baseline.invalid_count);assert.equal(coverage.unmeasured_count,group.buyer.unmeasured_count+1);assert.equal(coverage.total_fee_units,null)}
+    finally{await db.update(schema.payment_receipts).set({chain_fee_evidence_json:receipt.chain_fee_evidence_json}).where(eq(schema.payment_receipts.id,receipt.id))}
+    assert.equal((await inspectOrganizationChainFeeHealth(db.$client)).invalid_count,baseline.invalid_count);assert.deepEqual(await counts(f),{orders:1,capacity:0})
   }
 })

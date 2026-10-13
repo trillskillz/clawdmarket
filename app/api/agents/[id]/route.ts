@@ -22,8 +22,8 @@ export async function GET(
  const registeredPrincipalId = `user_agent_${id}`
  const client = (db as any).$client
 
- // Parallel: agent row, recent trades, eligible feedback, benchmarks and training network.
- const [agentRes, recentTradesRes, ratingsRes, benchmarksRes, lastImpRes, trainersRes, traineesRes] = await Promise.all([
+ // Parallel: agent row, recent trades, eligible feedback and benchmarks.
+ const [agentRes, recentTradesRes, ratingsRes, benchmarksRes] = await Promise.all([
   client.execute('SELECT * FROM agents WHERE id = ? LIMIT 1', [id]).catch(() => null),
   client.execute(
    `SELECT t.id, t.buyer_id, t.seller_id, t.amount, t.status, t.created_at,
@@ -49,35 +49,7 @@ export async function GET(
   client.execute(
    'SELECT id, capability, score, run_time_ms, status, created_at FROM benchmarks WHERE agent_id = ? ORDER BY created_at DESC LIMIT 10', [id]
   ).catch(() => null),
-  client.execute(
-   `SELECT ai.id, ai.from_version, ai.to_version, ai.benchmark_before, ai.benchmark_after, ai.delta,
-           ai.change_description, ai.improved_by_agent_id, ai.cost_usd, ai.created_at,
-           trainer.name as trainer_name
-    FROM agent_improvements ai
-    LEFT JOIN agents trainer ON trainer.id = ai.improved_by_agent_id
-    WHERE ai.base_agent_id = ?
-    ORDER BY ai.created_at DESC`, [id]
-  ).catch(() => null),
-  // Agents that have trained THIS agent
-  client.execute(
-   `SELECT ai.improved_by_agent_id as agent_id, trainer.name as agent_name,
-           COUNT(*) as times_trained, SUM(ai.delta) as total_delta,
-           MAX(ai.created_at) as last_trained
-    FROM agent_improvements ai
-    LEFT JOIN agents trainer ON trainer.id = ai.improved_by_agent_id
-    WHERE ai.base_agent_id = ? AND ai.improved_by_agent_id IS NOT NULL
-    GROUP BY ai.improved_by_agent_id`, [id]
-  ).catch(() => null),
-  // Agents THIS agent has trained
-  client.execute(
-   `SELECT ai.base_agent_id as agent_id, target.name as agent_name,
-           COUNT(*) as times_trained, SUM(ai.delta) as total_delta,
-           MAX(ai.created_at) as last_trained
-    FROM agent_improvements ai
-    LEFT JOIN agents target ON target.id = ai.base_agent_id
-    WHERE ai.improved_by_agent_id = ?
-    GROUP BY ai.base_agent_id`, [id]
-  ).catch(() => null),
+
  ])
 
  let row: any = agentRes?.rows?.[0]
@@ -155,8 +127,6 @@ export async function GET(
  })()
 
  const benchmarkScore = (row as any).benchmark_score ? Number((row as any).benchmark_score) : null
- const velocityScore = (row as any).velocity_score ? Number((row as any).velocity_score) : null
- const improvementCount = Number((row as any).improvement_count || 0)
  const trust = await loadAgentTrust({
   id,
   created_at: (row as any).created_at,
@@ -182,8 +152,6 @@ export async function GET(
   rating_count: trust.components.ratingCount,
   rating_distribution: ratingDist,
   created_at: (row as any).created_at,
-  version: (row as any).version || 1,
-  base_agent_id: (row as any).base_agent_id,
   model_id: (row as any).model_id,
   mpp_endpoint: (row as any).mpp_endpoint,
   llms_txt_url: (row as any).llms_txt_url,
@@ -196,10 +164,6 @@ export async function GET(
   benchmark_evidence: LEGACY_BENCHMARK_EVIDENCE,
   benchmark_count: Number((row as any).benchmark_count || 0),
   benchmark_history: benchmarkHistory,
-  velocity_score: velocityScore,
-  improvement_count: improvementCount,
-  total_improvement_delta: Number((row as any).total_improvement_delta || 0),
-  last_improved_at: (row as any).last_improved_at,
   moltbook_handle: (row as any).moltbook_handle || null,
   completed_trades: trust.components.completedTrades,
   total_trades: trust.components.totalTrades,
@@ -243,9 +207,6 @@ export async function GET(
    counterparty_name: trade.seller_id === principalId || trade.seller_id === id ? trade.buyer_name : trade.seller_name,
   })),
   recent_benchmarks: benchmarksRes?.rows || [],
-  improvements: lastImpRes?.rows || [],
-  trainers: trainersRes?.rows || [],
-  trainees: traineesRes?.rows || [],
  }, {
   headers: { 'Cache-Control': 'no-store' }
  })

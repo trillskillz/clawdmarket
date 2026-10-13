@@ -9,6 +9,7 @@ import { publicTradeWhereSql } from './public-trade-visibility'
 import { tradePrincipalSql } from './trade-evidence-sql'
 import { projectReputation, unavailableReputation, type ReputationObservation, type ReputationV2 } from './reputation-v2-model'
 import { REPUTATION_V2_POLICY, type ReputationScope } from './reputation-v2-policy'
+import { readWithLocalContentionRecovery } from './local-sqlite-read'
 
 type Source=typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 const provider="CASE WHEN t.seller_id GLOB 'user_agent_*' THEN substr(t.seller_id,12) ELSE t.seller_id END"
@@ -23,6 +24,19 @@ function millis(value:unknown):number|null{const n=Number(value);return value!==
 export type ReputationRequest={key:string;provider_id:string;scope:ReputationScope}
 /** One bounded authoritative query for all requested providers/scopes, never N+1. */
 export async function loadReputationV2Records(requests:ReputationRequest[],source:Source=db) {
+  if(!requests.length)return new Map<string,ReputationV2>()
+  // A failed native read must not retain a lock on the shared financial pool.
+  try {
+    return await (source === db
+      ? readWithLocalContentionRecovery(reader => loadReputationProjection(requests, reader))
+      : loadReputationProjection(requests, source))
+  } catch {
+    console.error('reputation_v2_projection_unavailable')
+    return new Map(requests.map(r=>[r.key,unavailableReputation(r.scope)]))
+  }
+}
+
+async function loadReputationProjection(requests:ReputationRequest[],source:Source) {
   if(!requests.length)return new Map<string,ReputationV2>()
   const keys=[...new Set(requests.map(r=>r.provider_id))],principals=keys.flatMap(id=>[id,`user_agent_${id}`]),args: (string|number)[]=[...principals]
   let where=`t.seller_id IN (${principals.map(()=>'?').join(',')}) AND ${eligibleReputationTradeSql('t')}
