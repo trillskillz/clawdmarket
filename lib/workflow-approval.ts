@@ -140,9 +140,15 @@ async function dto(row: Approval, source: Source) {
 /** Isolate lock failures from the application's shared financial connection pool.
  * A failed local BEGIN can leave native statements pending; dispose that client
  * before retrying, rather than poisoning later requests on the shared client. */
-async function write<T>(run: (source: Transaction) => Promise<T>): Promise<T> {
+async function write<T>(run: (source: Transaction) => Promise<T>, mode: 'write' | 'read' = 'write'): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     const client = createClient({ url: process.env.TURSO_DATABASE_URL?.trim() || 'file:./local.db', authToken: process.env.TURSO_AUTH_TOKEN })
+    // Drizzle's libsql session ignores transaction config and defaults to write.
+    // Pin only this fresh client's transaction mode for snapshot-only preflight.
+    if (mode === 'read') {
+      const begin = client.transaction.bind(client)
+      client.transaction = () => begin('read')
+    }
     try { return await drizzle(client, { schema }).transaction(run) } catch (error) {
       let cause: unknown = error, raced = false
       for (let depth = 0; cause && typeof cause === 'object' && depth < 6; depth++) {
@@ -217,3 +223,8 @@ export async function revokeWorkflowApproval(id: string, ownerId: string) {
 
 export { WorkflowPlanError }
 export { controls as workflowOwnerControlsBuyer, storedContract as storedWorkflowContract, write as workflowTransaction }
+
+/** Read-only preflight in one committed snapshot. Reservations still use writes. */
+export async function workflowReadTransaction<T>(read: (source: Transaction) => Promise<T>): Promise<T> {
+  return write(read, 'read')
+}

@@ -233,6 +233,34 @@ test('independent process child checkouts atomically retain the full parent gros
   }
 })
 
+test('retry preflight reads one committed workflow snapshot while another writer holds uncommitted exposure', async () => {
+  const f = await fixture(), active = await activate(f)
+  const { node } = await budget.prepareWorkflowNode(active.run.id, 'first', f.buyer)
+  const [plan] = await db.select().from(schema.route_plans).where(eq(schema.route_plans.id, node.route_id!))
+  const { createClient } = await import('@libsql/client')
+  const writer = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  const held = await writer.transaction('write')
+  try {
+    // An incomplete competing reservation must stay invisible to the preflight.
+    await held.execute({ sql: 'UPDATE workflow_runs SET gross_reserved_minor = 105 WHERE id = ?', args: [active.run.id] })
+    const { freshRouteRetryTerms } = await import('@/lib/route-payment-mandate')
+    const terms = await approval.workflowReadTransaction(async source => {
+      const original = await freshRouteRetryTerms(node.mandate_id!, plan, source)
+      const [run] = await source.select().from(schema.workflow_runs).where(eq(schema.workflow_runs.id, active.run.id))
+      assert.equal(run.gross_reserved_minor, 0)
+      assert.equal((await source.select().from(schema.workflow_reservations).where(eq(schema.workflow_reservations.run_id, active.run.id))).length, 0)
+      return original
+    })
+    assert.equal(terms.max_per_execution, 105)
+    assert.equal(terms.payment.rail, 'evm')
+    assert.equal(terms.payment.rail === 'evm' && terms.payment.max_gas_cost_wei, fee)
+  } finally {
+    await held.rollback()
+    writer.close()
+  }
+  assert.equal((await db.select().from(schema.workflow_runs).where(eq(schema.workflow_runs.id, active.run.id)))[0].gross_reserved_minor, 0)
+})
+
 test('independent retry and root checkouts retain original refunds, gross exposure and BigInt fee ceilings', async () => {
   const f = await fixture(false, false, 2), original = await checkout(f)
   assert.equal(original.response.status, 201, JSON.stringify(original.data))

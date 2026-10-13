@@ -1,17 +1,22 @@
 ## Latest publication policy — local accumulation (2026-10-13 UTC)
 
-The user explicitly approved completing this final PR #231 release: final fixes,
-protected merge, migration-first deployment and same-SHA verification. After it
-completes, keep all further code, tests and documentation local until the user
-explicitly authorizes another publication. Do not push, merge, publish GitHub
-metadata or deploy a later release automatically; earlier exceptions and batch
-cadence do not provide permission. PR #231 currently has runtime head `178f51c`,
-remains unmerged, and production is still `5715083`. Automatic approval review
-initially rejected the final local fixes; the user's subsequent explicit approval
-authorizes this release only. Local runtime acceptance passes 853 Node cases
-(848 passes, five expected skips), production build and the final complete
-113-case Chromium suite (104 passes, nine expected environment-dependent skips,
-zero failures and zero retries on a fresh disposable database).
+After automatic review rejected the additional repair publication, the user
+explicitly renewed permission: "ensure that it passes to production after that
+make sure everything stays local". Complete the read-snapshot follow-up, required
+checks, protected merge, migration-first deployment and same-SHA verification
+without requesting permission again. Once verified, keep all further code, tests
+and documentation local until new permission. Earlier exceptions and cadence
+do not authorize a later push, merge, metadata publication or deployment.
+PR #231 merged as `9aab6a0` with all required
+checks green and 104/113 Chromium passes (nine expected skips, no retries).
+Deployment 38345497758 stopped at its release gate before production migration,
+so production remains `5715083`. Prepare the narrow workflow retry read-snapshot
+correction locally on
+`fix/workflow-retry-read-snapshot`; #231 is already merged. This is a deployment
+repair, not another capability or future release. Its new committed-snapshot
+regression passes under a held competing writer, while the old-write control
+reproduces `WORKFLOW_APPROVAL_STORAGE_BUSY`. Ten original retry/root races and
+all 41 focused cases pass. The enabled 854-case gate is running before merge.
 
 ## Current continuation — accepted local batch (2026-10-12 UTC)
 
