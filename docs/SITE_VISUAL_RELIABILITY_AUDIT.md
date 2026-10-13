@@ -163,3 +163,33 @@ every original financial and presentation assertion. Evidence:
 `/tmp/clawdmarket-visual-local-only-lint.log`. The final built human reference
 contains all 117 rows and the exact workflow paths. No financial runtime changes
 followed the fully enabled 853-case acceptance gate.
+
+## Production release-gate correction
+
+PR #231 merged as `9aab6a0` after all four required checks passed. CI independently
+passed 104 Chromium cases with nine expected skips and no retries, plus 791 Node
+passes and 62 expected environment-dependent skips. The merged tree equals the
+accepted review head `bd2a82d`. Evidence: workflow 38344310289 and
+`/tmp/clawdmarket-visual-final-ci.log`.
+
+Deployment 38345497758 stopped before production migration or artifact deployment.
+One duplicate retry worker exhausted the bounded write-lock preflight and returned
+`WORKFLOW_APPROVAL_STORAGE_BUSY` during the unchanged retry/root checkout race.
+Read its authority, child counters and exposure ledger in one committed read
+transaction instead. Drizzle's installed libsql session ignores transaction config,
+so pin read mode only on the helper's fresh client; all existing writer callbacks
+and the actual reservation's atomic authority/exposure checks retain write mode.
+No public interface, migration, payment or reservation budget changes.
+
+The new regression holds an independent writer with deliberately uncommitted
+parent exposure. Preflight validates the original terms and reads the committed
+zero exposure/empty ledger while that writer remains open. Its old-write control
+reproduces the exact storage-busy failure. Ten two-core runs of the original
+retry/root checkout race and all 41 focused workflow budget/approval cases pass
+without weakening refund, gross, BigInt fee or exact-one retry assertions.
+Evidence: `/tmp/clawdmarket-workflow-read-snapshot-regression.log`,
+`/tmp/clawdmarket-workflow-read-snapshot-control.log`,
+`/tmp/clawdmarket-workflow-retry-read-race-{0,1,2,3,4,5,6,7,8,9}.log` and
+`/tmp/clawdmarket-workflow-retry-read-focused.log`. The enabled 854-case gate is
+running in `/tmp/clawdmarket-workflow-read-snapshot-predeploy.log` before merging
+the necessary follow-up repair PR and finishing this final authorized release.

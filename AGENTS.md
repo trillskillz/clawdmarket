@@ -2,21 +2,28 @@
 
 ## Latest publication policy — local accumulation (2026-10-13 UTC)
 
-The user explicitly approved completing one final publication: the combined
-PR #231 release, including final documentation/browser corrections, protected
-merge, migration-first Vercel deployment and same-SHA verification. Complete this
-release without requesting permission again. After it completes, keep further
-changes local and accumulate them until the user explicitly authorizes another
-GitHub/Vercel publication. Do not push commits, merge PRs, edit GitHub publication
-metadata or deploy a later release without new permission. Previous publication
-exceptions and the ten-capability cadence do not authorize a future release.
+The user explicitly renewed permission after the additional repair publication
+was rejected: "ensure that it passes to production after that make sure everything
+stays local". Complete the necessary read-snapshot repair, required checks,
+protected follow-up merge, migration-first deployment and same-SHA verification
+without requesting permission again. The prior rejected command never ran; this
+subsequent instruction authorizes the necessary follow-up to finish production.
+Once verified, all further changes must accumulate locally until new permission.
+Do not push, merge, publish GitHub metadata or deploy a later release automatically.
+Previous exceptions and the ten-capability cadence do not authorize a later release.
 
-PR #231 is currently unmerged at remote head `178f51c`. Its runtime passes the
-enabled 853-case Node gate and final production build. Final complete Chromium
-acceptance passes 104 of 113 cases with nine expected environment-dependent skips,
-zero failures and zero retries on a fresh disposable database. Automatic approval review initially rejected
-their push; the user then explicitly approved this final release only. Production
-remains at `5715083` until the authorized deployment and verification complete.
+PR #231 merged as `9aab6a0` after all four required checks passed, including 104
+Chromium passes with nine expected skips and no retries. Deployment 38345497758
+stopped at its release gate before production migration: a retry preflight took
+a write lock for read-only workflow validation and exhausted bounded contention
+recovery during concurrent retry/root checkout. Production remains `5715083`.
+The narrow read-snapshot correction is local on `fix/workflow-retry-read-snapshot`;
+a follow-up PR is necessary because #231 is already merged, and its publication
+is now explicitly authorized as recorded above. The new
+committed-snapshot regression passes while another writer holds uncommitted
+exposure; its old-write negative control fails with the observed storage-busy
+code. Ten unchanged concurrent retry/root cases and all 41 focused tests pass.
+The enabled 854-case gate is running before protected merge and deployment.
 
 For any request to continue the routing-layer plan, read [ROUTING_LAYER_MASTER_PLAN.md](ROUTING_LAYER_MASTER_PLAN.md) first. Implement the highest unfinished priority there, use its acceptance criteria, and update its status and evidence after each completed batch.
 
