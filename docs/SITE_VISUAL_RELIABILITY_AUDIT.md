@@ -3,7 +3,8 @@
 The user requested a rendered-site audit, consistent fonts and visual fixes, then
 publication with the accepted workflow/routing work. This branch starts from
 workflow acceptance `4c4d998` (HTTP 1.116). Visual changes do not alter the HTTP
-contract, schema, settlement behavior or rollout configuration.
+contract, schema, settlement behavior or rollout configuration. The combined
+release also repairs the database contention failure found by required CI below.
 
 The user's clarification requests both this batch and the existing public-surface
 PR #231. That PR's server-rendered catalog/registry/activity, readiness labels,
@@ -78,7 +79,32 @@ same-SHA smoke/live checks. Until that workflow succeeds this remains local
 built-site acceptance. The accepted parent retains its fully enabled 852-case
 Node gate (847 passes, five
 expected skips, zero failures), 18 Python tests, SDK checks, migration/replay and
-economic acceptance evidence in the workflow audit. Visual-only changes do not
-rerun live payment journeys. Fixture providers remain controlled fixtures rather
+economic acceptance evidence in the workflow audit. Fixture providers remain controlled fixtures rather
 than independent production evidence. The subsequent routing capability remains
 independently reviewed task-board purchasing, using its existing dependency audit.
+
+## Required-CI contention repair
+
+The first combined-branch CI run exposed an intermittent separate-process
+route/workflow race failure. A local reproduction captured a failed route-state
+write and `SQLITE_BUSY: cannot commit transaction - SQL statements in progress`.
+Failed autocommit statements could leave the shared local libsql connection
+locked, causing both contenders to fail instead of allowing exactly one purchase.
+
+Use the existing bounded fresh-client purchasing transaction helper for route
+state/attempt writes and standalone mandated reservations, and the existing
+read-only local-contention recovery helper for route preflight reads. Retry only
+database transactions, retain the original route, mandate and order references,
+and report exhausted contention through existing retryable storage errors.
+Workflow child reservations keep their existing workflow transaction helper.
+Financial authorization, gross/fee/department ceilings, capacity and idempotency
+remain inside the original atomic reservation callback.
+
+The unchanged seven-case workflow authorization suite passes, including the four
+separate-process ceiling races and ten SIGKILL boundaries. Sixteen additional
+two-core runs repeat each gross, fee, department and capacity race four times;
+all pass the original exactly-one-purchase and ledger assertions. TypeScript and
+lint pass. Logs: `/tmp/clawdmarket-ci-workflow-authority-fixed.log` and
+`/tmp/clawdmarket-route-storage-fixed-{gross,fee,department,capacity}-{0,1,2,3}.log`.
+The complete enabled release gate is rerunning before merge because this repair
+changes database transaction boundaries. No live production funds are involved.

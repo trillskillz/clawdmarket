@@ -42,7 +42,7 @@ import { assertRouteRetryReconciled, RouteRetryError } from './route-retry-recon
 import { listRouteFundingSteps } from './route-funding-steps'
 import { privateProviderAccess } from './organization-private-providers'
 import { validatePurchaseApproval, consumePurchaseApproval, originalPurchaseOrderMatches } from './organization-purchasing'
-import { purchasingTransaction } from './organization-purchasing-transaction'
+import { purchasingTransaction, PurchasingError } from './organization-purchasing-transaction'
 import { workflowTransaction, WorkflowApprovalError } from './workflow-approval'
 import { validateSpendingPurchase, consumeSpendingPurchase } from './organization-spending-accounts'
 import { validOrganizationSpendingEvidence, type OrganizationSpendingEvidence } from './organization-spending-evidence'
@@ -180,7 +180,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         if (error instanceof WorkflowApprovalError && error.status === 503) throw new ServiceOrderReservationError('WORKFLOW_STORAGE_BUSY', 'Retry the same workflow child reference', 503, true)
         throw error
       }
-    } : request.purchasing_approval_id || request.provider_share_id || args.organizationSpendingEvidence ? purchasingTransaction : db.transaction.bind(db)
+    } : args.mandateId || request.purchasing_approval_id || request.provider_share_id || args.organizationSpendingEvidence ? purchasingTransaction : db.transaction.bind(db)
     const reserveOnce = () => transaction(async (tx) => {
       const now = new Date()
       const privateShare = await resolvePrivateShare(tx)
@@ -315,6 +315,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
   } catch (error) {
     const raced = await replay(args)
     if (raced) return raced
+    if (error instanceof PurchasingError && error.status === 503) throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Retry the original order reference after storage contention', 503, true)
     if (referenceConflict(error)) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference belongs to another trade')
     throw error
   }

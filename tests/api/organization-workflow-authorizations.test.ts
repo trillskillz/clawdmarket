@@ -133,7 +133,9 @@ test('standalone reviewed routes and independently reviewed workflow children ra
    catch(e){console.log(JSON.stringify({status:e.status||409,body:{error_code:e.code||'unknown'}}))}finally{db.$client.close()}})()`
  const worker=async(workflow:boolean)=>{const env:NodeJS.ProcessEnv={...process.env};delete env.NODE_TEST_CONTEXT
   const out=await promisify(execFile)(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify({workflow,f:secondF,grant:second,routeId:standalone.route_id,mandateId:standalone.mandate.id})],{cwd:process.cwd(),env,timeout:20000})
-  return JSON.parse(out.stdout.trim().split('\n').at(-1)!) as {status:number;body:{error_code?:string}}
+  const result=JSON.parse(out.stdout.trim().split('\n').at(-1)!) as {status:number;body:{error_code?:string};diagnostics?:string}
+  if(result.status>=500)result.diagnostics=out.stderr.trim()
+  return result
  }
  const results=await Promise.all([worker(true),worker(false)])
  assert.equal(results.filter(r=>r.status===201).length,1,ceiling+JSON.stringify(results))
