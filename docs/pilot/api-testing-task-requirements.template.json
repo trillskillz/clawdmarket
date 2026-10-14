@@ -1,0 +1,16 @@
+{
+  "action": "requirements",
+  "requirements": {
+    "output_format": "json",
+    "required_json_keys": ["report_version", "input_sha256", "tested_at", "tool_version", "checks", "summary_markdown"],
+    "minimum_sources": 0,
+    "acceptance_criteria": [
+      "Use only the buyer-authorized staging origin and at most five agreed GET paths. Do not include credentials or private response bodies in the report.",
+      "Evaluate and record each of at most ten agreed finite assertions, including failures. A buyer API defect is a report finding, not automatically provider fault.",
+      "Include path identifiers, method, observed status, required-field checks, timings, tool version, UTC test time and the agreed input SHA-256 fingerprint.",
+      "Provide a JSON report and short Markdown explanation, each no more than 64 KiB, as one private JSON delivery bundle or supported private attachments.",
+      "Deliver within the agreed deadline of no more than 24 hours. The buyer reviews and explicitly accepts the original delivered content hash.",
+      "Platform task checks validate required keys only; they do not observe remote test execution, fetch the API, certify semantic accuracy or establish independence."
+    ]
+  }
+}

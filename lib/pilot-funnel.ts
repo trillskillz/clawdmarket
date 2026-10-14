@@ -49,6 +49,6 @@ export async function inspectPilotFunnel(serviceIds: string[], kind: 'service' |
     cohorts: buckets, contribution_margin_usd: null, operator_intervention_minutes: null,
     measurement_limits: { economics: 'Checkout, funding, delivery, exact-delivery buyer acceptance and financial backing are distinct stored facts. Repeat purchasing counts accounts, not independent people.',
       costs: 'Contribution margin requires actual rail costs, provider/processing costs and the reviewed operator time ledger; absent costs remain unmeasured.',
-      attribution: 'Controlled overrides independence. Unknown or expired ownership never qualifies as independently reviewed. Private organization work is excluded.' },
+      attribution: 'Controlled overrides independence. Unknown or expired ownership never qualifies as independently reviewed. Existing public-trade visibility governs inclusion; private inputs, artifacts and approval contents are excluded.' },
     execution_authority: false }
 }

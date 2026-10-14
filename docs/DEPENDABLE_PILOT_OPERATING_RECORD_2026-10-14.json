@@ -1,0 +1,75 @@
+{
+  "kind": "separate_operational_and_economic_evidence",
+  "production_commit_inspected": "96a017b6019920f47af32d86a7e476c9b9c07808",
+  "configuration": {
+    "status": "observed",
+    "checked_at": "2026-10-14T18:27:38.770Z",
+    "source": "https://clawdmkt.com/api/health/ready",
+    "configuration_ready": true,
+    "database_ready": true,
+    "password_reset_email_configured": false,
+    "scope": "configuration_and_database; email recovery is a separate unconfigured dependency"
+  },
+  "rpc": {
+    "status": "observed",
+    "checked_at": "2026-10-14T20:08:24.316Z",
+    "source": "https://github.com/trillskillz/clawdmarket/actions/runs/38629505398",
+    "healthy_chain_ids": [
+      8453,
+      4217
+    ],
+    "scope": "readiness_and_RPC_only; no new paid purchase"
+  },
+  "treasury_reserves": {
+    "status": "observed",
+    "checked_at": "2026-10-14T21:40:54.381Z",
+    "source": "read-only eth_chainId and eth_getBalance on https://mainnet.base.org; public treasury from /api/payments/config",
+    "required_operator_read": "scripts/prod-payment-rails-preflight.mjs",
+    "balances": { "chain_id": 8453, "native_wei": "100205551108468", "native_eth": "0.000100205551108468" },
+    "qualification": "Base native reserve only; above the existing 0.00005 ETH preflight floor. Token liabilities, Tempo reserves, worker freshness, pending payouts and total settlement fee bounds are not established. No transfer or signature."
+  },
+  "settlement_worker": {
+    "status": "unavailable",
+    "checked_at": "2026-10-14T20:08:24.316Z",
+    "source": "no fresh authorized worker-heartbeat observation in public readiness",
+    "required_operator_read": "scripts/prod-route-operator-preflight.mjs"
+  },
+  "payout_refund_anomalies": {
+    "status": "unavailable",
+    "checked_at": "2026-10-14T20:08:24.316Z",
+    "source": "public completion counts do not establish absence of settlement anomalies",
+    "outstanding_anomalies": null,
+    "required_operator_read": "scripts/prod-route-operator-preflight.mjs"
+  },
+  "paid_canary": {
+    "status": "not_demonstrated",
+    "checked_at": "2026-10-11T15:52:55.493Z",
+    "source": "https://github.com/trillskillz/clawdmarket/actions/runs/38153085972",
+    "last_attempt_at": "2026-10-11T15:52:55.493Z",
+    "last_successful_end_to_end_at": null,
+    "failure": "Dedicated buyer lacked minimum 0.01 Base USDC; execution stopped before payment",
+    "qualification": "Successful readiness/preflight workflow runs are not substituted for a complete fresh paid journey",
+    "cohort": "platform_canary"
+  },
+  "dedicated_buyer_funding_observation": {
+    "status": "observed",
+    "checked_at": "2026-10-14T21:40:54.381Z",
+    "chain_id": 8453,
+    "source": "read-only public Base RPC; dedicated wallet identified by failed canary workflow",
+    "native_wei": "2753001248135033",
+    "usdc_units": "5573",
+    "proposed_order_usdc_units": "20000",
+    "maximum_new_topup_at_observation": { "usdc_units": "14427", "native_wei": "0" },
+    "funding_executed": false,
+    "transaction_broadcast": false,
+    "qualification": "Must be refreshed before any separately authorized live action; this is not a funded or completed purchase."
+  },
+  "independent_customer_activity": {
+    "status": "not_demonstrated",
+    "checked_at": "2026-10-14T20:41:55.117697+00:00",
+    "source": "https://clawdmkt.com/api/routes/metrics",
+    "qualifying_autonomously_routed_gmv_usd": 0,
+    "independent_paying_customer_count": null,
+    "qualification": "Recorded volume is not independently attributable demand; unknown ownership is not independent"
+  }
+}

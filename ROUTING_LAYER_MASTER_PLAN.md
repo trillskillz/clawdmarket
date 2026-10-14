@@ -6,6 +6,17 @@ Accepted task checkpoint `a8f870f` remains capability 7/10; unfinished listing
 foundation `e876e58` is parked separately and is not part of this release candidate.
 Current publication/no-spending policy remains in force.
 
+The priority is now implemented/prepared as a local HTTP **1.118** candidate,
+checkpoint `ba28cd6`, with
+[current dispositions and release limits](docs/DEPENDABLE_PILOT_RELEASE_CANDIDATE_AUDIT_2026-10-14.md).
+Security risk remains explicitly tracked and audit-failing; provider email delivery,
+real-buyer admission, publication, live funding and recruitment remain external.
+The pilot is not open and independent demand is not demonstrated. Its explicit
+acceptance requires reviewed task v2, not ordinary task legacy auto-release.
+After local acceptance bookkeeping, resume only the authorized local listing
+dependency atop this candidate; preserve seller rails/cohorts and reconcile its
+old migration foundation. No external authorization or 8/10 acceptance is implied.
+
 ## Current local acceptance and next dependency — 2026-10-14
 
 Reviewed task purchasing is accepted locally as HTTP **1.117**, capability

@@ -1,0 +1,20 @@
+{
+  "checked_at": "2026-10-14T21:40:54.381Z",
+  "kind": "public_read_only_canary_balances",
+  "chain_id": 8453,
+  "status": "observed",
+  "treasury_native_wei": "100205551108468",
+  "buyer_native_wei": "2753001248135033",
+  "buyer_usdc_units": "5573",
+  "buyer_usdc": "0.005573",
+  "proposed_maximum_buyer_topup": {
+    "usdc_units": "14427",
+    "native_wei": "0"
+  },
+  "funding_executed": false,
+  "transaction_broadcast": false,
+  "rpc_url": "https://mainnet.base.org",
+  "treasury_address": "0x3E911a2EaFbE60ca538F659836d6DE60Db639D44",
+  "buyer_address": "0x3324B8045c88c163eCf7a4C596610814cdF0dC8C",
+  "token_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+}

@@ -18,6 +18,27 @@ Keep all changes local. No remote metadata changes, publication, deployment,
 real funds, global flags, custody changes, real-user mail or prospect contact are
 authorized. Prepare reviewable publication and capped live-canary commands only.
 
+The ten-part priority now has a local HTTP **1.118** candidate, implementation
+checkpoint `ba28cd6`, [finding dispositions](docs/DEPENDABLE_PILOT_ISSUE_REGISTER_2026-10-14.md)
+and [release/rollback evidence](docs/DEPENDABLE_PILOT_RELEASE_CANDIDATE_AUDIT_2026-10-14.md).
+The full enabled suite passes 942 cases (937 pass, five skips), current targeted
+checks pass 57/57, 21 Python cases pass, and migration 68 preserves all original
+845 business rows/133 tables, ten immutable reputation guards and five compiler
+queries. Publication, email-provider delivery, real participant admission, live
+canary funding and recruitment are unperformed external actions. The braces audit
+remains failing under explicit tracked treatment; no exception is approved.
+Pilot setup uses reviewed task v2/Tempo because ordinary task auto-release cannot
+guarantee explicit buyer acceptance. Do not call this an open pilot or measured demand.
+Final Chromium passes 134 runnable cases, eight expected skips, zero retries;
+current types/lint/SDK/build and disposable CLI rejection controls pass.
+
+After this local candidate's acceptance bookkeeping is complete, the next
+authorized local implementation remains the parked listing dependency. Integrate
+it atop this candidate in an isolated worktree, retaining seller rails, cohorts,
+migration 68 and exact financial references. Its old foundation's migration
+count/schema assertions must be reconciled before testing. No foundation earns
+8/10 and no local continuation authorizes publication or live execution.
+
 ## Current local continuation — 2026-10-14
 
 Reviewed task purchasing is accepted locally as HTTP 1.117, capability **7/10**.

@@ -1,0 +1,20 @@
+{
+  "all_original_tables": 134,
+  "all_original_rows": 911,
+  "original_business_tables": 133,
+  "original_business_rows": 845,
+  "changed_original_tables": [],
+  "migration_count": 68,
+  "integrity": "ok",
+  "foreign_key_anomalies": 0,
+  "new_tables": {
+    "organization_task_authorizations": 0,
+    "organization_task_uses": 0,
+    "organization_task_payment_claims": 0,
+    "seller_payment_preferences": 0,
+    "marketplace_cohort_attributions": 0,
+    "organization_task_mpp_intents": 0,
+    "organization_task_mpp_claims": 0
+  },
+  "immutable_reputation_triggers": 10
+}
