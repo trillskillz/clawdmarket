@@ -2,6 +2,13 @@
 set -euo pipefail
 
 required_files=(
+  "scripts/buyer-task-worker.mjs"
+  "scripts/provider-task-worker.mjs"
+  "sdk/python/clawdmarket/task.py"
+  "tests/api/organization-task-shared-exposure.test.ts"
+  "lib/organization-task-authorizations.ts"
+  "migrations/2026-10-13-organization-reviewed-task-purchasing-v1.sql"
+  "docs/ORGANIZATION_REVIEWED_TASK_PURCHASING.md"
   "lib/organization-workflow-authorizations.ts"
   "migrations/2026-10-12-organization-reviewed-workflows-v1.sql"
   "docs/ORGANIZATION_REVIEWED_WORKFLOWS.md"
@@ -358,6 +365,13 @@ if ! grep -Fqx '!/scripts/buyer-workflow-worker.mjs' .vercelignore; then
   echo "Vercel build excludes the buyer workflow worker imported by acceptance tests; include it in .vercelignore" >&2
   exit 1
 fi
+
+for task_worker in buyer-task-worker provider-task-worker; do
+  if ! grep -Fqx "!/scripts/${task_worker}.mjs" .vercelignore; then
+    echo "Vercel build excludes the task worker imported by acceptance tests: ${task_worker}" >&2
+    exit 1
+  fi
+done
 
 if command -v rg >/dev/null 2>&1; then
   proxy_has_passthrough() {

@@ -19,6 +19,9 @@ import { mandateFundingEligibility } from '@/lib/route-payment-mandate'
 import type { RequestPrincipal } from '@/lib/request-principal'
 import { originalSpendingPayment, spendingFundingEligibility } from '@/lib/organization-spending-accounts'
 import { inspectSpendingEvmClaim } from '@/lib/organization-spending-payment'
+import { originalTaskPayment, taskFundingEligibility } from '@/lib/organization-task-authorizations'
+import { inspectTaskEvmClaim } from '@/lib/organization-task-payment'
+import { PurchasingError } from '@/lib/organization-purchasing-transaction'
 type Context = { params: Promise<{ id: string }> }
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
 
@@ -39,7 +42,7 @@ export async function GET(request: NextRequest, context: Context, delegated?:Req
   if (auth.error) return auth.error
   const [intent] = await db.select().from(evm_payment_intents).where(eq(evm_payment_intents.trade_id, auth.trade.id)).limit(1)
   const [claim] = intent ? await db.select().from(buyer_evm_payment_claims).where(eq(buyer_evm_payment_claims.intent_id, intent.id)).limit(1) : []
-  return json({ intent: intent || null, claim: claim || (intent?await inspectSpendingEvmClaim(intent.id):null), trade: { id: auth.trade.id, status: auth.trade.status, payout_status: auth.trade.payout_status } })
+  return json({ intent: intent || null, claim: claim || (intent ? await inspectSpendingEvmClaim(intent.id) ?? await inspectTaskEvmClaim(intent.id) : null), trade: { id: auth.trade.id, status: auth.trade.status, payout_status: auth.trade.payout_status } })
 }
 
 export async function POST(request: NextRequest, context: Context, delegated?:RequestPrincipal) {
@@ -47,7 +50,13 @@ export async function POST(request: NextRequest, context: Context, delegated?:Re
   if (auth.error) return auth.error
   const body = await request.json().catch(() => null)
   const original=await originalSpendingPayment(db,auth.trade.id)
-  if(original&&!body?.buyer_operation_id)return json({code:'BUYER_OPERATION_REQUIRED'},400)
+  let originalTask
+  try { originalTask = await originalTaskPayment(db, auth.trade.id) }
+  catch (error) {
+    if (error instanceof PurchasingError) return json({ error: error.code, code: error.code }, error.status)
+    throw error
+  }
+  if((original || originalTask)&&!body?.buyer_operation_id)return json({code:'BUYER_OPERATION_REQUIRED'},400)
   const chainId = Number(body?.chain_id)
   const operationId = body?.buyer_operation_id
   if (operationId !== undefined && (typeof operationId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationId)
@@ -81,14 +90,15 @@ export async function POST(request: NextRequest, context: Context, delegated?:Re
       if (operationId) {
         const step = await findTradeFundingStep(tx, trade.id)
         const [used] = await tx.select().from(evm_payment_intents).where(eq(evm_payment_intents.buyer_operation_id, operationId)).limit(1)
-        if ((!step && !await originalSpendingPayment(tx,trade.id)) || used) throw new TradeFundingError('Buyer operation requires its original mandate checkout', 409, 'BUYER_OPERATION_CONFLICT')
+        if ((!step && !await originalSpendingPayment(tx,trade.id) && !await originalTaskPayment(tx, trade.id)) || used) throw new TradeFundingError('Buyer operation requires its original mandate checkout', 409, 'BUYER_OPERATION_CONFLICT')
       }
       const sendAllowed = !recoveryHash && trade.status === 'pending' && Boolean(trade.payment_due_at) && Date.parse(trade.payment_due_at!) > Date.now()
       if (!sendAllowed && !(recoveryHash && ['pending', 'cancelled'].includes(trade.status))) {
         return json({ error: 'This reservation is closed. Do not send payment.', code: 'CHECKOUT_CLOSED' }, 409)
       }
       if (sendAllowed) {
-        const reason = await spendingFundingEligibility(trade,tx,{rail:'evm',chainId,tokenAddress:body.token_address,payerAddress:body.payer_address,treasuryAddress:treasury}) || await mandateFundingEligibility(trade, tx, { rail: 'evm', chainId, tokenAddress: body.token_address, payerAddress: body.payer_address, treasuryAddress: treasury })
+        const reason = await taskFundingEligibility(trade, tx, { rail: 'evm', chainId, tokenAddress: body.token_address, payerAddress: body.payer_address, treasuryAddress: treasury })
+          || await spendingFundingEligibility(trade,tx,{rail:'evm',chainId,tokenAddress:body.token_address,payerAddress:body.payer_address,treasuryAddress:treasury}) || await mandateFundingEligibility(trade, tx, { rail: 'evm', chainId, tokenAddress: body.token_address, payerAddress: body.payer_address, treasuryAddress: treasury })
           || await serviceFundingEligibility(trade, tx)
         if (reason === 'ROUTE_EXECUTION_PAUSED') throw new TradeFundingError('New route payment authority is paused; recover original payments', 503, reason)
         if (reason) throw new TradeFundingError(`Provider no longer satisfies checkout requirements: ${reason}; do not pay`, 409, 'PROVIDER_ELIGIBILITY_CHANGED')
@@ -125,6 +135,7 @@ export async function POST(request: NextRequest, context: Context, delegated?:Re
       }
     })
   } catch (error) {
+    if (error instanceof PurchasingError) return json({ error: error.code, code: error.code }, error.status)
     if (error instanceof TradeFundingError) return json({ error: error.message, code: error.code }, error.status)
     return internalErrorResponse('Payment intent creation failed', error)
   }
@@ -137,7 +148,7 @@ export async function DELETE(request: NextRequest, context: Context, delegated?:
   if (auth.error) return auth.error
   const body = await request.json().catch(() => null)
   if (body?.reason !== 'wallet_rejected' || typeof body.intent_id !== 'string') return json({ error: 'An explicit wallet rejection is required' }, 400)
-  if(await inspectSpendingEvmClaim(body.intent_id))return json({code:'BUYER_ORIGINAL_PAYMENT_RECOVERY_REQUIRED'},409)
+  if(await inspectSpendingEvmClaim(body.intent_id) || await inspectTaskEvmClaim(body.intent_id))return json({code:'BUYER_ORIGINAL_PAYMENT_RECOVERY_REQUIRED'},409)
   const removed = await db.delete(evm_payment_intents).where(and(
     eq(evm_payment_intents.trade_id, auth.trade.id), eq(evm_payment_intents.id, body.intent_id), isNull(evm_payment_intents.tx_hash),
   )).returning({ id: evm_payment_intents.id })

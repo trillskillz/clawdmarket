@@ -45,10 +45,14 @@ test.describe('Core smoke matrix', () => {
     await expect(docsNavigation.getByRole('link', { name: /API reference/ })).toHaveAttribute('aria-current', 'location');
 
     const httpSurface = page.locator('#reference');
-    await expect(httpSurface.locator('tbody a')).toHaveCount(117);
+    await expect(httpSurface.locator('tbody a')).toHaveCount(124);
     for (const path of [
       '/api/organizations/:id/purchasing/roles',
       '/api/organizations/:id/purchasing/requests/:requestId/approval',
+      '/api/organizations/:id/task-authorizations',
+      '/api/organizations/:id/task-authorizations/:authorizationId',
+      '/api/organizations/:id/task-authorizations/:authorizationId/approval',
+      '/api/organizations/:id/task-authorizations/:authorizationId/checkout',
       '/api/organizations/:id/workflow-authorizations',
       '/api/organizations/:id/workflow-authorizations/:authorizationId',
       '/api/organizations/:id/workflow-authorizations/:authorizationId/approval',
@@ -102,6 +106,10 @@ test.describe('Core smoke matrix', () => {
     expect(routingControl.status()).toBe(401);
     expect(routingControl.headers()['cache-control']).toContain('private');
     expect(openApi.paths['/api/organizations/{id}/budget']?.put).toBeTruthy();
+    expect(openApi.paths['/api/organizations/{id}/task-authorizations']?.post).toBeTruthy();
+    expect(openApi.paths['/api/organizations/{id}/task-authorizations/{authorizationId}/approval']?.post).toBeTruthy();
+    expect(openApi.paths['/api/organizations/{id}/task-authorizations/{authorizationId}/checkout']?.post?.responses?.['201']).toBeTruthy();
+    expect(openApi.paths['/api/organizations/{id}/task-authorizations/{authorizationId}/checkout']?.get?.responses?.['200']).toBeTruthy();
     expect(openApi.paths['/api/organizations/{id}/teams/{teamId}/budget']?.put).toBeTruthy();
     expect(openApi.paths['/api/organizations/{id}/service-accounts']?.post).toBeTruthy();
     expect(openApi.paths['/api/spending-policy']?.put?.responses?.['200']).toBeTruthy();

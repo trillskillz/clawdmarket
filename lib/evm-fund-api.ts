@@ -15,6 +15,8 @@ import { measuredEvmChainFee } from '@/lib/chain-fee-evidence'
 
 import type { RequestPrincipal } from '@/lib/request-principal'
 import { inspectSpendingEvmClaim } from '@/lib/organization-spending-payment'
+import { assertTaskEvmProof, inspectTaskEvmClaim } from '@/lib/organization-task-payment'
+import { PurchasingError } from '@/lib/organization-purchasing-transaction'
 const TX_HASH = /^0x[a-fA-F0-9]{64}$/
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }, delegated?:RequestPrincipal) {
@@ -53,8 +55,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (intent.buyer_operation_id) {
       const [claim] = await db.select().from(buyer_evm_payment_claims).where(eq(buyer_evm_payment_claims.intent_id, intent.id)).limit(1)
       const spendingClaim=await inspectSpendingEvmClaim(intent.id)
-      if ((!claim || claim.tx_hash !== txHash) && (!spendingClaim || spendingClaim.tx_hash !== txHash)) return NextResponse.json({ error: 'Claim the saved signed transaction before submission', code: 'BUYER_PAYMENT_CLAIM_REQUIRED' }, { status: 409 })
+      const taskClaim = await inspectTaskEvmClaim(intent.id)
+      if ((!claim || claim.tx_hash !== txHash) && (!spendingClaim || spendingClaim.tx_hash !== txHash) && (!taskClaim || taskClaim.tx_hash !== txHash)) return NextResponse.json({ error: 'Claim the saved signed transaction before submission', code: 'BUYER_PAYMENT_CLAIM_REQUIRED' }, { status: 409 })
     }
+    await assertTaskEvmProof(trade.id, intent.id, txHash, payerAddress)
     const signature = String(body.payer_signature || intent.payer_signature || '')
     if (!signature) return NextResponse.json({
       error: 'The payer must authorize this exact transfer for this trade', code: 'PAYER_AUTHORIZATION_REQUIRED',
@@ -110,6 +114,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     ])
     return NextResponse.json({ ok: true, trade: funded, receipt: { tx_hash: txHash, chain_id: chainId, token_address: tokenAddress, token_amount: verified.tokenAmount.toString(), usd_value: verified.usdValue } })
   } catch (error) {
+    if (error instanceof PurchasingError) return NextResponse.json({ error: error.code, code: error.code }, { status: error.status })
     if (error instanceof TradeFundingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     if (error instanceof SettlementError) return NextResponse.json({ error: error.message, code: error.code, retryable: error.retryable }, { status: error.retryable ? 409 : 402 })
     console.error('[trade/fund/evm]', error)

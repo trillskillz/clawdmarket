@@ -221,9 +221,11 @@ export async function reserveOrganizationWorkflowExposure(source:PurchasingSourc
   const checked=await organizationWorkflowAuthority(source,workflowId);if(!checked)return
   const {readOriginalOrganizationRouteExposure}=await import('./organization-route-authorizations')
   const payment=checked.contract.terms.payment,route=await readOriginalOrganizationRouteExposure(source,checked.row.organization_id,checked.row.buyer_id,payment),workflow=await organizationWorkflowExposure(source,checked.row.organization_id,checked.row.buyer_id,payment,tradeId)
-  for(const [spent,limit]of [[route.daily+workflow.daily,checked.terms.max_daily_minor],[route.monthly+workflow.monthly,checked.terms.max_monthly_minor],[route.lifetime+workflow.lifetime,checked.terms.max_lifetime_minor]])
+  const { organizationTaskExposure } = await import('./organization-task-authorizations')
+  const task = await organizationTaskExposure(source, checked.row.organization_id, checked.row.buyer_id, payment)
+  for(const [spent,limit]of [[route.daily+workflow.daily+task.daily,checked.terms.max_daily_minor],[route.monthly+workflow.monthly+task.monthly,checked.terms.max_monthly_minor],[route.lifetime+workflow.lifetime+task.lifetime,checked.terms.max_lifetime_minor]])
     if(!Number.isSafeInteger(spent)||spent<0||spent+totalMinor>limit)fail('ORGANIZATION_WORKFLOW_GROSS_LIMIT')
-  const fees=payment.rail==='evm'?route.gas+workflow.gas:route.fees+workflow.fees
+  const fees=payment.rail==='evm'?route.gas+workflow.gas+task.gas:route.fees+workflow.fees+task.fees
   if(fees+BigInt(fee)>BigInt(checked.terms.max_lifetime_chain_fee_units))fail('ORGANIZATION_WORKFLOW_FEE_LIMIT')
 }
 export async function isPrivateOrganizationWorkflowRoute(routeId:string){const [node]=await db.select().from(workflow_node_runs).where(eq(workflow_node_runs.route_id,routeId)).limit(1)

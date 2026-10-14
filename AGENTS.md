@@ -1,19 +1,52 @@
 # ClawdMarket routing work
 
-## Current authorized visual follow-up (2026-10-13)
+## Current local continuation — 2026-10-14
 
-The user requested a fresh visual audit, chose a new visual follow-up PR, and
-explicitly instructed: "push this but after do not push anymore keep everything
-local". Complete this visual-only batch on `fix/site-visual-followup`, including
-rendered acceptance, required CI, protected publication and production verification
-under the established release workflow. This permission applies only to these
-visual fixes and their audit/policy records. No unrelated routing capability or
-later release is authorized. Once this batch is verified, all further code, tests
-and documentation must stay local until explicit new publication permission.
-Do not push, merge, publish GitHub metadata or deploy a later release automatically.
-The prior completed release and acceptance below are historical evidence.
+Reviewed task purchasing is accepted locally as HTTP 1.117, capability **7/10**.
+Final enabled predeploy: 926 Node cases (921 passed, five expected skips), 21
+Python cases, SDK parity/build, types and lint. Final production build and 122
+runnable Chromium cases pass (eight expected skips, zero retries). All 67
+migrations/replay preserve 845 original rows across 133 tables, ten immutable
+reputation guards and five actual evidence queries. Evidence:
+[task acceptance](docs/ORGANIZATION_REVIEWED_TASK_PURCHASING_AUDIT.md).
 
-## Latest publication policy — local accumulation (2026-10-13 UTC)
+Continue locally with
+[independently reviewed listing purchasing](docs/ORGANIZATION_REVIEWED_LISTING_PURCHASING_PLAN.md).
+Pending review blocks its original buyer's generic purchase, not unrelated public
+buyers or inventory. Preserve the original marketplace trade/payment/delivery
+identity, add separately scoped claims and shared route/workflow/task/listing
+exposure, and require complete genuine both-rail acceptance before counting 8/10.
+The dependency audit is not another capability. Contract escrow remains separate.
+The publication policy below still applies: no push, PR changes, merge, deployment,
+production funds or rollout changes without new explicit authorization.
+
+## Current publication policy — all further work stays local (2026-10-13)
+
+The final authorized visual follow-up is production-verified. PR #263 merged as
+`96a017b6019920f47af32d86a7e476c9b9c07808`; its tree equals accepted review head
+`fd8cee5`. All four required PR checks and same-SHA main CI 38477948085 passed.
+Complete local and PR Chromium
+acceptance: 112 passed, nine expected skips, zero failures and zero retries.
+Migration-first deployment 38477948102 and same-SHA production smoke 38479332306
+passed. Across both domains, 150 live renders at five widths pass;
+all three bundled font families load, and all 26 served font files match their
+signatures, sizes and SHA-256 hashes. Both domains are ready and retain HTTP 1.116.
+
+The user's instruction is now in force: "after do not push anymore keep everything
+local". This release's publication permission is consumed. All subsequent code,
+tests and documentation must accumulate locally until explicit new permission.
+Do not push commits, merge PRs, publish GitHub metadata or deploy to Vercel for a
+later release automatically. Earlier exceptions and the ten-capability cadence
+cannot authorize another publication. These completion records stay local.
+
+Current local continuation: `work/local-after-visual-followup-2026-10-13` in
+`/home/void/Work/clawdmarket-visual-reliability`, based on the verified merged SHA,
+with no upstream. Routing acceptance remains six capabilities; the next task-board
+purchasing batch must be implemented and validated locally. Financial handlers,
+feature gates and rollout scope are preserved. Evidence:
+[visual follow-up](/home/void/Work/clawdmarket-visual-reliability/docs/SITE_VISUAL_FOLLOWUP_AUDIT.md).
+
+## Prior release verification and policy (baseline)
 
 The final authorized production release is complete. PR #231 merged as `9aab6a0`;
 its required read-snapshot repair PR #262 merged as

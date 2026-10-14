@@ -14,6 +14,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from http.client import HTTPException
 from email.utils import parsedate_to_datetime
 from .enterprise import OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, original_grant_reference, original_tempo_credential
+from .task import OrganizationTaskProposal, OrganizationTaskDecision, OrganizationTaskCheckoutInput, OrganizationTaskCheckout, original_task_reference
 
 SDK_CONTRACT: dict[str, Any] = json.loads(files("clawdmarket").joinpath("contract.json").read_text())
 JSON = dict[str, Any]
@@ -221,6 +222,37 @@ class ClawdMarketClient:
 
     def revoke_organization_route(self, organization_id: str, authorization_id: str) -> JSON:
         return self._call('revoke_organization_route', organization_id, path_parameters={'authorizationId': authorization_id})
+
+    def propose_organization_task(self, organization_id: str, request: OrganizationTaskProposal) -> JSON:
+        """Owner freezes one accepted original task bid. Save the exact request/reference first."""
+        return self._call('propose_organization_task', organization_id, request)
+
+    def recover_organization_task(self, organization_id: str, client_reference: str) -> JSON:
+        return self._call('recover_organization_task', organization_id, query={'client_reference': original_task_reference(client_reference)})
+
+    def inspect_organization_task(self, organization_id: str, authorization_id: str) -> JSON:
+        return self._call('inspect_organization_task', organization_id, path_parameters={'authorizationId': authorization_id})
+
+    def approve_organization_task(self, organization_id: str, authorization_id: str, decision: OrganizationTaskDecision) -> JSON:
+        """Selected independent reviewer only; preserve the original hash, version and reference."""
+        return self._call('approve_organization_task', organization_id, decision, path_parameters={'authorizationId': authorization_id})
+
+    def revoke_organization_task(self, organization_id: str, authorization_id: str) -> JSON:
+        return self._call('revoke_organization_task', organization_id, path_parameters={'authorizationId': authorization_id})
+
+    def checkout_organization_task(self, organization_id: str, authorization_id: str, request: OrganizationTaskCheckoutInput) -> OrganizationTaskCheckout:
+        """Assigned buyer creates the original unpaid trade. Does not sign, broadcast or retry."""
+        return cast(OrganizationTaskCheckout, self._call('checkout_organization_task', organization_id, request, path_parameters={'authorizationId': authorization_id}))
+
+    def recover_organization_task_checkout(self, organization_id: str, authorization_id: str) -> OrganizationTaskCheckout:
+        """Recover the original trade after uncertainty, cancellation or revocation."""
+        return cast(OrganizationTaskCheckout, self._call('recover_organization_task_checkout', organization_id, path_parameters={'authorizationId': authorization_id}))
+
+    def confirm_task_delivery(self, trade_id: str, content_hash: str) -> JSON:
+        """Explicit original buyer decision for exact delivered bytes. Never accepts automatically."""
+        if not isinstance(content_hash, str) or not re.fullmatch(r'[a-f0-9]{64}', content_hash):
+            raise ValueError('original delivery content_hash must be a SHA-256 hash')
+        return self._call('confirm_trade', trade_id, {'content_hash': content_hash})
 
     def propose_organization_workflow(self, organization_id: str, request: JSON) -> JSON:
         """Current owner freezes one exact L1 or Tempo workflow for independent review. Save the exact request first."""

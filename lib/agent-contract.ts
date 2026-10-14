@@ -12,7 +12,7 @@ import { REPUTATION_V2_POLICY } from './reputation-v2-policy'
 import { REPUTATION_RANKING_POLICY } from './reputation-ranking'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.116'
+export const AGENT_CONTRACT_VERSION = '1.117'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -35,6 +35,16 @@ export const CLIENT_RECOVERY_RULES = {
     revoked_payment_recovery: 'separate_original_buyer_client_original_intent_and_hash_only',
     tempo_credential_submission: 'explicit_saved_original_credential_may_trigger_server_broadcast_of_claimed_bytes',
     buyer_host_review: 'original_private_order_get_includes_own_immutable_grant_dto_no_secret_review_then_reinspect_and_confirm_private_approval_file',
+  },
+  reviewed_tasks: {
+    proposal: 'owner_exact_accepted_bid_reference_private_scope_and_fee_inclusive_quote',
+    decision: 'selected_independent_current_reviewer_exact_version_reference_authority_hash',
+    checkout: 'assigned_payment_scoped_buyer_original_checkout_reference_one_task_trade',
+    payment_authority_kinds: ['organization_task_v1', 'organization_task_v2'],
+    cancelled_recovery: 'original_trade_only_never_replace_cancelled_obligation',
+    revoked_recovery: 'original_signed_bytes_proof_refund_and_private_accepted_delivery_only',
+    delivery: 'original_task_workspace_requirements_explicit_exact_hash_buyer_acceptance',
+    maximum_original_trades: 1,
   },
 } as const
 
@@ -162,6 +172,19 @@ const routeMandateBodySchema = { type: 'object', additionalProperties: false,
           minimum_fee_token_reserve_units: mandateUnitsSchema, max_fee_token_cost_units: { ...mandateUnitsSchema, description: 'Positive maximum fee in six-decimal fee-token base units. Principal and fee consume the same balance; both reserve floors must remain.' } } },
     ] },
   } }
+const organizationTaskCheckoutBodySchema = {type:'object',additionalProperties:false,required:['version','client_reference','authority_hash'],properties:{
+  version:{enum:[1,2]},client_reference:routeMandateBodySchema.properties.client_reference,authority_hash:{type:'string',pattern:'^[a-f0-9]{64}$'}}}
+const organizationTaskBodySchema = {type:'object',additionalProperties:false,
+  required:['version','client_reference','task_id','winning_bid_id','reviewer_role_id','expected_total','max_daily','max_monthly','max_lifetime','max_lifetime_chain_fee_units','expires_at','expected_token_decimals','expected_token_usd_price','payment'],
+  properties:{version:{enum:[1,2]},client_reference:routeMandateBodySchema.properties.client_reference,task_id:{type:'string',minLength:1,maxLength:200},winning_bid_id:{type:'string',minLength:1,maxLength:200},reviewer_role_id:{type:'string',format:'uuid'},
+    expected_total:{...mandateAmountSchema,description:'Exact original accepted workspace quote including platform fees. Positive USD decimal string.'},
+    max_daily:mandateAmountSchema,max_monthly:mandateAmountSchema,max_lifetime:mandateAmountSchema,
+    max_lifetime_chain_fee_units:{type:'string',pattern:'^[1-9][0-9]{0,77}$',description:'Positive lifetime fee ceiling: native wei for L1 v1; pathUSD base units for Tempo v2.'},
+    expires_at:routeMandateBodySchema.properties.expires_at,expected_token_decimals:{type:'integer',minimum:0,maximum:36},expected_token_usd_price:{type:'number',exclusiveMinimum:0},
+    payment:routeMandateBodySchema.properties.payment},
+  allOf:[{if:{properties:{version:{const:1}}},then:{properties:{payment:{properties:{rail:{const:'evm'},chain_id:{const:1}}}}}},
+    {if:{properties:{version:{const:2}}},then:{properties:{payment:{properties:{rail:{const:'mpp'},chain_id:{const:TEMPO_CHAIN_ID}}},expected_token_decimals:{const:6},expected_token_usd_price:{const:1}}}}]}
+
 function assertionBodySchema(op: string, properties: Record<string, unknown>, required: string[]) {
   return { type: 'object', additionalProperties: false, required: ['id', 'field', 'op', ...required],
     properties: { id: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$' }, field: { type: 'string', minLength: 1, maxLength: 100 }, op: { const: op }, ...properties },
@@ -483,6 +506,13 @@ const benchmarkReportBody = { type: 'object', additionalProperties: false, requi
 } }
 
 export const AGENT_ACTIONS: AgentAction[] = [
+  {id:'propose_organization_task',label:'Propose reviewed organization task',description:'Current owner freezes one exact already accepted task bid, original poster and assigned buyer/provider, private workspace requirements, quote including fees and bounded L1 v1 or Tempo v2 payment terms. Pending independent review cannot fund the task through the generic path. No funds move; route, workflow, direct-service and read credentials gain no task authority.',method:'POST',endpoint:'/api/organizations/{id}/task-authorizations',auth:'owner-account',payment:null,required:['id'],body_schema:organizationTaskBodySchema},
+  {id:'recover_organization_task',label:'Recover original task proposal',description:'Current owner recovers the exact saved client_reference after response loss. Original bid, workspace and authority are retained without replacement.',method:'GET',endpoint:'/api/organizations/{id}/task-authorizations',auth:'owner-account',payment:null,required:['id','client_reference']},
+  {id:'inspect_organization_task',label:'Inspect private task review',description:'Current owner or selected currently authorized reviewer inspects the original accepted bid, parsed requirements, exact gross and fee terms, decision and original task use. Other members and buyer read credentials cannot inspect private review content.',method:'GET',endpoint:'/api/organizations/{id}/task-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},
+  {id:'approve_organization_task',label:'Approve exact reviewed task',description:'Selected independent current reviewer approves only the original authority hash with the saved decision reference. Replay never reopens revocation or authorizes a replacement task trade.',method:'POST',endpoint:'/api/organizations/{id}/task-authorizations/{authorizationId}/approval',auth:'owner-account',payment:null,required:['id','authorizationId'],body_schema:{...organizationTaskCheckoutBodySchema,required:[...organizationTaskCheckoutBodySchema.required,'approve'],properties:{...organizationTaskCheckoutBodySchema.properties,approve:{const:true}}}},
+  {id:'revoke_organization_task',label:'Revoke reviewed task',description:'Current owner or selected authorized reviewer closes fresh task spending. Original trade, exact signed payments, private accepted delivery and refunds remain recoverable; gross and fee history never recycle.',method:'DELETE',endpoint:'/api/organizations/{id}/task-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},
+  {id:'checkout_organization_task',label:'Check out original reviewed task',description:'Original assigned buyer with payments:write atomically creates one original unpaid task-workspace trade using the approved authority hash and saved checkout reference. Current permission and frozen bid/requirements/quote are rechecked; payment signing and delivery acceptance remain separate. A cancelled original trade is never replaced.',method:'POST',endpoint:'/api/organizations/{id}/task-authorizations/{authorizationId}/checkout',auth:'agent_api_key',payment:null,required:['id','authorizationId'],body_schema:organizationTaskCheckoutBodySchema},
+  {id:'recover_organization_task_checkout',label:'Recover original reviewed task checkout',description:'Original assigned buyer with payment scope recovers the same task workspace, trade and payment authority after response loss, cancellation or revocation. Recovery never creates fresh authority or discloses reviewer-only private proposal content.',method:'GET',endpoint:'/api/organizations/{id}/task-authorizations/{authorizationId}/checkout',auth:'agent_api_key',payment:null,required:['id','authorizationId']},
   {id:'propose_organization_route',label:'Propose reviewed organization route',description:'Current owner atomically saves a private frozen route, pending authority and mandate. Does not reserve capacity or move funds. Existing cmos_ keys gain no route scope.',method:'POST',endpoint:'/api/organizations/{id}/route-authorizations',auth:'owner-account',payment:null,required:['id'],body_schema:organizationRouteBodySchema},
   {id:'recover_organization_route',label:'Recover original route proposal',description:'Current owner looks up the exact original client_reference after a lost reply. No replacement authority or financial commitment.',method:'GET',endpoint:'/api/organizations/{id}/route-authorizations',auth:'owner-account',payment:null,required:['id','client_reference']},
   {id:'inspect_organization_route',label:'Inspect private route review',description:'Current owner or selected currently authorized reviewer sees original route/candidates and immutable gross, wallet, reserve, fee and expiry terms. Other members and buyer credentials are denied.',method:'GET',endpoint:'/api/organizations/{id}/route-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},
@@ -2455,6 +2485,19 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/organizations/{id}/service-accounts/{accountId}': { delete: { operationId: 'revoke_organization_service_account', summary: 'Revoke a read-only organization credential', security: ownerAuthenticated,
       parameters: [tradeIdParameter, { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       responses: { 200: { description: 'Credential revoked or idempotent replay' }, 404: { description: 'Credential not owned' } } } },
+    '/api/organizations/{id}/task-authorizations': {
+      get:{operationId:'recover_organization_task',summary:'Current owner recovers the exact original accepted-task proposal',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'client_reference',in:'query',required:true,schema:routeMandateBodySchema.properties.client_reference}],responses:{200:{description:'Private original task authority'},401:{description:'Current owner account required'},404:{description:'Original proposal unavailable'}}},
+      post:{operationId:'propose_organization_task',summary:'Owner freezes one accepted task bid and exact L1 v1 or Tempo v2 payment scope for independent review',security:ownerAuthenticated,parameters:[tradeIdParameter],requestBody:{required:true,content:{'application/json':{schema:organizationTaskBodySchema}}},responses:{201:{description:'Pending original proposal; no funds moved'},200:{description:'Exact original replay'},400:{description:'Invalid bounded proposal'},403:{description:'Independent reviewer required'},409:{description:'Original bid/workspace/quote or current authority changed'},413:{description:'Body exceeds 16384 bytes'},503:{description:'Writes closed or bounded storage contention'}}},
+    },
+    '/api/organizations/{id}/task-authorizations/{authorizationId}': {
+      get:{operationId:'inspect_organization_task',summary:'Private frozen task review for current owner or selected reviewer',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Original accepted bid, task scope, requirements, quote and payment limits'},401:{description:'Human account required'},404:{description:'Private task authority unavailable'}}},
+      delete:{operationId:'revoke_organization_task',summary:'Close fresh task spending while preserving the original obligation',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Revoked or exact original replay'},401:{description:'Human account required'},404:{description:'Private task authority unavailable'}}},
+    },
+    '/api/organizations/{id}/task-authorizations/{authorizationId}/approval': {post:{operationId:'approve_organization_task',summary:'Selected independent reviewer approves the exact original task hash',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],requestBody:{required:true,content:{'application/json':{schema:getAction('approve_organization_task').body_schema}}},responses:{201:{description:'Approved; no funds moved'},200:{description:'Original decision replay including revoked state'},403:{description:'Selected independent reviewer required'},409:{description:'Original scope, version, reference or current authority changed'}}}},
+    '/api/organizations/{id}/task-authorizations/{authorizationId}/checkout': {
+      post:{operationId:'checkout_organization_task',summary:'Assigned buyer creates the one original unpaid reviewed task trade',security:agentAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],requestBody:{required:true,content:{'application/json':{schema:organizationTaskCheckoutBodySchema}}},responses:{201:{description:'Original unpaid trade, task workspace and separate payment authority'},200:{description:'Exact original checkout replay; cancelled obligations are not replaced'},401:{description:'Original buyer with payments:write required'},404:{description:'Original task authority unavailable'},409:{description:'Approval pending, exact scope drift, changed reference or current authority denied'},413:{description:'Body exceeds 16384 bytes'},503:{description:'Writes closed or bounded contention'}}},
+      get:{operationId:'recover_organization_task_checkout',summary:'Assigned buyer inspects original task payment authority and recovers the original trade without fresh spending',security:agentAuthenticated,parameters:[tradeIdParameter,{name:'authorizationId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],responses:{200:{description:'Private payment authority; null trade before checkout, then same original trade including revoked or cancelled recovery'},401:{description:'Original buyer with payments:write required'},404:{description:'Original authority unavailable'}}},
+    },
     '/api/organizations/{id}/route-authorizations': {
       get:{operationId:'recover_organization_route',summary:'Current-owner exact original proposal lookup',security:ownerAuthenticated,parameters:[tradeIdParameter,{name:'client_reference',in:'query',required:true,schema:{type:'string',minLength:8,maxLength:128,pattern:'^[A-Za-z0-9._:-]+$'}}],responses:{200:{description:'Private original authority'},401:{description:'Human account required'},404:{description:'Original proposal unavailable'}}},
       post:{operationId:'propose_organization_route',summary:'Owner freezes one public-provider v1/v2 or explicitly shared private-provider v3/v4 route for independent review',security:ownerAuthenticated,parameters:[tradeIdParameter],requestBody:{required:true,content:{'application/json':{schema:organizationRouteBodySchema}}},responses:{201:{description:'Pending proposal; no funds moved'},200:{description:'Exact original replay'},403:{description:'Independent reviewer required'},409:{description:'Original terms or current eligibility changed'},503:{description:'Writes closed or retryable storage contention'}}},

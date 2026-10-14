@@ -96,3 +96,22 @@ Current contract metadata is generated from `lib/agent-contract.ts`. Run
 `pnpm sdk:generate` after canonical contract changes and `pnpm sdk:check` to
 detect drift. `pnpm test:python` runs disposable loopback HTTP tests with dummy
 credentials and no wallet/RPC calls.
+
+### Independently reviewed task purchases
+
+An owner client calls `propose_organization_task` with the saved
+`OrganizationTaskProposal`, then uses `recover_organization_task` for exact
+original-reference lookup. Owner/selected reviewer inspection uses
+`inspect_organization_task`; the selected independent reviewer submits the saved
+`OrganizationTaskDecision` through `approve_organization_task`.
+`revoke_organization_task` closes fresh spending while preserving original work.
+
+The original assigned buyer uses a separate payment-scoped client for
+`recover_organization_task_checkout` and `checkout_organization_task`. Persist the
+`OrganizationTaskCheckoutInput` first. Before checkout the trade is null; later
+recovery retains the original trade across cancellation or revocation. The task
+`payment_authority` is separate L1 v1 or Tempo v2 authority. These calls never sign,
+broadcast, automatically retry or accept delivery. For an explicit buyer decision,
+call `confirm_task_delivery(trade_id, original_content_hash)` through the existing
+trade confirmation API. See
+[the task contract](../../docs/ORGANIZATION_REVIEWED_TASK_PURCHASING.md).

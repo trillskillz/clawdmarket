@@ -1,5 +1,5 @@
 import { SDK_CONTRACT } from './contract.js'
-import { enterpriseId, enterprisePath, originalGrantReference, scopedSpendingClient } from './enterprise.js'
+import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, scopedSpendingClient } from './enterprise.js'
 import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'
 export type { OrganizationSpendingClient, SpendingAccount, SpendingGrantInput, SpendingGrantResult, SpendingHistory, SpendingEvmPayment, SpendingTempoPayment, SpendingOrderInput, SpendingOrderResult, SpendingEvmIntentInput, SpendingEvmClaimInput, SpendingEvmFundingProof } from './enterprise.js'
@@ -55,6 +55,27 @@ export type OrganizationWorkflowProposal = {version:1|2;client_reference:string;
 export type OrganizationWorkflowAuthorization = {id:string;organization_id:string;workflow_id:string;buyer_id:string;version:1|2;state:'pending'|'approved'|'revoked';authority_hash:string;
   approval_id:string;client_reference:string;terms:{contract_hash:string;max_daily_minor:number;max_monthly_minor:number;max_lifetime_minor:number;max_lifetime_chain_fee_units:string;nodes:Array<{key:string;services:Array<{id:string;seller_id:string;contract_hash:string}>;provider_shares:Array<{id:string;consent_hash:string}>}>};
   contract:{workflow:Record<string,unknown>;terms:WorkflowApprovalCommand;token:Record<string,unknown>};decision:{version:1|2;client_reference:string;authority_hash:string;approve:true}|null;viewer_role:'owner'|'reviewer';review_url:string}
+type OrganizationTaskProposalBase = {client_reference:string;task_id:string;winning_bid_id:string;reviewer_role_id:string;expected_total:string;
+  max_daily:string;max_monthly:string;max_lifetime:string;max_lifetime_chain_fee_units:string;expires_at:string;expected_token_decimals:number;expected_token_usd_price:number}
+export type OrganizationTaskProposal = OrganizationTaskProposalBase & (
+  {version:1;payment:Extract<RouteMandatePayment,{rail:'evm'}>&{chain_id:1}}
+  | {version:2;payment:Extract<RouteMandatePayment,{rail:'mpp'}>&{chain_id:4217}}
+)
+export type OrganizationTaskDecision = {version:1|2;client_reference:string;authority_hash:string;approve:true}
+export type OrganizationTaskCheckoutInput = Omit<OrganizationTaskDecision,'approve'>
+export type OrganizationTaskRequirements = {output_format:'text'|'json';acceptance_criteria:string[];required_json_keys:string[];minimum_sources:number}
+export type OrganizationTaskTerms = {version:1|2;explicit_acceptance:true;
+  task:{id:string;poster_agent_id:string;title:string;description:string;required_capabilities:string[];budget_usd:number;deadline_at:string|null;expires_at:string|null;task_type:string;assigned_agent_id:string;winning_bid_id:string};
+  bid:{id:string;agent_id:string;price_usd:number;proposal:string;estimated_hours:number|null;counter_offer:{price:number|null;message:string|null;status:string|null}};workspace:{agreed_price:number|null;requirements:OrganizationTaskRequirements};
+  payment:RouteMandatePayment;token_decimals:number;token_usd_price:number;fee_token_decimals?:number;expires_at:string;total_minor:number;
+  max_daily_minor:number;max_monthly_minor:number;max_lifetime_minor:number;max_lifetime_chain_fee_units:string}
+export type OrganizationTaskAuthorization = {id:string;organization_id:string;task_id:string;winning_bid_id:string;buyer_id:string;team_id:string|null;cost_center:string;
+  client_reference:string;version:1|2;state:'pending'|'approved'|'revoked';authority_hash:string;terms:OrganizationTaskTerms;reviewer_account_id:string;
+  viewer_role:'owner'|'reviewer';approved_at:string|null;revoked_at:string|null;review_url:string;decision:OrganizationTaskDecision|null;
+  use:{trade_id:string;amount_minor:number;maximum_chain_fee_units:string;created_at:string}|null}
+export type OrganizationTaskCheckout = {ok:true;authorization_id:string;authority_hash:string;task_id:string;trade:{id:string;status:string;payment_rail:'evm'|'mpp';[key:string]:unknown}|null;
+  checkout:Record<string,unknown>|null;workspace_url:string;created?:boolean;
+  payment_authority:{id:string;kind:'organization_task_v1'|'organization_task_v2';authority_hash:string;terms:Pick<OrganizationTaskTerms,'payment'|'token_decimals'|'token_usd_price'|'fee_token_decimals'|'expires_at'>}}
 export type OrganizationRouteAuthorization = {id:string;version:1|2|3|4;organization_id:string;route_id:string;buyer_id:string;team_id:string|null;cost_center:string;reviewer_account_id:string;
   viewer_role:'owner'|'reviewer';review_url:string;client_reference:string;authority_hash:string;state:'pending'|'approved'|'revoked';approved_at:string|null;revoked_at:string|null;
   decision:{version:1|2|3|4;client_reference:string;authority_hash:string;approve:true}|null;
@@ -395,6 +416,35 @@ export class ClawdMarketClient {
   getReputationDecisions(tradeId:string,options?:RequestOptions){return this.request<{decisions:Record<string,unknown>[]}>('GET',`${tradePath(tradeId)}/reputation`,undefined,options)}
   /** Persist this exact body/reference before sending; inspect on transport uncertainty. */
   appealReputationFinding(tradeId:string,input:{version:1;client_reference:string;finding_id:string},options?:RequestOptions){return this.request<Record<string,unknown>>('PATCH',`${tradePath(tradeId)}/reputation`,input,options)}
+
+  /** Save the exact accepted bid, proposal and reference before submission. No automatic retries. */
+  proposeOrganizationTask(organizationId:string,input:OrganizationTaskProposal,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationTaskAuthorization;idempotent:boolean}>('propose_organization_task',{id:organizationId},input,options)
+  }
+  recoverOrganizationTask(organizationId:string,clientReference:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationTaskAuthorization}>('recover_organization_task',{id:organizationId},undefined,options,{client_reference:originalTaskReference(clientReference)})
+  }
+  inspectOrganizationTask(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationTaskAuthorization}>('inspect_organization_task',{id:organizationId,authorizationId},undefined,options)
+  }
+  approveOrganizationTask(organizationId:string,authorizationId:string,input:OrganizationTaskDecision,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationTaskAuthorization;idempotent:boolean}>('approve_organization_task',{id:organizationId,authorizationId},input,options)
+  }
+  revokeOrganizationTask(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationTaskAuthorization;idempotent:boolean}>('revoke_organization_task',{id:organizationId,authorizationId},undefined,options)
+  }
+  /** Original assigned buyer only. This creates the original unpaid task trade; it does not sign or send funds. */
+  checkoutOrganizationTask(organizationId:string,authorizationId:string,input:OrganizationTaskCheckoutInput,options?:RequestOptions){
+    return this.enterpriseRequest<OrganizationTaskCheckout>('checkout_organization_task',{id:organizationId,authorizationId},input,options)
+  }
+  recoverOrganizationTaskCheckout(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<OrganizationTaskCheckout>('recover_organization_task_checkout',{id:organizationId,authorizationId},undefined,options)
+  }
+  /** Explicit original buyer decision for the exact delivered content. Never accepts automatically. */
+  confirmTaskDelivery(tradeId:string,contentHash:string,options?:RequestOptions){
+    if(!/^[a-f0-9]{64}$/.test(contentHash))throw new TypeError('original delivery content_hash must be a SHA-256 hash')
+    return this.request<{ok:boolean;status?:string;trade:Record<string,unknown>}>('POST',`${tradePath(tradeId)}/confirm`,{content_hash:contentHash},options)
+  }
 
   proposeOrganizationWorkflow(organizationId:string,input:OrganizationWorkflowProposal,options?:RequestOptions){
     return this.enterpriseRequest<{authorization:OrganizationWorkflowAuthorization;idempotent:boolean}>('propose_organization_workflow',{id:organizationId},input,options)

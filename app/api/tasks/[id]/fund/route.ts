@@ -2,7 +2,6 @@ import { CreditError } from '@/lib/account-credit'
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { db } from '@/lib/db'
 import { agents, bids, listings, payment_controls, tasks, task_workspaces, trades } from '@/lib/schema'
 import { resolveRequestPrincipal } from '@/lib/request-principal'
 import { ensureSyntheticAgentUser } from '@/lib/registered-agent-auth'
@@ -17,6 +16,9 @@ import { getPaymentReadiness } from '@/lib/payment-config'
 import { payoutAddressForUser } from '@/lib/external-settlement'
 import { checkoutForTrade } from '@/lib/trade-checkout'
 import { NEW_PAYMENTS_CONTROL_KEY, NewPaymentsPausedError } from '@/lib/payment-control'
+import { genericTaskFundingGuard } from '@/lib/organization-task-authorizations'
+import { PurchasingError, purchasingTransaction } from '@/lib/organization-purchasing-transaction'
+import { readWithLocalContentionRecovery } from '@/lib/local-sqlite-read'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,26 +40,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const input = fundingSchema.safeParse(await request.json().catch(() => null))
     if (!input.success) return NextResponse.json({ error: 'Confirm the exact quote and select a payment rail.', details: input.error.issues }, { status: 400 })
     const { id } = await params
-    const [task] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1)
+    const [task] = await readWithLocalContentionRecovery(source => source.select().from(tasks).where(eq(tasks.id, id)).limit(1))
     if (!task) throw new FundingError('Task not found', 404)
     if (![principal.userId, principal.agentId].includes(task.posterAgentId)) throw new FundingError('Only the task poster can fund work', 403)
     if (task.status !== 'assigned' || !task.winningBidId || !task.assignedAgentId) throw new FundingError('Accept a bid before funding', 409)
-    const [seller] = await db.select({ id: agents.id, name: agents.name }).from(agents)
-      .where(and(eq(agents.id, task.assignedAgentId), eq(agents.status, 'active'))).limit(1)
+    const [seller] = await readWithLocalContentionRecovery(source => source.select({ id: agents.id, name: agents.name }).from(agents)
+      .where(and(eq(agents.id, task.assignedAgentId!), eq(agents.status, 'active'))).limit(1))
     if (!seller) throw new FundingError('The assigned agent is not active', 409)
     const sellerId = `user_agent_${seller.id}`
     if (sellerId === principal.userId) throw new FundingError('Cannot fund your own work', 409)
-    await ensureSyntheticAgentUser({ agentId: seller.id, name: seller.name, syntheticUserId: sellerId })
     const readiness = getPaymentReadiness()
     if (input.data.payment_rail === 'ledger' && !readiness.ledger.enabled) throw new FundingError('Account-balance settlement is not enabled', 503)
     if (input.data.payment_rail === 'credit' && !readiness.credit.enabled) throw new FundingError('Account credit is not configured', 503)
     if (input.data.payment_rail === 'evm' && !readiness.evm.enabled) throw new FundingError('EVM settlement is not configured', 503)
     if (input.data.payment_rail === 'mpp' && !readiness.mpp.enabled) throw new FundingError('MPP settlement is not configured', 503)
-    if (!['ledger', 'credit'].includes(input.data.payment_rail) && !await payoutAddressForUser(sellerId)) {
+    if (!['ledger', 'credit'].includes(input.data.payment_rail) && !await readWithLocalContentionRecovery(source => payoutAddressForUser(sellerId, source))) {
       throw new FundingError('The assigned agent must configure a payout wallet before external funding', 409)
     }
-    const feeRecipient = await ensureAdminFeeRecipient()
-    const result = await withOrganizationBuyerLock(principal.agentId, principal.userId, () => db.transaction(async (tx) => {
+    const result = await withOrganizationBuyerLock(principal.agentId, principal.userId, () => purchasingTransaction(async (tx) => {
+      await genericTaskFundingGuard(tx, id)
+      await ensureSyntheticAgentUser({ agentId: seller.id, name: seller.name, syntheticUserId: sellerId }, tx)
+      const feeRecipient = await ensureAdminFeeRecipient(tx)
       const [currentTask] = await tx.select().from(tasks).where(eq(tasks.id, id)).limit(1)
       if (currentTask.status !== 'assigned' || currentTask.winningBidId !== task.winningBidId) throw new FundingError('Task changed; reload before funding', 409)
       const [bid] = await tx.select().from(bids).where(and(eq(bids.id, task.winningBidId!), eq(bids.taskId, id), eq(bids.status, 'accepted'))).limit(1)
@@ -125,6 +128,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     ])
     return NextResponse.json({ ok: true, trade: result.trade, checkout: checkoutForTrade(result.trade), workspace_url: `/taskboard/${id}` }, { status: result.created ? 201 : 200 })
   } catch (error) {
+    if (error instanceof PurchasingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     if (error instanceof CreditError) return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status })
     if (error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     if (error instanceof FundingError) return NextResponse.json({ error: error.message }, { status: error.status })

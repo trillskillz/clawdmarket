@@ -324,8 +324,10 @@ export async function consumeOrganizationRouteExposure(source: PurchasingSource,
     const route = await readOriginalOrganizationRouteExposure(source,row.organization_id,row.buyer_id,payment,row.id)
     const { organizationWorkflowExposure } = await import('./organization-workflow-authorizations')
     const workflow = await organizationWorkflowExposure(source,row.organization_id,row.buyer_id,payment)
-    const daily=route.daily+workflow.daily, monthly=route.monthly+workflow.monthly, lifetime=route.lifetime+workflow.lifetime,
-      gas=route.gas+workflow.gas, fees=route.fees+workflow.fees
+    const { organizationTaskExposure } = await import('./organization-task-authorizations')
+    const task = await organizationTaskExposure(source, row.organization_id, row.buyer_id, payment)
+    const daily=route.daily+workflow.daily+task.daily, monthly=route.monthly+workflow.monthly+task.monthly, lifetime=route.lifetime+workflow.lifetime+task.lifetime,
+      gas=route.gas+workflow.gas+task.gas, fees=route.fees+workflow.fees+task.fees
     for (const [spent,limit] of [[daily,terms.max_daily_minor],[monthly,terms.max_monthly_minor],[lifetime,terms.max_lifetime_minor]])
       if (!Number.isSafeInteger(spent) || spent < 0 || spent + input.totalMinor > limit) fail('ORGANIZATION_ROUTE_GROSS_LIMIT')
     if (isTempo(terms)) {

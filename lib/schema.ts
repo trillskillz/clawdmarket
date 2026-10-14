@@ -868,6 +868,78 @@ export const bids = sqliteTable('bids', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
+/** Independent review of the original accepted task bid, never service/route authority. */
+export const organization_task_authorizations = sqliteTable('organization_task_authorizations', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  task_id: text('task_id').notNull().references(() => tasks.id, { onDelete: 'restrict' }),
+  winning_bid_id: text('winning_bid_id').notNull().references(() => bids.id, { onDelete: 'restrict' }),
+  poster_id: text('poster_id').notNull(),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  seller_agent_id: text('seller_agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  team_id: text('team_id').references(() => organization_teams.id, { onDelete: 'restrict' }),
+  cost_center: text('cost_center').notNull(),
+  reviewer_role_id: text('reviewer_role_id').notNull().references(() => organization_purchasing_roles.id, { onDelete: 'restrict' }),
+  reviewer_account_id: text('reviewer_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(), authority_hash: text('authority_hash').notNull(),
+  terms_json: text('terms_json').notNull(), state: text('state', { enum: ['pending', 'approved', 'revoked'] }).notNull().default('pending'),
+  decision_reference: text('decision_reference'), decision_hash: text('decision_hash'),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  approved_at: integer('approved_at', { mode: 'timestamp_ms' }), revoked_at: integer('revoked_at', { mode: 'timestamp_ms' }),
+}, table => [
+  uniqueIndex('organization_task_org_reference_idx').on(table.organization_id, table.client_reference),
+  uniqueIndex('organization_task_active_scope_idx').on(table.task_id).where(sql`${table.state} IN ('pending','approved')`),
+]);
+
+/** One original task checkout forever; cancellations/refunds do not recycle reviewed exposure. */
+export const organization_task_uses = sqliteTable('organization_task_uses', {
+  authorization_id: text('authorization_id').primaryKey().references(() => organization_task_authorizations.id, { onDelete: 'restrict' }),
+  task_id: text('task_id').notNull().unique().references(() => task_workspaces.task_id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  winning_bid_id: text('winning_bid_id').notNull().references(() => bids.id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(), client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(),
+  amount_minor: integer('amount_minor').notNull(), chain_id: integer('chain_id').notNull(), fee_token_address: text('fee_token_address'),
+  fee_token_decimals: integer('fee_token_decimals').notNull(), maximum_chain_fee_units: text('maximum_chain_fee_units').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+}, table => [check('organization_task_use_amount_positive', sql`${table.amount_minor} > 0`)]);
+
+export const organization_task_payment_claims = sqliteTable('organization_task_payment_claims', {
+  intent_id: text('intent_id').primaryKey().references(() => evm_payment_intents.id, { onDelete: 'restrict' }),
+  authorization_id: text('authorization_id').notNull().references(() => organization_task_authorizations.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(), chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(),
+  nonce: integer('nonce').notNull(), tx_hash: text('tx_hash').notNull().unique(), maximum_execution_gas_cost_wei: text('maximum_execution_gas_cost_wei').notNull(),
+  state: text('state', { enum: ['claimed', 'confirmed'] }).notNull().default('claimed'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, table => [
+  uniqueIndex('task_payment_claims_wallet_nonce_idx').on(table.chain_id, table.payer_address, table.nonce),
+  uniqueIndex('task_payment_claims_active_wallet_idx').on(table.chain_id, table.payer_address).where(sql`${table.state} = 'claimed'`),
+]);
+
+export const organization_task_mpp_intents = sqliteTable('organization_task_mpp_intents', {
+  id: text('id').primaryKey(), trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }), buyer_operation_id: text('buyer_operation_id').notNull().unique(),
+  authorization_id: text('authorization_id').notNull().references(() => organization_task_authorizations.id, { onDelete: 'restrict' }), authority_hash: text('authority_hash').notNull(),
+  origin: text('origin').notNull(), chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(), token_address: text('token_address').notNull(), treasury_address: text('treasury_address').notNull(),
+  token_amount: text('token_amount').notNull(), token_decimals: integer('token_decimals').notNull(), amount_usd: real('amount_usd').notNull(), challenge_json: text('challenge_json').notNull(), expires_at: text('expires_at').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const organization_task_mpp_claims = sqliteTable('organization_task_mpp_claims', {
+  intent_id: text('intent_id').primaryKey().references(() => organization_task_mpp_intents.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }), authorization_id: text('authorization_id').notNull().references(() => organization_task_authorizations.id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(), chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(), nonce: integer('nonce').notNull(), tx_hash: text('tx_hash').notNull().unique(),
+  fee_token_address: text('fee_token_address').notNull(), maximum_fee_token_cost_units: text('maximum_fee_token_cost_units').notNull(), valid_before: integer('valid_before').notNull(),
+  state: text('state', { enum: ['claimed', 'confirmed'] }).notNull().default('claimed'), first_submission_at: integer('first_submission_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, table => [
+  uniqueIndex('task_mpp_claims_wallet_nonce_idx').on(table.chain_id, table.payer_address, table.nonce),
+  uniqueIndex('task_mpp_claims_active_wallet_idx').on(table.chain_id, table.payer_address).where(sql`${table.state} = 'claimed'`),
+]);
+
 /** Frozen owner review only. Execution must add atomic child exposure and recovery before consuming approval. */
 export const workflow_approvals = sqliteTable('workflow_approvals', {
   id: text('id').primaryKey(),

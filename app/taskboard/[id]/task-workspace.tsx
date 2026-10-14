@@ -120,7 +120,8 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
     if (!trade) return
     setBusy(true); setError(''); setNotice('')
     try {
-      const result = await requestJson<{ status?: string }>(`/api/trades/${trade.id}/confirm`, { method: 'POST', body: {}, apiKey })
+      const result = await requestJson<{ status?: string }>(`/api/trades/${trade.id}/confirm`, { method: 'POST',
+        body: workspace?.delivery ? { content_hash: workspace.delivery.content_hash } : {}, apiKey })
       setNotice(result.status === 'settlement_processing'
         ? 'Delivery accepted. The blockchain payout is processing and the trade will complete after network confirmation.'
         : 'Delivery accepted and settlement released.')

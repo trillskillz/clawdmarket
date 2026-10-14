@@ -4,6 +4,8 @@ import { db } from './db'
 import { private_artifacts, service_definitions, service_orders, trade_deliveries, verification_results } from './schema'
 import { serviceExecutionContract } from './service-execution-contract'
 import { verificationPolicySchema } from './verification-policy'
+import { requirementsSchema } from './delivery-validation'
+import { originalTaskPayment } from './organization-task-authorizations'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
 export class AcceptanceError extends Error {
@@ -11,6 +13,18 @@ export class AcceptanceError extends Error {
 }
 
 async function agreedAcceptance(tradeId: string, source: Source) {
+  const task = await originalTaskPayment(source, tradeId)
+  if (task) {
+    try {
+      if (task.terms.explicit_acceptance !== true) throw new Error('TASK_ACCEPTANCE_REQUIRED')
+      const requirements = requirementsSchema.parse(task.terms.workspace.requirements)
+      const policy = verificationPolicySchema.parse({ required: true,
+        methods: requirements.minimum_sources > 0 ? ['buyer_review', 'source_urls'] : ['buyer_review'],
+        ...(requirements.minimum_sources > 0 ? { minimum_sources: requirements.minimum_sources } : {}),
+        acceptance: { version: 1, mode: 'explicit_buyer' } })
+      return { policy, taskRequirements: requirements }
+    } catch { throw new AcceptanceError('ACCEPTANCE_CONTRACT_INVALID') }
+  }
   const [linked] = await source.select({ execution_contract_json: service_orders.execution_contract_json,
     verification_policy: service_definitions.verification_policy }).from(service_orders)
     .innerJoin(service_definitions, eq(service_definitions.id, service_orders.service_id))
@@ -19,13 +33,14 @@ async function agreedAcceptance(tradeId: string, source: Source) {
   if (!linked || linked.execution_contract_json === null) return null
   try {
     const policy = verificationPolicySchema.parse(JSON.parse(serviceExecutionContract(linked, linked).verification_policy))
-    return policy.acceptance ? policy : null
+    return policy.acceptance ? { policy, taskRequirements: null } : null
   } catch { throw new AcceptanceError('ACCEPTANCE_CONTRACT_INVALID') }
 }
 
 async function requiredChecks(tradeId: string, source: Source) {
-  const policy = await agreedAcceptance(tradeId, source)
-  if (!policy) return null
+  const agreement = await agreedAcceptance(tradeId, source)
+  if (!agreement) return null
+  const { policy, taskRequirements } = agreement
   const [delivery] = await source.select({ id: trade_deliveries.id, content_hash: trade_deliveries.content_hash })
     .from(trade_deliveries).where(eq(trade_deliveries.trade_id, tradeId)).limit(1)
   if (!delivery) throw new AcceptanceError('REQUIRED_VERIFICATION_MISSING')
@@ -33,14 +48,16 @@ async function requiredChecks(tradeId: string, source: Source) {
     .where(and(eq(verification_results.trade_id, tradeId), eq(verification_results.delivery_id, delivery.id), eq(verification_results.content_hash, delivery.content_hash)))
   const passed = (method: string) => rows.some((row) => row.method === method && row.status === 'passed')
   if (!policy.methods.filter((method) => method !== 'buyer_review').every(passed)) throw new AcceptanceError('REQUIRED_VERIFICATION_MISSING')
+  if (taskRequirements?.output_format === 'json' && !passed('structure')) throw new AcceptanceError('REQUIRED_VERIFICATION_MISSING')
   const [attachment] = await source.select({ id: private_artifacts.id }).from(private_artifacts).where(eq(private_artifacts.delivery_id, delivery.id)).limit(1)
   if (attachment && !passed('artifact_integrity')) throw new AcceptanceError('REQUIRED_VERIFICATION_MISSING')
-  return { policy, passed }
+  return { policy, passed, reviewedTask: taskRequirements !== null }
 }
 
 /** Run before recording the authenticated buyer's acceptance, in its transaction. */
 export async function assertReadyForBuyerAcceptance(tradeId: string, source: Source = db, expectedHash?: string) {
-  await requiredChecks(tradeId, source)
+  const checks = await requiredChecks(tradeId, source)
+  if (checks?.reviewedTask && expectedHash === undefined) throw new AcceptanceError('EXPLICIT_ACCEPTANCE_REQUIRED')
   if (expectedHash !== undefined) {
     const [delivery] = await source.select({ content_hash: trade_deliveries.content_hash }).from(trade_deliveries).where(eq(trade_deliveries.trade_id, tradeId)).limit(1)
     if (!delivery || delivery.content_hash !== expectedHash) throw new AcceptanceError('DELIVERY_CHANGED')

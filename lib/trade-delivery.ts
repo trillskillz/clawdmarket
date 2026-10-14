@@ -1,6 +1,6 @@
 import { ArtifactError, loadDeliveryArtifacts } from './private-artifacts'
 import { verifyIsolatedDelivery } from './verification-jobs'
-import { sourceEvidenceUrls } from './structured-verification'
+import { canonicalContract, sourceEvidenceUrls } from './structured-verification'
 import { serviceExecutionContract } from './service-execution-contract'
 import { createHash } from 'node:crypto'
 import { and, eq, gt, isNull } from 'drizzle-orm'
@@ -12,6 +12,7 @@ import { deliverWebhookEvent } from './webhook-delivery'
 import { advanceServiceOrder } from './service-order-state'
 import { withKeyedWriteLock } from './service-reservation-lock'
 import { evaluateVerification, outputSchemaV1, verificationPolicySchema, type VerificationResult } from './verification-policy'
+import { originalTaskPayment } from './organization-task-authorizations'
 
 export class DeliveryError extends Error {
   constructor(message: string, public status: number, public details?: unknown) { super(message) }
@@ -49,8 +50,10 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
   const prior = await replay()
   if (prior) return prior
   if (trade.status !== 'escrow_held') throw new DeliveryError('Trade is not awaiting delivery', 409)
+  const reviewedTask = await originalTaskPayment(db, tradeId)
+  if (reviewedTask && reviewedTask.terms.explicit_acceptance !== true) throw new DeliveryError('Stored task acceptance contract is unsupported', 409)
   const [workspace] = await db.select().from(task_workspaces).where(eq(task_workspaces.trade_id, tradeId)).limit(1)
-  const requirements = requirementsSchema.parse(workspace ? {
+  const requirements = requirementsSchema.parse(reviewedTask ? reviewedTask.terms.workspace.requirements : workspace ? {
     ...workspace,
     acceptance_criteria: JSON.parse(workspace.acceptance_criteria),
     required_json_keys: JSON.parse(workspace.required_json_keys),
@@ -68,7 +71,8 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
       throw new DeliveryError('An accepted, active execution attempt is required for delivery', 409)
     }
   }
-  const policy = verificationPolicySchema.safeParse(service ? JSON.parse(service.verification_policy) : { required: true, methods: ['buyer_review'] })
+  const policy = verificationPolicySchema.safeParse(service ? JSON.parse(service.verification_policy) : { required: true, methods: ['buyer_review'],
+    ...(reviewedTask ? { acceptance: { version: 1, mode: 'explicit_buyer' } } : {}) })
   if (!policy.success) throw new DeliveryError('Stored verification policy is unsupported', 409)
   if (service && policy.data.methods.includes('schema') && !outputSchemaV1.safeParse(JSON.parse(service.output_schema)).success) {
     throw new DeliveryError('Stored output schema is unsupported', 409)
@@ -128,6 +132,12 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
   if (initial.failed) { await recordFailure(initial); throw new RequiredCheckFailure(initial) }
   const encrypted = await encryptMessage(JSON.stringify({ type: 'task_complete', trade_id: tradeId, ...parsed.data, content_hash: contentHash }))
   const commit = () => db.transaction(async (tx) => {
+    const originalTask = await originalTaskPayment(tx, tradeId)
+    if (Boolean(reviewedTask) !== Boolean(originalTask) || reviewedTask && (!originalTask || originalTask.authorization.id !== reviewedTask.authorization.id
+      || originalTask.authorization.authority_hash !== reviewedTask.authorization.authority_hash
+      || canonicalContract(originalTask.terms.workspace.requirements) !== canonicalContract(requirements))) {
+      throw new DeliveryError('The original reviewed task delivery contract changed', 409)
+    }
     // Recheck immutable file bindings inside the same transaction that opens review.
     const fresh = await loadDeliveryArtifacts(tradeId, parsed.data.artifact_ids || [], trade.status, tx)
     if (fresh.some(({ row }, index) => row.sha256 !== attachments[index].row.sha256 || row.request_hash !== attachments[index].row.request_hash)) throw new ArtifactError('ARTIFACT_INTEGRITY_FAILED', 422)
@@ -145,7 +155,7 @@ async function submitTradeDeliveryUnlocked(tradeId: string, sellerId: string, in
         .returning({ id: service_execution_attempts.id })
       if (!completed) throw new DeliveryError('Execution attempt expired before delivery', 409)
     }
-    const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: linkedService?.execution_contract_json != null && policy.data.acceptance ? null : new Date(Date.now() + 86400000).toISOString() })
+    const [updated] = await tx.update(trades).set({ status: 'pending_release', auto_confirm_at: originalTask || linkedService?.execution_contract_json != null && policy.data.acceptance ? null : new Date(Date.now() + 86400000).toISOString() })
       .where(and(eq(trades.id, tradeId), eq(trades.status, 'escrow_held'))).returning()
     if (!updated) throw new DeliveryError('Trade is not awaiting delivery', 409)
     await advanceServiceOrder(tx, tradeId, 'verifying')

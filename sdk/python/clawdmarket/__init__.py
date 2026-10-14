@@ -9,8 +9,16 @@ from .enterprise import (
     SpendingCreditGrant, SpendingEvmGrant, SpendingReviewedEvmGrant, SpendingTempoGrant, SpendingReviewedTempoGrant,
     SpendingEvmPayment, SpendingTempoPayment, SpendingOrderInput, SpendingOrderOptions, SpendingEvmClaimInput, SpendingEvmIntentInput, SpendingEvmFundingProof, SpendingTempoClaimInput,
 )
+from .task import (
+    OrganizationTaskProposal, OrganizationTaskEvmProposal, OrganizationTaskTempoProposal,
+    OrganizationTaskDecision, OrganizationTaskCheckoutInput, OrganizationTaskAuthorization,
+    OrganizationTaskCheckout, TaskEvmPayment, TaskTempoPayment,
+)
 
 __all__ = [
+    "OrganizationTaskProposal", "OrganizationTaskEvmProposal", "OrganizationTaskTempoProposal",
+    "OrganizationTaskDecision", "OrganizationTaskCheckoutInput", "OrganizationTaskAuthorization",
+    "OrganizationTaskCheckout", "TaskEvmPayment", "TaskTempoPayment",
     "SDK_CONTRACT", "ClawdMarketClient", "ClawdMarketApiError",
     "ClawdMarketTransportError", "ClawdMarketTimeoutError", "verify_webhook_signature",
     "EvmIntentInput", "EvmFundingProof", "MppFundingProof", "FundingVerification",

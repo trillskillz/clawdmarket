@@ -21,6 +21,7 @@ import { getNewPaymentControl, NEW_PAYMENTS_PAUSED_MESSAGE } from '@/lib/payment
 
 import type { RequestPrincipal } from '@/lib/request-principal'
 import { assertOrganizationTempoProof } from '@/lib/organization-spending-tempo-payment'
+import { assertTaskTempoProof } from '@/lib/organization-task-tempo-payment'
 import { PurchasingError } from '@/lib/organization-purchasing-transaction'
 const json = (value: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers)
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       withReceipt = (response) => payment.withReceipt(response)
     }
     await assertOrganizationTempoProof(trade.id,txHash,payer)
+    await assertTaskTempoProof(trade.id, txHash, payer)
     // Optional read-only fee observation cannot grant send permission or replace funding proof.
     if(!verifiedReceipt)verifiedReceipt=await verifyMarketplaceMppHash(trade,txHash as `0x${string}`,payer as `0x${string}`).then(value=>value.receipt).catch(()=>null)
     const reference = txHash.toLowerCase()

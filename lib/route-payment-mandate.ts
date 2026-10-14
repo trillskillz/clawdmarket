@@ -10,7 +10,7 @@ import { getPaymentReadiness, findAcceptedToken } from './payment-config'
 import { canonicalContract } from './structured-verification'
 import { verificationPolicySchema, supportsVerification } from './verification-policy'
 import { withKeyedWriteLock } from './service-reservation-lock'
-import { money } from './service-definitions'
+import { money } from './service-order-input'
 import { routeExecutionEnabled } from './routing-feature-flags'
 
 type Source = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
