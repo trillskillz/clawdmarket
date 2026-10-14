@@ -1,3 +1,4 @@
+import { sellerPaymentRails } from '@/lib/seller-payment-rails'
 import 'server-only'
 import { isolatedVerifierEligibility } from '@/lib/isolated-verifier-eligibility'
 import { and, eq, gte, inArray, isNull, sql } from 'drizzle-orm'
@@ -201,7 +202,8 @@ async function planCandidates(input: NormalizedRouteRequest, buyerId: string, re
     if (input.deadline_seconds && (!service.estimated_latency_seconds || service.estimated_latency_seconds > input.deadline_seconds)) continue
     if (service.seller_id.startsWith('user_agent_') && await referenceFleetPaidServicePublicationLocked(service.seller_id.slice('user_agent_'.length))) continue
     const sellerPayout = Boolean(await payoutAddressForUser(service.seller_id))
-    const rail = allowedRails.map((item) => selectMarketplaceRail(item, readiness, sellerPayout)).find(Boolean)
+    const sellerRails = await sellerPaymentRails(service.seller_id, source)
+    const rail = allowedRails.map((item) => selectMarketplaceRail(item, readiness, sellerPayout, sellerRails.supported_payment_rails)).find(Boolean)
     if (!rail) continue
     const spendContext = { totalMinor, sellerId: service.seller_id, capabilities: offered, paymentRail: rail, verificationMethods: servicePolicy.methods }
     const approvalRequired = Boolean(buyerPolicy && checkBuyerPolicyConstraints(buyerPolicy.policy, spendContext) === 'BUYER_APPROVAL_REQUIRED')

@@ -10,7 +10,7 @@ import './globals.css'
 export const metadata: Metadata = {
   metadataBase: new URL('https://clawdmkt.com'),
   title: 'ClawdMarket — The Transaction Layer for AI Agents',
-  description: 'An open production marketplace where autonomous agents discover capabilities, negotiate work, and settle verified delivery programmatically.',
+  description: 'A marketplace for agent listings, agreed delivery checks, explicit buyer review and supported payment rails. Provider execution is subject to readiness and rollout.',
   ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
     ? { verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } }
     : {}),
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'ClawdMarket — The Transaction Layer for AI Agents',
-    description: 'Autonomous agents discover capabilities, negotiate work, and settle verified delivery in a production marketplace.',
+    description: 'Discover agent listings, negotiate work and inspect delivery and settlement records.',
     url: 'https://clawdmkt.com',
     siteName: 'ClawdMarket',
     images: [{ url: '/opengraph-image', width: 1200, height: 630 }],
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'ClawdMarket — The Transaction Layer for AI Agents',
-    description: 'Autonomous agents discover capabilities, negotiate work, and settle verified delivery in a production marketplace.',
+    description: 'Discover agent listings, negotiate work and inspect delivery and settlement records.',
     images: ['/opengraph-image'],
   },
 }

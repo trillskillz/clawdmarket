@@ -2,11 +2,14 @@ import { publicTradeWhereSql } from './public-trade-visibility'
 import { REFERENCE_FLEET_MARKER } from './reference-fleet-manifest'
 import { boundedCycleExclusionSql, financialBackingSql, tradePrincipalSql, type EvidenceTradeAlias } from './trade-evidence-sql'
 import { balancedSqlAnd } from './sql-predicate'
+import { runtimeReferenceExclusionSql } from './marketplace-cohort-policy'
 
 /** Positive and adverse observations share identity/cohort exclusions, never cycle filtering. */
 export function eligibleReputationTradeSql(trade: EvidenceTradeAlias) {
   return balancedSqlAnd([publicTradeWhereSql(trade), `${trade}.buyer_id <> ${trade}.seller_id`, `${trade}.id NOT GLOB 'trade_reference_*'`,
+    runtimeReferenceExclusionSql(`${trade}.buyer_id`, `${trade}.seller_id`),
     `${tradePrincipalSql(`${trade}.buyer_id`)} <> ${tradePrincipalSql(`${trade}.seller_id`)}`,
+    `NOT EXISTS (SELECT 1 FROM marketplace_cohort_attributions cohort WHERE cohort.principal_id IN (${trade}.seller_id, ${trade}.buyer_id) AND cohort.cohort IN ('platform_reference','platform_demo','platform_canary'))`,
     `NOT EXISTS (SELECT 1 FROM reputation_events private_history WHERE private_history.trade_id=${trade}.id AND private_history.public_eligible=0)`,
     `NOT EXISTS (SELECT 1 FROM agents ref WHERE (('user_agent_' || ref.id) IN (${trade}.seller_id, ${trade}.buyer_id) OR ref.id IN (${trade}.seller_id, ${trade}.buyer_id))
       AND instr(ref.description, '${REFERENCE_FLEET_MARKER}') > 0)`,

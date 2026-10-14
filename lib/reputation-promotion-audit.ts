@@ -1,3 +1,4 @@
+import { providerConcentration, rankPositionChanges } from './reputation-promotion-measurements'
 import 'server-only'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db'
@@ -36,9 +37,10 @@ export async function inspectReputationPromotion() {
     JOIN service_orders o ON o.id=r.service_order_id JOIN trades t ON t.id=o.trade_id
     WHERE ${eligibleReputationTradeSql('t')}
     ORDER BY r.created_at DESC,r.id LIMIT 26`)
+  const providers = new Map(services.map(service => [service.id, service.seller_id]))
   const comparisons: { examined: number; truncated: boolean; eligible_candidates: number;
     modes: { mode: string; changed_positions: number; suggested_candidates: number;
-      unproven_candidates: number; unproven_top_three: number }[] }[] = []
+      unproven_candidates: number; unproven_top_three: number; changed_from_price: number; changed_from_history: number; provider_concentration: ReturnType<typeof providerConcentration>; top_three_concentration: ReturnType<typeof providerConcentration> }[] }[] = []
   let invalidRequests = 0, unavailableRequests = 0, closedBuyerRequests = 0
   for (const row of routes.rows.slice(0, 25)) {
     if (!reusableServiceBuyerOrdersEnabled(String(row.buyer_id))) { closedBuyerRequests++; continue }
@@ -55,7 +57,11 @@ export async function inspectReputationPromotion() {
       if (!shadow) { unavailableRequests++; continue }
       comparisons.push({examined:plan.examined,truncated:plan.truncated,eligible_candidates:shadow.eligible_candidates,
         modes:shadow.comparisons.map(mode=>({mode:mode.mode,
-          changed_positions:mode.suggested_ids.filter((id,index)=>id!==shadow.baseline_ids[index]).length,
+          changed_positions:rankPositionChanges(mode.suggested_ids,shadow.baseline_ids),
+          changed_from_price:rankPositionChanges(mode.suggested_ids,shadow.comparisons.find(comparison=>comparison.mode==='lowest_eligible_price')?.suggested_ids??[]),
+          changed_from_history:rankPositionChanges(mode.suggested_ids,shadow.comparisons.find(comparison=>comparison.mode==='best_supported_history')?.suggested_ids??[]),
+          provider_concentration:providerConcentration(mode.suggested_ids,providers),
+          top_three_concentration:providerConcentration(mode.suggested_ids.slice(0,3),providers),
           suggested_candidates:mode.suggested_ids.length,unproven_candidates:mode.unproven_ids.length,
           unproven_top_three:mode.suggested_ids.slice(0,3).filter(id=>mode.unproven_ids.includes(id)).length}))})
     } catch { unavailableRequests++ }
@@ -89,7 +95,7 @@ export async function inspectReputationPromotion() {
       invalid_original_requests:invalidRequests,unavailable_request_replays:unavailableRequests,
       original_buyer_rollout_closed:closedBuyerRequests},
     comparisons,measurement_limits:{scope_counts_are_whole_job_observations:true,
-      established_provider_concentration:'requires_review_of_representative_scoped_candidate_sets',
+      established_provider_concentration:'observed_in_bounded_hard_gated_candidate_sets; representative_review_pending',
       exclusion_false_positive_rate:'unmeasured_without_reviewed_real_cases',
       privacy_failures:'local_regression_passes; production_review_required',
       latency:'single_read_snapshot; not_a_production_percentile',

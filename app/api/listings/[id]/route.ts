@@ -1,3 +1,5 @@
+import { sellerPaymentRails } from '@/lib/seller-payment-rails'
+import { loadMarketplaceCohorts } from '@/lib/marketplace-cohorts'
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { agents, listings, users } from '@/lib/schema';
@@ -80,6 +82,8 @@ export async function GET(
     return NextResponse.json({
       listing: {
         ...listing,
+        ...await sellerPaymentRails(listing.seller_id),
+        operator_cohort: (await loadMarketplaceCohorts([listing.seller_id])).get(listing.seller_id),
         external_payment_ready: Boolean(await payoutAddressForUser(listing.seller_id)),
       },
     });

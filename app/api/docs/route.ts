@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         get: { summary: 'List trades belonging to the caller', security: authenticated, responses: { 200: { description: 'Trades returned' }, 401: { description: 'Unauthorized' }, 500: { description: 'Could not load trades' } } },
         post: {
           summary: 'Buy one active listing',
-          description: 'Reserve one active listing using account balance, MPP on Tempo, or an enabled ERC-20 token. External rails return a checkout funding URL; work starts only after payment is verified.',
+          description: 'Reserve one active listing using a seller-supported rail. New prepaid-credit purchases require explicit seller opt-in and pay nonwithdrawable account credit; MPP and enabled ERC-20 rails settle to the configured seller wallet. Inspect supported_payment_rails on the listing or manage owner settings at /api/payments/seller-rails. External rails return a checkout funding URL; work starts only after funding confirmation. Existing orders retain their original terms.',
           security: authenticated,
           requestBody: {
             required: true,
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
             201: { description: 'Trade funded from account balance, or external-payment reservation created with checkout instructions' }, 400: { description: 'Invalid request, inactive listing, self-purchase, unsupported quantity, or partial fill' },
             401: { description: 'Authentication required' }, 402: { description: 'Insufficient account balance' },
             403: { description: 'CSRF validation failed' }, 404: { description: 'Listing or buyer wallet not found' },
-            409: { description: 'Listing already claimed, preview listing, missing seller payout address, idempotency conflict, or autonomous spend cap reached' },
+            409: { description: 'Unsupported seller payment rail (SELLER_PAYMENT_RAIL_UNSUPPORTED), listing already claimed, preview listing, missing seller payout address, idempotency conflict, or autonomous spend cap reached' },
             429: { description: 'Rate limit reached' }, 500: { description: 'Trade creation failed' },
             503: { description: 'Selected payment rail is not configured on this deployment' },
           },

@@ -1,3 +1,4 @@
+import { publicAnalyticsMetadata } from '@/lib/analytics-metadata'
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { analytics_events } from '@/lib/schema';
@@ -12,6 +13,8 @@ export const dynamic = 'force-dynamic'
 const trackEventSchema = z.object({
   event_type: z.enum([
     'view_listing',
+    'service_discovery',
+    'task_discovery',
     'trade_init',
     'search',
     'add_favorite',
@@ -20,6 +23,7 @@ const trackEventSchema = z.object({
     'copy_install_cmd',
     'hire_started',
     'trade_created',
+    'trade_funded',
     'delivery_submitted',
     'trade_completed',
     'rating_submitted',
@@ -53,7 +57,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'rate_limit_exceeded' }, { status: 429, headers: getRateLimitHeaders(limit) });
     }
     const ip_hash = hashIp(ip);
-    const metadataJson = metadata ? JSON.stringify(metadata) : null;
+    const metadataJson = metadata ? JSON.stringify(publicAnalyticsMetadata(metadata)) : null;
     if (metadataJson && metadataJson.length > 10_000) {
       return NextResponse.json({ success: false, error: 'metadata_too_large' }, { status: 413 });
     }

@@ -45,3 +45,6 @@ ci.db
 ci-*.db
 playwright-report/
 test-results/
+
+# Also ignore linked local dependency directories.
+node_modules

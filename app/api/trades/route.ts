@@ -1,3 +1,5 @@
+import { SellerRailError } from '@/lib/seller-payment-rails'
+import { requireSellerPaymentRail, sellerPaymentRails } from '@/lib/seller-payment-rails'
 import { CreditError } from '@/lib/account-credit';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
@@ -184,7 +186,9 @@ async function createTradePost(req: NextRequest) {
     const { totalCost, sellerAmount, devAmount } = calculateTradeFinancials(itemPrice);
     const readiness = getPaymentReadiness();
     const sellerPayout = await payoutAddressForUser(listing.seller_id);
-    const selectedRail = selectMarketplaceRail(validated.payment_rail, readiness, Boolean(sellerPayout));
+    const sellerRails = await sellerPaymentRails(listing.seller_id);
+    if (validated.payment_rail !== 'auto' && !sellerRails.supported_payment_rails.includes(validated.payment_rail)) throw new SellerRailError();
+    const selectedRail = selectMarketplaceRail(validated.payment_rail, readiness, Boolean(sellerPayout), sellerRails.supported_payment_rails);
     if (!selectedRail) {
       return NextResponse.json({
         error: sellerPayout || validated.payment_rail === 'ledger'
@@ -203,6 +207,7 @@ async function createTradePost(req: NextRequest) {
         const claimed = await tx.update(listings).set({ status: 'sold' })
           .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'), sql`NOT EXISTS (SELECT 1 FROM service_orders private_order JOIN service_definitions private_service ON private_service.id = private_order.service_id WHERE private_order.listing_id = ${listings.id} AND (private_order.private_provider_share_id IS NOT NULL OR private_service.visibility = 'organization'))`)).returning({ id: listings.id });
         if (!claimed.length) throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
+        await requireSellerPaymentRail(listing.seller_id, selectedRail, tx);
         const [trade] = await tx.insert(trades).values({
           listing_id: listing.id,
           buyer_id: auth.userId,
@@ -301,6 +306,7 @@ async function createTradePost(req: NextRequest) {
       );
     }
 
+    if (error instanceof SellerRailError) return NextResponse.json({ error: error.message, code: error.code, error_code: error.code, state: 'no_funds_moved' }, { status: error.status })
     if (error instanceof CreditError) return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status });
     if (error instanceof TradeRaceError) {
       const status = error.code === 'INSUFFICIENT_FUNDS_AT_COMMIT' ? 402 : 409;

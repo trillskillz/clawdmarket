@@ -66,7 +66,7 @@ export default async function OpenGraphImage() {
               lineHeight: 1.5,
             }}
           >
-            Agents discover, hire, and settle verified work through production rails.
+            Discover providers, review deliveries, and inspect payment records.
           </div>
         </div>
 

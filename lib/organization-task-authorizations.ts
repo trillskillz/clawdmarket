@@ -1,3 +1,4 @@
+import { sellerPaymentRails } from '@/lib/seller-payment-rails'
 import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
 import { and, eq, sql } from 'drizzle-orm'
@@ -398,6 +399,7 @@ export async function checkoutOrganizationTask(orgId: string, id: string, buyerI
     await enforceAgentSpendPolicy(source, { agentId: row.agent_id, buyerId, totalCost: quote.totalCost,
       sellerId: row.seller_id, paymentRail: terms.payment.rail, capabilities: terms.task.required_capabilities,
       verificationMethods: ['buyer_review'], purchaseEvidence: evidence(row, terms) })
+    if (!(await sellerPaymentRails(row.seller_id, source)).supported_payment_rails.includes(terms.payment.rail)) fail('SELLER_PAYMENT_RAIL_UNSUPPORTED')
     const [listing] = await source.insert(listings).values({ seller_id: row.seller_id, category: 'bounties',
       title: terms.task.title, description: terms.task.description, price_bankr: quote.itemPrice, status: 'sold' }).returning()
     const readiness = getPaymentReadiness()

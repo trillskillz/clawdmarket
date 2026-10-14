@@ -79,6 +79,8 @@ export const REQUIRED_DATABASE_SCHEMA = {
   workflow_dependency_bindings: ['id', 'run_id', 'node_run_id', 'target_field', 'artifact_id', 'binding_hash', 'binding_json', 'created_at'],
   workflow_artifact_grants: ['id', 'binding_id', 'node_run_id', 'order_id', 'trade_id', 'recipient_id', 'created_at', 'revoked_at'],
   workflow_receipts: ['run_id', 'contract_hash', 'content_hash', 'receipt_json', 'created_at'],
+  seller_payment_preferences: ['seller_id', 'supported_rails', 'confirmed_by', 'confirmed_at'],
+  marketplace_cohort_attributions: ['id', 'principal_id', 'cohort', 'owner_group', 'evidence_ref', 'recorded_by', 'recorded_at', 'expires_at'],
   trades: [
     'id', 'listing_id', 'buyer_id', 'seller_id', 'amount', 'fee', 'item_price', 'platform_fee',
     'total_cost', 'seller_amount', 'dev_amount', 'dev_wallet', 'fee_tx_hash', 'payout_status',

@@ -1,3 +1,4 @@
+import { requireSellerPaymentRail } from '@/lib/seller-payment-rails'
 import { reserveCredit } from './account-credit';
 import { enforceBuyerSpendPolicy } from './buyer-spend-policy';
 import { db } from './db';
@@ -52,6 +53,7 @@ export async function createLedgerTrade(
   if (!Number.isFinite(listing.price_bankr) || listing.price_bankr <= 0) throw new Error('Invalid listing price');
   const { sellerAmount, platformFee, totalCost } = calculateTradeFinancials(listing.price_bankr);
   const rail = options.rail ?? 'ledger';
+  await requireSellerPaymentRail(listing.seller_id, rail, tx);
   if (rail === 'credit' && Math.abs(sellerAmount * 100 - Math.round(sellerAmount * 100)) > 0.000001) throw new Error('Account credit requires prices in whole cents');
   if (rail === 'credit' && !options.agentId) await enforceBuyerSpendPolicy(tx, buyerId, { totalMinor: Math.round(totalCost * 100), sellerId: listing.seller_id, paymentRail: rail, ...options.spendContext });
   if (options.agentId) {

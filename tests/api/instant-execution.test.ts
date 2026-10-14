@@ -37,7 +37,7 @@ before(async () => {
 })
 after(() => { db?.$client.close(); if (directory) rmSync(directory,{ recursive:true, force:true }) })
 async function user(minor = 0) {
- const id = crypto.randomUUID(); await db.insert(schema.users).values({ id, name:id, email:`${id}@test.invalid`, password_hash:'unused', role:'human' })
+ const id = crypto.randomUUID(); await db.insert(schema.users).values({ id, name:id, email:`${id}@test.invalid`, password_hash:'unused', role:'human' }); await db.insert(schema.seller_payment_preferences).values({ seller_id: id, supported_rails: '["credit","ledger","mpp","evm"]', confirmed_by: 'disposable-test-fixture', confirmed_at: new Date().toISOString() })
  if (minor) {
   // Pre-existing confirmed-deposit fixture. Incoming chain proofs are exercised by account-credit.test.ts.
   const depositId=crypto.randomUUID(), txHash=`0x${crypto.randomUUID().replaceAll('-','').repeat(2)}`, payer=`0x${'66'.repeat(20)}`

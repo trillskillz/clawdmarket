@@ -11,6 +11,7 @@ import { calculateTradeFinancials } from '@/lib/settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
 import { effectiveTaskStatus } from '@/lib/task-lifecycle';
 import { originalTaskPayment } from '@/lib/organization-task-authorizations';
+import { sellerPaymentRails } from '@/lib/seller-payment-rails';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     bid_count: enrichedBids.length,
     viewer: { authenticated: Boolean(principal), is_poster: isPoster, is_seller: isSeller },
     workspace: {
+      seller_payment_preferences: task.assignedAgentId ? await sellerPaymentRails(activeTrade?.seller_id ?? `user_agent_${task.assignedAgentId}`) : null,
       ...(visibleReviewed ? visibleReviewed.terms.workspace.requirements : {
         output_format: workspace?.output_format ?? 'text',
         acceptance_criteria: JSON.parse(workspace?.acceptance_criteria || '[]'),

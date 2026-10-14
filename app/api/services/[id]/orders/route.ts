@@ -1,3 +1,4 @@
+import { SellerRailError } from '@/lib/seller-payment-rails'
 import { PurchasingError } from '@/lib/organization-purchasing'
 import { readBoundedJson, ArtifactError } from '@/lib/private-artifacts'
 import { CreditError } from '@/lib/account-credit'
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ order: serviceOrderDto(result.order), trade: result.trade, checkout: checkoutForTrade(result.trade), idempotent: result.idempotent }, { status: result.idempotent ? 200 : 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     if (error instanceof PurchasingError || error instanceof ArtifactError) return failure(error.code, error.message, error.status, error.status === 503)
+    if (error instanceof SellerRailError) return NextResponse.json({ error: error.message, code: error.code, error_code: error.code, state: 'no_funds_moved' }, { status: error.status })
     if (error instanceof CreditError) return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status })
     if (error instanceof ServiceOrderReservationError) return failure(error.code, error.message, error.status, error.retryable)
     if (error instanceof NewPaymentsPausedError) return failure(error.code, error.message, error.status, true)

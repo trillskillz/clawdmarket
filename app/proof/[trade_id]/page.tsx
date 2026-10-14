@@ -1,3 +1,4 @@
+import { verificationEvidenceLabels } from '@/lib/verification-evidence-labels'
 import ReputationSummary from '@/components/ReputationSummary'
 import { backedReputationTradeSql } from '@/lib/reputation-evidence-sql'
 import type { Metadata } from 'next'
@@ -120,17 +121,11 @@ export default async function ProofPage({ params }: Props) {
   const rail = getPaymentMethodLabel(trade.payment_rail, payment?.payment_rail)
 
   const capabilities = parseJson(task?.required_capabilities) || []
-  const verification = parseJson(delivery?.verification)
-  const methodPassed = (method: string) => verificationRows.some((row: any) => row.method === method && row.status === 'passed')
   const categories = {
     identity_verified: false,
     payment_verified: Boolean(payment && payment.payment_rail === trade.payment_rail) || creditReserved,
     delivery_received: Boolean(delivery),
-    structure_verified: methodPassed('schema') || methodPassed('structure') || verification?.status === 'passed',
-    semantic_verified: false,
-    buyer_accepted: methodPassed('buyer_review'),
-    deterministic_tests_passed: false,
-    provenance_verified: false,
+    ...verificationEvidenceLabels(verificationRows),
     benchmark_verified: false,
   }
 
@@ -157,13 +152,13 @@ export default async function ProofPage({ params }: Props) {
           <div className={styles.verificationBadge}><i>✓</i><span><strong>Work completed</strong><small>{receipt.settlementLabel}</small></span></div>
         </header>
 
-        <div className={styles.permanentNote}>This record reports work completion in ClawdMarket. Payment and payout evidence appear below when available. Delivery contents remain private to the participants. Structural checks do not verify factual accuracy.</div>
+        <div className={styles.permanentNote}>This record reports work completion in ClawdMarket. Payment and payout evidence appear below when available. Delivery contents remain private to the participants. Structural checks do not verify factual accuracy. Authenticated verifier reports do not establish that ClawdMarket observed remote sandbox execution. Finite tests do not replace required buyer acceptance or settlement confirmation.</div>
 
         <div className={styles.detailGrid}>
           <div className={styles.mainColumn}>
             <section className={styles.proofPanel}>
               <p className={styles.panelLabel}>01 / TASK</p>
-              <h2>{task?.title || 'Autonomous task'}</h2>
+              <h2>{task?.title || 'Recorded work'}</h2>
               {task?.description && <p className={styles.panelText}>{task.description}</p>}
               <div className={styles.tagList}>
                 {capabilities.map((capability: string) => <span key={capability}>{capability}</span>)}
@@ -189,7 +184,7 @@ export default async function ProofPage({ params }: Props) {
 
             <section className={styles.proofPanel}>
               <p className={styles.panelLabel}>04 / DELIVERY RECORD</p>
-              <div className={styles.artifact}>{delivery ? <><p className={styles.artifactSummary}>SHA-256 fingerprint of the submitted delivery</p><pre className={styles.artifactCode}>{String(delivery.content_hash)}</pre><p className={styles.panelText}>Structural checks: {categories.structure_verified ? 'passed' : 'not established'}. Submitted {fmtDate(delivery.created_at)}.</p><p className={styles.panelText}>Verification states: {Object.entries(categories).map(([name, verified]) => `${name}=${verified ? 'yes' : 'unverified'}`).join(' · ')}. Source-list checks validate URL format and uniqueness only; URLs are not fetched.</p></> : <p className={styles.artifactEmpty}>No structured delivery record exists for this historical trade.</p>}</div>
+              <div className={styles.artifact}>{delivery ? <><p className={styles.artifactSummary}>SHA-256 fingerprint of the submitted delivery</p><pre className={styles.artifactCode}>{String(delivery.content_hash)}</pre><p className={styles.panelText}>Structural checks: {categories.structure_verified ? 'passed' : 'not established'}. Submitted {fmtDate(delivery.created_at)}.</p><p className={styles.panelText}>Verification states: {Object.entries(categories).filter(([, value]) => typeof value === 'boolean').map(([name, verified]) => `${name}=${verified ? 'yes' : 'unverified'}`).join(' · ')}. Source-list checks validate URL format and uniqueness only; URLs are not fetched.</p></> : <p className={styles.artifactEmpty}>No structured delivery record exists for this historical trade.</p>}</div>
               {taskRows[0]?.id && <Link href={`/taskboard/${taskRows[0].id}`}>Open job workspace →</Link>}
             </section>
 

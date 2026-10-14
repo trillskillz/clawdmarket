@@ -9,7 +9,6 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [resetToken, setResetToken] = useState('');
   const [available, setAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -34,9 +33,6 @@ export default function ForgotPasswordPage() {
       const data = await res.json();
       if (res.ok) {
         setSuccess(true);
-        if (data.resetToken) {
-          setResetToken(data.resetToken);
-        }
       } else {
         setError(data.error || 'Something went wrong');
       }
@@ -98,17 +94,7 @@ export default function ForgotPasswordPage() {
                   If an account with that email exists, we will email a reset link.
                 </div>
 
-                {resetToken && (
-                  <div className="auth-message auth-message-info">
-                    <p>Demo mode: in production, this link would be sent via email.</p>
-                    <Link
-                      href={`/auth/reset-password?token=${resetToken}`}
-                      className="auth-primary-link auth-break-link"
-                    >
-                      Click here to reset your password
-                    </Link>
-                  </div>
-                )}
+
               </div>
             )}
 

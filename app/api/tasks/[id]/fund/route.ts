@@ -1,3 +1,5 @@
+import { SellerRailError } from '@/lib/seller-payment-rails'
+import { requireSellerPaymentRail } from '@/lib/seller-payment-rails'
 import { CreditError } from '@/lib/account-credit'
 import { NextRequest, NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
@@ -88,6 +90,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const price = workspace.agreed_price ?? bid.priceUsd
       const quote = calculateTradeFinancials(price)
       if (input.data.expected_total !== quote.totalCost) throw new FundingError('The confirmed total does not match the accepted quote', 409)
+      await requireSellerPaymentRail(sellerId, input.data.payment_rail, tx)
       const [listing] = await tx.insert(listings).values({
         seller_id: sellerId, category: 'bounties', title: task.title,
         description: task.description, price_bankr: price, status: 'active',
@@ -129,6 +132,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ ok: true, trade: result.trade, checkout: checkoutForTrade(result.trade), workspace_url: `/taskboard/${id}` }, { status: result.created ? 201 : 200 })
   } catch (error) {
     if (error instanceof PurchasingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    if (error instanceof SellerRailError) return NextResponse.json({ error: error.message, code: error.code, error_code: error.code, state: 'no_funds_moved' }, { status: error.status })
     if (error instanceof CreditError) return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status })
     if (error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     if (error instanceof FundingError) return NextResponse.json({ error: error.message }, { status: error.status })

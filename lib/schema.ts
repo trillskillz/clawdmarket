@@ -18,6 +18,24 @@ export const users = sqliteTable('users', {
     .$defaultFn(() => new Date()),
 });
 
+export const seller_payment_preferences = sqliteTable('seller_payment_preferences', {
+  seller_id: text('seller_id').primaryKey(),
+  supported_rails: text('supported_rails').notNull(),
+  confirmed_by: text('confirmed_by').notNull(),
+  confirmed_at: text('confirmed_at').notNull(),
+});
+
+export const marketplace_cohort_attributions = sqliteTable('marketplace_cohort_attributions', {
+  id: text('id').primaryKey(),
+  principal_id: text('principal_id').notNull(),
+  cohort: text('cohort', { enum: ['platform_reference', 'platform_demo', 'platform_canary', 'ownership_unverified', 'independence_verified'] }).notNull(),
+  owner_group: text('owner_group'),
+  evidence_ref: text('evidence_ref').notNull(),
+  recorded_by: text('recorded_by').notNull(),
+  recorded_at: text('recorded_at').notNull(),
+  expires_at: text('expires_at'),
+}, table => [index('marketplace_cohort_principal_time_idx').on(table.principal_id, table.recorded_at)]);
+
 export const agents = sqliteTable('agents', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),

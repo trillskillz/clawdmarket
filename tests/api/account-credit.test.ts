@@ -64,7 +64,7 @@ before(async () => {
   complete = (await import('@/lib/trade-escrow')).finalizeTradeCompletion; dispute = (await import('@/lib/trade-dispute')).finalizeTradeDispute
 })
 after(async () => { db?.$client.close(); if (server) await new Promise<void>(resolve => server.close(() => resolve())); if (directory) rmSync(directory, { recursive: true, force: true }) })
-async function user() { const id = crypto.randomUUID(); await db.insert(schema.users).values({ id, name: id, email: `${id}@test.invalid`, password_hash: 'unused', role: 'human' }); return id }
+async function user() { const id = crypto.randomUUID(); await db.insert(schema.users).values({ id, name: id, email: `${id}@test.invalid`, password_hash: 'unused', role: 'human' }); await db.insert(schema.seller_payment_preferences).values({ seller_id: id, supported_rails: '["credit","ledger","mpp","evm"]', confirmed_by: 'disposable-test-fixture', confirmed_at: new Date().toISOString() }); return id }
 function request(path: string, userId: string, method = 'GET', body?: unknown) { return new NextRequest(`http://localhost${path}`, { method, headers: { 'Content-Type': 'application/json', authorization: `Bearer ${jwt({ userId, email: `${userId}@test.invalid`, role: 'human' })}` }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }) }
 async function intent(userId: string, minor = 100) {
   const response = await deposits.POST(request('/api/wallet/deposits', userId, 'POST', { amount_minor: minor, payer: payer.address, client_reference: crypto.randomUUID() }))
@@ -340,6 +340,8 @@ test('historical balances cannot buy; backed credit purchases reserve cents and 
   const response = await buyCredit(buyer, item, reference); assert.equal(response.status, 201, JSON.stringify(await response.clone().json()))
   const trade = (await response.json()).trade; assert.equal(trade.payment_rail, 'credit'); assert.equal(trade.status, 'escrow_held')
   assert.deepEqual(await credit.creditBalance(buyer), { available_minor: 0, escrow_minor: 100, currency: 'USD', rail: 'credit' }); assert.equal(await liability(), total)
+  // Changed preferences cannot strand an already-funded original obligation.
+  await db.delete(schema.seller_payment_preferences).where(eq(schema.seller_payment_preferences.seller_id, seller))
   assert.equal((await buyCredit(buyer, item, reference)).status, 200)
   const held = (await wallet(request('/api/wallet', buyer))).json(); assert.equal((await held).available, 0)
   const [ready] = await db.update(schema.trades).set({ status: 'pending_release' }).where(eq(schema.trades.id, trade.id)).returning()
@@ -436,6 +438,7 @@ test('credit-funded reusable orders dispatch immediately, replay without new exp
 test('task credit funding accepts a seller without external payout setup and enforces the exact quote', async () => {
   const buyer = await user(), agentId = crypto.randomUUID(), taskId = `task_${crypto.randomUUID()}`, bidId = `bid_${crypto.randomUUID()}`
   await db.insert(schema.agents).values({ id: agentId, name: 'Task credit seller', description: 'Task fixture', capabilities: '["code-review"]', endpoint: 'https://example.invalid', owner_address: '', api_key: 'unused', status: 'active' })
+  await db.insert(schema.seller_payment_preferences).values({ seller_id: `user_agent_${agentId}`, supported_rails: '["credit"]', confirmed_by: 'disposable-test-fixture', confirmed_at: new Date().toISOString() })
   await db.insert(schema.tasks).values({ id: taskId, posterAgentId: buyer, title: 'Credit-funded task', description: 'Review a code change', budgetUsd: 1, requiredCapabilities: '["code-review"]' })
   await db.insert(schema.bids).values({ id: bidId, taskId, bidderAgentId: agentId, priceUsd: 1 })
   const accept = (await import('@/app/api/tasks/[id]/accept/[bid_id]/route')).POST

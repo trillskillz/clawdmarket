@@ -1,3 +1,4 @@
+import { requireSellerPaymentRail, sellerPaymentRails, SellerRailError } from '@/lib/seller-payment-rails'
 import { routeAdmissionFailure } from './route-control'
 import 'server-only'
 import { isolatedVerifierEligibility } from '@/lib/isolated-verifier-eligibility'
@@ -165,7 +166,9 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     if (request.max_total !== undefined && totalMinor > request.max_total) throw new ServiceOrderReservationError('BUDGET_EXCEEDED', 'Current total exceeds max_total')
     const readiness = getPaymentReadiness()
     const sellerPayout = await readWithLocalContentionRecovery(source => payoutAddressForUser(service.seller_id, source))
-    const rail = selectMarketplaceRail(request.payment_rail, readiness, Boolean(sellerPayout))
+    const sellerRails = await readWithLocalContentionRecovery(source => sellerPaymentRails(service.seller_id, source))
+    if (request.payment_rail !== 'auto' && !sellerRails.supported_payment_rails.includes(request.payment_rail)) throw new SellerRailError()
+    const rail = selectMarketplaceRail(request.payment_rail, readiness, Boolean(sellerPayout), sellerRails.supported_payment_rails)
     if (!rail || externalOnly && ['ledger', 'credit'].includes(rail)) throw new ServiceOrderReservationError(sellerPayout ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED', 'No eligible external payment rail for this seller')
     const internal = rail === 'ledger' || rail === 'credit'
     const feeRecipient = internal && !args.organizationSpendingEvidence ? await ensureAdminFeeRecipient() : null
@@ -182,6 +185,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
       }
     } : args.mandateId || request.purchasing_approval_id || request.provider_share_id || args.organizationSpendingEvidence ? purchasingTransaction : db.transaction.bind(db)
     const reserveOnce = () => transaction(async (tx) => {
+      await requireSellerPaymentRail(service.seller_id, rail, tx)
       const now = new Date()
       const privateShare = await resolvePrivateShare(tx)
       if (service.visibility !== 'public' && !privateShare) throw new ServiceOrderReservationError('PRIVATE_SERVICE_NOT_FOUND','Private route requires independently reviewed consent',404)
@@ -315,6 +319,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
   } catch (error) {
     const raced = await replay(args)
     if (raced) return raced
+    if (error instanceof SellerRailError) throw new ServiceOrderReservationError(error.code, error.message, error.status)
     if (error instanceof PurchasingError && error.code === 'PURCHASING_STORAGE_BUSY') throw new ServiceOrderReservationError('SERVICE_RESERVATION_UNAVAILABLE', 'Retry the original order reference after storage contention', 503, true)
     if (referenceConflict(error)) throw new ServiceOrderReservationError('IDEMPOTENCY_CONFLICT', 'Reference belongs to another trade')
     throw error

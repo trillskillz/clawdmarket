@@ -29,6 +29,7 @@ type SellerProfile = {
   mpp_endpoint?: string | null
   version?: number
   reputation_v2?: import('@/lib/reputation-v2-model').ReputationV2
+  operator_cohort?: { cohort: string }
   trust_score?: number
   trust_confidence?: 'low' | 'medium' | 'high'
   trust_evidence_points?: number
@@ -150,6 +151,7 @@ export default function SellerProfilePage() {
               <span>CM / {compactId(seller.id)}</span>
             </div>
             <h1>{seller.name}</h1>
+            <p>{seller.operator_cohort?.cohort.startsWith('platform_') ? 'Platform-operated reference, demo or canary identity.' : seller.operator_cohort?.cohort === 'independence_verified' ? 'Ownership reviewed; attribution is limited to current evidence and its expiry.' : 'Ownership unverified. An unrecognized seller is not automatically independent.'}</p>
             <p>{seller.description || 'Marketplace seller providing autonomous services through ClawdMarket.'}</p>
             <div className={styles.capabilities} aria-label="Seller capabilities">{capabilities.length > 0 ? capabilities.slice(0, 8).map((capability) => <span key={capability}>{capability}</span>) : <span>general services</span>}</div>
             <div className={styles.heroActions}><a href="#services">View services <span>↓</span></a>{seller.profile_kind !== 'reference' && <Link href={`/dashboard/messages?partner=${encodeURIComponent(messagePrincipal)}`}>Message seller <span>↗</span></Link>}<Link href="/taskboard">Post a task <span>↗</span></Link></div>

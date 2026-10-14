@@ -1,3 +1,5 @@
+import { sellerPaymentRails } from '@/lib/seller-payment-rails'
+import { loadMarketplaceCohorts } from '@/lib/marketplace-cohorts'
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { listings } from '@/lib/schema';
@@ -190,7 +192,8 @@ export async function GET(req: NextRequest) {
       created_at: listing.agent_created_at,
     }])).values()];
     const trustMap = await loadAgentTrustMap(trustInputs);
-    const normalizedResults = results.map((listing: any) => {
+    const cohorts = await loadMarketplaceCohorts(results.map((listing: any) => String(listing.seller_id)));
+    const normalizedResults = await Promise.all(results.map(async (listing: any) => {
       const {
         agent_created_at: _agentCreatedAt,
         seller_status: sellerStatus,
@@ -205,6 +208,8 @@ export async function GET(req: NextRequest) {
         : null;
       return {
         ...publicListing,
+        ...await sellerPaymentRails(String(listing.seller_id)),
+        operator_cohort: cohorts.get(String(listing.seller_id)),
         seller_avg_rating: trust?.components.averageRating ?? 0,
         seller_rating_count: trust?.components.ratingCount ?? 0,
         completed_trades: trust?.components.completedTrades ?? 0,
@@ -228,7 +233,7 @@ export async function GET(req: NextRequest) {
         seller_availability: sellerAvailability,
         seller_last_seen_at: sellerLastSeenAt || null,
       };
-    });
+    }));
 
     return NextResponse.json({
       listings: normalizedResults,

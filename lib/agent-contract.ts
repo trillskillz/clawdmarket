@@ -1,3 +1,4 @@
+import { AGENT_ONLINE_WINDOW_SECONDS } from './agent-presence'
 import { CAPABILITIES } from '@/lib/capabilities'
 import { WEBHOOK_EVENT_TYPES } from '@/lib/webhook-events'
 import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
@@ -12,7 +13,7 @@ import { REPUTATION_V2_POLICY } from './reputation-v2-policy'
 import { REPUTATION_RANKING_POLICY } from './reputation-ranking'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.117'
+export const AGENT_CONTRACT_VERSION = '1.118'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -1216,6 +1217,8 @@ export const AGENT_ACTIONS: AgentAction[] = [
   { id: 'create_account_deposit', label: 'Create USDC account deposit', description: 'Requires payments:write or authenticated account plus CSRF. Persist a stable reference first. Only created=true grants one exact Base USDC transfer; never send again on replay or unknown outcome. Deposit credit is prepaid and not withdrawable.', method: 'POST', endpoint: '/api/wallet/deposits', auth: 'agent_api_key', payment: null, required: ['amount_minor', 'payer', 'client_reference'], body_schema: { type: 'object', additionalProperties: false, required: ['amount_minor', 'payer', 'client_reference'], properties: { amount_minor: { type: 'integer', minimum: 1, maximum: 100000 }, payer: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' }, client_reference: { type: 'string', minLength: 8, maxLength: 160 } } } },
   { id: 'confirm_account_deposit', label: 'Verify original deposit transfer', description: 'Requires payments:write. Sign the deposit-specific message binding account/intent/chain/token/treasury/amount/original hash. Verify exact finalized canonical transfer once. HTTP 202 means confirming, never a replacement transfer. Recovery works after expiry and while new payments are paused.', method: 'PUT', endpoint: '/api/wallet/deposits', auth: 'agent_api_key', payment: null, required: ['id', 'tx_hash', 'signature'], body_schema: { type: 'object', additionalProperties: false, required: ['id', 'tx_hash', 'signature'], properties: { id: { type: 'string' }, tx_hash: { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }, signature: { type: 'string', pattern: '^0x[a-fA-F0-9]{130}$' } } } },
   { id: 'fund_owned_agent_credit', label: 'Fund owned agent account credit', description: 'Current owner account transfers available backed credit to an active owned agent. Stable reference, immutable amount/destination, atomic debit/credit. Agent credentials cannot debit their owner account.', method: 'POST', endpoint: '/api/wallet/transfers', auth: 'owner-account', payment: null, required: ['agent_id', 'amount_minor', 'client_reference'], body_schema: { type: 'object', additionalProperties: false, required: ['agent_id', 'amount_minor', 'client_reference'], properties: { agent_id: { type: 'string', maxLength: 200 }, amount_minor: { type: 'integer', minimum: 1, maximum: 100000 }, client_reference: { type: 'string', minLength: 8, maxLength: 160 } } } },
+  { id: 'get_seller_payment_rails', label: 'Inspect seller payment rails', description: 'Read explicit seller rail preferences. Unconfirmed legacy settings require owner migration review; listing prose never becomes binding machine policy.', method: 'GET', endpoint: '/api/payments/seller-rails', auth: 'agent_api_key', payment: null, optional: ['agent_id'] },
+  { id: 'set_seller_payment_rails', label: 'Confirm seller payment rails', description: 'Current account or owned agent confirms rails for new orders only. Credit pays nonwithdrawable prepaid account credit; mpp/evm settle externally. Existing orders retain original terms. Requires payments:write or account plus CSRF.', method: 'PUT', endpoint: '/api/payments/seller-rails', auth: 'agent_api_key', payment: null, required: ['supported_payment_rails'], optional: ['agent_id'], body_schema: { type: 'object', additionalProperties: false, required: ['supported_payment_rails'], properties: { agent_id: { type: 'string', maxLength: 200 }, supported_payment_rails: { type: 'array', maxItems: 4, uniqueItems: true, items: { type: 'string', enum: ['credit', 'ledger', 'mpp', 'evm'] } } } } },
   {
     id: 'set_payout_address', label: 'Set payout wallet', description: 'Save the EVM address that receives seller payouts. Required before a seller can accept MPP or ERC-20 funded work.',
     method: 'PUT', endpoint: '/api/payments/payout-address', auth: 'agent_api_key', payment: null, required: ['address'],
@@ -1372,7 +1375,7 @@ export const AGENT_MCP_TOOLS = [
   },
   {
     name: 'get_marketplace_stats',
-    description: 'Get live marketplace statistics',
+    description: 'Get recorded marketplace statistics with cohort attribution, precise listing/service inventory, independent economic evidence and freshness. Legacy services_listed/online count listing records; tasks_routed means assigned tasks. Unavailable statistics return HTTP 503, never invented zero activity.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -1492,6 +1495,11 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
     version: AGENT_CONTRACT_VERSION,
     client_recovery: CLIENT_RECOVERY_RULES,
     marketplace_reputation: REPUTATION_EVIDENCE_POLICY,
+    marketplace_metrics: { cohorts: 'operator_attribution_records_and_operator_reference_manifest; unknown_is_not_independent',
+      inventory: ['listings_total', 'listings_active', 'listings_external_payment_ready', 'executable_reusable_services'],
+      legacy_aliases: { services_listed: 'listings_total', services_online: 'listings_active', tasks_routed: 'tasks_assigned', registered_agent_count: 'active_public_registered_agent_count' },
+      independent_economics: 'current reviewed distinct owner groups plus accepted backed settlement; separate from total recorded volume',
+      upstream_failure: 'HTTP 503 unavailable; no invented zero counts', recent_online_seconds: AGENT_ONLINE_WINDOW_SECONDS },
     reputation_v2: {aggregation:REPUTATION_V2_POLICY,ranking:REPUTATION_RANKING_POLICY,contract_version:AGENT_CONTRACT_VERSION,default_ranking_changed:true,legacy_fields:"compatibility_only_uncalibrated_heuristic",public_review_bodies:false},
     isolated_verification: { adapters: VERIFIER_ADAPTERS, execution_host: 'buyer_approved_external_verifier',
       python_entrypoint: 'run(*args)', python_dependencies: 'standard_library_only', python_output: 'finite_json',
@@ -1587,6 +1595,10 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
   const tradeIdParameter = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
 
   return {
+    '/api/stats': { get: { operationId: 'get_marketplace_statistics', summary: 'Recorded public inventory, operator cohorts and separately qualified economic evidence', responses: {
+      200: { description: 'Fresh aggregate evidence. services_listed and services_online are legacy listing-count aliases; tasks_routed counts assignment, not autonomous routing.', content: { 'application/json': { schema: { type: 'object', required: ['data_status', 'observed_at', 'cohort_counts', 'listings_total', 'listings_active', 'listings_external_payment_ready', 'executable_reusable_services', 'economic_adoption'], properties: { data_status: { const: 'available' }, observed_at: { type: 'string', format: 'date-time' }, network_profile_count: { type: 'integer', minimum: 0 }, public_registered_agent_count: { type: 'integer', minimum: 0 }, active_public_registered_agent_count: { type: 'integer', minimum: 0 }, cohort_counts: { type: 'object', description: 'platform_reference/demo/canary, ownership_unverified and independence_verified: public registered and recently_online counts from authoritative operator metadata, never names' }, listings_total: { type: 'integer', minimum: 0 }, listings_active: { type: 'integer', minimum: 0 }, listings_external_payment_ready: { type: 'integer', minimum: 0, description: 'Active listing seller has a syntactically valid external payout address; this does not establish delivery, capacity or currently enabled checkout' }, executable_reusable_services: { type: 'integer', minimum: 0, description: 'Public reusable definitions with supported contract, capacity, seller rails and generally enabled rollout' }, economic_adoption: { type: 'object', description: 'Accepted backed work with currently reviewed ownership in distinct groups; controlled and unknown ownership excluded; raw volume remains separate' } } } } } },
+      503: { description: 'Statistics unavailable. observed_at is null and counts are omitted, never replaced with zero.', content: { 'application/json': { schema: { type: 'object', properties: { data_status: { const: 'unavailable' }, observed_at: { type: 'null' }, requested_at: { type: 'string', format: 'date-time' } } } } } },
+    } } },
     '/api/benchmark-definitions': { get: { operationId: 'list_benchmark_definitions', summary: 'Immutable benchmark version metadata without private cases',
       parameters: [{ name: 'capability', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } }],
       responses: { 200: { description: 'Bounded definitions, total and current grader availability; no calibrated quality' }, 400: { description: 'Invalid pagination or non-leaf capability' } } } },
@@ -2387,6 +2399,10 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
       put: { operationId: 'confirm_account_deposit', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('confirm_account_deposit').body_schema } } }, responses: { 200: { description: 'Deposit credited exactly once' }, 202: { description: 'Original transfer confirming; recover same hash' }, 403: { description: 'Payer, scope or CSRF rejected' }, 409: { description: 'Proof or hash conflict' } } },
     },
     '/api/wallet/transfers': { post: { operationId: 'fund_owned_agent_credit', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('fund_owned_agent_credit').body_schema } } }, responses: { 200: { description: 'Agent credit funded or original transfer recovered' }, 402: { description: 'Insufficient deposited credit' }, 403: { description: 'Current owner account required' }, 409: { description: 'Reference conflict' } } } },
+    '/api/payments/seller-rails': {
+      get: { operationId: 'get_seller_payment_rails', summary: 'Inspect supported seller rails and nonwithdrawable credit disclosure', security: authenticated, parameters: [{ name: 'agent_id', in: 'query', required: false, schema: { type: 'string', minLength: 1, maxLength: 200 }, description: 'Omit for caller; another agent requires current linked account ownership.' }], responses: { 200: { description: 'Explicit supported_payment_rails, confirmation and migration-review state; credit_redeemable=false' }, 403: { description: 'Caller not authorized for seller' } } },
+      put: { operationId: 'set_seller_payment_rails', summary: 'Confirm supported rails for new seller orders', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('set_seller_payment_rails').body_schema } } }, responses: { 200: { description: 'Seller preferences saved; existing orders retain original terms' }, 400: { description: 'Invalid rails' }, 403: { description: 'Owner, credential scope or CSRF rejected' } } },
+    },
     '/api/payments/payout-address': {
       get: { operationId: 'get_payout_address', summary: 'Read the caller payout wallet', security: authenticated, responses: { 200: { description: 'Payout address returned' }, 401: { description: 'Authentication required' } } },
       put: { operationId: 'set_payout_address', summary: 'Set the caller payout wallet', security: authenticated, requestBody: { required: true, content: { 'application/json': { schema: getAction('set_payout_address').body_schema } } }, responses: { 200: { description: 'Payout address saved' }, 400: { description: 'Invalid EVM address' }, 401: { description: 'Authentication required' }, 403: { description: 'CSRF validation failed' } } },

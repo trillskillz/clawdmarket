@@ -103,7 +103,7 @@ export function projectReputation(observations: ReputationObservation[], scope: 
     freshness:{dated_terminal_observations:terminal.filter(o=>Number.isFinite(o.at)&&o.at<=now).length,unknown_date_observations:terminal.filter(o=>!Number.isFinite(o.at)||o.at>now).length},
     verification,first_pass:{jobs_with_failed_check:facts.filter(o=>o.firstPassFailure).length,interpretation:'operational_check; not_a_second_terminal_failure'},
     incidents:{serious_unremediated:facts.filter(o=>o.seriousIncident&&(o.incident==='upheld'||o.incident==='appealed')).length,remediation_policy:policy.serious_incident_expiry,pending:facts.filter(o=>o.openCase).length,adjudicated:facts.filter(o=>o.incident==='upheld'||o.incident==='appealed').length,appealed:facts.filter(o=>o.incident==='appealed').length,overturned:facts.filter(o=>o.incident==='overturned').length},
-    value_experience:bands,limitations:{calibrated:false,buyer_independence:'not_verified',semantic_quality:'unmeasured',capability_attribution:policy.scope_attribution,private_work:policy.private_work},
+    value_experience:bands,limitations:{calibrated:false,representative_evidence_review:'pending',model_version:policy.aggregation_policy_version,buyer_independence:'not_verified',semantic_quality:'unmeasured',capability_attribution:policy.scope_attribution,private_work:policy.private_work},
   }
 }
 export type ReputationV2=ReturnType<typeof projectReputation>

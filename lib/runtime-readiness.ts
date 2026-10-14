@@ -3,7 +3,7 @@ import { inspectDatabaseSchema, type DatabaseReadiness } from '@/lib/database-re
 import { logger } from '@/lib/logger'
 import { getPaymentReadiness } from '@/lib/payment-config'
 import { inspectPaymentRpcHealth, type RpcProbe } from '@/lib/payment-rpc-health'
-import { isPasswordResetEmailConfigured } from '@/lib/password-reset-email'
+import { passwordResetEmailReadiness } from '@/lib/password-reset-email'
 
 type RuntimeEnvironment = Record<string, string | undefined>
 
@@ -56,7 +56,7 @@ export type RuntimeReadiness = {
   configuration: RuntimeConfigurationReadiness
   database: DatabaseReadinessSummary
   payments: PaymentReadinessSummary
-  password_reset_email: { configured: boolean }
+  password_reset_email: ReturnType<typeof passwordResetEmailReadiness>
 }
 
 const READY_CACHE_MS = 30_000
@@ -140,7 +140,7 @@ async function computeRuntimeReadiness(): Promise<RuntimeReadiness> {
     configuration,
     database,
     payments,
-    password_reset_email: { configured: isPasswordResetEmailConfigured() },
+    password_reset_email: passwordResetEmailReadiness(),
   }
 }
 

@@ -1,3 +1,4 @@
+import { requireSellerPaymentRail, SellerRailError } from '@/lib/seller-payment-rails'
 import { NextRequest, NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
@@ -122,6 +123,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
         await attributeOrganizationContract(tx, auth.agentId, contract.id, Math.round(contract.escrow_amount * 100), now);
 
+        await requireSellerPaymentRail(contract.seller_id, 'credit', tx);
         await lockContractFunds(tx, {
           contractId: contract.id,
           buyerId: contract.buyer_id,
@@ -202,7 +204,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const [updated] = await db.select().from(contracts).where(eq(contracts.id, contract.id)).limit(1);
     return NextResponse.json({ contract: updated });
   } catch (error: any) {
-    if (error instanceof CreditError || error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    if (error instanceof CreditError || error instanceof NewPaymentsPausedError || error instanceof SellerRailError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AgentSpendPolicyError) return NextResponse.json({ error: error.message, code: error.code, spending_policy: error.policy }, { status: 409 });
     if (error instanceof BuyerSpendPolicyError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error?.issues || error?.errors) {
