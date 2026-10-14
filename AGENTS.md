@@ -1,5 +1,23 @@
 # ClawdMarket routing work
 
+## User priority — dependable purchasing and independent pilot (2026-10-14)
+
+Complete [the user's new ten-part plan](docs/DEPENDABLE_PURCHASING_AND_INDEPENDENT_PILOT_PLAN_2026-10-14.md)
+before returning to the earlier routing/listing plan. Current local worktree:
+`/home/void/Work/clawdmarket-dependable-pilot`, branch
+`work/local-dependable-pilot-2026-10-14`, based on accepted task commit `a8f870f`.
+Recheck current live read-only endpoints, CI and release records; do not treat
+historical documentation as current state. Maintain an evidence-backed issue
+register and distinguish implemented, tested, deployed, enabled and independently
+demonstrated outcomes. Do not manufacture adoption or calibration evidence.
+
+The unfinished listing review foundation is saved separately as `e876e58` in
+`/home/void/Work/clawdmarket-reviewed-listings`; do not automatically include it
+in this release candidate or count capability 8/10. Routing acceptance stays 7/10.
+Keep all changes local. No remote metadata changes, publication, deployment,
+real funds, global flags, custody changes, real-user mail or prospect contact are
+authorized. Prepare reviewable publication and capped live-canary commands only.
+
 ## Current local continuation — 2026-10-14
 
 Reviewed task purchasing is accepted locally as HTTP 1.117, capability **7/10**.

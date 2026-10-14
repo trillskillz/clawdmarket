@@ -1,3 +1,11 @@
+## Superseding user priority — dependable product and paid pilot (2026-10-14)
+
+Complete [the new plan](docs/DEPENDABLE_PURCHASING_AND_INDEPENDENT_PILOT_PLAN_2026-10-14.md)
+in `/home/void/Work/clawdmarket-dependable-pilot` before resuming this routing plan.
+Accepted task checkpoint `a8f870f` remains capability 7/10; unfinished listing
+foundation `e876e58` is parked separately and is not part of this release candidate.
+Current publication/no-spending policy remains in force.
+
 ## Current local acceptance and next dependency — 2026-10-14
 
 Reviewed task purchasing is accepted locally as HTTP **1.117**, capability
