@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq, or, sql } from 'drizzle-orm';
+import { eq, or, sql, getTableColumns } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { contracts } from '@/lib/schema';
+import { contracts, organization_contract_authorizations } from '@/lib/schema';
 import { createContractSchema } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
@@ -51,15 +51,16 @@ export async function GET(req: NextRequest) {
     .where(participantWhere);
   const total = Number(countRow?.count || 0);
   const rows = await db
-    .select()
+    .select({ ...getTableColumns(contracts), review_id: organization_contract_authorizations.id })
     .from(contracts)
+    .leftJoin(organization_contract_authorizations, eq(organization_contract_authorizations.contract_id, contracts.id))
     .where(participantWhere)
     .orderBy(sql`${contracts.created_at} desc`)
     .limit(limit)
     .offset((page - 1) * limit);
 
   return NextResponse.json({
-    contracts: rows,
+    contracts: rows.map(({ review_id, ...contract }) => ({ ...contract, reviewed_contract: review_id !== null })),
     page,
     limit,
     total,

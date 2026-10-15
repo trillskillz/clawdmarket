@@ -1,3 +1,12 @@
+## Local contract dashboard follow-up — 2026-10-15
+
+The ordinary contract dashboard lacked the prepaid-credit disclosure. The current
+local continuation now shows nonwithdrawability, seller credit and original fee/
+principal treatment before funding/start, exposes unavailable readiness accurately,
+and uses exact companion-record metadata to omit incompatible legacy actions for
+reviewed agreements. Actual API/CLI and14 targeted browser checks pass. This is
+local only, not a deployed remedy; see the current contract purchasing audit.
+
 ## Read-only production baseline refreshed — 2026-10-15 16:50 UTC
 
 Production still serves HTTP1.116/main96a017b. Public counts are now90 profiles,

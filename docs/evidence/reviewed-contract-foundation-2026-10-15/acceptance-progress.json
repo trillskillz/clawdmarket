@@ -1,5 +1,5 @@
 {
-  "stage": "Actual scoped-funding economic terminal outcomes verified; dashboard disclosure/participant UI/shared reservation/full release work remains",
+  "stage": "Dashboard contract credit disclosure/reviewed-record UI restrictions verified; shared reservation/participant UI/full release work remains",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 79,
@@ -51,7 +51,9 @@
     "actual_fulfillment_cli_kill_restart_recovery": true,
     "private_organization_contract_review_ui": true,
     "actual_scoped_funding_admin_redo_partial_outcomes": true,
-    "actual_scoped_funding_frozen_expiry_and_no_automatic_acceptance": true
+    "actual_scoped_funding_frozen_expiry_and_no_automatic_acceptance": true,
+    "contract_dashboard_credit_disclosures": true,
+    "authoritative_companion_metadata_and_dashboard_restrictions": true
   },
   "records": {
     "original_use": {
@@ -405,6 +407,10 @@
     "scoped-economic-outcomes": {
       "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/scoped-economic-outcomes.json",
       "source_manifest_sha256": "d97af9e148517a37fe97e140d980d3ad8a69ecb3838dcd3f70cf0b481e7aceb0"
+    },
+    "dashboard-disclosure": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/dashboard-disclosure.json",
+      "source_manifest_sha256": "16c340110e20cffbd07a73a18dea1bfbbd08e6d1ce9b637e1743161608d6e9a9"
     }
   },
   "compatibility_cases": {

@@ -72,9 +72,20 @@ test('private contract review freezes original ordered milestones, credit fee/re
 test('every contract companion state blocks generic funding and exact proposal/decision replay never reopens revocation', async () => {
   const f = await fixture(), a = await propose(f), path = `${f.prefix}/${a.id}`, saved = decision(a)
   const fund = (await import('@/app/api/contracts/[id]/route')).PATCH
+  const ordinary = await (await import('@/app/api/contracts/route')).POST(request('/api/contracts', f.buyer, 'POST', {
+    client_reference: crypto.randomUUID(), seller_id: f.seller, milestones: [{ title: 'Separate ordinary agreement', amount: .2 }],
+  }))
+  assert.equal(ordinary.status, 201); const ordinaryId = (await ordinary.json()).contract.id
   for (const state of ['pending', 'approved', 'revoked']) {
     if (state === 'approved') assert.equal((await approval.POST(request(path + '/approval', f.reviewer, 'POST', saved), context(f.org, a.id))).status, 201)
     if (state === 'revoked') assert.equal((await item.DELETE(request(path, f.owner, 'DELETE'), context(f.org, a.id))).status, 200)
+    const listed = await (await (await import('@/app/api/contracts/route')).GET(request('/api/contracts', f.buyer))).json()
+    assert.equal(listed.contracts.find((c: any) => c.id === f.original.contract.id)?.reviewed_contract, true)
+    assert.equal(listed.contracts.find((c: any) => c.id === ordinaryId)?.reviewed_contract, false, 'review presence belongs only to its exact original agreement')
+    const participant = await (await import('@/app/api/contracts/[id]/route')).GET(request(`/api/contracts/${f.original.contract.id}`, f.seller), { params: Promise.resolve({ id: f.original.contract.id }) })
+    assert.equal(participant.status, 200); assert.equal(participant.headers.get('Cache-Control'), 'private, no-store')
+    const privateView = await participant.json()
+    assert.equal(privateView.contract.reviewed_contract, true); assert.deepEqual(privateView.viewer, { is_buyer: false, is_seller: true })
     const response = await fund(request(`/api/contracts/${f.original.contract.id}`, f.buyer, 'PATCH', { action: 'fund' }), { params: Promise.resolve({ id: f.original.contract.id }) })
     assert.equal(response.status, 409); assert.equal((await response.json()).code, 'CONTRACT_REVIEWED_FUNDING_REQUIRED')
   }
@@ -84,6 +95,17 @@ test('every contract companion state blocks generic funding and exact proposal/d
   assert.equal(approvalReplay.status, 200); assert.equal((await approvalReplay.json()).authorization.state, 'revoked')
   assert.equal((await collection.POST(request(f.prefix, f.owner, 'POST', { ...f.input, client_reference: crypto.randomUUID() }), context(f.org))).status, 409)
   assert.equal((await db.select().from(schema.contracts).where(eq(schema.contracts.id, f.original.contract.id)))[0].state, 'DRAFT')
+})
+
+test('ordinary participant inventory remains explicitly unreviewed without inferring an organizational grant', async () => {
+  const f = await fixture()
+  const api = await import('@/app/api/contracts/route')
+  const listed = await (await api.GET(request('/api/contracts', f.buyer))).json()
+  assert.equal(listed.contracts.find((c: any) => c.id === f.original.contract.id)?.reviewed_contract, false)
+  const detail = await (await import('@/app/api/contracts/[id]/route')).GET(request(`/api/contracts/${f.original.contract.id}`, f.buyer), { params: Promise.resolve({ id: f.original.contract.id }) })
+  assert.equal(detail.status, 200); const body = await detail.json()
+  assert.equal(body.contract.reviewed_contract, false); assert.deepEqual(body.viewer, { is_buyer: true, is_seller: false })
+  assert.equal((await db.select().from(schema.organization_contract_authorizations).where(eq(schema.organization_contract_authorizations.contract_id, f.original.contract.id))).length, 0)
 })
 test('contract decision rejects current ownership, assignment, reviewer, amount, milestone, acceptance, deadline, seller rail and ban drift', async () => {
   for (const mutation of ['owner', 'assignment', 'reviewer', 'quote', 'milestone', 'acceptance', 'deadline', 'rails', 'ban', 'seller-private', 'department', 'reviewer-ban', 'reviewer-buyer-owner', 'reviewer-seller-owner']) {

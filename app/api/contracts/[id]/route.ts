@@ -2,7 +2,7 @@ import { requireSellerPaymentRail, SellerRailError } from '@/lib/seller-payment-
 import { NextRequest, NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { contract_milestones, contracts, listings } from '@/lib/schema';
+import { contract_milestones, contracts, listings, organization_contract_authorizations } from '@/lib/schema';
 import { contractActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionMilestone } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
@@ -54,7 +54,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .where(eq(contract_milestones.contract_id, contract.id))
     .orderBy(asc(contract_milestones.milestone_index));
 
-  return NextResponse.json({ contract, milestones });
+  const [review] = await db.select({ id: organization_contract_authorizations.id }).from(organization_contract_authorizations)
+    .where(eq(organization_contract_authorizations.contract_id, contract.id)).limit(1);
+  return NextResponse.json({ contract: { ...contract, reviewed_contract: Boolean(review) }, milestones,
+    viewer: { is_buyer: auth.userId === contract.buyer_id, is_seller: auth.userId === contract.seller_id } }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

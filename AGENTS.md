@@ -1,3 +1,38 @@
+## Dashboard contract disclosure and scope repair verified — local only
+
+Contract cards now disclose nonwithdrawable prepaid credit, what sellers receive
+and unstarted principal/fee refund treatment before buyer funding/seller start.
+Failed/malformed readiness stays unavailable and funding disabled, not a false
+claim that the rail is unconfigured. Actual participant inventory/detail returns
+an authoritative reviewed_contract boolean from the exact companion record in
+ANY state. This means record presence, never current approval or payment authority.
+Detail also gives original buyer/seller viewer role and private/no-store headers.
+Dashboard omits generic funding and hashless submit/approve/release for reviewed
+agreements; server guards still enforce scope. Ordinary historical actions and
+settlement semantics remain. Milestone refresh now fetches current data; failed
+inspection clears old milestones instead of presenting a successful empty result.
+
+Current **36/36** API/canonical/SDK cases plus the actual paid disposable CLI
+kill/restart journey pass. **14/14 Chromium** checks pass, zero skips/retries,
+covering320/390/1440px, review access, metadata restrictions, seller disclosure,
+unavailable readiness, ordinary credit purchase and historical Tempo evidence.
+Initial35pass/1fail caught a wrongly correlated ORM projection; the corrected
+explicit unique-contract LEFT JOIN passes for reviewed and ordinary agreements
+owned by the SAME buyer in pending/approved/revoked states. Types/lint/SDK parity
+and production build pass. Prior91 financial cases remain preceding evidence;
+this is not a new full contract release gate. Migration79/preservation unchanged.
+
+Manifest **76** files versus e55e151, SHA-256 `16c340110e20cffbd07a73a18dea1bfbbd08e6d1ce9b637e1743161608d6e9a9`.
+Evidence: `docs/evidence/reviewed-contract-foundation-2026-10-15/dashboard-disclosure.json`.
+Fresh funding defaults DISABLED; HTTP1.119/count8 stay local. No live payment,
+publication, production flags, independent demand or capability9. Next verify the
+actual new fund transaction in BOTH reservation orders with route/workflow/task/
+listing ceilings, then finish participant human work UI and complete release
+checks. Keep prior accepted candidates unchanged. Rollback retains original
+financial/ref/output/consent records, recovery and durable inventory interlocks.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Original scoped-funding economic outcomes verified — local only
 
 Current **91/91** named API/logic/SDK cases pass, zero failures/skips, including
