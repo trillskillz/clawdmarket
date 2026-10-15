@@ -1,8 +1,8 @@
 {
-  "stage": "Authenticated public exact buyer acceptance and private original-reference recovery; no reviewed funding or release",
+  "stage": "Internal exact original credit release with immutable decision/ledger binding; separate admin dispute safeguards; public funding/release closed",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
-  "migrations": 76,
+  "migrations": 77,
   "accepted_capability_count": "8/10; no contract capability yet",
   "original_use_cases": {
     "passed": 30,
@@ -13,13 +13,14 @@
   "preservation": {
     "local_baseline_business_rows": 845,
     "local_baseline_tables": 133,
-    "migrations": 76,
+    "migrations": 77,
     "integrity": "ok",
     "foreign_key_anomalies": 0,
     "immutable_guards": 10,
     "actual_queries": 5,
     "reviewed_submission_immutable_guards": 4,
-    "reviewed_acceptance_immutable_guards": 2
+    "reviewed_acceptance_immutable_guards": 2,
+    "reviewed_release_immutable_guards": 2
   },
   "limits": {
     "public_reviewed_contract_funding": false,
@@ -32,7 +33,9 @@
     "participant_original_submission_get": true,
     "internal_exact_buyer_acceptance": true,
     "public_reviewed_milestone_acceptance": true,
-    "reviewed_credit_release": false
+    "reviewed_credit_release": false,
+    "internal_original_credit_release": true,
+    "public_reviewed_credit_release": false
   },
   "records": {
     "original_use": {
@@ -138,6 +141,34 @@
     "public-acceptance-python-sandbox-denial": {
       "local_log": "/tmp/clawdmarket-contract-acceptance-api-python-2026-10-15.log",
       "log_sha256": "71d10887547a5771e53fed77044404162f91268068dc7c390af60e43e01db54b"
+    },
+    "original-release-focused": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-final-focused-2026-10-15.log",
+      "log_sha256": "1f472c61c691e35095500de1f01d10e32e95b99c75ad2755e7fcf88c22c536b0"
+    },
+    "original-release-initial-assertion-failure": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-focused-2026-10-15.log",
+      "log_sha256": "c2de419e57a6d92fc083dec813e631b467e66f012ecfec92f09c57e1fe861e75"
+    },
+    "original-release-types": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-final-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "original-release-lint": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-final-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "original-release-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "original-release-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-build-2026-10-15.log",
+      "log_sha256": "e7f3f3346fcf70fb37df952a33e1917f39b856fb19955bdb6f6d1ef01382f635"
+    },
+    "original-release-preservation": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-preservation-2026-10-15.log",
+      "log_sha256": "01039a2b00a48ef0088d724bd2ab19acd610600d474bba4724e82286718e5cc3"
     }
   },
   "compatibility_cases": {
@@ -163,8 +194,8 @@
     "skipped": 0
   },
   "source_manifest": {
-    "files": 45,
-    "sha256": "d2c85a86494de6074f9d6e3ddfc18eae37c4d568bb7b7c4f13989ca4c67ac01f",
+    "files": 48,
+    "sha256": "6b3f02e02e32e2ecb7425518d8f00f4980201c587c84ce7dcd5aac983474bdee",
     "baseline": "e55e151"
   },
   "private_inspection_cases": {
@@ -206,5 +237,18 @@
     "Initial parallel typecheck lost generated .next files during build; final sequential rerun passes",
     "Initial Python suite could not open localhost sockets in sandbox; permitted local-listener rerun passes",
     "Migration76 unchanged; prior preservation is applicable, not repeated in this adapter batch"
+  ],
+  "original_release_cases": {
+    "passed": 75,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Final current original use/output/acceptance/release, genuine HTTP recovery, ordinary credit/creation/review, SDK and migration regression"
+  },
+  "original_release_limitations": [
+    "Internal financial command only; no public reviewed fund, submission or release adapter or completed SDK/human economic journey",
+    "Actual deposits on unforked disposable local test chain; initial funding/use records are directly constructed controlled records, not public checkout",
+    "Initial run26pass1fail because injected database cause was wrapped outside regex assertion; bounded cause inspection corrected; final75pass0fail0skip",
+    "Admin routes now validate original use/amount and label separate adjudication. Saved-reference immutable admin-ruling recovery remains unfinished",
+    "Unstarted refund preservation and consumed inventory/funding still need completion before reviewed funding"
   ]
 }

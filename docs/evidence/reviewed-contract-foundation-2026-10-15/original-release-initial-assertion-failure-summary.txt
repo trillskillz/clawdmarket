@@ -1,0 +1,75 @@
+✔ original contract use fails closed on creation contradiction instead of adopting another financial reference (204.290909ms)
+✔ original contract use fails closed on purchase contradiction instead of adopting another financial reference (262.3966ms)
+✔ original contract use fails closed on fee-recipient contradiction instead of adopting another financial reference (198.327198ms)
+✔ original contract use fails closed on fee-amount contradiction instead of adopting another financial reference (187.325456ms)
+✔ original contract use fails closed on financial-family contradiction instead of adopting another financial reference (4182.982667ms)
+✔ original contract use fails closed on orphan-sale contradiction instead of adopting another financial reference (4112.052931ms)
+✔ funded companion without its original use cannot silently disappear from gross history (4101.300812ms)
+✔ an old reservation cannot be reclassified as a new reviewed draft by resetting its state (46.61037ms)
+✔ original credit gross blocks new reviewed route, workflow, task, listing and contract budgets without consuming chain fee headroom (5118.220168ms)
+✔ prior original route, workflow, task and listing gross blocks a fresh credit contract ceiling in the reverse reservation order (1100.337714ms)
+✔ internal original seller submission replays one immutable output and finite report without accepting or moving credit (4477.174904ms)
+✔ missing finite keys and unbounded original submission data cannot create acceptance or output records (231.309345ms)
+✔ internal exact buyer decisions persist once, require the selected immutable submission and cannot accept replacement output after redo (4369.839502ms)
+✔ public exact acceptance enforces original buyer, scope, CSRF, finite checks and private unambiguous decision recovery without paying (8667.648493ms)
+✔ both SDKs recover genuinely lost committed acceptance HTTP replies after review closes without retrying or releasing credit (1219.842904ms)
+✔ internal original credit release posts exact accepted milestones once, conserves original fees and recovers after completion and review closure (864.412445ms)
+✖ release requires real exact consent and actual ledger proof, and a failed journal append rolls back state and both credit postings (384.086596ms)
+✔ reviewed admin buyer-win, seller-win, split and redo preserve original financial references as separate adjudication without invented buyer consent (1088.193003ms)
+✔ an actual admin redo preserves older consent but identical replacement output needs a new exact acceptance before original credit release (490.115501ms)
+✔ reviewed admin settlement rejects changed original amounts and missing use before resolving or moving any credit (548.549317ms)
+✔ runtime schema migration upgrades a legacy database and is idempotent (1207.173378ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 26
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 53066.178657
+
+✖ failing tests:
+
+test at tests/api/organization-contract-original-uses.test.ts:14:9072
+✖ release requires real exact consent and actual ledger proof, and a failed journal append rolls back state and both credit postings (384.086596ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /injected_release_append_failure/. Input:
+  
+  'Error: Failed query: insert into "contract_release_operations" ("id", "milestone_id", "contract_id", "authorization_id", "authority_hash", "acceptance_id", "submission_id", "content_hash", "buyer_id", "seller_id", "client_reference", "request_hash", "amount_minor", "settlement_entry_id", "sale_entry_id", "released_at") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning "id", "milestone_id", "contract_id", "authorization_id", "authority_hash", "acceptance_id", "submission_id", "content_hash", "buyer_id", "seller_id", "client_reference", "request_hash", "amount_minor", "settlement_entry_id", "sale_entry_id", "released_at"\n' +
+    'params: 96f7a40d-953f-4bb8-b749-b30101743bdc,a4119647-2de2-4478-9f2f-049d70ad666d,5ae9a241-4f29-482b-9357-a4cf2eab8643,534d9a8a-cb05-4d0a-b660-a186566ba861,acb2ab5198c59fd917c3e92987c0d409ab8ac27477e792bd7a06d91fe5e7c42d,6deb3015-7ab5-4f99-9fab-f57667851089,5d4df280-d72d-474f-a209-326c74c4fe1a,45477b3ba09e82b2137688cf0d7e5955e3ec2d00a28119e39d1d97c686f20723,user_agent_agent_cf184179-2e88-4407-b4fd-a9def2100532,user_agent_agent_c9de2368-12c2-402d-9c1a-7f5d09664c78,360ed468-ef24-48e0-b8ca-86e814721551,065a8f66f498db2d94a9e8bdb26f9c0ec87cd222eca6a6636afe014261a24660,40,b218f17a-8d84-42df-99b9-c4a834ca2726,6b319b37-da55-4213-926b-f335299df5e9,1792081446'
+  
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:555:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: Failed query: insert into "contract_release_operations" ("id", "milestone_id", "contract_id", "authorization_id", "authority_hash", "acceptance_id", "submission_id", "content_hash", "buyer_id", "seller_id", "client_reference", "request_hash", "amount_minor", "settlement_entry_id", "sale_entry_id", "released_at") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning "id", "milestone_id", "contract_id", "authorization_id", "authority_hash", "acceptance_id", "submission_id", "content_hash", "buyer_id", "seller_id", "client_reference", "request_hash", "amount_minor", "settlement_entry_id", "sale_entry_id", "released_at"
+    params: 96f7a40d-953f-4bb8-b749-b30101743bdc,a4119647-2de2-4478-9f2f-049d70ad666d,5ae9a241-4f29-482b-9357-a4cf2eab8643,534d9a8a-cb05-4d0a-b660-a186566ba861,acb2ab5198c59fd917c3e92987c0d409ab8ac27477e792bd7a06d91fe5e7c42d,6deb3015-7ab5-4f99-9fab-f57667851089,5d4df280-d72d-474f-a209-326c74c4fe1a,45477b3ba09e82b2137688cf0d7e5955e3ec2d00a28119e39d1d97c686f20723,user_agent_agent_cf184179-2e88-4407-b4fd-a9def2100532,user_agent_agent_c9de2368-12c2-402d-9c1a-7f5d09664c78,360ed468-ef24-48e0-b8ca-86e814721551,065a8f66f498db2d94a9e8bdb26f9c0ec87cd222eca6a6636afe014261a24660,40,b218f17a-8d84-42df-99b9-c4a834ca2726,6b319b37-da55-4213-926b-f335299df5e9,1792081446
+        at LibSQLPreparedQuery.queryWithCache (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/session.ts:80:11)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async LibSQLPreparedQuery.values (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:286:10)
+        at async LibSQLPreparedQuery.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:214:16)
+        at async <anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/contract-original-credit-release.ts:97:25)
+        at async LibSQLSession.transaction (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:122:19)
+        at async purchasingTransaction (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/organization-purchasing-transaction.ts:26:18)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:555:9) {
+      [cause]: LibsqlError: SQLITE_CONSTRAINT: injected_release_append_failure
+          at mapSqliteError (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:683:16)
+          at executeStmt (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:586:15)
+          at Sqlite3Transaction.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:449:16)
+          at <anonymous> (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:288:30)
+          at LibSQLPreparedQuery.queryWithCache (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/session.ts:78:18)
+          at LibSQLPreparedQuery.values (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:286:21)
+          at LibSQLPreparedQuery.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:214:27)
+          at QueryPromise.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/query-builders/insert.ts:402:26)
+          at QueryPromise.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/query-builders/insert.ts:414:40)
+          at QueryPromise.then (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/query-promise.ts:31:15) {
+        [cause]: [Object]
+      }
+    },
+    expected: /injected_release_append_failure/,
+    operator: 'rejects',
+    diff: 'simple'
+  }

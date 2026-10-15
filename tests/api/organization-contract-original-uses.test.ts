@@ -41,6 +41,7 @@ before(async () => {
   db = (await import('@/lib/db')).db; schema = await import('@/lib/schema'); await createLocalTestSchema(db.$client, schema)
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-submissions-v1.sql', 'utf8'))
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-exact-acceptance-v1.sql', 'utf8'))
+  await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-credit-release-v1.sql', 'utf8'))
   domain = await import('@/lib/organization-contract-authorizations'); reader = await import('@/lib/organization-contract-uses')
 })
 after(async () => { db?.$client.close(); if (chain) await chain.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })
@@ -465,4 +466,184 @@ print(json.dumps({'recovered': r, 'replay': p}))`
       assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
     } finally { await new Promise<void>(resolve => server.close(() => resolve())) }
   }
+})
+
+async function acceptedMilestone(f: Awaited<ReturnType<typeof fixture>>, index = 0, artifacts = { report: 'Original paid work' }) {
+  const submission = await (await import('@/lib/contract-original-submissions')).submitOriginalReviewedContract(f.original.contract.id,
+    f.original.milestones[index].id, f.seller, { version: 1, client_reference: crypto.randomUUID(), artifact_bundle: artifacts })
+  const acceptance = await (await import('@/lib/contract-exact-acceptance')).acceptOriginalReviewedContract(f.original.contract.id,
+    f.original.milestones[index].id, f.buyer, { version: 1, client_reference: crypto.randomUUID(),
+      submission_id: submission.submission.id, content_hash: submission.submission.content_hash, approve: true })
+  return { submission, acceptance, input: { version: 1 as const, client_reference: crypto.randomUUID(),
+    submission_id: submission.submission.id, content_hash: submission.submission.content_hash, acceptance_id: acceptance.decision.id } }
+}
+async function openDispute(f: Awaited<ReturnType<typeof fixture>>) {
+  const api = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  const response = await api.PATCH(new NextRequest(`http://localhost/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' })}` },
+    body: JSON.stringify({ action: 'open_dispute', reason_code: 'disposable-controlled-dispute' }) }),
+  { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) })
+  assert.equal(response.status, 200, JSON.stringify(await response.clone().json()))
+  return (await response.json()).contract.dispute_id as string
+}
+async function adjudicate(f: Awaited<ReturnType<typeof fixture>>, dispute: string, ruling: string, actor = f.owner) {
+  const api = await import('@/app/api/admin/contracts/disputes/[id]/resolve/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  const old = process.env.ADMIN_USER_IDS; process.env.ADMIN_USER_IDS = f.owner
+  try {
+    return await api.PATCH(new NextRequest(`http://localhost/api/admin/contracts/disputes/${dispute}/resolve`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })}` },
+      body: JSON.stringify({ ruling, ...(ruling === 'split' ? { split_percent_to_seller: 25 } : {}) }) }), { params: Promise.resolve({ id: dispute }) })
+  } finally { if (old === undefined) delete process.env.ADMIN_USER_IDS; else process.env.ADMIN_USER_IDS = old }
+}
+
+test('internal original credit release posts exact accepted milestones once, conserves original fees and recovers after completion and review closure', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f)
+  const { releaseOriginalContractCredit: release, inspectOriginalContractCreditRelease: inspect } = await import('@/lib/contract-original-credit-release')
+  const first = await acceptedMilestone(f)
+  for (const actor of [f.owner, f.reviewer, f.seller, f.other]) await assert.rejects(release(f.original.contract.id, f.original.milestones[0].id, actor, first.input),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_BUYER_REQUIRED')
+  const results = await Promise.all([release(f.original.contract.id, f.original.milestones[0].id, f.buyer, first.input), release(f.original.contract.id, f.original.milestones[0].id, f.buyer, first.input)])
+  assert.equal(results.filter(r => r.idempotent).length, 1); assert.equal(results[0].release.id, results[1].release.id)
+  assert.equal(results[0].release.amount_minor, 40); assert.equal(results[0].financial_posting_confirmed, true)
+  assert.equal(results[0].release.seller_receives, 'nonwithdrawable_account_credit'); assert.equal(results[0].credit_remaining_principal_minor, 60)
+  const credit = await import('@/lib/account-credit')
+  assert.equal((await credit.creditBalance(f.seller)).available_minor, 40); assert.equal((await credit.creditBalance(f.feeRecipient)).available_minor, 5)
+  for (const statement of ['UPDATE contract_release_operations SET amount_minor=1 WHERE id=?', 'DELETE FROM contract_release_operations WHERE id=?']) {
+    await assert.rejects(db.$client.execute({ sql: statement, args: [results[0].release.id] }), /immutable/)
+  }
+  await assert.rejects(release(f.original.contract.id, f.original.milestones[0].id, f.buyer, { ...first.input, client_reference: crypto.randomUUID() }),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_REFERENCE_CONFLICT')
+  await assert.rejects(release(f.original.contract.id, f.original.milestones[0].id, f.buyer, { ...first.input, content_hash: '0'.repeat(64) }),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_REFERENCE_CONFLICT')
+  await assert.rejects(release(f.original.contract.id, f.original.milestones[1].id, f.buyer, first.input),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_REFERENCE_CONFLICT')
+  await domain.revokeOrganizationContract(f.org, f.a.id, f.owner)
+  await db.update(schema.seller_payment_preferences).set({ supported_rails: '["evm"]' }).where(eq(schema.seller_payment_preferences.seller_id, f.seller))
+  const second = await acceptedMilestone(f, 1)
+  const final = await release(f.original.contract.id, f.original.milestones[1].id, f.buyer, second.input)
+  assert.equal(final.credit_remaining_principal_minor, 0)
+  assert.equal((await db.select().from(schema.contracts).where(eq(schema.contracts.id, f.original.contract.id)))[0].state, 'COMPLETED')
+  assert.equal((await credit.creditBalance(f.seller)).available_minor, 100); assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 0)
+  assert.equal((await credit.creditBalance(f.feeRecipient)).available_minor, 5)
+  for (const actor of [f.buyer, f.seller]) {
+    const recovered = await inspect(db, f.original.contract.id, f.original.milestones[0].id, actor, first.input.client_reference)
+    assert.equal(recovered.release.id, results[0].release.id); assert.equal(recovered.financial_posting_confirmed, true); assert.equal(recovered.credit_remaining_principal_minor, 0)
+  }
+  for (const actor of [f.owner, f.reviewer, f.other]) await assert.rejects(inspect(db, f.original.contract.id, f.original.milestones[0].id, actor, first.input.client_reference),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_NOT_FOUND')
+  assert.equal((await release(f.original.contract.id, f.original.milestones[0].id, f.buyer, first.input)).idempotent, true)
+  assert.equal((await reader.organizationContractExposure(db, f.org, f.buyer)).lifetime, 105)
+})
+
+test('release requires real exact consent and actual ledger proof, and a failed journal append rolls back state and both credit postings', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f)
+  const { releaseOriginalContractCredit: release, inspectOriginalContractCreditRelease: inspect } = await import('@/lib/contract-original-credit-release')
+  const output = await (await import('@/lib/contract-original-submissions')).submitOriginalReviewedContract(f.original.contract.id, f.original.milestones[0].id, f.seller,
+    { version: 1, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'Passing finite checks are insufficient for payment' } })
+  const input = { version: 1, client_reference: crypto.randomUUID(), submission_id: output.submission.id, content_hash: output.submission.content_hash, acceptance_id: crypto.randomUUID() }
+  await db.update(schema.contract_milestones).set({ state: 'APPROVED' }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+  await assert.rejects(release(f.original.contract.id, f.original.milestones[0].id, f.buyer, input),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_EXACT_ACCEPTANCE_REQUIRED')
+  await db.update(schema.contract_milestones).set({ state: 'PAID' }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+  await assert.rejects(inspect(db, f.original.contract.id, f.original.milestones[0].id, f.buyer, input.client_reference),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_NOT_FOUND')
+  await db.update(schema.contract_milestones).set({ state: 'AWAITING_BUYER_REVIEW' }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+  const { acceptance_id: _id, ...command } = input
+  const acceptance = await (await import('@/lib/contract-exact-acceptance')).acceptOriginalReviewedContract(f.original.contract.id, f.original.milestones[0].id, f.buyer, { ...command, approve: true })
+  const exact = { ...input, acceptance_id: acceptance.decision.id }
+  await db.$client.execute("CREATE TRIGGER injected_release_append_failure BEFORE INSERT ON contract_release_operations BEGIN SELECT RAISE(ABORT, 'injected_release_append_failure'); END")
+  try { await assert.rejects(release(f.original.contract.id, f.original.milestones[0].id, f.buyer, exact), (error: unknown) => {
+    let cause: any = error
+    for (let depth = 0; cause && depth < 8; depth++, cause = cause.cause) if (String(cause.message).includes('injected_release_append_failure')) return true
+    return false
+  }) }
+  finally { await db.$client.execute('DROP TRIGGER injected_release_append_failure') }
+  const credit = await import('@/lib/account-credit')
+  assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 100); assert.equal((await credit.creditBalance(f.seller)).available_minor, 0)
+  assert.equal((await db.select().from(schema.contract_milestones).where(eq(schema.contract_milestones.id, f.original.milestones[0].id)))[0].state, 'APPROVED')
+  assert.equal((await db.select().from(schema.contract_release_operations).where(eq(schema.contract_release_operations.contract_id, f.original.contract.id))).length, 0)
+  const released = await release(f.original.contract.id, f.original.milestones[0].id, f.buyer, exact)
+  await db.update(schema.credit_entries).set({ available_delta: 39 }).where(eq(schema.credit_entries.id, released.release.sale_entry_id))
+  await assert.rejects(release(f.original.contract.id, f.original.milestones[0].id, f.buyer, exact), invalid)
+  await assert.rejects(inspect(db, f.original.contract.id, f.original.milestones[0].id, f.buyer, exact.client_reference), invalid)
+})
+
+test('reviewed admin buyer-win, seller-win, split and redo preserve original financial references as separate adjudication without invented buyer consent', { skip: !enabled }, async () => {
+  for (const ruling of ['buyer_win', 'seller_win', 'split', 'redo']) {
+    const f = await fixture(); await startOriginal(f); const dispute = await openDispute(f)
+    assert.equal((await adjudicate(f, dispute, ruling, f.buyer)).status, 403)
+    const response = await adjudicate(f, dispute, ruling)
+    assert.equal(response.status, 200, JSON.stringify(await response.clone().json()))
+    assert.deepEqual((await response.json()).reviewed_outcome, { basis: 'admin_adjudication', rail: 'credit', distributed_minor: ruling === 'redo' ? 0 : 40 })
+    assert.equal((await adjudicate(f, dispute, ruling)).status, 409)
+    const credit = await import('@/lib/account-credit')
+    assert.equal((await credit.creditBalance(f.buyer)).available_minor, ruling === 'buyer_win' ? 40 : ruling === 'split' ? 30 : 0)
+    assert.equal((await credit.creditBalance(f.seller)).available_minor, ruling === 'seller_win' ? 40 : ruling === 'split' ? 10 : 0)
+    assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, ruling === 'redo' ? 100 : 60)
+    assert.equal((await reader.originalReviewedContractUse(db, f.original.contract.id))?.remaining_principal_minor, ruling === 'redo' ? 100 : 60)
+    assert.equal((await credit.creditBalance(f.feeRecipient)).available_minor, 5)
+    for (const table of [schema.contract_acceptance_operations, schema.contract_release_operations]) {
+      assert.equal((await db.select().from(table).where(eq(table.contract_id, f.original.contract.id))).length, 0)
+    }
+    if (ruling === 'buyer_win') {
+      const second = await acceptedMilestone(f, 1)
+      const result = await (await import('@/lib/contract-original-credit-release')).releaseOriginalContractCredit(f.original.contract.id, f.original.milestones[1].id, f.buyer, second.input)
+      assert.equal(result.credit_remaining_principal_minor, 0)
+      assert.equal((await credit.creditBalance(f.buyer)).available_minor, 40); assert.equal((await credit.creditBalance(f.seller)).available_minor, 60)
+      assert.equal((await reader.organizationContractExposure(db, f.org, f.buyer)).lifetime, 105)
+    }
+  }
+})
+
+test('an actual admin redo preserves older consent but identical replacement output needs a new exact acceptance before original credit release', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f)
+  const first = await acceptedMilestone(f), dispute = await openDispute(f)
+  assert.equal((await adjudicate(f, dispute, 'redo')).status, 200)
+  const second = await (await import('@/lib/contract-original-submissions')).submitOriginalReviewedContract(f.original.contract.id, f.original.milestones[0].id, f.seller,
+    { version: 1, client_reference: crypto.randomUUID(), artifact_bundle: first.submission.submission.artifact_bundle })
+  assert.equal(second.submission.content_hash, first.submission.submission.content_hash); assert.notEqual(second.submission.id, first.submission.submission.id)
+  const { releaseOriginalContractCredit: release } = await import('@/lib/contract-original-credit-release')
+  await assert.rejects(release(f.original.contract.id, f.original.milestones[0].id, f.buyer, first.input),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_SUBMISSION_CHANGED')
+  const input = { ...first.input, client_reference: crypto.randomUUID(), submission_id: second.submission.id, content_hash: second.submission.content_hash }
+  await assert.rejects(release(f.original.contract.id, f.original.milestones[0].id, f.buyer, input),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_EXACT_ACCEPTANCE_REQUIRED')
+  const acceptance = await (await import('@/lib/contract-exact-acceptance')).acceptOriginalReviewedContract(f.original.contract.id, f.original.milestones[0].id, f.buyer,
+    { version: 1, client_reference: crypto.randomUUID(), submission_id: second.submission.id, content_hash: second.submission.content_hash, approve: true })
+  const result = await release(f.original.contract.id, f.original.milestones[0].id, f.buyer, { ...input, acceptance_id: acceptance.decision.id })
+  assert.equal(result.release.basis, 'explicit_buyer_acceptance'); assert.equal(result.credit_remaining_principal_minor, 60)
+})
+
+test('reviewed admin settlement rejects changed original amounts and missing use before resolving or moving any credit', { skip: !enabled }, async () => {
+  for (const mutation of ['amount', 'missing_use']) {
+    const f = await fixture(); await startOriginal(f); const dispute = await openDispute(f)
+    if (mutation === 'amount') await db.update(schema.contract_milestones).set({ amount: .41 }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+    else await db.delete(schema.organization_contract_uses).where(eq(schema.organization_contract_uses.contract_id, f.original.contract.id))
+    const response = await adjudicate(f, dispute, 'seller_win')
+    assert.equal(response.status, 409); assert.equal((await response.json()).code, 'ORGANIZATION_CONTRACT_USE_INVALID')
+    assert.equal((await db.select().from(schema.contract_disputes).where(eq(schema.contract_disputes.id, dispute)))[0].state, 'open')
+    const credit = await import('@/lib/account-credit')
+    assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 100); assert.equal((await credit.creditBalance(f.seller)).available_minor, 0)
+  }
+})
+
+test('an admin payout cannot be adopted as a buyer-directed release or paid again through contradictory stored states', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f)
+  const first = await acceptedMilestone(f), dispute = await openDispute(f)
+  assert.equal((await adjudicate(f, dispute, 'seller_win')).status, 200)
+  const { releaseOriginalContractCredit: release, inspectOriginalContractCreditRelease: inspect } = await import('@/lib/contract-original-credit-release')
+  await assert.rejects(inspect(db, f.original.contract.id, f.original.milestones[0].id, f.buyer, first.input.client_reference),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_NOT_FOUND')
+  // Stored-state contradiction controls, not legitimate reopen/redo operations.
+  await db.update(schema.contract_milestones).set({ state: 'APPROVED' }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+  await assert.rejects(release(f.original.contract.id, f.original.milestones[0].id, f.buyer, first.input),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_RELEASE_ALREADY_SETTLED')
+  await db.update(schema.contract_milestones).set({ state: 'DISPUTED' }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+  const [contradiction] = await db.insert(schema.contract_disputes).values({ contract_id: f.original.contract.id, milestone_id: f.original.milestones[0].id,
+    raised_by: f.buyer, reason_code: 'stored-state-contradiction-only', evidence: '{}', state: 'open' }).returning()
+  await db.update(schema.contracts).set({ state: 'DISPUTED', dispute_id: contradiction.id }).where(eq(schema.contracts.id, f.original.contract.id))
+  const response = await adjudicate(f, contradiction.id, 'seller_win')
+  assert.equal(response.status, 409); assert.equal((await response.json()).code, 'CONTRACT_REVIEWED_MILESTONE_ALREADY_SETTLED')
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.seller)).available_minor, 40)
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 60)
 })

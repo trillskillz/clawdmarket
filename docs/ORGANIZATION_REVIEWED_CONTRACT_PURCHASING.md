@@ -1,6 +1,6 @@
 # Local contract review foundation
 
-This unfinished credit-only foundation is local HTTP 1.119 and migration 76.
+This unfinished credit-only foundation is local HTTP 1.119 and migration 77.
 Approval alone grants no funding or release authority. It is not capability 9/10,
 a deployed product or independently demonstrated customer activity. Creation
 uses the original optional buyer-scoped `client_reference` on POST `/api/contracts`
@@ -100,7 +100,24 @@ and never automatically retry mutations. Their actual application HTTP response-
 loss controls recover one committed decision after review revocation, without
 credit release. This does not establish a complete funded contract journey.
 
-Remaining work: frozen original release/refund and separately authenticated admin
+An INTERNAL original credit-release command now accepts version1, a separate
+saved client_reference, acceptance_id, exact submission_id and content_hash. It
+requires the selected original immutable buyer decision and APPROVED milestone;
+it atomically posts the frozen original amount, records exact ledger row IDs,
+marks the milestone paid and activates the next pending milestone. It grants no
+public payment adapter or new funding authority. Original participant internal
+recovery checks the posted debit/seller credit pair; a state flag alone cannot
+produce financial_posting_confirmed. Append/update/delete constraints preserve
+this original release fact, and a failed append rolls the entire transaction back.
+The original upfront fee stays charged and history remains in reviewed gross.
+
+Admin resolutions validate original reviewed financial use/frozen amounts and
+report a separate admin_adjudication basis. They cannot create explicit buyer
+consent or buyer-directed release records. Immutable saved-reference admin ruling
+recovery and public proof interfaces remain unfinished. Do not treat a mutable
+ruling/state or a timeout as an original financial receipt.
+
+Remaining work: original unstarted refund/inventory preservation, immutable admin
 adjudication recovery, scoped reviewed funding/use, consumed inventory exclusion,
 public original seller submission, finite buyer/provider restart journals, private
 human work UI, actual multi-milestone economics and complete release gates.

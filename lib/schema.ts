@@ -1993,6 +1993,25 @@ export const contract_acceptance_operations = sqliteTable('contract_acceptance_o
   accepted_at: integer('accepted_at', { mode: 'timestamp' }).notNull(),
 }, table => [uniqueIndex('contract_acceptance_buyer_reference_idx').on(table.buyer_id, table.client_reference)]);
 
+/** Exact original buyer-directed release, separately evidenced from admin rulings. */
+export const contract_release_operations = sqliteTable('contract_release_operations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  milestone_id: text('milestone_id').notNull().unique().references(() => contract_milestones.id, { onDelete: 'restrict' }),
+  contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'restrict' }),
+  authorization_id: text('authorization_id').notNull().references(() => organization_contract_uses.authorization_id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(),
+  acceptance_id: text('acceptance_id').notNull().references(() => contract_acceptance_operations.id, { onDelete: 'restrict' }),
+  submission_id: text('submission_id').notNull().references(() => contract_submission_operations.submission_id, { onDelete: 'restrict' }),
+  content_hash: text('content_hash').notNull(),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  settlement_entry_id: text('settlement_entry_id').notNull().references(() => credit_entries.id, { onDelete: 'restrict' }),
+  sale_entry_id: text('sale_entry_id').notNull().references(() => credit_entries.id, { onDelete: 'restrict' }),
+  released_at: integer('released_at', { mode: 'timestamp' }).notNull(),
+}, table => [uniqueIndex('contract_release_buyer_reference_idx').on(table.buyer_id, table.client_reference)]);
+
 export const contract_disputes = sqliteTable('contract_disputes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),

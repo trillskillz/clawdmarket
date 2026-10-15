@@ -3,7 +3,9 @@ import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateRequest } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { contract_disputes, contract_milestones, contracts } from '@/lib/schema';
+import { contract_disputes, contract_milestones, contracts, credit_entries, organization_contract_authorizations } from '@/lib/schema';
+import { originalReviewedContractUse } from '@/lib/organization-contract-uses';
+import { PurchasingError } from '@/lib/organization-purchasing-transaction';
 import { isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
@@ -55,8 +57,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     await ensureContractWallets(contract.buyer_id, contract.seller_id);
 
+    let reviewedOutcome: { basis: 'admin_adjudication'; rail: 'credit'; distributed_minor: number } | undefined;
     await db.transaction(async (tx) => {
       const now = new Date();
+      let settlementAmount = milestone.amount;
+      const [review] = await tx.select({ id: organization_contract_authorizations.id }).from(organization_contract_authorizations)
+        .where(eq(organization_contract_authorizations.contract_id, contract.id)).limit(1);
+      if (review) {
+        const original = await originalReviewedContractUse(tx, contract.id);
+        const frozen = original?.terms.original.milestones.find(m => m.id === milestone.id);
+        if (!original || !frozen || original.contract.state !== 'DISPUTED') throw new PurchasingError('CONTRACT_REVIEWED_DISPUTE_INVALID');
+        const [settled] = await tx.select({ id: credit_entries.id }).from(credit_entries).where(and(
+          eq(credit_entries.reference, contract.id), eq(credit_entries.kind, `contract_settlement:${milestone.id}`))).limit(1);
+        if (settled) throw new PurchasingError('CONTRACT_REVIEWED_MILESTONE_ALREADY_SETTLED');
+        settlementAmount = frozen.amount_minor / 100;
+        reviewedOutcome = { basis: 'admin_adjudication', rail: 'credit', distributed_minor: resolution.ruling === 'redo' ? 0 : frozen.amount_minor };
+      }
       const claimed = await tx
         .update(contract_disputes)
         .set({ state: 'resolved', ruling: resolution.ruling, resolved_at: now, updated_at: now })
@@ -70,7 +86,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           contractId: contract.id,
           milestoneId: milestone.id,
           buyerId: contract.buyer_id,
-          amount: milestone.amount,
+          amount: settlementAmount,
         });
         nextMilestoneState = 'REFUNDED';
       } else if (resolution.ruling === 'seller_win') {
@@ -79,7 +95,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           milestoneId: milestone.id,
           buyerId: contract.buyer_id,
           sellerId: contract.seller_id,
-          amount: milestone.amount,
+          amount: settlementAmount,
         });
         nextMilestoneState = 'PAID';
       } else if (resolution.ruling === 'split') {
@@ -88,7 +104,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           milestoneId: milestone.id,
           buyerId: contract.buyer_id,
           sellerId: contract.seller_id,
-          amount: milestone.amount,
+          amount: settlementAmount,
           sellerPercent: resolution.split_percent_to_seller,
         });
         nextMilestoneState = 'PAID';
@@ -130,9 +146,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           updated_at: now,
         })
         .where(and(eq(contracts.id, dispute.contract_id), eq(contracts.state, 'DISPUTED')));
+      if (review) await originalReviewedContractUse(tx, contract.id);
     });
 
-    return NextResponse.json({ success: true, dispute_id: id, ...resolution });
+    return NextResponse.json({ success: true, dispute_id: id, ...resolution, ...(reviewedOutcome ? { reviewed_outcome: reviewedOutcome } : {}) });
   } catch (error: any) {
     if (error?.issues || error?.errors) {
       return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });
@@ -140,6 +157,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (error instanceof ContractSettlementError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     }
+    if (error instanceof PurchasingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error?.message === 'DISPUTE_ALREADY_RESOLVED' || error?.message === 'MILESTONE_STATE_CHANGED') {
       return NextResponse.json({ error: 'Dispute state changed; refresh and try again' }, { status: 409 });
     }

@@ -1,3 +1,49 @@
+## Internal original credit release verified — migration 77
+
+The contract foundation can now internally release one frozen milestone only
+against its exact immutable buyer decision, selected submission ID AND content
+hash. A new append-only operation pins the original contract/use/authority,
+acceptance, amount and the exact debit/seller credit entry IDs. Exact concurrent
+replay returns one original posting; altered/cross-milestone references conflict.
+An APPROVED/PAID flag or finite check alone is insufficient. Recovery validates
+actual ledger evidence, not state. Seller receives nonwithdrawable account credit.
+Public reviewed mark_paid, funding and seller submission remain closed.
+
+Separately authenticated admin buyer-win/seller-win/split/redo policy is retained.
+Reviewed resolutions now validate original use and frozen amount inside their
+financial transaction, reject existing settlement, and label admin_adjudication
+without inventing buyer consent or an explicit-buyer release operation. Actual
+admin redo plus identical replacement output requires new exact consent. Immutable
+original-reference admin decision recovery is still unfinished; do not claim it.
+
+Current focused checks pass **75/75**, no skips/failures. They include partial
+admin refund followed by remaining milestone release, complete two-milestone
+internal release, retained upfront fee/gross, exact concurrent replay, no adoption
+of admin payouts, changed ledger proof rejection and rollback of state/both credit
+postings when the release journal append fails. Initial run had26pass/1fail because
+the expected injected database cause was wrapped by Drizzle; the assertion now
+inspects its bounded cause chain and verifies rollback. Types/lint/SDK parity and
+production build pass. Migration77/replay preserves845 local baseline rows across
+133 tables, zero FK anomalies,10 reputation guards,4 output guards,2 acceptance
+and2 release guards, and5 actual evidence queries. This is not a production backup.
+
+These controls use genuine disposable local test-token deposits with DIRECT
+controlled future funding/use records. They do not prove public reviewed funding,
+a complete customer/client journey, a live paid canary or independent adoption.
+HTTP stays1.119 locally; accepted capability count stays8/10. No full new contract
+predeploy/browser gate is claimed. Source manifest **48** files relative to
+e55e151; SHA-256 `6b3f02e02e32e2ecb7425518d8f00f4980201c587c84ce7dcd5aac983474bdee`. Evidence is in
+`docs/evidence/reviewed-contract-foundation-2026-10-15/`.
+
+Next preserve original unstarted refunds without recycling reviewed inventory,
+finish immutable admin decision recovery and public original work/release adapters,
+then reviewed funding/use plus cross-scope consumed inventory, finite client/SDK/
+private UI and genuine multi-milestone/process/full release gates. Keep existing
+accepted candidates unchanged and all work local. No real funds, production flags,
+custody changes, email, outreach or publication authorized.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Public exact buyer acceptance and recovery verified — migration 76
 
 The local reviewed-contract adapter now accepts only an authenticated original
