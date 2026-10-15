@@ -2,12 +2,18 @@ name: Audit Internal Credits
 
 on:
   workflow_dispatch:
+    inputs:
+      backup_certificate_base64:
+        description: 'Optional owner-approved private recovery transport certificate (public PEM, base64). Never a private key.'
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   audit:
+    if: ${{ inputs.backup_certificate_base64 == '' }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
@@ -30,3 +36,65 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       - run: node scripts/audit-internal-credits.mjs
+
+  private-recovery-copy:
+    if: ${{ inputs.backup_certificate_base64 != '' }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      BACKUP_CERTIFICATE_BASE64: ${{ inputs.backup_certificate_base64 }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create owner-encrypted recovery transport (no production writes)
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -m 700 "$RUNNER_TEMP/clawdmarket-private-recovery"
+          mkdir -m 700 "$RUNNER_TEMP/clawdmarket-encrypted-recovery"
+          printf '%s' "$BACKUP_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/clawdmarket-private-recovery/recipient.pem"
+          openssl x509 -in "$RUNNER_TEMP/clawdmarket-private-recovery/recipient.pem" -checkend 0 -noout
+          node --input-type=module <<'JS'
+          import { createClient } from '@libsql/client';
+          import { writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const directory = join(process.env.RUNNER_TEMP, 'clawdmarket-private-recovery');
+          if (!process.env.TURSO_DATABASE_URL?.startsWith('libsql://') || !process.env.TURSO_AUTH_TOKEN) throw Error('PRODUCTION_DATABASE_CONFIGURATION_REQUIRED');
+          const started = new Date().toISOString();
+          const client = createClient({ url: `file:${join(directory, 'snapshot.db')}`, syncUrl: process.env.TURSO_DATABASE_URL,
+            authToken: process.env.TURSO_AUTH_TOKEN, syncInterval: 0, readYourWrites: false, offline: false });
+          try {
+            const sync = await client.sync();
+            const integrity = await client.execute('PRAGMA integrity_check');
+            const foreignKeys = await client.execute('PRAGMA foreign_key_check');
+            if (String(integrity.rows[0]?.integrity_check) !== 'ok' || foreignKeys.rows.length) throw Error('RECOVERY_COPY_INTEGRITY_FAILED');
+            writeFileSync(join(directory, 'recovery.json'), JSON.stringify({ started_at: started, synchronized_at: new Date().toISOString(),
+              sync, integrity: 'ok', foreign_key_anomalies: 0, credential_names: ['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN'],
+              scope: 'Production read-only synchronized recovery copy. No application writes or production restore.' }, null, 2));
+          } finally { client.close(); }
+          JS
+          tar -C "$RUNNER_TEMP/clawdmarket-private-recovery" -cf "$RUNNER_TEMP/clawdmarket-private-recovery/snapshot.tar" snapshot.db recovery.json
+          openssl cms -encrypt -binary -aes-256-gcm             -in "$RUNNER_TEMP/clawdmarket-private-recovery/snapshot.tar"             -out "$RUNNER_TEMP/clawdmarket-encrypted-recovery/snapshot.cms" -outform DER             "$RUNNER_TEMP/clawdmarket-private-recovery/recipient.pem"
+          cd "$RUNNER_TEMP/clawdmarket-encrypted-recovery"
+          sha256sum snapshot.cms > snapshot.cms.sha256
+      - name: Retain encrypted transport only (private key stays with operator)
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-private-recovery-${{ github.run_id }}
+          path: ${{ runner.temp }}/clawdmarket-encrypted-recovery/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Remove plaintext recovery files
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/clawdmarket-private-recovery"

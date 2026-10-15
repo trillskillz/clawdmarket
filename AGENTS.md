@@ -8,6 +8,11 @@ migration-first Vercel deployment and exact-SHA production verification. Do not
 publish superseded alternative worktrees. The current cumulative worktree is
 `clawdmarket-reviewed-contracts-current`; preserve prior accepted checkpoints.
 
+The user separately approved a full private production recovery copy and local
+restore, then explicitly approved AES256GCM-encrypted Actions artifact transport
+and deletion after download. Keep the private key and plaintext outside git and
+public artifacts. Production credentials stay in the protected Actions environment.
+
 No permission was granted to move real funds, enable global or fresh reviewed-
 contract execution flags, change custody, email real users or contact prospects.
 New reviewed-contract funding remains disabled by default. Recovery of original
