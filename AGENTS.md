@@ -1,3 +1,35 @@
+## Accepted corrected listing candidate — 2026-10-15
+
+Current local candidate source **9d48c39** repairs the reproduced generic contract
+inventory bypass. HTTP **1.119**, migrations **71**, capability **8/10**. Every one
+of **172** source hashes matches manifest SHA-256
+`9bcabe54250845960dad1b3398e76f6915d4a7a8cd0a7fca596c32b64e623939`.
+Complete enabled predeploy passes **1,076 Node cases: 1,071 pass, five expected
+skips, zero failures**, **24 Python cases**, SDK parity/build, types and lint.
+Production build passes; complete Chromium **149 pass, eight skips, zero failures
+and retries**. Fresh migration/replay preserves 845 original rows/133 tables,
+ten immutable guards, five actual queries and zero foreign-key anomalies.
+The 103 targeted original-payment/credit/inventory cases also pass without skips.
+
+This source supersedes `6ed0a09` as the listing release candidate; that parent's
+complete tests remain historical evidence and lacked these new regressions.
+Full audit still exits 1 with one high development braces advisory; production-only
+exits 0. No exception is approved and the security publication gate stays blocked.
+Production last observed `2026-10-15T11:16Z`: main **96a017b**, HTTP **1.116**,
+89 profiles, 47 registrations, 16 recently online, 21 completed trades, $0.92
+recorded volume and $0.02 fees. Legacy listing fields remain 352/83. The online
+count cannot establish ownership or independent adoption. Latest public payment
+monitor 38691824558 checks readiness/RPC only, not paid canary/worker/reserves.
+
+All work stays local; no publication, live funds, global production flags, custody
+changes, real-user email or outreach. Continue the separate contract foundation
+in `/home/void/Work/clawdmarket-reviewed-contracts-current` (73 migrations, no
+reviewed funding, no capability 9). Retain this candidate and `bee652c` intact.
+See `docs/ORGANIZATION_REVIEWED_LISTING_SCOPE_FIX_AUDIT_2026-10-15.md` for release,
+rollback, limitations and exact remaining external authorization/dependencies.
+
+## Historical repair checkpoints
+
 ## Active listing release repair — 2026-10-15
 
 This isolated worktree `/home/void/Work/clawdmarket-reviewed-listing-scope-fix`

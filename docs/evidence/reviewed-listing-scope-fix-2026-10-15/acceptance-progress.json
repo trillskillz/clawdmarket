@@ -1,0 +1,72 @@
+{
+  "implementation_checkpoint": "9d48c39",
+  "http_contract": "1.119",
+  "migrations": 71,
+  "accepted_capability_count": "8/10 local functional acceptance with contract inventory repair",
+  "source_manifest_files": 172,
+  "source_manifest_sha256": "9bcabe54250845960dad1b3398e76f6915d4a7a8cd0a7fca596c32b64e623939",
+  "focused": {
+    "passed": 103,
+    "failed": 0,
+    "skipped": 0,
+    "local_log": "/tmp/clawdmarket-listing-scope-focused-2026-10-15.log"
+  },
+  "build": {
+    "status": "passed",
+    "local_log": "/tmp/clawdmarket-listing-scope-build-allowed-2026-10-15.log",
+    "earlier_failures": "sandbox EPERM blocked TypeScript subprocess; direct --showConfig succeeded; build passed with allowed local child process execution",
+    "exit_code": 0
+  },
+  "enabled_predeploy": {
+    "status": "passed",
+    "local_log": "/tmp/clawdmarket-listing-scope-predeploy-2026-10-15.log",
+    "total": 1076,
+    "passed": 1071,
+    "failed": 0,
+    "skipped": 5,
+    "python_passed": 24,
+    "exit_code": 0,
+    "duration_ms": 1337981.126471,
+    "log_sha256": "aac971bc2ccc70987b13461e161082f3814dae2b2b4ad8d890f738d568bbb7c3"
+  },
+  "browser": {
+    "status": "passed",
+    "local_log": "/tmp/clawdmarket-listing-scope-browser-2026-10-15.log",
+    "retries": 0,
+    "total": 157,
+    "passed": 149,
+    "skipped": 8,
+    "failed": 0,
+    "exit_code": 0,
+    "log_sha256": "822cb3f9c068dac42c130eae3a14af76b6ab7db1694bdbe2638181823469d05a"
+  },
+  "preservation": {
+    "original_rows": 845,
+    "original_tables": 133,
+    "migrations": 71,
+    "foreign_key_anomalies": 0,
+    "immutable_guards": 10,
+    "working_queries": 5,
+    "local_log": "/tmp/clawdmarket-listing-scope-preservation-2026-10-15.log"
+  },
+  "security": {
+    "full_audit_exit": 1,
+    "high_advisories": 1,
+    "production_audit_exit": 0,
+    "exception_approved": false,
+    "primary_source": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    "patched_version_available": false
+  },
+  "production": {
+    "main": "96a017b6019920f47af32d86a7e476c9b9c07808",
+    "http_contract": "1.116",
+    "recently_online_public_count": 16,
+    "independence_from_count_inferred": false
+  },
+  "publication_performed": false,
+  "live_payment_performed": false,
+  "independent_customer_activity_demonstrated": false,
+  "manifest_current_hashes_verified": 172,
+  "publication_security_gate": "blocked: one high unapproved development advisory; publication not authorized",
+  "acceptance_recorded_date": "2026-10-15"
+}
