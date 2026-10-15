@@ -1,3 +1,20 @@
+## Active listing release repair — 2026-10-15
+
+This isolated worktree `/home/void/Work/clawdmarket-reviewed-listing-scope-fix`
+repairs a newly reproduced generic credit-contract bypass of original reviewed
+listing inventory. Parent `6ed0a09` preserves prior tested source `4cc00d4`, but
+its listing release now needs this repair and complete source-bound reacceptance.
+Seven new disposable backed-credit regressions pass in the separate contract
+worktree; rerun them here with the actual listing payment tests, then complete
+enabled/build/browser and preservation gates. No contract-reference foundation or
+migration 72 is included: this repair remains HTTP **1.119**, **71** migrations.
+Historical capability count is **8/10**, release acceptance pending this repair;
+no new capability is counted. Keep all changes local, no live funds, publication,
+global flags, custody, mail or outreach. Security still has one unapproved high
+development advisory. Preserve both earlier listing and dependable-pilot trees.
+Once corrected listing acceptance is complete, merge this fix's tested source
+into the separate contract continuation and resume the saved contract plan.
+
 ## Accepted local listing outcome — 2026-10-15
 
 Source **4cc00d4** is functionally accepted locally as HTTP **1.119**, **71**

@@ -10,6 +10,9 @@ import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
 import { getPaymentReadiness } from '@/lib/payment-config';
 import { requireNewPaymentsOpen, NewPaymentsPausedError } from '@/lib/payment-control';
 
+import { requireContractListingScope } from '@/lib/contract-listing-scope';
+import { PurchasingError } from '@/lib/organization-purchasing-transaction';
+
 export const dynamic = 'force-dynamic'
 
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
@@ -105,6 +108,7 @@ export async function POST(req: NextRequest) {
     const expiresAt = new Date(Date.now() + validated.expires_in_hours * 60 * 60 * 1000);
 
     const created = await db.transaction(async (tx) => {
+      if (validated.listing_id) await requireContractListingScope(tx, validated.listing_id, { expectedSeller: sellerId! });
       const [contract] = await tx
         .insert(contracts)
         .values({
@@ -144,7 +148,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ contract: created, milestones }, { status: 201 });
   } catch (error: any) {
-    if (error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    if (error instanceof NewPaymentsPausedError || error instanceof PurchasingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error?.issues || error?.errors) {
       return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });
     }
