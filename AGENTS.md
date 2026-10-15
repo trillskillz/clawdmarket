@@ -1,3 +1,37 @@
+## Current acceptance evidence and disposable setup — 2026-10-14
+
+Integrated listing source is `6ae6dbb`, current bookkeeping `bc4faa5`, local HTTP
+**1.119**, **71** migrations. All **167** source-manifest hashes still match.
+Final built Chromium passes **149**, eight expected skips, zero failures/retries;
+all 15 new listing review/work cases pass. Fresh original preservation passes
+845 rows/133 tables, ten immutable reputation guards and all five actual queries.
+Final enabled predeploy is RUNNING (do not count 8/10 yet):
+`/tmp/clawdmarket-listing-predeploy-final-2026-10-14.log`, exec session **24119**.
+It uses fully initialized/migrated disposable storage and both real disposable
+chain binaries. Source must remain unchanged while this exact-source gate runs;
+any necessary source fix must be reverified and refresh the manifest.
+
+An earlier predeploy was aborted after seven existing tests hit an unmigrated
+root test database. An initial full browser run passed 144/eight skipped/five
+failed; missing runtime readiness metadata and reused/local concurrent fixture
+writes were corrected by a FRESH fully migrated browser database using WAL.
+Do not rerun a full browser suite on a reused database with fixed receipt hashes.
+Do not merely create a directory or touch an empty database for predeploy:
+initialize the full current schema with `tests/helpers/local-schema.ts` then run
+`pnpm db:migrate:runtime` before the gate. Always use an explicit disposable
+`file:/tmp/clawdmarket-workspace-test-*` URL and empty database auth token. Source
+`/tmp/clawdmarket-task-acceptance-env-2026-10-14.sh` supplies Node 24/dummy keys/
+chain binaries but overrides an old DB; immediately replace its DB URL. Example
+CommonJS eval uses `require` for schema, not a dynamic namespace with a default
+export. The build database parent directory must exist throughout page collection.
+
+Full audit still fails with one high development braces advisory; production
+only audit passes. No exception is approved. Production read-only recheck remains
+main `96a017b`, HTTP 1.116. No publication/funds/global flags/outreach authorized.
+The next contract dependency plan is saved at
+`docs/ORGANIZATION_REVIEWED_CONTRACT_PURCHASING_PLAN.md`; implement it only after
+complete local listing acceptance. Existing pilot external dependencies remain.
+
 ## Current integrated listing acceptance — local HTTP 1.119
 
 Buyer listing checkout/recovery, separate EVM/Tempo claims, frozen explicit

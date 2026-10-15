@@ -1,3 +1,18 @@
+## Current listing final gate — source 6ae6dbb
+
+Local HTTP **1.119** has complete both-rail original listing clients/SDK/private
+review/work integration. Chromium passes **149**, eight expected skips, zero
+failures/retries; original 845 rows/133 tables, 71 migrations/replay, ten immutable
+guards and five actual evidence queries pass. The complete correctly initialized
+enabled predeploy is still running in
+`/tmp/clawdmarket-listing-predeploy-final-2026-10-14.log`. Count stays **7/10**
+until its actual final exit and remaining acceptance evidence are recorded.
+The parent pilot `bee652c` is preserved; all source stays local. Security audit
+still has one unapproved high development finding. See the listing audit and
+167-file source manifest. The next separate credit-contract dependency plan is
+`docs/ORGANIZATION_REVIEWED_CONTRACT_PURCHASING_PLAN.md`; its audit is not a
+capability and implementation follows listing acceptance.
+
 ## Current integrated listing acceptance — local HTTP 1.119
 
 Buyer listing checkout/recovery, separate EVM/Tempo claims, frozen explicit
