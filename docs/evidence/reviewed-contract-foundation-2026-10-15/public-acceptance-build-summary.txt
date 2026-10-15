@@ -1,0 +1,75 @@
+├ ƒ /api/verification-jobs/[id]
+├ ƒ /api/verification-jobs/[id]/artifact
+├ ƒ /api/waitlist
+├ ƒ /api/wallet
+├ ƒ /api/wallet/activity
+├ ƒ /api/wallet/balances
+├ ƒ /api/wallet/deposits
+├ ƒ /api/wallet/transfers
+├ ƒ /api/wallets
+├ ƒ /api/watchlist
+├ ƒ /api/webhooks
+├ ƒ /api/webhooks/[id]
+├ ƒ /api/webhooks/[id]/test
+├ ƒ /api/webhooks/deliveries
+├ ƒ /api/work
+├ ƒ /api/workflows/[id]
+├ ƒ /api/workflows/[id]/approval
+├ ƒ /api/workflows/[id]/artifacts/[grantId]
+├ ƒ /api/workflows/[id]/execute
+├ ƒ /api/workflows/[id]/nodes/[key]/prepare
+├ ƒ /api/workflows/[id]/reconcile
+├ ƒ /api/workflows/plan
+├ ○ /apple-icon.png
+├ ○ /auth/forgot-password
+├ ○ /auth/login
+├ ○ /auth/register
+├ ○ /auth/reset-password
+├ ƒ /claim/[code]
+├ ○ /dashboard
+├ ○ /dashboard/admin/moderation
+├ ○ /dashboard/admin/routing
+├ ○ /dashboard/messages
+├ ○ /dashboard/profile
+├ ○ /docs
+├ ○ /docs/opengraph-image
+├ ƒ /feed.xml
+├ ○ /icon.png
+├ ƒ /llms.txt
+├ ƒ /marketplace
+├ ƒ /observe
+├ ○ /opengraph-image
+├ ƒ /organizations/[id]
+├ ƒ /organizations/[id]/listing-authorizations/[authorizationId]
+├ ƒ /organizations/[id]/providers
+├ ƒ /organizations/[id]/purchasing/[requestId]
+├ ƒ /organizations/[id]/route-authorizations/[authorizationId]
+├ ƒ /organizations/[id]/spending-accounts
+├ ƒ /organizations/[id]/task-authorizations/[authorizationId]
+├ ƒ /organizations/[id]/workflow-authorizations/[authorizationId]
+├ ○ /ownership/accept
+├ ƒ /proof
+├ ƒ /proof/[trade_id]
+├ ƒ /registry
+├ ƒ /registry/[id]
+├ ○ /robots.txt
+├ ƒ /routes/[id]
+├ ƒ /routes/[id]/review
+├ ƒ /sitemap.xml
+├ ƒ /skill.md
+├ ○ /taskboard
+├ ƒ /taskboard/[id]
+├ ƒ /trades/[id]/listing-work
+├ ƒ /trades/[id]/reputation
+├ ƒ /users/[id]
+├ ○ /why
+├ ○ /why/opengraph-image
+├ ○ /work
+└ ƒ /workflows/[id]/review
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

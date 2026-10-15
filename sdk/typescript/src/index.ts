@@ -1,6 +1,6 @@
 import { SDK_CONTRACT } from './contract.js'
-import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation } from './milestone-contract.js'
-export type { MilestoneContractDraftInput, OriginalContractCreation } from './milestone-contract.js'
+import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission } from './milestone-contract.js'
+export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission } from './milestone-contract.js'
 import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, originalListingReference, scopedSpendingClient } from './enterprise.js'
 import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'
@@ -427,6 +427,25 @@ export class ClawdMarketClient {
   recoverMilestoneContractCreation(clientReference: string, options?: RequestOptions) {
     const reference = originalContractCreationReference(clientReference), operation = SDK_CONTRACT.operations.list_milestone_contracts
     return this.request<OriginalContractCreation>(operation.method, `${operation.path}?${new URLSearchParams({ client_reference: reference })}`, undefined, options)
+  }
+  private originalContractMilestonePath(contractId: string, milestoneId: string) {
+    return SDK_CONTRACT.operations.get_original_contract_submission.path.replace('{id}', enterpriseId(contractId)).replace('{milestoneId}', enterpriseId(milestoneId))
+  }
+  inspectOriginalContractSubmission(contractId: string, milestoneId: string, clientReference?: string, options?: RequestOptions) {
+    const path = this.originalContractMilestonePath(contractId, milestoneId)
+    const query = clientReference === undefined ? '' : `?${new URLSearchParams({ client_reference: originalContractCreationReference(clientReference) })}`
+    return this.request<OriginalContractSubmission>('GET', path + query, undefined, options)
+  }
+  /** Persist the exact submission ID, hash and reference first. Acceptance never releases credit. No automatic retry. */
+  acceptOriginalContractSubmission(contractId: string, milestoneId: string, input: OriginalContractAcceptanceInput, options?: RequestOptions) {
+    originalContractCreationReference(input.client_reference)
+    enterpriseId(input.submission_id)
+    if (input.version !== 1 || input.approve !== true || !/^[a-f0-9]{64}$/.test(input.content_hash)) throw new TypeError('Invalid exact contract acceptance')
+    return this.request<OriginalContractAcceptance>('PATCH', this.originalContractMilestonePath(contractId, milestoneId), { ...input, action: 'approve' }, options)
+  }
+  recoverOriginalContractAcceptance(contractId: string, milestoneId: string, clientReference: string, options?: RequestOptions) {
+    const path = this.originalContractMilestonePath(contractId, milestoneId)
+    return this.request<OriginalContractAcceptance>('GET', `${path}?${new URLSearchParams({ acceptance_reference: originalContractCreationReference(clientReference) })}`, undefined, options)
   }
 
   /** Public evidence only; all three scope fields must be supplied together. */

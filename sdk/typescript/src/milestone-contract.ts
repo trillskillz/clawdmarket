@@ -18,3 +18,19 @@ export function originalContractCreationReference(value: string): string {
   if (typeof value !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(value)) throw new TypeError('original contract client_reference must be 8 to 128 allowed characters')
   return value
 }
+
+export type OriginalContractAcceptanceInput = { version: 1; client_reference: string; submission_id: string; content_hash: string; approve: true }
+export type OriginalContractAcceptance = {
+  decision: { id: string; contract_id: string; milestone_id: string; submission_id: string; content_hash: string;
+    buyer_id: string; client_reference: string; accepted_at: string; kind: 'explicit_buyer_acceptance' }
+  selected_submission_id: string | null; applies_to_current_submission: boolean; current_milestone_state: string
+  credit_remaining_principal_minor: number; financial_release_performed: false; semantic_accuracy: 'unmeasured'
+  idempotent?: boolean; observed_at?: string
+}
+export type OriginalContractSubmission = {
+  contract_id: string; contract_state: string; milestone_id: string; milestone_state: string; selected_submission_id: string | null
+  credit_remaining_principal_minor: number; superseded: boolean; observed_at: string; original_requirements: Record<string, unknown>
+  submission: null | { id: string; content_hash: string; client_reference: string; artifact_bundle: Record<string, unknown>;
+    auto_check_result: 'pass' | 'fail' | 'inconclusive'; auto_check_report: Record<string, unknown>;
+    authorizes_payment: false; remote_execution_observed: false; semantic_accuracy: 'unmeasured' }
+}

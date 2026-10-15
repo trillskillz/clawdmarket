@@ -14,6 +14,10 @@ import { startDisposableWorkflowChain } from '../helpers/disposable-workflow-cha
 import { canonicalContract } from '@/lib/structured-verification'
 import { creditDepositMessage } from '@/lib/credit-proof'
 import { NextRequest } from 'next/server'
+import { createServer } from 'node:http'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { ClawdMarketClient, ClawdMarketTransportError } from '../../sdk/typescript/src/index'
 import { reviewedSharedService } from '../helpers/reviewed-shared-service'
 import { reviewedSharedTask } from '../helpers/reviewed-shared-task'
 
@@ -241,7 +245,7 @@ test('internal original seller submission replays one immutable output and finit
   assert.equal((await milestoneApi.GET(new NextRequest(`http://localhost${originalPath}`, { headers: { 'X-ClawdMarket-Agent-Key': read.api_key } }), milestoneContext)).status, 200)
   assert.equal((await milestoneApi.PATCH(new NextRequest(`http://localhost${originalPath}`, { method: 'PATCH', headers: { 'X-ClawdMarket-Agent-Key': read.api_key,
     'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve' }) }), milestoneContext)).status, 401)
-  for (const [action, actor] of [['submit', f.seller], ['approve', f.buyer], ['mark_paid', f.buyer]]) {
+  for (const [action, actor] of [['submit', f.seller], ['mark_paid', f.buyer]]) {
     const path = `/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}`
     const response = await milestoneApi.PATCH(new NextRequest(`http://localhost${path}`, { method: 'PATCH', headers: {
       'Content-Type': 'application/json', Authorization: `Bearer ${generateJWT({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })}` }, body: JSON.stringify({ action }) }),
@@ -321,9 +325,144 @@ test('internal exact buyer decisions persist once, require the selected immutabl
   const old = await accept(f.original.contract.id, f.original.milestones[0].id, f.buyer, input)
   assert.equal(old.decision.id, replies[0].decision.id); assert.equal(old.applies_to_current_submission, false)
   assert.equal(old.current_milestone_state, 'AWAITING_BUYER_REVIEW')
+  const api = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  const context = { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) }
+  const path = `http://localhost/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}`
+  const headers = { Authorization: `Bearer ${jwt({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' })}`, 'Content-Type': 'application/json' }
+  const recovered = await api.GET(new NextRequest(`${path}?acceptance_reference=${input.client_reference}`, { headers }), context)
+  assert.equal(recovered.status, 200); assert.equal((await recovered.json()).applies_to_current_submission, false)
+  const replay = await api.PATCH(new NextRequest(path, { method: 'PATCH', headers, body: JSON.stringify({ ...input, action: 'approve' }) }), context)
+  assert.equal(replay.status, 200); assert.equal((await replay.json()).current_milestone_state, 'AWAITING_BUYER_REVIEW')
   const fresh = await accept(f.original.contract.id, f.original.milestones[0].id, f.buyer, { ...input, client_reference: crypto.randomUUID(),
     submission_id: second.submission.id, content_hash: second.submission.content_hash })
   assert.notEqual(fresh.decision.id, old.decision.id); assert.equal(fresh.applies_to_current_submission, true)
   assert.equal((await db.select().from(schema.contract_acceptance_operations).where(eq(schema.contract_acceptance_operations.milestone_id, f.original.milestones[0].id))).length, 2)
   assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+})
+
+test('public exact acceptance enforces original buyer, scope, CSRF, finite checks and private unambiguous decision recovery without paying', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f)
+  const { submitOriginalReviewedContract: submit } = await import('@/lib/contract-original-submissions')
+  const api = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  const first = await submit(f.original.contract.id, f.original.milestones[0].id, f.seller, {
+    version: 1, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'PRIVATE_API_ACCEPTANCE_OUTPUT' } })
+  const input = { action: 'approve', version: 1, client_reference: crypto.randomUUID(), submission_id: first.submission.id, content_hash: first.submission.content_hash, approve: true }
+  const path = `/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}`
+  const context = { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) }
+  const token = (actor: string) => jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })
+  const patch = (actor: string, body: unknown = input, headers?: Record<string, string>) => api.PATCH(new NextRequest(`http://localhost${path}`, {
+    method: 'PATCH', headers: { Authorization: `Bearer ${token(actor)}`, 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }), context)
+  assert.equal((await patch(f.buyer, { action: 'approve' })).status, 400, 'hashless reviewed approve cannot use legacy acceptance')
+  assert.equal((await patch(f.buyer, { ...input, approve: 'x'.repeat(512 * 1024) })).status, 413)
+  for (const actor of [f.seller, f.owner, f.reviewer, f.other]) assert.equal((await patch(actor)).status, 403)
+  for (const body of [{ ...input, content_hash: '0'.repeat(64) }, { ...input, submission_id: crypto.randomUUID() }]) assert.equal((await patch(f.buyer, body)).status, 409)
+  assert.equal((await patch(f.buyer, input, { Authorization: 'Bearer invalid', Cookie: `auth-token=${token(f.buyer)}` })).status, 403)
+  const { createNamedAgentCredential } = await import('@/lib/agent-named-credentials')
+  const read = await createNamedAgentCredential({ agentId: f.buyerAgent, name: 'Acceptance recovery only', scopes: ['agent:read'], actorCredentialId: null })
+  assert.equal(read.kind, 'created'); if (read.kind !== 'created') throw new Error('Credential fixture failed')
+  assert.equal((await patch(f.buyer, input, { Authorization: '', 'X-ClawdMarket-Agent-Key': read.api_key })).status, 401)
+  const result = await patch(f.buyer)
+  assert.equal(result.status, 201); assert.equal(result.headers.get('Cache-Control'), 'private, no-store')
+  const accepted = await result.json(); assert.equal(accepted.financial_release_performed, false); assert.equal(accepted.credit_remaining_principal_minor, 100)
+  assert.equal((await patch(f.buyer)).status, 200)
+  assert.equal((await patch(f.buyer, { ...input, client_reference: crypto.randomUUID() })).status, 409)
+  for (const actor of [f.buyer, f.seller, f.owner, f.reviewer, f.other]) {
+    const read = await api.GET(new NextRequest(`http://localhost${path}?acceptance_reference=${input.client_reference}`, {
+      headers: { Authorization: `Bearer ${token(actor)}` } }), context)
+    assert.equal(read.headers.get('Cache-Control'), 'private, no-store')
+    if ([f.buyer, f.seller].includes(actor)) {
+      assert.equal(read.status, 200); const body = await read.json()
+      assert.deepEqual(body.decision, accepted.decision); assert.equal(body.applies_to_current_submission, true); assert.ok(Date.parse(body.observed_at))
+    } else { assert.equal(read.status, 404); assert.equal(JSON.stringify(await read.json()).includes('PRIVATE_API_ACCEPTANCE_OUTPUT'), false) }
+  }
+  assert.equal((await api.GET(new NextRequest(`http://localhost${path}?acceptance_reference=${input.client_reference}`, {
+    headers: { 'X-ClawdMarket-Agent-Key': read.api_key } }), context)).status, 200)
+  for (const query of [`acceptance_reference=${input.client_reference}&client_reference=${input.client_reference}`,
+    `acceptance_reference=${input.client_reference}&acceptance_reference=${input.client_reference}`, 'acceptance_reference=short', 'acceptance_reference=unknown-reference']) {
+    const response = await api.GET(new NextRequest(`http://localhost${path}?${query}`, { headers: { Authorization: `Bearer ${token(f.buyer)}` } }), context)
+    assert.equal(response.status, query.includes('unknown-reference') ? 404 : 400)
+  }
+  assert.equal((await patch(f.buyer, { action: 'mark_paid' })).status, 409)
+  // Exact command must never silently degrade to legacy hashless approval.
+  const legacy = await reviewedContractFixture({ db, schema })
+  const legacyResponse = await api.PATCH(new NextRequest(`http://localhost/api/contracts/${legacy.original.contract.id}/milestones/${legacy.original.milestones[0].id}`, {
+    method: 'PATCH', headers: { Authorization: `Bearer ${token(legacy.buyer)}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) }),
+  { params: Promise.resolve({ id: legacy.original.contract.id, milestoneId: legacy.original.milestones[0].id }) })
+  assert.equal(legacyResponse.status, 409); assert.equal((await legacyResponse.json()).code, 'CONTRACT_REVIEWED_USE_REQUIRED')
+  const failedFixture = await fixture(); await startOriginal(failedFixture)
+  const failed = await submit(failedFixture.original.contract.id, failedFixture.original.milestones[0].id, failedFixture.seller, {
+    version: 1, client_reference: crypto.randomUUID(), artifact_bundle: {} })
+  const failedReply = await api.PATCH(new NextRequest(`http://localhost/api/contracts/${failedFixture.original.contract.id}/milestones/${failedFixture.original.milestones[0].id}`, {
+    method: 'PATCH', headers: { Authorization: `Bearer ${token(failedFixture.buyer)}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...input, client_reference: crypto.randomUUID(), submission_id: failed.submission.id, content_hash: failed.submission.content_hash }) }),
+  { params: Promise.resolve({ id: failedFixture.original.contract.id, milestoneId: failedFixture.original.milestones[0].id }) })
+  assert.equal(failedReply.status, 409); assert.equal((await failedReply.json()).code, 'CONTRACT_ACCEPTANCE_STATE_CHANGED')
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+})
+
+test('both SDKs recover genuinely lost committed acceptance HTTP replies after review closes without retrying or releasing credit', { skip: !enabled }, async () => {
+  const api = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  for (const language of ['typescript', 'python']) {
+    const f = await fixture(); await startOriginal(f)
+    const first = await (await import('@/lib/contract-original-submissions')).submitOriginalReviewedContract(f.original.contract.id, f.original.milestones[0].id, f.seller, {
+      version: 1, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'Lost real decision reply' } })
+    const input = { version: 1 as const, client_reference: crypto.randomUUID(), submission_id: first.submission.id, content_hash: first.submission.content_hash, approve: true as const }
+    const token = jwt({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' })
+    const calls: Array<{ method: string; path: string; body: unknown }> = []
+    let committed: any
+    const server = createServer(async (incoming, outgoing) => {
+      try {
+        let body = ''; for await (const chunk of incoming) body += chunk
+        calls.push({ method: incoming.method!, path: incoming.url!, body: body ? JSON.parse(body) : null })
+        const request = new NextRequest(`http://localhost${incoming.url}`, { method: incoming.method, headers: {
+          Authorization: incoming.headers.authorization!, 'Content-Type': 'application/json' }, ...(incoming.method === 'PATCH' ? { body } : {}) })
+        const context = { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) }
+        const response = await (incoming.method === 'PATCH' ? api.PATCH(request, context) : api.GET(request, context))
+        const result = await response.json()
+        if (!committed && incoming.method === 'PATCH') {
+          assert.equal(response.status, 201); committed = result
+          await domain.revokeOrganizationContract(f.org, f.a.id, f.owner)
+          outgoing.destroy() // Real TCP response loss, after the acceptance transaction commits.
+        } else { outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(JSON.stringify(result)) }
+      } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+      let result: any
+      if (language === 'typescript') {
+        const client = new ClawdMarketClient({ apiKey: token, baseUrl: base })
+        await assert.rejects(client.acceptOriginalContractSubmission(f.original.contract.id, f.original.milestones[0].id, input), ClawdMarketTransportError)
+        assert.equal(calls.length, 1, 'uncertain mutation never retries automatically')
+        const recovered = await client.recoverOriginalContractAcceptance(f.original.contract.id, f.original.milestones[0].id, input.client_reference)
+        const replay = await client.acceptOriginalContractSubmission(f.original.contract.id, f.original.milestones[0].id, input)
+        result = { recovered, replay }
+      } else {
+        const source = `import json, os
+from clawdmarket import ClawdMarketClient, ClawdMarketTransportError
+f = json.loads(os.environ['CLAWDMARKET_LOCAL_ACCEPTANCE_FIXTURE'])
+c = ClawdMarketClient(f['token'], base_url=f['base'])
+try:
+    c.accept_original_contract_submission(f['contract'], f['milestone'], f['input'])
+except ClawdMarketTransportError:
+    pass
+else:
+    raise AssertionError('Expected lost committed HTTP reply')
+r = c.recover_original_contract_acceptance(f['contract'], f['milestone'], f['input']['client_reference'])
+p = c.accept_original_contract_submission(f['contract'], f['milestone'], f['input'])
+print(json.dumps({'recovered': r, 'replay': p}))`
+        const output = await promisify(execFile)('python3', ['-c', source], { env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1', PYTHONPATH: 'sdk/python',
+          CLAWDMARKET_LOCAL_ACCEPTANCE_FIXTURE: JSON.stringify({ token, base, contract: f.original.contract.id, milestone: f.original.milestones[0].id, input }) }, timeout: 30000 })
+        result = JSON.parse(output.stdout)
+      }
+      assert.deepEqual(calls.map(c => c.method), ['PATCH', 'GET', 'PATCH'])
+      assert.deepEqual(calls[0].body, { ...input, action: 'approve' }); assert.deepEqual(calls[2].body, calls[0].body)
+      assert.ok(calls[1].path.endsWith(`?acceptance_reference=${input.client_reference}`))
+      assert.deepEqual(result.recovered.decision, committed.decision); assert.deepEqual(result.replay.decision, committed.decision)
+      assert.equal(result.replay.idempotent, true); assert.equal(result.replay.financial_release_performed, false)
+      assert.equal(result.recovered.credit_remaining_principal_minor, 100); assert.equal(result.replay.credit_remaining_principal_minor, 100)
+      assert.equal((await db.select().from(schema.contract_acceptance_operations).where(eq(schema.contract_acceptance_operations.contract_id, f.original.contract.id))).length, 1)
+      assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())) }
+  }
 })

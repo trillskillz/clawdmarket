@@ -1,6 +1,6 @@
 # Local contract review foundation
 
-This unfinished credit-only foundation is local HTTP 1.119 and migration 73.
+This unfinished credit-only foundation is local HTTP 1.119 and migration 76.
 Approval alone grants no funding or release authority. It is not capability 9/10,
 a deployed product or independently demonstrated customer activity. Creation
 uses the original optional buyer-scoped `client_reference` on POST `/api/contracts`
@@ -39,37 +39,73 @@ unstarted refunds retain that original fee treatment. No new custody or withdraw
 mechanism is introduced. Reviewed companions are excluded from automatic elapsed-window approval in all
 states. This restriction alone cannot accept or pay a milestone.
 
-Explicit exact-submission acceptance, original reviewed
-funding/use accounting, milestone release/refunds, finite clients/SDK review/UI and
-genuine economic/full release acceptance remain future implementation work.
+Original-use validation and shared reviewed gross are implemented as read-only
+financial history checks. They do not authorize funding or release. Both
+credit-first and external-first reservation controls cover route, workflow, task
+and listing. Credit contributes zero external fee units. No reviewed fund endpoint
+is exposed, and direct controlled future-use test records are not public checkout
+or independent economic proof.
 
-Original-use validation and shared reviewed gross now exist as read-only financial
-history checks. They do not authorize funding or release. Both credit-first and
-external-first reservation controls pass for route, workflow, task and listing;
-credit contributes zero external fee units. New funding remains unavailable until
-exact original submission/acceptance, paid recovery and complete release acceptance.
+Original immutable seller submissions exist internally (migration 75): bounded
+finite JSON, stable saved references, exact content hashes and four SQL update/
+delete guards. Public submit remains blocked. Passing required-key presence
+checks cannot accept output or release credit. Semantic accuracy and remote
+sandbox execution remain unmeasured. No remote artifacts are fetched or executed.
 
-Internal original submission storage is now implemented (migration 75), with bounded
-finite JSON, stable references, exact content hashes and SQL-pinned immutable
-output/operation rows. It is not exposed through a public work route or SDK worker.
-The public generic submit/approve/mark_paid path explicitly blocks reviewed
-contracts. Passing key-presence checks keeps credit held and cannot accept/pay.
-Buyer exact-hash decisions, original financial release, participant work inspection
-and complete outcome acceptance remain unfinished. Preserve all linked operation,
-submission, use, review and financial rows across any rollback; an older generic
-milestone handler is incompatible with these new obligations.
+Original buyer/seller GET `/api/contracts/{id}/milestones/{milestoneId}` is private,
+no-store and timestamped. Default returns selected original output or null before
+delivery, frozen requirements and remaining held principal. Optional
+`client_reference` selects an older original seller submission, marking whether
+it is superseded. Optional `acceptance_reference` selects a saved original buyer
+decision. The selectors cannot be combined, repeated or supplemented by unknown
+query fields. Named agent:read credentials may inspect; owner/reviewer review
+scope grants no seller output or decision access. Unavailable/contradictory
+original data produces an error rather than invented empty work or zero balances.
 
-Participant original submission inspection is now available locally through GET
-`/api/contracts/{id}/milestones/{milestoneId}`. Optional client_reference selects
-the exact older seller operation; otherwise current selected output is returned.
-Only the original buyer/seller may read it, including agent:read credentials.
-Owner/reviewer approval scope alone cannot read seller output. Responses are
-private/no-store and timestamped; original financial/data errors remain unavailable.
-This read never creates buyer acceptance, credit release or a new submission.
+Explicit buyer decisions are immutable (migration 76). The local PATCH accepts:
 
-Internal exact buyer-decision storage is implemented in migration 76. Decisions
-bind both immutable submission ID and content hash; identical bytes submitted
-again after redo still require the new submission identity. Earlier decisions
-remain immutable and replay only their historical fact. Accepting does not release
-credit; public approval/payment and new reviewed funding remain unavailable until
-the complete scoped API, original financial and client/UI gates are accepted.
+```json
+{
+  "action": "approve",
+  "version": 1,
+  "client_reference": "save-original-decision-reference-first",
+  "submission_id": "<exact selected original submission UUID>",
+  "content_hash": "<exact 64 lowercase hexadecimal content hash>",
+  "approve": true
+}
+```
+
+Only the authenticated original buyer can approve. Cookie requests require CSRF;
+named agents require payments:write. Save the exact body before sending. First
+success returns 201, exact replay 200, changed command/reference or selection
+conflict 409. Missing exact fields fail validation; the command cannot fall back
+to ordinary contract approval. Failed finite checks cannot be accepted. An old
+decision replay returns the original fact before checking fresh eligibility; it
+cannot approve a replacement submission. Even identical bytes under a new
+submission ID after redo need a fresh decision. Both old and new facts survive.
+
+On uncertainty, GET with `acceptance_reference` before explicitly replaying the
+saved exact body. Read and replay report original decision ID/hash, selected
+submission ID, applies_to_current_submission, current milestone state and held
+principal. A selection match alone is not payment authority or a capability
+claim. Acceptance returns financial_release_performed:false because this command
+never releases credit. Public reviewed mark_paid is still blocked. Raw APPROVED
+or COMPLETED states are not financial settlement evidence.
+
+TypeScript methods: inspectOriginalContractSubmission,
+acceptOriginalContractSubmission, recoverOriginalContractAcceptance. Python:
+inspect_original_contract_submission, accept_original_contract_submission,
+recover_original_contract_acceptance. Both SDKs preserve the saved exact command
+and never automatically retry mutations. Their actual application HTTP response-
+loss controls recover one committed decision after review revocation, without
+credit release. This does not establish a complete funded contract journey.
+
+Remaining work: frozen original release/refund and separately authenticated admin
+adjudication recovery, scoped reviewed funding/use, consumed inventory exclusion,
+public original seller submission, finite buyer/provider restart journals, private
+human work UI, actual multi-milestone economics and complete release gates.
+No contract capability9, publication, live-payment or outreach authorization is
+implied. Preserve all original operation, decision, submission, use, review and
+financial rows across rollback. An older generic milestone handler must not serve
+new reviewed obligations; retain scoped recovery and the payment/submission
+interlocks. Existing ordinary historical contract policy stays unchanged.

@@ -1,3 +1,42 @@
+## Public exact buyer acceptance and recovery verified — migration 76
+
+The local reviewed-contract adapter now accepts only an authenticated original
+buyer command naming version 1, saved client_reference, selected immutable
+submission ID AND content hash, and approve:true. Cookie CSRF and named
+payments:write remain required. Hashless reviewed approval fails; exact commands
+cannot silently fall back to ordinary contract approval. Public mark_paid and
+seller submit remain closed, and no reviewed funding exists. Acceptance itself
+never releases credit. Count stays 8/10 and HTTP stays 1.119 locally.
+
+Participant-only GET with acceptance_reference recovers the original immutable
+decision, current selection/state, held principal and observed_at. Seller-output
+client_reference remains a separate selector; combined/repeated selectors fail.
+Owner/reviewer review authority exposes no output or decision. Identical bytes
+under a new submission ID after redo require new consent. Exact old decision
+replay returns its fact without approving replacement output.
+
+Current **86/86 Node cases** and **27 Python cases** pass, no skips/failures.
+Both SDKs lose an actual committed HTTP reply, then recover and explicitly replay
+one original decision after review revocation, with all principal still held.
+These are real transport/adapter controls over direct controlled future-use
+records backed by actual disposable local test-token deposits; they are not a
+public funding journey, admin redo ruling, live paid canary or customer adoption.
+Types/lint/SDK parity/build and production build pass. Initial typecheck overlapped
+Next generated-file replacement and failed; sequential post-build rerun passes.
+Initial Python sandbox socket denial is recorded; allowed localhost rerun passes.
+No migration changed; previous migration76 preservation remains applicable.
+
+Foundation source manifest: **45** files relative to e55e151;
+SHA-256 `d2c85a86494de6074f9d6e3ddfc18eae37c4d568bb7b7c4f13989ca4c67ac01f`. Durable evidence is under
+`docs/evidence/reviewed-contract-foundation-2026-10-15/`.
+The separate e55e151 listing candidate is unchanged and security-blocked.
+Next implement frozen original credit release/refund and separate admin-ruling
+recovery, then reviewed funding/use, consumed inventory, public seller submission,
+finite clients/private UI and complete genuine multi-milestone release gates.
+Keep everything local; no funds, production flags, custody, email or outreach.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Internal exact buyer decisions verified — migration 76
 
 The separate contract foundation now persists immutable explicit buyer decisions

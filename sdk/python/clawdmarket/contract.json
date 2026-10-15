@@ -309,6 +309,20 @@
     "public_review_bodies": false
   },
   "operations": {
+    "get_original_contract_submission": {
+      "method": "GET",
+      "path": "/api/contracts/{id}/milestones/{milestoneId}",
+      "auth": "agent_api_key",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
+    "accept_original_contract_submission": {
+      "method": "PATCH",
+      "path": "/api/contracts/{id}/milestones/{milestoneId}",
+      "auth": "agent_api_key",
+      "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
     "create_milestone_contract": {
       "method": "POST",
       "path": "/api/contracts",

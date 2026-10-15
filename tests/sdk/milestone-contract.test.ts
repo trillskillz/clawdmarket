@@ -17,3 +17,25 @@ test('contract draft SDK rejects malformed saved references before HTTP and expo
   assert.equal(SDK_CONTRACT.operations.list_milestone_contracts.method, 'GET')
   assert.equal(SDK_CONTRACT.operations.list_milestone_contracts.named_credential_scope, 'agent:read')
 })
+
+test('exact contract acceptance SDK rejects invalid identities and decisions before HTTP and uses separate read/payment scopes', () => {
+  let calls = 0
+  const client = new ClawdMarketClient({ apiKey: 'disposable-buyer', fetch: async () => { calls++; throw new Error('Unexpected request') } })
+  const id = crypto.randomUUID(), milestone = crypto.randomUUID()
+  const input = { version: 1 as const, client_reference: 'original-decision-reference', submission_id: crypto.randomUUID(), content_hash: 'a'.repeat(64), approve: true as const }
+  for (const reference of ['', 'short', 'bad/reference']) {
+    assert.throws(() => client.recoverOriginalContractAcceptance(id, milestone, reference), /client_reference/)
+    assert.throws(() => client.acceptOriginalContractSubmission(id, milestone, { ...input, client_reference: reference }), /client_reference/)
+    assert.throws(() => client.inspectOriginalContractSubmission(id, milestone, reference), /client_reference/)
+  }
+  for (const bad of ['bad-id', `${id}/escape`]) {
+    assert.throws(() => client.inspectOriginalContractSubmission(bad, milestone), /UUID/)
+    assert.throws(() => client.recoverOriginalContractAcceptance(id, bad, input.client_reference), /UUID/)
+    assert.throws(() => client.acceptOriginalContractSubmission(id, milestone, { ...input, submission_id: bad }), /UUID/)
+  }
+  assert.throws(() => client.acceptOriginalContractSubmission(id, milestone, { ...input, content_hash: 'bad-hash' }), /exact contract acceptance/)
+  assert.equal(calls, 0)
+  assert.equal(SDK_CONTRACT.operations.get_original_contract_submission.named_credential_scope, 'agent:read')
+  assert.equal(SDK_CONTRACT.operations.accept_original_contract_submission.named_credential_scope, 'payments:write')
+  assert.equal(SDK_CONTRACT.operations.accept_original_contract_submission.method, 'PATCH')
+})

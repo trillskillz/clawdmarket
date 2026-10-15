@@ -7,6 +7,8 @@ import { PurchasingError } from '@/lib/organization-purchasing-transaction';
 import { inspectOriginalReviewedContractSubmission, reviewedContractSubmissionLookup } from '@/lib/contract-original-submissions';
 import { isLocalSqliteContention, readWithLocalContentionRecovery } from '@/lib/local-sqlite-read';
 import { purchasingResult } from '@/lib/organization-purchasing-api';
+import { acceptOriginalReviewedContract, inspectOriginalReviewedContractAcceptance, reviewedContractAcceptanceLookup } from '@/lib/contract-exact-acceptance';
+import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts';
 import { milestoneActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionMilestone, nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
@@ -27,7 +29,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!auth) return purchasingResult({ error: 'Unauthorized' }, 401);
   if (!isValidUUID(id) || !isValidUUID(milestoneId)) return purchasingResult({ error: 'Invalid contract or milestone ID' }, 400);
   try {
-    const query = reviewedContractSubmissionLookup.parse(Object.fromEntries(req.nextUrl.searchParams));
+    const entries = Object.fromEntries(req.nextUrl.searchParams);
+    if ([...req.nextUrl.searchParams.keys()].length !== Object.keys(entries).length) return purchasingResult({ error: 'Repeated lookup parameter' }, 400);
+    if (Object.hasOwn(entries, 'acceptance_reference')) {
+      const query = reviewedContractAcceptanceLookup.parse(entries);
+      return purchasingResult(await readWithLocalContentionRecovery(source => inspectOriginalReviewedContractAcceptance(source, id, milestoneId, auth.userId, query.acceptance_reference)));
+    }
+    const query = reviewedContractSubmissionLookup.parse(entries);
     const result = await readWithLocalContentionRecovery(source => inspectOriginalReviewedContractSubmission(source, id, milestoneId, auth.userId, query.client_reference));
     return purchasingResult(result);
   } catch (error: any) {
@@ -82,7 +90,9 @@ export async function PATCH(
   }
 
   try {
-    const validated = milestoneActionSchema.parse(await req.json());
+    // Retain legacy artifact capacity (100k JS characters) while bounding the HTTP body.
+    const raw = await readBoundedJson(req, 512 * 1024);
+    const validated = milestoneActionSchema.parse(raw);
     const [contract] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1);
     if (!contract) return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
     if (contract.buyer_id !== auth.userId && contract.seller_id !== auth.userId) {
@@ -90,9 +100,17 @@ export async function PATCH(
     }
     const [review] = await db.select({ id: organization_contract_authorizations.id }).from(organization_contract_authorizations)
       .where(eq(organization_contract_authorizations.contract_id, contract.id)).limit(1);
-    if (review && ['submit', 'approve', 'mark_paid'].includes(validated.action)) {
-      return NextResponse.json({ error: 'Original reviewed submission and acceptance operations are not enabled on this public path yet.',
-        code: 'CONTRACT_REVIEWED_FULFILLMENT_UNAVAILABLE' }, { status: 409 });
+    if (!review && validated.action === 'approve' && ['version', 'client_reference', 'submission_id', 'content_hash', 'approve'].some(key => Object.hasOwn(raw, key))) {
+      throw new PurchasingError('CONTRACT_REVIEWED_USE_REQUIRED');
+    }
+    if (review && validated.action === 'approve') {
+      const { action: _action, ...input } = raw;
+      const result = await acceptOriginalReviewedContract(id, milestoneId, auth.userId, input);
+      return purchasingResult(result, result.idempotent ? 200 : 201);
+    }
+    if (review && ['submit', 'mark_paid'].includes(validated.action)) {
+      return purchasingResult({ error: 'Original reviewed submission and payment operations are not enabled on this public path yet.',
+        code: 'CONTRACT_REVIEWED_FULFILLMENT_UNAVAILABLE' }, 409);
     }
     if (['DRAFT', 'FUNDED', 'COMPLETED', 'CANCELED', 'EXPIRED', 'REFUNDED'].includes(contract.state)) {
       return NextResponse.json({ error: 'Contract is not accepting milestone actions' }, { status: 409 });
@@ -223,9 +241,9 @@ export async function PATCH(
       .orderBy(asc(contract_milestones.milestone_index));
     return NextResponse.json({ contract: updatedContract, milestones });
   } catch (error: any) {
-    if (error instanceof PurchasingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    if (error instanceof PurchasingError || error instanceof ArtifactError) return purchasingResult({ error: error.message, code: error.code }, error.status);
     if (error?.issues || error?.errors) {
-      return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });
+      return purchasingResult({ error: 'Validation failed', details: error.issues || error.errors }, 400);
     }
     if (error instanceof ContractSettlementError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });

@@ -14,6 +14,9 @@ export const reviewedContractAcceptanceInput = z.object({ version: z.literal(1),
   submission_id: z.uuid(), content_hash: z.string().regex(/^[a-f0-9]{64}$/), approve: z.literal(true),
 }).strict()
 type Input = z.output<typeof reviewedContractAcceptanceInput>
+export const reviewedContractAcceptanceLookup = z.object({
+  acceptance_reference: reviewedContractAcceptanceInput.shape.client_reference,
+}).strict()
 function fail(code: string, status = 409): never { throw new PurchasingError(code, status) }
 const hash = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
 function requestHash(contractId: string, milestoneId: string, buyer: string, authorityHash: string, input: Input) {
@@ -40,7 +43,22 @@ async function dto(source: PurchasingSource, decision: typeof decisions.$inferSe
     financial_release_performed: false as const, semantic_accuracy: 'unmeasured' as const }
 }
 
-/** Internal buyer decision only. No public acceptance API or credit release is enabled. */
+/** Read an original decision without changing current selection, approval or credit. */
+export async function inspectOriginalReviewedContractAcceptance(source: PurchasingSource, contractId: string,
+  milestoneId: string, actor: string, reference: string) {
+  reviewedContractAcceptanceLookup.parse({ acceptance_reference: reference })
+  const [participant] = await source.select().from(contracts).where(eq(contracts.id, contractId)).limit(1)
+  if (!participant || ![participant.buyer_id, participant.seller_id].includes(actor)) fail('CONTRACT_ACCEPTANCE_NOT_FOUND', 404)
+  const original = await originalReviewedContractUse(source, contractId)
+  if (!original || ![original.authorization.buyer_id, original.authorization.seller_id].includes(actor)) fail('CONTRACT_ACCEPTANCE_NOT_FOUND', 404)
+  const [decision] = await source.select().from(decisions).where(and(eq(decisions.contract_id, contractId),
+    eq(decisions.milestone_id, milestoneId), eq(decisions.buyer_id, original.authorization.buyer_id),
+    eq(decisions.client_reference, reference))).limit(1)
+  if (!decision) fail('CONTRACT_ACCEPTANCE_NOT_FOUND', 404)
+  return { ...await dto(source, decision), observed_at: new Date().toISOString() }
+}
+
+/** Authenticated original buyer decision only. Acceptance never releases credit. */
 export async function acceptOriginalReviewedContract(contractId: string, milestoneId: string, buyer: string, rawInput: unknown) {
   const input = reviewedContractAcceptanceInput.parse(rawInput)
   return purchasingTransaction(async source => {

@@ -16,7 +16,7 @@ from email.utils import parsedate_to_datetime
 from .enterprise import OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, original_grant_reference, original_tempo_credential
 from .listing import OrganizationListingProposal, OrganizationListingDecision, OrganizationListingCheckoutInput, OrganizationListingCheckout, original_listing_reference
 from .task import OrganizationTaskProposal, OrganizationTaskDecision, OrganizationTaskCheckoutInput, OrganizationTaskCheckout, original_task_reference
-from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, original_contract_creation_reference
+from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, original_contract_creation_reference
 
 SDK_CONTRACT: dict[str, Any] = json.loads(files("clawdmarket").joinpath("contract.json").read_text())
 JSON = dict[str, Any]
@@ -197,6 +197,25 @@ class ClawdMarketClient:
         return cast(OriginalContractCreation, self._call('list_milestone_contracts', query={
             'client_reference': original_contract_creation_reference(client_reference),
         }))
+
+    def inspect_original_contract_submission(self, contract_id: str, milestone_id: str, client_reference: str | None = None) -> JSON:
+        query = None if client_reference is None else {'client_reference': original_contract_creation_reference(client_reference)}
+        return self._call('get_original_contract_submission', contract_id, path_parameters={'milestoneId': milestone_id}, query=query)
+
+    def accept_original_contract_submission(self, contract_id: str, milestone_id: str, request: OriginalContractAcceptanceInput) -> OriginalContractAcceptance:
+        """Save the exact reference, submission ID and hash first. No credit release or automatic retry."""
+        original_contract_creation_reference(request.get('client_reference'))
+        submission = request.get('submission_id')
+        if (not isinstance(submission, str) or UUID.fullmatch(submission) is None
+                or type(request.get('version')) is not int or request.get('version') != 1 or request.get('approve') is not True
+                or not isinstance(request.get('content_hash'), str) or re.fullmatch(r'[a-f0-9]{64}', request['content_hash']) is None):
+            raise ValueError('Invalid exact contract acceptance')
+        return cast(OriginalContractAcceptance, self._call('accept_original_contract_submission', contract_id,
+                    body={**request, 'action': 'approve'}, path_parameters={'milestoneId': milestone_id}))
+
+    def recover_original_contract_acceptance(self, contract_id: str, milestone_id: str, client_reference: str) -> OriginalContractAcceptance:
+        return cast(OriginalContractAcceptance, self._call('get_original_contract_submission', contract_id,
+                    path_parameters={'milestoneId': milestone_id}, query={'acceptance_reference': original_contract_creation_reference(client_reference)}))
 
     def get_reputation(self, agent_id: str, *, scope: Mapping[str, str] | None = None) -> JSON:
         """Public scoped evidence; no buyer IDs, review bodies or payment authority."""

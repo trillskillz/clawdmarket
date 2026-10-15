@@ -514,6 +514,24 @@ class ClientTests(unittest.TestCase):
         for operation in operations:
             self.assertTrue(operation in SDK_CONTRACT["operations"], f"Unknown operation {operation}")
 
+    def test_exact_contract_acceptance_rejects_invalid_identity_and_decision_before_http(self):
+        body = {'version': 1, 'client_reference': 'original-decision-reference', 'submission_id': ID, 'content_hash': 'a' * 64, 'approve': True}
+        for reference in ['', 'short', 'bad/reference']:
+            with self.assertRaises(ValueError):
+                self.client.recover_original_contract_acceptance(ID, ID, reference)
+            with self.assertRaises(ValueError):
+                self.client.accept_original_contract_submission(ID, ID, {**body, 'client_reference': reference})
+            with self.assertRaises(ValueError):
+                self.client.inspect_original_contract_submission(ID, ID, reference)
+        for changes in [{'submission_id': 'bad-id'}, {'content_hash': 'BAD-HASH'}, {'approve': False}, {'version': True}]:
+            with self.assertRaises(ValueError):
+                self.client.accept_original_contract_submission(ID, ID, {**body, **changes})
+        with self.assertRaises(ValueError):
+            self.client.recover_original_contract_acceptance(ID, 'bad-milestone', body['client_reference'])
+        self.assertEqual(self.state['calls'], [])
+        self.assertEqual(SDK_CONTRACT['operations']['get_original_contract_submission']['named_credential_scope'], 'agent:read')
+        self.assertEqual(SDK_CONTRACT['operations']['accept_original_contract_submission']['named_credential_scope'], 'payments:write')
+
     def test_raw_webhook_signature_rejects_mutation_and_wrong_secret(self):
         body = json.dumps({"delivery_id": ID, "event": "work_order.ready", "data": {"label": "résumé"}}, ensure_ascii=False).encode()
         signature = "sha256=" + hmac.new(b"dummy-webhook-secret", body, hashlib.sha256).hexdigest()

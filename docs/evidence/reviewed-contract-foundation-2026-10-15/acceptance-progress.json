@@ -1,5 +1,5 @@
 {
-  "stage": "internal exact buyer decisions bound to immutable submission IDs and hashes; no public acceptance or financial release",
+  "stage": "Authenticated public exact buyer acceptance and private original-reference recovery; no reviewed funding or release",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 76,
@@ -31,7 +31,7 @@
     "internal_original_submission": true,
     "participant_original_submission_get": true,
     "internal_exact_buyer_acceptance": true,
-    "public_reviewed_milestone_acceptance": false,
+    "public_reviewed_milestone_acceptance": true,
     "reviewed_credit_release": false
   },
   "records": {
@@ -102,6 +102,42 @@
     "identical-output-redo": {
       "local_log": "/tmp/clawdmarket-contract-exact-acceptance-identical-redo-2026-10-15.log",
       "log_sha256": "676ea56c8e2bdecd85b1512b1af1d3cdc819644d20efadb6f42feccf0e75948a"
+    },
+    "public-acceptance-focused": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-final-focused-2026-10-15.log",
+      "log_sha256": "35a6c919daee1b355ddd2ece87398484ac142a10fd04f715b7df163f85d96b5b"
+    },
+    "public-acceptance-build": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-build-2026-10-15.log",
+      "log_sha256": "818ec61528f8fc4361565ce968c87f9cd963012fc2e7cbcaf59328a930f1c15d"
+    },
+    "public-acceptance-types": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-final-types-after-build-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "public-acceptance-lint": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-final-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "public-acceptance-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "public-acceptance-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "public-acceptance-python": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-python-allowed-2026-10-15.log",
+      "log_sha256": "5b20cae0d8e42752cae994c6add67a9a9fd35011463af7552fe13589e933e12f"
+    },
+    "public-acceptance-types-generated-race": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-final-types-2026-10-15.log",
+      "log_sha256": "d2fc3aa6309eee9cd5ad194936535008046d16354e9decdb595843138077a81e"
+    },
+    "public-acceptance-python-sandbox-denial": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-python-2026-10-15.log",
+      "log_sha256": "71d10887547a5771e53fed77044404162f91268068dc7c390af60e43e01db54b"
     }
   },
   "compatibility_cases": {
@@ -128,7 +164,7 @@
   },
   "source_manifest": {
     "files": 45,
-    "sha256": "c93c6eb54c6a0c1f183fad70329ded71bf736ff643ef48a77f36a36a171ca970",
+    "sha256": "d2c85a86494de6074f9d6e3ddfc18eae37c4d568bb7b7c4f13989ca4c67ac01f",
     "baseline": "e55e151"
   },
   "private_inspection_cases": {
@@ -151,5 +187,24 @@
     "passed": 1,
     "failed": 0,
     "skipped": 0
-  }
+  },
+  "public_acceptance_cases": {
+    "passed": 86,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Current API/original credit/creation/review/canonical contract/TypeScript SDK regression; both real HTTP lost committed acceptance replies, including Python SDK"
+  },
+  "python_cases": {
+    "passed": 27,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Local HTTP SDK suite; allowed localhost listeners after sandbox socket denial"
+  },
+  "limitations_public_acceptance": [
+    "Controlled future-use records over actual disposable local test-token deposits; no public reviewed funding or completed economic journey",
+    "No current contract full predeploy/browser release acceptance, no capability9",
+    "Initial parallel typecheck lost generated .next files during build; final sequential rerun passes",
+    "Initial Python suite could not open localhost sockets in sandbox; permitted local-listener rerun passes",
+    "Migration76 unchanged; prior preservation is applicable, not repeated in this adapter batch"
+  ]
 }
