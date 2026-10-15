@@ -125,6 +125,47 @@ test('fresh review, credit rail, department and buyer ceilings fail before any o
   }
 })
 
+test('fresh scoped FUND rechecks current owner, original agent, selected reviewer and participant eligibility after genuine approval', { skip: !enabled }, async () => {
+  for (const kind of ['owner', 'agent_link', 'reviewer_revoked', 'reviewer_banned', 'buyer_banned', 'seller_banned', 'owner_banned', 'team_archived', 'buyer_inactive', 'seller_private', 'reviewer_seller_owner', 'grant_revoked']) {
+    const f = await fixture(), credit = await import('@/lib/account-credit')
+    const beforeFees = (await credit.creditBalance('system_marketplace_fees')).available_minor
+    if (kind === 'owner') await db.update(schema.organizations).set({ owner_account_id: f.other }).where(eq(schema.organizations.id, f.org))
+    if (kind === 'agent_link') await db.update(schema.agent_owners).set({ userId: f.other }).where(eq(schema.agent_owners.agentId, f.buyerAgent))
+    if (kind === 'reviewer_revoked') await (await import('@/lib/organization-purchasing')).revokePurchasingRole(f.org, f.owner, f.roleId)
+    if (kind.endsWith('_banned')) {
+      const actor = kind === 'reviewer_banned' ? f.reviewer : kind === 'buyer_banned' ? f.buyer : kind === 'seller_banned' ? f.seller : f.owner
+      await db.update(schema.users).set({ is_banned: true }).where(eq(schema.users.id, actor))
+    }
+    if (kind === 'team_archived') await db.update(schema.organization_teams).set({ status: 'archived' }).where(eq(schema.organization_teams.id, f.team))
+    if (kind === 'buyer_inactive') await db.update(schema.agents).set({ status: 'inactive' }).where(eq(schema.agents.id, f.buyerAgent))
+    if (kind === 'seller_private') await db.update(schema.agents).set({ visibility: 'private' }).where(eq(schema.agents.id, f.providerAgent))
+    if (kind === 'reviewer_seller_owner') await db.insert(schema.agent_owners).values({ agentId: f.providerAgent, userId: f.reviewer, establishedBy: 'disposable-guard-fixture' })
+    if (kind === 'grant_revoked') assert.equal((await (await import('@/app/api/organizations/[id]/contract-authorizations/[authorizationId]/route')).DELETE(request(`${f.prefix}/${f.a.id}`, f.owner, 'DELETE'), f.context)).status, 200)
+    const response = await post(f)
+    assert.ok([401, 403, 409].includes(response.status), `${kind}: ${response.status} ${JSON.stringify(await response.clone().json())}`)
+    await unchanged(f)
+    assert.equal((await credit.creditBalance('system_marketplace_fees')).available_minor, beforeFees)
+    assert.equal((await db.select().from(schema.credit_entries).where(eq(schema.credit_entries.reference, f.original.contract.id))).length, 0)
+  }
+})
+
+test('fresh scoped FUND rechecks frozen agreement, exact authority and original expiry after genuine approval', { skip: !enabled }, async t => {
+  for (const kind of ['quote', 'milestone', 'acceptance_spec', 'deadline', 'authority', 'expired_review']) {
+    const f = await fixture()
+    if (kind === 'quote') await db.update(schema.contracts).set({ total_amount: 2 }).where(eq(schema.contracts.id, f.original.contract.id))
+    if (kind === 'milestone') await db.update(schema.contract_milestones).set({ title: 'Changed after exact review' }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+    if (kind === 'acceptance_spec') await db.update(schema.contract_milestones).set({ acceptance_spec: '{"required_artifacts":["changed"]}' }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+    if (kind === 'deadline') await db.update(schema.contract_milestones).set({ deadline_at: new Date(Date.now() + 1000) }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+    if (kind === 'expired_review') t.mock.timers.enable({ apis: ['Date'], now: Date.parse(f.a.terms.expires_at) + 1000 })
+    try {
+      const response = await post(f, f.buyer, kind === 'authority' ? { ...f.funding, authority_hash: 'b'.repeat(64) } : f.funding)
+      assert.equal(response.status, 409, `${kind}: ${JSON.stringify(await response.clone().json())}`)
+      await unchanged(f)
+      assert.equal((await db.select().from(schema.credit_entries).where(eq(schema.credit_entries.reference, f.original.contract.id))).length, 0)
+    } finally { if (kind === 'expired_review') t.mock.timers.reset() }
+  }
+})
+
 test('final funding-reference append failure rolls back credit, fee, attribution, original use, contract and inventory together', { skip: !enabled }, async () => {
   const f = await fixture()
   await db.$client.execute("CREATE TRIGGER injected_contract_funding_append BEFORE INSERT ON organization_contract_funding_requests BEGIN SELECT RAISE(ABORT, 'injected_contract_funding_append'); END")

@@ -1,10 +1,11 @@
 {
   "baseline_listing_candidate": "e55e151",
-  "scope": "Unfinished contract release foundation with default-disabled scoped funding, finite journals/process/economic/shared-budget recovery, private organizational review and actual named-party browser fulfillment verified. Full release gates and final fresh-funding drift coverage remain incomplete. Not capability9, publication or live execution permission.",
+  "scope": "Original reviewed contract funding/fulfillment and fresh authority drift coverage implemented; security dependency path removed. Comprehensive cumulative release gates are running. Publication is authorized after security remediation; no live execution or rollout enablement is authorized.",
   "http_contract": "1.119",
   "migrations": 79,
   "files": {
     ".env.example": "0c10df70fe08cc1c645f35d95fdc2475e18fb3cf4997b6c11d447d353b8c66d8",
+    ".pnpmfile.cjs": "9f62dd9bf5315bcd5fdd36202463cee8850b45e17762d0aa913bc59fa1fb636f",
     "app/api/admin/contracts/disputes/[id]/resolve/route.ts": "2cb49f75db12e971a07612bd8dc0f4083b2672c1f5220659b465fb7b419b6310",
     "app/api/contracts/[id]/milestones/[milestoneId]/release/route.ts": "a9cd9dd764672db19811befb6c8eb9829fdd95b964f82ac20cf8caff600a3302",
     "app/api/contracts/[id]/milestones/[milestoneId]/route.ts": "46b73af93862ff1648ce1443f33aa84d2847127f10dd480163b906c1db79273a",
@@ -58,8 +59,12 @@
     "migrations/2026-10-15-contract-original-submissions-v1.sql": "4eaa16058712b949b07e9a28e517853010e187d16a31668e13820897d42c7796",
     "migrations/2026-10-15-organization-contract-original-uses-v1.sql": "3b7e4dd550f396e57b5b812468187dbf41a80bc091976a95900561e441a85d32",
     "migrations/2026-10-15-organization-contract-review-draft-v1.sql": "5c5be14bd41d9e76f2ac9be31ffaa762afe065510c60fb0838ccc04fb6d8d383",
+    "package.json": "08637503dbcc4713870f445adc85e843b09e2203dc3624d9e120a115b89b3723",
+    "patches/@next__eslint-plugin-next@16.3.8.patch": "ed179f5e08daa9ed6800fccabbc6679f1544a89020af18ed6a684dec30761b25",
+    "pnpm-lock.yaml": "04121b42e64b57652594d3fec6f43cd306e904951785e6c350c5b8335f66aef1",
     "scripts/contract-command-worker.mjs": "15ac05ecb6dbad845d908f316ddf9eb88dad890324183aa3531f8164e7ad222e",
     "scripts/migrate-runtime-schema.ts": "d1273d316faab3a0d51c1c255cc57510f7bc1c6ed81ea6f35d16f49be98cbd58",
+    "scripts/predeploy-check.sh": "f443ca9b3a2764dce52255419dd40f67477cbb0190f4d7624b39181f3683d785",
     "sdk/python/clawdmarket/__init__.py": "12cbd9e14f3bdfa3cbcc7d1656a1d39870628de6423018d9cb5163c9af5d7fa6",
     "sdk/python/clawdmarket/client.py": "5b0b625d192fbf39bd1e43b779d9a136acd1ba6e8e43b8db09132e6f1f60a10c",
     "sdk/python/clawdmarket/contract.json": "5f5f4908e7e0157ca8495cc3a27b8edd1ff73ba3519d3e0e7bbcd0789a40304e",
@@ -75,12 +80,13 @@
     "tests/api/organization-contract-refund-recovery.test.ts": "a2b97d95c4a110faade8b96ea5c972dca912cf69fdfbe2fc781d3bbe245b4973",
     "tests/api/organization-contract-review-races.test.ts": "3a6f3f7a93073506896681174b9bec111dc798a01e61b435ea547d856798c57a",
     "tests/api/organization-contract-review.test.ts": "a9f6645767e6ba2a95d80cfd45bcd9b9632c2a85166a1975120d581ef97b4dfe",
-    "tests/api/organization-contract-scoped-funding.test.ts": "e0aa9e012eeac2a620c1caffb646ed1702c6677491d5783c88a32059f8565085",
+    "tests/api/organization-contract-scoped-funding.test.ts": "3e15994391b13ef8143ae73fb5980d7a9cec76502c4779eef01e5af461cd5a72",
     "tests/helpers/contract-creation-process.ts": "81e4856400491dfba47ba36ec1955db3d6ffa1130d535c188a58495aba1c989f",
     "tests/helpers/contract-scoped-funding-process.ts": "b0ab841c91acc337439acffaffb1806ee557ee5e10b028982127de612203c594",
     "tests/helpers/reviewed-contract-fixture.ts": "bc7c488d4880041568fd10794b0c3ba3ec2354e8fd3052e4be8e4766a0f71a6c",
     "tests/logic/contract-command-worker.test.ts": "44e1b8c138e395f523eb63b398a23b354e57e4654868ea29be7e7a4b7c205304",
     "tests/logic/runtime-schema-migration.test.ts": "0412a07b0fde5b1df14868fe096acf79d6de5f61a34453a43709f3ad27b09416",
-    "tests/sdk/milestone-contract.test.ts": "885f12cc4251d0659351d40f8331ffaa75e07949c62141a4e41d083130747711"
+    "tests/sdk/milestone-contract.test.ts": "885f12cc4251d0659351d40f8331ffaa75e07949c62141a4e41d083130747711",
+    "tests/security/next-eslint-dependency.test.ts": "84e2082348475b7f4be01b7ee3e7ead6ce1fdf91b01e8944a82d6e7c9be52ca2"
   }
 }
