@@ -1,0 +1,8 @@
+{
+  "run_id": 38691824558,
+  "head_sha": "96a017b6019920f47af32d86a7e476c9b9c07808",
+  "log_sha256": "308e08765a631df234948488e269aab1ff9e604b7b4d1006485b1422a6b4fe95",
+  "readiness_rpc_only": true,
+  "paid_canary_executed": false,
+  "worker_anomaly_and_treasury_evidence_established": false
+}

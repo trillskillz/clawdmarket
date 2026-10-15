@@ -1,3 +1,24 @@
+## Corrected listing history integrated into contract continuation
+
+Accepted listing candidate **e55e151**, tested source **9d48c39**, is preserved in
+`/home/void/Work/clawdmarket-reviewed-listing-scope-fix`. All 172 of its source
+hashes and complete release gates passed there. Its source manifest binds that
+candidate, not this unfinished contract tree (currently 73 migrations).
+The integration retains both inventory-scope checks and all seven regressions.
+Here the original-draft helper checks listing scope inside its creation transaction;
+funding retains both the original listing check and the new contract-companion
+exclusion. Conflict resolution preserves exactly the previously tested contract
+implementation, including original-reference recovery and maintenance controls.
+The accepted listing candidate's audits/evidence are added without replacing any
+contract financial behavior. No publication, flags or live payments are authorized.
+
+Current contract focus remains **54/54**, plus one genuine disposable deposited-
+credit backing/guard case, all passing. Reviewed contract funding/acceptance/
+settlement and finite client/UI outcomes remain unfinished; no capability 9/10.
+Continue the bounded credit exposure/submission/acceptance dependencies in
+`docs/ORGANIZATION_CONTRACT_CREDIT_EXPOSURE_DESIGN_2026-10-15.md` before exposing
+any reviewed contract funding path. Never infer demand from controlled fixtures.
+
 ## Contract backing and maintenance controls — 2026-10-15
 
 The separate local foundation now proves one actual token deposit on an unforked
