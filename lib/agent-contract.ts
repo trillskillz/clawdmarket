@@ -523,9 +523,9 @@ const benchmarkReportBody = { type: 'object', additionalProperties: false, requi
 
 export const AGENT_ACTIONS: AgentAction[] = [
   { id: 'get_original_contract_submission', label: 'Inspect original reviewed contract work',
-    description: 'Original funded buyer/seller only. Default reads the selected immutable output. client_reference recovers an older seller submission; acceptance_reference recovers an original buyer decision. Selectors are mutually exclusive. Review authority grants no artifact access. Reads never accept or pay.',
+    description: 'Original funded buyer/seller only. Default reads the selected immutable output. client_reference recovers an older seller submission; acceptance_reference recovers an original buyer decision; adjudication_reference recovers a separate original admin outcome by dispute UUID. Selectors are mutually exclusive. Review authority grants no artifact access. Reads never accept or pay.',
     method: 'GET', endpoint: '/api/contracts/{id}/milestones/{milestoneId}', auth: 'agent_api_key', payment: null,
-    required: ['id', 'milestoneId'], optional: ['client_reference', 'acceptance_reference'] },
+    required: ['id', 'milestoneId'], optional: ['client_reference', 'acceptance_reference', 'adjudication_reference'] },
   { id: 'accept_original_contract_submission', label: 'Accept exact original reviewed contract output',
     description: 'Original payments:write buyer explicitly accepts the selected immutable submission ID AND content hash. Save exact body/reference first; recover acceptance_reference after uncertainty. Exact replay cannot approve a replacement submission. No credit is released. Reviewed funding and mark_paid remain unavailable.',
     method: 'PATCH', endpoint: '/api/contracts/{id}/milestones/{milestoneId}', auth: 'agent_api_key', payment: null,
@@ -1712,10 +1712,11 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     },
     '/api/contracts/{id}/milestones/{milestoneId}': {
       get: { operationId: 'get_original_contract_submission', summary: 'Inspect private original reviewed milestone output', security: authenticated,
-        description: 'Original funded reviewed-contract buyer or seller only. Organization review grants no output access. Default returns the selected original submission; client_reference recovers older seller output; acceptance_reference recovers an original buyer decision and whether it still names the current selected submission. Selectors are mutually exclusive and cannot repeat. Includes remaining held principal and observation time. Finite checks do not measure semantic accuracy or remote execution. This read grants no funding, acceptance or release; reviewed funding and public submission remain unavailable.',
+        description: 'Original funded reviewed-contract buyer or seller only. Organization review grants no output access. Default returns the selected original submission; client_reference recovers older seller output; acceptance_reference recovers an original buyer decision and whether it still names the current selected submission. adjudication_reference recovers a separate original admin ruling with its actual credit distribution. Selectors are mutually exclusive and cannot repeat. Includes remaining held principal and observation time. Finite checks do not measure semantic accuracy or remote execution. This read grants no funding, acceptance or release; reviewed funding and public submission remain unavailable.',
         parameters: [tradeIdParameter, { name: 'milestoneId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
           { name: 'client_reference', in: 'query', required: false, schema: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' } },
-          { name: 'acceptance_reference', in: 'query', required: false, schema: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' } }],
+          { name: 'acceptance_reference', in: 'query', required: false, schema: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' } },
+          { name: 'adjudication_reference', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } }],
         responses: { 200: { description: 'Private/no-store frozen requirements and original submission or null before delivery, current selection and held principal; no financial success inferred from state alone' },
           400: { description: 'Invalid ID or bounded lookup' }, 401: { description: 'Authentication required' }, 404: { description: 'Original reviewed work unavailable or caller is not an original participant' },
           409: { description: 'Original financial or submission evidence is contradictory; no permission granted' }, 503: { description: 'Private inspection unavailable; retain original reference and retry inspection' } } },
@@ -1727,6 +1728,22 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
           400: { description: 'Missing or invalid exact acceptance terms' }, 401: { description: 'Authentication or named credential scope required' }, 403: { description: 'Original buyer or CSRF required' },
           404: { description: 'Contract not found or private participant scope unavailable' }, 409: { description: 'Selection, finite checks, original evidence or request reference conflict; no acceptance or release' },
           413: { description: 'Bounded request exceeded' }, 503: { description: 'Storage unavailable; recover original acceptance_reference' } } },
+    },
+    '/api/admin/contracts/disputes/{id}/resolve': {
+      get: { operationId: 'get_original_contract_adjudication_admin', summary: 'Configured admin recovers an original reviewed ruling', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], description: 'Authenticated currently configured administrator account only; agent keys and organizational reviewer roles grant no authority. Original dispute UUID recovers a private immutable ruling and pinned original credit distribution. Redo records no payment, even after a later payout. No legacy outcomes are inferred and no dispute artifacts are returned. This read never resolves, accepts or pays.',
+        responses: { 200: { description: 'Private/no-store original admin outcome, actual credit distribution, current held principal and observation time' },
+          400: { description: 'Invalid reference or unsupported query' }, 401: { description: 'Account authentication required' }, 403: { description: 'Configured administrator required' },
+          404: { description: 'No original reviewed adjudication record' }, 409: { description: 'Contradictory original evidence; no financial claim granted' }, 503: { description: 'Original outcome unavailable; retain dispute UUID' } } },
+      patch: { operationId: 'resolve_contract_dispute_admin', summary: 'Configured admin adjudicates an original contract dispute', security: ownerAuthenticated,
+        parameters: [tradeIdParameter], description: 'Existing admin buyer_win/seller_win/split/redo policy; cookie writes require CSRF. Reviewed outcomes validate frozen original credit use and amount and atomically preserve an immutable original ruling with exact ledger IDs. This is separate from explicit buyer acceptance and grants no semantic quality or remote execution guarantee. Save the dispute UUID first; after uncertainty GET the original result. Resolved replay returns409 and cannot replace the original ruling. Ordinary historical behavior is retained.',
+        requestBody: { required: true, content: { 'application/json': { schema: { oneOf: [
+          { type: 'object', required: ['ruling'], properties: { ruling: { enum: ['buyer_win', 'seller_win', 'redo'] } } },
+          { type: 'object', required: ['ruling', 'split_percent_to_seller'], properties: { ruling: { const: 'split' }, split_percent_to_seller: { type: 'number', minimum: 0, maximum: 100 } } },
+        ] } } } }, responses: { 200: { description: 'Original ruling committed; reviewed outcome explicitly identifies admin adjudication' },
+          400: { description: 'Invalid resolution' }, 401: { description: 'Authentication required' }, 403: { description: 'Administrator or CSRF required' },
+          404: { description: 'Dispute not found' }, 409: { description: 'Already resolved/settled or original financial evidence conflicts; recover saved dispute UUID' },
+          500: { description: 'Resolution unavailable; inspect original result before any explicit retry' } } },
     },
     '/api/contracts/{id}': {
       get: { operationId: 'get_milestone_contract', summary: 'Inspect a participant-owned contract and milestones', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Private contract and milestones' } } },

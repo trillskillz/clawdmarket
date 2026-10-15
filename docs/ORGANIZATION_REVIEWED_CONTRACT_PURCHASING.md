@@ -1,6 +1,6 @@
 # Local contract review foundation
 
-This unfinished credit-only foundation is local HTTP 1.119 and migration 77.
+This unfinished credit-only foundation is local HTTP 1.119 and migration 78.
 Approval alone grants no funding or release authority. It is not capability 9/10,
 a deployed product or independently demonstrated customer activity. Creation
 uses the original optional buyer-scoped `client_reference` on POST `/api/contracts`
@@ -113,9 +113,20 @@ The original upfront fee stays charged and history remains in reviewed gross.
 
 Admin resolutions validate original reviewed financial use/frozen amounts and
 report a separate admin_adjudication basis. They cannot create explicit buyer
-consent or buyer-directed release records. Immutable saved-reference admin ruling
-recovery and public proof interfaces remain unfinished. Do not treat a mutable
-ruling/state or a timeout as an original financial receipt.
+consent or buyer-directed release records. Migration78 now pins new reviewed admin outcomes and their resolved disputes
+with four SQL immutability guards. The original dispute UUID is the recovery
+reference. GET the milestone with adjudication_reference to read its immutable
+ruling, exact split percentage, measured credit distribution and pinned original
+ledger row IDs. Only original participants can read it. Configured admin GET
+`/api/admin/contracts/disputes/{id}/resolve` independently checks admin account
+authority and returns the same original outcome without seller dispute artifacts.
+No historical outcomes are inferred. Resolved PATCH replay stays409: inspect the
+saved original dispute ID before any retry. TypeScript/Python provide
+recoverOriginalContractAdjudication/recover_original_contract_adjudication.
+Redo reports financial_posting_confirmed:false forever for that redo operation,
+even after another legitimate ruling or exact buyer release pays the milestone.
+A mutable state flag alone cannot create this receipt. These reads grant no
+admin adjudication, buyer consent or payment authority.
 
 Reviewed unstarted cancel/expire and maintenance now validate original financial
 use before changing state or credit. Original principal is refundable, the upfront
@@ -126,8 +137,8 @@ listing sold; durable cross-scope exclusion after manual reactivation still need
 completion before reviewed funding. Contradictory original evidence rolls back
 maintenance and returns a timestamped explicit failure, not zero successful work.
 
-Remaining work: durable consumed inventory, immutable admin
-adjudication recovery, scoped reviewed funding/use, consumed inventory exclusion,
+Remaining work: durable consumed inventory, public original seller submission
+and exact credit-release/recovery adapters, scoped reviewed funding/use, consumed inventory exclusion,
 public original seller submission, finite buyer/provider restart journals, private
 human work UI, actual multi-milestone economics and complete release gates.
 No contract capability9, publication, live-payment or outreach authorization is

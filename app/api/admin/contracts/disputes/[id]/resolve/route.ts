@@ -6,6 +6,9 @@ import { db } from '@/lib/db';
 import { contract_disputes, contract_milestones, contracts, credit_entries, organization_contract_authorizations } from '@/lib/schema';
 import { originalReviewedContractUse } from '@/lib/organization-contract-uses';
 import { PurchasingError } from '@/lib/organization-purchasing-transaction';
+import { originalContractAdjudication, recordOriginalContractAdjudication } from '@/lib/contract-original-adjudication';
+import { purchasingResult } from '@/lib/organization-purchasing-api';
+import { readWithLocalContentionRecovery } from '@/lib/local-sqlite-read';
 import { isValidUUID } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
@@ -26,6 +29,20 @@ const resolutionSchema = z.discriminatedUnion('ruling', [
   z.object({ ruling: z.literal('redo') }),
   z.object({ ruling: z.literal('split'), split_percent_to_seller: z.number().min(0).max(100) }),
 ]);
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const auth = await authenticateRequest(req.headers.get('authorization') || (req.cookies.get('auth-token')?.value ? `Bearer ${req.cookies.get('auth-token')!.value}` : null));
+  const denied = authorizeAdmin(auth ? { userId: auth.userId, email: auth.email } : null);
+  if (denied) return denied;
+  if (!isValidUUID(id) || req.nextUrl.searchParams.size) return purchasingResult({ error: 'Invalid original dispute reference' }, 400);
+  try { return purchasingResult(await readWithLocalContentionRecovery(source => originalContractAdjudication(source, id))); }
+  catch (error) {
+    if (error instanceof PurchasingError) return purchasingResult({ error: error.message, code: error.code }, error.status);
+    console.error('Original admin adjudication read failed:', error);
+    return purchasingResult({ error: 'Original adjudication unavailable' }, 503);
+  }
+}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -146,10 +163,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           updated_at: now,
         })
         .where(and(eq(contracts.id, dispute.contract_id), eq(contracts.state, 'DISPUTED')));
-      if (review) await originalReviewedContractUse(tx, contract.id);
+      if (review) await recordOriginalContractAdjudication(tx, dispute.id, auth!.userId, resolution.ruling === 'split' ? resolution.split_percent_to_seller : null);
     });
 
-    return NextResponse.json({ success: true, dispute_id: id, ...resolution, ...(reviewedOutcome ? { reviewed_outcome: reviewedOutcome } : {}) });
+    const result = { success: true, dispute_id: id, ...resolution, ...(reviewedOutcome ? { reviewed_outcome: reviewedOutcome } : {}) };
+    return reviewedOutcome ? purchasingResult(result) : NextResponse.json(result);
   } catch (error: any) {
     if (error?.issues || error?.errors) {
       return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });

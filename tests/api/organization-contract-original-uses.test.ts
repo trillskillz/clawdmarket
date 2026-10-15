@@ -42,6 +42,7 @@ before(async () => {
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-submissions-v1.sql', 'utf8'))
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-exact-acceptance-v1.sql', 'utf8'))
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-credit-release-v1.sql', 'utf8'))
+  await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-adjudication-v1.sql', 'utf8'))
   domain = await import('@/lib/organization-contract-authorizations'); reader = await import('@/lib/organization-contract-uses')
 })
 after(async () => { db?.$client.close(); if (chain) await chain.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })
@@ -211,7 +212,7 @@ test('prior original route, workflow, task and listing gross blocks a fresh cred
     assert.equal((await db.select().from(schema.credit_entries).where(eq(schema.credit_entries.user_id, f.buyer))).length, 0, 'this is an unpaid reservation control, not funded credit')
   }
 })
-async function startOriginal(f: Awaited<ReturnType<typeof fixture>>) {
+async function startOriginal(f: Pick<Awaited<ReturnType<typeof fixture>>, 'seller' | 'original'>) {
   const { generateJWT } = await import('@/lib/auth'), { PATCH } = await import('@/app/api/contracts/[id]/route')
   const response = await PATCH(new NextRequest(`http://localhost/api/contracts/${f.original.contract.id}`, { method: 'PATCH', headers: {
     'Content-Type': 'application/json', Authorization: `Bearer ${generateJWT({ userId: f.seller, email: `${f.seller}@test.invalid`, role: 'human' })}` }, body: JSON.stringify({ action: 'start' }) }),
@@ -477,7 +478,7 @@ async function acceptedMilestone(f: Awaited<ReturnType<typeof fixture>>, index =
   return { submission, acceptance, input: { version: 1 as const, client_reference: crypto.randomUUID(),
     submission_id: submission.submission.id, content_hash: submission.submission.content_hash, acceptance_id: acceptance.decision.id } }
 }
-async function openDispute(f: Awaited<ReturnType<typeof fixture>>) {
+async function openDispute(f: Pick<Awaited<ReturnType<typeof fixture>>, 'buyer' | 'original'>) {
   const api = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route'), { generateJWT: jwt } = await import('@/lib/auth')
   const response = await api.PATCH(new NextRequest(`http://localhost/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' })}` },
@@ -486,7 +487,7 @@ async function openDispute(f: Awaited<ReturnType<typeof fixture>>) {
   assert.equal(response.status, 200, JSON.stringify(await response.clone().json()))
   return (await response.json()).contract.dispute_id as string
 }
-async function adjudicate(f: Awaited<ReturnType<typeof fixture>>, dispute: string, ruling: string, actor = f.owner) {
+async function adjudicate(f: Pick<Awaited<ReturnType<typeof fixture>>, 'owner'>, dispute: string, ruling: string, actor = f.owner) {
   const api = await import('@/app/api/admin/contracts/disputes/[id]/resolve/route'), { generateJWT: jwt } = await import('@/lib/auth')
   const old = process.env.ADMIN_USER_IDS; process.env.ADMIN_USER_IDS = f.owner
   try {
@@ -576,6 +577,13 @@ test('reviewed admin buyer-win, seller-win, split and redo preserve original fin
     assert.equal(response.status, 200, JSON.stringify(await response.clone().json()))
     assert.deepEqual((await response.json()).reviewed_outcome, { basis: 'admin_adjudication', rail: 'credit', distributed_minor: ruling === 'redo' ? 0 : 40 })
     assert.equal((await adjudicate(f, dispute, ruling)).status, 409)
+    const original = await (await import('@/lib/contract-original-adjudication')).originalContractAdjudication(db, dispute)
+    assert.equal(original.adjudication.ruling, ruling); assert.equal(original.adjudication.basis, 'admin_adjudication')
+    assert.equal(original.buyer_acceptance_created, false); assert.equal(original.financial_posting_confirmed, ruling !== 'redo')
+    for (const statement of ['UPDATE contract_adjudication_operations SET ruling=\'redo\' WHERE dispute_id=?', 'DELETE FROM contract_adjudication_operations WHERE dispute_id=?',
+      'UPDATE contract_disputes SET ruling=\'redo\' WHERE id=?', 'DELETE FROM contract_disputes WHERE id=?']) {
+      await assert.rejects(db.$client.execute({ sql: statement, args: [dispute] }), /immutable/)
+    }
     const credit = await import('@/lib/account-credit')
     assert.equal((await credit.creditBalance(f.buyer)).available_minor, ruling === 'buyer_win' ? 40 : ruling === 'split' ? 30 : 0)
     assert.equal((await credit.creditBalance(f.seller)).available_minor, ruling === 'seller_win' ? 40 : ruling === 'split' ? 10 : 0)
@@ -612,6 +620,9 @@ test('an actual admin redo preserves older consent but identical replacement out
     { version: 1, client_reference: crypto.randomUUID(), submission_id: second.submission.id, content_hash: second.submission.content_hash, approve: true })
   const result = await release(f.original.contract.id, f.original.milestones[0].id, f.buyer, { ...input, acceptance_id: acceptance.decision.id })
   assert.equal(result.release.basis, 'explicit_buyer_acceptance'); assert.equal(result.credit_remaining_principal_minor, 60)
+  const redo = await (await import('@/lib/contract-original-adjudication')).originalContractAdjudication(db, dispute)
+  assert.equal(redo.adjudication.ruling, 'redo'); assert.equal(redo.financial_posting_confirmed, false)
+  assert.equal(redo.adjudication.settlement_entry_id, null); assert.equal(redo.credit_remaining_principal_minor, 60, 'later payout cannot be adopted as payment by the original redo')
 })
 
 test('reviewed admin settlement rejects changed original amounts and missing use before resolving or moving any credit', { skip: !enabled }, async () => {
@@ -646,4 +657,122 @@ test('an admin payout cannot be adopted as a buyer-directed release or paid agai
   assert.equal(response.status, 409); assert.equal((await response.json()).code, 'CONTRACT_REVIEWED_MILESTONE_ALREADY_SETTLED')
   assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.seller)).available_minor, 40)
   assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 60)
+})
+
+test('original admin outcome recovery is participant-private and rejects changed ledger evidence, ambiguous lookup and foreign scope', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f); const dispute = await openDispute(f)
+  assert.equal((await adjudicate(f, dispute, 'split')).status, 200)
+  const api = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  const path = `http://localhost/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}`
+  const context = { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) }
+  const token = (actor: string) => jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })
+  for (const actor of [f.buyer, f.seller, f.owner, f.reviewer, f.other]) {
+    const read = await api.GET(new NextRequest(`${path}?adjudication_reference=${dispute}`, { headers: { Authorization: `Bearer ${token(actor)}` } }), context)
+    assert.equal(read.headers.get('Cache-Control'), 'private, no-store')
+    if ([f.buyer, f.seller].includes(actor)) {
+      assert.equal(read.status, 200); const result = await read.json()
+      assert.equal(result.adjudication.buyer_refund_minor, 30); assert.equal(result.adjudication.seller_credit_minor, 10)
+      assert.equal(Object.hasOwn(result, 'evidence'), false); assert.equal(result.buyer_acceptance_created, false)
+    } else assert.equal(read.status, 404)
+  }
+  for (const query of [`adjudication_reference=${dispute}&acceptance_reference=old-decision`, `adjudication_reference=${dispute}&client_reference=old-submission`,
+    `adjudication_reference=${dispute}&adjudication_reference=${dispute}`, 'adjudication_reference=bad-id', `adjudication_reference=${crypto.randomUUID()}`]) {
+    const response = await api.GET(new NextRequest(`${path}?${query}`, { headers: { Authorization: `Bearer ${token(f.buyer)}` } }), context)
+    assert.equal(response.status, query.includes('bad-id') || query.includes('&') ? 400 : 404)
+  }
+  const admin = await import('@/app/api/admin/contracts/disputes/[id]/resolve/route'), previous = process.env.ADMIN_USER_IDS
+  process.env.ADMIN_USER_IDS = f.owner
+  try {
+    const adminPath = `http://localhost/api/admin/contracts/disputes/${dispute}/resolve`, adminContext = { params: Promise.resolve({ id: dispute }) }
+    assert.equal((await admin.GET(new NextRequest(adminPath, { headers: { Authorization: `Bearer ${token(f.owner)}` } }), adminContext)).status, 200)
+    assert.equal((await admin.GET(new NextRequest(adminPath, { headers: { Authorization: `Bearer ${token(f.buyer)}` } }), adminContext)).status, 403)
+  } finally { if (previous === undefined) delete process.env.ADMIN_USER_IDS; else process.env.ADMIN_USER_IDS = previous }
+  const op = (await db.select().from(schema.contract_adjudication_operations).where(eq(schema.contract_adjudication_operations.dispute_id, dispute)))[0]
+  await db.update(schema.credit_entries).set({ available_delta: 9 }).where(eq(schema.credit_entries.id, op.sale_entry_id!))
+  const invalidRead = await api.GET(new NextRequest(`${path}?adjudication_reference=${dispute}`, { headers: { Authorization: `Bearer ${token(f.buyer)}` } }), context)
+  assert.equal(invalidRead.status, 409); assert.equal((await invalidRead.json()).code, 'ORGANIZATION_CONTRACT_USE_INVALID')
+})
+
+test('a failed immutable admin journal append rolls back ruling, state and original credit distribution', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f); const dispute = await openDispute(f)
+  await db.$client.execute("CREATE TRIGGER injected_adjudication_append_failure BEFORE INSERT ON contract_adjudication_operations BEGIN SELECT RAISE(ABORT, 'injected_adjudication_append_failure'); END")
+  try { assert.equal((await adjudicate(f, dispute, 'seller_win')).status, 500) }
+  finally { await db.$client.execute('DROP TRIGGER injected_adjudication_append_failure') }
+  assert.equal((await db.select().from(schema.contract_disputes).where(eq(schema.contract_disputes.id, dispute)))[0].state, 'open')
+  assert.equal((await db.select().from(schema.contract_milestones).where(eq(schema.contract_milestones.id, f.original.milestones[0].id)))[0].state, 'DISPUTED')
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.seller)).available_minor, 0)
+  assert.equal((await db.select().from(schema.contract_adjudication_operations).where(eq(schema.contract_adjudication_operations.dispute_id, dispute))).length, 0)
+  assert.equal((await adjudicate(f, dispute, 'seller_win')).status, 200)
+})
+
+test('a genuinely lost committed admin resolution reply recovers its original split through both participant SDKs without repeating resolution', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f); const dispute = await openDispute(f)
+  const admin = await import('@/app/api/admin/contracts/disputes/[id]/resolve/route'), api = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  const token = (actor: string) => jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })
+  const calls: string[] = [], previous = process.env.ADMIN_USER_IDS; process.env.ADMIN_USER_IDS = f.owner
+  const server = createServer(async (incoming, outgoing) => {
+    try {
+      let body = ''; for await (const chunk of incoming) body += chunk
+      calls.push(incoming.method!)
+      const request = new NextRequest(`http://localhost${incoming.url}`, { method: incoming.method, headers: { Authorization: incoming.headers.authorization!,
+        'Content-Type': 'application/json' }, ...(incoming.method === 'PATCH' ? { body } : {}) })
+      const response = incoming.method === 'PATCH' ? await admin.PATCH(request, { params: Promise.resolve({ id: dispute }) })
+        : await api.GET(request, { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) })
+      if (incoming.method === 'PATCH') { assert.equal(response.status, 200); outgoing.destroy() }
+      else { outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text()) }
+    } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+    await assert.rejects(fetch(`${base}/api/admin/contracts/disputes/${dispute}/resolve`, { method: 'PATCH', headers: {
+      Authorization: `Bearer ${token(f.owner)}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ruling: 'split', split_percent_to_seller: 25 }) }))
+    assert.deepEqual(calls, ['PATCH'])
+    const client = new ClawdMarketClient({ apiKey: token(f.buyer), baseUrl: base })
+    const original = await client.recoverOriginalContractAdjudication(f.original.contract.id, f.original.milestones[0].id, dispute)
+    const source = `import json, os
+from clawdmarket import ClawdMarketClient
+f=json.loads(os.environ['CLAWDMARKET_LOCAL_ADJUDICATION_FIXTURE'])
+c=ClawdMarketClient(f['token'], base_url=f['base'])
+print(json.dumps(c.recover_original_contract_adjudication(f['contract'], f['milestone'], f['dispute'])))`
+    const output = await promisify(execFile)('python3', ['-c', source], { env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1', PYTHONPATH: 'sdk/python',
+      CLAWDMARKET_LOCAL_ADJUDICATION_FIXTURE: JSON.stringify({ token: token(f.seller), base, contract: f.original.contract.id, milestone: f.original.milestones[0].id, dispute }) }, timeout: 30000 })
+    assert.deepEqual(JSON.parse(output.stdout).adjudication, original.adjudication)
+    assert.equal(original.adjudication.buyer_refund_minor, 30); assert.equal(original.adjudication.seller_credit_minor, 10)
+    assert.equal(original.financial_posting_confirmed, true); assert.equal(original.buyer_acceptance_created, false)
+    assert.deepEqual(calls, ['PATCH', 'GET', 'GET'])
+    assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 60)
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()))
+    if (previous === undefined) delete process.env.ADMIN_USER_IDS; else process.env.ADMIN_USER_IDS = previous
+  }
+})
+
+test('ordinary unreviewed contracts retain all four existing admin rulings without inferred reviewed operations or consent', { skip: !enabled }, async () => {
+  const credit = await import('@/lib/account-credit'), api = await import('@/app/api/contracts/[id]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  for (const ruling of ['buyer_win', 'seller_win', 'split', 'redo']) {
+    const f = await reviewedContractFixture({ db, schema }) // Creates a real public DRAFT, no review companion.
+    // The review fixture requires approval above 50 cents. This ordinary-path
+    // positive control explicitly permits its $1.05 reservation below a $5 cap.
+    await db.update(schema.buyer_spend_policies).set({ policy_json: '{"max_per_execution":500,"approval_required_above":500}' })
+      .where(eq(schema.buyer_spend_policies.buyer_id, f.buyer))
+    const deposit = await credit.createDeposit(f.buyer, { amount_minor: 105, payer: payer.address, client_reference: crypto.randomUUID() })
+    const txHash = await wallet.writeContract({ account: payer, chain: { ...mainnet, id: 8453 }, address: chain.token, abi: erc20Abi,
+      functionName: 'transfer', args: [chain.treasury, 1_050_000n] })
+    await chain.client.waitForTransactionReceipt({ hash: txHash })
+    await credit.confirmDeposit(f.buyer, { id: deposit.id, tx_hash: txHash, signature: await payer.signMessage({ message: creditDepositMessage(deposit, txHash) }) })
+    const funded = await api.PATCH(new NextRequest(`http://localhost/api/contracts/${f.original.contract.id}`, { method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' })}` },
+      body: JSON.stringify({ action: 'fund' }) }), { params: Promise.resolve({ id: f.original.contract.id }) })
+    assert.equal(funded.status, 200, JSON.stringify(await funded.clone().json()))
+    await startOriginal(f); const dispute = await openDispute(f), result = await adjudicate(f, dispute, ruling)
+    assert.equal(result.status, 200); assert.equal(Object.hasOwn(await result.json(), 'reviewed_outcome'), false)
+    assert.equal((await credit.creditBalance(f.buyer)).available_minor, ruling === 'buyer_win' ? 40 : ruling === 'split' ? 30 : 0)
+    assert.equal((await credit.creditBalance(f.seller)).available_minor, ruling === 'seller_win' ? 40 : ruling === 'split' ? 10 : 0)
+    assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, ruling === 'redo' ? 100 : 60)
+    assert.equal((await db.select().from(schema.contract_adjudication_operations).where(eq(schema.contract_adjudication_operations.dispute_id, dispute))).length, 0)
+    await assert.rejects((await import('@/lib/contract-original-adjudication')).originalContractAdjudication(db, dispute),
+      (error: unknown) => (error as { code: string }).code === 'CONTRACT_ADJUDICATION_NOT_FOUND')
+  }
 })

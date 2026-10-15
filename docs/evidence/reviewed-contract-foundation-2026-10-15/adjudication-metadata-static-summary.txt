@@ -1,0 +1,25 @@
+
+> clawdmarket@2.0.0 sdk:generate /home/void/Work/clawdmarket-reviewed-contracts-current
+> node --import tsx scripts/generate-sdk-contract.ts
+
+✔ tests/logic/agent-contract.test.ts (790.872124ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 807.695956
+
+> clawdmarket@2.0.0 typecheck /home/void/Work/clawdmarket-reviewed-contracts-current
+> tsc --noEmit
+
+
+> clawdmarket@2.0.0 lint /home/void/Work/clawdmarket-reviewed-contracts-current
+> eslint .
+
+
+> clawdmarket@2.0.0 sdk:check /home/void/Work/clawdmarket-reviewed-contracts-current
+> node --import tsx scripts/generate-sdk-contract.ts --check
+

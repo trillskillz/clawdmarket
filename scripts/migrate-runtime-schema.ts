@@ -892,6 +892,7 @@ async function main() {
     migrations.push({id:'2026-10-15-contract-original-submissions-v1',run:async(database:Client)=>{await database.executeMultiple(await readFile(new URL('../migrations/2026-10-15-contract-original-submissions-v1.sql',import.meta.url),'utf8'))}})
     migrations.push({id:'2026-10-15-contract-exact-acceptance-v1',run:async(database:Client)=>{await database.executeMultiple(await readFile(new URL('../migrations/2026-10-15-contract-exact-acceptance-v1.sql',import.meta.url),'utf8'))}})
     migrations.push({id:'2026-10-15-contract-original-credit-release-v1',run:async(database:Client)=>{await database.executeMultiple(await readFile(new URL('../migrations/2026-10-15-contract-original-credit-release-v1.sql',import.meta.url),'utf8'))}})
+    migrations.push({id:'2026-10-15-contract-original-adjudication-v1',run:async(database:Client)=>{await database.executeMultiple(await readFile(new URL('../migrations/2026-10-15-contract-original-adjudication-v1.sql',import.meta.url),'utf8'))}})
     for (const migration of migrations) {
       const existing = await client.execute({
         sql: 'SELECT id FROM _clawdmarket_migrations WHERE id = ? LIMIT 1',

@@ -1,3 +1,57 @@
+## Immutable original admin recovery verified — migration 78
+
+New reviewed admin rulings now commit an immutable operation in the SAME
+transaction as dispute closure, original credit distribution and milestone state.
+It freezes original dispute/contract/milestone/use/authority, deciding account,
+exact ruling/split percentage, original principal and exact refund/seller ledger
+entry IDs. Four SQL guards protect both operation and its original resolved
+dispute. Nothing is backfilled. Redo pins no financial posting, even after a later
+legitimate payout. Admin adjudication never creates explicit buyer consent.
+
+Participant-private GET uses adjudication_reference=<original dispute UUID>,
+mutually exclusive with submission/acceptance selectors. Buyer/seller only;
+organization owner/reviewer authority grants no output/receipt access. Configured
+admin GET of the original resolve path is separately authenticated. Both SDKs
+recover participant receipts. Missing/contradictory original financial records
+fail closed. An actual committed admin HTTP reply is dropped, then both SDKs
+read the same original split without repeating resolution. Journal append failure
+rolls back ruling, milestone state and both original credit postings. Actual admin
+redo still requires fresh consent for identical bytes under a new submission ID.
+
+Current **92/92 focused Node cases**, no skips/failures, plus **27 Python cases**
+pass. Final OpenAPI-only descriptions followed the functional gate; **18 actual
+canonical contract cases** plus static checks and final build pass afterward.
+Those18 overlap the92 and are not additional unique cases. Initial91pass/1fail
+was the ordinary positive fixture inheriting a50-cent approval threshold; its
+explicit5-dollar cap now permits the1.05 control without changing app policy.
+All four actual ordinary public-funded admin rulings retain their behavior and
+gain no inferred reviewed operation. A non-escalated metadata runner reported
+only a file pass; it is NOT counted. Permitted execution lists all18 real cases.
+Types/lint/SDK parity/build and final production build pass. Migration78/replay
+preserves845 LOCAL baseline rows/133 tables, zero FK anomalies,10 reputation,
+4 output,2 acceptance,2 release and4 adjudication/dispute guards, plus5 actual
+queries. No production backup/deployment or full contract release is claimed.
+
+Reviewed tests use actual disposable deposits with DIRECT controlled initial
+funding/use records. No public reviewed purchase, live canary or independent
+adoption is demonstrated. Public reviewed funding, seller submission and payment
+release stay closed; HTTP1.119/count8 remain local. The source manifest binds
+**51** files relative to accepted listing e55e151, SHA-256
+`0ddfd62fde2dbcd37061991eb1f458d5392b2e39b584a16d6dbb687a0740f033`. Prior listing/pilot candidates are unchanged.
+
+Next connect public saved-reference original seller submission and exact release/
+recovery adapters in both SDKs, then durable consumed inventory and one scoped
+reviewed funding/use transaction. Complete finite provider/buyer journals/restarts,
+private human work UI, actual multi-milestone public-path economics and full
+process/predeploy/browser gates before accepting capability9. Keep all work local;
+no publication, real funds, global production flags, custody changes, mail or
+outreach. Rollback must retain migration78 original records and scoped financial
+recovery/interlocks; never rewrite original financial refs or reopen consumed
+inventory. Do not deploy this unfinished foundation. Existing security/provider/
+inbox/pilot/publication/live-budget external dependencies remain unresolved.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Original unstarted refunds verified — migration 77 unchanged
 
 Reviewed start/cancel/expire now validate original financial use inside their

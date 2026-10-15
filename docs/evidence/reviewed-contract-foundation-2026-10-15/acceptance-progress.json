@@ -1,8 +1,8 @@
 {
-  "stage": "Original unstarted refund/expiry preservation and explicit fail-closed maintenance; no public reviewed funding or release",
+  "stage": "Immutable original reviewed admin adjudication recovery, separate from buyer acceptance and release; public funding/work/release closed",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
-  "migrations": 77,
+  "migrations": 78,
   "accepted_capability_count": "8/10; no contract capability yet",
   "original_use_cases": {
     "passed": 30,
@@ -13,14 +13,15 @@
   "preservation": {
     "local_baseline_business_rows": 845,
     "local_baseline_tables": 133,
-    "migrations": 77,
+    "migrations": 78,
     "integrity": "ok",
     "foreign_key_anomalies": 0,
     "immutable_guards": 10,
     "actual_queries": 5,
     "reviewed_submission_immutable_guards": 4,
     "reviewed_acceptance_immutable_guards": 2,
-    "reviewed_release_immutable_guards": 2
+    "reviewed_release_immutable_guards": 2,
+    "reviewed_adjudication_and_dispute_immutable_guards": 4
   },
   "limits": {
     "public_reviewed_contract_funding": false,
@@ -37,7 +38,10 @@
     "internal_original_credit_release": true,
     "public_reviewed_credit_release": false,
     "original_reviewed_refund_preservation": true,
-    "durable_contract_consumed_inventory_all_paths": false
+    "durable_contract_consumed_inventory_all_paths": false,
+    "internal_original_adjudication": true,
+    "participant_original_adjudication_get": true,
+    "admin_original_adjudication_get": true
   },
   "records": {
     "original_use": {
@@ -191,6 +195,54 @@
     "original-refunds-build": {
       "local_log": "/tmp/clawdmarket-contract-original-refunds-build-2026-10-15.log",
       "log_sha256": "0a69160ab692015e03c2138cca2f22807d0a23ed035ccf810bf9e9a3593c8039"
+    },
+    "adjudication-focused": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-checked-focused-2026-10-15.log",
+      "log_sha256": "276053cd618f93465db31902a31f684cbe8110832b529a6d16dea62d69ae4819"
+    },
+    "adjudication-initial-ordinary-policy-fixture": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-final-focused-2026-10-15.log",
+      "log_sha256": "547dc475da06edb49ad60ab2cfa4d6d143c7feff9926b070249f4243f1a5e0cf"
+    },
+    "adjudication-types": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-checked-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "adjudication-lint": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-checked-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "adjudication-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-final-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "adjudication-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-final-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "adjudication-metadata-static": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-metadata-2026-10-15.log",
+      "log_sha256": "3021d07ec80e2a4d276b70159e149d9a70767a4c84481611a45ce717532ecb04"
+    },
+    "adjudication-metadata-actual": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-metadata-allowed-2026-10-15.log",
+      "log_sha256": "76d6b4283986b8b9c5371369bc4668606b9c7301b7540ebd48dd9d30a203a051"
+    },
+    "adjudication-metadata-unverified-file-only": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-metadata-actual-2026-10-15.log",
+      "log_sha256": "6f037ae7bcb4f3f292e34b0eaeac4490f19e47274cedf29b439433c0b8fa4783"
+    },
+    "adjudication-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-build-final-2026-10-15.log",
+      "log_sha256": "43a89e5bfb4fb83b36a7ae30fe4e2d850945d2a7706b1fa0e473f7b9179cad02"
+    },
+    "adjudication-preservation": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-preservation-2026-10-15.log",
+      "log_sha256": "75b103c024f9daaab88810753714a904e19ff91afb1ea5a5eaa4bf654b21d7b8"
+    },
+    "adjudication-python": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-python-2026-10-15.log",
+      "log_sha256": "1da699aea4b4a838563f9eb5f2f7ba8a2cc50e7aaa1c1ce0d86cd1bbe7696b42"
     }
   },
   "compatibility_cases": {
@@ -198,7 +250,7 @@
     "failed": 0,
     "skipped": 0
   },
-  "current_disjoint_focused_cases_total": 67,
+  "current_disjoint_focused_cases_total": 92,
   "existing_family_regression_cases": {
     "passed": 83,
     "failed": 0,
@@ -206,8 +258,8 @@
     "scope": "integration before the additional helper exclusion check; that check is included in current32"
   },
   "source_manifest": {
-    "files": 49,
-    "sha256": "f3f918cbfa0f4768d05dc48a74671082490f7c063223cefc3b918c4908b725ad",
+    "files": 51,
+    "sha256": "0ddfd62fde2dbcd37061991eb1f458d5392b2e39b584a16d6dbb687a0740f033",
     "baseline": "e55e151"
   },
   "private_inspection_cases": {
@@ -241,7 +293,7 @@
     "passed": 27,
     "failed": 0,
     "skipped": 0,
-    "scope": "Local HTTP SDK suite; allowed localhost listeners after sandbox socket denial"
+    "scope": "Current Python transport/export compatibility; actual application lost admin reply then both participant SDK reads are in Node integration gate"
   },
   "limitations_public_acceptance": [
     "Controlled future-use records over actual disposable local test-token deposits; no public reviewed funding or completed economic journey",
@@ -263,7 +315,7 @@
     "Admin routes now validate original use/amount and label separate adjudication. Saved-reference immutable admin-ruling recovery remains unfinished",
     "Unstarted refund preservation and consumed inventory/funding still need completion before reviewed funding"
   ],
-  "current_disjoint_focused_cases_scope": "Final current refund/original-use/credit/acceptance/release/review regression, not a full contract release gate",
+  "current_disjoint_focused_cases_scope": "Current financial/refund/review/SDK/migration/API regression before final OpenAPI-only admin endpoint description; 18 actual canonical cases pass after that metadata addition",
   "historical_submission_cases": {
     "passed": 64,
     "failed": 0,
@@ -286,5 +338,25 @@
     "Refund handlers no longer reactivate reviewed listings; durable consumed-inventory exclusion after manual status reactivation still unfinished across catalog/funding/adoption",
     "Initial39pass1fail caught new falsy-zero timestamp regression; finite/undefined checks corrected it; final67pass0fail0skip",
     "Migration77 unchanged; prior preservation still applies, not rerun for these handler changes"
+  ],
+  "adjudication_cases": {
+    "passed": 92,
+    "failed": 0,
+    "skipped": 0
+  },
+  "adjudication_metadata_cases": {
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0,
+    "overlaps_prior_functional_gate": true
+  },
+  "adjudication_limitations": [
+    "No public reviewed funding/submission/release or complete finite client/UI/customer journey",
+    "Reviewed future-use tests construct controlled initial reservations over actual disposable local deposits; ordinary compatibility control does use actual public unreviewed funding",
+    "Initial91pass1fail: ordinary fixture inherited 50-cent approval threshold; explicitly configured its five-dollar cap for the $1.05 positive control without changing app policy; final92pass",
+    "Non-escalated metadata-only runner reported file-level pass without executing cases; not counted. Permitted runtime executes all18 canonical cases",
+    "18 canonical cases overlap the92-case gate; do not add them as unique cases",
+    "Final OpenAPI-only description added after92 functional cases; final18 canonical/static/build validate that addition",
+    "Full new contract predeploy/browser/customer economic acceptance remains unfinished"
   ]
 }

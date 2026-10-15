@@ -36,6 +36,7 @@ before(async () => {
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-submissions-v1.sql', 'utf8'))
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-exact-acceptance-v1.sql', 'utf8'))
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-credit-release-v1.sql', 'utf8'))
+  await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-adjudication-v1.sql', 'utf8'))
   domain = await import('@/lib/organization-contract-authorizations'); reader = await import('@/lib/organization-contract-uses')
 })
 after(async () => { db?.$client.close(); if (chain) await chain.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })

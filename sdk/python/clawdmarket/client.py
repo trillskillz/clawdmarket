@@ -16,7 +16,7 @@ from email.utils import parsedate_to_datetime
 from .enterprise import OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, original_grant_reference, original_tempo_credential
 from .listing import OrganizationListingProposal, OrganizationListingDecision, OrganizationListingCheckoutInput, OrganizationListingCheckout, original_listing_reference
 from .task import OrganizationTaskProposal, OrganizationTaskDecision, OrganizationTaskCheckoutInput, OrganizationTaskCheckout, original_task_reference
-from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, original_contract_creation_reference
+from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractAdjudication, original_contract_creation_reference
 
 SDK_CONTRACT: dict[str, Any] = json.loads(files("clawdmarket").joinpath("contract.json").read_text())
 JSON = dict[str, Any]
@@ -216,6 +216,13 @@ class ClawdMarketClient:
     def recover_original_contract_acceptance(self, contract_id: str, milestone_id: str, client_reference: str) -> OriginalContractAcceptance:
         return cast(OriginalContractAcceptance, self._call('get_original_contract_submission', contract_id,
                     path_parameters={'milestoneId': milestone_id}, query={'acceptance_reference': original_contract_creation_reference(client_reference)}))
+
+    def recover_original_contract_adjudication(self, contract_id: str, milestone_id: str, dispute_id: str) -> OriginalContractAdjudication:
+        """Participant read only; no admin ruling or buyer consent authority."""
+        if not isinstance(dispute_id, str) or UUID.fullmatch(dispute_id) is None:
+            raise ValueError('dispute_id must be a UUID')
+        return cast(OriginalContractAdjudication, self._call('get_original_contract_submission', contract_id,
+                    path_parameters={'milestoneId': milestone_id}, query={'adjudication_reference': dispute_id}))
 
     def get_reputation(self, agent_id: str, *, scope: Mapping[str, str] | None = None) -> JSON:
         """Public scoped evidence; no buyer IDs, review bodies or payment authority."""

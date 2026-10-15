@@ -50,3 +50,13 @@ class OriginalContractAcceptance(TypedDict):
     semantic_accuracy: Literal['unmeasured']
     idempotent: NotRequired[bool]
     observed_at: NotRequired[str]
+
+
+class OriginalContractAdjudication(TypedDict):
+    adjudication: dict[str, Any]
+    buyer_acceptance_created: Literal[False]
+    financial_posting_confirmed: bool
+    selected_submission_id: str | None
+    current_milestone_state: str
+    credit_remaining_principal_minor: int
+    observed_at: str

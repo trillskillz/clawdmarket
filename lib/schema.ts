@@ -2028,6 +2028,26 @@ export const contract_disputes = sqliteTable('contract_disputes', {
   index('contract_disputes_contract_idx').on(table.contract_id),
 ]);
 
+/** New reviewed admin decisions only. Never inferred from historical outcomes. */
+export const contract_adjudication_operations = sqliteTable('contract_adjudication_operations', {
+  dispute_id: text('dispute_id').primaryKey().references(() => contract_disputes.id, { onDelete: 'restrict' }),
+  contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'restrict' }),
+  milestone_id: text('milestone_id').notNull().references(() => contract_milestones.id, { onDelete: 'restrict' }),
+  authorization_id: text('authorization_id').notNull().references(() => organization_contract_uses.authorization_id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  decided_by_account_id: text('decided_by_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  ruling: text('ruling', { enum: ['buyer_win', 'seller_win', 'split', 'redo'] }).notNull(),
+  split_percent_to_seller: real('split_percent_to_seller'),
+  amount_minor: integer('amount_minor').notNull(),
+  buyer_refund_minor: integer('buyer_refund_minor').notNull(), seller_credit_minor: integer('seller_credit_minor').notNull(),
+  settlement_entry_id: text('settlement_entry_id').references(() => credit_entries.id, { onDelete: 'restrict' }),
+  sale_entry_id: text('sale_entry_id').references(() => credit_entries.id, { onDelete: 'restrict' }),
+  decision_hash: text('decision_hash').notNull(),
+  resolved_at: integer('resolved_at', { mode: 'timestamp' }).notNull(),
+});
+
 export type AgentDirectory = typeof agents.$inferSelect;
 export type NewAgentDirectory = typeof agents.$inferInsert;
 export type Wallet = typeof wallets.$inferSelect;

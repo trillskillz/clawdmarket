@@ -34,3 +34,11 @@ export type OriginalContractSubmission = {
     auto_check_result: 'pass' | 'fail' | 'inconclusive'; auto_check_report: Record<string, unknown>;
     authorizes_payment: false; remote_execution_observed: false; semantic_accuracy: 'unmeasured' }
 }
+export type OriginalContractAdjudication = {
+  adjudication: { dispute_id: string; contract_id: string; milestone_id: string; decided_by_account_id: string
+    ruling: 'buyer_win' | 'seller_win' | 'split' | 'redo'; split_percent_to_seller: number | null; amount_minor: number
+    buyer_refund_minor: number; seller_credit_minor: number; settlement_entry_id: string | null; sale_entry_id: string | null
+    resolved_at: string; decision_hash: string; basis: 'admin_adjudication'; rail: 'credit'; seller_receives: 'nonwithdrawable_account_credit' }
+  buyer_acceptance_created: false; financial_posting_confirmed: boolean; selected_submission_id: string | null
+  current_milestone_state: string; credit_remaining_principal_minor: number; observed_at: string
+}

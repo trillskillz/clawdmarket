@@ -1,3 +1,12 @@
+## Implemented local checkpoint — migration78
+
+Immutable reviewed operations, both private recovery paths, participant SDKs,
+actual lost reply/rollback/ordinary-policy controls and preservation now pass.
+See the current contract audit for exact counts and limits. No public reviewed
+funding/submission/release or capability9 is enabled.
+
+## Original dependency design (historical)
+
 # Original reviewed contract adjudication recovery (next local dependency)
 
 This is an implementation plan, not an enabled capability. The current migration77

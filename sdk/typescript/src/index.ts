@@ -1,6 +1,6 @@
 import { SDK_CONTRACT } from './contract.js'
-import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission } from './milestone-contract.js'
-export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission } from './milestone-contract.js'
+import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission, type OriginalContractAdjudication } from './milestone-contract.js'
+export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission, OriginalContractAdjudication } from './milestone-contract.js'
 import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, originalListingReference, scopedSpendingClient } from './enterprise.js'
 import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'
@@ -446,6 +446,10 @@ export class ClawdMarketClient {
   recoverOriginalContractAcceptance(contractId: string, milestoneId: string, clientReference: string, options?: RequestOptions) {
     const path = this.originalContractMilestonePath(contractId, milestoneId)
     return this.request<OriginalContractAcceptance>('GET', `${path}?${new URLSearchParams({ acceptance_reference: originalContractCreationReference(clientReference) })}`, undefined, options)
+  }
+  /** Participant recovery only; cannot issue an admin ruling or create buyer consent. */
+  recoverOriginalContractAdjudication(contractId: string, milestoneId: string, disputeId: string, options?: RequestOptions) {
+    return this.request<OriginalContractAdjudication>('GET', `${this.originalContractMilestonePath(contractId, milestoneId)}?${new URLSearchParams({ adjudication_reference: enterpriseId(disputeId) })}`, undefined, options)
   }
 
   /** Public evidence only; all three scope fields must be supplied together. */

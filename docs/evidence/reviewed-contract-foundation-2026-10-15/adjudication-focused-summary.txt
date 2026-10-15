@@ -1,0 +1,75 @@
+    40,
+    '404c1a20-02d1-4175-be4b-d292243e73be',
+    '2f7cc8fc-02d5-4c7f-bbdb-a44ff0e56000',
+    '0435168c1536cb3c928b252e35ce39edd887899dfaf31da323a51e61a572e9fe',
+    1792082698
+  ],
+  cause: LibsqlError: SQLITE_CONSTRAINT: injected_adjudication_append_failure
+      at mapSqliteError (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:683:16)
+      at executeStmt (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:586:15)
+      at Sqlite3Transaction.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:449:16)
+      ... 4 lines matching cause stack trace ...
+      at QueryPromise.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/query-builders/insert.ts:402:26)
+      at QueryPromise.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/query-builders/insert.ts:414:40)
+      at QueryPromise.then (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/query-promise.ts:31:15) {
+    code: 'SQLITE_CONSTRAINT',
+    extendedCode: 'SQLITE_CONSTRAINT_TRIGGER',
+    rawCode: 1811,
+    [cause]: SqliteError: injected_adjudication_append_failure
+        at convertError (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js:59:12)
+        at Object.next (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js:385:17)
+        at Statement.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js:403:18)
+        at executeStmt (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:570:34)
+        at Sqlite3Transaction.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:449:16)
+        at <anonymous> (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:288:30)
+        at LibSQLPreparedQuery.queryWithCache (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/session.ts:78:18)
+        at LibSQLPreparedQuery.values (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:286:21)
+        at LibSQLPreparedQuery.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:214:27)
+        at QueryPromise.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/query-builders/insert.ts:402:26) {
+      code: 'SQLITE_CONSTRAINT_TRIGGER',
+      rawCode: 1811
+    }
+  }
+}
+✔ a failed immutable admin journal append rolls back ruling, state and original credit distribution (342.358602ms)
+✔ a genuinely lost committed admin resolution reply recovers its original split through both participant SDKs without repeating resolution (554.026345ms)
+✔ ordinary unreviewed contracts retain all four existing admin rulings without inferred reviewed operations or consent (4906.333118ms)
+✔ original reviewed cancellation preserves consumed listing, principal/fee terms and gross after current permission closes (1895.477886ms)
+✔ mutable expired metadata cannot expire or refund a reviewed obligation before its frozen original deadline (345.029906ms)
+✔ manual expiration uses frozen original deadline even if current metadata extends or removes it, and never recycles consumed inventory (331.285541ms)
+✔ maintenance expiration uses frozen original deadline even if current metadata extends or removes it, and never recycles consumed inventory (239.47328ms)
+✔ contradictory original credit amounts block start, cancel and maintenance before state, listing or financial changes (278.779779ms)
+✔ private contract review freezes original ordered milestones, credit fee/refund terms and an independent organizational reviewer without funding (2541.541188ms)
+✔ every contract companion state blocks generic funding and exact proposal/decision replay never reopens revocation (376.896151ms)
+✔ contract decision rejects current ownership, assignment, reviewer, amount, milestone, acceptance, deadline, seller rail and ban drift (2141.742343ms)
+✔ contract review refuses reviewer ownership of provider, changed original proposal, unreferenced legacy drafts, CSRF and oversized input (298.228591ms)
+✔ elapsed review windows cannot invent acceptance for any companion state while ordinary historical policy stays unchanged (370.513656ms)
+✔ independent workflow commands preserve account scope and advertise usable exact-dollar ceilings (2.000541ms)
+✔ department budget operations remain owner-only and do not delegate purchasing authority (6.131226ms)
+✔ marketplace reputation advertises bounded owner feedback and history confidence without independent quality claims (5.949672ms)
+✔ Python verifier discovery and report schemas agree on finite external checks with mandatory buyer acceptance (4.130114ms)
+✔ completion proof advertises the exact bounded cycle scope without claiming buyer independence (0.965424ms)
+✔ versioned observations advertise finite grading and scopes without measured quality or inherited authority (0.860987ms)
+✔ family discovery advertises explicit navigation IDs without granting purchase or evidence inheritance (2.44544ms)
+✔ every advertised agent action has one matching OpenAPI operation (1.700823ms)
+✔ every OpenAPI path template declares each path parameter (2.115978ms)
+✔ the OpenAPI document reports the serving origin and current contract version (12.089414ms)
+✔ machine manifest advertises the subscribed provider work event (0.297813ms)
+✔ request origin prefers reverse-proxy headers over an internal bind address (0.428149ms)
+✔ agent skill documents the complete production task and settlement lifecycle (1.508791ms)
+✔ instant contract separates metered prepaid authority, asynchronous calls and atomic result receipts (2.209094ms)
+✔ purchasing contract separates exact participant approvals from owner grants and buyer payment credentials (2.834786ms)
+✔ private-provider contract freezes exact two-owner service shares without extending public routing authority (3.350191ms)
+✔ organization spending contract separates credit and reviewed external authority without general buyer impersonation (3.357594ms)
+✔ reputation v2 contracts retain separate policy versions, frozen scopes and production ordering without spending authority (2.443778ms)
+✔ runtime schema migration upgrades a legacy database and is idempotent (563.267183ms)
+✔ contract draft SDK rejects malformed saved references before HTTP and exposes no funding or reviewer scope (1.267535ms)
+✔ exact contract acceptance SDK rejects invalid identities and decisions before HTTP and uses separate read/payment scopes (0.869373ms)
+ℹ tests 92
+ℹ suites 0
+ℹ pass 92
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 92405.747565
