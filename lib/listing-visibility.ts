@@ -1,9 +1,12 @@
-import { and, eq, isNotNull, or } from 'drizzle-orm'
+import { and, eq, isNotNull, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agents, service_orders, service_definitions, organization_task_uses, organization_listing_uses, trades } from '@/lib/schema'
+import { agents, service_orders, service_definitions, organization_task_uses, organization_listing_uses, organization_contract_uses, organization_contract_authorizations, trades } from '@/lib/schema'
 
 // Match the seller rule used by checkout, the public catalog, and live stats.
-export const PUBLIC_LISTING_SELLER_WHERE_SQL = `(NOT EXISTS (SELECT 1 FROM organization_listing_uses original_listing_use WHERE original_listing_use.listing_id = listings.id) AND NOT EXISTS (SELECT 1 FROM organization_task_uses original_task_use
+export const PUBLIC_LISTING_SELLER_WHERE_SQL = `(NOT EXISTS (SELECT 1 FROM organization_contract_uses original_contract_use
+  JOIN organization_contract_authorizations original_contract_review ON original_contract_review.id = original_contract_use.authorization_id
+  WHERE json_extract(original_contract_review.terms_json, '$.original.listing_id') = listings.id)
+  AND NOT EXISTS (SELECT 1 FROM organization_listing_uses original_listing_use WHERE original_listing_use.listing_id = listings.id) AND NOT EXISTS (SELECT 1 FROM organization_task_uses original_task_use
   JOIN trades original_task_trade ON original_task_trade.id = original_task_use.trade_id
   WHERE original_task_trade.listing_id = listings.id) AND NOT EXISTS (SELECT 1 FROM service_orders private_listing_order
   JOIN service_definitions private_listing_service ON private_listing_service.id = private_listing_order.service_id
@@ -48,5 +51,13 @@ export async function originalReviewedTaskListing(listingId: string, source: typ
 export async function originalReviewedListing(listingId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) {
   const [row] = await source.select({ id: organization_listing_uses.authorization_id }).from(organization_listing_uses)
     .where(eq(organization_listing_uses.listing_id, listingId)).limit(1)
+  return !!row
+}
+
+/** Paid original inventory stays consumed across refunds and mutable status/link edits. */
+export async function originalReviewedContractListing(listingId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) {
+  const [row] = await source.select({ id: organization_contract_uses.authorization_id }).from(organization_contract_uses)
+    .innerJoin(organization_contract_authorizations, eq(organization_contract_authorizations.id, organization_contract_uses.authorization_id))
+    .where(sql`json_extract(${organization_contract_authorizations.terms_json}, '$.original.listing_id') = ${listingId}`).limit(1)
   return !!row
 }

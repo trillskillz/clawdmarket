@@ -1,7 +1,7 @@
 import 'server-only'
 import { eq } from 'drizzle-orm'
 import { listings, task_workspaces, trades } from './schema'
-import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedListing } from './listing-visibility'
+import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedListing, originalReviewedContractListing } from './listing-visibility'
 import { genericListingFundingGuard } from './organization-listing-authorizations'
 import { PurchasingError, type PurchasingSource } from './organization-purchasing-transaction'
 
@@ -14,7 +14,8 @@ export async function requireContractListingScope(source: PurchasingSource, list
     || !await isPublicMarketplaceSeller(listing.seller_id, source)
     || await originalPrivateServiceListing(listingId, source)
     || await originalReviewedTaskListing(listingId, source)
-    || await originalReviewedListing(listingId, source)) throw new PurchasingError('CONTRACT_LISTING_UNAVAILABLE')
+    || await originalReviewedListing(listingId, source)
+    || await originalReviewedContractListing(listingId, source)) throw new PurchasingError('CONTRACT_LISTING_UNAVAILABLE')
   // A bounty listing belongs to its original task, including legacy task trades.
   const [task] = await source.select({ id: task_workspaces.task_id }).from(task_workspaces)
     .innerJoin(trades, eq(trades.id, task_workspaces.trade_id)).where(eq(trades.listing_id, listingId)).limit(1)

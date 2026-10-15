@@ -1,3 +1,42 @@
+## Durable original contract inventory exclusion verified
+
+Public catalog/snapshot/metrics SQL and listing detail/edit/preview, all generic
+fresh trade rails, shared credit/ledger reservations, new reviewed listing scopes
+and contract draft/funding checks now exclude original consumed contract inventory.
+The binding is the original paid USE plus frozen agreement listing ID, never the
+mutable status or current contract link. Refund, cancellation or manual status/
+link edits cannot reopen it. Free pending contract review has NO paid use and does
+not reserve inventory. Historical identities/credit references and ordinary
+unreviewed behavior remain unchanged. No new migration or financial writer.
+
+Current inventory/credit/catalog/transparency checks **59/59** pass; separate
+reviewed listing/task compatibility passes **44**, with **4 preexisting retired
+legacy-credit skips**, zero failures. Total107cases=103pass4skip. Types/lint and
+production build pass. The previous public original release gate91 remains
+historical evidence for those adapters, not a new full contract gate. Tests use
+direct controlled original reviewed-use records over actual disposable deposits.
+Shared reservation anti-adoption is tested; public task/service APIs otherwise
+create their own listing identities. No public reviewed funding, complete finite
+client/worker journey, live canary or independent customer demand is demonstrated.
+Migration78 unchanged; prior845-row/133-table/guard/query preservation applies,
+not repeated. Source manifest **61** changed files versus e55e151, SHA-256
+`2b24307f395b4ce35c0d7ba567d944f448ca7fba3acc93b1e7bc5d29b79e71c8`. Evidence is under the contract foundation directory.
+
+Next implement unique buyer-scoped original FUND request references and one scoped
+reviewed funding/use transaction. Bind exact authority/reference, current buyer/
+owner/reviewer/team/rails/deadlines, shared gross and global budgets, current pause,
+original quote/principal/fee recipient, atomic listing claim and original credit/
+attribution/use. Recover known original funding before fresh eligibility; reject
+changed/cross-contract reference reuse and never adopt historical unreferenced
+reservations or fabricate a trade/route/task/service identity. Then finite process
+journals/private human work UI and complete actual economic/process/release gates
+before capability9. HTTP1.119/count8 remain local and undeployed. Prior accepted
+listing/pilot candidates remain unchanged. Do not deploy this unfinished tree or
+roll back to handlers that recycle consumed inventory/skip exact consent or proof.
+No publication, real funds, production flags, custody changes, email or outreach.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Exact original public credit release verified — migration78 unchanged
 
 The dedicated POST `/api/contracts/{id}/milestones/{milestoneId}/release` now

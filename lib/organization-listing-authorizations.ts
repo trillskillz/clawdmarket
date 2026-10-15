@@ -14,7 +14,7 @@ import { requirementsSchema } from './delivery-validation'
 import { calculateTradeFinancials } from './settlement'
 import { enterpriseFoundationEnabled } from './enterprise-foundation'
 import { routeExecutionEnabled } from './routing-feature-flags'
-import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing } from './listing-visibility'
+import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedContractListing } from './listing-visibility'
 import { payoutAddressForUser } from './external-settlement'
 import { sellerPaymentRails } from './seller-payment-rails'
 
@@ -123,7 +123,8 @@ async function current(row: Grant, source: PurchasingSource, options: { original
   const [trade] = await source.select({ id: trades.id }).from(trades).where(eq(trades.listing_id, row.listing_id)).limit(1)
   if (trade && trade.id !== options.originalTradeId || options.originalTradeId && !trade) fail('ORGANIZATION_LISTING_ALREADY_RESERVED')
   if (!await isPublicMarketplaceSeller(row.seller_id, source) || await originalPrivateServiceListing(row.listing_id, source)
-    || await originalReviewedTaskListing(row.listing_id, source)) fail('ORGANIZATION_LISTING_NOT_AVAILABLE')
+    || await originalReviewedTaskListing(row.listing_id, source)
+    || await originalReviewedContractListing(row.listing_id, source)) fail('ORGANIZATION_LISTING_NOT_AVAILABLE')
   const metadata = paymentContract(terms.payment)
   if (metadata.token_decimals !== terms.token_decimals || metadata.token_usd_price !== terms.token_usd_price
     || metadata.fee_token_decimals !== terms.fee_token_decimals) fail('ORGANIZATION_LISTING_PAYMENT_CHANGED')
@@ -151,7 +152,7 @@ export async function proposeOrganizationListing(orgId: string, actor: string, i
       return { authorization: dto(prior, actor), idempotent: true }
     }
     const [listing] = await source.select().from(listings).where(eq(listings.id, input.listing_id)).limit(1)
-    if (!listing || listing.status !== 'active') fail('ORGANIZATION_LISTING_NOT_AVAILABLE')
+    if (!listing || listing.status !== 'active' || await originalReviewedContractListing(listing.id, source)) fail('ORGANIZATION_LISTING_NOT_AVAILABLE')
     const buyerId = `user_agent_${input.buyer_agent_id}`
     const [existing] = await source.select({ id: grants.id }).from(grants).where(and(eq(grants.buyer_id, buyerId), eq(grants.listing_id, input.listing_id),
       eq(grants.state, 'pending'))).limit(1)

@@ -151,12 +151,16 @@ Reviewed unstarted cancel/expire and maintenance now validate original financial
 use before changing state or credit. Original principal is refundable, the upfront
 fee stays charged, and gross remains consumed. Current permission/owner/rail edits
 do not replace paid terms. Expiry uses the frozen original absolute deadline;
-mutable metadata cannot advance or postpone it. Refund handlers keep the linked
-listing sold; durable cross-scope exclusion after manual reactivation still needs
-completion before reviewed funding. Contradictory original evidence rolls back
+mutable metadata cannot advance or postpone it. Refund handlers keep the linked listing sold. Public catalog/snapshot/metrics,
+listing detail/edit/preview, generic checkout across all rails, shared credit/ledger
+reservation, reviewed listing and new contract scopes now also exclude the original
+paid use's FROZEN listing ID, including after manual status or current contract-link
+changes. Free pending review reserves no inventory. Task/service APIs create their
+own listing identities; the shared reservation guard prevents adopting a consumed
+contract listing where a caller supplies one. Contradictory original evidence rolls back
 maintenance and returns a timestamped explicit failure, not zero successful work.
 
-Remaining work: durable consumed inventory, unique original funding references, scoped reviewed funding/use, consumed inventory exclusion,
+Remaining work: unique original funding references, scoped reviewed funding/use, consumed inventory exclusion,
 public original seller submission, finite buyer/provider restart journals, private
 human work UI, actual multi-milestone economics and complete release gates.
 No contract capability9, publication, live-payment or outreach authorization is

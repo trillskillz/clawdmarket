@@ -27,7 +27,7 @@ import { getPaymentReadiness } from '@/lib/payment-config';
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
 import { NewPaymentsPausedError, requireNewPaymentsOpen } from '@/lib/payment-control';
-import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedListing } from '@/lib/listing-visibility';
+import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedListing, originalReviewedContractListing } from '@/lib/listing-visibility';
 import { selectMarketplaceRail } from '@/lib/payment-rail-selection';
 import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets';
 import { genericListingFundingGuard } from '@/lib/organization-listing-authorizations';
@@ -139,7 +139,7 @@ async function createTradePost(req: NextRequest) {
       );
     }
 
-    if (await originalPrivateServiceListing(listing.id) || await originalReviewedTaskListing(listing.id) || await originalReviewedListing(listing.id) || !await isPublicMarketplaceSeller(String(listing.seller_id))) {
+    if (await originalPrivateServiceListing(listing.id) || await originalReviewedTaskListing(listing.id) || await originalReviewedListing(listing.id) || await originalReviewedContractListing(listing.id) || !await isPublicMarketplaceSeller(String(listing.seller_id))) {
       return NextResponse.json({
         ...paymentError('LISTING_NOT_AVAILABLE', 'Listing is not available for purchase'),
         ...envMeta('clawdmarket/api/trades'),
@@ -206,6 +206,7 @@ async function createTradePost(req: NextRequest) {
       const [newTrade] = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction(async (tx) => {
         await genericListingFundingGuard(tx, listing.id, auth.userId);
         if (await originalReviewedTaskListing(listing.id, tx)) throw new TradeRaceError('ORIGINAL_TASK_LISTING', 'Recover the original reviewed task checkout');
+        if (await originalReviewedContractListing(listing.id, tx)) throw new TradeRaceError('ORIGINAL_CONTRACT_LISTING', 'Recover the original reviewed contract');
         if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost, sellerId: listing.seller_id, paymentRail: selectedRail });
         const claimed = await tx.update(listings).set({ status: 'sold' })
           .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'), sql`NOT EXISTS (SELECT 1 FROM service_orders private_order JOIN service_definitions private_service ON private_service.id = private_order.service_id WHERE private_order.listing_id = ${listings.id} AND (private_order.private_provider_share_id IS NOT NULL OR private_service.visibility = 'organization'))`)).returning({ id: listings.id });

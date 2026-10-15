@@ -1,0 +1,56 @@
+✔ L1 listing review freezes private terms, denies unrelated readers and recovers original decisions without any checkout (1176.0239ms)
+✔ Tempo listing review freezes private terms, denies unrelated readers and recovers original decisions without any checkout (161.344913ms)
+✔ L1 free pending review keeps public inventory available to another buyer and then loses fresh approval eligibility (117.903339ms)
+✔ Tempo free pending review keeps public inventory available to another buyer and then loses fresh approval eligibility (80.057313ms)
+✔ different buyers may review one public listing concurrently without taking inventory or creating financial identities (82.739955ms)
+✔ L1 listing approval rejects current owner, quote, department, reviewer, seller and ban drift (365.774898ms)
+✔ Tempo listing approval rejects current owner, quote, department, reviewer, seller and ban drift (347.136646ms)
+✔ listing review refuses conflicting original references, overlarge bodies and cookie mutations without CSRF (44.603452ms)
+✔ L1 original listing use retains frozen economics after cancellation, revocation and editable listing changes (78.519276ms)
+✔ Tempo original listing use retains frozen economics after cancellation, revocation and editable listing changes (71.473527ms)
+✔ L1 consumed listing exposure blocks another reviewed task and cross-scope/orphan records fail closed (158.564927ms)
+✔ Tempo consumed listing exposure blocks another reviewed task and cross-scope/orphan records fail closed (102.904741ms)
+✔ L1 consumed listing gross exposure blocks route reservation and remains charged after cancellation (586.347314ms)
+✔ L1 consumed listing fee exposure blocks route reservation and remains charged after cancellation (499.757168ms)
+✔ L1 consumed listing gross exposure blocks workflow reservation and remains charged after cancellation (772.84183ms)
+✔ L1 consumed listing fee exposure blocks workflow reservation and remains charged after cancellation (723.456322ms)
+✔ Tempo consumed listing gross exposure blocks route reservation and remains charged after cancellation (549.497383ms)
+✔ Tempo consumed listing fee exposure blocks route reservation and remains charged after cancellation (518.091155ms)
+✔ Tempo consumed listing gross exposure blocks workflow reservation and remains charged after cancellation (955.834781ms)
+✔ Tempo consumed listing fee exposure blocks workflow reservation and remains charged after cancellation (960.309657ms)
+✔ reviewed route reads expose local contention as retryable without retrying writes or hiding policy and other storage errors (1.341897ms)
+✔ L1 internal listing checkout consumes one exact original trade and replays after all fresh permissions close (620.386508ms)
+✔ Tempo internal listing checkout consumes one exact original trade and replays after all fresh permissions close (113.577121ms)
+✔ a legacy buyer-supplied reference prefix does not acquire reviewed scope or block original financial recovery (19.199879ms)
+✔ L1 reviewed task, route, workflow and internal listing checkout preserve registry-format agent identifiers (641.522853ms)
+✔ Tempo reviewed task, route, workflow and internal listing checkout preserve registry-format agent identifiers (635.905194ms)
+✔ L1 internal listing reservation cannot bypass prior task gross exposure or recycle its cancelled obligation (141.768863ms)
+✔ L1 internal listing reservation cannot bypass prior task fee exposure or recycle its cancelled obligation (122.727874ms)
+✔ L1 internal listing reservation cannot bypass prior route gross exposure or recycle its cancelled obligation (280.296734ms)
+✔ L1 internal listing reservation cannot bypass prior route fee exposure or recycle its cancelled obligation (274.346749ms)
+✔ L1 internal listing reservation cannot bypass prior workflow gross exposure or recycle its cancelled obligation (401.508202ms)
+✔ L1 internal listing reservation cannot bypass prior workflow fee exposure or recycle its cancelled obligation (431.365703ms)
+✔ Tempo internal listing reservation cannot bypass prior task gross exposure or recycle its cancelled obligation (124.679359ms)
+✔ Tempo internal listing reservation cannot bypass prior task fee exposure or recycle its cancelled obligation (128.493131ms)
+✔ Tempo internal listing reservation cannot bypass prior route gross exposure or recycle its cancelled obligation (292.265564ms)
+✔ Tempo internal listing reservation cannot bypass prior route fee exposure or recycle its cancelled obligation (305.532219ms)
+✔ Tempo internal listing reservation cannot bypass prior workflow gross exposure or recycle its cancelled obligation (410.444662ms)
+✔ Tempo internal listing reservation cannot bypass prior workflow fee exposure or recycle its cancelled obligation (472.467339ms)
+✔ with internal credits disabled, an unpayable bidder cannot strand a task assignment (1600.109328ms)
+✔ legacy credit cannot fund a task even when the old toggle is set and the bidder has a payout wallet (35.667553ms)
+✔ hashed keys work through inbox and self-test; inactive agents and expired work are excluded (28.841207ms)
+✔ expired open tasks leave public opportunities and counts but remain visible as expired history (85.795538ms)
+✔ agent inbox, bid history, and account work page beyond 100 records (49.208023ms)
+﹣ legacy-credit job lifecycle is retired until asset-backed funding is implemented (0.142999ms) # SKIP
+✔ a dispute cannot race an external payout after settlement starts (9.169028ms)
+﹣ legacy-credit failed funding path is retired until asset-backed funding is implemented (0.122581ms) # SKIP
+﹣ legacy-credit agent funding is retired until asset-backed funding is implemented (0.113614ms) # SKIP
+﹣ legacy-credit agent daily spend is retired until asset-backed funding is implemented (0.082315ms) # SKIP
+ℹ tests 48
+ℹ suites 0
+ℹ pass 44
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 4
+ℹ todo 0
+ℹ duration_ms 17158.250411

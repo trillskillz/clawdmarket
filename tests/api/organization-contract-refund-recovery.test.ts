@@ -133,6 +133,58 @@ for (const mode of ['manual', 'maintenance']) test(`${mode} expiration uses froz
   } finally { t.mock.timers.reset() }
 })
 
+test('free contract review does not consume listing inventory before original funding use exists', { skip: !enabled }, async () => {
+  const f = await reviewedContractFixture({ db, schema }, true, true)
+  await domain.proposeOrganizationContract(f.org, f.owner, domain.organizationContractInput.parse(f.input))
+  const visibility = await import('@/lib/listing-visibility')
+  assert.equal(await visibility.originalReviewedContractListing(f.listing.id), false)
+  assert.equal((await (await import('@/lib/contract-listing-scope')).requireContractListingScope(db, f.listing.id, { fundingBuyer: f.other })).id, f.listing.id)
+  const catalog = await (await import('@/app/api/listings/route')).GET(new NextRequest(`http://localhost/api/listings?seller_id=${f.seller}&status=active`))
+  assert.equal(catalog.status, 200); assert.equal(JSON.stringify(await catalog.json()).includes(f.listing.id), true)
+})
+
+test('consumed original reviewed contract listing cannot reenter catalog, fresh trade, review or contract scopes after refund and manual reactivation', { skip: !enabled }, async () => {
+  const f = await fixture(); assert.equal((await act(f, 'cancel')).status, 200)
+  await db.update(schema.listings).set({ status: 'active' }).where(eq(schema.listings.id, f.listing.id))
+  const visibility = await import('@/lib/listing-visibility'), { generateJWT: jwt } = await import('@/lib/auth')
+  assert.equal(await visibility.originalReviewedContractListing(f.listing.id), true)
+  const count = await db.$client.execute({ sql: `SELECT COUNT(*) AS n FROM listings WHERE id=? AND ${visibility.PUBLIC_LISTING_SELLER_WHERE_SQL}`, args: [f.listing.id] })
+  assert.equal(Number(count.rows[0].n), 0)
+  const catalog = await (await import('@/app/api/listings/route')).GET(new NextRequest(`http://localhost/api/listings?seller_id=${f.seller}&status=active`))
+  assert.equal(catalog.status, 200); assert.equal(JSON.stringify(await catalog.json()).includes(f.listing.id), false)
+  assert.equal((await (await import('@/lib/public-catalog-snapshot')).getPublicCatalogSnapshot(100)).listings.some(item => item.id === f.listing.id), false)
+  const detail = await import('@/app/api/listings/[id]/route'), context = { params: Promise.resolve({ id: f.listing.id }) }
+  assert.equal((await detail.GET(new NextRequest(`http://localhost/api/listings/${f.listing.id}`), context)).status, 404)
+  const auth = (actor: string) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })}` })
+  const update = await detail.PUT(new NextRequest(`http://localhost/api/listings/${f.listing.id}`, { method: 'PUT', headers: auth(f.seller), body: '{"title":"Republished item"}' }), context)
+  assert.equal(update.status, 409); assert.equal((await update.json()).code, 'ORIGINAL_CONTRACT_LISTING')
+  const preview = await (await import('@/app/api/trades/preview/route')).POST(new NextRequest('http://localhost/api/trades/preview', { method: 'POST', headers: auth(f.other), body: JSON.stringify({ listing_id: f.listing.id }) }))
+  assert.equal(preview.status, 409)
+  for (const rail of ['credit', 'evm', 'mpp']) {
+    const trade = await (await import('@/app/api/trades/route')).POST(new NextRequest('http://localhost/api/trades', { method: 'POST', headers: auth(f.other),
+      body: JSON.stringify({ listing_id: f.listing.id, amount: 1, payment_rail: rail, client_reference: crypto.randomUUID() }) }))
+    assert.equal(trade.status, 409); assert.equal((await trade.json()).error_code, 'LISTING_NOT_AVAILABLE')
+  }
+  const [listing] = await db.select().from(schema.listings).where(eq(schema.listings.id, f.listing.id))
+  for (const rail of ['credit', 'ledger'] as const) await assert.rejects(db.transaction(tx => (import('@/lib/settlement').then(m => m.createLedgerTrade(tx, listing, f.other, f.feeRecipient, { rail })))),
+    (error: unknown) => (error as { code: string }).code === 'ORIGINAL_CONTRACT_LISTING')
+  await assert.rejects((await import('@/lib/contract-listing-scope')).requireContractListingScope(db, f.listing.id),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_LISTING_UNAVAILABLE')
+  const drafts = await (await import('@/app/api/contracts/route')).POST(new NextRequest('http://localhost/api/contracts', { method: 'POST', headers: auth(f.other),
+    body: JSON.stringify({ listing_id: f.listing.id, client_reference: crypto.randomUUID(), milestones: [{ title: 'Cannot adopt consumed asset', amount: 1 }] }) }))
+  assert.equal(drafts.status, 409)
+  const reviews = await import('@/lib/organization-listing-authorizations')
+  await assert.rejects(reviews.proposeOrganizationListing(f.org, f.owner, reviews.organizationListingInput.parse(f.body)),
+    (error: unknown) => (error as { code: string }).code === 'ORGANIZATION_LISTING_NOT_AVAILABLE')
+  assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.listing_id, f.listing.id))).length, 0, 'no new financial family identity is manufactured')
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).available_minor, 100)
+  // Even a contradictory mutable contract link cannot detach the original frozen inventory.
+  await db.update(schema.contracts).set({ listing_id: null }).where(eq(schema.contracts.id, f.original.contract.id))
+  assert.equal(await visibility.originalReviewedContractListing(f.listing.id), true)
+  await db.update(schema.contracts).set({ listing_id: f.listing.id }).where(eq(schema.contracts.id, f.original.contract.id))
+  assert.equal((await reader.organizationContractExposure(db, f.org, f.buyer)).lifetime, 105)
+})
+
 test('contradictory original credit amounts block start, cancel and maintenance before state, listing or financial changes', { skip: !enabled }, async () => {
   const f = await fixture()
   await db.update(schema.contracts).set({ total_amount: 2 }).where(eq(schema.contracts.id, f.original.contract.id))
