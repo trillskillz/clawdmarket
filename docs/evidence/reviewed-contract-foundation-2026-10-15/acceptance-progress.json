@@ -1,5 +1,5 @@
 {
-  "stage": "Internal exact original credit release with immutable decision/ledger binding; separate admin dispute safeguards; public funding/release closed",
+  "stage": "Original unstarted refund/expiry preservation and explicit fail-closed maintenance; no public reviewed funding or release",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 77,
@@ -35,7 +35,9 @@
     "public_reviewed_milestone_acceptance": true,
     "reviewed_credit_release": false,
     "internal_original_credit_release": true,
-    "public_reviewed_credit_release": false
+    "public_reviewed_credit_release": false,
+    "original_reviewed_refund_preservation": true,
+    "durable_contract_consumed_inventory_all_paths": false
   },
   "records": {
     "original_use": {
@@ -169,6 +171,26 @@
     "original-release-preservation": {
       "local_log": "/tmp/clawdmarket-contract-original-release-preservation-2026-10-15.log",
       "log_sha256": "01039a2b00a48ef0088d724bd2ab19acd610600d474bba4724e82286718e5cc3"
+    },
+    "original-refunds-focused": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-final-focused-2026-10-15.log",
+      "log_sha256": "c7ce83790aae0886545a665074c84d5a7b38c9991ab6b0f3a66f7daaae981345"
+    },
+    "original-refunds-initial-epoch-regression": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-focused-2026-10-15.log",
+      "log_sha256": "86a61e02b60e4d507f3c0e274d028ef282aaca6ce2765b808872ee8de367fb06"
+    },
+    "original-refunds-types": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-final-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "original-refunds-lint": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-final-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "original-refunds-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-build-2026-10-15.log",
+      "log_sha256": "0a69160ab692015e03c2138cca2f22807d0a23ed035ccf810bf9e9a3593c8039"
     }
   },
   "compatibility_cases": {
@@ -176,26 +198,16 @@
     "failed": 0,
     "skipped": 0
   },
-  "current_disjoint_focused_cases_total": 68,
-  "current_shared_gross_cases": {
-    "passed": 32,
-    "failed": 0,
-    "skipped": 0
-  },
+  "current_disjoint_focused_cases_total": 67,
   "existing_family_regression_cases": {
     "passed": 83,
     "failed": 0,
     "skipped": 0,
     "scope": "integration before the additional helper exclusion check; that check is included in current32"
   },
-  "current_submission_cases": {
-    "passed": 64,
-    "failed": 0,
-    "skipped": 0
-  },
   "source_manifest": {
-    "files": 48,
-    "sha256": "6b3f02e02e32e2ecb7425518d8f00f4980201c587c84ce7dcd5aac983474bdee",
+    "files": 49,
+    "sha256": "f3f918cbfa0f4768d05dc48a74671082490f7c063223cefc3b918c4908b725ad",
     "baseline": "e55e151"
   },
   "private_inspection_cases": {
@@ -250,5 +262,29 @@
     "Initial run26pass1fail because injected database cause was wrapped outside regex assertion; bounded cause inspection corrected; final75pass0fail0skip",
     "Admin routes now validate original use/amount and label separate adjudication. Saved-reference immutable admin-ruling recovery remains unfinished",
     "Unstarted refund preservation and consumed inventory/funding still need completion before reviewed funding"
+  ],
+  "current_disjoint_focused_cases_scope": "Final current refund/original-use/credit/acceptance/release/review regression, not a full contract release gate",
+  "historical_submission_cases": {
+    "passed": 64,
+    "failed": 0,
+    "skipped": 0
+  },
+  "historical_shared_gross_cases": {
+    "passed": 32,
+    "failed": 0,
+    "skipped": 0
+  },
+  "original_refund_cases": {
+    "passed": 67,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Final current original refund/expiry and original financial/acceptance/ordinary credit/review regression"
+  },
+  "original_refund_limitations": [
+    "Actual disposable token deposits with direct controlled reviewed-use reservation records, not public reviewed funding or customer adoption",
+    "Frozen deadline exercised with controlled test clock; no real waiting or live order expiration",
+    "Refund handlers no longer reactivate reviewed listings; durable consumed-inventory exclusion after manual status reactivation still unfinished across catalog/funding/adoption",
+    "Initial39pass1fail caught new falsy-zero timestamp regression; finite/undefined checks corrected it; final67pass0fail0skip",
+    "Migration77 unchanged; prior preservation still applies, not rerun for these handler changes"
   ]
 }

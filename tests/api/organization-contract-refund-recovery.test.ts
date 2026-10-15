@@ -1,0 +1,147 @@
+import test, { before, after } from 'node:test'
+import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { mkdtemp, rm, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
+import { createWalletClient, erc20Abi, http } from 'viem'
+import { mainnet } from 'viem/chains'
+import { privateKeyToAccount } from 'viem/accounts'
+import { createLocalTestSchema } from '../helpers/local-schema'
+import { reviewedContractFixture } from '../helpers/reviewed-contract-fixture'
+import { startDisposableWorkflowChain } from '../helpers/disposable-workflow-chain'
+import { canonicalContract } from '@/lib/structured-verification'
+import { creditDepositMessage } from '@/lib/credit-proof'
+import { NextRequest } from 'next/server'
+
+const enabled = Boolean(process.env.CLAWDMARKET_TEST_ANVIL_BINARY)
+const payer = privateKeyToAccount(`0x${'18'.repeat(32)}`), treasuryKey = `0x${'99'.repeat(32)}` as const
+let directory: string, db: typeof import('@/lib/db').db, schema: typeof import('@/lib/schema')
+let chain: Awaited<ReturnType<typeof startDisposableWorkflowChain>>, wallet: ReturnType<typeof createWalletClient>
+let domain: typeof import('@/lib/organization-contract-authorizations'), reader: typeof import('@/lib/organization-contract-uses')
+const digest = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
+before(async () => {
+  if (!enabled) return
+  directory = await mkdtemp(join(tmpdir(), 'clawdmarket-workspace-test-contract-refund-recovery-'))
+  Object.assign(process.env, { TURSO_DATABASE_URL: `file:${join(directory, 'uses.db')}`, TURSO_AUTH_TOKEN: '', JWT_SECRET: 'contract-refund-recovery-fixture-only',
+    AGENT_API_KEY_PEPPER: 'contract-refund-recovery-fixture-only', WEBHOOK_SECRET_KEY: 'contract-refund-recovery-fixture-only',
+    CHAT_ENCRYPTION_KEY: 'contract-refund-recovery-fixture-only', CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED: 'true' })
+  for (const name of ['VERCEL', 'VERCEL_ENV', 'CLAWDMARKET_NEW_PAYMENTS_PAUSED', 'DEV_WALLET_ADDRESS', 'DEV_FEE_WALLET_ADDRESS']) delete process.env[name]
+  chain = await startDisposableWorkflowChain(process.env.CLAWDMARKET_TEST_ANVIL_BINARY!, payer.address, treasuryKey, 8453)
+  Object.assign(process.env, { TREASURY_ADDRESS: chain.treasury, EVM_SETTLEMENT_PRIVATE_KEY: treasuryKey,
+    EVM_ACCEPTED_TOKENS: JSON.stringify([{ chainId: 8453, address: chain.token, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain.url }]) })
+  wallet = createWalletClient({ chain: { ...mainnet, id: 8453 }, transport: http(chain.url), account: payer })
+  db = (await import('@/lib/db')).db; schema = await import('@/lib/schema'); await createLocalTestSchema(db.$client, schema)
+  await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-submissions-v1.sql', 'utf8'))
+  await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-exact-acceptance-v1.sql', 'utf8'))
+  await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-credit-release-v1.sql', 'utf8'))
+  domain = await import('@/lib/organization-contract-authorizations'); reader = await import('@/lib/organization-contract-uses')
+})
+after(async () => { db?.$client.close(); if (chain) await chain.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })
+
+async function fixture() {
+  const f = await reviewedContractFixture({ db, schema }, true, true), credit = await import('@/lib/account-credit')
+  const deposit = await credit.createDeposit(f.buyer, { amount_minor: 105, payer: payer.address, client_reference: crypto.randomUUID() })
+  const hash = await wallet.writeContract({ account: payer, chain: { ...mainnet, id: 8453 }, address: chain.token, abi: erc20Abi,
+    functionName: 'transfer', args: [chain.treasury, 1_050_000n] })
+  await chain.client.waitForTransactionReceipt({ hash })
+  await credit.confirmDeposit(f.buyer, { id: deposit.id, tx_hash: hash, signature: await payer.signMessage({ message: creditDepositMessage(deposit, hash) }) })
+  const a = (await domain.proposeOrganizationContract(f.org, f.owner, domain.organizationContractInput.parse(f.input))).authorization
+  await domain.approveOrganizationContract(f.org, a.id, f.reviewer, { version: 1, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash, approve: true })
+  const feeRecipient = `fee-${crypto.randomUUID()}`
+  await db.insert(schema.users).values({ id: feeRecipient, name: 'Original platform fee fixture', email: `${feeRecipient}@test.invalid`, password_hash: 'unused' })
+  const now = new Date(Math.floor(Date.now() / 1000) * 1000), funding = { version: 1, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash }
+  // Stored-record control only: the public reviewed funding API does not exist.
+  // Real deposit collateral above prevents unbacked seeded credit substituting
+  // for asset evidence. These direct test writes do not demonstrate a checkout.
+  await db.transaction(async tx => {
+    await tx.update(schema.listings).set({ status: 'sold' }).where(eq(schema.listings.id, f.listing.id))
+    await tx.update(schema.contracts).set({ state: 'FUNDED', funded_at: now }).where(eq(schema.contracts.id, f.original.contract.id))
+    await (await import('@/lib/organization-budgets')).attributeOrganizationContract(tx, f.buyerAgent, f.original.contract.id, 105, now)
+    await credit.reserveCredit(tx, { id: f.original.contract.id, buyer: f.buyer, feeRecipient, total: 105, seller: 100, fee: 5 })
+    await tx.insert(schema.organization_contract_uses).values({ authorization_id: a.id, contract_id: f.original.contract.id,
+      fee_recipient_id: feeRecipient, authority_hash: a.authority_hash, client_reference: funding.client_reference,
+      request_hash: digest(funding), amount_minor: 105, created_at: now })
+  })
+  return { ...f, a, feeRecipient, funding }
+}
+
+async function act(f: Awaited<ReturnType<typeof fixture>>, action: string) {
+  const { PATCH } = await import('@/app/api/contracts/[id]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  return PATCH(new NextRequest(`http://localhost/api/contracts/${f.original.contract.id}`, { method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' })}` },
+    body: JSON.stringify({ action }) }), { params: Promise.resolve({ id: f.original.contract.id }) })
+}
+async function maintenance() {
+  const before = process.env.MAINTENANCE_SECRET; process.env.MAINTENANCE_SECRET = 'contract-refund-local-maintenance-only'
+  try {
+    return await (await import('@/app/api/contracts/maintenance/route')).POST(new NextRequest('http://localhost/api/contracts/maintenance', {
+      method: 'POST', headers: { 'x-maintenance-secret': process.env.MAINTENANCE_SECRET } }))
+  } finally { if (before === undefined) delete process.env.MAINTENANCE_SECRET; else process.env.MAINTENANCE_SECRET = before }
+}
+async function refunded(f: Awaited<ReturnType<typeof fixture>>) {
+  const credit = await import('@/lib/account-credit')
+  assert.equal((await credit.creditBalance(f.buyer)).available_minor, 100); assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 0)
+  assert.equal((await credit.creditBalance(f.seller)).available_minor, 0); assert.equal((await credit.creditBalance(f.feeRecipient)).available_minor, 5)
+  assert.equal((await reader.originalReviewedContractUse(db, f.original.contract.id))?.remaining_principal_minor, 0)
+  assert.equal((await reader.organizationContractExposure(db, f.org, f.buyer)).lifetime, 105)
+  assert.equal((await db.select().from(schema.listings).where(eq(schema.listings.id, f.listing.id)))[0].status, 'sold', 'reviewed consumption cannot be relisted by refund')
+  const entries = await db.select().from(schema.credit_entries).where(eq(schema.credit_entries.reference, f.original.contract.id))
+  assert.equal(entries.filter(e => e.kind === 'contract_settlement:refund').length, 1)
+  assert.equal(entries.filter(e => e.kind.startsWith('contract_sale:')).length, 0)
+}
+
+test('original reviewed cancellation preserves consumed listing, principal/fee terms and gross after current permission closes', { skip: !enabled }, async () => {
+  const f = await fixture()
+  await domain.revokeOrganizationContract(f.org, f.a.id, f.owner)
+  await db.update(schema.organizations).set({ owner_account_id: f.other }).where(eq(schema.organizations.id, f.org))
+  await db.update(schema.organization_agent_assignments).set({ cost_center: 'CURRENT_CLOSED' }).where(eq(schema.organization_agent_assignments.agent_id, f.buyerAgent))
+  await db.update(schema.seller_payment_preferences).set({ supported_rails: '[]' }).where(eq(schema.seller_payment_preferences.seller_id, f.seller))
+  assert.equal((await act(f, 'cancel')).status, 200); await refunded(f)
+  assert.equal((await act(f, 'cancel')).status, 409); await refunded(f)
+})
+
+test('mutable expired metadata cannot expire or refund a reviewed obligation before its frozen original deadline', { skip: !enabled }, async () => {
+  const f = await fixture()
+  await db.update(schema.contracts).set({ expires_at: new Date(Date.now() - 60000) }).where(eq(schema.contracts.id, f.original.contract.id))
+  assert.equal((await act(f, 'expire')).status, 400)
+  const response = await maintenance(); assert.equal(response.status, 200)
+  assert.equal((await response.json()).expired_contracts, 0)
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+  assert.equal((await act(f, 'cancel')).status, 200); await refunded(f)
+})
+
+for (const mode of ['manual', 'maintenance']) test(`${mode} expiration uses frozen original deadline even if current metadata extends or removes it, and never recycles consumed inventory`, { skip: !enabled }, async t => {
+  const f = await fixture(), originalExpiry = Date.parse(f.original.contract.expires_at)
+  await db.update(schema.contracts).set({ expires_at: mode === 'manual' ? new Date(originalExpiry + 86400000) : null }).where(eq(schema.contracts.id, f.original.contract.id))
+  t.mock.timers.enable({ apis: ['Date'], now: originalExpiry + 1000 })
+  try {
+    const response = mode === 'manual' ? await act(f, 'expire') : await maintenance()
+    assert.equal(response.status, 200, JSON.stringify(await response.clone().json()))
+    if (mode === 'maintenance') assert.equal((await response.json()).expired_contracts, 1)
+    await refunded(f)
+    if (mode === 'manual') assert.equal((await act(f, 'expire')).status, 409)
+    else assert.equal((await (await maintenance()).json()).expired_contracts, 0)
+    await refunded(f)
+  } finally { t.mock.timers.reset() }
+})
+
+test('contradictory original credit amounts block start, cancel and maintenance before state, listing or financial changes', { skip: !enabled }, async () => {
+  const f = await fixture()
+  await db.update(schema.contracts).set({ total_amount: 2 }).where(eq(schema.contracts.id, f.original.contract.id))
+  const reply = await act(f, 'cancel')
+  assert.equal(reply.status, 409); assert.equal((await reply.json()).code, 'ORGANIZATION_CONTRACT_USE_INVALID')
+  const { PATCH } = await import('@/app/api/contracts/[id]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  const start = await PATCH(new NextRequest(`http://localhost/api/contracts/${f.original.contract.id}`, { method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt({ userId: f.seller, email: `${f.seller}@test.invalid`, role: 'human' })}` },
+    body: JSON.stringify({ action: 'start' }) }), { params: Promise.resolve({ id: f.original.contract.id }) })
+  assert.equal(start.status, 409)
+  const failed = await maintenance(); assert.equal(failed.status, 409)
+  const body = await failed.json(); assert.equal(body.code, 'ORGANIZATION_CONTRACT_USE_INVALID')
+  assert.equal(body.success, false); assert.equal(body.financial_changes_committed, false); assert.ok(Date.parse(body.ran_at))
+  assert.equal((await db.select().from(schema.contracts).where(eq(schema.contracts.id, f.original.contract.id)))[0].state, 'FUNDED')
+  assert.equal((await db.select().from(schema.listings).where(eq(schema.listings.id, f.listing.id)))[0].status, 'sold')
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).available_minor, 0)
+})

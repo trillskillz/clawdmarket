@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { NextRequest } from "next/server"
 import { reviewedListingFixture } from "./reviewed-listing-fixture"
 
-export async function reviewedContractFixture(source: { db: typeof import("@/lib/db").db; schema: typeof import("@/lib/schema") }, reference = true) {
+export async function reviewedContractFixture(source: { db: typeof import("@/lib/db").db; schema: typeof import("@/lib/schema") }, reference = true, linkedListing = false) {
   const { db, schema } = source
   const drafts = await import("@/app/api/contracts/route")
   const { generateJWT: jwt } = await import("@/lib/auth")
@@ -11,7 +11,7 @@ export async function reviewedContractFixture(source: { db: typeof import("@/lib
   await db.insert(schema.seller_payment_preferences).values({ seller_id: f.seller, supported_rails: '["credit"]',
     confirmed_by: 'disposable-fixture', confirmed_at: new Date().toISOString() })
   const response = await drafts.POST(request('/api/contracts', f.buyer, 'POST', {
-    ...(reference ? { client_reference: crypto.randomUUID() } : {}), seller_id: f.seller, milestones: [
+    ...(reference ? { client_reference: crypto.randomUUID() } : {}), ...(linkedListing ? { listing_id: f.listing.id } : {}), seller_id: f.seller, milestones: [
       { title: 'Original first finite report', amount: .4, deadline_in_hours: 12, acceptance_spec: { required_artifacts: ['report'], notes: 'PRIVATE_ORIGINAL_REVIEW_SCOPE' } },
       { title: 'Original second report', amount: .6, deadline_in_hours: 24 },
     ],

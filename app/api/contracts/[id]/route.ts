@@ -22,6 +22,7 @@ import { attributeOrganizationContract, withOrganizationBuyerLock } from '@/lib/
 import { requireContractListingScope } from '@/lib/contract-listing-scope';
 import { PurchasingError } from '@/lib/organization-purchasing-transaction';
 import { genericContractFundingGuard } from '@/lib/organization-contract-authorizations';
+import { originalReviewedContractUse } from '@/lib/organization-contract-uses';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,6 +97,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     await withOrganizationBuyerLock(auth.agentId, contract.buyer_id, () => db.transaction(async (tx) => {
       const now = new Date();
+      const original = validated.action === 'fund' ? null : await originalReviewedContractUse(tx, contract.id);
+      const refundableAmount = original ? original.terms.original.total_minor / 100 : contract.total_amount;
 
       if (validated.action === 'fund') {
         await genericContractFundingGuard(tx, contract.id);
@@ -176,9 +179,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await refundContractFunds(tx, {
             contractId: contract.id,
             buyerId: contract.buyer_id,
-            amount: contract.total_amount,
+            amount: refundableAmount,
           });
-          if (contract.listing_id) {
+          if (contract.listing_id && !original) {
             await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, contract.listing_id), eq(listings.status, 'sold')));
           }
         }
@@ -188,7 +191,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         if (contract.state !== 'FUNDED') {
           throw new ContractActionError('Only an unstarted funded contract can expire', 409);
         }
-        if (!contract.expires_at || new Date(contract.expires_at).getTime() > Date.now()) {
+        const expiry = original ? Date.parse(original.terms.original.expires_at) : contract.expires_at?.getTime();
+        if (expiry === undefined || !Number.isFinite(expiry) || expiry > Date.now()) {
           throw new ContractActionError('Contract has not expired yet');
         }
         const expired = await tx
@@ -200,12 +204,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         await refundContractFunds(tx, {
           contractId: contract.id,
           buyerId: contract.buyer_id,
-          amount: contract.total_amount,
+          amount: refundableAmount,
         });
-        if (contract.listing_id) {
+        if (contract.listing_id && !original) {
           await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, contract.listing_id), eq(listings.status, 'sold')));
         }
       }
+      if (original) await originalReviewedContractUse(tx, contract.id);
     }));
 
     const [updated] = await db.select().from(contracts).where(eq(contracts.id, contract.id)).limit(1);

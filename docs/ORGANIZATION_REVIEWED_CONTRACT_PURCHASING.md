@@ -117,7 +117,16 @@ consent or buyer-directed release records. Immutable saved-reference admin rulin
 recovery and public proof interfaces remain unfinished. Do not treat a mutable
 ruling/state or a timeout as an original financial receipt.
 
-Remaining work: original unstarted refund/inventory preservation, immutable admin
+Reviewed unstarted cancel/expire and maintenance now validate original financial
+use before changing state or credit. Original principal is refundable, the upfront
+fee stays charged, and gross remains consumed. Current permission/owner/rail edits
+do not replace paid terms. Expiry uses the frozen original absolute deadline;
+mutable metadata cannot advance or postpone it. Refund handlers keep the linked
+listing sold; durable cross-scope exclusion after manual reactivation still needs
+completion before reviewed funding. Contradictory original evidence rolls back
+maintenance and returns a timestamped explicit failure, not zero successful work.
+
+Remaining work: durable consumed inventory, immutable admin
 adjudication recovery, scoped reviewed funding/use, consumed inventory exclusion,
 public original seller submission, finite buyer/provider restart journals, private
 human work UI, actual multi-milestone economics and complete release gates.

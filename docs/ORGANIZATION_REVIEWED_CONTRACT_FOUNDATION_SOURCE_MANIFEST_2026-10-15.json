@@ -1,13 +1,13 @@
 {
   "baseline_listing_candidate": "e55e151",
-  "scope": "Changed source/tests for unfinished contract foundation. Public exact acceptance/recovery and internal original credit release exist. Reviewed public funding/submission/release, complete clients/UI and release acceptance remain unavailable. Not capability9 or publication permission.",
+  "scope": "Changed source/tests for unfinished contract foundation. Public exact acceptance/recovery, internal original credit release and frozen original unstarted refunds exist. Reviewed public funding/submission/release and immutable admin recovery/full outcome gates remain unavailable. Not capability9 or publication permission.",
   "http_contract": "1.119",
   "migrations": 77,
   "files": {
     "app/api/admin/contracts/disputes/[id]/resolve/route.ts": "dea30273a60587c2865eab4b92318a1aa5a25f012cc67554b46b53cc1a989959",
     "app/api/contracts/[id]/milestones/[milestoneId]/route.ts": "7b5c871c9a048265d520666910f4694ee37ea9d06edba6fe0698fb6d4a6c857e",
-    "app/api/contracts/[id]/route.ts": "1374a3b4ee0f9defa444b13e09033995d6fca60717648d8eeb9cc171041deb1c",
-    "app/api/contracts/maintenance/route.ts": "0c24e98e99e97f7c155b27f2de599947270f04f6117df656751f1cdcda114d9c",
+    "app/api/contracts/[id]/route.ts": "33a59057e616e45a1961a246bcc91ee917251fc587ad40dc42b9a1b5b7397f4d",
+    "app/api/contracts/maintenance/route.ts": "00f507ce0a14006f1ff2cb8f0b7358e896a638d3618d8f01868c18292c288492",
     "app/api/contracts/route.ts": "38212b9ce688bd7369d171fcb038f40db6f75cddd375facf8ead5d69a1bcfc7c",
     "app/api/organizations/[id]/contract-authorizations/[authorizationId]/approval/route.ts": "93c93e02df1b71ecedffb1b8524029e3c4781e66e9521df4a0f222bb89702afa",
     "app/api/organizations/[id]/contract-authorizations/[authorizationId]/route.ts": "182aa9898978b963fcc195917772215719cf815976963e5a8f712c2fe1973894",
@@ -46,10 +46,11 @@
     "tests/api/contract-creation.test.ts": "cb2b8a228f09a3f245d139cc2c1a87040b28a90914e59cfcd70ed6b9b5f3352f",
     "tests/api/organization-contract-credit-backing.test.ts": "aa907218f52f6d8fbd2947de34dacfea6f971837633e6a5d5248251ed695866f",
     "tests/api/organization-contract-original-uses.test.ts": "477ca3fd0074bef128bc5b6c01f94b667ed1d6fdc056bb5ad4ee2e82cb6317fc",
+    "tests/api/organization-contract-refund-recovery.test.ts": "8b3f3d5ebaf90c87726397f75365441af19e290854bae26fcc4ea1a897081744",
     "tests/api/organization-contract-review-races.test.ts": "3a6f3f7a93073506896681174b9bec111dc798a01e61b435ea547d856798c57a",
     "tests/api/organization-contract-review.test.ts": "209f4762fc1e2863aa5f1179aae3a777cdcf64329df4d5b000476b9b753b573a",
     "tests/helpers/contract-creation-process.ts": "81e4856400491dfba47ba36ec1955db3d6ffa1130d535c188a58495aba1c989f",
-    "tests/helpers/reviewed-contract-fixture.ts": "da663f03cc23e2f49f66b5661e483127e6408e8af4034119cedbf0aca2265b8e",
+    "tests/helpers/reviewed-contract-fixture.ts": "bc7c488d4880041568fd10794b0c3ba3ec2354e8fd3052e4be8e4766a0f71a6c",
     "tests/logic/runtime-schema-migration.test.ts": "0fda357f8a334197eb40b0da460a222f1c73afae3bdfd81d790b019dbb6a45c9",
     "tests/sdk/milestone-contract.test.ts": "885f12cc4251d0659351d40f8331ffaa75e07949c62141a4e41d083130747711"
   }

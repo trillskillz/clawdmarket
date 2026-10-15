@@ -1,0 +1,68 @@
+✔ Observe wallet activity appears after verified deposit confirmation using the ledger posting date (2437.619608ms)
+✔ standalone contracts reserve backed credit once and release multiple milestones without touching legacy balances (558.137318ms)
+✖ contract cancellation and expiry refund the original credit escrow during a payment pause (352.120315ms)
+✔ historical funded wallet contracts retain their original release and refund path (13.826789ms)
+✔ contract disputes split cents once and cannot consume a different contract reservation (238.61302ms)
+✔ contract funding respects payment holds, whole cents and shared buyer spend policy (304.961556ms)
+✔ agent and organization contract ceilings share exposure with marketplace purchases (346.693574ms)
+✔ backed contract funding shares department ceilings with trades and preserves original department after reassignment (326.849887ms)
+✔ verified platform MPP receipts are durable and public without private account data or duplicate historical proofs (17.121541ms)
+✔ concurrent deposit intent creation grants one send and immutable reference replay (71.694214ms)
+✔ payer signature and authoritative receipt are required; original hash remains locked (126.709119ms)
+✔ receipt sender, recipient, asset, exact amount, timestamp, status and canonical network are checked (505.388532ms)
+✔ confirmed deposit is credited once across concurrent recovery, expiry and payment pause (86.925282ms)
+✔ a transfer receipt used by a trade cannot mint account credit (46.785787ms)
+✔ historical balances cannot buy; backed credit purchases reserve cents and settle once with fee conservation (138.181782ms)
+✔ dispute split releases exact escrow once; different purchases cannot overspend concurrently (99.67682ms)
+✔ owners fund agent credit idempotently; a different owner or destination cannot reuse the reference (85.645196ms)
+✔ connected wallet balance reads report actual decimals and unavailable RPC states (55.092771ms)
+✔ deposit cookie authentication requires CSRF and agent read credentials cannot authorize wallet writes (2.987184ms)
+✔ registered agents can deposit and spend backed credit; scoped read keys cannot pay and spend limits hold (119.034835ms)
+✔ credit-funded reusable orders dispatch immediately, replay without new exposure and release capacity after settlement (207.62193ms)
+✔ task credit funding accepts a seller without external payout setup and enforces the exact quote (122.329556ms)
+✔ credit audit reconciles deposits, account deltas, escrow and shared receipts and detects unbacked edits (4.51154ms)
+✔ original pending listing review cannot be bypassed by a backed-credit contract; unrelated public buyer keeps access (228.614236ms)
+✔ original revoked listing review cannot be bypassed by a backed-credit contract; unrelated public buyer keeps access (195.598701ms)
+✔ a consumed reviewed listing cannot be adopted by a new credit contract after cancel and manual reactivation (217.122827ms)
+✔ linked contract funding rechecks current listing seller without changing historical funded settlement terms (73.718639ms)
+✔ contract draft and funding cannot adopt an original task listing after status reactivation (90.939618ms)
+✔ contract draft and funding cannot adopt an original private-service listing after status reactivation (81.66734ms)
+✔ a current private provider closes fresh contract draft and funding without rewriting original records (115.028565ms)
+✔ original reviewed cancellation preserves consumed listing, principal/fee terms and gross after current permission closes (13057.01612ms)
+✔ mutable expired metadata cannot expire or refund a reviewed obligation before its frozen original deadline (4189.480035ms)
+✔ manual expiration uses frozen original deadline even if current metadata extends or removes it, and never recycles consumed inventory (187.625103ms)
+✔ maintenance expiration uses frozen original deadline even if current metadata extends or removes it, and never recycles consumed inventory (4162.623678ms)
+✔ contradictory original credit amounts block start, cancel and maintenance before state, listing or financial changes (4162.448302ms)
+✔ private contract review freezes original ordered milestones, credit fee/refund terms and an independent organizational reviewer without funding (1159.155497ms)
+✔ every contract companion state blocks generic funding and exact proposal/decision replay never reopens revocation (175.245894ms)
+✔ contract decision rejects current ownership, assignment, reviewer, amount, milestone, acceptance, deadline, seller rail and ban drift (1038.226784ms)
+✔ contract review refuses reviewer ownership of provider, changed original proposal, unreferenced legacy drafts, CSRF and oversized input (177.458783ms)
+✔ elapsed review windows cannot invent acceptance for any companion state while ordinary historical policy stays unchanged (252.528611ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 39
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 42410.393978
+
+✖ failing tests:
+
+test at tests/api/account-credit.test.ts:2:14334
+✖ contract cancellation and expiry refund the original credit escrow during a payment pause (352.120315ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  400 !== 200
+  
+      at TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/account-credit.test.ts:146:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 400,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

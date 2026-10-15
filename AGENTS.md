@@ -1,3 +1,44 @@
+## Original unstarted refunds verified — migration 77 unchanged
+
+Reviewed start/cancel/expire now validate original financial use inside their
+transaction. Refunds use frozen original principal, preserve the upfront fee and
+original credit reference/gross, and do not reactivate linked reviewed inventory.
+Current owner, assignment, rails or review revocation cannot erase a paid refund.
+Manual and maintenance expiry use the frozen ORIGINAL deadline: changing current
+metadata cannot cause early refund or postpone expiry. Maintenance includes paid
+reviewed uses even if mutable expiry was removed. Contradictory evidence returns
+a timestamped failure with financial_changes_committed:false after rollback;
+it cannot report a successful empty maintenance run.
+
+Current **67/67 focused cases** pass, no failures/skips, including original credit,
+output/acceptance/release/admin and review compatibility. Types/lint and production
+build pass. Initial run39pass/1fail caught an introduced falsy-zero timestamp check
+that rejected historical epoch-zero expiry; explicit finite/undefined checks fix
+it and the final regression passes. Date tests use a controlled clock with actual
+disposable local test-token deposits and directly constructed future use records.
+No public reviewed purchase, customer demand or live canary is demonstrated.
+Migration77 is unchanged; its prior845-row/133-table/guard/query preservation
+remains applicable, not newly repeated. No new full predeploy/browser gate.
+
+The refund handlers now preserve original inventory, but durable catalog/adoption/
+funding exclusion after manual status reactivation remains a separate unfinished
+boundary. No public reviewed funding, seller submission or payment release is
+opened. Count8/10 and HTTP1.119 remain local-only; prior accepted candidates stay
+unchanged. Source manifest **49** files relative to e55e151, SHA-256
+`f3f918cbfa0f4768d05dc48a74671082490f7c063223cefc3b918c4908b725ad`. Evidence is under the contract foundation evidence directory.
+
+Next implement [immutable original admin-ruling recovery](docs/ORGANIZATION_CONTRACT_ADJUDICATION_RECOVERY_DESIGN_2026-10-15.md),
+then public original work/release adapters, reviewed funding/use plus durable
+consumed inventory, finite clients/private UI and actual multi-milestone process/
+full release gates. Do not deploy this unfinished foundation. Any eventual
+migration requires a real production backup and full accepted candidate gates;
+the local baseline rehearsal is not that backup. Rollback must preserve original
+use, output, consent, release and ledger rows, retain scoped paid recovery, and
+never restore generic hashless reviewed approval/payment or inventory recycling.
+No publication, real funds, production flags, custody changes, mail or outreach.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Internal original credit release verified — migration 77
 
 The contract foundation can now internally release one frozen milestone only
