@@ -1,6 +1,6 @@
 import { SDK_CONTRACT } from './contract.js'
-import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission, type OriginalContractAdjudication } from './milestone-contract.js'
-export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission, OriginalContractAdjudication } from './milestone-contract.js'
+import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission, type OriginalContractAdjudication, type OriginalContractSubmissionInput, type OriginalContractSubmissionOperation } from './milestone-contract.js'
+export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractSubmissionOperation } from './milestone-contract.js'
 import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, originalListingReference, scopedSpendingClient } from './enterprise.js'
 import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'
@@ -446,6 +446,12 @@ export class ClawdMarketClient {
   recoverOriginalContractAcceptance(contractId: string, milestoneId: string, clientReference: string, options?: RequestOptions) {
     const path = this.originalContractMilestonePath(contractId, milestoneId)
     return this.request<OriginalContractAcceptance>('GET', `${path}?${new URLSearchParams({ acceptance_reference: originalContractCreationReference(clientReference) })}`, undefined, options)
+  }
+  /** Save exact JSON/reference before sending; inspect original work after uncertainty. No automatic retry or payment. */
+  submitOriginalContractOutput(contractId: string, milestoneId: string, input: OriginalContractSubmissionInput, options?: RequestOptions) {
+    originalContractCreationReference(input.client_reference)
+    if (input.version !== 1 || !input.artifact_bundle || typeof input.artifact_bundle !== 'object' || Array.isArray(input.artifact_bundle)) throw new TypeError('Invalid original contract output')
+    return this.request<OriginalContractSubmissionOperation>('POST', `${this.originalContractMilestonePath(contractId, milestoneId)}/submissions`, input, options)
   }
   /** Participant recovery only; cannot issue an admin ruling or create buyer consent. */
   recoverOriginalContractAdjudication(contractId: string, milestoneId: string, disputeId: string, options?: RequestOptions) {

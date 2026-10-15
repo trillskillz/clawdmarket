@@ -48,7 +48,17 @@ or independent economic proof.
 
 Original immutable seller submissions exist internally (migration 75): bounded
 finite JSON, stable saved references, exact content hashes and four SQL update/
-delete guards. Public submit remains blocked. Passing required-key presence
+delete guards. The dedicated local POST
+`/api/contracts/{id}/milestones/{milestoneId}/submissions` accepts version1,
+client_reference and artifact_bundle from the original paid seller. Named keys
+require payments:write and cookies require CSRF; foreign owners/reviewers have no
+work authority. HTTP input is capped96000 bytes and canonical artifact JSON65536
+UTF8 bytes/depth12/nodes4096. First success201/exact replay200; changed reference
+reuse409. Save the exact JSON/reference before sending and recover by the existing
+participant GET client_reference after uncertainty. TypeScript/Python expose
+submitOriginalContractOutput/submit_original_contract_output. Both actual
+application HTTP lost-reply controls pass without new output or financial movement.
+The older generic hashless reviewed submission remains blocked. Passing required-key presence
 checks cannot accept output or release credit. Semantic accuracy and remote
 sandbox execution remain unmeasured. No remote artifacts are fetched or executed.
 
@@ -137,8 +147,8 @@ listing sold; durable cross-scope exclusion after manual reactivation still need
 completion before reviewed funding. Contradictory original evidence rolls back
 maintenance and returns a timestamped explicit failure, not zero successful work.
 
-Remaining work: durable consumed inventory, public original seller submission
-and exact credit-release/recovery adapters, scoped reviewed funding/use, consumed inventory exclusion,
+Remaining work: durable consumed inventory and public exact credit-release/
+recovery adapters, scoped reviewed funding/use, consumed inventory exclusion,
 public original seller submission, finite buyer/provider restart journals, private
 human work UI, actual multi-milestone economics and complete release gates.
 No contract capability9, publication, live-payment or outreach authorization is

@@ -60,3 +60,9 @@ class OriginalContractAdjudication(TypedDict):
     current_milestone_state: str
     credit_remaining_principal_minor: int
     observed_at: str
+
+
+class OriginalContractSubmissionInput(TypedDict):
+    version: Literal[1]
+    client_reference: str
+    artifact_bundle: dict[str, Any]

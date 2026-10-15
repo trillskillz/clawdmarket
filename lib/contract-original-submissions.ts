@@ -73,7 +73,7 @@ export async function inspectOriginalReviewedContractSubmission(source: Purchasi
 }
 
 /** Seller-only append/replay. Finite key presence never accepts output or releases credit.
- * This internal foundation has no public API/worker integration or funding authority. */
+ * The versioned public adapter grants no buyer acceptance, worker execution or funding authority. */
 export async function submitOriginalReviewedContract(contractId: string, milestoneId: string, seller: string, rawInput: Input) {
   const input = reviewedContractSubmissionInput.parse(rawInput)
   const content = contentHash(contractId, milestoneId, seller, input.artifact_bundle), digest = requestHash(input, content)

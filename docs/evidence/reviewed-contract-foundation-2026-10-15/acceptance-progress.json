@@ -1,5 +1,5 @@
 {
-  "stage": "Immutable original reviewed admin adjudication recovery, separate from buyer acceptance and release; public funding/work/release closed",
+  "stage": "Dedicated versioned original seller submission POST plus both provider SDKs; public funding/payment release closed",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 78,
@@ -29,7 +29,7 @@
     "full_new_contract_release_gates": false,
     "live_funding_performed": false,
     "independent_customer_activity_demonstrated": false,
-    "public_reviewed_contract_submission": false,
+    "public_reviewed_contract_submission": true,
     "internal_original_submission": true,
     "participant_original_submission_get": true,
     "internal_exact_buyer_acceptance": true,
@@ -243,6 +243,34 @@
     "adjudication-python": {
       "local_log": "/tmp/clawdmarket-contract-original-adjudication-python-2026-10-15.log",
       "log_sha256": "1da699aea4b4a838563f9eb5f2f7ba8a2cc50e7aaa1c1ce0d86cd1bbe7696b42"
+    },
+    "output-focused": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-focused-2026-10-15.log",
+      "log_sha256": "8d41741cf278ee64b5175dc3e9e2e5a88596addf03886013ce87ce8de6e626d0"
+    },
+    "output-types": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "output-lint": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "output-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "output-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "output-python": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-python-2026-10-15.log",
+      "log_sha256": "588f8f798faa726c89639799b0cd6fe3d8451160a7998826cd3d34f05c0d0e3b"
+    },
+    "output-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-build-2026-10-15.log",
+      "log_sha256": "b5f5cbe55c9f6c73adcd0e821856f5662f19afbe41824a3a2ba5f518647b3b0a"
     }
   },
   "compatibility_cases": {
@@ -250,7 +278,7 @@
     "failed": 0,
     "skipped": 0
   },
-  "current_disjoint_focused_cases_total": 92,
+  "current_disjoint_focused_cases_total": 53,
   "existing_family_regression_cases": {
     "passed": 83,
     "failed": 0,
@@ -258,8 +286,8 @@
     "scope": "integration before the additional helper exclusion check; that check is included in current32"
   },
   "source_manifest": {
-    "files": 51,
-    "sha256": "0ddfd62fde2dbcd37061991eb1f458d5392b2e39b584a16d6dbb687a0740f033",
+    "files": 53,
+    "sha256": "bc1699f78e36353fba497420eed3dfe4e561f593867cef4e44f936d00cf622dc",
     "baseline": "e55e151"
   },
   "private_inspection_cases": {
@@ -293,7 +321,7 @@
     "passed": 27,
     "failed": 0,
     "skipped": 0,
-    "scope": "Current Python transport/export compatibility; actual application lost admin reply then both participant SDK reads are in Node integration gate"
+    "scope": "Current local HTTP SDK/export suite; both actual application provider lost-reply cases execute in Node integration gate"
   },
   "limitations_public_acceptance": [
     "Controlled future-use records over actual disposable local test-token deposits; no public reviewed funding or completed economic journey",
@@ -315,7 +343,7 @@
     "Admin routes now validate original use/amount and label separate adjudication. Saved-reference immutable admin-ruling recovery remains unfinished",
     "Unstarted refund preservation and consumed inventory/funding still need completion before reviewed funding"
   ],
-  "current_disjoint_focused_cases_scope": "Current financial/refund/review/SDK/migration/API regression before final OpenAPI-only admin endpoint description; 18 actual canonical cases pass after that metadata addition",
+  "current_disjoint_focused_cases_scope": "Original financial/submission/acceptance/adjudication, both actual provider HTTP losses, canonical API and TS SDK checks for dedicated seller endpoint",
   "historical_submission_cases": {
     "passed": 64,
     "failed": 0,
@@ -372,5 +400,16 @@
     "payment_monitor_run": 38763126626,
     "payment_monitor_scope": "readiness/enabled rails/Base+Tempo RPC only",
     "remote_changes_performed": false
-  }
+  },
+  "public_output_cases": {
+    "passed": 53,
+    "failed": 0,
+    "skipped": 0
+  },
+  "public_output_limitations": [
+    "Actual provider HTTP reply loss and SDK recovery use direct controlled original reviewed funding/use records over genuine disposable token deposits; not public reviewed funding or customer demand",
+    "Migration78 unchanged; previous preservation applies and was not rerun",
+    "No public original credit-release endpoint, finite process worker/UI or full reviewed contract release acceptance",
+    "Legacy generic hashless submit remains blocked; only dedicated saved-reference operation is exposed locally"
+  ]
 }

@@ -310,6 +310,13 @@ export const SDK_CONTRACT = {
     "public_review_bodies": false
   },
   "operations": {
+    "submit_original_contract_output": {
+      "method": "POST",
+      "path": "/api/contracts/{id}/milestones/{milestoneId}/submissions",
+      "auth": "agent_api_key",
+      "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
     "get_original_contract_submission": {
       "method": "GET",
       "path": "/api/contracts/{id}/milestones/{milestoneId}",

@@ -1,3 +1,47 @@
+## Dedicated original seller submission verified — local migration78 unchanged
+
+POST `/api/contracts/{id}/milestones/{milestoneId}/submissions` now accepts bounded
+version1, saved client_reference and artifact_bundle from the original paid seller.
+The older generic hashless reviewed submit stays blocked. Named credentials need
+payments:write, cookies need CSRF, foreign owners/reviewers cannot inspect/write
+work, and all responses are private/no-store. Raw requests are capped96000 bytes;
+existing canonical artifact65536-byte/depth12/node4096 bounds and SQL immutability
+remain. Passing finite checks cannot accept or release credit or prove semantics
+or remote sandbox execution. No remote artifact fetching/execution is added.
+
+Both provider SDKs save one exact command, lose an ACTUAL committed HTTP reply,
+then inspect by the original seller reference and explicitly replay the same body
+after review revocation. One immutable submission/hash remains, with no new output,
+acceptance or financial movement. Current focused **53/53 cases**, no skips/failures,
+plus **27 Python cases**, types/lint/SDK parity/build and production build pass.
+The focused gate includes original financial/acceptance/admin controls and18
+canonical cases. It is not a new full predeploy/browser or process-worker gate.
+Migration78 did not change; prior local baseline preservation remains applicable.
+Reviewed tests still directly construct original funding/use records over genuine
+disposable deposits, not public reviewed checkout, a live canary or independent
+customer activity. No capability9. HTTP1.119/count8 remain local and undeployed.
+
+The source manifest binds **53** changed files relative to e55e151, SHA-256
+`bc1699f78e36353fba497420eed3dfe4e561f593867cef4e44f936d00cf622dc`. Durable output logs/evidence are in the contract foundation directory.
+Production was independently observed at16:50UTC on HTTP1.116/main96a017b; current
+security/metrics/monitor limitations are in the read-only recheck note. Prior
+listing/pilot candidates are unchanged.
+
+Next add a dedicated exact original credit-release POST and participant saved-
+release-reference GET/SDK recovery, retaining old generic hashless mark_paid
+exclusion. Use payments:write plus original buyer, expected immutable acceptance
+ID/submission ID/hash, separate saved release reference and pinned ledger proof.
+Verify actual committed release HTTP loss in BOTH SDKs with no duplicate debit/
+seller credit, including revocation and completion recovery. Then durable consumed
+inventory, scoped reviewed fund/use, finite buyer/provider process journals/private
+human UI, actual multi-milestone economics and complete process/release gates.
+Do not deploy this unfinished tree. Preserve all original references/records and
+scoped recovery/interlocks on rollback; do not restore older hashless approval/pay
+or relist consumed inventory. No publication, real funds, production flags, custody
+changes, email or outreach authorization is implied.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Read-only production baseline refreshed — 2026-10-15 16:50 UTC
 
 Production still serves HTTP1.116/main96a017b. Public counts are now90 profiles,

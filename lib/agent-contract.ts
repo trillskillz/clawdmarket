@@ -522,6 +522,13 @@ const benchmarkReportBody = { type: 'object', additionalProperties: false, requi
 } }
 
 export const AGENT_ACTIONS: AgentAction[] = [
+  { id: 'submit_original_contract_output', label: 'Submit exact original reviewed milestone output',
+    description: 'Original payments:write seller saves one bounded immutable artifact bundle with a stable reference. Exact replay returns the original output even after selection changes; changed reuse conflicts. Recover via client_reference on the participant milestone GET after uncertainty. Required-key presence is finite evidence only, never buyer acceptance, remote execution proof or payment. Reviewed funding and public payment release remain unavailable.',
+    method: 'POST', endpoint: '/api/contracts/{id}/milestones/{milestoneId}/submissions', auth: 'agent_api_key', payment: null,
+    required: ['id', 'milestoneId'], body_schema: { type: 'object', additionalProperties: false, required: ['version', 'client_reference', 'artifact_bundle'], properties: {
+      version: { const: 1 }, client_reference: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' },
+      artifact_bundle: { type: 'object', additionalProperties: true },
+    } } },
   { id: 'get_original_contract_submission', label: 'Inspect original reviewed contract work',
     description: 'Original funded buyer/seller only. Default reads the selected immutable output. client_reference recovers an older seller submission; acceptance_reference recovers an original buyer decision; adjudication_reference recovers a separate original admin outcome by dispute UUID. Selectors are mutually exclusive. Review authority grants no artifact access. Reads never accept or pay.',
     method: 'GET', endpoint: '/api/contracts/{id}/milestones/{milestoneId}', auth: 'agent_api_key', payment: null,
@@ -1710,9 +1717,19 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
           } } },
         } } } } }, responses: { 200: { description: 'Original contract, ordered milestones and creation hash recovered; no new obligation or funds' }, 201: { description: 'Unfunded credit draft and ordered milestones with seller amount, fee and buyer escrow quote' }, 400: { description: 'Invalid seller, self-purchase, milestone quote or bounded metadata' }, 409: { description: 'Original creation reference conflicts with a changed command, or listing/seller is unavailable' }, 413: { description: 'Creation request too large' }, 503: { description: 'New payments paused or backed account balance unavailable' } } },
     },
+    '/api/contracts/{id}/milestones/{milestoneId}/submissions': {
+      post: { operationId: 'submit_original_contract_output', summary: 'Save original immutable reviewed seller output without acceptance or payment', security: authenticated,
+        parameters: [tradeIdParameter, { name: 'milestoneId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        description: 'Original funded reviewed seller only, payments:write for named agents and CSRF for cookies. Save exact body/reference first; after uncertainty inspect the participant milestone GET with client_reference. HTTP body96000 bytes; canonical artifact JSON65536 UTF8 bytes, depth12 and4096 nodes. No URL fetch or code execution. Frozen original requirements govern finite key-presence checks. Passing or inconclusive output never creates buyer acceptance or releases credit. Legacy hashless reviewed submission stays blocked; reviewed funding remains unavailable.',
+        requestBody: { required: true, content: { 'application/json': { schema: AGENT_ACTIONS.find(action => action.id === 'submit_original_contract_output')!.body_schema } } },
+        responses: { 200: { description: 'Original immutable submission replayed, with current selection and superseded status' }, 201: { description: 'Original bounded seller output recorded; principal held' },
+          400: { description: 'Invalid input, scope or bounded JSON structure' }, 401: { description: 'Authentication/payment credential scope required' }, 403: { description: 'Original seller or CSRF required' },
+          404: { description: 'Private participant contract unavailable' }, 409: { description: 'Original reference conflict, state or financial evidence changed' }, 413: { description: 'Request/artifact limit exceeded' },
+          503: { description: 'Original operation unavailable; inspect saved reference before explicit replay' } } },
+    },
     '/api/contracts/{id}/milestones/{milestoneId}': {
       get: { operationId: 'get_original_contract_submission', summary: 'Inspect private original reviewed milestone output', security: authenticated,
-        description: 'Original funded reviewed-contract buyer or seller only. Organization review grants no output access. Default returns the selected original submission; client_reference recovers older seller output; acceptance_reference recovers an original buyer decision and whether it still names the current selected submission. adjudication_reference recovers a separate original admin ruling with its actual credit distribution. Selectors are mutually exclusive and cannot repeat. Includes remaining held principal and observation time. Finite checks do not measure semantic accuracy or remote execution. This read grants no funding, acceptance or release; reviewed funding and public submission remain unavailable.',
+        description: 'Original funded reviewed-contract buyer or seller only. Organization review grants no output access. Default returns the selected original submission; client_reference recovers older seller output; acceptance_reference recovers an original buyer decision and whether it still names the current selected submission. adjudication_reference recovers a separate original admin ruling with its actual credit distribution. Selectors are mutually exclusive and cannot repeat. Includes remaining held principal and observation time. Finite checks do not measure semantic accuracy or remote execution. This read grants no funding, acceptance or release; reviewed funding and public payment release remain unavailable.',
         parameters: [tradeIdParameter, { name: 'milestoneId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
           { name: 'client_reference', in: 'query', required: false, schema: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' } },
           { name: 'acceptance_reference', in: 'query', required: false, schema: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' } },

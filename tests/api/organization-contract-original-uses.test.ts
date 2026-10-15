@@ -776,3 +776,93 @@ test('ordinary unreviewed contracts retain all four existing admin rulings witho
       (error: unknown) => (error as { code: string }).code === 'CONTRACT_ADJUDICATION_NOT_FOUND')
   }
 })
+
+test('dedicated original seller POST enforces actor, payment scope, CSRF and bounded finite output while legacy hashless submit stays blocked', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f)
+  const api = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/submissions/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  const context = { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) }
+  const path = `http://localhost/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}/submissions`
+  const input = { version: 1, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'Private original seller output' } }
+  const token = (actor: string) => jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })
+  const post = (actor: string, body: unknown = input, headers?: Record<string, string>) => api.POST(new NextRequest(path, { method: 'POST',
+    headers: { Authorization: `Bearer ${token(actor)}`, 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }), context)
+  for (const actor of [f.owner, f.reviewer, f.other]) assert.equal((await post(actor)).status, 404)
+  assert.equal((await post(f.buyer)).status, 403)
+  assert.equal((await post(f.seller, input, { Authorization: 'Bearer invalid', Cookie: `auth-token=${token(f.seller)}` })).status, 403)
+  const { createNamedAgentCredential } = await import('@/lib/agent-named-credentials')
+  const read = await createNamedAgentCredential({ agentId: f.providerAgent, name: 'Read only provider', scopes: ['agent:read'], actorCredentialId: null })
+  assert.equal(read.kind, 'created'); if (read.kind !== 'created') throw new Error('Read fixture failed')
+  assert.equal((await post(f.seller, input, { Authorization: '', 'X-ClawdMarket-Agent-Key': read.api_key })).status, 401)
+  assert.equal((await post(f.seller, { artifact_bundle: {} })).status, 400)
+  assert.equal((await post(f.seller, { ...input, artifact_bundle: { report: 'x'.repeat(96001) } })).status, 413)
+  const response = await post(f.seller)
+  assert.equal(response.status, 201); assert.equal(response.headers.get('Cache-Control'), 'private, no-store')
+  const first = await response.json(); assert.equal(first.submission.authorizes_payment, false)
+  assert.equal(first.submission.remote_execution_observed, false); assert.equal(first.credit_remaining_principal_minor, 100)
+  assert.equal((await post(f.seller)).status, 200)
+  assert.equal((await post(f.seller, { ...input, artifact_bundle: { report: 'Changed same reference' } })).status, 409)
+  const parent = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route')
+  assert.equal((await parent.PATCH(new NextRequest(path.replace('/submissions', ''), { method: 'PATCH', headers: {
+    Authorization: `Bearer ${token(f.seller)}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'submit', artifact_bundle: input.artifact_bundle }) }), context)).status, 409)
+  assert.equal((await db.select().from(schema.contract_acceptance_operations).where(eq(schema.contract_acceptance_operations.contract_id, f.original.contract.id))).length, 0)
+})
+
+test('both provider SDKs recover actual lost committed original submission replies without recomputation, new output or credit release', { skip: !enabled }, async () => {
+  const post = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/submissions/route'), get = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route'), { generateJWT: jwt } = await import('@/lib/auth')
+  for (const language of ['typescript', 'python']) {
+    const f = await fixture(); await startOriginal(f)
+    const input = { version: 1 as const, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'Saved original finite output before sending' } }
+    const token = jwt({ userId: f.seller, email: `${f.seller}@test.invalid`, role: 'human' })
+    const calls: Array<{ method: string; body: unknown }> = []; let committed: any
+    const server = createServer(async (incoming, outgoing) => {
+      try {
+        let body = ''; for await (const chunk of incoming) body += chunk
+        calls.push({ method: incoming.method!, body: body ? JSON.parse(body) : null })
+        const request = new NextRequest(`http://localhost${incoming.url}`, { method: incoming.method, headers: { Authorization: incoming.headers.authorization!, 'Content-Type': 'application/json' }, ...(incoming.method === 'POST' ? { body } : {}) })
+        const context = { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) }
+        const response = await (incoming.method === 'POST' ? post.POST(request, context) : get.GET(request, context))
+        const result = await response.json()
+        if (!committed && incoming.method === 'POST') {
+          assert.equal(response.status, 201); committed = result
+          await domain.revokeOrganizationContract(f.org, f.a.id, f.owner)
+          outgoing.destroy()
+        } else { outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(JSON.stringify(result)) }
+      } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+      let result: any
+      if (language === 'typescript') {
+        const client = new ClawdMarketClient({ apiKey: token, baseUrl: base })
+        await assert.rejects(client.submitOriginalContractOutput(f.original.contract.id, f.original.milestones[0].id, input), ClawdMarketTransportError)
+        assert.equal(calls.length, 1)
+        result = { recovered: await client.inspectOriginalContractSubmission(f.original.contract.id, f.original.milestones[0].id, input.client_reference),
+          replay: await client.submitOriginalContractOutput(f.original.contract.id, f.original.milestones[0].id, input) }
+      } else {
+        const source = `import os,json
+from clawdmarket import ClawdMarketClient,ClawdMarketTransportError
+f=json.loads(os.environ['CLAWDMARKET_LOCAL_OUTPUT_FIXTURE']);c=ClawdMarketClient(f['token'],base_url=f['base'])
+try:
+    c.submit_original_contract_output(f['contract'],f['milestone'],f['input'])
+except ClawdMarketTransportError:
+    pass
+else:
+    raise AssertionError('Expected lost committed reply')
+r=c.inspect_original_contract_submission(f['contract'],f['milestone'],f['input']['client_reference'])
+p=c.submit_original_contract_output(f['contract'],f['milestone'],f['input'])
+print(json.dumps({'recovered':r,'replay':p}))`
+        const output = await promisify(execFile)('python3', ['-c', source], { env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1', PYTHONPATH: 'sdk/python',
+          CLAWDMARKET_LOCAL_OUTPUT_FIXTURE: JSON.stringify({ token, base, contract: f.original.contract.id, milestone: f.original.milestones[0].id, input }) }, timeout: 30000 })
+        result = JSON.parse(output.stdout)
+      }
+      assert.deepEqual(calls.map(c => c.method), ['POST', 'GET', 'POST'])
+      assert.deepEqual(calls[0].body, input); assert.deepEqual(calls[2].body, input)
+      assert.equal(result.recovered.submission.id, committed.submission.id); assert.equal(result.replay.submission.id, committed.submission.id)
+      assert.equal(result.replay.submission.content_hash, committed.submission.content_hash); assert.equal(result.replay.idempotent, true)
+      assert.equal(result.replay.credit_remaining_principal_minor, 100)
+      assert.equal((await db.select().from(schema.contract_submission_operations).where(eq(schema.contract_submission_operations.contract_id, f.original.contract.id))).length, 1)
+      assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())) }
+  }
+})
