@@ -293,7 +293,7 @@ export async function originalTaskPayment(source: PurchasingSource, tradeId: str
   if (duplicate) fail('ORGANIZATION_TASK_USE_INVALID')
   return { authorization, terms, use, trade }
 }
-export async function organizationTaskExposure(source: PurchasingSource, orgId: string, buyerId: string, payment: ReturnType<typeof mandateDto>['terms']['payment'], excludeTradeId = '') {
+export async function organizationTaskExposure(source: PurchasingSource, orgId: string, buyerId: string, payment: ReturnType<typeof mandateDto>['terms']['payment'] | { rail: 'credit' }, excludeTradeId = '') {
   const history = await source.select({ use: uses }).from(uses).innerJoin(grants, eq(grants.id, uses.authorization_id))
     .where(and(eq(grants.organization_id, orgId), eq(grants.buyer_id, buyerId))).limit(10001)
   if (history.length > 10000) fail('ORGANIZATION_TASK_HISTORY_UNAVAILABLE', 503)
@@ -324,9 +324,11 @@ async function exposure(row: Grant, terms: TaskTerms, source: PurchasingSource, 
   const task = await organizationTaskExposure(source, row.organization_id, row.buyer_id, terms.payment, excludeTradeId)
   const { organizationListingExposure } = await import('./organization-listing-uses')
   const listing = await organizationListingExposure(source, row.organization_id, row.buyer_id, terms.payment)
-  if (route.daily + workflow.daily + task.daily + listing.daily + terms.total_minor > terms.max_daily_minor) fail('ORGANIZATION_TASK_DAILY_EXPOSURE')
-  if (route.monthly + workflow.monthly + task.monthly + listing.monthly + terms.total_minor > terms.max_monthly_minor) fail('ORGANIZATION_TASK_MONTHLY_EXPOSURE')
-  if (route.lifetime + workflow.lifetime + task.lifetime + listing.lifetime + terms.total_minor > terms.max_lifetime_minor) fail('ORGANIZATION_TASK_LIFETIME_EXPOSURE')
+  const { organizationContractExposure } = await import('./organization-contract-uses')
+  const contract = await organizationContractExposure(source, row.organization_id, row.buyer_id)
+  if (route.daily + workflow.daily + task.daily + listing.daily + contract.daily + terms.total_minor > terms.max_daily_minor) fail('ORGANIZATION_TASK_DAILY_EXPOSURE')
+  if (route.monthly + workflow.monthly + task.monthly + listing.monthly + contract.monthly + terms.total_minor > terms.max_monthly_minor) fail('ORGANIZATION_TASK_MONTHLY_EXPOSURE')
+  if (route.lifetime + workflow.lifetime + task.lifetime + listing.lifetime + contract.lifetime + terms.total_minor > terms.max_lifetime_minor) fail('ORGANIZATION_TASK_LIFETIME_EXPOSURE')
   const priorFees = terms.payment.rail === 'evm' ? route.gas + workflow.gas + task.gas + listing.gas : route.fees + workflow.fees + task.fees + listing.fees
   if (priorFees + BigInt(feeCeiling(terms)) > BigInt(terms.max_lifetime_chain_fee_units)) fail('ORGANIZATION_TASK_FEE_EXPOSURE')
 }

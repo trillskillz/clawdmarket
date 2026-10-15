@@ -13,6 +13,9 @@ import { reviewedContractFixture } from '../helpers/reviewed-contract-fixture'
 import { startDisposableWorkflowChain } from '../helpers/disposable-workflow-chain'
 import { canonicalContract } from '@/lib/structured-verification'
 import { creditDepositMessage } from '@/lib/credit-proof'
+import { NextRequest } from 'next/server'
+import { reviewedSharedService } from '../helpers/reviewed-shared-service'
+import { reviewedSharedTask } from '../helpers/reviewed-shared-task'
 
 const enabled = Boolean(process.env.CLAWDMARKET_TEST_ANVIL_BINARY)
 const payer = privateKeyToAccount(`0x${'18'.repeat(32)}`), treasuryKey = `0x${'99'.repeat(32)}` as const
@@ -68,6 +71,7 @@ test('original contract use validates exact real-deposit-backed reservation and 
   assert.equal(original?.remaining_principal_minor, 100)
   assert.equal(original?.use.fee_recipient_id, f.feeRecipient)
   assert.deepEqual(await reader.organizationContractExposure(db, f.org, f.buyer), { daily: 105, monthly: 105, lifetime: 105, gas: 0n, fees: 0n })
+  assert.deepEqual(await reader.reviewedOrganizationCreditGross(db, f.org, f.buyer), { daily: 105, monthly: 105, lifetime: 105 })
   assert.deepEqual(await reader.organizationContractExposure(db, f.org, f.buyer, f.original.contract.id), { daily: 0, monthly: 0, lifetime: 0, gas: 0n, fees: 0n })
   assert.equal((await db.select().from(schema.trades)).length, 0, 'no marketplace financial identity is fabricated')
 })
@@ -126,4 +130,77 @@ test('an old reservation cannot be reclassified as a new reviewed draft by reset
   await assert.rejects(domain.proposeOrganizationContract(f.org, f.owner, domain.organizationContractInput.parse(f.input)),
     (error: unknown) => (error as { code?: string }).code === 'ORGANIZATION_CONTRACT_DRAFT_REQUIRED')
   assert.equal((await db.select().from(schema.organization_contract_authorizations).where(eq(schema.organization_contract_authorizations.contract_id, f.original.contract.id))).length, 0)
+})
+test('original credit gross blocks new reviewed route, workflow, task, listing and contract budgets without consuming chain fee headroom', { skip: !enabled }, async () => {
+  const f = await fixture(), { generateJWT } = await import('@/lib/auth')
+  // Only unpaid external reservations are tested here. The actual node remains
+  // Base-ID8453; no L1 transaction or fee proof is fabricated or submitted.
+  Object.assign(process.env, { CLAWDMARKET_REUSABLE_SERVICES_ENABLED: 'true', CLAWDMARKET_ROUTE_PLANNING_ENABLED: 'true',
+    CLAWDMARKET_ROUTE_EXECUTION_ENABLED: 'true', CLAWDMARKET_WORKFLOW_PLANNING_ENABLED: 'true', CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED: 'true',
+    EVM_ACCEPTED_TOKENS: JSON.stringify([...JSON.parse(process.env.EVM_ACCEPTED_TOKENS!), { chainId: 1, address: chain.token,
+      symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain.url }]),
+  })
+  f.body.payment.token_address = chain.token
+  await db.update(schema.seller_payment_preferences).set({ supported_rails: '["credit","evm"]' }).where(eq(schema.seller_payment_preferences.seller_id, f.seller))
+  const request = (path: string, actor: string, body: unknown) => new NextRequest(`http://localhost${path}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${generateJWT({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })}` }, body: JSON.stringify(body),
+  })
+  for (const family of ['route', 'workflow'] as const) {
+    const reserve = await reviewedSharedService({ db, schema }, request, f, family, '1.05', '1000000000000000')
+    const result = await reserve()
+    assert.equal(result.status, 409, JSON.stringify(result)); assert.equal(result.code, `ORGANIZATION_${family.toUpperCase()}_GROSS_LIMIT`)
+  }
+  const task = await reviewedSharedTask({ db, schema }, f, '1.05', '1000000000000000')
+  const taskResult = await task(); assert.equal(taskResult.status, 409); assert.equal(taskResult.code, 'ORGANIZATION_TASK_DAILY_EXPOSURE')
+  const listings = await import('@/lib/organization-listing-authorizations'), checkout = await import('@/lib/organization-listing-checkout')
+  const a = (await listings.proposeOrganizationListing(f.org, f.owner, listings.organizationListingInput.parse({ ...f.body,
+    client_reference: crypto.randomUUID(), max_daily: '1.05', max_monthly: '1.05', max_lifetime: '1.05' }))).authorization
+  await listings.approveOrganizationListing(f.org, a.id, f.reviewer, { version: 1, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash, approve: true })
+  await assert.rejects(checkout.checkoutOrganizationListing(f.org, a.id, f.buyer, { version: 1, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash }),
+    (error: unknown) => (error as { code: string }).code === 'ORGANIZATION_LISTING_DAILY_EXPOSURE')
+  const second = await (await import('@/lib/contract-creation')).createContractDraft(f.buyer,
+    (await import('@/lib/validation')).createContractSchema.parse({ client_reference: crypto.randomUUID(), seller_id: f.seller, milestones: [{ title: 'Separate finite contract', amount: 1 }] }))
+  const b = (await domain.proposeOrganizationContract(f.org, f.owner, domain.organizationContractInput.parse({ ...f.input,
+    contract_id: second.contract.id, client_reference: crypto.randomUUID(), max_daily: '1.05', max_monthly: '1.05', max_lifetime: '1.05' }))).authorization
+  const [row] = await db.select().from(schema.organization_contract_authorizations).where(eq(schema.organization_contract_authorizations.id, b.id))
+  await assert.rejects(reader.assertReviewedContractGross(db, row), (error: unknown) => (error as { code: string }).code === 'ORGANIZATION_CONTRACT_DAILY_EXPOSURE')
+  await assert.rejects(reader.assertReviewedContractGross(db, row, f.original.contract.id), invalid, 'another contract cannot be excluded from a funding budget')
+  assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.buyer_id, f.buyer))).length, 0)
+  assert.deepEqual(await reader.reviewedOrganizationCreditGross(db, f.org, f.buyer), { daily: 105, monthly: 105, lifetime: 105 })
+  assert.deepEqual(await reader.organizationContractExposure(db, f.org, f.buyer), { daily: 105, monthly: 105, lifetime: 105, gas: 0n, fees: 0n })
+})
+test('prior original route, workflow, task and listing gross blocks a fresh credit contract ceiling in the reverse reservation order', { skip: !enabled }, async () => {
+  const { generateJWT } = await import('@/lib/auth')
+  Object.assign(process.env, { CLAWDMARKET_REUSABLE_SERVICES_ENABLED: 'true', CLAWDMARKET_ROUTE_PLANNING_ENABLED: 'true', CLAWDMARKET_ROUTE_EXECUTION_ENABLED: 'true',
+    CLAWDMARKET_WORKFLOW_PLANNING_ENABLED: 'true', CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED: 'true',
+    EVM_ACCEPTED_TOKENS: JSON.stringify([...JSON.parse(process.env.EVM_ACCEPTED_TOKENS!).filter((t: { chainId: number }) => t.chainId !== 1),
+      { chainId: 1, address: chain.token, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain.url }]),
+  })
+  const request = (path: string, actor: string, body: unknown) => new NextRequest(`http://localhost${path}`, { method: 'POST', headers: {
+    'Content-Type': 'application/json', Authorization: `Bearer ${generateJWT({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })}` }, body: JSON.stringify(body) })
+  for (const family of ['route', 'workflow', 'task', 'listing'] as const) {
+    const f = await reviewedContractFixture({ db, schema }); f.body.payment.token_address = chain.token
+    await db.update(schema.seller_payment_preferences).set({ supported_rails: '["credit","evm"]' }).where(eq(schema.seller_payment_preferences.seller_id, f.seller))
+    if (family === 'route' || family === 'workflow') {
+      const reserve = await reviewedSharedService({ db, schema }, request, f, family, '1.05', '1000000000000000')
+      const response = await reserve(); assert.equal(response.status, 201, JSON.stringify(response))
+    } else if (family === 'task') {
+      const reserve = await reviewedSharedTask({ db, schema }, f, '1.05', '1000000000000000')
+      assert.equal((await reserve()).status, 201)
+    } else {
+      const listings = await import('@/lib/organization-listing-authorizations'), checkout = await import('@/lib/organization-listing-checkout')
+      const a = (await listings.proposeOrganizationListing(f.org, f.owner, listings.organizationListingInput.parse(f.body))).authorization
+      await listings.approveOrganizationListing(f.org, a.id, f.reviewer, { version: 1, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash, approve: true })
+      assert.equal((await checkout.checkoutOrganizationListing(f.org, a.id, f.buyer, { version: 1, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash })).created, true)
+    }
+    const a = (await domain.proposeOrganizationContract(f.org, f.owner, domain.organizationContractInput.parse({ ...f.input,
+      max_daily: '1.05', max_monthly: '1.05', max_lifetime: '1.05' }))).authorization
+    const [row] = await db.select().from(schema.organization_contract_authorizations).where(eq(schema.organization_contract_authorizations.id, a.id))
+    assert.deepEqual(await reader.reviewedOrganizationCreditGross(db, f.org, f.buyer), { daily: 105, monthly: 105, lifetime: 105 }, family)
+    await assert.rejects(reader.assertReviewedContractGross(db, row), (error: unknown) => (error as { code: string }).code === 'ORGANIZATION_CONTRACT_DAILY_EXPOSURE')
+    const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.buyer_id, f.buyer))
+    await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, trade.id))
+    assert.equal((await reader.reviewedOrganizationCreditGross(db, f.org, f.buyer)).lifetime, 105, 'cancellation cannot recycle original gross')
+    assert.equal((await db.select().from(schema.credit_entries).where(eq(schema.credit_entries.user_id, f.buyer))).length, 0, 'this is an unpaid reservation control, not funded credit')
+  }
 })

@@ -119,3 +119,30 @@ export async function organizationContractExposure(source: PurchasingSource, org
   }
   return { daily, monthly, lifetime, gas: 0n, fees: 0n }
 }
+
+/** Explicit credit context reads gross only; no fabricated external wallet/fee metadata. */
+export async function reviewedOrganizationCreditGross(source: PurchasingSource, orgId: string, buyerId: string, excludeContractId = '') {
+  const { readOriginalOrganizationRouteExposure } = await import('./organization-route-authorizations')
+  const { organizationWorkflowExposure } = await import('./organization-workflow-authorizations')
+  const { organizationTaskExposure } = await import('./organization-task-authorizations')
+  const { organizationListingExposure } = await import('./organization-listing-uses')
+  const credit = { rail: 'credit' as const }
+  const records = [await readOriginalOrganizationRouteExposure(source, orgId, buyerId, credit),
+    await organizationWorkflowExposure(source, orgId, buyerId, credit), await organizationTaskExposure(source, orgId, buyerId, credit),
+    await organizationListingExposure(source, orgId, buyerId, credit), await organizationContractExposure(source, orgId, buyerId, excludeContractId)]
+  const totals = { daily: 0, monthly: 0, lifetime: 0 }
+  for (const record of records) for (const window of ['daily', 'monthly', 'lifetime'] as const) {
+    totals[window] += record[window]
+    if (!Number.isSafeInteger(totals[window]) || totals[window] < 0) fail()
+  }
+  return totals
+}
+
+/** Budget check only, never permission to fund, accept, or release. */
+export async function assertReviewedContractGross(source: PurchasingSource, row: typeof grants.$inferSelect, excludeContractId = '') {
+  if (excludeContractId && excludeContractId !== row.contract_id) fail()
+  const terms = validatedContractReviewTerms(row), totals = await reviewedOrganizationCreditGross(source, row.organization_id, row.buyer_id, excludeContractId)
+  for (const [window, ceiling] of [['daily', terms.max_daily_minor], ['monthly', terms.max_monthly_minor], ['lifetime', terms.max_lifetime_minor]] as const) {
+    if (totals[window] + terms.original.gross_minor > ceiling) throw new PurchasingError(`ORGANIZATION_CONTRACT_${window.toUpperCase()}_EXPOSURE`)
+  }
+}

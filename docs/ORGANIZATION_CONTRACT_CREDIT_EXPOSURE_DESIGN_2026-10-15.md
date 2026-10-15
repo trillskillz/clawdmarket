@@ -67,3 +67,34 @@ independent customer activity or a live paid canary. The high braces advisory,
 provider inbox delivery, actual participant admission, publication, treasury budget
 and recruitment dependencies stay separate and unresolved until real evidence or
 explicit authorization resolves them.
+
+## Submission and dispute dependency discovered in current code
+
+The existing admin contract-dispute resolver can issue original buyer-win refunds,
+seller-win releases, split releases or redo. Preserve that separately authenticated
+adjudication policy; it must never be relabeled explicit buyer acceptance. For a
+reviewed contract, validate the original reviewed use, frozen original milestone
+amount and original credit reference inside the same resolution transaction.
+Ordinary historical wallet/credit contracts retain their original behavior.
+
+Redo can return an unpaid milestone to ACTIVE after an earlier buyer acceptance.
+Therefore an immutable future acceptance ledger must permit distinct decisions
+for different original submission IDs of the same milestone. Do not overwrite or
+delete the older decision, or enforce a single acceptance row per milestone that
+would prevent an authorized redo. Selected submission ID plus exact content hash
+must scope every new approve/pay command. An old decision's exact replay can return
+its historical fact, but cannot approve/pay a replacement selected submission.
+Once paid/refunded, existing terminal state and unique original milestone financial
+reference prevent another release. A new submission following changes/redo needs
+a new saved operation; a lost original submission reply must recover its old ID
+and bytes before any new computation. Reviewers/owners still receive no private
+seller artifact or buyer acceptance authority.
+
+Current inspected code has no standalone human contract page and no private
+submission GET route. The finite reviewed contract work interface must therefore
+add participant-only bounded original submission inspection/recovery as part of
+the eventual complete outcome. Human/client surfaces must show pending credit
+release versus confirmed original credit settlement and distinguish finite key
+checks, explicit acceptance, admin adjudication and actual financial posting.
+Do not advertise remote sandbox execution, semantic accuracy, marketplace
+independence or withdrawability based on those records.

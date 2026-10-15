@@ -1,5 +1,5 @@
 {
-  "stage": "read-only original credit-use foundation; no reviewed funding",
+  "stage": "original-use validation and shared gross foundation; no reviewed contract funding",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 74,
@@ -21,7 +21,7 @@
   },
   "limits": {
     "public_reviewed_contract_funding": false,
-    "shared_contract_gross_wired": false,
+    "shared_contract_gross_wired": true,
     "reviewed_milestone_acceptance": false,
     "full_new_contract_release_gates": false,
     "live_funding_performed": false,
@@ -43,6 +43,18 @@
     "preservation": {
       "local_log": "/tmp/clawdmarket-contract-original-uses-preservation-2026-10-15.log",
       "log_sha256": "ac4f6b8a5ab308ce737ab15703098ce20c809bd9d420cb14bcd1afbc1b817896"
+    },
+    "shared-gross": {
+      "local_log": "/tmp/clawdmarket-contract-shared-gross-full-focused-2026-10-15.log",
+      "log_sha256": "4a10c022bfeadfced112e6bf0d9d22c7d0144c66ed841812f0e6cd83f871f6e2"
+    },
+    "shared-regression": {
+      "local_log": "/tmp/clawdmarket-contract-shared-gross-regression-2026-10-15.log",
+      "log_sha256": "b6fc71a5d73f8169e1948540bcc7b6b7c2ed4c268e5b94a1f22d976cbcccbcea"
+    },
+    "shared-build": {
+      "local_log": "/tmp/clawdmarket-contract-shared-gross-build-2026-10-15.log",
+      "log_sha256": "a0a3c88eebb141a25bdd988fa9de869ba211f41c4d4a553f19b1638441f27d32"
     }
   },
   "compatibility_cases": {
@@ -50,5 +62,16 @@
     "failed": 0,
     "skipped": 0
   },
-  "current_disjoint_focused_cases_total": 68
+  "current_disjoint_focused_cases_total": 68,
+  "current_shared_gross_cases": {
+    "passed": 32,
+    "failed": 0,
+    "skipped": 0
+  },
+  "existing_family_regression_cases": {
+    "passed": 83,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "integration before the additional helper exclusion check; that check is included in current32"
+  }
 }

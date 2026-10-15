@@ -36,7 +36,9 @@ export async function assertListingExposure(source: PurchasingSource, row: Grant
   const workflow = await organizationWorkflowExposure(source, row.organization_id, row.buyer_id, terms.payment)
   const task = await organizationTaskExposure(source, row.organization_id, row.buyer_id, terms.payment)
   const listing = await organizationListingExposure(source, row.organization_id, row.buyer_id, terms.payment, excludeTradeId)
-  const all = [route, workflow, task, listing]
+  const { organizationContractExposure } = await import('./organization-contract-uses')
+  const contract = await organizationContractExposure(source, row.organization_id, row.buyer_id)
+  const all = [route, workflow, task, listing, contract]
   for (const [window, limit] of [['daily', terms.max_daily_minor], ['monthly', terms.max_monthly_minor], ['lifetime', terms.max_lifetime_minor]] as const) {
     const spent = all.reduce((total, entry) => total + entry[window], 0)
     if (!Number.isSafeInteger(spent) || spent + terms.total_minor > limit) fail(`ORGANIZATION_LISTING_${window.toUpperCase()}_EXPOSURE`)

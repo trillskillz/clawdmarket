@@ -330,7 +330,9 @@ export async function consumeOrganizationRouteExposure(source: PurchasingSource,
     const task = await organizationTaskExposure(source, row.organization_id, row.buyer_id, payment)
     const { organizationListingExposure } = await import('./organization-listing-uses')
     const listing = await organizationListingExposure(source, row.organization_id, row.buyer_id, payment)
-    const daily=route.daily+workflow.daily+task.daily+listing.daily, monthly=route.monthly+workflow.monthly+task.monthly+listing.monthly, lifetime=route.lifetime+workflow.lifetime+task.lifetime+listing.lifetime,
+    const { organizationContractExposure } = await import('./organization-contract-uses')
+    const contract = await organizationContractExposure(source, row.organization_id, row.buyer_id)
+    const daily=route.daily+workflow.daily+task.daily+listing.daily+contract.daily, monthly=route.monthly+workflow.monthly+task.monthly+listing.monthly+contract.monthly, lifetime=route.lifetime+workflow.lifetime+task.lifetime+listing.lifetime+contract.lifetime,
       gas=route.gas+workflow.gas+task.gas+listing.gas, fees=route.fees+workflow.fees+task.fees+listing.fees
     for (const [spent,limit] of [[daily,terms.max_daily_minor],[monthly,terms.max_monthly_minor],[lifetime,terms.max_lifetime_minor]])
       if (!Number.isSafeInteger(spent) || spent < 0 || spent + input.totalMinor > limit) fail('ORGANIZATION_ROUTE_GROSS_LIMIT')
@@ -372,7 +374,7 @@ export async function isPrivateOrganizationRoute(routeId:string) {
   return !!row && isPrivate(frozen(row))
 }
 
-export async function readOriginalOrganizationRouteExposure(source:PurchasingSource,orgId:string,buyerId:string,payment:ReturnType<typeof mandateDto>['terms']['payment'],currentId='') {
+export async function readOriginalOrganizationRouteExposure(source:PurchasingSource,orgId:string,buyerId:string,payment:ReturnType<typeof mandateDto>['terms']['payment'] | { rail: 'credit' },currentId='') {
     const history = await source.select({ use: uses, grant: grants }).from(uses).innerJoin(grants,eq(grants.id,uses.authorization_id))
       .where(and(eq(grants.organization_id,orgId),eq(grants.buyer_id,buyerId))).limit(10001)
     if (history.length > 10000) fail('ORGANIZATION_ROUTE_HISTORY_UNAVAILABLE',503)

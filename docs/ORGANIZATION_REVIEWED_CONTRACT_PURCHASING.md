@@ -42,3 +42,9 @@ states. This restriction alone cannot accept or pay a milestone.
 Explicit exact-submission acceptance, original reviewed
 funding/use accounting, milestone release/refunds, finite clients/SDK review/UI and
 genuine economic/full release acceptance remain future implementation work.
+
+Original-use validation and shared reviewed gross now exist as read-only financial
+history checks. They do not authorize funding or release. Both credit-first and
+external-first reservation controls pass for route, workflow, task and listing;
+credit contributes zero external fee units. New funding remains unavailable until
+exact original submission/acceptance, paid recovery and complete release acceptance.

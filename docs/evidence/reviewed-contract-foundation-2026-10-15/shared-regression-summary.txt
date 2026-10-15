@@ -1,0 +1,18 @@
+✔ a reviewer owning the accepted provider cannot independently authorize its task purchase (20.912088ms)
+✔ L1 approved task checkout rejects changed owner, bid, provider, requirements, quote, department and reviewer atomically (292.914871ms)
+✔ Tempo approved task checkout rejects changed owner, bid, provider, requirements, quote, department and reviewer atomically (353.116473ms)
+✔ independent public workflow review freezes exact graph and original contracts; pending grants cannot execute (1168.017018ms)
+✔ independent private workflow review freezes exact graph and original contracts; pending grants cannot execute (458.790307ms)
+✔ workflow review rejects changed graph, consent, owner, reviewer and department before fresh economic exposure (788.745288ms)
+✔ standalone reviewed routes and independently reviewed workflow children race under one original gross and fee history (14635.282298ms)
+✔ lost workflow proposal and decision recover exact original references without reopening revocation or admitting another graph (163.34355ms)
+✔ private workflow proposal, decision, activation, child preparation and reservation survive real before/after-commit SIGKILL (14319.673738ms)
+✔ named read credentials cannot inspect private workflow approval, prepare child terms or inspect its mandate (193.710137ms)
+ℹ tests 83
+ℹ suites 0
+ℹ pass 83
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 58963.602857

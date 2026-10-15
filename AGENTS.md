@@ -1,3 +1,33 @@
+## Shared original gross integrated — local continuation
+
+Current contract source now includes original credit uses in reviewed route,
+workflow, task and listing gross checks. The reverse credit budget reader accepts
+an explicit credit-only context and reads each original family once, without a
+fake external wallet, token or chain-fee ceiling. Credit fees stay in fee-inclusive
+USD gross; credit contributes zero external chain-fee units. An exclusion can name
+only the checked contract's own original ID. Cancellation/refund cannot recycle
+history. No reviewed contract funding API or financial authority is added.
+
+Current full focused run passes **32/32**, zero skips/failures, in
+`/tmp/clawdmarket-contract-shared-gross-full-focused-2026-10-15.log`. Both original
+reservation orders are covered across all four external families plus the credit
+budget; prior unpaid external cancellation remains charged. The earlier integration
+regression passes **83/83** original listing payment/review, task authority and
+workflow/process cases. Current types/lint/build also pass in the shared-gross
+logs. The existing migration 74/local baseline preservation remains applicable;
+no schema changed in this step. Evidence still cannot establish a completed
+reviewed credit purchase, live paid canary or independent adoption. No capability 9.
+
+Next implement stable immutable seller submission references and exact submission-
+ID/content-hash buyer decisions before exposing funding. Preserve authenticated
+admin dispute adjudication as a separate financial basis; redo must retain earlier
+immutable decisions while requiring a fresh decision for a replacement submission.
+Then wire one original credit funding/use transaction, consumed inventory exclusion,
+finite clients/SDK/private work UI and complete genuine multi-milestone economic,
+process and release gates. Keep e55e151 as the accepted separate listing candidate.
+
+## Historical foundation evidence
+
 ## Verified original credit-use foundation — migration 74
 
 The final disjoint compatibility run also passes **38/38** (existing backed

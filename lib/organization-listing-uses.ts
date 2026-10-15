@@ -58,7 +58,7 @@ export async function originalListingPayment(source: PurchasingSource, tradeId: 
 }
 
 export async function organizationListingExposure(source: PurchasingSource, orgId: string, buyerId: string,
-  payment: ReturnType<typeof mandateDto>['terms']['payment'], excludeTradeId = '') {
+  payment: ReturnType<typeof mandateDto>['terms']['payment'] | { rail: 'credit' }, excludeTradeId = '') {
   // Missing parent scope cannot safely be assigned to an organization. Corruption
   // fails closed rather than silently excluding an unaccounted obligation.
   const [orphanUse] = await source.all(sql`SELECT u.trade_id FROM organization_listing_uses u

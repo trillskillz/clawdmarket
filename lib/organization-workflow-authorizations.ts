@@ -182,7 +182,7 @@ export async function organizationWorkflowPurchaseEvidence(source:PurchasingSour
 }
 
 /** Historical exposure is validated against original contracts, without requiring live consent. */
-export async function organizationWorkflowExposure(source:PurchasingSource,orgId:string,buyerId:string,payment:ReturnType<typeof mandateDto>['terms']['payment'],currentTradeId=''){
+export async function organizationWorkflowExposure(source:PurchasingSource,orgId:string,buyerId:string,payment:ReturnType<typeof mandateDto>['terms']['payment'] | { rail: 'credit' },currentTradeId=''){
   const rows=await source.select().from(grants).where(and(eq(grants.organization_id,orgId),eq(grants.buyer_id,buyerId))).limit(10001)
   if(rows.length>10000)fail('ORGANIZATION_WORKFLOW_HISTORY_UNAVAILABLE',503)
   let daily=0,monthly=0,lifetime=0,gas=0n,fees=0n
@@ -225,7 +225,9 @@ export async function reserveOrganizationWorkflowExposure(source:PurchasingSourc
   const task = await organizationTaskExposure(source, checked.row.organization_id, checked.row.buyer_id, payment)
   const { organizationListingExposure } = await import('./organization-listing-uses')
   const listing = await organizationListingExposure(source, checked.row.organization_id, checked.row.buyer_id, payment)
-  for(const [spent,limit]of [[route.daily+workflow.daily+task.daily+listing.daily,checked.terms.max_daily_minor],[route.monthly+workflow.monthly+task.monthly+listing.monthly,checked.terms.max_monthly_minor],[route.lifetime+workflow.lifetime+task.lifetime+listing.lifetime,checked.terms.max_lifetime_minor]])
+  const { organizationContractExposure } = await import('./organization-contract-uses')
+  const contract = await organizationContractExposure(source, checked.row.organization_id, checked.row.buyer_id)
+  for(const [spent,limit]of [[route.daily+workflow.daily+task.daily+listing.daily+contract.daily,checked.terms.max_daily_minor],[route.monthly+workflow.monthly+task.monthly+listing.monthly+contract.monthly,checked.terms.max_monthly_minor],[route.lifetime+workflow.lifetime+task.lifetime+listing.lifetime+contract.lifetime,checked.terms.max_lifetime_minor]])
     if(!Number.isSafeInteger(spent)||spent<0||spent+totalMinor>limit)fail('ORGANIZATION_WORKFLOW_GROSS_LIMIT')
   const fees=payment.rail==='evm'?route.gas+workflow.gas+task.gas+listing.gas:route.fees+workflow.fees+task.fees+listing.fees
   if(fees+BigInt(fee)>BigInt(checked.terms.max_lifetime_chain_fee_units))fail('ORGANIZATION_WORKFLOW_FEE_LIMIT')
