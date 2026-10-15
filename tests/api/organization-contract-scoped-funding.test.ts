@@ -16,6 +16,8 @@ import { reviewedContractFixture } from '../helpers/reviewed-contract-fixture'
 import { startDisposableWorkflowChain } from '../helpers/disposable-workflow-chain'
 import { creditDepositMessage } from '@/lib/credit-proof'
 import { ClawdMarketClient, ClawdMarketTransportError } from '../../sdk/typescript/src/index'
+import { reviewedSharedService } from '../helpers/reviewed-shared-service'
+import { reviewedSharedTask } from '../helpers/reviewed-shared-task'
 
 const enabled = Boolean(process.env.CLAWDMARKET_TEST_ANVIL_BINARY)
 const payer = privateKeyToAccount(`0x${'18'.repeat(32)}`), treasuryKey = `0x${'99'.repeat(32)}` as const
@@ -565,3 +567,65 @@ test('actual scoped funding review-window expiry never accepts passing structure
     assert.equal(recovered.status, 200); assert.equal((await recovered.json()).contract.state, 'COMPLETED')
   } finally { t.mock.timers.reset(); if (secret === undefined) delete process.env.MAINTENANCE_SECRET; else process.env.MAINTENANCE_SECRET = secret }
 })
+
+for (const family of ['route', 'workflow', 'task', 'listing'] as const) for (const order of ['contract_first', 'other_first'] as const) {
+  test(`actual scoped FUND shares original gross with ${family} in ${order} reservation order`, { skip: !enabled }, async () => {
+    const f = await fixture(true, '1.05'), credit = await import('@/lib/account-credit')
+    const names = ['CLAWDMARKET_REUSABLE_SERVICES_ENABLED', 'CLAWDMARKET_ROUTE_PLANNING_ENABLED', 'CLAWDMARKET_ROUTE_EXECUTION_ENABLED',
+      'CLAWDMARKET_WORKFLOW_PLANNING_ENABLED', 'CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED', 'EVM_ACCEPTED_TOKENS']
+    const prior = Object.fromEntries(names.map(key => [key, process.env[key]]))
+    try {
+      Object.assign(process.env, Object.fromEntries(names.filter(k => k !== 'EVM_ACCEPTED_TOKENS').map(key => [key, 'true'])), {
+        EVM_ACCEPTED_TOKENS: JSON.stringify([...JSON.parse(prior.EVM_ACCEPTED_TOKENS!).filter((token: { chainId: number }) => token.chainId !== 1), {
+          chainId: 1, address: chain.token, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain.url,
+        }]),
+      })
+      // External orders below are UNPAID reservation controls, not L1 payments.
+      // The actual unforked node remains Base-ID8453. No L1 proof/fees are invented.
+      f.body.payment.token_address = chain.token
+      await db.update(schema.seller_payment_preferences).set({ supported_rails: '["credit","evm"]' }).where(eq(schema.seller_payment_preferences.seller_id, f.seller))
+      const [separate] = await db.insert(schema.listings).values({ seller_id: f.seller, category: 'code', title: 'Separate shared-budget inventory', description: 'Original other-family inventory', price_bankr: 1, status: 'active' }).returning()
+      Object.assign(f.body, { listing_id: separate.id, max_daily: '1.05', max_monthly: '1.05', max_lifetime: '1.05' })
+      if (order === 'contract_first') assert.equal((await post(f)).status, 201)
+      let reserve: () => Promise<{ status: number; code?: string; trade?: any }>
+      if (family === 'route' || family === 'workflow') reserve = await reviewedSharedService({ db, schema }, (path, actor, body) => request(path, actor, 'POST', body), f, family, '1.05', '1000000000000000')
+      else if (family === 'task') reserve = await reviewedSharedTask({ db, schema }, f, '1.05', '1000000000000000')
+      else {
+        const domain = await import('@/lib/organization-listing-authorizations'), checkout = await import('@/lib/organization-listing-checkout')
+        const a = (await domain.proposeOrganizationListing(f.org, f.owner, domain.organizationListingInput.parse(f.body))).authorization
+        await domain.approveOrganizationListing(f.org, a.id, f.reviewer, { version: 1, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash, approve: true })
+        const input = { version: 1 as const, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash }
+        reserve = async () => {
+          try { const result = await checkout.checkoutOrganizationListing(f.org, a.id, f.buyer, input); return { status: result.created ? 201 : 200, trade: result.trade } }
+          catch (error) { if (error instanceof Error && 'code' in error) return { status: Number('status' in error ? error.status : 409), code: String(error.code) }; throw error }
+        }
+      }
+      if (order === 'contract_first') {
+        for (const afterRefund of [false, true]) {
+          if (afterRefund) {
+            const cancel = await (await import('@/app/api/contracts/[id]/route')).PATCH(request(`/api/contracts/${f.original.contract.id}`, f.buyer, 'PATCH', { action: 'cancel' }), { params: Promise.resolve({ id: f.original.contract.id }) })
+            assert.equal(cancel.status, 200)
+          }
+          const result = await reserve()
+          assert.equal(result.status, 409, JSON.stringify(result))
+          assert.equal(result.code, family === 'route' || family === 'workflow' ? `ORGANIZATION_${family.toUpperCase()}_GROSS_LIMIT` : `ORGANIZATION_${family.toUpperCase()}_DAILY_EXPOSURE`)
+          assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.buyer_id, f.buyer))).length, 0)
+          assert.equal((await credit.creditBalance(f.buyer)).available_minor, afterRefund ? 100 : 0)
+          assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, afterRefund ? 0 : 100)
+          assert.equal((await (await import('@/lib/organization-contract-uses')).reviewedOrganizationCreditGross(db, f.org, f.buyer)).lifetime, 105)
+        }
+      } else {
+        const result = await reserve(); assert.equal(result.status, 201, JSON.stringify(result))
+        for (const cancelledStoredState of [false, true]) {
+          // This second pass is a controlled stored-state cancellation test;
+          // it is not an external funding, refund or successful cancellation API journey.
+          if (cancelledStoredState) await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, result.trade!.id))
+          const denied = await post(f); assert.equal(denied.status, 409)
+          assert.equal((await denied.json()).code, 'ORGANIZATION_CONTRACT_DAILY_EXPOSURE')
+          await unchanged(f)
+          assert.equal((await db.select().from(schema.credit_entries).where(eq(schema.credit_entries.reference, f.original.contract.id))).length, 0)
+        }
+      }
+    } finally { for (const key of names) { if (prior[key] === undefined) delete process.env[key]; else process.env[key] = prior[key] } }
+  })
+}

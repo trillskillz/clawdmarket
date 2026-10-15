@@ -1,6 +1,6 @@
 {
   "baseline_listing_candidate": "e55e151",
-  "scope": "Unfinished contract foundation with default-disabled scoped funding, original economic/process recovery, private organizational review and dashboard credit disclosures/authoritative review-record action restrictions verified. Participant human work UI, shared reservation order coverage and complete release gates remain incomplete. Not capability9, publication or live execution permission.",
+  "scope": "Unfinished contract foundation: default-disabled actual scoped credit funding, original process/economic recovery, shared gross both reservation orders, private organizational review and dashboard disclosures/restrictions verified. Participant human work UI and complete release gates remain incomplete. Not capability9 or publication/live execution permission.",
   "http_contract": "1.119",
   "migrations": 79,
   "files": {
@@ -73,7 +73,7 @@
     "tests/api/organization-contract-refund-recovery.test.ts": "a2b97d95c4a110faade8b96ea5c972dca912cf69fdfbe2fc781d3bbe245b4973",
     "tests/api/organization-contract-review-races.test.ts": "3a6f3f7a93073506896681174b9bec111dc798a01e61b435ea547d856798c57a",
     "tests/api/organization-contract-review.test.ts": "a9f6645767e6ba2a95d80cfd45bcd9b9632c2a85166a1975120d581ef97b4dfe",
-    "tests/api/organization-contract-scoped-funding.test.ts": "0784f14d1d9a28643282b596e127e97a317b9115eba818505b5a46c726b8b83c",
+    "tests/api/organization-contract-scoped-funding.test.ts": "0f0860af50d8097d4ffa436c2eafaa12cec05c2b684fa067180589863cf5992a",
     "tests/helpers/contract-creation-process.ts": "81e4856400491dfba47ba36ec1955db3d6ffa1130d535c188a58495aba1c989f",
     "tests/helpers/contract-scoped-funding-process.ts": "b0ab841c91acc337439acffaffb1806ee557ee5e10b028982127de612203c594",
     "tests/helpers/reviewed-contract-fixture.ts": "bc7c488d4880041568fd10794b0c3ba3ec2354e8fd3052e4be8e4766a0f71a6c",

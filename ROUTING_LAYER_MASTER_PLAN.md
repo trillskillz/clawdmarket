@@ -1,3 +1,35 @@
+## Actual scoped funding shared-reservation orders verified — local only
+
+All **8/8** new cross-family cases pass: route/workflow/task/listing in BOTH
+reservation orders with the actual public scoped credit fund transaction. A paid
+original contract blocks each later obligation at the exact gross ceiling, even
+after its actual unstarted refund. An earlier original other-family reservation
+blocks new contract funding without changing its DRAFT/listing/credit/fee/use/ref/
+attribution. A controlled cancelled stored-state pass retains that original gross.
+Other-family controls are UNPAID external reservations through existing domain/
+public route helpers. No L1 payment/proof/fees, external refund or actual cancel API
+journey is claimed. The unforked test chain remains Base-ID8453 throughout.
+
+The integrated **54/54** named cases pass, zero failures/skips: all25 scoped
+fund/process/CLI/economic/shared-order cases,6 review API,18 canonical,3 worker
+safety and2 SDK. Types/lint pass. Only tests changed after60fe4f8; its app build/
+14-browser evidence applies to unchanged app source, not a new full predeploy gate.
+Migration79 and prior845-row local preservation unchanged/not repeated. Manifest
+**76** files versus e55e151, SHA-256 `8da08b1718e08662fe52fe29a0bf85bb999f9d1201eec76c2e6d3af9de163755`.
+Evidence: `docs/evidence/reviewed-contract-foundation-2026-10-15/shared-reservation-orders.json`.
+
+Fresh funding defaults DISABLED; HTTP1.119/count8 remain local. No publication,
+real funds, production/global flags, independent demand or capability9. Next finish
+participant human work UI with actual original-party authentication, immutable
+submission identity, separate buyer acceptance/release and saved-reference recovery.
+Organization ownership/review alone must not expose output or impersonate a buyer.
+Then complete full economic/process/predeploy/browser/build/preservation/security
+release gates. Preserve original records and scoped paid recovery across rollback.
+Prior accepted listing/pilot candidates remain unchanged. Existing security/provider
+inbox/admission/calibration/demand/live-canary/treasury-gas dependencies stay external.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Dashboard contract disclosure and scope repair verified — local only
 
 Contract cards now disclose nonwithdrawable prepaid credit, what sellers receive

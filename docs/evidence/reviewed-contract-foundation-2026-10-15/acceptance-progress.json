@@ -1,5 +1,5 @@
 {
-  "stage": "Dashboard contract credit disclosure/reviewed-record UI restrictions verified; shared reservation/participant UI/full release work remains",
+  "stage": "Actual scoped funding shared-reservation orders verified; participant human UI and full release gates incomplete",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 79,
@@ -53,7 +53,8 @@
     "actual_scoped_funding_admin_redo_partial_outcomes": true,
     "actual_scoped_funding_frozen_expiry_and_no_automatic_acceptance": true,
     "contract_dashboard_credit_disclosures": true,
-    "authoritative_companion_metadata_and_dashboard_restrictions": true
+    "authoritative_companion_metadata_and_dashboard_restrictions": true,
+    "actual_scoped_funding_both_shared_reservation_orders": true
   },
   "records": {
     "original_use": {
@@ -411,6 +412,10 @@
     "dashboard-disclosure": {
       "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/dashboard-disclosure.json",
       "source_manifest_sha256": "16c340110e20cffbd07a73a18dea1bfbbd08e6d1ce9b637e1743161608d6e9a9"
+    },
+    "shared-reservation-orders": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/shared-reservation-orders.json",
+      "source_manifest_sha256": "8da08b1718e08662fe52fe29a0bf85bb999f9d1201eec76c2e6d3af9de163755"
     }
   },
   "compatibility_cases": {
