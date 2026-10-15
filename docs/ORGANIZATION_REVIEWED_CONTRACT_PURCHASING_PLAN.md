@@ -1,3 +1,22 @@
+## Current progress — 2026-10-15
+
+The corrected listing candidate e55e151 (tested source 9d48c39) passes all complete
+local gates: 1,071 Node/24 Python/149 Chromium, expected skips retained, security
+publication blocked. Its separate manifest/migration 71 evidence does not bind the
+unfinished contract continuation. Contract checkpoints now implement original
+DRAFT reference recovery, private credit-only review and generic funding exclusion,
+maintenance exclusion and read-only historical use validation (migration 74).
+No reviewed funding or acceptance authority is enabled and no capability 9 is
+accepted. Next wire shared gross across each existing reviewed family, preserve
+consumed inventory, add exact immutable submission/buyer acceptance and original
+financial recovery, then finite clients/SDK/private UI and complete genuine
+multi-milestone economic and release acceptance. See the current contract audit
+and `ORGANIZATION_CONTRACT_CREDIT_EXPOSURE_DESIGN_2026-10-15.md`.
+
+The initial dependency observations below are historical code findings, superseded
+by current implementation evidence where stated. Preserve historical financial
+semantics, original references and local-only publication policy throughout.
+
 # Next dependency audit: independently reviewed contract purchasing
 
 This is a read-only dependency plan for the milestone after reviewed listing

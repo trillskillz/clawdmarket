@@ -1,0 +1,18 @@
+✔ contract draft and funding cannot adopt an original private-service listing after status reactivation (50.782275ms)
+✔ a current private provider closes fresh contract draft and funding without rewriting original records (68.65525ms)
+✔ separate contract proposal processes recover one exact original reference (1707.607305ms)
+✔ separate contract proposal processes reject competing references for one draft (1055.19593ms)
+✔ contract propose survives actual before-commit SIGKILL with original review identity and no credit authority (1101.211944ms)
+✔ contract propose survives actual after-commit SIGKILL with original review identity and no credit authority (989.564052ms)
+✔ contract approve survives actual before-commit SIGKILL with original review identity and no credit authority (994.964658ms)
+✔ contract approve survives actual after-commit SIGKILL with original review identity and no credit authority (980.743388ms)
+✔ contract revoke survives actual before-commit SIGKILL with original review identity and no credit authority (958.752091ms)
+✔ contract revoke survives actual after-commit SIGKILL with original review identity and no credit authority (976.460487ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12022.154393

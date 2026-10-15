@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { db } from './db'
 import { agents, agent_owners, users, organizations, organization_agent_assignments, organization_teams,
   organization_contract_authorizations as grants, organization_purchasing_roles,
-  contracts, contract_creation_requests, contract_milestones, contract_submissions } from './schema'
+  contracts, contract_creation_requests, contract_milestones, contract_submissions, credit_entries, organization_contract_attributions } from './schema'
 import { PurchasingError, purchasingTransaction, type PurchasingSource } from './organization-purchasing-transaction'
 import { validateOrganizationApprover } from './organization-purchasing'
 import { canonicalContract } from './structured-verification'
@@ -61,6 +61,11 @@ async function snapshot(id: string, source: PurchasingSource) {
   const [creation] = await source.select().from(contract_creation_requests).where(eq(contract_creation_requests.contract_id, id)).limit(1)
   if (!contract || contract.state !== 'DRAFT' || contract.payment_rail !== 'credit' || contract.funded_at
     || !creation || creation.buyer_id !== contract.buyer_id) fail('ORGANIZATION_CONTRACT_DRAFT_REQUIRED')
+  const [reserved] = await source.select({ id: credit_entries.id }).from(credit_entries)
+    .where(and(eq(credit_entries.reference, id), eq(credit_entries.kind, 'purchase'))).limit(1)
+  const [attributed] = await source.select({ id: organization_contract_attributions.contract_id }).from(organization_contract_attributions)
+    .where(eq(organization_contract_attributions.contract_id, id)).limit(1)
+  if (reserved || attributed) fail('ORGANIZATION_CONTRACT_DRAFT_REQUIRED')
   const milestones = await source.select().from(contract_milestones).where(eq(contract_milestones.contract_id, id)).orderBy(asc(contract_milestones.milestone_index))
   if (!milestones.length || milestones.length > 20 || milestones.some((m, i) => m.milestone_index !== i || m.state !== 'PENDING' || m.submission_id)) fail('ORGANIZATION_CONTRACT_MILESTONES_CHANGED')
   const [submission] = await source.select({ id: contract_submissions.id }).from(contract_submissions)
@@ -242,3 +247,4 @@ export async function genericContractFundingGuard(source: PurchasingSource, cont
   const [row] = await source.select({ id: grants.id }).from(grants).where(eq(grants.contract_id, contractId)).limit(1)
   if (row) fail('CONTRACT_REVIEWED_FUNDING_REQUIRED')
 }
+export { frozen as validatedContractReviewTerms }

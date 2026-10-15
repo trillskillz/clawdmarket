@@ -1,0 +1,54 @@
+{
+  "stage": "read-only original credit-use foundation; no reviewed funding",
+  "accepted_listing_candidate": "e55e151",
+  "http_contract": "1.119",
+  "migrations": 74,
+  "accepted_capability_count": "8/10; no contract capability yet",
+  "original_use_cases": {
+    "passed": 30,
+    "failed": 0,
+    "skipped": 0
+  },
+  "production_build": "passed",
+  "preservation": {
+    "local_baseline_business_rows": 845,
+    "local_baseline_tables": 133,
+    "migrations": 74,
+    "integrity": "ok",
+    "foreign_key_anomalies": 0,
+    "immutable_guards": 10,
+    "actual_queries": 5
+  },
+  "limits": {
+    "public_reviewed_contract_funding": false,
+    "shared_contract_gross_wired": false,
+    "reviewed_milestone_acceptance": false,
+    "full_new_contract_release_gates": false,
+    "live_funding_performed": false,
+    "independent_customer_activity_demonstrated": false
+  },
+  "records": {
+    "original_use": {
+      "local_log": "/tmp/clawdmarket-contract-original-uses-checked-2026-10-15.log",
+      "log_sha256": "ea794d00c59463d5c5ce0d003b80b3c0129fd71dd1ff7735b8c7d4f8e0c28b37"
+    },
+    "compatibility": {
+      "local_log": "/tmp/clawdmarket-contract-original-uses-compatibility-2026-10-15.log",
+      "log_sha256": "61652a1343486dd47b577143c60b92a8ea291f1172501b3629112cb837704ad5"
+    },
+    "build": {
+      "local_log": "/tmp/clawdmarket-contract-original-uses-build-2026-10-15.log",
+      "log_sha256": "0ec09635f6dc8d3c322c7bdbeea75826a635b0789c96a333b8de8d4e8d4ccbbd"
+    },
+    "preservation": {
+      "local_log": "/tmp/clawdmarket-contract-original-uses-preservation-2026-10-15.log",
+      "log_sha256": "ac4f6b8a5ab308ce737ab15703098ce20c809bd9d420cb14bcd1afbc1b817896"
+    }
+  },
+  "compatibility_cases": {
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0
+  },
+  "current_disjoint_focused_cases_total": 68
+}

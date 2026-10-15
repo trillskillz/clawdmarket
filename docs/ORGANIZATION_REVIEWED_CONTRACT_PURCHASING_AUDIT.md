@@ -1,3 +1,74 @@
+## Verified original credit-use foundation — migration 74
+
+The final disjoint compatibility run also passes **38/38** (existing backed
+credit and all review process races/kill boundaries). Together with the current
+30-case original-use/creation/review/migration run, **68/68** pass with zero skips
+or failures on this same source. No full new contract release gate is claimed.
+
+Current read-only use validation passes **30/30**, no failures/skips, in
+`/tmp/clawdmarket-contract-original-uses-checked-2026-10-15.log`. Current types,
+lint and production build pass. Migration 74/replay preserves the original LOCAL
+baseline snapshot (845 business rows/133 tables), integrity ok, zero FK anomalies,
+ten immutable guards and five actual evidence queries. This is a disposable local
+preservation rehearsal, not a production backup or deployment. Evidence summaries
+and log hashes are saved under `docs/evidence/reviewed-contract-foundation-2026-10-15/`.
+
+The reader validates original credit debit/principal/fee recipient, exact original
+contract/milestone/reference identity, approval and attribution. Matched original
+partial releases/refunds conserve principal and cannot replenish gross history.
+Missing use records, orphan sales, contradictory fees and other financial-family
+references fail closed. Resetting a prior reservation's state cannot admit a new
+review. Current owner/assignment/rails/revocation do not erase historical paid
+scope. Tests use actual local test-token deposits plus DIRECT controlled stored-
+record construction; no reviewed public funding API/client journey is demonstrated.
+Credit's chain-fee totals are exactly zero and do not mix fee units.
+
+No shared route/workflow/task/listing contract gross hook, reviewed funding,
+exact-submission buyer acceptance or finite reviewed contract UI/client outcome
+exists yet. Continue those dependencies next. HTTP stays 1.119, count stays 8/10;
+no capability 9, production flags, publication, real funds, custody changes, mail
+or outreach. The accepted listing candidate e55e151 remains separate, unchanged
+and security-blocked by the one high unapproved development advisory.
+
+## Earlier foundation checkpoints
+
+## Original credit-use reader under verification — migration 74
+
+The next local foundation adds `organization_contract_uses` and read-only original
+reservation validation. It grants no funding or release authority. Each record
+binds original authorization/contract/reference/hash, exact fee recipient, gross
+whole USD cents and the first funding clock. Validation checks the independently
+approved frozen scope, original draft reference, unchanged financial amounts and
+milestone IDs, exact organization/department attribution, original credit debit/
+held principal/upfront fee, and matched original milestone settlement/refund
+entries. Other financial-family IDs, orphan sales and missing original use fail
+closed. Paid history does not consult current owner, assignment, rails, catalog
+or review expiry; refunds do not replenish gross history and credit has no chain
+fee unit. New review admission rejects drafts with an existing reservation or
+attribution, even if their mutable state was reset.
+
+This reader is not yet wired into shared route/workflow/task/listing gross gates
+and does not implement reviewed funding. Those remain required next steps. The
+stored-record tests use actual unforked local test-token deposits and existing
+credit ledger functions, then directly construct future original-use records in
+a disposable database. This demonstrates validation and conservation controls;
+it is not a successful reviewed funding API/client journey, acceptance decision,
+production payment, live canary, custody change or independent customer activity.
+The first focused run passed29/29. After adding the reset-reservation admission
+control, current final focused and preservation/static checks are running in the
+`/tmp/clawdmarket-contract-original-uses-*-2026-10-15.log` files. Do not count
+uncompleted checks or use the earlier build as acceptance for this newer source.
+
+## Current integrated foundation build verified
+
+The current source after integration passes the production build in
+`/tmp/clawdmarket-contract-review-maintenance-build-2026-10-15.log` (exit0;
+known MPP warnings). The separate listing candidate e55e151 remains accepted and
+unchanged. Contract funding is still unavailable. Next implement historical
+original credit-use validation/shared gross accounting before any funding path;
+then exact submission/acceptance and financial/recovery acceptance. Do not count
+these foundations as another capability or independent adoption.
+
 ## Contract backing and maintenance controls — 2026-10-15
 
 The separate local foundation now proves one actual token deposit on an unforked

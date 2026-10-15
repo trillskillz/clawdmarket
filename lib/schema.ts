@@ -1926,6 +1926,16 @@ export const organization_contract_authorizations = sqliteTable('organization_co
   approved_at: integer('approved_at', { mode: 'timestamp' }), revoked_at: integer('revoked_at', { mode: 'timestamp' }),
 }, table => [uniqueIndex('organization_contract_org_reference_idx').on(table.organization_id, table.client_reference)]);
 
+/** One original reviewed credit obligation. Refunds never recycle its gross history. */
+export const organization_contract_uses = sqliteTable('organization_contract_uses', {
+  authorization_id: text('authorization_id').primaryKey().references(() => organization_contract_authorizations.id, { onDelete: 'restrict' }),
+  contract_id: text('contract_id').notNull().unique().references(() => contracts.id, { onDelete: 'restrict' }),
+  fee_recipient_id: text('fee_recipient_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(), client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
 export const contract_milestones = sqliteTable('contract_milestones', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),
