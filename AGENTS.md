@@ -1,3 +1,20 @@
+## Security-first release preparation — 2026-10-15
+
+The user explicitly authorized GitHub/Vercel publication after fixing security,
+and separately approved a full private production recovery copy, a local restore,
+and AES256GCM-encrypted Actions artifact transfer with remote artifact deletion.
+This preparatory branch removes the braces dependency path while retaining lint
+rules and adds the approved optional encrypted backup mode to the existing audit
+workflow. The protected production environment requires protected branches; do
+not weaken that policy. Merge this small preparatory PR through required checks,
+validate same-SHA deployment, then run the backup mode from protected main.
+No application purchasing handlers, migrations, financial semantics, funds or
+rollout flags change in this preparatory release. Existing migration66 is replayed.
+The cumulative marketplace branch/PR274 follows only after its complete checks
+and a validated private production recovery copy before migration79.
+Earlier local-only publication instructions below are historical and superseded
+by the user's new publication authorization for this release.
+
 # ClawdMarket routing work
 
 ## Current authorized visual follow-up (2026-10-13)
