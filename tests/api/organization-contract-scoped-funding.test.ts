@@ -1,10 +1,10 @@
 import test, { before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
@@ -48,15 +48,20 @@ function request(path: string, actor: string, method = 'GET', body?: unknown, he
   return new NextRequest(`http://localhost${path}`, { method, headers: { Authorization: `Bearer ${token(actor)}`, 'Content-Type': 'application/json', ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
 }
-async function fixture(approved = true) {
-  const f = await reviewedContractFixture({ db, schema }, true, true), credit = await import('@/lib/account-credit')
-  const deposit = await credit.createDeposit(f.buyer, { amount_minor: 105, payer: payer.address, client_reference: crypto.randomUUID() })
+async function depositCredit(buyer: string) {
+  const credit = await import('@/lib/account-credit')
+  const deposit = await credit.createDeposit(buyer, { amount_minor: 105, payer: payer.address, client_reference: crypto.randomUUID() })
   const [intent] = await db.select().from(schema.credit_deposits).where(eq(schema.credit_deposits.id, deposit.id))
   const latest = await chain.rpc('eth_getBlockByNumber', ['latest', false])
   await chain.rpc('evm_setNextBlockTimestamp', [Math.max(Math.floor(Date.now() / 1000) + 1, Math.floor(intent.created_at.getTime() / 1000) + 1, Number(BigInt(latest.timestamp)) + 1)])
   const hash = await wallet.writeContract({ account: payer, chain: { ...mainnet, id: 8453 }, address: chain.token, abi: erc20Abi, functionName: 'transfer', args: [chain.treasury, 1_050_000n] })
   await chain.client.waitForTransactionReceipt({ hash })
-  await credit.confirmDeposit(f.buyer, { id: deposit.id, tx_hash: hash, signature: await payer.signMessage({ message: creditDepositMessage(deposit, hash) }) })
+  await credit.confirmDeposit(buyer, { id: deposit.id, tx_hash: hash, signature: await payer.signMessage({ message: creditDepositMessage(deposit, hash) }) })
+}
+async function fixture(approved = true, ceiling = '2.10') {
+  const f = await reviewedContractFixture({ db, schema }, true, true)
+  await depositCredit(f.buyer)
+  Object.assign(f.input, { max_daily: ceiling, max_monthly: ceiling, max_lifetime: ceiling })
   const proposal = await (await import('@/app/api/organizations/[id]/contract-authorizations/route')).POST(request(f.prefix, f.owner, 'POST', f.input), { params: Promise.resolve({ id: f.org }) })
   assert.equal(proposal.status, 201, JSON.stringify(await proposal.clone().json()))
   const a = (await proposal.json()).authorization
@@ -207,5 +212,119 @@ print(json.dumps({'recovered':r,'replay':p}))`
       assert.equal((await (await import('@/lib/organization-contract-uses')).organizationContractExposure(db, f.org, f.buyer)).lifetime, 105)
       assert.equal((await db.select().from(schema.trades)).length, 0, 'original contract identity is retained')
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); process.env.CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED = 'true'; delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED }
+  }
+})
+
+async function additional(f: Awaited<ReturnType<typeof fixture>>, sameReference = false) {
+  await depositCredit(f.buyer)
+  const [listing] = await db.insert(schema.listings).values({ seller_id: f.seller, category: 'code', title: 'Second original inventory', description: 'Separate controlled agreement', price_bankr: 1, status: 'active' }).returning()
+  const response = await (await import('@/app/api/contracts/route')).POST(request('/api/contracts', f.buyer, 'POST', {
+    client_reference: crypto.randomUUID(), listing_id: listing.id, milestones: [
+      { title: 'Second agreement first report', amount: .4, acceptance_spec: { required_artifacts: ['report'] } }, { title: 'Second agreement last report', amount: .6 },
+    ] }))
+  assert.equal(response.status, 201); const original = await response.json()
+  const input = { ...f.input, client_reference: crypto.randomUUID(), contract_id: original.contract.id }
+  const proposed = await (await import('@/app/api/organizations/[id]/contract-authorizations/route')).POST(request(f.prefix, f.owner, 'POST', input), { params: Promise.resolve({ id: f.org }) })
+  assert.equal(proposed.status, 201); const a = (await proposed.json()).authorization
+  const approved = await (await import('@/app/api/organizations/[id]/contract-authorizations/[authorizationId]/approval/route')).POST(request(`${f.prefix}/${a.id}/approval`, f.reviewer, 'POST', {
+    version: 1, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash, approve: true }), { params: Promise.resolve({ id: f.org, authorizationId: a.id }) })
+  assert.equal(approved.status, 201)
+  return { ...f, listing, original, a, input, funding: { version: 1 as const, client_reference: sameReference ? f.funding.client_reference : crypto.randomUUID(), authority_hash: a.authority_hash },
+    path: `${f.prefix}/${a.id}/fund`, context: { params: Promise.resolve({ id: f.org, authorizationId: a.id }) } }
+}
+function processFund(f: Awaited<ReturnType<typeof fixture>>, barrier: string, boundary?: 'before' | 'after') {
+  const command = { org: f.org, authorization: f.a.id, buyer: f.buyer, contractId: f.original.contract.id, body: f.funding, barrier, boundary }
+  const child = spawn(process.execPath, ['--conditions=react-server', '--import', 'tsx', 'tests/helpers/contract-scoped-funding-process.ts', JSON.stringify(command)], {
+    cwd: process.cwd(), env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let output = '', errors = ''; child.stdout!.on('data', data => output += data); child.stderr!.on('data', data => errors += data)
+  const result = new Promise<{ status: number; body: any }>((resolve, reject) => {
+    child.on('error', reject); child.on('exit', (code, signal) => {
+      if (code !== 0 || signal) reject(new Error(`Funding child ${signal ?? code}: ${errors}`))
+      else { try { resolve(JSON.parse(output)) } catch (error) { reject(error) } }
+    })
+  })
+  void result.catch(() => {})
+  return { child, result, errors: () => errors }
+}
+async function waitFor(path: string, worker: ReturnType<typeof processFund>) {
+  const deadline = Date.now() + 25000
+  while (true) {
+    try { await access(path); return } catch {
+      assert.equal(worker.child.exitCode, null, worker.errors())
+      assert.ok(Date.now() < deadline, `Funding process barrier missing: ${worker.errors()}`)
+      await new Promise(resolve => setTimeout(resolve, 15))
+    }
+  }
+}
+async function releaseProcesses(workers: Array<ReturnType<typeof processFund>>, barriers: string[]) {
+  await Promise.all(workers.map((worker, i) => waitFor(`${barriers[i]}.ready`, worker)))
+  await Promise.all(barriers.map(path => writeFile(`${path}.go`, '')))
+}
+for (const mode of ['same', 'conflicting_reference', 'shared_budget'] as const) test(`separate actual fund processes preserve ${mode} original authority and one financial reservation`, { skip: !enabled }, async () => {
+  const f = await fixture(true, mode === 'shared_budget' ? '1.05' : '2.10')
+  const second = mode === 'same' ? f : await additional(f, mode === 'conflicting_reference')
+  const barriers = [join(directory, crypto.randomUUID()), join(directory, crypto.randomUUID())]
+  const workers = [processFund(f, barriers[0]), processFund(second, barriers[1])]
+  try {
+    await releaseProcesses(workers, barriers)
+    const replies = await Promise.all(workers.map(w => w.result))
+    assert.deepEqual(replies.map(r => r.status).sort(), mode === 'same' ? [200, 201] : [201, 409], JSON.stringify(replies))
+    const accepted = replies.find(r => r.status === 201)!, refused = replies.find(r => r.status === 409)
+    if (mode === 'same') assert.equal(replies[0].body.funding.id, replies[1].body.funding.id)
+    if (mode === 'conflicting_reference') assert.equal(refused!.body.code, 'CONTRACT_FUND_REFERENCE_CONFLICT')
+    if (mode === 'shared_budget') assert.match(refused!.body.code, /ORGANIZATION_CONTRACT_(DAILY|MONTHLY|LIFETIME)_EXPOSURE/)
+    const credit = await import('@/lib/account-credit')
+    assert.equal((await credit.creditBalance(f.buyer)).available_minor, mode === 'same' ? 0 : 105)
+    assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 100)
+    assert.equal((await db.select().from(schema.organization_contract_uses).where(eq(schema.organization_contract_uses.contract_id, accepted.body.contract.id))).length, 1)
+    if (mode !== 'same') {
+      const loser = accepted.body.contract.id === f.original.contract.id ? second : f
+      assert.equal((await db.select().from(schema.contracts).where(eq(schema.contracts.id, loser.original.contract.id)))[0].state, 'DRAFT')
+      assert.equal((await db.select().from(schema.listings).where(eq(schema.listings.id, loser.listing.id)))[0].status, 'active')
+      assert.equal((await db.select().from(schema.credit_entries).where(eq(schema.credit_entries.reference, loser.original.contract.id))).length, 0)
+      if (mode === 'shared_budget') {
+        const cancel = await (await import('@/app/api/contracts/[id]/route')).PATCH(request(`/api/contracts/${accepted.body.contract.id}`, f.buyer, 'PATCH', { action: 'cancel' }), { params: Promise.resolve({ id: accepted.body.contract.id }) })
+        assert.equal(cancel.status, 200)
+        const retry = await post(loser); assert.equal(retry.status, 409); assert.match((await retry.json()).code, /EXPOSURE/)
+        assert.equal((await credit.creditBalance(f.buyer)).available_minor, 205, 'principal refund retains the original fee and cannot replenish reviewed gross')
+      }
+    }
+  } finally { for (const worker of workers) if (worker.child.exitCode === null && worker.child.signalCode === null) worker.child.kill('SIGKILL') }
+})
+for (const boundary of ['before', 'after'] as const) test(`actual ${boundary}-commit funding SIGKILL preserves original inventory, credit and request recovery`, { skip: !enabled }, async () => {
+  const f = await fixture(), marker = join(directory, crypto.randomUUID()), worker = processFund(f, marker, boundary)
+  const exited = new Promise<void>(resolve => worker.child.once('exit', () => resolve()))
+  try {
+    await releaseProcesses([worker], [marker]); await waitFor(`${marker}.boundary`, worker)
+    const staged = JSON.parse(await readFile(`${marker}.boundary`, 'utf8'))
+    worker.child.kill('SIGKILL'); await exited; assert.equal(worker.child.signalCode, 'SIGKILL')
+    if (boundary === 'before') await unchanged(f)
+    else {
+      const row = (await db.select().from(schema.organization_contract_funding_requests).where(eq(schema.organization_contract_funding_requests.contract_id, f.original.contract.id)))[0]
+      assert.equal(row.id, staged.id)
+      const revoked = await (await import('@/app/api/organizations/[id]/contract-authorizations/[authorizationId]/route')).DELETE(request(`${f.prefix}/${f.a.id}`, f.owner, 'DELETE'), f.context)
+      assert.equal(revoked.status, 200)
+      process.env.CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED = 'false'; process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED = 'true'
+    }
+    const nextMarker = join(directory, crypto.randomUUID()), restarted = processFund(f, nextMarker)
+    try {
+      await releaseProcesses([restarted], [nextMarker]); const recovered = await restarted.result
+      assert.equal(recovered.status, boundary === 'before' ? 201 : 200)
+      assert.equal(recovered.body.contract.id, f.original.contract.id)
+      assert.deepEqual(recovered.body.milestones.map((m: any) => m.id), f.original.milestones.map((m: any) => m.id))
+      assert.equal(recovered.body.credit_remaining_principal_minor, 100)
+      if (boundary === 'after') assert.equal(recovered.body.funding.id, staged.id)
+      assert.equal((await db.select().from(schema.organization_contract_funding_requests).where(eq(schema.organization_contract_funding_requests.contract_id, f.original.contract.id))).length, 1)
+      const cancelled = await (await import('@/app/api/contracts/[id]/route')).PATCH(request(`/api/contracts/${f.original.contract.id}`, f.buyer, 'PATCH', { action: 'cancel' }), { params: Promise.resolve({ id: f.original.contract.id }) })
+      assert.equal(cancelled.status, 200)
+      const original = await fund.GET(request(`${f.path}?client_reference=${f.funding.client_reference}`, f.buyer), f.context)
+      assert.equal(original.status, 200); assert.equal((await original.json()).credit_remaining_principal_minor, 0)
+      assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).available_minor, 100)
+      assert.equal((await (await import('@/lib/listing-visibility')).originalReviewedContractListing(f.listing.id)), true)
+    } finally { if (restarted.child.exitCode === null && restarted.child.signalCode === null) restarted.child.kill('SIGKILL') }
+  } finally {
+    if (worker.child.exitCode === null && worker.child.signalCode === null) worker.child.kill('SIGKILL')
+    await exited; process.env.CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED = 'true'; delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED
   }
 })

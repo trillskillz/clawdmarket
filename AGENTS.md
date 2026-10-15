@@ -1,3 +1,26 @@
+## Original funding process recovery verified — local only
+
+All **9** actual scoped-funding API cases pass with zero failures/skips, including
+separate-process exact replay, conflicting reuse across two valid agreements,
+a shared original-gross ceiling, and SIGKILL immediately before/after commit.
+Before-commit termination leaves the original DRAFT, inventory and deposited
+credit unchanged; restart commits once. After-commit restart recovers the SAME
+request despite review revocation, fresh rollout closure and new-payment pause.
+Refund retains the original fee and consumed inventory; it does not recycle gross.
+Types pass. Lint passes after removing one unused fixture binding. The previous
+9b9f9b7 application build remains applicable; this checkpoint changes tests only.
+Migration79 and its prior local preservation are unchanged, not repeated.
+
+Source manifest **69** files versus e55e151, SHA-256 `b33e7fc41c966356d9a5847bdcd73642dbb571c3380b0ba5e4bca3cc104e3928`.
+Evidence: `docs/evidence/reviewed-contract-foundation-2026-10-15/funding-process.json`.
+Fresh funding still defaults DISABLED; HTTP1.119/count8 remain local. No live
+funds, publication, production flag, independent demand or capability9 claimed.
+Next: finite durable exact-command buyer/provider journals and real restarts,
+private human review/work UI, remaining economics and complete release gates.
+Rollback retains original references, paid recovery and financial safeguards.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Separately gated original reviewed funding verified — migration79 unchanged
 
 One scoped fund transaction now recovers known originals first, then checks the

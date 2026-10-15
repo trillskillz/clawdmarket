@@ -1,5 +1,5 @@
 {
-  "stage": "Default-disabled scoped reviewed funding API, both SDKs and complete disposable public API fulfillment; not complete contract capability",
+  "stage": "Default-disabled scoped funding and independent process/commit-boundary recovery; durable workers and full contract capability incomplete",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 79,
@@ -45,7 +45,8 @@
     "admin_original_adjudication_get": true,
     "original_funding_reference_boundary": true,
     "fresh_reviewed_contract_funding_enabled_by_default": false,
-    "disposable_public_funding_and_fulfillment": true
+    "disposable_public_funding_and_fulfillment": true,
+    "independent_funding_process_recovery": true
   },
   "records": {
     "original_use": {
@@ -383,6 +384,10 @@
     "scoped-funding-build": {
       "local_log": "/tmp/clawdmarket-contract-scoped-funding-build-2026-10-15.log",
       "log_sha256": "6fdebd8ec8ec859fe6d43264cd8f4dd7e07a3a0aa99740a7ab99976c7e680af8"
+    },
+    "funding-process": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/funding-process.json",
+      "source_manifest_sha256": "b33e7fc41c966356d9a5847bdcd73642dbb571c3380b0ba5e4bca3cc104e3928"
     }
   },
   "compatibility_cases": {
