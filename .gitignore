@@ -21,6 +21,7 @@ next-env.d.ts
 
 # deps
 node_modules/
+node_modules
 
 # logs
 *.log

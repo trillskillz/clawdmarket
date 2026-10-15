@@ -887,6 +887,29 @@ export const bids = sqliteTable('bids', {
 });
 
 /** Independent review of the original accepted task bid, never service/route authority. */
+/** Local listing review draft: no checkout or payment authority is minted here. */
+export const organization_listing_authorizations = sqliteTable('organization_listing_authorizations', {
+  id: text('id').primaryKey(),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  listing_id: text('listing_id').notNull().references(() => listings.id, { onDelete: 'restrict' }),
+  owner_account_id: text('owner_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  agent_id: text('agent_id').notNull().references(() => agents.id, { onDelete: 'restrict' }),
+  seller_id: text('seller_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  team_id: text('team_id').references(() => organization_teams.id, { onDelete: 'restrict' }),
+  cost_center: text('cost_center').notNull(),
+  reviewer_role_id: text('reviewer_role_id').notNull().references(() => organization_purchasing_roles.id, { onDelete: 'restrict' }),
+  reviewer_account_id: text('reviewer_account_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(),
+  authority_hash: text('authority_hash').notNull(), terms_json: text('terms_json').notNull(),
+  state: text('state', { enum: ['pending', 'approved', 'revoked'] }).notNull().default('pending'),
+  decision_reference: text('decision_reference'), decision_hash: text('decision_hash'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+  approved_at: integer('approved_at', { mode: 'timestamp' }), revoked_at: integer('revoked_at', { mode: 'timestamp' }),
+}, table => [uniqueIndex('organization_listing_org_reference_idx').on(table.organization_id, table.client_reference),
+  uniqueIndex('organization_listing_active_buyer_scope_idx').on(table.buyer_id, table.listing_id)
+    .where(sql`${table.state} IN ('pending','approved')`)]);
+
 export const organization_task_authorizations = sqliteTable('organization_task_authorizations', {
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),

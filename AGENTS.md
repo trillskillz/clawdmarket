@@ -1,5 +1,21 @@
 # ClawdMarket routing work
 
+## Active local listing continuation after pilot candidate — 2026-10-14
+
+The dependable-product/pilot local candidate is preserved unchanged at `bee652c`
+in `/home/void/Work/clawdmarket-dependable-pilot`. Its audit/manifest applies to
+that parent, not this unfinished listing tree. Its open security, publication,
+email-provider, admission, live-payment and recruitment dependencies remain.
+
+Active worktree `/home/void/Work/clawdmarket-reviewed-listings-current`, branch
+`work/local-reviewed-listings-after-pilot-2026-10-14`, integrates saved draft
+`e876e58` atop `bee652c`. Both migrations are retained: transparency is 68 and
+listing review foundation is 69. Seller rail settings remain authoritative during
+listing proposal/approval. This foundation has no checkout/use/payment authority,
+HTTP stays 1.118 and routing acceptance stays 7/10. Continue the complete
+`docs/ORGANIZATION_REVIEWED_LISTING_PURCHASING_PLAN.md` outcome locally. Do not
+publish, move funds, enable global flags or infer independent demand.
+
 ## User priority — dependable purchasing and independent pilot (2026-10-14)
 
 Complete [the user's new ten-part plan](docs/DEPENDABLE_PURCHASING_AND_INDEPENDENT_PILOT_PLAN_2026-10-14.md)

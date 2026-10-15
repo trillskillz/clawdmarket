@@ -19,7 +19,7 @@ export const PUBLIC_LISTING_SELLER_WHERE_SQL = `(NOT EXISTS (SELECT 1 FROM organ
   )
 ))`
 
-export async function isPublicMarketplaceSeller(sellerId: string, source: typeof db = db): Promise<boolean> {
+export async function isPublicMarketplaceSeller(sellerId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db): Promise<boolean> {
   if (!sellerId.startsWith('user_agent_')) return true
   const agentId = sellerId.slice('user_agent_'.length)
   const [agent] = await source.select({

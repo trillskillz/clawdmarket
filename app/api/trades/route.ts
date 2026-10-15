@@ -30,6 +30,8 @@ import { NewPaymentsPausedError, requireNewPaymentsOpen } from '@/lib/payment-co
 import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing } from '@/lib/listing-visibility';
 import { selectMarketplaceRail } from '@/lib/payment-rail-selection';
 import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets';
+import { genericListingFundingGuard } from '@/lib/organization-listing-authorizations';
+import { PurchasingError } from '@/lib/organization-purchasing-transaction';
 
 export const dynamic = 'force-dynamic'
 
@@ -202,6 +204,7 @@ async function createTradePost(req: NextRequest) {
 
     if (selectedRail === 'mpp' || selectedRail === 'evm') {
       const [newTrade] = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction(async (tx) => {
+        await genericListingFundingGuard(tx, listing.id, auth.userId);
         if (await originalReviewedTaskListing(listing.id, tx)) throw new TradeRaceError('ORIGINAL_TASK_LISTING', 'Recover the original reviewed task checkout');
         if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost, sellerId: listing.seller_id, paymentRail: selectedRail });
         const claimed = await tx.update(listings).set({ status: 'sold' })
@@ -253,8 +256,10 @@ async function createTradePost(req: NextRequest) {
 
     const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
 
-    const newTrade = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction((tx) =>
-      createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { rail: selectedRail, agentId: auth.agentId, clientReference })));
+    const newTrade = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction(async (tx) => {
+      await genericListingFundingGuard(tx, listing.id, auth.userId);
+      return createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { rail: selectedRail, agentId: auth.agentId, clientReference });
+    }));
     // ─── ESCROW LOGIC END ───
 
     // Queue webhook records durably before returning the trade response.
@@ -287,6 +292,8 @@ async function createTradePost(req: NextRequest) {
       }
     );
   } catch (error: any) {
+    if (error instanceof PurchasingError) return NextResponse.json({ error: error.message, error_code: error.code,
+      retryable: error.status === 503, state: 'no_funds_moved' }, { status: error.status, headers: { 'Cache-Control': 'private, no-store' } });
     if (error instanceof NewPaymentsPausedError) {
       return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });
     }

@@ -1,9 +1,12 @@
 # Next dependency: independently reviewed marketplace listing purchasing
 
-Dependency audit only. No listing authority is implemented or accepted by this
-document. Complete reviewed task purchasing acceptance before counting it or
-starting the next economic capability. All work and evidence remain local under
-the current publication policy.
+The requirements below remain the full acceptance scope. Reviewed task purchasing
+is accepted locally and the intervening dependable-product/pilot candidate is
+preserved at `bee652c`. A separate integrated review-only listing foundation now
+supports proposal/inspection/decision/revocation, with no checkout or payment
+authority and no 8/10 increment. See the
+[current foundation record](ORGANIZATION_LISTING_REVIEW_DRAFT_CHECKPOINT.md).
+All work and evidence remain local under the current publication policy.
 
 The next first scope is one current public fixed-price marketplace listing,
 quantity one, one exact reviewed purchase and one original external marketplace

@@ -1,3 +1,14 @@
+## Active listing continuation — after local dependable pilot checkpoint
+
+The authorized local dependable-product/pilot work is saved at `bee652c` in its
+own clean worktree. External actions and security treatment remain explicitly open.
+Current branch `work/local-reviewed-listings-after-pilot-2026-10-14` in
+`/home/void/Work/clawdmarket-reviewed-listings-current` integrates the saved listing
+foundation atop that candidate. Preserve migration 68 and seller rail/cohort
+controls; listing review foundation becomes migration 69. No checkout/payment is
+implemented yet, HTTP remains 1.118, acceptance stays 7/10. Continue the listing
+plan below; the parent candidate's source manifest is historical for this draft.
+
 ## Superseding user priority — dependable product and paid pilot (2026-10-14)
 
 Complete [the new plan](docs/DEPENDABLE_PURCHASING_AND_INDEPENDENT_PILOT_PLAN_2026-10-14.md)
