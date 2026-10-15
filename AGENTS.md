@@ -1,3 +1,41 @@
+## Original buyer funding-reference boundary verified — migration79
+
+A separate immutable request now binds buyer/reference uniquely across reviewed
+contracts, and pins organization/authorization/original contract/hash/clock to
+its original use. Exact original recovery returns frozen original_terms plus
+current state/held principal and fee/principal/nonwithdrawability disclosures.
+Changed/cross-contract reference reuse conflicts; owner/reviewer/seller cannot
+read the buyer request. Earlier reservations gain NO invented request receipt;
+their original financial/fulfillment/refund meaning stays intact. Append accepts
+only a transaction source for the future atomic financial write. No public scoped
+funding writer or SDK is exposed and funding_available staysfalse.
+
+Current focused **47/47**, zero skips/failures, types/lint and production build
+pass. Initial39pass/1fail was a wrapped uniqueness-error assertion; the actual
+buyer/reference constraint rejected the duplicate correctly. The assertion now
+checks its bounded precise cause. Controlled initial use/reference construction
+is atomic over actual disposable deposits; it is not a public reviewed purchase
+or independent economic activity. Migration79/replay preserves845 LOCAL baseline
+rows/133 tables, integrityok, zero FK anomalies,10 reputation guards,4 output,
+2 acceptance,2 release,4 adjudication/dispute and2 funding-reference guards, and
+all5 actual evidence queries. New reference tables stay empty on legacy migration.
+No production backup/deployment or complete new contract release gate is claimed.
+
+Source manifest **63** changed files versus e55e151, SHA-256
+`615d2f20a1a0af2c7768d3f4c01080aa1987af443716aad708fe24ffb48801bd`. Evidence is under the contract foundation directory. HTTP1.119/count8
+remain local-only; prior accepted listing/pilot candidates remain unchanged.
+Next implement the SINGLE [scoped funding transaction](docs/ORGANIZATION_CONTRACT_SCOPED_FUNDING_DESIGN_2026-10-15.md)
+with original buyer/current reviewed authority, atomic pause/shared gross/global
+budgets, current seller credit rail, original listing claim/credit/fee recipient/
+attribution/use/reference. Recover known originals before fresh eligibility and
+never adopt unreferenced old reservations or fabricate another financial family.
+Then actual funding HTTP/process/economic controls, finite journals/private human
+UI and complete release gates before capability9. Retain all original records and
+scoped recovery/interlocks across rollback. Do not deploy this unfinished tree.
+No publication, real funds, global flags, custody changes, mail or outreach.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Durable original contract inventory exclusion verified
 
 Public catalog/snapshot/metrics SQL and listing detail/edit/preview, all generic

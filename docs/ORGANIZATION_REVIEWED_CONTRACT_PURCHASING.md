@@ -1,6 +1,6 @@
 # Local contract review foundation
 
-This unfinished credit-only foundation is local HTTP 1.119 and migration 78.
+This unfinished credit-only foundation is local HTTP 1.119 and migration 79.
 Approval alone grants no funding or release authority. It is not capability 9/10,
 a deployed product or independently demonstrated customer activity. Creation
 uses the original optional buyer-scoped `client_reference` on POST `/api/contracts`
@@ -160,7 +160,14 @@ own listing identities; the shared reservation guard prevents adopting a consume
 contract listing where a caller supplies one. Contradictory original evidence rolls back
 maintenance and returns a timestamped explicit failure, not zero successful work.
 
-Remaining work: unique original funding references, scoped reviewed funding/use, consumed inventory exclusion,
+Migration79 now implements INTERNAL immutable unique buyer/client_reference
+funding requests. They pin original use/contract/authority/hash/clock and recover
+immutable original_terms, current state and held principal. Wrong actors and
+changed/cross-contract reuse fail. Existing reservations gain no invented request
+receipt. This is not a public fund endpoint or spending authorization; the future
+writer must append it inside the same credit/use/attribution transaction.
+
+Remaining work: scoped reviewed funding/use, consumed inventory exclusion,
 public original seller submission, finite buyer/provider restart journals, private
 human work UI, actual multi-milestone economics and complete release gates.
 No contract capability9, publication, live-payment or outreach authorization is

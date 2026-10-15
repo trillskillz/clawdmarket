@@ -1,8 +1,8 @@
 {
-  "stage": "Frozen original reviewed contract inventory remains consumed after refund/manual status or link changes; scoped funding still unavailable",
+  "stage": "Internal immutable unique original buyer funding references and frozen financial recovery; no scoped funding writer",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
-  "migrations": 78,
+  "migrations": 79,
   "accepted_capability_count": "8/10; no contract capability yet",
   "original_use_cases": {
     "passed": 30,
@@ -13,7 +13,7 @@
   "preservation": {
     "local_baseline_business_rows": 845,
     "local_baseline_tables": 133,
-    "migrations": 78,
+    "migrations": 79,
     "integrity": "ok",
     "foreign_key_anomalies": 0,
     "immutable_guards": 10,
@@ -21,7 +21,8 @@
     "reviewed_submission_immutable_guards": 4,
     "reviewed_acceptance_immutable_guards": 2,
     "reviewed_release_immutable_guards": 2,
-    "reviewed_adjudication_and_dispute_immutable_guards": 4
+    "reviewed_adjudication_and_dispute_immutable_guards": 4,
+    "reviewed_funding_reference_immutable_guards": 2
   },
   "limits": {
     "public_reviewed_contract_funding": false,
@@ -41,7 +42,8 @@
     "durable_contract_consumed_inventory_all_paths": true,
     "internal_original_adjudication": true,
     "participant_original_adjudication_get": true,
-    "admin_original_adjudication_get": true
+    "admin_original_adjudication_get": true,
+    "original_funding_reference_boundary": true
   },
   "records": {
     "original_use": {
@@ -327,6 +329,30 @@
     "inventory-build": {
       "local_log": "/tmp/clawdmarket-contract-original-inventory-build-2026-10-15.log",
       "log_sha256": "1396818798f94505c367d78fb38d4359483d32d32db4ccb2572f9f0ac076c8b7"
+    },
+    "funding-reference-focused": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-checked-focused-2026-10-15.log",
+      "log_sha256": "56c1dd9f04ea4f19135350b6d3289469f6248ca5fe45648762dddbf259a16715"
+    },
+    "funding-reference-initial-wrapped-assertion": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-focused-2026-10-15.log",
+      "log_sha256": "cc7f2ee903f7ff1677d8ca7e4f6da8c33b1f3ff41a2f6885f2638cf200b556d5"
+    },
+    "funding-reference-types": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-checked-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "funding-reference-lint": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-checked-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "funding-reference-build": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-build-2026-10-15.log",
+      "log_sha256": "ce86196d95f45acdd532b8214781a9633985586dca396981979e68a5bfa6e073"
+    },
+    "funding-reference-preservation": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-preservation-2026-10-15.log",
+      "log_sha256": "1a76542c49eea876a5b54b95242e533bc8ffe1174cb685b09f8250a46bda6ef3"
     }
   },
   "compatibility_cases": {
@@ -334,7 +360,7 @@
     "failed": 0,
     "skipped": 0
   },
-  "current_disjoint_focused_cases_total": 107,
+  "current_disjoint_focused_cases_total": 47,
   "existing_family_regression_cases": {
     "passed": 83,
     "failed": 0,
@@ -342,8 +368,8 @@
     "scope": "integration before the additional helper exclusion check; that check is included in current32"
   },
   "source_manifest": {
-    "files": 61,
-    "sha256": "2b24307f395b4ce35c0d7ba567d944f448ca7fba3acc93b1e7bc5d29b79e71c8",
+    "files": 63,
+    "sha256": "615d2f20a1a0af2c7768d3f4c01080aa1987af443716aad708fe24ffb48801bd",
     "baseline": "e55e151"
   },
   "private_inspection_cases": {
@@ -399,7 +425,7 @@
     "Admin routes now validate original use/amount and label separate adjudication. Saved-reference immutable admin-ruling recovery remains unfinished",
     "Unstarted refund preservation and consumed inventory/funding still need completion before reviewed funding"
   ],
-  "current_disjoint_focused_cases_scope": "59+48 disjoint inventory/credit/catalog/review/task cases:103pass4skip; not full contract release acceptance",
+  "current_disjoint_focused_cases_scope": "Current47 focused financial/reference/refund/inventory/migration cases, not full contract release acceptance",
   "historical_submission_cases": {
     "passed": 64,
     "failed": 0,
@@ -499,5 +525,18 @@
     "Tests use direct future reviewed-use records with genuine disposable deposits, not public reviewed funding or customer adoption",
     "Shared ledger/credit reservation guards cover callers trying to adopt the same listing; task/service public APIs otherwise create their own listing identities",
     "Migration78 unchanged, prior local preservation applies; no new full contract predeploy/browser/process gates"
+  ],
+  "funding_reference_cases": {
+    "passed": 47,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Current original financial/HTTP/adjudication/reference/refund/inventory plus migration/replay controls"
+  },
+  "funding_reference_limitations": [
+    "Internal transaction-source append/read only; no scoped public funding API, SDK or financial writer",
+    "Controlled future reservations are directly constructed over genuine disposable token deposits; no complete public reviewed purchase/customer activity",
+    "Initial39pass1fail: unique buyer/reference constraint correctly rejected a direct duplicate, but Drizzle wrapped its cause outside the regex assertion; precise bounded cause inspection corrected; current47pass0fail0skip",
+    "No inferred request receipt for earlier reservations; original financial/fulfillment/refund meaning stays intact",
+    "No new complete contract predeploy/browser/process-journal acceptance or independent demand demonstrated"
   ]
 }

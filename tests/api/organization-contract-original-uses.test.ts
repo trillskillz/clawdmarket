@@ -43,11 +43,12 @@ before(async () => {
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-exact-acceptance-v1.sql', 'utf8'))
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-credit-release-v1.sql', 'utf8'))
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-adjudication-v1.sql', 'utf8'))
+  await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-funding-reference-v1.sql', 'utf8'))
   domain = await import('@/lib/organization-contract-authorizations'); reader = await import('@/lib/organization-contract-uses')
 })
 after(async () => { db?.$client.close(); if (chain) await chain.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })
 
-async function fixture() {
+async function fixture(withFundingReference = false) {
   const f = await reviewedContractFixture({ db, schema }), credit = await import('@/lib/account-credit')
   const deposit = await credit.createDeposit(f.buyer, { amount_minor: 105, payer: payer.address, client_reference: crypto.randomUUID() })
   await alignDisposableDepositClock(deposit.id)
@@ -70,6 +71,8 @@ async function fixture() {
     await tx.insert(schema.organization_contract_uses).values({ authorization_id: a.id, contract_id: f.original.contract.id,
       fee_recipient_id: feeRecipient, authority_hash: a.authority_hash, client_reference: funding.client_reference,
       request_hash: digest(funding), amount_minor: 105, created_at: now })
+    if (withFundingReference) await (await import('@/lib/contract-original-funding-reference')).recordOriginalContractFundingCommand(
+      tx, f.org, a.id, f.buyer, f.original.contract.id, funding)
   })
   return { ...f, a, feeRecipient, funding }
 }
@@ -1005,4 +1008,60 @@ print(json.dumps({'recovered':r,'replay':p}))`
       assert.equal((await reader.organizationContractExposure(db, f.org, f.buyer)).lifetime, 105)
     } finally { await new Promise<void>(resolve => server.close(() => resolve())) }
   }
+})
+
+test('original buyer funding reference pins one controlled original reservation and recovers frozen terms after current permission closes', { skip: !enabled }, async () => {
+  const f = await fixture(true), refs = await import('@/lib/contract-original-funding-reference')
+  const original = await refs.inspectOriginalContractFunding(db, f.org, f.a.id, f.buyer, f.funding.client_reference)
+  assert.equal(original.contract.id, f.original.contract.id); assert.equal(original.funding.gross_minor, 105)
+  assert.equal(original.funding.upfront_fee_minor, 5); assert.equal(original.funding.principal_minor, 100)
+  assert.equal(original.funding.fee_recipient_id, f.feeRecipient); assert.equal(original.funding.redeemable, false)
+  assert.equal(original.funding.seller_receives, 'nonwithdrawable_account_credit'); assert.equal(original.credit_remaining_principal_minor, 100)
+  await domain.revokeOrganizationContract(f.org, f.a.id, f.owner)
+  await db.update(schema.organizations).set({ owner_account_id: f.other }).where(eq(schema.organizations.id, f.org))
+  await db.update(schema.organization_agent_assignments).set({ cost_center: 'CHANGED_AFTER_FUNDING' }).where(eq(schema.organization_agent_assignments.agent_id, f.buyerAgent))
+  await db.update(schema.seller_payment_preferences).set({ supported_rails: '[]' }).where(eq(schema.seller_payment_preferences.seller_id, f.seller))
+  await db.update(schema.contract_milestones).set({ acceptance_spec: '{"required_artifacts":["CHANGED"]}' }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+  assert.deepEqual((await refs.inspectOriginalContractFunding(db, f.org, f.a.id, f.buyer, f.funding.client_reference)).original_terms, original.original_terms)
+  assert.deepEqual(original.original_terms.milestones[0].acceptance_spec.required_artifacts, ['report'])
+  assert.equal((await refs.recoverOriginalContractFundingCommand(db, f.org, f.a.id, f.buyer, f.funding))?.idempotent, true)
+  assert.equal((await db.select().from(schema.organization_contract_funding_requests).where(eq(schema.organization_contract_funding_requests.buyer_id, f.buyer))).length, 1)
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+  for (const statement of ['UPDATE organization_contract_funding_requests SET request_hash=\'changed\' WHERE id=?', 'DELETE FROM organization_contract_funding_requests WHERE id=?']) {
+    await assert.rejects(db.$client.execute({ sql: statement, args: [original.funding.id] }), /immutable/)
+  }
+})
+
+test('funding references reject changed and cross-contract reuse and private actors without reclassifying earlier unreferenced reservations', { skip: !enabled }, async () => {
+  const f = await fixture(true), other = await fixture(), refs = await import('@/lib/contract-original-funding-reference')
+  for (const actor of [f.owner, f.reviewer, f.seller, f.other]) await assert.rejects(refs.inspectOriginalContractFunding(db, f.org, f.a.id, actor, f.funding.client_reference),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_FUND_REFERENCE_NOT_FOUND')
+  for (const [org, id, input] of [[other.org, other.a.id, f.funding], [f.org, f.a.id, { ...f.funding, authority_hash: '0'.repeat(64) }]] as const) {
+    await assert.rejects(refs.recoverOriginalContractFundingCommand(db, org, id, f.buyer, input),
+      (error: unknown) => (error as { code: string }).code === 'CONTRACT_FUND_REFERENCE_CONFLICT')
+  }
+  assert.equal(await refs.recoverOriginalContractFundingCommand(db, other.org, other.a.id, other.buyer, other.funding), null)
+  await assert.rejects(refs.inspectOriginalContractFunding(db, other.org, other.a.id, other.buyer, other.funding.client_reference),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_FUND_REFERENCE_NOT_FOUND')
+  assert.ok(await reader.originalReviewedContractUse(db, other.original.contract.id), 'old original reservation retains financial meaning but gains no request receipt')
+  assert.equal((await db.select().from(schema.organization_contract_funding_requests).where(eq(schema.organization_contract_funding_requests.contract_id, other.original.contract.id))).length, 0)
+  const [request] = await db.select().from(schema.organization_contract_funding_requests).where(eq(schema.organization_contract_funding_requests.contract_id, f.original.contract.id))
+  // Constraint control: even a direct insert cannot reuse buyer/reference under other existing financial IDs.
+  await assert.rejects(db.insert(schema.organization_contract_funding_requests).values({ ...request, id: crypto.randomUUID(), organization_id: other.org,
+    authorization_id: other.a.id, contract_id: other.original.contract.id }), (error: unknown) => {
+    let cause: any = error
+    for (let depth = 0; cause && depth < 8; depth++, cause = cause.cause) {
+      if (String(cause.message).includes('UNIQUE constraint failed: organization_contract_funding_requests.buyer_id, organization_contract_funding_requests.client_reference')) return true
+    }
+    return false
+  })
+})
+
+test('a saved funding reference cannot turn contradictory ledger evidence into original financial success', { skip: !enabled }, async () => {
+  const f = await fixture(true), refs = await import('@/lib/contract-original-funding-reference')
+  const entries = await db.select().from(schema.credit_entries).where(eq(schema.credit_entries.reference, f.original.contract.id))
+  const entry = entries.find(e => e.kind === 'purchase'); assert.ok(entry)
+  await db.update(schema.credit_entries).set({ available_delta: -104 }).where(eq(schema.credit_entries.id, entry.id))
+  await assert.rejects(refs.inspectOriginalContractFunding(db, f.org, f.a.id, f.buyer, f.funding.client_reference), invalid)
+  await assert.rejects(refs.recoverOriginalContractFundingCommand(db, f.org, f.a.id, f.buyer, f.funding), invalid)
 })

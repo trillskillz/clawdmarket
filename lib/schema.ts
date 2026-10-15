@@ -1936,6 +1936,17 @@ export const organization_contract_uses = sqliteTable('organization_contract_use
   created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
+/** New original funding commands only; legacy reservations gain no invented reference. */
+export const organization_contract_funding_requests = sqliteTable('organization_contract_funding_requests', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),
+  authorization_id: text('authorization_id').notNull().unique().references(() => organization_contract_uses.authorization_id, { onDelete: 'restrict' }),
+  contract_id: text('contract_id').notNull().unique().references(() => contracts.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(), authority_hash: text('authority_hash').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, table => [uniqueIndex('organization_contract_funding_buyer_reference_idx').on(table.buyer_id, table.client_reference)]);
+
 export const contract_milestones = sqliteTable('contract_milestones', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),
