@@ -1,3 +1,26 @@
+## Private contract review foundation — 2026-10-15
+
+Current separate contract worktree now has migration **73** and credit-only
+organization draft review. It freezes the original recoverable DRAFT and ordered
+milestone IDs, whole-cent quote/fee/escrow, acceptance specifications, absolute
+deadlines, assigned buyer/department/current owner and selected reviewer. DTOs
+explicitly say `funding_available:false`; a companion in ANY state blocks generic
+funding of its original contract. No reviewed funding/use, payment rail/claim,
+acceptance/release authority, client loop or human review page is implemented.
+No capability 9/10; HTTP stays 1.119 and this is not a release candidate.
+
+Complete focused run **53/53**, zero failures/skips, includes two separate-process
+proposal races and six real before/after-commit SIGKILL boundaries. Original
+proposal and exact decision identity survive restart and revocation cannot reopen
+funding. Four private behavior cases include fourteen drift scenarios, current
+reviewer ownership of participants, privacy, CSRF and bounds, plus existing
+creation/credit/migration regressions. Current types/lint and migration/replay to
+73 preserve 845 original rows/133 tables, ten immutable guards, five actual queries.
+The current production build passes in `/tmp/clawdmarket-contract-review-build-2026-10-15.log` (known MPP dynamic-dependency warnings).
+The separate listing repair source 9d48c39 remains frozen while its final enabled
+gate runs (browser149pass/eightskip, zero retries already passed). Do not confuse
+that candidate's 71 migrations/source manifest with this unfinished foundation.
+
 ## Original draft clients — next local checkpoint
 
 TypeScript and Python now expose explicit create/recover original contract draft
@@ -127,3 +150,39 @@ funded refund recovery, task/private-service original identities, and current
 provider visibility. Original draft-reference recovery stays available after
 fresh scope closes. All credit evidence is controlled signed RPC receipt fixtures;
 this scope regression does not establish a new live or independently paid journey.
+
+## Private review foundation evidence
+
+Current focused application/review/process/migration evidence:
+`/tmp/clawdmarket-contract-review-races-focused-2026-10-15.log`, **53/53**,
+zero failures/skips. Current type/lint files are
+`/tmp/clawdmarket-contract-review-races-{types,lint}-2026-10-15.log`.
+`/tmp/clawdmarket-contract-review-preservation-2026-10-15.log` checks migration
+73 and replay on a fresh original baseline copy, all original business rows,
+zero FK anomalies, ten immutable guards and five actual query executions.
+No authority is inherited and no original creation reference is invented.
+Earlier focused run passed45; typecheck caught an optional expiry type, corrected
+without changing policy. A test tried to insert a second buyer owner and correctly
+hit the single-owner primary key; it now performs an ownership transfer. No
+co-ownership behavior or financial execution is claimed. The complete corrected
+53-case run includes both process races and all six kill boundaries.
+
+Current owner or selected current reviewer can inspect frozen terms; unrelated
+accounts, the assigned buyer and seller cannot use organization review inspection
+to read private review data. Review access does not grant participant delivery
+access. Current assignment, owner, department, buyer/seller/reviewer bans, reviewer
+role, either participant ownership, seller visibility/credit opt-in, original
+milestones/quote/acceptance/deadlines and optional linked inventory are checked
+before fresh decisions. Exact original proposal/decision replay retains revoked
+state; no new reference can replace this contract's existing companion. Reference
+lookups are bounded and private; local read contention returns retryable 503.
+No submission bytes, source credentials or artifacts enter review DTOs.
+
+This foundation must not be rolled back to a generic-funding application while
+ANY organization_contract_authorizations row exists, including pending/revoked.
+Retain the generic contract funding guard, original draft lookup and review
+inspection/revocation handlers. Do not delete reference/review rows to make an
+old release seem compatible. Existing funded contracts retain original release,
+refund, dispute and fee semantics. Future reviewed funding must remain separate
+from generic paths and cannot be implemented by reusing a marketplace trade,
+listing/task claim, route mandate, wallet nonce or synthetic service identity.

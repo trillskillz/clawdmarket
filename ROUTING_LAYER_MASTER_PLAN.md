@@ -1,3 +1,26 @@
+## Private contract review foundation — 2026-10-15
+
+Current separate contract worktree now has migration **73** and credit-only
+organization draft review. It freezes the original recoverable DRAFT and ordered
+milestone IDs, whole-cent quote/fee/escrow, acceptance specifications, absolute
+deadlines, assigned buyer/department/current owner and selected reviewer. DTOs
+explicitly say `funding_available:false`; a companion in ANY state blocks generic
+funding of its original contract. No reviewed funding/use, payment rail/claim,
+acceptance/release authority, client loop or human review page is implemented.
+No capability 9/10; HTTP stays 1.119 and this is not a release candidate.
+
+Complete focused run **53/53**, zero failures/skips, includes two separate-process
+proposal races and six real before/after-commit SIGKILL boundaries. Original
+proposal and exact decision identity survive restart and revocation cannot reopen
+funding. Four private behavior cases include fourteen drift scenarios, current
+reviewer ownership of participants, privacy, CSRF and bounds, plus existing
+creation/credit/migration regressions. Current types/lint and migration/replay to
+73 preserve 845 original rows/133 tables, ten immutable guards, five actual queries.
+The current production build passes in `/tmp/clawdmarket-contract-review-build-2026-10-15.log` (known MPP dynamic-dependency warnings).
+The separate listing repair source 9d48c39 remains frozen while its final enabled
+gate runs (browser149pass/eightskip, zero retries already passed). Do not confuse
+that candidate's 71 migrations/source manifest with this unfinished foundation.
+
 ## Contract inventory defect reproduced and fixed locally — 2026-10-15
 
 The fresh contract audit found a cross-scope defect in the previously tested

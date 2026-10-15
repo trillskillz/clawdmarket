@@ -21,6 +21,7 @@ import { enforceBuyerSpendPolicy, BuyerSpendPolicyError } from '@/lib/buyer-spen
 import { attributeOrganizationContract, withOrganizationBuyerLock } from '@/lib/organization-budgets';
 import { requireContractListingScope } from '@/lib/contract-listing-scope';
 import { PurchasingError } from '@/lib/organization-purchasing-transaction';
+import { genericContractFundingGuard } from '@/lib/organization-contract-authorizations';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +98,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const now = new Date();
 
       if (validated.action === 'fund') {
+        await genericContractFundingGuard(tx, contract.id);
         if (contract.listing_id) await requireContractListingScope(tx, contract.listing_id, {
           expectedSeller: contract.seller_id, fundingBuyer: contract.buyer_id,
         });
