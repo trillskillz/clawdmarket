@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useToast } from '@/components/Toast';
 
 type ContractState = 'DRAFT' | 'FUNDED' | 'IN_PROGRESS' | 'AWAITING_REVIEW' | 'DISPUTED' | 'COMPLETED' | 'CANCELED' | 'EXPIRED' | 'REFUNDED';
@@ -187,6 +188,7 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
               Unstarted refunds return the held work amount and retain the original upfront fee of ${Number(c.fee_amount).toFixed(2)} USD.
             </p>}
             {reviewed && <p className="text-sm text-text-dim mt-3">Reviewed agreement: funding, exact output acceptance and credit release use its original reviewed workflow. Approval alone cannot release credit.</p>}
+            {reviewed && <Link href={`/contracts/${encodeURIComponent(c.id)}/work`} className="btn-secondary text-xs mt-3">Open original work</Link>}
             {!reviewed && c.state === 'DRAFT' && creditEnabled === null && <p className="text-sm text-text-dim mt-3">Account-balance readiness is unavailable. Funding is disabled until it can be checked.</p>}
 
             <div className="flex flex-wrap gap-2 mt-4">

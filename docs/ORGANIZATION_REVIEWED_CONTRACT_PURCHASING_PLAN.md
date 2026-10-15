@@ -1,3 +1,47 @@
+## Original-party human/agent browser fulfillment verified — local only
+
+Private `/contracts/{id}/work` now supports original seller start/bounded JSON
+output, exact buyer acceptance and SEPARATE credit release. Original-party login
+or an existing in-memory agent key is required; organizational owner/reviewer
+status grants neither output nor buyer authority. Keys omit cookies, never enter
+browser storage and clear on private-view invalidation. Saved references/hash/
+identity metadata contain no artifact. Original receipt GETs recover lost replies;
+precise missing originals require explicit saved-command confirmation. Terminal
+state alone never becomes proof of buyer-directed payment. Nonwithdrawability and
+finite structure/semantic/remote-execution limits are visible before work/consent.
+
+Current integrated **55/55** API/logic/SDK cases pass, zero skips/failures, including
+all26 scoped fund/process/CLI/economic/shared-order/REAL-browser cases. Actual
+built local Next server + actual named seller/buyer credentials + verified test-
+token deposit complete BOTH milestones in Chromium without API-response mocks.
+Reload drops the key and recovers exact consent; acceptance leaves funds held.
+Final buyer0 held/seller100/fee5 TEST cents, exactly2 immutable outputs/decisions/
+releases and1 original funding request; owner-only credentials cannot read output.
+Separate **11/11 Chromium** screen/recovery cases pass at1440/390/320px, zero
+skips/retries, including lost committed output/acceptance/release, explicit
+precommit retry, read-only key denial and no private artifact/key in storage.
+Those11 use controlled API responses; the actual paid browser case above does not.
+
+Types/lint and production application build pass. Initial client helper declaration
+ordering and test-only credential union typing were corrected. The build preceded
+later test-only harness/guard additions; final types and the55-case integration
+include those changes. No new schema: migration79/prior845-row preservation applies,
+not rerun. Manifest **78** files versus e55e151, SHA-256 `45f4cc366f29298030cac4074e9eee6ef496093f741fef5e8559a8b8b4758134`.
+Setup: `docs/ORIGINAL_CONTRACT_WORKSPACE.md`; evidence:
+`docs/evidence/reviewed-contract-foundation-2026-10-15/participant-workspace.json`.
+
+Fresh security reevaluation22:00UTC: full audit STILL exits1 for the single high
+braces GHSA; production audit0. Registry braces3.0.3 and latest Next ESLint16.4.2
+retain the vulnerable fast-glob path. No fix/exception/suppression/override claimed.
+See security risk/evidence. Fresh funding defaults DISABLED, HTTP1.119/count8 stay
+local; no live payment/canary, independent demand, production flag or publication.
+Next add only missing actual fresh-funding owner/reviewer/expiry/ban drift controls,
+then freeze and run complete predeploy/build/browser/preservation/security gates
+before accepting capability9/1.120. Keep previous accepted candidates unchanged;
+rollback retains original financial/ref/output/consent records and paid recovery.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Actual scoped funding shared-reservation orders verified — local only
 
 All **8/8** new cross-family cases pass: route/workflow/task/listing in BOTH

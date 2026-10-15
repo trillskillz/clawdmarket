@@ -1,5 +1,16 @@
 # Open development dependency risk: braces
 
+## Reevaluated 2026-10-15 22:00 UTC — still open
+
+Fresh full audit exits1 with the same single high GHSA-vfj7-8cjw-p6xm finding;
+production-only audit exits0 with no advisories. Registry braces remains3.0.3.
+The latest eslint-config-next is now16.4.2 and depends on plugin16.4.2, which still
+pins fast-glob3.3.1. Metadata inspection does not establish upgrade compatibility
+or remediation. The primary GitHub advisory still lists no patched version.
+No package, lockfile, override, audit suppression or exception was changed.
+Owner, exposure controls, October28 reevaluation and the failed release security
+gate remain as below. Evidence: `docs/evidence/reviewed-contract-foundation-2026-10-15/security-reevaluation.json`.
+
 **Disposition: acknowledged and mitigated exposure, not remediated. Release
 security gate remains failing.** No exception is granted and no audit is muted.
 Owner: repository maintainer `trillskillz` (security-review responsibility). Reevaluate by
@@ -19,9 +30,9 @@ eslint-config-next@16.3.8
 ```
 
 The specified failed security run 38445060809 reports this same advisory.
-The current registry still publishes braces 3.0.3. The latest compatible Next
-ESLint configuration 16.4.1 still depends on fast-glob; updating it alone does
-not remove this finding. No incompatible transitive override was introduced.
+The current registry still publishes braces 3.0.3. At the October14 inspection, Next ESLint configuration16.4.1 still depended
+on fast-glob. The October15 reevaluation below checks the newer16.4.2; neither
+inspection identifies a dependency-path fix. No incompatible transitive override was introduced.
 
 Exposure: eslint-config-next is a development dependency. Fresh
 `pnpm audit --prod --audit-level=high --json` exits 0 with no advisories. This

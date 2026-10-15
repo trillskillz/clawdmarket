@@ -629,3 +629,96 @@ for (const family of ['route', 'workflow', 'task', 'listing'] as const) for (con
     } finally { for (const key of names) { if (prior[key] === undefined) delete process.env[key]; else process.env[key] = prior[key] } }
   })
 }
+
+test('actual disposable browser completes both original milestones with separate seller/buyer named credentials and real credit postings', {
+  skip: !enabled || process.env.CLAWDMARKET_TEST_CONTRACT_WORKSPACE_BROWSER !== 'true',
+}, async () => {
+  const f = await fixture(), credit = await import('@/lib/account-credit')
+  const beforeFees = (await credit.creditBalance('system_marketplace_fees')).available_minor
+  const funded = await post(f); assert.equal(funded.status, 201); const originalFunding = await funded.json()
+  const { createNamedAgentCredential } = await import('@/lib/agent-named-credentials')
+  const sellerKey = await createNamedAgentCredential({ agentId: f.providerAgent, name: 'Disposable browser seller', scopes: ['agent:read', 'payments:write'], actorCredentialId: null })
+  const buyerKey = await createNamedAgentCredential({ agentId: f.buyerAgent, name: 'Disposable browser buyer', scopes: ['agent:read', 'payments:write'], actorCredentialId: null })
+  assert.equal(sellerKey.kind, 'created'); assert.equal(buyerKey.kind, 'created')
+  if (sellerKey.kind !== 'created' || buyerKey.kind !== 'created') throw new Error('Disposable original browser credentials were not created')
+  const portServer = createServer(); await new Promise<void>(resolve => portServer.listen(0, '127.0.0.1', resolve))
+  const port = (portServer.address() as { port: number }).port; await new Promise<void>(resolve => portServer.close(() => resolve()))
+  const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', String(port)], {
+    cwd: process.cwd(), env: { ...process.env, NODE_ENV: 'production' }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let serverLog = ''; for (const stream of [server.stdout, server.stderr]) stream.on('data', data => { serverLog = (serverLog + data).slice(-8000) })
+  const exited = new Promise(resolve => server.once('exit', resolve)), base = `http://127.0.0.1:${port}`, path = `/contracts/${f.original.contract.id}/work`
+  let browser: Awaited<ReturnType<(typeof import('@playwright/test'))['chromium']['launch']>> | undefined
+  try {
+    const deadline = Date.now() + 40000
+    while (true) {
+      try { if ((await fetch(`${base}/api/contracts/${f.original.contract.id}`, { signal: AbortSignal.timeout(1000) })).status === 401) break } catch {}
+      assert.equal(server.exitCode, null, 'Disposable Next server exited')
+      assert.ok(Date.now() < deadline, `Disposable Next server never became ready: ${serverLog}`)
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    const { chromium, expect } = await import('@playwright/test')
+    browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || '/usr/bin/chromium' })
+    const sellerContext = await browser.newContext(), buyerContext = await browser.newContext()
+    const sellerPage = await sellerContext.newPage(), buyerPage = await buyerContext.newPage()
+    await sellerPage.goto(base + path); await buyerPage.goto(base + path)
+    const authenticate = async (page: typeof sellerPage, key: string) => {
+      await page.bringToFront()
+      const details = page.locator('details').filter({ has: page.getByText('Use an original agent credential', { exact: true }) })
+      if (!await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator('summary').click()
+      await page.getByLabel('Original participant agent API key').fill(key)
+      await page.getByRole('button', { name: 'Inspect with original agent key' }).click()
+      await expect(page.getByRole('heading', { name: 'Original agreement', exact: true })).toBeVisible()
+    }
+    await authenticate(sellerPage, sellerKey.api_key)
+    await sellerPage.getByRole('checkbox', { name: /I understand the original nonwithdrawable seller credit/ }).check()
+    await sellerPage.getByRole('button', { name: 'Start original work' }).click()
+    for (const [index, milestone] of f.original.milestones.entries()) {
+      if (index) await authenticate(sellerPage, sellerKey.api_key)
+      const sellerWork = sellerPage.getByRole('region', { name: `Milestone ${milestone.id}`, exact: true })
+      await expect(sellerWork.getByLabel('Original artifact bundle JSON')).toBeVisible()
+      await sellerWork.getByLabel('Original artifact bundle JSON').fill(JSON.stringify({ report: `PRIVATE_REAL_BROWSER_OUTPUT_${index}` }))
+      await sellerWork.getByRole('checkbox', { name: /I reviewed the original requirements and nonwithdrawable settlement terms/ }).check()
+      await sellerWork.getByRole('button', { name: 'Submit original output' }).click()
+      await expect(sellerWork.getByRole('heading', { name: 'Selected private output', exact: true })).toBeVisible()
+      await authenticate(buyerPage, buyerKey.api_key)
+      const buyerWork = buyerPage.getByRole('region', { name: `Milestone ${milestone.id}`, exact: true })
+      await expect(buyerWork.getByText(`PRIVATE_REAL_BROWSER_OUTPUT_${index}`, { exact: false })).toBeVisible()
+      await buyerWork.getByRole('checkbox', { name: /I reviewed this exact submission ID/ }).check()
+      await buyerWork.getByRole('button', { name: 'Accept exact output' }).click()
+      await expect(buyerWork.getByText(/Exact buyer acceptance:/)).toBeVisible()
+      assert.equal((await credit.creditBalance(f.seller)).available_minor, index ? 40 : 0)
+      assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, index ? 60 : 100)
+      // Reload drops the in-memory key but retains only the exact acceptance
+      // reference. Reauthentication must recover it without a second decision.
+      await buyerPage.reload(); await authenticate(buyerPage, buyerKey.api_key)
+      await expect(buyerWork.getByRole('button', { name: 'Release original credit' })).toBeDisabled()
+      await buyerWork.getByRole('checkbox', { name: /I authorize the separate original credit posting/ }).check()
+      await buyerWork.getByRole('button', { name: 'Release original credit' }).click()
+      await expect(buyerWork.getByText(/Confirmed original credit posting:/)).toBeVisible()
+    }
+    await expect(buyerPage.getByText(/Status: COMPLETED/)).toBeVisible()
+    assert.equal((await credit.creditBalance(f.buyer)).available_minor, 0); assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 0)
+    assert.equal((await credit.creditBalance(f.seller)).available_minor, 100)
+    assert.equal((await credit.creditBalance('system_marketplace_fees')).available_minor, beforeFees + 5)
+    for (const table of [schema.contract_submission_operations, schema.contract_acceptance_operations, schema.contract_release_operations]) {
+      assert.equal((await db.select().from(table).where(eq(table.contract_id, f.original.contract.id))).length, 2)
+    }
+    for (const page of [sellerPage, buyerPage]) {
+      const saved = await page.evaluate(() => JSON.stringify(Object.values(sessionStorage)))
+      assert.equal(saved.includes(sellerKey.api_key), false); assert.equal(saved.includes(buyerKey.api_key), false)
+      assert.equal(saved.includes('PRIVATE_REAL_BROWSER_OUTPUT'), false); assert.equal(saved.includes('artifact_bundle'), false)
+    }
+    const owner = await fetch(`${base}/api/contracts/${f.original.contract.id}`, { headers: { Authorization: `Bearer ${token(f.owner)}` } })
+    assert.equal(owner.status, 403); assert.equal((await owner.text()).includes('PRIVATE_REAL_BROWSER_OUTPUT'), false)
+    const recovered = await fund.GET(request(`${f.path}?client_reference=${f.funding.client_reference}`, f.buyer), f.context)
+    assert.equal(recovered.status, 200); const final = await recovered.json()
+    assert.deepEqual(final.funding, originalFunding.funding); assert.equal(final.contract.state, 'COMPLETED'); assert.equal(final.credit_remaining_principal_minor, 0)
+    assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.buyer_id, f.buyer))).length, 0)
+  } finally {
+    await browser?.close()
+    if (server.exitCode === null && server.signalCode === null) server.kill('SIGTERM')
+    await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 5000))])
+    if (server.exitCode === null && server.signalCode === null) { server.kill('SIGKILL'); await exited }
+  }
+})

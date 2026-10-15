@@ -1,5 +1,5 @@
 {
-  "stage": "Actual scoped funding shared-reservation orders verified; participant human UI and full release gates incomplete",
+  "stage": "Actual original-party browser fulfillment verified; final fresh-funding drift coverage/full release gates incomplete",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 79,
@@ -54,7 +54,9 @@
     "actual_scoped_funding_frozen_expiry_and_no_automatic_acceptance": true,
     "contract_dashboard_credit_disclosures": true,
     "authoritative_companion_metadata_and_dashboard_restrictions": true,
-    "actual_scoped_funding_both_shared_reservation_orders": true
+    "actual_scoped_funding_both_shared_reservation_orders": true,
+    "private_original_party_work_ui": true,
+    "actual_named_credential_browser_paid_test_credit_journey": true
   },
   "records": {
     "original_use": {
@@ -416,6 +418,15 @@
     "shared-reservation-orders": {
       "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/shared-reservation-orders.json",
       "source_manifest_sha256": "8da08b1718e08662fe52fe29a0bf85bb999f9d1201eec76c2e6d3af9de163755"
+    },
+    "participant-workspace": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/participant-workspace.json",
+      "source_manifest_sha256": "45f4cc366f29298030cac4074e9eee6ef496093f741fef5e8559a8b8b4758134"
+    },
+    "security-reevaluation": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/security-reevaluation.json",
+      "full_exit": 1,
+      "production_exit": 0
     }
   },
   "compatibility_cases": {
