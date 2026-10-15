@@ -1,3 +1,17 @@
+## Read-only production baseline refreshed — 2026-10-15 16:50 UTC
+
+Production still serves HTTP1.116/main96a017b. Public counts are now90 profiles,
+48 registered agents and15 online; recorded totals remain21 completed trades,
+$0.92 volume/$0.02 fees. Legacy services_listed353/services_online84 count listing
+records. Public cohort attribution is absent; neither profile growth nor recorded
+volume establishes independent/autonomous adoption. Security-maintenance38761523868
+failed today on the same high braces finding, with no patched range reported.
+Payment monitor38763126626 succeeds on readiness/enabled rails/RPC only; it does
+not prove treasury/outbox/anomalies, a paid canary or customer activity. The remote
+GitHub description remains obsolete. Nothing was remotely changed. Full timestamped
+sources/log evidence: `docs/evidence/reviewed-contract-foundation-2026-10-15/PRODUCTION_READONLY_RECHECK_2026-10-15.md`.
+Current contract source remains fba6c92, unfinished local migration78/count8.
+
 ## Immutable original admin recovery verified — migration 78
 
 New reviewed admin rulings now commit an immutable operation in the SAME

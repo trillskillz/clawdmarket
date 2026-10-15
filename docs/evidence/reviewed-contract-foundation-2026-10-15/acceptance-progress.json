@@ -358,5 +358,19 @@
     "18 canonical cases overlap the92-case gate; do not add them as unique cases",
     "Final OpenAPI-only description added after92 functional cases; final18 canonical/static/build validate that addition",
     "Full new contract predeploy/browser/customer economic acceptance remains unfinished"
-  ]
+  ],
+  "production_readonly_recheck": {
+    "observed_at": "2026-10-15T16:50:56Z",
+    "live_http": "1.116",
+    "main": "96a017b6019920f47af32d86a7e476c9b9c07808",
+    "profiles": 90,
+    "registered_agents": 48,
+    "online_agents": 15,
+    "independence": "not established by public legacy counts",
+    "security_run": 38761523868,
+    "security_conclusion": "failure, same one high braces advisory",
+    "payment_monitor_run": 38763126626,
+    "payment_monitor_scope": "readiness/enabled rails/Base+Tempo RPC only",
+    "remote_changes_performed": false
+  }
 }

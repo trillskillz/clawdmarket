@@ -1,0 +1,65 @@
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.2732605Z ╰──────────────────────────────────────────────────────────────────────────────╯
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.2785339Z Done in 1.8s using pnpm v10.34.5
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3116179Z ##[group]Run pnpm exec drizzle-kit push --force
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3116412Z ^[[36;1mpnpm exec drizzle-kit push --force^[[0m
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3169943Z shell: /usr/bin/bash -e {0}
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3170110Z env:
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3170235Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3170396Z   NEXT_TELEMETRY_DISABLED: 1
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3170546Z   TURSO_DATABASE_URL: file:./ci-security.db
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3170716Z   JWT_SECRET: ci-jwt-secret-please-change
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3170916Z   CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3171147Z   WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3171362Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.3171531Z ##[endgroup]
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.6046703Z No config path provided, using default 'drizzle.config.ts'
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:43.6047508Z Reading config file '/home/runner/work/clawdmarket/clawdmarket/drizzle.config.ts'
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.0895965Z [⣷] Pulling schema from database...
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.0902545Z ^[[2K^[[1G[✓] Pulling schema from database...
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.7842412Z [✓] Changes applied
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8178210Z ##[group]Run pnpm audit --audit-level=high
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8178415Z ^[[36;1mpnpm audit --audit-level=high^[[0m
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8230189Z shell: /usr/bin/bash -e {0}
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8230339Z env:
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8230464Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8230617Z   NEXT_TELEMETRY_DISABLED: 1
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8230759Z   TURSO_DATABASE_URL: file:./ci-security.db
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8230924Z   JWT_SECRET: ci-jwt-secret-please-change
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8231120Z   CHAT_ENCRYPTION_KEY: ci-chat-encryption-key-32-bytes-minimum
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8231345Z   WEBHOOK_SECRET_KEY: ci-webhook-secret-key-32-bytes-minimum
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8231556Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:44.8231722Z ##[endgroup]
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2684836Z ┌─────────────────────┬────────────────────────────────────────────────────────┐
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2685642Z │ high                │ braces vulnerable to stack-exhaustion denial of        │
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2698066Z │                     │ service through deeply nested patterns                 │
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2698619Z ├─────────────────────┼────────────────────────────────────────────────────────┤
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2699092Z │ Package             │ braces                                                 │
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2699594Z ├─────────────────────┼────────────────────────────────────────────────────────┤
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2700085Z │ Vulnerable versions │ <=3.0.3                                                │
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2700610Z ├─────────────────────┼────────────────────────────────────────────────────────┤
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2701082Z │ Patched versions    │ <0.0.0                                                 │
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2701589Z ├─────────────────────┼────────────────────────────────────────────────────────┤
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2702089Z │ Paths               │ .>eslint-config-next>@next/eslint-plugin-next>fast-    │
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2702431Z │                     │ glob>micromatch>braces                                 │
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2703092Z ├─────────────────────┼────────────────────────────────────────────────────────┤
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2703420Z │ More info           │ https://github.com/advisories/GHSA-vfj7-8cjw-p6xm      │
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2703744Z └─────────────────────┴────────────────────────────────────────────────────────┘
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2704030Z 1 vulnerabilities found
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2704175Z Severity: 1 high
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2872722Z ##[error]Process completed with exit code 1.
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.2956609Z Post job cleanup.
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.3852402Z Pruning is unnecessary.
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4016625Z Post job cleanup.
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4587913Z [command]/usr/bin/git version
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4624199Z git version 2.55.0
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4653273Z Temporarily overriding HOME='/home/runner/work/_temp/e816826c-ca5c-425e-b7ed-175d13b57275' before making global git config changes
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4654093Z Adding repository directory to the temporary git global config as a safe directory
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4661156Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/clawdmarket/clawdmarket
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4696045Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4731008Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4961044Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.4998792Z http.https://github.com/.extraheader
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.5016624Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.5062875Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.5438582Z Cleaning up orphan processes
+verify-security-and-build	UNKNOWN STEP	2026-10-15T15:34:45.5635652Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4.2.2, actions/setup-node@v4.4.0, pnpm/action-setup@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

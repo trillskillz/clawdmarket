@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-10-15T16:50:56.972914+00:00",
+  "source_url": "https://api.github.com/repos/trillskillz/clawdmarket/actions/workflows/security-maintenance.yml/runs?per_page=1",
+  "data_status": "available",
+  "data": {
+    "total_count": 220,
+    "runs": [
+      {
+        "id": 38761523868,
+        "name": "security-maintenance",
+        "head_sha": "96a017b6019920f47af32d86a7e476c9b9c07808",
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-10-15T15:34:26Z",
+        "updated_at": "2026-10-15T15:34:59Z",
+        "html_url": "https://github.com/trillskillz/clawdmarket/actions/runs/38761523868"
+      }
+    ]
+  }
+}

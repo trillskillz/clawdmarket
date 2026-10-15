@@ -1,0 +1,51 @@
+health	UNKNOWN STEP	﻿2026-10-15T15:45:33.5521500Z Current runner version: '2.337.0'
+health	UNKNOWN STEP	2026-10-15T15:45:33.5545614Z ##[group]Runner Image Provisioner
+health	UNKNOWN STEP	2026-10-15T15:45:33.5546597Z Hosted Compute Agent
+health	UNKNOWN STEP	2026-10-15T15:45:33.5547261Z Version: 20261012.601
+health	UNKNOWN STEP	2026-10-15T15:45:33.5548002Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d
+health	UNKNOWN STEP	2026-10-15T15:45:33.5548750Z Build Date: 2026-10-12T17:48:21Z
+health	UNKNOWN STEP	2026-10-15T15:45:33.5549481Z Worker ID: {c0bf7010-7707-483e-a027-9d33fc8d1b3f}
+health	UNKNOWN STEP	2026-10-15T15:45:33.5550208Z Region: westus3
+health	UNKNOWN STEP	2026-10-15T15:45:33.5550851Z Cloud: Azure
+health	UNKNOWN STEP	2026-10-15T15:45:33.5551452Z ##[endgroup]
+health	UNKNOWN STEP	2026-10-15T15:45:33.5552938Z ##[group]Operating System
+health	UNKNOWN STEP	2026-10-15T15:45:33.5553621Z Ubuntu
+health	UNKNOWN STEP	2026-10-15T15:45:33.5554186Z 24.04.5
+health	UNKNOWN STEP	2026-10-15T15:45:33.5554973Z LTS
+health	UNKNOWN STEP	2026-10-15T15:45:33.5555530Z ##[endgroup]
+health	UNKNOWN STEP	2026-10-15T15:45:33.5556081Z ##[group]Runner Image
+health	UNKNOWN STEP	2026-10-15T15:45:33.5556741Z Image: ubuntu-24.04
+health	UNKNOWN STEP	2026-10-15T15:45:33.5557353Z Version: 20261012.334.1
+health	UNKNOWN STEP	2026-10-15T15:45:33.5558635Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261012.334/images/ubuntu/Ubuntu2404-Readme.md
+health	UNKNOWN STEP	2026-10-15T15:45:33.5560226Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261012.334
+health	UNKNOWN STEP	2026-10-15T15:45:33.5561217Z ##[endgroup]
+health	UNKNOWN STEP	2026-10-15T15:45:33.5562334Z ##[group]GITHUB_TOKEN Permissions
+health	UNKNOWN STEP	2026-10-15T15:45:33.5564429Z Contents: read
+health	UNKNOWN STEP	2026-10-15T15:45:33.5565126Z Metadata: read
+health	UNKNOWN STEP	2026-10-15T15:45:33.5565767Z ##[endgroup]
+health	UNKNOWN STEP	2026-10-15T15:45:33.5568227Z Secret source: Actions
+health	UNKNOWN STEP	2026-10-15T15:45:33.5569205Z Cache mode: write
+health	UNKNOWN STEP	2026-10-15T15:45:33.5569948Z Prepare workflow directory
+health	UNKNOWN STEP	2026-10-15T15:45:33.6091429Z Prepare all required actions
+health	UNKNOWN STEP	2026-10-15T15:45:33.6155299Z Complete job name: health
+health	UNKNOWN STEP	2026-10-15T15:45:33.6711038Z ##[group]Run set -euo pipefail
+health	UNKNOWN STEP	2026-10-15T15:45:33.6711837Z ^[[36;1mset -euo pipefail^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6712933Z ^[[36;1mresponse=$(curl --fail --silent --show-error --max-time 20 "$BASE_URL/api/health/ready")^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6714110Z ^[[36;1mPAYMENT_HEALTH_RESPONSE="$response" node -e '^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6715274Z ^[[36;1m  const readiness = JSON.parse(process.env.PAYMENT_HEALTH_RESPONSE);^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6716281Z ^[[36;1m  const payment = readiness.checks?.payments;^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6717208Z ^[[36;1m  if (readiness.status !== "ready" || !payment?.ready) process.exit(1);^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6718452Z ^[[36;1m  if (!payment.enabled_rails?.includes("mpp") || !payment.enabled_rails?.includes("evm")) process.exit(1);^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6719596Z ^[[36;1m  for (const chain of [8453, 4217]) {^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6720685Z ^[[36;1m    if (!payment.rpc?.some((endpoint) => endpoint.chain_id === chain && endpoint.healthy === true)) process.exit(1);^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6721830Z ^[[36;1m  }^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6722377Z ^[[36;1m'^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.6723045Z ^[[36;1mecho 'Base USDC and Tempo pathUSD payment RPCs are healthy'^[[0m
+health	UNKNOWN STEP	2026-10-15T15:45:33.7469058Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+health	UNKNOWN STEP	2026-10-15T15:45:33.7470186Z env:
+health	UNKNOWN STEP	2026-10-15T15:45:33.7470870Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+health	UNKNOWN STEP	2026-10-15T15:45:33.7471784Z   BASE_URL: ***
+health	UNKNOWN STEP	2026-10-15T15:45:33.7473036Z   ALERT_WEBHOOK_URL: ***
+health	UNKNOWN STEP	2026-10-15T15:45:33.7473626Z ##[endgroup]
+health	UNKNOWN STEP	2026-10-15T15:45:36.0570468Z Base USDC and Tempo pathUSD payment RPCs are healthy
+health	UNKNOWN STEP	2026-10-15T15:45:36.0775880Z Cleaning up orphan processes

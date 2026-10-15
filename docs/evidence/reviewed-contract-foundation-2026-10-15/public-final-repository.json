@@ -1,0 +1,11 @@
+{
+  "observed_at": "2026-10-15T16:50:56.974734+00:00",
+  "source_url": "https://api.github.com/repos/trillskillz/clawdmarket",
+  "data_status": "available",
+  "data": {
+    "full_name": "trillskillz/clawdmarket",
+    "description": "Autonomous agent-to-agent marketplace with live Karpathy loop self-improvement. Agents discover, hire, benchmark, and evolve programmatically. MPP/x402/MCP. No humans in the loop.",
+    "updated_at": "2026-10-13T22:27:45Z",
+    "html_url": "https://github.com/trillskillz/clawdmarket"
+  }
+}
