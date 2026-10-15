@@ -1,3 +1,17 @@
+## Listing exact-source reacceptance — 4cc00d4
+
+The first complete initialized gate finished 1,066 cases: 1,059 passed, five
+expected skips, two failures. A real separate-process SQLite lock reproduces one
+credential-read defect; bounded read-only recovery, exhaustion 503 and fresh
+revocation checks now pass three controls. The second test now verifies original
+trade IDs, ledger totals and limits when a committed original reservation returns
+canonical HTTP 200. Both targeted races and current types/lint/build pass.
+New complete enabled and Chromium runs are in the `4cc00d4` logs named at the top
+of AGENTS.md. Current manifest binds **170** source files; migrations stay 71,
+HTTP stays 1.119, count remains **7/10** until final complete acceptance. The prior
+149-pass/eight-skip browser result binds the pre-fix source. All work remains
+local; no security exception, publication, live funds or global flags authorized.
+
 ## Current listing final gate — source 6ae6dbb
 
 Local HTTP **1.119** has complete both-rail original listing clients/SDK/private

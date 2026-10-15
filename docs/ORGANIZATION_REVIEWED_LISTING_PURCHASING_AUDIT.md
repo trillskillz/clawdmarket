@@ -1,3 +1,16 @@
+**Current reacceptance source: `4cc00d4`, HTTP 1.119, 71 migrations.** The
+refreshed manifest binds **170** source files; SHA-256
+`5126f33a3de36b1a5f2c314f98f6bc5334d9fdab9a9ad372d43cf4af9ae060a3`.
+Current complete enabled gate is running in
+`/tmp/clawdmarket-listing-4cc00d4-predeploy-2026-10-14.log`; current complete built
+Chromium gate is running in
+`/tmp/clawdmarket-listing-4cc00d4-browser-2026-10-14.log`, zero retries. Current
+build passes in `/tmp/clawdmarket-listing-read-recovery-build-final-2026-10-14.log`.
+The earlier full-gate failures and their narrow corrections are retained below.
+Count remains **7/10** until these exact-source runs actually pass. No publication
+or live execution is authorized. Older 167-file and 149-case records below bind
+the pre-fix checkpoint `6ae6dbb` and are historical, not final fixed-source evidence.
+
 # Reviewed listing local candidate — final acceptance in progress
 
 Integrated implementation checkpoint **6ae6dbb**, local HTTP **1.119**, additive migrations **71**, branch

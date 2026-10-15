@@ -1,3 +1,30 @@
+## Current reacceptance after reproduced read contention — source 4cc00d4
+
+Local HTTP **1.119**, migrations **71**, count **7/10 pending acceptance**.
+Committed source **4cc00d4** adds bounded read-only spending credential recovery
+and strict original-trade assertions for the workflow race. Three real exclusive
+SQLite-lock controls pass; no financial callback is retried and revocation remains
+401. The old complete run finished **1,066 cases: 1,059 pass, five skips, two
+failures**. Both findings are corrected and targeted races/types/lint/build pass.
+It is NOT an accepted full run. See the listing audit's exact failure/correction
+section. The updated source manifest has **170** entries, SHA-256
+`5126f33a3de36b1a5f2c314f98f6bc5334d9fdab9a9ad372d43cf4af9ae060a3`.
+
+CURRENT complete enabled gate:
+`/tmp/clawdmarket-listing-4cc00d4-predeploy-2026-10-14.log`, exec **39301**.
+CURRENT complete built Chromium gate, zero retries:
+`/tmp/clawdmarket-listing-4cc00d4-browser-2026-10-14.log`, exec **64667**.
+Both use fresh fully migrated disposable databases; browser uses WAL. Keep source
+unchanged until these exact-source gates finish. Earlier 149-pass/eight-skip browser
+acceptance binds source 6ae6dbb, not the read fix; current rebuilt app is in
+`/tmp/clawdmarket-listing-read-recovery-build-final-2026-10-14.log` (exit zero).
+Fresh preservation and five-query evidence still apply to unchanged migration 71.
+
+Record actual final exits, refresh final audit/progress and only then accept 8/10.
+Do not mask new failures or substitute a passing isolated rerun for the complete
+gate. Security remains one high unapproved development advisory. All work stays
+local. Then continue the saved separate reviewed credit-contract dependency plan.
+
 ## Current acceptance evidence and disposable setup — 2026-10-14
 
 Integrated listing source is `6ae6dbb`, current bookkeeping `bc4faa5`, local HTTP
