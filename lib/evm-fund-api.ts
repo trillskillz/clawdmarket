@@ -16,6 +16,7 @@ import { measuredEvmChainFee } from '@/lib/chain-fee-evidence'
 import type { RequestPrincipal } from '@/lib/request-principal'
 import { inspectSpendingEvmClaim } from '@/lib/organization-spending-payment'
 import { assertTaskEvmProof, inspectTaskEvmClaim } from '@/lib/organization-task-payment'
+import { assertListingEvmProof, inspectListingEvmClaim } from '@/lib/organization-listing-payment'
 import { PurchasingError } from '@/lib/organization-purchasing-transaction'
 const TX_HASH = /^0x[a-fA-F0-9]{64}$/
 
@@ -56,9 +57,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const [claim] = await db.select().from(buyer_evm_payment_claims).where(eq(buyer_evm_payment_claims.intent_id, intent.id)).limit(1)
       const spendingClaim=await inspectSpendingEvmClaim(intent.id)
       const taskClaim = await inspectTaskEvmClaim(intent.id)
-      if ((!claim || claim.tx_hash !== txHash) && (!spendingClaim || spendingClaim.tx_hash !== txHash) && (!taskClaim || taskClaim.tx_hash !== txHash)) return NextResponse.json({ error: 'Claim the saved signed transaction before submission', code: 'BUYER_PAYMENT_CLAIM_REQUIRED' }, { status: 409 })
+      const listingClaim = await inspectListingEvmClaim(intent.id)
+      if ((!claim || claim.tx_hash !== txHash) && (!spendingClaim || spendingClaim.tx_hash !== txHash) && (!taskClaim || taskClaim.tx_hash !== txHash) && (!listingClaim || listingClaim.tx_hash !== txHash)) return NextResponse.json({ error: 'Claim the saved signed transaction before submission', code: 'BUYER_PAYMENT_CLAIM_REQUIRED' }, { status: 409 })
     }
     await assertTaskEvmProof(trade.id, intent.id, txHash, payerAddress)
+    await assertListingEvmProof(trade.id, intent.id, txHash, payerAddress)
     const signature = String(body.payer_signature || intent.payer_signature || '')
     if (!signature) return NextResponse.json({
       error: 'The payer must authorize this exact transfer for this trade', code: 'PAYER_AUTHORIZATION_REQUIRED',

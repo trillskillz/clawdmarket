@@ -10,7 +10,7 @@ import { and, eq } from 'drizzle-orm';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { internalErrorResponse } from '@/lib/api-error';
 import { payoutAddressForUser } from '@/lib/external-settlement';
-import { originalPrivateServiceListing, originalReviewedTaskListing } from '@/lib/listing-visibility'
+import { originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedListing } from '@/lib/listing-visibility'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth';
 
 export const dynamic = 'force-dynamic'
@@ -60,7 +60,7 @@ export async function GET(
       );
     }
 
-    if (await originalPrivateServiceListing(id) || await originalReviewedTaskListing(id)) {
+    if (await originalPrivateServiceListing(id) || await originalReviewedTaskListing(id) || await originalReviewedListing(id)) {
       const principal = await resolveRequestPrincipal(req)
       if (principal?.userId !== listing.seller_id) return NextResponse.json({ error: 'Listing not found' }, { status: 404, headers: { 'Cache-Control': 'private, no-store' } })
     }
@@ -143,6 +143,9 @@ export async function PUT(
     }
     if (await originalReviewedTaskListing(id)) {
       return NextResponse.json({ error: 'Recover the original reviewed task checkout', code: 'ORIGINAL_TASK_LISTING' }, { status: 409 });
+    }
+    if (await originalReviewedListing(id)) {
+      return NextResponse.json({ error: 'Recover the original reviewed listing checkout', code: 'ORIGINAL_LISTING_CHECKOUT_REQUIRED' }, { status: 409 });
     }
     if (listing.status !== 'active') {
       return NextResponse.json({ error: 'Only active listings can be updated' }, { status: 409 });

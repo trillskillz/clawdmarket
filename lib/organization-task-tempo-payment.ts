@@ -4,7 +4,7 @@ import { Challenge } from 'mppx'
 import { createPublicClient, erc20Abi, http, parseUnits, type Address } from 'viem'
 import { db } from './db'
 import { buyer_evm_payment_claims, buyer_mpp_payment_claims, organization_spending_payment_claims, organization_spending_mpp_claims,
-  organization_task_payment_claims, organization_task_mpp_intents as intents, organization_task_mpp_claims as claims, payment_receipts } from './schema'
+  organization_listing_payment_claims, organization_listing_mpp_claims, organization_task_payment_claims, organization_task_mpp_intents as intents, organization_task_mpp_claims as claims, payment_receipts } from './schema'
 import { originalTaskPayment, taskFundingEligibility } from './organization-task-authorizations'
 import { purchasingTransaction, PurchasingError, type PurchasingSource } from './organization-purchasing-transaction'
 import { serviceFundingEligibility } from './service-funding-eligibility'
@@ -116,7 +116,7 @@ export async function claimTaskTempoPayment(tradeId: string, buyerId: string, in
     }
     if (!prior) {
       for (const family of [buyer_evm_payment_claims, buyer_mpp_payment_claims, organization_spending_payment_claims,
-        organization_spending_mpp_claims, organization_task_payment_claims, claims] as const) {
+        organization_spending_mpp_claims, organization_task_payment_claims, organization_listing_payment_claims, organization_listing_mpp_claims, claims] as const) {
         const [other] = await tx.select({ state: family.state }).from(family).where(and(eq(family.chain_id, checked.chain_id),
           eq(family.payer_address, checked.payer_address), or(eq(family.state, 'claimed'), eq(family.nonce, checked.nonce)))).limit(1)
         if (other) fail(other.state === 'claimed' ? 'BUYER_WALLET_PAYMENT_UNRECONCILED' : 'BUYER_WALLET_NONCE_ALREADY_CLAIMED')

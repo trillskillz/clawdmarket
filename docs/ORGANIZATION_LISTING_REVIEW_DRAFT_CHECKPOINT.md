@@ -148,3 +148,44 @@ journeys, process races and deaths, full security/build/browser/preservation gat
 Resume those requirements from `ORGANIZATION_REVIEWED_LISTING_PURCHASING_PLAN.md`
 only after the user's new dependable-product/pilot plan is complete. Do not
 include this unfinished foundation in that release candidate automatically.
+
+## Local original payment and explicit delivery checkpoint
+
+Separate EVM listing claims and Tempo listing intents/claims now use additive
+migration **71**. Original listing authorization/use identity dispatches through
+the existing buyer claim, external intent/proof, funding and cancellation paths.
+All route/spending/task/listing claim families exclude an unreconciled wallet or
+consumed nonce in both directions. Exact original bytes remain recoverable after
+revocation, pause, cancellation or lost fresh permission; reserve precision,
+actual balance and current authority are rechecked before fresh submission.
+Consumed listings stay excluded from generic catalog/checkout and cannot be
+reopened by changing their status. No task or service identity is fabricated.
+
+The frozen private delivery requirements now govern original listing delivery
+and acceptance. JSON/key checks and attached-artifact integrity are required
+where agreed. Current catalog edits and later authorization revocation do not
+rewrite a paid delivery contract. Passing structure cannot release funds:
+explicit buyer acceptance of the exact content hash is required; automatic
+confirmation remains disabled.
+
+Current targeted run passes **91/91**, zero skips/failures:
+`/tmp/clawdmarket-listing-claims-current-2026-10-14.log`. This includes 25 listing
+claim/delivery cases plus existing review, task payment, ordinary delivery and
+migration regressions. The RPC fixture rejects every send/sign request; receipt
+persistence is trusted fixture input, **not genuine paid-chain acceptance**.
+Types and lint pass in `.../clawdmarket-listing-claims-types-current-2026-10-14.log`
+and `.../clawdmarket-listing-claims-lint-current-2026-10-14.log` (both under `/tmp`).
+The first static run caught a missing error-code union entry, then passed after
+correction. Migration 71 and replay preserve all prior rows and migration rows,
+including the previously checked 845 original business rows across 133 tables.
+All three new claim tables remain empty, integrity is `ok`, foreign-key anomalies
+are zero, ten immutable guards remain and all five actual evidence queries pass.
+Evidence: `/tmp/clawdmarket-listing-claims-preservation-2026-10-14.log` and
+`/tmp/clawdmarket-workspace-test-listing-preservation-2026-10-14/preservation71.json`.
+
+There is still no public listing checkout API; inspection still says
+`checkout_available:false`. Finite listing clients, genuine both-rail payment,
+buyer/provider restart and late refund, process-race/death and SDK lost-response
+acceptance, owner/reviewer UI, full enabled gates/build/browser acceptance remain.
+HTTP stays **1.118**, accepted capability count **7/10**. This local checkpoint
+is not a release candidate or independently demonstrated economic activity.

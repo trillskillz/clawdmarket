@@ -992,6 +992,40 @@ export const organization_task_mpp_claims = sqliteTable('organization_task_mpp_c
   uniqueIndex('task_mpp_claims_active_wallet_idx').on(table.chain_id, table.payer_address).where(sql`${table.state} = 'claimed'`),
 ]);
 
+export const organization_listing_payment_claims = sqliteTable('organization_listing_payment_claims', {
+  intent_id: text('intent_id').primaryKey().references(() => evm_payment_intents.id, { onDelete: 'restrict' }),
+  authorization_id: text('authorization_id').notNull().references(() => organization_listing_authorizations.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(), chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(),
+  nonce: integer('nonce').notNull(), tx_hash: text('tx_hash').notNull().unique(), maximum_execution_gas_cost_wei: text('maximum_execution_gas_cost_wei').notNull(),
+  state: text('state', { enum: ['claimed', 'confirmed'] }).notNull().default('claimed'),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, table => [
+  uniqueIndex('listing_payment_claims_wallet_nonce_idx').on(table.chain_id, table.payer_address, table.nonce),
+  uniqueIndex('listing_payment_claims_active_wallet_idx').on(table.chain_id, table.payer_address).where(sql`${table.state} = 'claimed'`),
+]);
+
+export const organization_listing_mpp_intents = sqliteTable('organization_listing_mpp_intents', {
+  id: text('id').primaryKey(), trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }), buyer_operation_id: text('buyer_operation_id').notNull().unique(),
+  authorization_id: text('authorization_id').notNull().references(() => organization_listing_authorizations.id, { onDelete: 'restrict' }), authority_hash: text('authority_hash').notNull(),
+  origin: text('origin').notNull(), chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(), token_address: text('token_address').notNull(), treasury_address: text('treasury_address').notNull(),
+  token_amount: text('token_amount').notNull(), token_decimals: integer('token_decimals').notNull(), amount_usd: real('amount_usd').notNull(), challenge_json: text('challenge_json').notNull(), expires_at: text('expires_at').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
+export const organization_listing_mpp_claims = sqliteTable('organization_listing_mpp_claims', {
+  intent_id: text('intent_id').primaryKey().references(() => organization_listing_mpp_intents.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }), authorization_id: text('authorization_id').notNull().references(() => organization_listing_authorizations.id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(), chain_id: integer('chain_id').notNull(), payer_address: text('payer_address').notNull(), nonce: integer('nonce').notNull(), tx_hash: text('tx_hash').notNull().unique(),
+  fee_token_address: text('fee_token_address').notNull(), maximum_fee_token_cost_units: text('maximum_fee_token_cost_units').notNull(), valid_before: integer('valid_before').notNull(),
+  state: text('state', { enum: ['claimed', 'confirmed'] }).notNull().default('claimed'), first_submission_at: integer('first_submission_at', { mode: 'timestamp' }),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+}, table => [
+  uniqueIndex('listing_mpp_claims_wallet_nonce_idx').on(table.chain_id, table.payer_address, table.nonce),
+  uniqueIndex('listing_mpp_claims_active_wallet_idx').on(table.chain_id, table.payer_address).where(sql`${table.state} = 'claimed'`),
+]);
+
 /** Frozen owner review only. Execution must add atomic child exposure and recovery before consuming approval. */
 export const workflow_approvals = sqliteTable('workflow_approvals', {
   id: text('id').primaryKey(),

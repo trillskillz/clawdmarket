@@ -2,6 +2,9 @@ import { spendingFundingEligibility } from './organization-spending-accounts'
 import { recordSpendingPayment } from './organization-spending-payment'
 import { originalTaskPayment, taskFundingEligibility } from './organization-task-authorizations'
 import { recordTaskPayment } from './organization-task-payment'
+import { originalListingPayment } from './organization-listing-uses'
+import { listingFundingEligibility } from './organization-listing-checkout'
+import { recordListingPayment } from './organization-listing-payment'
 import 'server-only'
 import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
@@ -46,7 +49,8 @@ export async function expireTradePayment(trade: typeof trades.$inferSelect) {
           const [serviceOrder] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, trade.id)).limit(1)
           if (!serviceOrder) {
             const task = await originalTaskPayment(tx, trade.id)
-            await tx.update(listings).set({ status: task ? 'expired' : 'active' }).where(and(eq(listings.id, trade.listing_id), eq(listings.status, 'sold')))
+            const listing = await originalListingPayment(tx, trade.id)
+            await tx.update(listings).set({ status: task || listing ? 'expired' : 'active' }).where(and(eq(listings.id, trade.listing_id), eq(listings.status, 'sold')))
           }
           return rows
         })
@@ -120,7 +124,8 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
     const commit = () => db.transaction(async (tx) => {
       const [current] = await tx.select().from(trades).where(eq(trades.id, input.trade.id)).limit(1)
       if (!current || current.status !== 'pending') throw new TradeFundingError('Trade was funded or cancelled by another request', 409, 'TRADE_FUNDING_RACE')
-      const reason = paymentDeadlinePassed(current) ? 'CHECKOUT_EXPIRED' : await taskFundingEligibility(current, tx, { ...input, txHash: input.txHash ?? undefined })
+      const reason = paymentDeadlinePassed(current) ? 'CHECKOUT_EXPIRED' : await listingFundingEligibility(current, tx, { ...input, txHash: input.txHash ?? undefined })
+        || await taskFundingEligibility(current, tx, { ...input, txHash: input.txHash ?? undefined })
         || await spendingFundingEligibility(current,tx,input) || await mandateFundingEligibility(current, tx, input) || await serviceFundingEligibility(current, tx, 'proof_recovery')
       if (reason) {
         const [cancelled] = await tx.update(trades).set({ status: 'cancelled', payout_status: 'processing', fee_tx_hash: input.txHash, funded_at: new Date().toISOString() })
@@ -130,11 +135,13 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
         const [order] = await tx.select({ id: service_orders.id }).from(service_orders).where(eq(service_orders.trade_id, current.id)).limit(1)
         if (!order) {
           const task = await originalTaskPayment(tx, current.id)
-          await tx.update(listings).set({ status: task ? 'expired' : 'active' }).where(and(eq(listings.id, current.listing_id), eq(listings.status, 'sold')))
+          const listing = await originalListingPayment(tx, current.id)
+          await tx.update(listings).set({ status: task || listing ? 'expired' : 'active' }).where(and(eq(listings.id, current.listing_id), eq(listings.status, 'sold')))
         }
         await tx.insert(payment_receipts).values(paymentReceiptValues(input))
         await recordSpendingPayment(tx,current.id)
         await recordTaskPayment(tx, current.id)
+        await recordListingPayment(tx, current.id)
         await recordMandateFunding(tx, current.id, 'rejected')
         return { trade: cancelled, rejection: reason }
       }
@@ -150,6 +157,7 @@ export async function recordExternalTradeFunding(input: ExternalFundingInput) {
       await tx.insert(payment_receipts).values(paymentReceiptValues(input))
       await recordSpendingPayment(tx,current.id)
       await recordTaskPayment(tx, current.id)
+      await recordListingPayment(tx, current.id)
       await recordMandateFunding(tx, current.id, 'funded')
       await queueFundedWorkOrder(tx, input.trade.id, input.trade.seller_id)
       return { trade: funded, rejection: null }
@@ -208,6 +216,7 @@ export async function recordCancelledExternalFunding(input: ExternalFundingInput
         await tx.insert(payment_receipts).values(paymentReceiptValues(input))
         await recordSpendingPayment(tx,input.trade.id)
         await recordTaskPayment(tx, input.trade.id)
+        await recordListingPayment(tx, input.trade.id)
         await recordMandateFunding(tx, input.trade.id, 'rejected')
         return rows
       })

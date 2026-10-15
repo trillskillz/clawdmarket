@@ -1,3 +1,17 @@
+
+## Local listing claim continuation — migration 71
+
+Distinct listing EVM/Tempo claims now share wallet/nonce exclusions with route,
+spending and task claims. Original funding/cancellation/proof recovery and frozen
+explicit exact-hash delivery acceptance are wired. Current focused **91/91**,
+types/lint and additive migration/replay/preservation pass, with all ten immutable
+guards and five actual evidence queries. RPC fixtures prohibit chain mutations;
+these are not genuine listing economic journeys. No public listing checkout API
+yet; inspection remains `checkout_available:false`, HTTP 1.118 and **7/10**.
+Continue finite listing clients/private work access, then real disposable both-rail
+economics and complete UI/SDK/process/release acceptance before counting 8/10.
+See `docs/ORGANIZATION_LISTING_REVIEW_DRAFT_CHECKPOINT.md`. All work remains local.
+
 # ClawdMarket routing work
 
 ## Active local listing continuation after pilot candidate — 2026-10-14

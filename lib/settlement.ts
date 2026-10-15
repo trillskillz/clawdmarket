@@ -6,7 +6,7 @@ import { users, wallets, mpp_sessions, listings, trades, transactions } from './
 import { and, eq, sql } from 'drizzle-orm';
 import { createPublicClient, decodeEventLog, erc20Abi, http, isAddress, parseAbiItem } from 'viem';
 import crypto from 'crypto';
-import { originalPrivateServiceListing, originalReviewedTaskListing } from './listing-visibility'
+import { originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedListing } from './listing-visibility'
 import { enforceAgentSpendPolicy } from './agent-spend-policy';
 import type { SpendContext } from './buyer-spend-policy';
 import { attributeOrganizationTrade } from './organization-budgets';
@@ -32,7 +32,7 @@ export function calculateTradeFinancials(itemPrice: number) {
 }
 
 export class TradeRaceError extends Error {
-  constructor(public readonly code: 'LISTING_ALREADY_CLAIMED' | 'INSUFFICIENT_FUNDS_AT_COMMIT' | 'PRIVATE_SERVICE_LISTING' | 'ORIGINAL_TASK_LISTING', message: string) {
+  constructor(public readonly code: 'LISTING_ALREADY_CLAIMED' | 'INSUFFICIENT_FUNDS_AT_COMMIT' | 'PRIVATE_SERVICE_LISTING' | 'ORIGINAL_TASK_LISTING' | 'ORIGINAL_LISTING_CHECKOUT_REQUIRED', message: string) {
     super(message);
     this.name = 'TradeRaceError';
   }
@@ -49,6 +49,7 @@ export async function createLedgerTrade(
 ) {
   if (await originalPrivateServiceListing(listing.id, tx)) throw new TradeRaceError('PRIVATE_SERVICE_LISTING', 'Recover the original private service order')
   if (await originalReviewedTaskListing(listing.id, tx)) throw new TradeRaceError('ORIGINAL_TASK_LISTING', 'Recover the original reviewed task checkout')
+  if (await originalReviewedListing(listing.id, tx)) throw new TradeRaceError('ORIGINAL_LISTING_CHECKOUT_REQUIRED', 'Recover the original reviewed listing checkout')
   if (listing.seller_id === buyerId) throw new Error('Cannot buy your own work');
   if (!Number.isFinite(listing.price_bankr) || listing.price_bankr <= 0) throw new Error('Invalid listing price');
   const { sellerAmount, platformFee, totalCost } = calculateTradeFinancials(listing.price_bankr);

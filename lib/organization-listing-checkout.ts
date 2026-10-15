@@ -9,9 +9,10 @@ import { originalListingPayment, organizationListingExposure } from './organizat
 import { PurchasingError, purchasingTransaction, type PurchasingSource } from './organization-purchasing-transaction'
 import { canonicalContract } from './structured-verification'
 import { calculateTradeFinancials } from './settlement'
-import { enforceAgentSpendPolicy } from './agent-spend-policy'
+import { enforceAgentSpendPolicy, agentFundingPolicyFailure } from './agent-spend-policy'
 import { issuePurchaseEvidence } from './organization-purchase-evidence'
-import { attributeOrganizationTrade } from './organization-budgets'
+import { attributeOrganizationTrade, organizationFundingBudgetFailure } from './organization-budgets'
+import { buyerPolicyUsage, checkBuyerPolicyConstraints, loadBuyerSpendPolicy } from './buyer-spend-policy'
 import { checkoutForTrade } from './trade-checkout'
 import { getPaymentReadiness } from './payment-config'
 import { NEW_PAYMENTS_CONTROL_KEY } from './payment-control'
@@ -48,6 +49,38 @@ export async function assertListingExposure(source: PurchasingSource, row: Grant
 export function listingPurchaseEvidence(row: Grant, terms: Terms) {
   return issuePurchaseEvidence({ approvalId: row.id, requestHash: row.authority_hash, buyerId: row.buyer_id,
     totalMinor: terms.total_minor, sellerId: row.seller_id, paymentRail: terms.payment.rail })
+}
+
+type ActualScope = { rail: string; chainId: number; tokenAddress: string; payerAddress: string; treasuryAddress?: string; txHash?: string | null }
+export async function listingFundingEligibility(trade: typeof trades.$inferSelect, source: PurchasingSource = db, actualScope?: ActualScope): Promise<string | null> {
+  try {
+    const original = await originalListingPayment(source, trade.id)
+    if (!original) return null
+    const { authorization: row, terms } = original
+    await currentListingReview(row, source, { originalTradeId: trade.id, requireApproval: true })
+    if (actualScope && (actualScope.rail !== terms.payment.rail || actualScope.chainId !== terms.payment.chain_id
+      || actualScope.tokenAddress.toLowerCase() !== terms.payment.token_address || actualScope.payerAddress.toLowerCase() !== terms.payment.payer_address
+      || actualScope.treasuryAddress !== undefined && actualScope.treasuryAddress.toLowerCase() !== terms.payment.treasury_address
+      || actualScope.treasuryAddress === undefined && !actualScope.txHash)) return 'ORGANIZATION_LISTING_PAYMENT_CHANGED'
+    await assertListingExposure(source, row, terms, trade.id)
+    const deployment = await agentFundingPolicyFailure(trade, source); if (deployment) return deployment
+    const organizationReason = await organizationFundingBudgetFailure(trade, source); if (organizationReason) return organizationReason
+    const policy = await loadBuyerSpendPolicy(trade.buyer_id, source)
+    if (policy) {
+      const reason = checkBuyerPolicyConstraints(policy.policy, { totalMinor: terms.total_minor, sellerId: row.seller_id,
+        paymentRail: terms.payment.rail, verificationMethods: ['buyer_review'], purchaseEvidence: listingPurchaseEvidence(row, terms) })
+      if (reason) return reason
+      const usage = await buyerPolicyUsage(row.buyer_id, new Date(), source)
+      if (policy.policy.max_daily !== undefined && usage.reserved_or_spent_today_minor > policy.policy.max_daily) return 'BUYER_DAILY_LIMIT'
+      if (policy.policy.max_monthly !== undefined && usage.reserved_or_spent_month_minor > policy.policy.max_monthly) return 'BUYER_MONTHLY_LIMIT'
+    }
+    return null
+  } catch (error) {
+    if (error instanceof PurchasingError) return error.code
+    if (error instanceof Error && 'code' in error && typeof error.code === 'string') return error.code
+    if (error instanceof SyntaxError || error instanceof z.ZodError) return 'ORGANIZATION_LISTING_CONTRACT_INVALID'
+    throw error
+  }
 }
 
 function dto(row: Grant, terms: Terms, trade: typeof trades.$inferSelect | null) {

@@ -3,7 +3,7 @@ import { and, eq, isNull, or } from 'drizzle-orm'
 import { createPublicClient, erc20Abi, http, parseUnits, type Address } from 'viem'
 import { db } from './db'
 import { buyer_evm_payment_claims, buyer_mpp_payment_claims, evm_payment_intents, organization_spending_payment_claims as claims, payment_receipts,
-  organization_spending_mpp_claims, organization_task_payment_claims, organization_task_mpp_claims } from './schema'
+  organization_spending_mpp_claims, organization_task_payment_claims, organization_task_mpp_claims, organization_listing_payment_claims, organization_listing_mpp_claims } from './schema'
 import { originalSpendingPayment, spendingFundingEligibility, spendingPaymentTerms } from './organization-spending-accounts'
 import { purchasingTransaction, PurchasingError, type PurchasingSource } from './organization-purchasing-transaction'
 import { inspectSignedEvmPayment, assertBuyerWalletReserve } from './buyer-signed-transaction.mjs'
@@ -15,7 +15,7 @@ import type { BuyerPaymentClaimInput } from './buyer-payment-claim'
 
 /** Cross-family wallet collisions are checked in the same transaction as the immutable claim. */
 export async function spendingWalletConflict(source:PurchasingSource,chain:number,payer:string,nonce:number){
-  for (const family of [claims, organization_spending_mpp_claims, organization_task_payment_claims, organization_task_mpp_claims] as const) {
+  for (const family of [claims, organization_spending_mpp_claims, organization_task_payment_claims, organization_task_mpp_claims, organization_listing_payment_claims, organization_listing_mpp_claims] as const) {
     const [row] = await source.select({ state: family.state }).from(family).where(and(eq(family.chain_id, chain),
       eq(family.payer_address, payer), or(eq(family.state, 'claimed'), eq(family.nonce, nonce)))).limit(1)
     if (row) return row.state === 'claimed' ? 'BUYER_WALLET_PAYMENT_UNRECONCILED' : 'BUYER_WALLET_NONCE_ALREADY_CLAIMED'

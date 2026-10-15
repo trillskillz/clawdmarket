@@ -1,9 +1,9 @@
 import { and, eq, isNotNull, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agents, service_orders, service_definitions, organization_task_uses, trades } from '@/lib/schema'
+import { agents, service_orders, service_definitions, organization_task_uses, organization_listing_uses, trades } from '@/lib/schema'
 
 // Match the seller rule used by checkout, the public catalog, and live stats.
-export const PUBLIC_LISTING_SELLER_WHERE_SQL = `(NOT EXISTS (SELECT 1 FROM organization_task_uses original_task_use
+export const PUBLIC_LISTING_SELLER_WHERE_SQL = `(NOT EXISTS (SELECT 1 FROM organization_listing_uses original_listing_use WHERE original_listing_use.listing_id = listings.id) AND NOT EXISTS (SELECT 1 FROM organization_task_uses original_task_use
   JOIN trades original_task_trade ON original_task_trade.id = original_task_use.trade_id
   WHERE original_task_trade.listing_id = listings.id) AND NOT EXISTS (SELECT 1 FROM service_orders private_listing_order
   JOIN service_definitions private_listing_service ON private_listing_service.id = private_listing_order.service_id
@@ -41,5 +41,12 @@ export async function originalPrivateServiceListing(listingId: string, source: t
 export async function originalReviewedTaskListing(listingId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) {
   const [row] = await source.select({ id: organization_task_uses.authorization_id }).from(organization_task_uses)
     .innerJoin(trades, eq(trades.id, organization_task_uses.trade_id)).where(eq(trades.listing_id, listingId)).limit(1)
+  return !!row
+}
+
+/** A consumed listing remains bound to its original trade after cancellation. */
+export async function originalReviewedListing(listingId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) {
+  const [row] = await source.select({ id: organization_listing_uses.authorization_id }).from(organization_listing_uses)
+    .where(eq(organization_listing_uses.listing_id, listingId)).limit(1)
   return !!row
 }

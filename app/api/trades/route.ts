@@ -27,7 +27,7 @@ import { getPaymentReadiness } from '@/lib/payment-config';
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
 import { NewPaymentsPausedError, requireNewPaymentsOpen } from '@/lib/payment-control';
-import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing } from '@/lib/listing-visibility';
+import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedListing } from '@/lib/listing-visibility';
 import { selectMarketplaceRail } from '@/lib/payment-rail-selection';
 import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets';
 import { genericListingFundingGuard } from '@/lib/organization-listing-authorizations';
@@ -139,7 +139,7 @@ async function createTradePost(req: NextRequest) {
       );
     }
 
-    if (await originalPrivateServiceListing(listing.id) || await originalReviewedTaskListing(listing.id) || !await isPublicMarketplaceSeller(String(listing.seller_id))) {
+    if (await originalPrivateServiceListing(listing.id) || await originalReviewedTaskListing(listing.id) || await originalReviewedListing(listing.id) || !await isPublicMarketplaceSeller(String(listing.seller_id))) {
       return NextResponse.json({
         ...paymentError('LISTING_NOT_AVAILABLE', 'Listing is not available for purchase'),
         ...envMeta('clawdmarket/api/trades'),
