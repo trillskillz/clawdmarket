@@ -74,3 +74,9 @@ class OriginalContractCreditReleaseInput(TypedDict):
     acceptance_id: str
     submission_id: str
     content_hash: str
+
+
+class OriginalContractFundingInput(TypedDict):
+    version: Literal[1]
+    client_reference: str
+    authority_hash: str

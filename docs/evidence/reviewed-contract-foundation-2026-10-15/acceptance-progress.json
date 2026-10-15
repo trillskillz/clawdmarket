@@ -1,5 +1,5 @@
 {
-  "stage": "Internal immutable unique original buyer funding references and frozen financial recovery; no scoped funding writer",
+  "stage": "Default-disabled scoped reviewed funding API, both SDKs and complete disposable public API fulfillment; not complete contract capability",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 79,
@@ -25,7 +25,7 @@
     "reviewed_funding_reference_immutable_guards": 2
   },
   "limits": {
-    "public_reviewed_contract_funding": false,
+    "public_reviewed_contract_funding": true,
     "shared_contract_gross_wired": true,
     "full_new_contract_release_gates": false,
     "live_funding_performed": false,
@@ -43,7 +43,9 @@
     "internal_original_adjudication": true,
     "participant_original_adjudication_get": true,
     "admin_original_adjudication_get": true,
-    "original_funding_reference_boundary": true
+    "original_funding_reference_boundary": true,
+    "fresh_reviewed_contract_funding_enabled_by_default": false,
+    "disposable_public_funding_and_fulfillment": true
   },
   "records": {
     "original_use": {
@@ -353,6 +355,34 @@
     "funding-reference-preservation": {
       "local_log": "/tmp/clawdmarket-contract-funding-reference-preservation-2026-10-15.log",
       "log_sha256": "1a76542c49eea876a5b54b95242e533bc8ffe1174cb685b09f8250a46bda6ef3"
+    },
+    "scoped-funding-focused": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-focused-2026-10-15.log",
+      "log_sha256": "e0f7946edc76732961c1542c1e131a7545af81bf9d7637e97d8f758485af03c0"
+    },
+    "scoped-funding-types": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "scoped-funding-lint": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "scoped-funding-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "scoped-funding-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "scoped-funding-python": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-python-2026-10-15.log",
+      "log_sha256": "9bb8eb8a3fdd9d8adb289895219d80d47dfb57b110f27064418817835a46d732"
+    },
+    "scoped-funding-build": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-build-2026-10-15.log",
+      "log_sha256": "6fdebd8ec8ec859fe6d43264cd8f4dd7e07a3a0aa99740a7ab99976c7e680af8"
     }
   },
   "compatibility_cases": {
@@ -360,7 +390,7 @@
     "failed": 0,
     "skipped": 0
   },
-  "current_disjoint_focused_cases_total": 47,
+  "current_disjoint_focused_cases_total": 68,
   "existing_family_regression_cases": {
     "passed": 83,
     "failed": 0,
@@ -368,8 +398,8 @@
     "scope": "integration before the additional helper exclusion check; that check is included in current32"
   },
   "source_manifest": {
-    "files": 63,
-    "sha256": "615d2f20a1a0af2c7768d3f4c01080aa1987af443716aad708fe24ffb48801bd",
+    "files": 68,
+    "sha256": "1494cc5cb35e627eb3d8f3c7efa3ca918e35256591226986d725b2ed195c41ba",
     "baseline": "e55e151"
   },
   "private_inspection_cases": {
@@ -403,7 +433,7 @@
     "passed": 27,
     "failed": 0,
     "skipped": 0,
-    "scope": "Current Python local HTTP transport/export suite; actual application financial reply-loss controls through both SDKs run in Node integration"
+    "scope": "Current Python SDK local HTTP/export suite; actual public application lost funding replies run in Node integration gate"
   },
   "limitations_public_acceptance": [
     "Controlled future-use records over actual disposable local test-token deposits; no public reviewed funding or completed economic journey",
@@ -425,7 +455,7 @@
     "Admin routes now validate original use/amount and label separate adjudication. Saved-reference immutable admin-ruling recovery remains unfinished",
     "Unstarted refund preservation and consumed inventory/funding still need completion before reviewed funding"
   ],
-  "current_disjoint_focused_cases_scope": "Current47 focused financial/reference/refund/inventory/migration cases, not full contract release acceptance",
+  "current_disjoint_focused_cases_scope": "Current68 scoped-fund/original-finance/review/canonical/SDK controls; no full contract predeploy/browser/process acceptance",
   "historical_submission_cases": {
     "passed": 64,
     "failed": 0,
@@ -538,5 +568,20 @@
     "Initial39pass1fail: unique buyer/reference constraint correctly rejected a direct duplicate, but Drizzle wrapped its cause outside the regex assertion; precise bounded cause inspection corrected; current47pass0fail0skip",
     "No inferred request receipt for earlier reservations; original financial/fulfillment/refund meaning stays intact",
     "No new complete contract predeploy/browser/process-journal acceptance or independent demand demonstrated"
+  ],
+  "scoped_funding_cases": {
+    "passed": 68,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Actual scoped owner/reviewer/buyer/fulfillment/final receipt APIs, two actual lost funding SDK replies, policy/rollback/old finance/reference/review/canonical/SDK controls"
+  },
+  "scoped_funding_limitations": [
+    "Fresh rollout gate defaultsfalse; enabled ONLY inside dedicated disposable fixture process; no production/global execution flags changed",
+    "Actual public draft/proposal/selected-reviewer/buyer fund/start/output/exact acceptance/release journey with real disposable test-token deposit proof, not direct funding/use construction in new scoped tests",
+    "Both actual lost committed funding replies recover through TypeScript/Python then complete public fulfillment despite revocation/current owner/rail changes, new-payment pause and fresh rollout closure",
+    "Controlled fixtures are not independent adoption, remote sandbox proof or a live paid canary",
+    "Current68 scope is focused; original separate-process funding races/SIGKILL, durable buyer/provider journals, human review/work UI and full release gates still required",
+    "Migration79 unchanged by the writer; preceding preservation applies, not rerun",
+    "Operator example records defaultfalse; no deployment or live rollout authorized"
   ]
 }

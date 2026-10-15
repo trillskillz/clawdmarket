@@ -69,7 +69,8 @@ export async function inspectOriginalReviewedContractSubmission(source: Purchasi
   const empty = { contract_id: contractId, contract_state: original.contract.state, milestone_id: milestoneId, milestone_state: milestone.state,
     selected_submission_id: milestone.submission_id, credit_remaining_principal_minor: original.remaining_principal_minor,
     submission: null, superseded: false }
-  return { ...(operation ? await dto(source, operation) : empty), original_requirements: frozen, observed_at: new Date().toISOString() }
+  return { ...(operation ? await dto(source, operation) : empty), original_requirements: frozen,
+    settlement_terms: original.terms.payment, observed_at: new Date().toISOString() }
 }
 
 /** Seller-only append/replay. Finite key presence never accepts output or releases credit.

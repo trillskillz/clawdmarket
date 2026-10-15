@@ -1,3 +1,12 @@
+## Implemented local checkpoint — fresh rollout defaultfalse
+
+The atomic writer/API, buyer SDKs, actual public API funding/fulfillment and lost
+HTTP/policy/rollback controls now pass. Only isolated fixtures enable the fresh
+flag. Process races/kills, durable clients/private human UI and complete release
+acceptance remain required. See the current contract audit; no capability9.
+
+## Original dependency design (historical)
+
 # Next local boundary: one original reviewed credit funding transaction
 
 Migration79 implements only unique immutable buyer/reference binding and original

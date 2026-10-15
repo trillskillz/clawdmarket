@@ -30,6 +30,7 @@ export type OriginalContractAcceptance = {
 export type OriginalContractSubmission = {
   contract_id: string; contract_state: string; milestone_id: string; milestone_state: string; selected_submission_id: string | null
   credit_remaining_principal_minor: number; superseded: boolean; observed_at: string; original_requirements: Record<string, unknown>
+  settlement_terms?: { rail: 'credit'; redeemable: false; seller_receives: 'nonwithdrawable_account_credit'; upfront_fee_minor: number; refundable_principal_minor: number }
   submission: null | { id: string; content_hash: string; client_reference: string; artifact_bundle: Record<string, unknown>;
     auto_check_result: 'pass' | 'fail' | 'inconclusive'; auto_check_report: Record<string, unknown>;
     authorizes_payment: false; remote_execution_observed: false; semantic_accuracy: 'unmeasured' }
@@ -46,6 +47,12 @@ export type OriginalContractCreditRelease = {
   financial_posting_confirmed: true; selected_submission_id: string | null; current_milestone_state: string
   credit_remaining_principal_minor: number; idempotent?: boolean; observed_at?: string
 }
+export type OriginalContractFundingInput = { version: 1; client_reference: string; authority_hash: string }
+export type OriginalContractFunding = { contract: OriginalContractCreation['contract']; milestones: OriginalContractCreation['milestones']
+  original_terms: Record<string, unknown>; funding: { id: string; organization_id: string; authorization_id: string; contract_id: string; buyer_id: string
+    client_reference: string; request_hash: string; authority_hash: string; created_at: string; gross_minor: number; principal_minor: number
+    upfront_fee_minor: number; fee_recipient_id: string; rail: 'credit'; redeemable: false; seller_receives: 'nonwithdrawable_account_credit' }
+  credit_remaining_principal_minor: number; observed_at: string; idempotent?: boolean }
 export type OriginalContractAdjudication = {
   adjudication: { dispute_id: string; contract_id: string; milestone_id: string; decided_by_account_id: string
     ruling: 'buyer_win' | 'seller_win' | 'split' | 'redo'; split_percent_to_seller: number | null; amount_minor: number

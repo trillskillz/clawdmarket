@@ -16,7 +16,7 @@ from email.utils import parsedate_to_datetime
 from .enterprise import OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, original_grant_reference, original_tempo_credential
 from .listing import OrganizationListingProposal, OrganizationListingDecision, OrganizationListingCheckoutInput, OrganizationListingCheckout, original_listing_reference
 from .task import OrganizationTaskProposal, OrganizationTaskDecision, OrganizationTaskCheckoutInput, OrganizationTaskCheckout, original_task_reference
-from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractCreditReleaseInput, original_contract_creation_reference
+from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractCreditReleaseInput, OriginalContractFundingInput, original_contract_creation_reference
 
 SDK_CONTRACT: dict[str, Any] = json.loads(files("clawdmarket").joinpath("contract.json").read_text())
 JSON = dict[str, Any]
@@ -236,6 +236,18 @@ class ClawdMarketClient:
     def recover_original_contract_credit_release(self, contract_id: str, milestone_id: str, client_reference: str) -> JSON:
         return self._call('get_original_contract_submission', contract_id, path_parameters={'milestoneId': milestone_id},
                           query={'release_reference': original_contract_creation_reference(client_reference)})
+
+    def fund_original_organization_contract(self, organization_id: str, authorization_id: str, request: OriginalContractFundingInput) -> JSON:
+        """Fresh funding is separately gated. Save reference/hash first; never automatically retry."""
+        original_contract_creation_reference(request.get('client_reference'))
+        if (type(request.get('version')) is not int or request.get('version') != 1
+                or not isinstance(request.get('authority_hash'), str) or re.fullmatch(r'[a-f0-9]{64}', request['authority_hash']) is None):
+            raise ValueError('Invalid original contract funding')
+        return self._call('fund_organization_contract', organization_id, body=request, path_parameters={'authorizationId': authorization_id})
+
+    def recover_original_organization_contract_funding(self, organization_id: str, authorization_id: str, client_reference: str) -> JSON:
+        return self._call('recover_organization_contract_funding', organization_id, path_parameters={'authorizationId': authorization_id},
+                          query={'client_reference': original_contract_creation_reference(client_reference)})
 
     def recover_original_contract_adjudication(self, contract_id: str, milestone_id: str, dispute_id: str) -> OriginalContractAdjudication:
         """Participant read only; no admin ruling or buyer consent authority."""

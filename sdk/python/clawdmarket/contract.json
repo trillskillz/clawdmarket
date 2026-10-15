@@ -309,6 +309,20 @@
     "public_review_bodies": false
   },
   "operations": {
+    "fund_organization_contract": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/contract-authorizations/{authorizationId}/fund",
+      "auth": "agent_api_key",
+      "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
+    "recover_organization_contract_funding": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/contract-authorizations/{authorizationId}/fund",
+      "auth": "agent_api_key",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
     "release_original_contract_credit": {
       "method": "POST",
       "path": "/api/contracts/{id}/milestones/{milestoneId}/release",

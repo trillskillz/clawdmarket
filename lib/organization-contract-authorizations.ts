@@ -13,6 +13,7 @@ import { enterpriseFoundationEnabled } from './enterprise-foundation'
 import { getPaymentReadiness } from './payment-config'
 import { sellerPaymentRails } from './seller-payment-rails'
 import { requireContractListingScope } from './contract-listing-scope'
+import { reviewedContractFundingEnabled } from './organization-contract-funding-policy'
 import { isPublicMarketplaceSeller } from './listing-visibility'
 import { money } from './service-order-input'
 import { DEV_FEE_PERCENT } from './settlement'
@@ -166,7 +167,7 @@ function dto(row: Grant, actor: string) {
     version: 1 as const, state: row.state, terms: frozen(row), approved_at: row.approved_at, revoked_at: row.revoked_at,
     viewer_role: actor === row.reviewer_account_id ? 'reviewer' as const : 'owner' as const,
     decision: row.decision_reference ? { version: 1 as const, client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true as const } : null,
-    funding_available: false as const }
+    funding_available: reviewedContractFundingEnabled(), funding_api_implemented: true as const, funding_requires_current_review: true as const }
 }
 export async function proposeOrganizationContract(orgId: string, actor: string, input: z.output<typeof organizationContractInput>) {
   return purchasingTransaction(async source => {
@@ -242,9 +243,16 @@ export async function revokeOrganizationContract(org: string, id: string, actor:
     return { authorization: dto(updated, actor), idempotent: false }
   })
 }
-/** Every companion state blocks generic funding; reviewed funding is not implemented yet. */
+/** Every companion state blocks generic funding; only the separately gated exact resource can fund. */
 export async function genericContractFundingGuard(source: PurchasingSource, contractId: string) {
   const [row] = await source.select({ id: grants.id }).from(grants).where(eq(grants.contract_id, contractId)).limit(1)
   if (row) fail('CONTRACT_REVIEWED_FUNDING_REQUIRED')
 }
 export { frozen as validatedContractReviewTerms }
+
+/** Fresh funding only; original paid recovery must never call this DRAFT-only validator. */
+export async function currentContractFundingReview(row: Grant, source: PurchasingSource) {
+  if (row.state !== 'approved' || !row.approved_at || !row.decision_reference
+    || row.decision_hash !== hash({ version: 1, client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true })) fail('ORGANIZATION_CONTRACT_APPROVAL_REQUIRED')
+  return current(row, source)
+}

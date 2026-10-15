@@ -30,7 +30,7 @@ limits apply. All review responses are private/no-store. Exact proposal/decision
 replay preserves original scope and revocation; a new reference cannot replace
 the same original draft's review. Changing owner, assignment, reviewer, department,
 seller rail/visibility, quote, milestone, acceptance or deadline closes fresh
-decisions. Funding DTOs explicitly report funding_available:false. Pending,
+decisions. Funding DTOs expose the default-disabled fresh rollout flag as funding_available, plus funding_api_implemented:true and funding_requires_current_review:true. These are not binding funding eligibility. Pending,
 approved and revoked companions all block generic funding of that exact contract.
 
 Prepaid credit cannot be withdrawn as cash or tokens. Sellers receive account
@@ -42,9 +42,7 @@ states. This restriction alone cannot accept or pay a milestone.
 Original-use validation and shared reviewed gross are implemented as read-only
 financial history checks. They do not authorize funding or release. Both
 credit-first and external-first reservation controls cover route, workflow, task
-and listing. Credit contributes zero external fee units. No reviewed fund endpoint
-is exposed, and direct controlled future-use test records are not public checkout
-or independent economic proof.
+and listing. Credit contributes zero external fee units. The separately gated reviewed fund endpoint below now exists. Older direct stored-use controls remain distinct from its actual public API journeys; neither is independent economic proof.
 
 Original immutable seller submissions exist internally (migration 75): bounded
 finite JSON, stable saved references, exact content hashes and four SQL update/
@@ -164,10 +162,25 @@ Migration79 now implements INTERNAL immutable unique buyer/client_reference
 funding requests. They pin original use/contract/authority/hash/clock and recover
 immutable original_terms, current state and held principal. Wrong actors and
 changed/cross-contract reuse fail. Existing reservations gain no invented request
-receipt. This is not a public fund endpoint or spending authorization; the future
-writer must append it inside the same credit/use/attribution transaction.
+receipt. The scoped writer now appends it inside the SAME original credit/use/attribution
+transaction. POST `/api/organizations/{id}/contract-authorizations/{authorizationId}/fund`
+accepts version1, saved client_reference and exact authority_hash from the original
+payments:write buyer (cookie CSRF required). Fresh execution defaults disabled by
+CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED=false. Do not enable it without new
+rollout authorization. Current original review, global/shared/department budgets,
+pause, seller credit rail, quote/deadline and inventory are checked transactionally.
+Known exact replay200 precedes fresh eligibility; first commit201. Final append
+failure rolls back all effects. Original buyer GET with client_reference recovers
+the same request/use/fee/contract, immutable original_terms and current held
+principal, even after fresh rollout/permission closure. Original review access
+grants no buyer funding or private seller output. TypeScript/Python provide
+fundOriginalOrganizationContract/fund_original_organization_contract and
+recoverOriginalOrganizationContractFunding/recover_original_organization_contract_funding.
+The actual scoped deposit->public review->fund->public fulfillment path is now
+tested, including both SDKs losing a committed funding reply. This is controlled
+disposable evidence, not a complete process/human/customer release.
 
-Remaining work: scoped reviewed funding/use, consumed inventory exclusion,
+Remaining work: scoped funding separate-process/kill/shared-race acceptance, consumed inventory exclusion,
 public original seller submission, finite buyer/provider restart journals, private
 human work UI, actual multi-milestone economics and complete release gates.
 No contract capability9, publication, live-payment or outreach authorization is

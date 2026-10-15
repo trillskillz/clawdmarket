@@ -1,3 +1,55 @@
+## Separately gated original reviewed funding verified — migration79 unchanged
+
+One scoped fund transaction now recovers known originals first, then checks the
+current approved original buyer/owner/reviewer/team/quote/rails/deadlines,
+environment/database pause, shared original gross, buyer/agent/global/team caps
+and validated internal purchase evidence. It atomically claims original inventory,
+funds the SAME original contract, reserves existing deposited credit/fee, records
+organization attribution/use and appends the immutable buyer reference. Final
+journal failure rolls everything back. No trade/route/task/service/nonce alias.
+
+Fresh funding DEFAULTS DISABLED behind
+CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED=false (operator example preserved).
+Only the dedicated disposable fixture enables it; no production/global flags
+changed. Known original GET/replay precedes fresh rollout/pause/permission checks.
+Owner review reports funding_api_implemented and funding_requires_current_review;
+funding_available reflects the fresh rollout flag, not binding purchase authority.
+Both SDKs expose explicit fund/original-reference recovery with no automatic retry.
+Seller work reads expose frozen nonwithdrawable-credit/fee/refund terms BEFORE
+start; seller receives account credit, not external tokens.
+
+Current **68/68** focused cases, zero skips/failures, **27 Python cases**, types/
+lint/SDK parity/build and production build pass. Two ACTUAL public API journeys
+use verified disposable test-token deposits, public original DRAFT and owner/
+selected reviewer decisions, actual buyer fund, seller start/output, exact buyer
+acceptance and credit release of both milestones. Both SDKs lose a committed
+funding HTTP reply, recover/replay one original request after revocation, owner/
+seller-rail changes, new-payment pause and rollout closure, complete work, then
+recover after completion without another fee/reservation. Tests also cover exact
+concurrent replay, read-key/cookie/role exclusion, pending review/rail/department/
+buyer/team/pause failures and final-append full rollback. No direct initial use
+construction substitutes for these NEW scoped paths; older stored-record controls
+remain separate. Controlled actors still establish no independent demand, remote
+sandbox execution or live paid canary. No capability9 or complete client outcome.
+
+Migration79 unchanged; preceding845-row/133-table/guard/query local preservation
+applies, not rerun. Manifest **68** source/config files relative to e55e151,
+SHA-256 `1494cc5cb35e627eb3d8f3c7efa3ca918e35256591226986d725b2ed195c41ba`. Evidence is under the contract foundation directory. Prior
+accepted listing/pilot candidates stay unchanged. HTTP1.119/count8 remain local;
+last observed production1.116/main96a017b and continuing security risk are separate.
+
+Next prove original FUND same/different-body separate-process races, shared budget
+reservation orders and before/after-commit SIGKILL/rollback. Then finite durable
+buyer/provider journals and real restarts, private human review/work UI and complete
+multi-milestone/dispute/refund/revocation/expiry economics plus full predeploy/build/
+browser/preservation gates before capability9/1.120. Do not deploy or enable the
+fresh rollout flag. Any eventual rollout/publication/live funding needs new
+explicit authorization and external risk/provider/inbox/calibration/admission/
+canary-budget dependencies remain unresolved. Rollback must retain original
+references/financial records and scoped paid recovery/interlocks.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Original buyer funding-reference boundary verified — migration79
 
 A separate immutable request now binds buyer/reference uniquely across reviewed

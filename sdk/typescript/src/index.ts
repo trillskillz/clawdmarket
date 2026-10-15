@@ -1,6 +1,6 @@
 import { SDK_CONTRACT } from './contract.js'
-import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission, type OriginalContractAdjudication, type OriginalContractSubmissionInput, type OriginalContractSubmissionOperation, type OriginalContractCreditReleaseInput, type OriginalContractCreditRelease } from './milestone-contract.js'
-export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractSubmissionOperation, OriginalContractCreditReleaseInput, OriginalContractCreditRelease } from './milestone-contract.js'
+import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission, type OriginalContractAdjudication, type OriginalContractSubmissionInput, type OriginalContractSubmissionOperation, type OriginalContractCreditReleaseInput, type OriginalContractCreditRelease, type OriginalContractFundingInput, type OriginalContractFunding } from './milestone-contract.js'
+export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractSubmissionOperation, OriginalContractCreditReleaseInput, OriginalContractCreditRelease, OriginalContractFundingInput, OriginalContractFunding } from './milestone-contract.js'
 import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, originalListingReference, scopedSpendingClient } from './enterprise.js'
 import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'
@@ -461,6 +461,18 @@ export class ClawdMarketClient {
   }
   recoverOriginalContractCreditRelease(contractId: string, milestoneId: string, clientReference: string, options?: RequestOptions) {
     return this.request<OriginalContractCreditRelease>('GET', `${this.originalContractMilestonePath(contractId, milestoneId)}?${new URLSearchParams({ release_reference: originalContractCreationReference(clientReference) })}`, undefined, options)
+  }
+  private originalOrganizationContractFundingPath(organizationId: string, authorizationId: string) {
+    return SDK_CONTRACT.operations.fund_organization_contract.path.replace('{id}', enterpriseId(organizationId)).replace('{authorizationId}', enterpriseId(authorizationId))
+  }
+  /** Fresh funding stays separately gated. Save exact original reference/hash before sending; no automatic retry. */
+  fundOriginalOrganizationContract(organizationId: string, authorizationId: string, input: OriginalContractFundingInput, options?: RequestOptions) {
+    originalContractCreationReference(input.client_reference)
+    if (input.version !== 1 || !/^[a-f0-9]{64}$/.test(input.authority_hash)) throw new TypeError('Invalid original contract funding')
+    return this.request<OriginalContractFunding>('POST', this.originalOrganizationContractFundingPath(organizationId, authorizationId), input, options)
+  }
+  recoverOriginalOrganizationContractFunding(organizationId: string, authorizationId: string, clientReference: string, options?: RequestOptions) {
+    return this.request<OriginalContractFunding>('GET', `${this.originalOrganizationContractFundingPath(organizationId, authorizationId)}?${new URLSearchParams({ client_reference: originalContractCreationReference(clientReference) })}`, undefined, options)
   }
   /** Participant recovery only; cannot issue an admin ruling or create buyer consent. */
   recoverOriginalContractAdjudication(contractId: string, milestoneId: string, disputeId: string, options?: RequestOptions) {
