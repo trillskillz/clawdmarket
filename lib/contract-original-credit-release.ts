@@ -48,7 +48,7 @@ async function dto(source: PurchasingSource, operation: typeof operations.$infer
     current_milestone_state: decision.current_milestone_state, credit_remaining_principal_minor: original.remaining_principal_minor }
 }
 
-/** Internal original-reference recovery only. No public payment adapter is enabled. */
+/** Original participants recover pinned postings without fresh payment authority. */
 export async function inspectOriginalContractCreditRelease(source: PurchasingSource, contractId: string, milestoneId: string, actor: string, reference: string) {
   originalContractReleaseInput.shape.client_reference.parse(reference)
   const [contract] = await source.select().from(contracts).where(eq(contracts.id, contractId)).limit(1)
@@ -59,7 +59,7 @@ export async function inspectOriginalContractCreditRelease(source: PurchasingSou
   return { ...await dto(source, operation), observed_at: new Date().toISOString() }
 }
 
-/** Internal credit-only financial command. Never invoke from the legacy mark_paid adapter. */
+/** Exact credit-only financial command. Never invoke from the legacy mark_paid adapter. */
 export async function releaseOriginalContractCredit(contractId: string, milestoneId: string, buyer: string, raw: unknown) {
   const input = originalContractReleaseInput.parse(raw)
   return purchasingTransaction(async source => {

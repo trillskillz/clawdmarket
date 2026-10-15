@@ -99,7 +99,7 @@ saved exact body. Read and replay report original decision ID/hash, selected
 submission ID, applies_to_current_submission, current milestone state and held
 principal. A selection match alone is not payment authority or a capability
 claim. Acceptance returns financial_release_performed:false because this command
-never releases credit. Public reviewed mark_paid is still blocked. Raw APPROVED
+never releases credit. The generic reviewed mark_paid remains blocked; the separate exact release resource below is available locally. Raw APPROVED
 or COMPLETED states are not financial settlement evidence.
 
 TypeScript methods: inspectOriginalContractSubmission,
@@ -110,16 +110,25 @@ and never automatically retry mutations. Their actual application HTTP response-
 loss controls recover one committed decision after review revocation, without
 credit release. This does not establish a complete funded contract journey.
 
-An INTERNAL original credit-release command now accepts version1, a separate
+The dedicated local POST `/api/contracts/{id}/milestones/{milestoneId}/release`
+accepts version1, a separate
 saved client_reference, acceptance_id, exact submission_id and content_hash. It
 requires the selected original immutable buyer decision and APPROVED milestone;
-it atomically posts the frozen original amount, records exact ledger row IDs,
+it requires original buyer/payments:write and cookie CSRF, and atomically posts
+the frozen original amount, records exact ledger row IDs,
 marks the milestone paid and activates the next pending milestone. It grants no
-public payment adapter or new funding authority. Original participant internal
-recovery checks the posted debit/seller credit pair; a state flag alone cannot
+new funding authority. Original participant GET release_reference recovery checks the posted debit/seller credit pair; a state flag alone cannot
 produce financial_posting_confirmed. Append/update/delete constraints preserve
 this original release fact, and a failed append rolls the entire transaction back.
 The original upfront fee stays charged and history remains in reviewed gross.
+TypeScript/Python expose releaseOriginalContractCredit/release_original_contract_credit
+and recoverOriginalContractCreditRelease/recover_original_contract_credit_release.
+A distinct saved reference binds exact immutable acceptance ID, submission ID and
+hash. First success201/exact replay200, changed reuse409. A lost response never
+authorizes a replacement payment. Both actual application HTTP financial losses
+recover and explicitly replay one posting after revocation and completion. Current
+account inconsistencies fail with operator-review conflict and roll back; they do
+not request another customer deposit.
 
 Admin resolutions validate original reviewed financial use/frozen amounts and
 report a separate admin_adjudication basis. They cannot create explicit buyer
@@ -147,8 +156,7 @@ listing sold; durable cross-scope exclusion after manual reactivation still need
 completion before reviewed funding. Contradictory original evidence rolls back
 maintenance and returns a timestamped explicit failure, not zero successful work.
 
-Remaining work: durable consumed inventory and public exact credit-release/
-recovery adapters, scoped reviewed funding/use, consumed inventory exclusion,
+Remaining work: durable consumed inventory, unique original funding references, scoped reviewed funding/use, consumed inventory exclusion,
 public original seller submission, finite buyer/provider restart journals, private
 human work UI, actual multi-milestone economics and complete release gates.
 No contract capability9, publication, live-payment or outreach authorization is

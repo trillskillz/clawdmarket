@@ -38,6 +38,14 @@ export type OriginalContractSubmissionInput = { version: 1; client_reference: st
 export type OriginalContractSubmissionOperation = Omit<OriginalContractSubmission, 'observed_at' | 'original_requirements' | 'submission'> & {
   submission: NonNullable<OriginalContractSubmission['submission']>; idempotent: boolean
 }
+export type OriginalContractCreditReleaseInput = Omit<OriginalContractAcceptanceInput, 'approve'> & { acceptance_id: string }
+export type OriginalContractCreditRelease = {
+  release: { id: string; contract_id: string; milestone_id: string; acceptance_id: string; submission_id: string; content_hash: string
+    client_reference: string; amount_minor: number; released_at: string; settlement_entry_id: string; sale_entry_id: string
+    basis: 'explicit_buyer_acceptance'; rail: 'credit'; seller_receives: 'nonwithdrawable_account_credit' }
+  financial_posting_confirmed: true; selected_submission_id: string | null; current_milestone_state: string
+  credit_remaining_principal_minor: number; idempotent?: boolean; observed_at?: string
+}
 export type OriginalContractAdjudication = {
   adjudication: { dispute_id: string; contract_id: string; milestone_id: string; decided_by_account_id: string
     ruling: 'buyer_win' | 'seller_win' | 'split' | 'redo'; split_percent_to_seller: number | null; amount_minor: number

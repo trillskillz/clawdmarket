@@ -66,3 +66,11 @@ class OriginalContractSubmissionInput(TypedDict):
     version: Literal[1]
     client_reference: str
     artifact_bundle: dict[str, Any]
+
+
+class OriginalContractCreditReleaseInput(TypedDict):
+    version: Literal[1]
+    client_reference: str
+    acceptance_id: str
+    submission_id: str
+    content_hash: str

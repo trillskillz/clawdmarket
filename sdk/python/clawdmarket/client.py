@@ -16,7 +16,7 @@ from email.utils import parsedate_to_datetime
 from .enterprise import OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, original_grant_reference, original_tempo_credential
 from .listing import OrganizationListingProposal, OrganizationListingDecision, OrganizationListingCheckoutInput, OrganizationListingCheckout, original_listing_reference
 from .task import OrganizationTaskProposal, OrganizationTaskDecision, OrganizationTaskCheckoutInput, OrganizationTaskCheckout, original_task_reference
-from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractAdjudication, OriginalContractSubmissionInput, original_contract_creation_reference
+from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractCreditReleaseInput, original_contract_creation_reference
 
 SDK_CONTRACT: dict[str, Any] = json.loads(files("clawdmarket").joinpath("contract.json").read_text())
 JSON = dict[str, Any]
@@ -223,6 +223,19 @@ class ClawdMarketClient:
         if type(request.get('version')) is not int or request.get('version') != 1 or not isinstance(request.get('artifact_bundle'), dict):
             raise ValueError('Invalid original contract output')
         return self._call('submit_original_contract_output', contract_id, body=request, path_parameters={'milestoneId': milestone_id})
+
+    def release_original_contract_credit(self, contract_id: str, milestone_id: str, request: OriginalContractCreditReleaseInput) -> JSON:
+        """Save exact release reference/decision first; never automatically retry a financial mutation."""
+        original_contract_creation_reference(request.get('client_reference'))
+        if (type(request.get('version')) is not int or request.get('version') != 1
+                or not all(isinstance(request.get(k), str) and UUID.fullmatch(request[k]) for k in ('acceptance_id', 'submission_id'))
+                or not isinstance(request.get('content_hash'), str) or re.fullmatch(r'[a-f0-9]{64}', request['content_hash']) is None):
+            raise ValueError('Invalid exact original credit release')
+        return self._call('release_original_contract_credit', contract_id, body=request, path_parameters={'milestoneId': milestone_id})
+
+    def recover_original_contract_credit_release(self, contract_id: str, milestone_id: str, client_reference: str) -> JSON:
+        return self._call('get_original_contract_submission', contract_id, path_parameters={'milestoneId': milestone_id},
+                          query={'release_reference': original_contract_creation_reference(client_reference)})
 
     def recover_original_contract_adjudication(self, contract_id: str, milestone_id: str, dispute_id: str) -> OriginalContractAdjudication:
         """Participant read only; no admin ruling or buyer consent authority."""

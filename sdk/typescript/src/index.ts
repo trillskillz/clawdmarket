@@ -1,6 +1,6 @@
 import { SDK_CONTRACT } from './contract.js'
-import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission, type OriginalContractAdjudication, type OriginalContractSubmissionInput, type OriginalContractSubmissionOperation } from './milestone-contract.js'
-export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractSubmissionOperation } from './milestone-contract.js'
+import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission, type OriginalContractAdjudication, type OriginalContractSubmissionInput, type OriginalContractSubmissionOperation, type OriginalContractCreditReleaseInput, type OriginalContractCreditRelease } from './milestone-contract.js'
+export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractSubmissionOperation, OriginalContractCreditReleaseInput, OriginalContractCreditRelease } from './milestone-contract.js'
 import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, originalListingReference, scopedSpendingClient } from './enterprise.js'
 import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'
@@ -452,6 +452,15 @@ export class ClawdMarketClient {
     originalContractCreationReference(input.client_reference)
     if (input.version !== 1 || !input.artifact_bundle || typeof input.artifact_bundle !== 'object' || Array.isArray(input.artifact_bundle)) throw new TypeError('Invalid original contract output')
     return this.request<OriginalContractSubmissionOperation>('POST', `${this.originalContractMilestonePath(contractId, milestoneId)}/submissions`, input, options)
+  }
+  /** Separate exact financial command. Save its reference first; never automatically retry. */
+  releaseOriginalContractCredit(contractId: string, milestoneId: string, input: OriginalContractCreditReleaseInput, options?: RequestOptions) {
+    originalContractCreationReference(input.client_reference); enterpriseId(input.acceptance_id); enterpriseId(input.submission_id)
+    if (input.version !== 1 || !/^[a-f0-9]{64}$/.test(input.content_hash)) throw new TypeError('Invalid exact original credit release')
+    return this.request<OriginalContractCreditRelease>('POST', `${this.originalContractMilestonePath(contractId, milestoneId)}/release`, input, options)
+  }
+  recoverOriginalContractCreditRelease(contractId: string, milestoneId: string, clientReference: string, options?: RequestOptions) {
+    return this.request<OriginalContractCreditRelease>('GET', `${this.originalContractMilestonePath(contractId, milestoneId)}?${new URLSearchParams({ release_reference: originalContractCreationReference(clientReference) })}`, undefined, options)
   }
   /** Participant recovery only; cannot issue an admin ruling or create buyer consent. */
   recoverOriginalContractAdjudication(contractId: string, milestoneId: string, disputeId: string, options?: RequestOptions) {

@@ -309,6 +309,13 @@
     "public_review_bodies": false
   },
   "operations": {
+    "release_original_contract_credit": {
+      "method": "POST",
+      "path": "/api/contracts/{id}/milestones/{milestoneId}/release",
+      "auth": "agent_api_key",
+      "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
     "submit_original_contract_output": {
       "method": "POST",
       "path": "/api/contracts/{id}/milestones/{milestoneId}/submissions",

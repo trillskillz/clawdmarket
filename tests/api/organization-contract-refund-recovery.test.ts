@@ -44,6 +44,11 @@ after(async () => { db?.$client.close(); if (chain) await chain.stop(); if (dire
 async function fixture() {
   const f = await reviewedContractFixture({ db, schema }, true, true), credit = await import('@/lib/account-credit')
   const deposit = await credit.createDeposit(f.buyer, { amount_minor: 105, payer: payer.address, client_reference: crypto.randomUUID() })
+  // Advance only the disposable node before sending; keep the real not-before proof guard intact.
+  const [intent] = await db.select().from(schema.credit_deposits).where(eq(schema.credit_deposits.id, deposit.id))
+  const latest = await chain.rpc('eth_getBlockByNumber', ['latest', false])
+  await chain.rpc('evm_setNextBlockTimestamp', [Math.max(Math.floor(Date.now() / 1000) + 1,
+    Math.floor(intent.created_at.getTime() / 1000) + 1, Number(BigInt(latest.timestamp)) + 1)])
   const hash = await wallet.writeContract({ account: payer, chain: { ...mainnet, id: 8453 }, address: chain.token, abi: erc20Abi,
     functionName: 'transfer', args: [chain.treasury, 1_050_000n] })
   await chain.client.waitForTransactionReceipt({ hash })

@@ -10,6 +10,7 @@ import { purchasingResult } from '@/lib/organization-purchasing-api';
 import { acceptOriginalReviewedContract, inspectOriginalReviewedContractAcceptance, reviewedContractAcceptanceLookup } from '@/lib/contract-exact-acceptance';
 import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts';
 import { inspectParticipantContractAdjudication } from '@/lib/contract-original-adjudication';
+import { inspectOriginalContractCreditRelease, originalContractReleaseInput } from '@/lib/contract-original-credit-release';
 import { z } from 'zod';
 import { milestoneActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionMilestone, nextContractStateFromMilestones } from '@/lib/contracts-state';
@@ -33,6 +34,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const entries = Object.fromEntries(req.nextUrl.searchParams);
     if ([...req.nextUrl.searchParams.keys()].length !== Object.keys(entries).length) return purchasingResult({ error: 'Repeated lookup parameter' }, 400);
+    if (Object.hasOwn(entries, 'release_reference')) {
+      const query = z.object({ release_reference: originalContractReleaseInput.shape.client_reference }).strict().parse(entries);
+      return purchasingResult(await readWithLocalContentionRecovery(source => inspectOriginalContractCreditRelease(source, id, milestoneId, auth.userId, query.release_reference)));
+    }
     if (Object.hasOwn(entries, 'adjudication_reference')) {
       const query = z.object({ adjudication_reference: z.uuid() }).strict().parse(entries);
       return purchasingResult(await readWithLocalContentionRecovery(source => inspectParticipantContractAdjudication(source, id, milestoneId, auth.userId, query.adjudication_reference)));

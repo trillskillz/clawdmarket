@@ -19,10 +19,10 @@ from .listing import (
     OrganizationListingDecision, OrganizationListingCheckoutInput, OrganizationListingAuthorization,
     OrganizationListingCheckout, ListingEvmPayment, ListingTempoPayment,
 )
-from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractAdjudication, OriginalContractSubmissionInput
+from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractCreditReleaseInput
 
 __all__ = [
-    "MilestoneContractDraftInput", "OriginalContractCreation", "OriginalContractAcceptanceInput", "OriginalContractAcceptance", "OriginalContractAdjudication", "OriginalContractSubmissionInput",
+    "MilestoneContractDraftInput", "OriginalContractCreation", "OriginalContractAcceptanceInput", "OriginalContractAcceptance", "OriginalContractAdjudication", "OriginalContractSubmissionInput", "OriginalContractCreditReleaseInput",
     "OrganizationListingProposal", "OrganizationListingEvmProposal", "OrganizationListingTempoProposal",
     "OrganizationListingDecision", "OrganizationListingCheckoutInput", "OrganizationListingAuthorization",
     "OrganizationListingCheckout", "ListingEvmPayment", "ListingTempoPayment",

@@ -1,3 +1,54 @@
+## Exact original public credit release verified — migration78 unchanged
+
+The dedicated POST `/api/contracts/{id}/milestones/{milestoneId}/release` now
+requires original buyer/payments:write, cookie CSRF, saved release reference and
+exact immutable acceptance ID/submission ID/content hash. Generic hashless
+mark_paid remains blocked. Participant GET release_reference recovers the original
+pinned ledger posting; selectors cannot combine/repeat. Both SDKs expose explicit
+release/recovery with no automatic retry. Seller receives NONWITHDRAWABLE account
+credit, never an external token payout. New funding authority is not introduced.
+
+Both SDKs lose an ACTUAL committed financial HTTP reply, recover and explicitly
+replay the same original posting after review revocation, then complete the next
+milestone through public seller/acceptance/release handlers. Original first release
+recovers after completion without another debit/credit. Exact ledger IDs, original
+upfront fee and gross remain preserved. Named read/marketplace keys cannot pay;
+foreign owners/reviewers have no receipt authority. An inconsistent held-credit
+account returns a conflict requiring operator review, rolls back state/postings,
+and never asks the buyer to deposit again for already held work.
+
+Current focused **91/91**, no failures/skips, plus **27 Python cases**, types/lint/
+SDK parity/build and production build pass. Initial56cases22pass/34fail all rejected
+fixture deposits with PAYMENT_PREDATES_INTENT before the release path. Isolated
+first control passed. Positive fixtures now advance ONLY the unforked node's next
+block after the ACTUAL original intent/latest-block timestamp BEFORE transferring;
+no intent is backdated and production payment guards remain unchanged. The final
+91 include ordinary credit/refund, original admin, actual HTTP and canonical API
+controls. Migration78 did not change; prior845-row/133-table/guard/query local
+preservation applies, not newly repeated. No full new contract release is claimed.
+
+Initial reviewed funding/use records are still DIRECT controlled records over
+genuine disposable token deposits. Public fulfillment is exercised, but no complete
+public reviewed purchasing/client/worker journey, live canary or independent
+adoption is established. Scoped reviewed funding/use, durable consumed inventory,
+finite process journals/private human UI and complete economic/process/release
+gates remain unfinished. HTTP1.119/count8 stay local-only; production was last
+observed at16:50UTC on1.116/main96a017b with the same open security risk.
+
+Manifest **54** changed source files relative to e55e151, SHA-256
+`633d7875ba9c4de7174b6362f104c447831da7392b3433dd1b0bf49da223b922`. Current evidence is in the contract foundation directory. Prior accepted
+listing/pilot candidates stay unchanged. Next complete durable original listing
+consumption exclusion and unique buyer-scoped funding references, then one scoped
+reviewed fund/use transaction with original fee/credit/attribution and all shared
+budget/pause/role/rail/deadline checks. Recover original use before fresh eligibility
+and never create a second financial family identity. Finish finite clients/UI and
+complete release acceptance before capability9. Do not deploy this unfinished tree.
+Rollback must retain original financial/operation/submission/decision/admin records
+and scoped recovery/interlocks. No publication, real funds, production flags,
+custody changes, email or outreach authorization is implied.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Dedicated original seller submission verified — local migration78 unchanged
 
 POST `/api/contracts/{id}/milestones/{milestoneId}/submissions` now accepts bounded

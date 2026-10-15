@@ -1,5 +1,5 @@
 {
-  "stage": "Dedicated versioned original seller submission POST plus both provider SDKs; public funding/payment release closed",
+  "stage": "Exact original buyer credit-release POST and private saved-reference recovery with both SDKs; scoped reviewed funding still unavailable",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 78,
@@ -34,9 +34,9 @@
     "participant_original_submission_get": true,
     "internal_exact_buyer_acceptance": true,
     "public_reviewed_milestone_acceptance": true,
-    "reviewed_credit_release": false,
+    "reviewed_credit_release": true,
     "internal_original_credit_release": true,
-    "public_reviewed_credit_release": false,
+    "public_reviewed_credit_release": true,
     "original_reviewed_refund_preservation": true,
     "durable_contract_consumed_inventory_all_paths": false,
     "internal_original_adjudication": true,
@@ -271,6 +271,42 @@
     "output-build": {
       "local_log": "/tmp/clawdmarket-contract-original-output-build-2026-10-15.log",
       "log_sha256": "b5f5cbe55c9f6c73adcd0e821856f5662f19afbe41824a3a2ba5f518647b3b0a"
+    },
+    "public-release-focused": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-focused-2026-10-15.log",
+      "log_sha256": "bdb1b9a617f13b920cf81088f17b5ccbb61ba225556a7cac2bc3bb3e1ea285bf"
+    },
+    "public-release-initial-clock-rejection": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-focused-2026-10-15.log",
+      "log_sha256": "02f675f80a44eac7b1a616584f1a8505a846691c6cc84b46dce04088ee86cdf4"
+    },
+    "public-release-isolated-clock-control": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-diagnostic-2026-10-15.log",
+      "log_sha256": "96a1299ce0a2fc2901e25fd36da9e6b325c03a4a39e71b59686d3a3adac04862"
+    },
+    "public-release-types": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "public-release-lint": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "public-release-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "public-release-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "public-release-python": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-python-2026-10-15.log",
+      "log_sha256": "6abb7386708b9c72713bf6fee86f3ced9c0c31c39d0ce12dddbb6e2fff22cbe0"
+    },
+    "public-release-build": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-build-2026-10-15.log",
+      "log_sha256": "508b09c25e61ab5e4f417b075a8a09921bac9ea7715fb56ec2eb412df6cdbcec"
     }
   },
   "compatibility_cases": {
@@ -278,7 +314,7 @@
     "failed": 0,
     "skipped": 0
   },
-  "current_disjoint_focused_cases_total": 53,
+  "current_disjoint_focused_cases_total": 91,
   "existing_family_regression_cases": {
     "passed": 83,
     "failed": 0,
@@ -286,8 +322,8 @@
     "scope": "integration before the additional helper exclusion check; that check is included in current32"
   },
   "source_manifest": {
-    "files": 53,
-    "sha256": "bc1699f78e36353fba497420eed3dfe4e561f593867cef4e44f936d00cf622dc",
+    "files": 54,
+    "sha256": "633d7875ba9c4de7174b6362f104c447831da7392b3433dd1b0bf49da223b922",
     "baseline": "e55e151"
   },
   "private_inspection_cases": {
@@ -321,7 +357,7 @@
     "passed": 27,
     "failed": 0,
     "skipped": 0,
-    "scope": "Current local HTTP SDK/export suite; both actual application provider lost-reply cases execute in Node integration gate"
+    "scope": "Current Python local HTTP transport/export suite; actual application financial reply-loss controls through both SDKs run in Node integration"
   },
   "limitations_public_acceptance": [
     "Controlled future-use records over actual disposable local test-token deposits; no public reviewed funding or completed economic journey",
@@ -343,7 +379,7 @@
     "Admin routes now validate original use/amount and label separate adjudication. Saved-reference immutable admin-ruling recovery remains unfinished",
     "Unstarted refund preservation and consumed inventory/funding still need completion before reviewed funding"
   ],
-  "current_disjoint_focused_cases_scope": "Original financial/submission/acceptance/adjudication, both actual provider HTTP losses, canonical API and TS SDK checks for dedicated seller endpoint",
+  "current_disjoint_focused_cases_scope": "Current original public fulfillment/release/admin/HTTP recovery, ordinary credit/refund, canonical API and TS SDK regression; no full contract release acceptance",
   "historical_submission_cases": {
     "passed": 64,
     "failed": 0,
@@ -411,5 +447,18 @@
     "Migration78 unchanged; previous preservation applies and was not rerun",
     "No public original credit-release endpoint, finite process worker/UI or full reviewed contract release acceptance",
     "Legacy generic hashless submit remains blocked; only dedicated saved-reference operation is exposed locally"
+  ],
+  "public_release_cases": {
+    "passed": 91,
+    "failed": 0,
+    "skipped": 0
+  },
+  "public_release_limitations": [
+    "Scoped reviewed funding/use is not exposed; initial reviewed reservations in controls are direct stored records backed by genuine disposable deposits",
+    "Actual public seller/acceptance/release handlers and both buyer SDKs exercise later multi-milestone fulfillment, but this is not a full public reviewed purchasing/client/worker journey",
+    "Initial56cases22pass34fail: all34 fail PAYMENT_PREDATES_INTENT before release. Isolated first control passes. Positive fixtures now advance only the unforked test node before transfers past actual original intent/latest-block time; no intent backdating or production proof guard changes",
+    "Final91pass0fail0skip; tests include actual lost financial replies and original post-completion recovery with no duplicate debit/credit",
+    "Migration78 unchanged; prior local baseline preservation applies and was not repeated",
+    "No current full contract predeploy/browser/process-journal gates, live paid canary or independent demand demonstrated"
   ]
 }

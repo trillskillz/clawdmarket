@@ -55,7 +55,7 @@ export function requiredAgentCredentialScopeForPath(method: string, pathname: st
   if (/^\/api\/organizations\/[^/]+\/(?:task|listing)-authorizations\/[^/]+\/checkout$/.test(pathname)) return 'payments:write'
   if (method === 'GET' || method === 'HEAD') return 'agent:read'
   if (
-    (method === 'POST' && /^\/api\/contracts\/[^/]+\/milestones\/[^/]+\/submissions$/.test(pathname))
+    (method === 'POST' && /^\/api\/contracts\/[^/]+\/milestones\/[^/]+\/(?:submissions|release)$/.test(pathname))
     ||
     pathname.startsWith('/api/instant/sessions/')
     || /^\/api\/instant\/services\/[^/]+\/sessions$/.test(pathname)
