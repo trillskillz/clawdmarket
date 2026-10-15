@@ -1,5 +1,5 @@
 {
-  "stage": "Private owner/reviewer contract review browser UI verified; participant work UI and full economic/release gates incomplete",
+  "stage": "Actual scoped-funding economic terminal outcomes verified; dashboard disclosure/participant UI/shared reservation/full release work remains",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 79,
@@ -49,7 +49,9 @@
     "independent_funding_process_recovery": true,
     "finite_exact_command_journals": true,
     "actual_fulfillment_cli_kill_restart_recovery": true,
-    "private_organization_contract_review_ui": true
+    "private_organization_contract_review_ui": true,
+    "actual_scoped_funding_admin_redo_partial_outcomes": true,
+    "actual_scoped_funding_frozen_expiry_and_no_automatic_acceptance": true
   },
   "records": {
     "original_use": {
@@ -399,6 +401,10 @@
     "private-review-ui": {
       "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/private-review-ui.json",
       "source_manifest_sha256": "2d21876f71e62fef354dc3a28f708af8297158b67c9b60d078a531b6e5e7ad2e"
+    },
+    "scoped-economic-outcomes": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/scoped-economic-outcomes.json",
+      "source_manifest_sha256": "d97af9e148517a37fe97e140d980d3ad8a69ecb3838dcd3f70cf0b481e7aceb0"
     }
   },
   "compatibility_cases": {

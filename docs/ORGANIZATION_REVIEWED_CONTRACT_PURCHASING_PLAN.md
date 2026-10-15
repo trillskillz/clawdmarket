@@ -1,3 +1,33 @@
+## Original scoped-funding economic outcomes verified — local only
+
+Current **91/91** named API/logic/SDK cases pass, zero failures/skips, including
+17 actual public scoped-funding/process/CLI/economic cases and original financial/
+refund/review compatibility. All four admin outcomes follow a real scoped funding,
+first exact payout and second exact acceptance/dispute. Original paid rights and
+receipts survive review revocation, organization ownership/seller-rail changes,
+new-payment pause and rollout closure. Buyer-win/seller-win/split preserve first
+posting and distribute only remaining60 TEST cents. Redo with identical bytes
+requires a NEW submission ID and exact consent; its old outcome never adopts the
+later payout. Manual/maintenance expiry uses the frozen original deadline and
+retains original fee/reference/gross/inventory. Elapsed review windows never accept
+passing structure or release principal; the original buyer can explicitly complete
+after expiry. Actual original funding/release recovery remains exact once.
+
+Final types/lint pass. Only tests changed since6a84a74's app build; that production
+build and14-browser review gate apply to unchanged app sources, not a new full
+contract predeploy gate. Migration79/prior845-row local preservation unchanged/not
+rerun. Manifest **73** files versus e55e151, SHA-256 `d97af9e148517a37fe97e140d980d3ad8a69ecb3838dcd3f70cf0b481e7aceb0`.
+Evidence: `docs/evidence/reviewed-contract-foundation-2026-10-15/scoped-economic-outcomes.json`.
+No live funds, independent demand, publication, production flags or capability9.
+Fresh funding defaults disabled; HTTP1.119/count8 remain local. Participant human
+work UI/shared reservation order coverage/full release gates remain. Next close
+the discovered ordinary dashboard credit-disclosure gap and prevent it offering
+legacy hashless actions on authoritative reviewed companions, then continue the
+participant workspace. Keep original historical settlement semantics and financial
+references; rollback must retain paid recovery, inventory and exact-consent guards.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Private original contract review UI verified — local only
 
 Actual review responses now link the private owner/selected-reviewer page. It

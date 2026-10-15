@@ -431,3 +431,137 @@ test('finite buyer and seller CLI journals recover actual committed fund/output/
     process.env.CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED = 'true'; delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED
   }
 })
+
+async function originalMilestoneCommand(f: Awaited<ReturnType<typeof fixture>>, index: number, kind: 'submit' | 'accept' | 'release' | 'dispute', body: any) {
+  const id = f.original.contract.id, milestoneId = f.original.milestones[index].id
+  const base = `/api/contracts/${id}/milestones/${milestoneId}`, context = { params: Promise.resolve({ id, milestoneId }) }
+  if (kind === 'submit') return (await import('@/app/api/contracts/[id]/milestones/[milestoneId]/submissions/route')).POST(request(base + '/submissions', f.seller, 'POST', body), context)
+  if (kind === 'release') return (await import('@/app/api/contracts/[id]/milestones/[milestoneId]/release/route')).POST(request(base + '/release', f.buyer, 'POST', body), context)
+  return (await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route')).PATCH(request(base, f.buyer, 'PATCH', kind === 'accept' ? { ...body, action: 'approve' } : { action: 'open_dispute', reason_code: 'finite_acceptance_review', evidence: { note: 'Controlled private fixture' } }), context)
+}
+async function submittedAndAccepted(f: Awaited<ReturnType<typeof fixture>>, index: number, artifacts = { report: 'PRIVATE_ORIGINAL_ECONOMIC_REPORT' }) {
+  const input = { version: 1, client_reference: crypto.randomUUID(), artifact_bundle: artifacts }
+  const submitted = await originalMilestoneCommand(f, index, 'submit', input)
+  assert.equal(submitted.status, 201, JSON.stringify(await submitted.clone().json())); const output = await submitted.json()
+  const acceptanceInput = { version: 1, client_reference: crypto.randomUUID(), submission_id: output.submission.id, content_hash: output.submission.content_hash, approve: true }
+  const accepted = await originalMilestoneCommand(f, index, 'accept', acceptanceInput)
+  assert.equal(accepted.status, 201, JSON.stringify(await accepted.clone().json())); const acceptance = await accepted.json()
+  return { output, acceptance, input, acceptanceInput, releaseInput: { version: 1, client_reference: crypto.randomUUID(), submission_id: output.submission.id, content_hash: output.submission.content_hash, acceptance_id: acceptance.decision.id } }
+}
+for (const ruling of ['buyer_win', 'seller_win', 'split', 'redo'] as const) test(`actual scoped funding retains first exact posting and completes original second milestone through admin ${ruling}`, { skip: !enabled }, async () => {
+  const f = await fixture(), credit = await import('@/lib/account-credit'), root = await import('@/app/api/contracts/[id]/route')
+  const feesBefore = (await credit.creditBalance('system_marketplace_fees')).available_minor
+  const funding = await post(f); assert.equal(funding.status, 201); const original = await funding.json()
+  assert.equal((await root.PATCH(request(`/api/contracts/${f.original.contract.id}`, f.seller, 'PATCH', { action: 'start' }), { params: Promise.resolve({ id: f.original.contract.id }) })).status, 200)
+  const first = await submittedAndAccepted(f, 0)
+  const paid = await originalMilestoneCommand(f, 0, 'release', first.releaseInput); assert.equal(paid.status, 201); const firstPaid = await paid.json()
+  assert.equal(firstPaid.credit_remaining_principal_minor, 60)
+  const second = await submittedAndAccepted(f, 1)
+  assert.equal((await credit.creditBalance(f.seller)).available_minor, 40)
+  assert.equal((await originalMilestoneCommand(f, 1, 'dispute', {})).status, 200)
+  const revoked = await (await import('@/app/api/organizations/[id]/contract-authorizations/[authorizationId]/route')).DELETE(request(`${f.prefix}/${f.a.id}`, f.owner, 'DELETE'), f.context)
+  assert.equal(revoked.status, 200)
+  await db.update(schema.organizations).set({ owner_account_id: f.other }).where(eq(schema.organizations.id, f.org))
+  await db.update(schema.seller_payment_preferences).set({ supported_rails: '[]' }).where(eq(schema.seller_payment_preferences.seller_id, f.seller))
+  process.env.CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED = 'false'; process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED = 'true'
+  const [contract] = await db.select().from(schema.contracts).where(eq(schema.contracts.id, f.original.contract.id)), dispute = contract.dispute_id!
+  const admin = await import('@/app/api/admin/contracts/disputes/[id]/resolve/route'), priorAdmin = process.env.ADMIN_USER_IDS
+  try {
+    process.env.ADMIN_USER_IDS = f.owner
+    const result = await admin.PATCH(request(`/api/admin/contracts/disputes/${dispute}/resolve`, f.owner, 'PATCH', { ruling, ...(ruling === 'split' ? { split_percent_to_seller: 25 } : {}) }), { params: Promise.resolve({ id: dispute }) })
+    assert.equal(result.status, 200, JSON.stringify(await result.clone().json()))
+    const invalidBuyerRelease = await originalMilestoneCommand(f, 1, 'release', second.releaseInput)
+    assert.equal(invalidBuyerRelease.status, 409, 'admin resolution never manufactures a buyer-directed release')
+    const recoveredAdmin = await admin.GET(request(`/api/admin/contracts/disputes/${dispute}/resolve`, f.owner), { params: Promise.resolve({ id: dispute }) })
+    assert.equal(recoveredAdmin.status, 200); const originalAdmin = await recoveredAdmin.json()
+    assert.equal(originalAdmin.buyer_acceptance_created, false); assert.equal(originalAdmin.adjudication.ruling, ruling)
+    assert.equal(originalAdmin.financial_posting_confirmed, ruling !== 'redo')
+    if (ruling === 'redo') {
+      const replacedResponse = await originalMilestoneCommand(f, 1, 'submit', { ...second.input, client_reference: crypto.randomUUID() })
+      assert.equal(replacedResponse.status, 201); const replaced = await replacedResponse.json()
+      assert.notEqual(replaced.submission.id, second.output.submission.id); assert.equal(replaced.submission.content_hash, second.output.submission.content_hash)
+      assert.equal((await originalMilestoneCommand(f, 1, 'release', second.releaseInput)).status, 409)
+      const old = await (await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route')).GET(request(`/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[1].id}?acceptance_reference=${second.acceptanceInput.client_reference}`, f.buyer), { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[1].id }) })
+      assert.equal(old.status, 200); assert.equal((await old.json()).applies_to_current_submission, false)
+      const newInput = { ...second.acceptanceInput, client_reference: crypto.randomUUID(), submission_id: replaced.submission.id }
+      const approved = await originalMilestoneCommand(f, 1, 'accept', newInput); assert.equal(approved.status, 201); const fresh = await approved.json()
+      const releaseInput = { ...second.releaseInput, client_reference: crypto.randomUUID(), submission_id: replaced.submission.id, acceptance_id: fresh.decision.id }
+      const released = await originalMilestoneCommand(f, 1, 'release', releaseInput); assert.equal(released.status, 201)
+      assert.equal((await originalMilestoneCommand(f, 1, 'release', releaseInput)).status, 200)
+      const finalAdmin = await admin.GET(request(`/api/admin/contracts/disputes/${dispute}/resolve`, f.owner), { params: Promise.resolve({ id: dispute }) })
+      const redo = await finalAdmin.json(); assert.deepEqual(redo.adjudication, originalAdmin.adjudication); assert.equal(redo.financial_posting_confirmed, false)
+    }
+    await db.update(schema.seller_payment_preferences).set({ supported_rails: '[]' }).where(eq(schema.seller_payment_preferences.seller_id, f.seller))
+    await db.update(schema.listings).set({ status: 'active' }).where(eq(schema.listings.id, f.listing.id))
+    const recovered = await fund.GET(request(`${f.path}?client_reference=${f.funding.client_reference}`, f.buyer), f.context)
+    assert.equal(recovered.status, 200); const terminal = await recovered.json()
+    assert.deepEqual(terminal.funding, original.funding); assert.equal(terminal.contract.state, 'COMPLETED'); assert.equal(terminal.credit_remaining_principal_minor, 0)
+    assert.deepEqual((await (await post(f)).json()).funding, original.funding)
+    const firstRecovered = await originalMilestoneCommand(f, 0, 'release', first.releaseInput)
+    assert.equal(firstRecovered.status, 200); assert.deepEqual((await firstRecovered.json()).release, firstPaid.release)
+    assert.equal((await credit.creditBalance(f.buyer)).available_minor, ruling === 'buyer_win' ? 60 : ruling === 'split' ? 45 : 0)
+    assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 0)
+    assert.equal((await credit.creditBalance(f.seller)).available_minor, ruling === 'buyer_win' ? 40 : ruling === 'split' ? 55 : 100)
+    assert.equal((await credit.creditBalance('system_marketplace_fees')).available_minor, feesBefore + 5)
+    assert.equal((await (await import('@/lib/organization-contract-uses')).organizationContractExposure(db, f.org, f.buyer)).lifetime, 105)
+    assert.equal(await (await import('@/lib/listing-visibility')).originalReviewedContractListing(f.listing.id), true)
+    assert.equal((await db.select().from(schema.contract_release_operations).where(eq(schema.contract_release_operations.contract_id, f.original.contract.id))).length, ruling === 'redo' ? 2 : 1)
+  } finally {
+    if (priorAdmin === undefined) delete process.env.ADMIN_USER_IDS; else process.env.ADMIN_USER_IDS = priorAdmin
+    process.env.CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED = 'true'; delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED
+  }
+})
+
+for (const mode of ['manual', 'maintenance'] as const) test(`actual scoped funding ${mode} expiry uses original frozen deadline and recovers the same fee/principal/reference`, { skip: !enabled }, async t => {
+  const f = await fixture(), credit = await import('@/lib/account-credit')
+  const feeBefore = (await credit.creditBalance('system_marketplace_fees')).available_minor
+  const response = await post(f); assert.equal(response.status, 201); const original = await response.json()
+  const originalExpiry = Date.parse(f.original.contract.expires_at), oldSecret = process.env.MAINTENANCE_SECRET
+  await db.update(schema.contracts).set({ expires_at: mode === 'manual' ? new Date(originalExpiry + 86400000) : null }).where(eq(schema.contracts.id, f.original.contract.id))
+  const revoked = await (await import('@/app/api/organizations/[id]/contract-authorizations/[authorizationId]/route')).DELETE(request(`${f.prefix}/${f.a.id}`, f.owner, 'DELETE'), f.context)
+  assert.equal(revoked.status, 200)
+  t.mock.timers.enable({ apis: ['Date'], now: originalExpiry + 1000 })
+  try {
+    process.env.MAINTENANCE_SECRET = 'disposable-contract-economics-only'
+    const expired = mode === 'manual' ? await (await import('@/app/api/contracts/[id]/route')).PATCH(request(`/api/contracts/${f.original.contract.id}`, f.buyer, 'PATCH', { action: 'expire' }), { params: Promise.resolve({ id: f.original.contract.id }) })
+      : await (await import('@/app/api/contracts/maintenance/route')).POST(new NextRequest('http://localhost/api/contracts/maintenance', { method: 'POST', headers: { 'x-maintenance-secret': process.env.MAINTENANCE_SECRET } }))
+    assert.equal(expired.status, 200, JSON.stringify(await expired.clone().json()))
+    const recovery = await fund.GET(request(`${f.path}?client_reference=${f.funding.client_reference}`, f.buyer), f.context)
+    assert.equal(recovery.status, 200); const final = await recovery.json()
+    assert.deepEqual(final.funding, original.funding); assert.equal(final.credit_remaining_principal_minor, 0); assert.equal(final.contract.state, 'REFUNDED')
+    assert.equal((await post(f)).status, 200)
+    assert.equal((await credit.creditBalance(f.buyer)).available_minor, 100); assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 0)
+    assert.equal((await credit.creditBalance('system_marketplace_fees')).available_minor, feeBefore + 5)
+    assert.equal((await (await import('@/lib/organization-contract-uses')).organizationContractExposure(db, f.org, f.buyer)).lifetime, 105)
+    assert.equal(await (await import('@/lib/listing-visibility')).originalReviewedContractListing(f.listing.id), true)
+  } finally { t.mock.timers.reset(); if (oldSecret === undefined) delete process.env.MAINTENANCE_SECRET; else process.env.MAINTENANCE_SECRET = oldSecret }
+})
+
+test('actual scoped funding review-window expiry never accepts passing structure or releases principal; original buyer consent remains separately available', { skip: !enabled }, async t => {
+  const f = await fixture(), credit = await import('@/lib/account-credit'), root = await import('@/app/api/contracts/[id]/route')
+  assert.equal((await post(f)).status, 201)
+  assert.equal((await root.PATCH(request(`/api/contracts/${f.original.contract.id}`, f.seller, 'PATCH', { action: 'start' }), { params: Promise.resolve({ id: f.original.contract.id }) })).status, 200)
+  const submitted = await originalMilestoneCommand(f, 0, 'submit', { version: 1, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'Finite report with unmeasured semantics' } })
+  assert.equal(submitted.status, 201); const output = await submitted.json()
+  const secret = process.env.MAINTENANCE_SECRET
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() + 3 * 86400000 })
+  try {
+    process.env.MAINTENANCE_SECRET = 'disposable-original-window-only'
+    const response = await (await import('@/app/api/contracts/maintenance/route')).POST(new NextRequest('http://localhost/api/contracts/maintenance', { method: 'POST', headers: { 'x-maintenance-secret': process.env.MAINTENANCE_SECRET } }))
+    assert.equal(response.status, 200); assert.equal((await response.json()).auto_approved_milestones, 0)
+    const milestone = (await db.select().from(schema.contract_milestones).where(eq(schema.contract_milestones.id, f.original.milestones[0].id)))[0]
+    assert.equal(milestone.state, 'AWAITING_BUYER_REVIEW'); assert.equal(milestone.submission_id, output.submission.id)
+    assert.equal((await db.select().from(schema.contract_acceptance_operations).where(eq(schema.contract_acceptance_operations.contract_id, f.original.contract.id))).length, 0)
+    assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 100); assert.equal((await credit.creditBalance(f.seller)).available_minor, 0)
+    const input = { version: 1, client_reference: crypto.randomUUID(), submission_id: output.submission.id, content_hash: output.submission.content_hash, approve: true }
+    const accepted = await originalMilestoneCommand(f, 0, 'accept', input); assert.equal(accepted.status, 201); const decision = await accepted.json()
+    assert.equal(decision.financial_release_performed, false); assert.equal((await credit.creditBalance(f.seller)).available_minor, 0)
+    const paid = await originalMilestoneCommand(f, 0, 'release', { version: 1, client_reference: crypto.randomUUID(), submission_id: output.submission.id, content_hash: output.submission.content_hash, acceptance_id: decision.decision.id })
+    assert.equal(paid.status, 201); assert.equal((await paid.json()).credit_remaining_principal_minor, 60)
+    const last = await submittedAndAccepted(f, 1)
+    assert.equal((await originalMilestoneCommand(f, 1, 'release', last.releaseInput)).status, 201)
+    assert.equal((await credit.creditBalance(f.seller)).available_minor, 100); assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 0)
+    const recovered = await fund.GET(request(`${f.path}?client_reference=${f.funding.client_reference}`, f.buyer), f.context)
+    assert.equal(recovered.status, 200); assert.equal((await recovered.json()).contract.state, 'COMPLETED')
+  } finally { t.mock.timers.reset(); if (secret === undefined) delete process.env.MAINTENANCE_SECRET; else process.env.MAINTENANCE_SECRET = secret }
+})
