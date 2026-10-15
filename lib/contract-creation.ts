@@ -2,7 +2,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { and, asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { contracts, contract_milestones, contract_creation_requests, listings, users, payment_controls } from './schema'
+import { contracts, contract_milestones, contract_creation_requests, users, payment_controls } from './schema'
 import { createContractSchema } from './validation'
 import { canonicalContract } from './structured-verification'
 import { PurchasingError, purchasingTransaction, type PurchasingSource } from './organization-purchasing-transaction'
@@ -11,6 +11,7 @@ import { isPublicMarketplaceSeller } from './listing-visibility'
 import { DEV_FEE_PERCENT } from './settlement'
 import { getPaymentReadiness } from './payment-config'
 import { NEW_PAYMENTS_CONTROL_KEY, NewPaymentsPausedError } from './payment-control'
+import { requireContractListingScope } from './contract-listing-scope'
 
 export const contractCreationReference = z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/)
 type Input = z.output<typeof createContractSchema>
@@ -82,9 +83,7 @@ export async function createContractDraft(buyer: string, input: Input) {
     if (process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED === 'true' || control?.paused === 1) throw new NewPaymentsPausedError()
     let sellerId = input.seller_id
     if (input.listing_id) {
-      const [listing] = await source.select().from(listings).where(eq(listings.id, input.listing_id)).limit(1)
-      if (!listing) throw new ContractCreationError('LISTING_NOT_FOUND', 'Listing not found', 404)
-      if (listing.status !== 'active') throw new ContractCreationError('LISTING_UNAVAILABLE', 'Listing is not active')
+      const listing = await requireContractListingScope(source, input.listing_id)
       sellerId = listing.seller_id
     }
     if (!sellerId) throw new ContractCreationError('SELLER_REQUIRED', 'seller_id or listing_id is required', 400)

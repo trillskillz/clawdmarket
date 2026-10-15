@@ -1,3 +1,18 @@
+## Contract inventory defect reproduced and fixed locally — 2026-10-15
+
+The fresh contract audit found a cross-scope defect in the previously tested
+listing candidate: generic credit contract funding could bypass pending/revoked
+listing review, adopt a consumed manually reopened listing, or fund after the
+seller changed. These are real local backed-credit fixture reproductions, not
+live activity. The correction checks exact current seller/public inventory and
+original review/task/private-service scope inside fresh funding; new draft
+creation excludes consumed/synthetic inventory. Original paid release/refund
+paths remain unchanged, including principal-only refund after upfront fees.
+Seven new scope cases and existing regressions pass in the complete **84/84**
+focused run, zero skips/failures; current types/lint pass. The old listing release
+candidate requires this fix and source-bound reacceptance before publication.
+Preserve `6ed0a09` as historical tested evidence, not an unqualified final release.
+
 # Reviewed contract foundation — local checkpoint, not accepted capability
 
 Based on accepted listing candidate `6ed0a09`; code remains local HTTP 1.119,
@@ -73,3 +88,27 @@ any exist. All pre-existing claim, financial, immutable evidence and listing
 rollback conditions continue to apply. Live canary, treasury fee budget, email
 provider inbox verification, real participant admission and recruitment remain
 separate external dependencies documented in the preserved pilot/listing audits.
+
+## Linked inventory evidence
+
+`/tmp/clawdmarket-contract-listing-scope-before-corrected-2026-10-15.log`
+reproduces all four unsafe fresh funding outcomes (HTTP 200 instead of 409).
+An initial attempt hit the unrelated fixture buyer-approval threshold and supplied
+an extra approval property to internal checkout; both fixtures were corrected
+before counting a reproduction. Production guards were not relaxed.
+`/tmp/clawdmarket-contract-listing-scope-after-2026-10-15.log` passes those four.
+The complete current focused run
+`/tmp/clawdmarket-contract-listing-scope-focused-2026-10-15.log` passes **84/84**,
+including seven new scope cases, original creation, existing credit and listing
+review, pause and migration tests. Types/lint pass in the contract-scope logs.
+No listing payment-claim test is counted by that run; the requested nonexistent
+claims filename did not add any cases. The later full listing reacceptance must
+include the actual `organization-listing-payment.test.ts` file.
+
+The seven cases cover pending/revoked original-buyer restrictions with unrelated
+public buyer access, consumed original listing exclusion after cancellation and
+manual catalog reactivation, seller changes before funding versus original
+funded refund recovery, task/private-service original identities, and current
+provider visibility. Original draft-reference recovery stays available after
+fresh scope closes. All credit evidence is controlled signed RPC receipt fixtures;
+this scope regression does not establish a new live or independently paid journey.

@@ -1,3 +1,18 @@
+## Contract inventory defect reproduced and fixed locally — 2026-10-15
+
+The fresh contract audit found a cross-scope defect in the previously tested
+listing candidate: generic credit contract funding could bypass pending/revoked
+listing review, adopt a consumed manually reopened listing, or fund after the
+seller changed. These are real local backed-credit fixture reproductions, not
+live activity. The correction checks exact current seller/public inventory and
+original review/task/private-service scope inside fresh funding; new draft
+creation excludes consumed/synthetic inventory. Original paid release/refund
+paths remain unchanged, including principal-only refund after upfront fees.
+Seven new scope cases and existing regressions pass in the complete **84/84**
+focused run, zero skips/failures; current types/lint pass. The old listing release
+candidate requires this fix and source-bound reacceptance before publication.
+Preserve `6ed0a09` as historical tested evidence, not an unqualified final release.
+
 ## Active reviewed contract foundation — 2026-10-15
 
 Worktree `/home/void/Work/clawdmarket-reviewed-contracts-current`, branch

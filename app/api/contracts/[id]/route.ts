@@ -19,6 +19,8 @@ import { requireNewPaymentsOpen, NewPaymentsPausedError } from '@/lib/payment-co
 import { enforceAgentSpendPolicy, AgentSpendPolicyError } from '@/lib/agent-spend-policy';
 import { enforceBuyerSpendPolicy, BuyerSpendPolicyError } from '@/lib/buyer-spend-policy';
 import { attributeOrganizationContract, withOrganizationBuyerLock } from '@/lib/organization-budgets';
+import { requireContractListingScope } from '@/lib/contract-listing-scope';
+import { PurchasingError } from '@/lib/organization-purchasing-transaction';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,6 +97,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const now = new Date();
 
       if (validated.action === 'fund') {
+        if (contract.listing_id) await requireContractListingScope(tx, contract.listing_id, {
+          expectedSeller: contract.seller_id, fundingBuyer: contract.buyer_id,
+        });
         const milestones = await tx.select().from(contract_milestones).where(eq(contract_milestones.contract_id, contract.id));
         const wholeCents = (amount: number) => Number.isFinite(amount) && amount > 0 && Math.abs(amount * 100 - Math.round(amount * 100)) < .000001;
         if (!wholeCents(contract.total_amount) || !wholeCents(contract.escrow_amount) || !milestones.length
@@ -204,7 +209,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const [updated] = await db.select().from(contracts).where(eq(contracts.id, contract.id)).limit(1);
     return NextResponse.json({ contract: updated });
   } catch (error: any) {
-    if (error instanceof CreditError || error instanceof NewPaymentsPausedError || error instanceof SellerRailError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    if (error instanceof CreditError || error instanceof NewPaymentsPausedError || error instanceof SellerRailError || error instanceof PurchasingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AgentSpendPolicyError) return NextResponse.json({ error: error.message, code: error.code, spending_policy: error.policy }, { status: 409 });
     if (error instanceof BuyerSpendPolicyError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error?.issues || error?.errors) {
