@@ -33,7 +33,7 @@ for(const tempo of [false,true])test(`listing SDK recovers genuinely lost ${temp
       if(method==='DELETE')state='revoked'
       if(url.search)assert.equal(url.searchParams.get('client_reference'),proposal.client_reference)
       res.setHeader('Content-Type','application/json');res.end(JSON.stringify(phase==='checkout'?{...result(),created:false}:{authorization:authorization(),idempotent:true}))
-    }catch(error){res.statusCode=500;res.end(JSON.stringify({error:String(error)}))}
+    }catch{res.statusCode=500;res.end(JSON.stringify({error:'CONTROLLED_TEST_TRANSPORT_FAILED'}))}
   })
   server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())))
   const address=server.address();assert.ok(address&&typeof address==='object')

@@ -73,7 +73,7 @@ async function economicScenario(rail: 'evm' | 'mpp') {
       if (!response.ok && path.includes('/fund/')) console.error(JSON.stringify({ listing_fixture_http_failure: { method, path, status: response.status, body: await response.clone().json() } }))
       if (afterHook && await afterHook(path, method, response)) { outgoing.destroy(); return }
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()))
-    } catch (error) { outgoing.writeHead(500, { 'Content-Type': 'application/json' }); outgoing.end(JSON.stringify({ fixture_error: String(error) })) }
+    } catch { outgoing.writeHead(500, { 'Content-Type': 'application/json' }); outgoing.end(JSON.stringify({ fixture_error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
   })
   await new Promise<void>(done => server.listen(0, '127.0.0.1', done)); base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   process.env.CLAWDMARKET_CANONICAL_ORIGIN = base

@@ -438,7 +438,7 @@ test('both SDKs recover genuinely lost committed acceptance HTTP replies after r
           await domain.revokeOrganizationContract(f.org, f.a.id, f.owner)
           outgoing.destroy() // Real TCP response loss, after the acceptance transaction commits.
         } else { outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(JSON.stringify(result)) }
-      } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+      } catch { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
     })
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
     try {
@@ -733,7 +733,7 @@ test('a genuinely lost committed admin resolution reply recovers its original sp
         : await api.GET(request, { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) })
       if (incoming.method === 'PATCH') { assert.equal(response.status, 200); outgoing.destroy() }
       else { outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text()) }
-    } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+    } catch { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   try {
@@ -840,7 +840,7 @@ test('both provider SDKs recover actual lost committed original submission repli
           await domain.revokeOrganizationContract(f.org, f.a.id, f.owner)
           outgoing.destroy()
         } else { outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(JSON.stringify(result)) }
-      } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+      } catch { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
     })
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
     try {
@@ -962,7 +962,7 @@ test('both buyer SDKs recover actual lost committed release replies and original
           await domain.revokeOrganizationContract(f.org, f.a.id, f.owner)
           outgoing.destroy()
         } else { outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(JSON.stringify(result)) }
-      } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+      } catch { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
     })
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
     try {

@@ -86,7 +86,7 @@ test('lost committed HTTP creation reply recovers exact original draft, mileston
         outgoing.statusCode = response.status
         outgoing.setHeader('Content-Type', 'application/json'); outgoing.end(JSON.stringify(result))
       }
-    } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+    } catch { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   try {

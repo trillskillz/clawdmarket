@@ -214,7 +214,7 @@ test('both buyer SDKs recover actual lost committed scoped funding replies, fini
           await db.update(schema.seller_payment_preferences).set({ supported_rails: '[]' }).where(eq(schema.seller_payment_preferences.seller_id, f.seller))
           outgoing.destroy()
         } else { outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(JSON.stringify(result)) }
-      } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+      } catch { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
     })
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
     try {
@@ -399,7 +399,7 @@ test('finite buyer and seller CLI journals recover actual committed fund/output/
         dropAction = ''; committed(result); return // Leave the actual committed reply unacknowledged until its worker is killed.
       }
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(JSON.stringify(result))
-    } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+    } catch { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`

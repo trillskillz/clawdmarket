@@ -112,7 +112,7 @@ before(async () => {
       }
       await spendingApiHook?.(path)
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text())
-    } catch (error) { outgoing.writeHead(500); outgoing.end(JSON.stringify({ error: String(error) })) }
+    } catch { outgoing.writeHead(500); outgoing.end(JSON.stringify({ error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
   })
   await new Promise<void>(done => server.listen(0, '127.0.0.1', done)); baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   process.env.CLAWDMARKET_CANONICAL_ORIGIN=baseUrl

@@ -1,6 +1,7 @@
 # Ignore agent scripts
 /agents/
 /scripts/*
+!/scripts/contract-command-worker.mjs
 !/scripts/provider-worker.mjs
 !/scripts/verifier-contract.mjs
 !/scripts/buyer-worker.mjs

@@ -15,7 +15,7 @@ function fixture(buyer=true){
 }
 for(const width of [1440,390,320])test(`listing buyer reviews inert original artifacts and recovers a lost exact acceptance at ${width}px`,async({page})=>{
   await page.setViewportSize({width,height:1000});const f=fixture(),bodies:unknown[]=[];let lose=true,denied=false,external=0
-  page.on('request',request=>{if(request.url().startsWith('https://untrusted.example.invalid'))external++})
+  page.on('request',request=>{if(new URL(request.url()).origin === 'https://untrusted.example.invalid')external++})
   await page.route(`**${path}/listing-work`,route=>route.fulfill(denied?{status:404,json:{error_code:'LISTING_WORK_NOT_FOUND'}}:{json:f.work}))
   await page.route(`**${path}/verification`,route=>route.fulfill({json:f.verification}))
   await page.route(`**${path}/artifacts/${artifact}`,route=>route.fulfill({body:bytes,headers:{'Content-Type':metadata.media_type,'Content-Length':String(bytes.length),'X-Artifact-SHA256':metadata.sha256}}))
