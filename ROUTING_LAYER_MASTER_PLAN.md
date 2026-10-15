@@ -1,3 +1,32 @@
+## Accepted local listing outcome — 2026-10-15
+
+Source **4cc00d4** is functionally accepted locally as HTTP **1.119**, **71**
+migrations and capability **8/10**. All **170** source hashes match manifest
+SHA-256 `5126f33a3de36b1a5f2c314f98f6bc5334d9fdab9a9ad372d43cf4af9ae060a3`.
+Complete enabled predeploy finishes successfully: **1,069 Node cases, 1,064 pass,
+five expected skips, zero failures**, plus **24 Python cases**, SDK parity/build,
+types and lint. Current built Chromium: **149 pass, eight skips, zero failures
+and zero retries**. Both real disposable listing rails and restart/refund/process
+cases are included. Preservation retains 845 original rows/133 tables, all 71
+migrations/replay, ten immutable guards and five actual evidence queries.
+
+Exact logs and hashes are recorded in
+`docs/evidence/reviewed-listing-2026-10-14/acceptance-progress.json`; earlier failed
+runs below remain historical evidence. The corrected-source complete runs passed,
+not merely isolated reruns. Known build dependency warnings remain documented.
+Security remains blocked by one unapproved high development advisory; full audit
+exit 1, production-only audit exit 0. This is local functional acceptance, not an
+unqualified security release or production/customer evidence. Production was last
+observed at main **96a017b**, HTTP **1.116**. No publication, real funds, global
+execution flags, custody changes, real-user mail or outreach has occurred.
+
+Continue the separate reviewed deposited-credit contract plan in an isolated
+worktree based on this accepted checkpoint. Preserve this listing candidate and
+`bee652c`; do not count a contract foundation as capability 9/10. Existing pilot,
+security, delivery-provider, publication and live-payment dependencies remain.
+
+## Historical checkpoints (superseded by the accepted outcome above)
+
 ## Listing exact-source reacceptance — 4cc00d4
 
 The first complete initialized gate finished 1,066 cases: 1,059 passed, five

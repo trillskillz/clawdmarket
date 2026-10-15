@@ -1,11 +1,16 @@
 {
   "implementation_checkpoint": "4cc00d4",
   "http_contract": "1.119",
-  "accepted_capability_count": "7/10 pending full enabled gate",
+  "accepted_capability_count": "8/10 local functional acceptance",
   "browser": {
-    "status": "running",
+    "status": "passed; terminal log confirms completion",
     "retries": 0,
-    "local_log": "/tmp/clawdmarket-listing-4cc00d4-browser-2026-10-14.log"
+    "local_log": "/tmp/clawdmarket-listing-4cc00d4-browser-2026-10-14.log",
+    "total": 157,
+    "passed": 149,
+    "skipped": 8,
+    "failed": 0,
+    "log_sha256": "1c6657a3a26ab1bc40326e715536dbb3c3c3c41700e0a95cbbf0d5ffd9582f6c"
   },
   "genuine_disposable_economic_and_process": {
     "total": 16,
@@ -32,8 +37,15 @@
     "exception_approved": false
   },
   "enabled_predeploy": {
-    "status": "running",
-    "local_log": "/tmp/clawdmarket-listing-4cc00d4-predeploy-2026-10-14.log"
+    "status": "passed; terminal log confirms completion",
+    "local_log": "/tmp/clawdmarket-listing-4cc00d4-predeploy-2026-10-14.log",
+    "total": 1069,
+    "passed": 1064,
+    "skipped": 5,
+    "failed": 0,
+    "python_passed": 24,
+    "duration_ms": 1292932.928354,
+    "log_sha256": "ddfc3e70c36994b746f51d2155a8cde48f40d6919431312daba496c7e294bb00"
   },
   "publication_performed": false,
   "live_payment_performed": false,
@@ -56,11 +68,13 @@
     "local_log": "/tmp/clawdmarket-listing-browser-final-2026-10-14.log"
   },
   "previous_enabled_predeploy": {
-    "status": "failed; narrowly corrected, exact-source reacceptance pending",
+    "status": "failed; corrected and superseded by passing complete 4cc00d4 gate",
     "total": 1066,
     "passed": 1059,
     "failed": 2,
     "skipped": 5,
     "local_log": "/tmp/clawdmarket-listing-predeploy-final-2026-10-14.log"
-  }
+  },
+  "acceptance_recorded_date": "2026-10-15",
+  "manifest_current_hashes_verified": 170
 }

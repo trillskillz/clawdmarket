@@ -1,3 +1,42 @@
+## Accepted local listing outcome — 2026-10-15
+
+Source **4cc00d4** is functionally accepted locally as HTTP **1.119**, **71**
+migrations and capability **8/10**. All **170** source hashes match manifest
+SHA-256 `5126f33a3de36b1a5f2c314f98f6bc5334d9fdab9a9ad372d43cf4af9ae060a3`.
+Complete enabled predeploy finishes successfully: **1,069 Node cases, 1,064 pass,
+five expected skips, zero failures**, plus **24 Python cases**, SDK parity/build,
+types and lint. Current built Chromium: **149 pass, eight skips, zero failures
+and zero retries**. Both real disposable listing rails and restart/refund/process
+cases are included. Preservation retains 845 original rows/133 tables, all 71
+migrations/replay, ten immutable guards and five actual evidence queries.
+
+Exact logs and hashes are recorded in
+`docs/evidence/reviewed-listing-2026-10-14/acceptance-progress.json`; earlier failed
+runs below remain historical evidence. The corrected-source complete runs passed,
+not merely isolated reruns. Known build dependency warnings remain documented.
+Security remains blocked by one unapproved high development advisory; full audit
+exit 1, production-only audit exit 0. This is local functional acceptance, not an
+unqualified security release or production/customer evidence. Production was last
+observed at main **96a017b**, HTTP **1.116**. No publication, real funds, global
+execution flags, custody changes, real-user mail or outreach has occurred.
+
+Continue the separate reviewed deposited-credit contract plan in an isolated
+worktree based on this accepted checkpoint. Preserve this listing candidate and
+`bee652c`; do not count a contract foundation as capability 9/10. Existing pilot,
+security, delivery-provider, publication and live-payment dependencies remain.
+
+The Node skips cover four retired unbacked-credit service paths and an
+unconfigured Base Sepolia wallet integration. Browser skips retain retired
+credit flows, the dedicated instant-fixture requirement and guarded buyer-chain
+launchers; real disposable economic suites run separately inside enabled gates.
+No skipped test is counted as demonstrated. The original full-gate two failures
+and fixture/setup failures are retained below with their corrections. Current
+logs end in `Pre-deploy checks passed` and `149 passed (4.7m)` respectively; tool
+sessions have completed and expired, so acceptance records these terminal log
+results rather than inventing retained process exit metadata.
+
+## Historical checkpoints and failure analysis
+
 **Current reacceptance source: `4cc00d4`, HTTP 1.119, 71 migrations.** The
 refreshed manifest binds **170** source files; SHA-256
 `5126f33a3de36b1a5f2c314f98f6bc5334d9fdab9a9ad372d43cf4af9ae060a3`.
@@ -11,7 +50,7 @@ Count remains **7/10** until these exact-source runs actually pass. No publicati
 or live execution is authorized. Older 167-file and 149-case records below bind
 the pre-fix checkpoint `6ae6dbb` and are historical, not final fixed-source evidence.
 
-# Reviewed listing local candidate — final acceptance in progress
+# Historical integrated listing candidate — before final acceptance
 
 Integrated implementation checkpoint **6ae6dbb**, local HTTP **1.119**, additive migrations **71**, branch
 `work/local-reviewed-listings-after-pilot-2026-10-14`, based on preserved local
@@ -22,7 +61,7 @@ pilot candidate `bee652c` and inspected production
 binds 167 changed implementation/SDK/migration/workflow/packaging/test files
 against that production base. Its SHA-256 is
 `3b7a359f75629c9fd9d1bccb6d030a45d27913950a01e9a43be419024141a88f`;
-all 167 current hashes match. Documentation is excluded. The source is local only. No push, PR, deployment, live funds, global flag,
+all 167 hashes matched that checkpoint. Documentation is excluded. The source is local only. No push, PR, deployment, live funds, global flag,
 custody change, real-user email or recruitment action has occurred.
 
 **Accepted capability count remains 7/10 while complete final gates run.** This

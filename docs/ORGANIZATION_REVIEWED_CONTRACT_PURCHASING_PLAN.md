@@ -1,10 +1,10 @@
 # Next dependency audit: independently reviewed contract purchasing
 
 This is a read-only dependency plan for the milestone after reviewed listing
-acceptance. The current listing candidate is local HTTP 1.119 at `6ae6dbb`; its
-complete enabled gate is still running. This audit is not another accepted
+acceptance. The listing outcome is accepted locally as HTTP 1.119 at source `4cc00d4`; its
+complete enabled and browser gates pass (1,064 Node and 149 browser passes). This audit is not another accepted
 capability, payment authority, publication permission or change to custody.
-Finish that listing outcome before implementing this scope. Keep the preserved
+The separate contract implementation may now proceed locally. Keep the preserved
 `bee652c` dependable-pilot candidate unchanged.
 
 The initial finite contract scope is one original deposited-credit contract and

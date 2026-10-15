@@ -1,0 +1,24 @@
+✔ different encryptions of same message produce different nonces (0.268285ms)
+✔ decryption with wrong nonce throws (0.453794ms)
+✔ decryption with corrupted ciphertext throws (0.255841ms)
+✔ handles empty string (0.231957ms)
+✔ handles unicode content (0.202821ms)
+✔ verifier refuses unlimited or weakened effective kernel controls (0.838047ms)
+✔ Python adapter rejects unsupported contracts and oversized or nonfinite cases before execution (0.576905ms)
+✔ real Python isolation checks finite JSON without exposing expected answers, host files, environment or network (3759.367613ms)
+✔ real external isolation denies host files, secrets and network, and bounds runtime/output/resources (2903.202603ms)
+﹣ base sepolia config missing, skipping wallet integration tests (0.400514ms) # SKIP
+✔ wallet connector filtering removes targetless injected connector (0.904543ms)
+✔ wallet empty-account errors are actionable and hide viem internals (0.198133ms)
+✔ wallet rejection errors are normalized (0.081924ms)
+✔ transfer guard enforces positive and capped amounts (0.657427ms)
+✔ escrow guard enforces positive and capped amounts (0.145364ms)
+ℹ tests 1069
+ℹ suites 0
+ℹ pass 1064
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 5
+ℹ todo 0
+ℹ duration_ms 1292932.928354
+Pre-deploy checks passed
