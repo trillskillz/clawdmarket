@@ -167,6 +167,7 @@ function dto(row: Grant, actor: string) {
     version: 1 as const, state: row.state, terms: frozen(row), approved_at: row.approved_at, revoked_at: row.revoked_at,
     viewer_role: actor === row.reviewer_account_id ? 'reviewer' as const : 'owner' as const,
     decision: row.decision_reference ? { version: 1 as const, client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true as const } : null,
+    review_url: `/organizations/${row.organization_id}/contract-authorizations/${row.id}`,
     funding_available: reviewedContractFundingEnabled(), funding_api_implemented: true as const, funding_requires_current_review: true as const }
 }
 export async function proposeOrganizationContract(orgId: string, actor: string, input: z.output<typeof organizationContractInput>) {

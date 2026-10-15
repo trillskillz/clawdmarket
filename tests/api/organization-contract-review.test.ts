@@ -49,6 +49,7 @@ function decision(a: any) { return { version: 1, client_reference: crypto.random
 
 test('private contract review freezes original ordered milestones, credit fee/refund terms and an independent organizational reviewer without funding', async () => {
   const f = await fixture(), a = await propose(f)
+  assert.equal(a.review_url, `/organizations/${f.org}/contract-authorizations/${a.id}`)
   assert.equal(a.funding_available, false); assert.equal(a.terms.payment.rail, 'credit'); assert.equal(a.terms.payment.redeemable, false)
   assert.equal(a.terms.payment.upfront_fee_minor, 5); assert.equal(a.terms.payment.refundable_principal_minor, 100)
   assert.equal(a.terms.explicit_buyer_acceptance, true); assert.equal(a.terms.automatic_review_window_acceptance, false)

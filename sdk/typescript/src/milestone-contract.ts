@@ -48,6 +48,20 @@ export type OriginalContractCreditRelease = {
   credit_remaining_principal_minor: number; idempotent?: boolean; observed_at?: string
 }
 export type OriginalContractFundingInput = { version: 1; client_reference: string; authority_hash: string }
+export type OrganizationContractDecision = { version: 1; client_reference: string; authority_hash: string; approve: true }
+export type OrganizationContractAuthorization = {
+  id: string; organization_id: string; contract_id: string; buyer_id: string; team_id: string | null; cost_center: string
+  client_reference: string; authority_hash: string; version: 1; state: 'pending' | 'approved' | 'revoked'
+  viewer_role: 'owner' | 'reviewer'; approved_at: string | null; revoked_at: string | null; decision: OrganizationContractDecision | null
+  review_url: string; funding_available: boolean; funding_api_implemented: true; funding_requires_current_review: true
+  terms: { version: 1; original: { contract_id: string; buyer_id: string; seller_id: string; listing_id: string | null
+    total_minor: number; fee_minor: number; gross_minor: number; expires_at: string; creation: { client_reference: string; request_hash: string }
+    milestones: Array<{ id: string; milestone_index: number; title: string; amount_minor: number; acceptance_spec: Record<string, unknown>
+      deadline_at: string | null; review_window_hours: number }> }
+    expires_at: string; max_daily_minor: number; max_monthly_minor: number; max_lifetime_minor: number
+    payment: { rail: 'credit'; redeemable: false; seller_receives: 'nonwithdrawable_account_credit'; upfront_fee_minor: number; refundable_principal_minor: number }
+    explicit_buyer_acceptance: true; automatic_review_window_acceptance: false }
+}
 export type OriginalContractFunding = { contract: OriginalContractCreation['contract']; milestones: OriginalContractCreation['milestones']
   original_terms: Record<string, unknown>; funding: { id: string; organization_id: string; authorization_id: string; contract_id: string; buyer_id: string
     client_reference: string; request_hash: string; authority_hash: string; created_at: string; gross_minor: number; principal_minor: number

@@ -190,3 +190,5 @@ new reviewed obligations; retain scoped recovery and the payment/submission
 interlocks. Existing ordinary historical contract policy stays unchanged.
 
 Finite buyer/provider exact-command journals, recovery and reviewable local CLI instructions: [original contract command worker](ORIGINAL_CONTRACT_COMMAND_WORKER.md). This does not complete the overall contract capability.
+
+Private owner/selected-reviewer human review: `/organizations/{id}/contract-authorizations/{authorizationId}`. The actual review DTO supplies `review_url`. It discloses original nonwithdrawable-credit terms and cannot fund or inspect participant output. Browser recovery keeps only original decision identity, clears unavailable/private state and preserves original approval references.

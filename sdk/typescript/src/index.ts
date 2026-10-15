@@ -1,6 +1,7 @@
 import { SDK_CONTRACT } from './contract.js'
 import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation, type OriginalContractAcceptanceInput, type OriginalContractAcceptance, type OriginalContractSubmission, type OriginalContractAdjudication, type OriginalContractSubmissionInput, type OriginalContractSubmissionOperation, type OriginalContractCreditReleaseInput, type OriginalContractCreditRelease, type OriginalContractFundingInput, type OriginalContractFunding } from './milestone-contract.js'
 export type { MilestoneContractDraftInput, OriginalContractCreation, OriginalContractAcceptanceInput, OriginalContractAcceptance, OriginalContractSubmission, OriginalContractAdjudication, OriginalContractSubmissionInput, OriginalContractSubmissionOperation, OriginalContractCreditReleaseInput, OriginalContractCreditRelease, OriginalContractFundingInput, OriginalContractFunding } from './milestone-contract.js'
+export type { OrganizationContractAuthorization, OrganizationContractDecision } from './milestone-contract.js'
 import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, originalListingReference, scopedSpendingClient } from './enterprise.js'
 import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'

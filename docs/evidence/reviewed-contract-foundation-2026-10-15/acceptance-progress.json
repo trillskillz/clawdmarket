@@ -1,5 +1,5 @@
 {
-  "stage": "Finite exact command buyer/provider journals and actual CLI kills/restarts; private human UI and full release gates incomplete",
+  "stage": "Private owner/reviewer contract review browser UI verified; participant work UI and full economic/release gates incomplete",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 79,
@@ -48,7 +48,8 @@
     "disposable_public_funding_and_fulfillment": true,
     "independent_funding_process_recovery": true,
     "finite_exact_command_journals": true,
-    "actual_fulfillment_cli_kill_restart_recovery": true
+    "actual_fulfillment_cli_kill_restart_recovery": true,
+    "private_organization_contract_review_ui": true
   },
   "records": {
     "original_use": {
@@ -394,6 +395,10 @@
     "finite-worker": {
       "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/finite-worker.json",
       "source_manifest_sha256": "e5906b8d6882155eef870419f9ae1d9efee5b8ac35fd65200a8d667577cfae51"
+    },
+    "private-review-ui": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/private-review-ui.json",
+      "source_manifest_sha256": "2d21876f71e62fef354dc3a28f708af8297158b67c9b60d078a531b6e5e7ad2e"
     }
   },
   "compatibility_cases": {

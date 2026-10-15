@@ -10,7 +10,11 @@ Payment monitor38763126626 succeeds on readiness/enabled rails/RPC only; it does
 not prove treasury/outbox/anomalies, a paid canary or customer activity. The remote
 GitHub description remains obsolete. Nothing was remotely changed. Full timestamped
 sources/log evidence: `docs/evidence/reviewed-contract-foundation-2026-10-15/PRODUCTION_READONLY_RECHECK_2026-10-15.md`.
-Current contract source remains fba6c92, unfinished local migration78/count8.
+That production recheck was recorded at fba6c92. The subsequent LOCAL contract
+foundation now uses migration79/count8 with separately default-disabled scoped
+funding, finite command recovery and private organizational review UI. Participant
+work UI/full economic/release gates remain unfinished; see the current contract
+purchasing audit and source manifest. Production was not changed.
 
 # Dependable purchasing issue register
 

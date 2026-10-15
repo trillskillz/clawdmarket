@@ -1,3 +1,36 @@
+## Private original contract review UI verified — local only
+
+Actual review responses now link the private owner/selected-reviewer page. It
+shows frozen original milestone IDs/requirements/deadlines/review windows, exact
+principal/fee/gross, department/ceilings and nonwithdrawable seller-credit terms.
+Organizational role separation is explicitly not marketplace independence.
+Selected reviewer approval requires explicit confirmation; the owner cannot approve.
+Saved decision identity survives lost replies without storing private requirements
+or output. Role denial, unavailable reads, blur/background and expired freshness
+clear the private view. Revocation preserves paid obligations; no funding/output/
+acceptance/release authority is granted by review. Fresh funding remains disabled.
+
+Current **25/25** API/canonical/SDK cases plus a final **5/5** review-API rerun
+for the exact review URL pass. **14/14 Chromium** cases pass, zero skips/retries,
+covering new contract review at1440/390/320px and existing listing review. Browser
+API responses are controlled; separate actual API cases enforce access/CSRF/
+original scope. Types/lint/SDK parity/build and production build pass. An initial
+React cleanup-ref lint warning was corrected. No new migration; migration79 and
+prior845-row local preservation unchanged/not rerun. No live/independent activity.
+
+Manifest **73** source/config files versus e55e151, SHA-256 `2d21876f71e62fef354dc3a28f708af8297158b67c9b60d078a531b6e5e7ad2e`.
+Evidence: `docs/evidence/reviewed-contract-foundation-2026-10-15/private-review-ui.json`.
+HTTP1.119/count8 stay local; prior accepted listing/pilot candidates stay unchanged.
+Participant human work UI, remaining partial settlement/dispute/refund and shared
+reservation scenarios and complete release gates remain before capability9/1.120.
+Next exercise actual new scoped funding through those economic terminal outcomes;
+retain original references/consent/output/postings/inventory and shared gross.
+No publication, real funds, production flags, custody changes, mail or outreach.
+Existing security/provider inbox/admission/calibration/demand and authorized live
+canary/treasury-gas dependencies remain external. Rollback preserves paid recovery.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Finite original buyer/provider command recovery verified — local only
 
 One exact-command worker durably journals explicit FUND, seller OUTPUT, buyer
