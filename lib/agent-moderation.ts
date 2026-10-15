@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { readWithLocalContentionRecovery } from '@/lib/local-sqlite-read';
 import { users } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 
@@ -20,10 +21,10 @@ export async function isIpBlacklisted(ip: string): Promise<boolean> {
 }
 
 export async function isUserBanned(userId: string): Promise<boolean> {
-  const res = await (db as any).$client.execute({
+  const res = await readWithLocalContentionRecovery(source => source.$client.execute({
     sql: `SELECT user_id FROM banned_users WHERE user_id = ? LIMIT 1`,
     args: [userId],
-  });
+  }));
   return (res.rows || []).length > 0;
 }
 

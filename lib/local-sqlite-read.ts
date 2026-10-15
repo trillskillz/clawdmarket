@@ -18,11 +18,14 @@ export async function readWithLocalContentionRecovery<T>(read: (source: typeof d
   const url = process.env.TURSO_DATABASE_URL?.trim()
   if (!url?.startsWith('file:') || url.startsWith('file::memory:')) return await read(db)
   for (let attempt = 0; attempt < 6; attempt++) {
-    const client = createClient({ url })
-    try { return await read(drizzle(client, { schema })) }
+    let client: ReturnType<typeof createClient> | undefined
+    try {
+      client = createClient({ url })
+      return await read(drizzle(client, { schema }))
+    }
     catch (error) {
       if (!isLocalSqliteContention(error) || attempt === 5) throw error
-    } finally { client.close() }
+    } finally { client?.close() }
     await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))
   }
   throw new Error('local_sqlite_read_unavailable')
