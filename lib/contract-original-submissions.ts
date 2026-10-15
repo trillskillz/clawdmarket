@@ -12,6 +12,7 @@ export const reviewedContractSubmissionInput = z.object({ version: z.literal(1),
   client_reference: z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
   artifact_bundle: z.record(z.string(), z.unknown()),
 }).strict()
+export const reviewedContractSubmissionLookup = z.object({ client_reference: z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/).optional() }).strict()
 type Input = z.output<typeof reviewedContractSubmissionInput>
 function fail(code: string, status = 409): never { throw new PurchasingError(code, status) }
 const hash = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
@@ -49,6 +50,26 @@ async function dto(source: PurchasingSource, operation: typeof operations.$infer
       content_hash: operation.content_hash, client_reference: operation.client_reference,
       artifact_bundle: artifacts, auto_check_result: submission.auto_check_result, auto_check_report: JSON.parse(submission.auto_check_report),
       semantic_accuracy: 'unmeasured' as const, remote_execution_observed: false as const, authorizes_payment: false as const } }
+}
+
+/** Original participants only; organizational review alone never exposes seller output. */
+export async function inspectOriginalReviewedContractSubmission(source: PurchasingSource, contractId: string,
+  milestoneId: string, actor: string, clientReference?: string) {
+  if (clientReference !== undefined) reviewedContractSubmissionLookup.parse({ client_reference: clientReference })
+  const [participant] = await source.select().from(contracts).where(eq(contracts.id, contractId)).limit(1)
+  if (!participant || ![participant.buyer_id, participant.seller_id].includes(actor)) fail('CONTRACT_SUBMISSION_NOT_FOUND', 404)
+  const original = await originalReviewedContractUse(source, contractId)
+  if (!original || ![original.authorization.buyer_id, original.authorization.seller_id].includes(actor)) fail('CONTRACT_SUBMISSION_NOT_FOUND', 404)
+  const [milestone] = await source.select().from(contract_milestones).where(and(eq(contract_milestones.id, milestoneId), eq(contract_milestones.contract_id, contractId))).limit(1)
+  const frozen = original.terms.original.milestones.find(m => m.id === milestoneId)
+  if (!milestone || !frozen) fail('CONTRACT_SUBMISSION_NOT_FOUND', 404)
+  const [operation] = await source.select().from(operations).where(and(eq(operations.contract_id, contractId), eq(operations.milestone_id, milestoneId),
+    clientReference === undefined ? eq(operations.submission_id, milestone.submission_id ?? '') : eq(operations.client_reference, clientReference))).limit(1)
+  if (clientReference !== undefined && !operation || milestone.submission_id && !operation && clientReference === undefined) fail('CONTRACT_SUBMISSION_NOT_FOUND', 404)
+  const empty = { contract_id: contractId, contract_state: original.contract.state, milestone_id: milestoneId, milestone_state: milestone.state,
+    selected_submission_id: milestone.submission_id, credit_remaining_principal_minor: original.remaining_principal_minor,
+    submission: null, superseded: false }
+  return { ...(operation ? await dto(source, operation) : empty), original_requirements: frozen, observed_at: new Date().toISOString() }
 }
 
 /** Seller-only append/replay. Finite key presence never accepts output or releases credit.

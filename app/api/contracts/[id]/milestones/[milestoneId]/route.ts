@@ -4,6 +4,9 @@ import { db } from '@/lib/db';
 import { contract_disputes, contract_milestones, contract_submissions, contracts, organization_contract_authorizations } from '@/lib/schema';
 import { originalReviewedContractUse } from '@/lib/organization-contract-uses';
 import { PurchasingError } from '@/lib/organization-purchasing-transaction';
+import { inspectOriginalReviewedContractSubmission, reviewedContractSubmissionLookup } from '@/lib/contract-original-submissions';
+import { isLocalSqliteContention, readWithLocalContentionRecovery } from '@/lib/local-sqlite-read';
+import { purchasingResult } from '@/lib/organization-purchasing-api';
 import { milestoneActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionMilestone, nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
@@ -17,6 +20,24 @@ import {
 export const dynamic = 'force-dynamic';
 
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string; milestoneId: string }> }) {
+  const auth = await resolveRequestPrincipal(req), { id, milestoneId } = await params;
+  if (!CONTRACTS_V1_ENABLED) return purchasingResult({ error: 'Contracts feature disabled' }, 404);
+  if (!auth) return purchasingResult({ error: 'Unauthorized' }, 401);
+  if (!isValidUUID(id) || !isValidUUID(milestoneId)) return purchasingResult({ error: 'Invalid contract or milestone ID' }, 400);
+  try {
+    const query = reviewedContractSubmissionLookup.parse(Object.fromEntries(req.nextUrl.searchParams));
+    const result = await readWithLocalContentionRecovery(source => inspectOriginalReviewedContractSubmission(source, id, milestoneId, auth.userId, query.client_reference));
+    return purchasingResult(result);
+  } catch (error: any) {
+    if (error instanceof PurchasingError) return purchasingResult({ error: error.message, code: error.code }, error.status);
+    if (error?.issues || error?.errors) return purchasingResult({ error: 'Invalid submission lookup' }, 400);
+    if (process.env.TURSO_DATABASE_URL?.startsWith('file:') && isLocalSqliteContention(error)) return purchasingResult({ error: 'Original submission unavailable', code: 'PURCHASING_STORAGE_BUSY' }, 503);
+    console.error('Original contract submission read failed:', error);
+    return purchasingResult({ error: 'Original submission unavailable' }, 503);
+  }
+}
 
 class MilestoneActionError extends Error {
   constructor(message: string, public readonly status = 400) {

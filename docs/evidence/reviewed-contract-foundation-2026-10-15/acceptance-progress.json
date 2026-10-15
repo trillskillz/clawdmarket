@@ -1,5 +1,5 @@
 {
-  "stage": "internal immutable original submission foundation and public legacy-path exclusion; no reviewed funding or buyer acceptance",
+  "stage": "participant-only original submission inspection; immutable internal submission; no reviewed funding or acceptance",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 75,
@@ -28,7 +28,8 @@
     "live_funding_performed": false,
     "independent_customer_activity_demonstrated": false,
     "public_reviewed_contract_submission": false,
-    "internal_original_submission": true
+    "internal_original_submission": true,
+    "participant_original_submission_get": true
   },
   "records": {
     "original_use": {
@@ -70,6 +71,18 @@
     "submission-preservation": {
       "local_log": "/tmp/clawdmarket-contract-original-submissions-preservation-2026-10-15.log",
       "log_sha256": "37674fcae3d96feb03a18adeeddd21e97d7fb241c4e6ca47200c45954430bdc3"
+    },
+    "submission-read": {
+      "local_log": "/tmp/clawdmarket-contract-submission-read-focused-2026-10-15.log",
+      "log_sha256": "f6503fa97b26a441c931fb69be8e47d9aa5cd31b679566681c2220b748311b0c"
+    },
+    "submission-read-compatibility": {
+      "local_log": "/tmp/clawdmarket-contract-submission-read-compatibility-2026-10-15.log",
+      "log_sha256": "bb2ee9dff97b0a572d5d2a3e5477db38bc7adb51b266ccb0a96952a74e19a1d6"
+    },
+    "submission-read-build": {
+      "local_log": "/tmp/clawdmarket-contract-submission-read-build-2026-10-15.log",
+      "log_sha256": "9d7cfaf026a90c07e384109c415340b52812d95709fac7eaa1012411da3cd04f"
     }
   },
   "compatibility_cases": {
@@ -96,7 +109,17 @@
   },
   "source_manifest": {
     "files": 43,
-    "sha256": "d73cfc314a61cbd7b204b0c767cf0fc589c46fdefe27662eb0abfd2ddd748dba",
+    "sha256": "908a0d134a6fc84b09630a530f78dd2e027f0645d0676f09fb63e24bb1fe699b",
     "baseline": "e55e151"
+  },
+  "private_inspection_cases": {
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  "readonly_compatibility_cases": {
+    "passed": 48,
+    "failed": 0,
+    "skipped": 0
   }
 }

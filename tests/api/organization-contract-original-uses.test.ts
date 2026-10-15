@@ -223,6 +223,23 @@ test('internal original seller submission replays one immutable output and finit
   assert.equal(original.submission.semantic_accuracy, 'unmeasured'); assert.equal(original.submission.remote_execution_observed, false)
   assert.equal(original.credit_remaining_principal_minor, 100); assert.equal(original.milestone_state, 'AWAITING_BUYER_REVIEW')
   const { generateJWT } = await import('@/lib/auth'), milestoneApi = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route')
+  const originalPath = `/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}`
+  const milestoneContext = { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) }
+  for (const actor of [f.buyer, f.seller, f.owner, f.reviewer, f.other]) {
+    const response = await milestoneApi.GET(new NextRequest(`http://localhost${originalPath}`, { headers: {
+      Authorization: `Bearer ${generateJWT({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })}` } }), milestoneContext)
+    if (actor === f.buyer || actor === f.seller) {
+      assert.equal(response.status, 200); assert.equal(response.headers.get('Cache-Control'), 'private, no-store')
+      const inspected = await response.json(); assert.equal(inspected.submission.content_hash, original.submission.content_hash)
+      assert.equal(inspected.submission.artifact_bundle.report, input.artifact_bundle.report); assert.ok(Date.parse(inspected.observed_at))
+    } else { assert.equal(response.status, 404); assert.equal(JSON.stringify(await response.json()).includes(input.artifact_bundle.report), false) }
+  }
+  const { createNamedAgentCredential } = await import('@/lib/agent-named-credentials')
+  const read = await createNamedAgentCredential({ agentId: f.buyerAgent, name: 'Original submission read', scopes: ['agent:read'], actorCredentialId: null })
+  assert.equal(read.kind, 'created'); if (read.kind !== 'created') throw new Error('Read fixture failed')
+  assert.equal((await milestoneApi.GET(new NextRequest(`http://localhost${originalPath}`, { headers: { 'X-ClawdMarket-Agent-Key': read.api_key } }), milestoneContext)).status, 200)
+  assert.equal((await milestoneApi.PATCH(new NextRequest(`http://localhost${originalPath}`, { method: 'PATCH', headers: { 'X-ClawdMarket-Agent-Key': read.api_key,
+    'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve' }) }), milestoneContext)).status, 401)
   for (const [action, actor] of [['submit', f.seller], ['approve', f.buyer], ['mark_paid', f.buyer]]) {
     const path = `/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}`
     const response = await milestoneApi.PATCH(new NextRequest(`http://localhost${path}`, { method: 'PATCH', headers: {
@@ -245,6 +262,10 @@ test('internal original seller submission replays one immutable output and finit
   assert.notEqual(next.submission.id, original.submission.id); assert.equal(next.submission.auto_check_result, 'pass', 'paid original frozen requirements govern delivery')
   const replay = await submit(f.original.contract.id, f.original.milestones[0].id, f.seller, input)
   assert.equal(replay.submission.id, original.submission.id); assert.equal(replay.superseded, true); assert.equal(replay.selected_submission_id, next.submission.id)
+  const recovered = await milestoneApi.GET(new NextRequest(`http://localhost${originalPath}?client_reference=${input.client_reference}`, { headers: {
+    Authorization: `Bearer ${generateJWT({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' })}` } }), milestoneContext)
+  assert.equal(recovered.status, 200); const recoveredBody = await recovered.json()
+  assert.equal(recoveredBody.submission.id, original.submission.id); assert.equal(recoveredBody.superseded, true)
   assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
 })
 test('missing finite keys and unbounded original submission data cannot create acceptance or output records', { skip: !enabled }, async () => {

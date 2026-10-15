@@ -1,3 +1,26 @@
+## Private original submission inspection verified
+
+GET `/api/contracts/{id}/milestones/{milestoneId}` now exposes only original
+reviewed funded work to its buyer/seller. It returns frozen requirements, selected
+original output/hash, held principal and observed_at; exact client_reference
+recovers older immutable output with explicit superseded state. Current owner or
+selected reviewer cannot read seller output through organization review authority.
+Named agent:read credentials can inspect but cannot approve/pay. Unavailable data
+returns an error, never invented zero work. Responses are private/no-store.
+
+Current participant/privacy/recovery controls pass 2/2; separate ordinary credit
+and canonical API compatibility passes 48/48, all with no skips/failures. Current
+types/lint/SDK parity and production build pass in the contract-submission-read
+logs. These are focused checks of this readonly addition; the earlier 64-case
+submission/interlock gate remains historical evidence, not a new full release.
+Migration stays 75. Source manifest is refreshed below. No reviewed funding,
+public seller submission, exact buyer acceptance/release or capability 9 is enabled.
+The separate e55e151 listing candidate stays accepted, unchanged and security-blocked.
+Continue immutable exact-submission buyer decisions before public funding, then
+canonical financial/client/UI/recovery acceptance. Keep all work local.
+
+## Earlier foundation checkpoints
+
 ## Current original submission checkpoint — migration 75
 
 The local contract continuation now has an INTERNAL original seller submission

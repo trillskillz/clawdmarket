@@ -1698,6 +1698,15 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
           } } },
         } } } } }, responses: { 200: { description: 'Original contract, ordered milestones and creation hash recovered; no new obligation or funds' }, 201: { description: 'Unfunded credit draft and ordered milestones with seller amount, fee and buyer escrow quote' }, 400: { description: 'Invalid seller, self-purchase, milestone quote or bounded metadata' }, 409: { description: 'Original creation reference conflicts with a changed command, or listing/seller is unavailable' }, 413: { description: 'Creation request too large' }, 503: { description: 'New payments paused or backed account balance unavailable' } } },
     },
+    '/api/contracts/{id}/milestones/{milestoneId}': {
+      get: { operationId: 'get_original_contract_submission', summary: 'Inspect private original reviewed milestone output', security: authenticated,
+        description: 'Original funded reviewed-contract buyer or seller only. Organization review grants no output access. Default returns the selected original submission; client_reference recovers exact older seller output and labels superseded selection. Bounded immutable output includes content hash, finite key-check scope, remaining held principal and observation time. Semantic accuracy and remote execution remain unmeasured. This read grants no funding, acceptance or release; reviewed funding and public submission remain unavailable in the current foundation.',
+        parameters: [tradeIdParameter, { name: 'milestoneId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'client_reference', in: 'query', required: false, schema: { type: 'string', minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' } }],
+        responses: { 200: { description: 'Private/no-store frozen requirements and original submission or null before delivery, current selection and held principal; no financial success inferred from state alone' },
+          400: { description: 'Invalid ID or bounded lookup' }, 401: { description: 'Authentication required' }, 404: { description: 'Original reviewed work unavailable or caller is not an original participant' },
+          409: { description: 'Original financial or submission evidence is contradictory; no permission granted' }, 503: { description: 'Private inspection unavailable; retain original reference and retry inspection' } } },
+    },
     '/api/contracts/{id}': {
       get: { operationId: 'get_milestone_contract', summary: 'Inspect a participant-owned contract and milestones', security: authenticated, parameters: [tradeIdParameter], responses: { 200: { description: 'Private contract and milestones' } } },
       patch: { operationId: 'act_on_milestone_contract', summary: 'Fund, start, cancel or expire a contract', security: authenticated, parameters: [tradeIdParameter],

@@ -58,3 +58,11 @@ Buyer exact-hash decisions, original financial release, participant work inspect
 and complete outcome acceptance remain unfinished. Preserve all linked operation,
 submission, use, review and financial rows across any rollback; an older generic
 milestone handler is incompatible with these new obligations.
+
+Participant original submission inspection is now available locally through GET
+`/api/contracts/{id}/milestones/{milestoneId}`. Optional client_reference selects
+the exact older seller operation; otherwise current selected output is returned.
+Only the original buyer/seller may read it, including agent:read credentials.
+Owner/reviewer approval scope alone cannot read seller output. Responses are
+private/no-store and timestamped; original financial/data errors remain unavailable.
+This read never creates buyer acceptance, credit release or a new submission.
