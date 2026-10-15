@@ -1,11 +1,15 @@
 # Reviewed listing local candidate — final acceptance in progress
 
-Local HTTP **1.119**, additive migrations **71**, branch
+Integrated implementation checkpoint **6ae6dbb**, local HTTP **1.119**, additive migrations **71**, branch
 `work/local-reviewed-listings-after-pilot-2026-10-14`, based on preserved local
 pilot candidate `bee652c` and inspected production
 `96a017b6019920f47af32d86a7e476c9b9c07808`. Separate original claim checkpoint
 `b233dfd` passes 91 focused cases and migration preservation. The integrated
-source below is local only. No push, PR, deployment, live funds, global flag,
+[source manifest](ORGANIZATION_REVIEWED_LISTING_SOURCE_MANIFEST_2026-10-14.json)
+binds 167 changed implementation/SDK/migration/workflow/packaging/test files
+against that production base. Its SHA-256 is
+`3b7a359f75629c9fd9d1bccb6d030a45d27913950a01e9a43be419024141a88f`;
+all 167 current hashes match. Documentation is excluded. The source is local only. No push, PR, deployment, live funds, global flag,
 custody change, real-user email or recruitment action has occurred.
 
 **Accepted capability count remains 7/10 while complete final gates run.** This
@@ -71,17 +75,35 @@ for reviewed listing trades.
 - `/tmp/clawdmarket-listing-build-final-2026-10-14.log` exits zero for the current
   production build. Existing MPP/Tempo dynamic dependency warnings remain.
 - Full enabled predeploy is running in
-  `/tmp/clawdmarket-listing-predeploy-current-2026-10-14.log`. Full built Chromium,
-  zero retries, is running in
-  `/tmp/clawdmarket-listing-browser-current-2026-10-14.log`. Their final outcomes
-  are pending; the earlier targeted browser run had 13 pass/two mobile overflow
+  `/tmp/clawdmarket-listing-predeploy-final-2026-10-14.log`. Full built Chromium
+  passes in `/tmp/clawdmarket-listing-browser-final-2026-10-14.log`: **157 total,
+  149 passed, eight expected skips, zero failures and zero retries**, 4.8 minutes.
+  All 15 new owner/reviewer and buyer/seller listing journeys pass at desktop,
+  390px and 320px. Both use fresh fully
+  migrated disposable databases; the browser database uses WAL for concurrent
+  fixture/page reads and writes. The enabled predeploy final outcome
+  is pending; the earlier targeted browser run had 13 pass/two mobile overflow
   failures, now corrected in the final build.
 - Fresh original-database migration/replay/row preservation and five evidence
-  queries run in `/tmp/clawdmarket-listing-final-preservation-2026-10-14.log`.
+  queries pass in `/tmp/clawdmarket-listing-final-preservation-2026-10-14.log`.
   The previous migration-71 report preserves all original 845 business rows/133
   tables, ten immutable guards, original migration rows, zero inherited new
-  authority, integrity `ok` and zero foreign-key anomalies. Record the fresh
-  final outcome before acceptance.
+  authority, integrity `ok` and zero foreign-key anomalies. The fresh final run also exits zero with exactly these counts.
+
+A first broad gate was stopped after seven existing admin/agent-auth failures
+showed its disposable database had not been initialized/migrated (including a
+missing api_key_prefix column). Its successful financial cases remain recorded,
+but it is not an accepted full run. First full browser: **144 passed, eight
+expected skips, five failed**; all 15 new listing cases passed. Missing runtime
+migration readiness caused four operational-console failures, and an existing
+cycle fixture write failed under concurrent local reads. A targeted rerun after
+migration passed three/five, but reused fixed receipt IDs collided and another
+cycle write failed. The final unchanged-source run uses a fresh migrated WAL
+database, not that reused fixture state. No runtime guard or test expectation
+was relaxed. The unchanged-source final browser run passes all 149 runnable cases. Its eight
+expected skips are three retired unbacked-credit journeys and five scenarios
+requiring separately supplied live economic browser fixtures; real disposable
+L1/Tempo economics is tested in the Node suite. Enabled predeploy remains pending.
 
 Initial failures are retained honestly: missing error-code/SDK operation types,
 permissive new TypeScript reference validation, test response inference, faulty
@@ -89,6 +111,24 @@ post-race inspection, rate-limit admission contention before inventory CAS,
 mobile preformatted output overflow, and a build database parent directory/setup
 namespace issue. Corrections preserve policy/rate limiting and original payment
 semantics. No retry changes a saved financial reference or signs new bytes.
+
+## Fresh public baseline recheck
+
+Read-only recheck at `2026-10-15T03:23:29.701Z` still finds main
+[`96a017b`](https://github.com/trillskillz/clawdmarket/commit/96a017b6019920f47af32d86a7e476c9b9c07808)
+and live HTTP **1.116**. Public statistics remain 89 profiles, 47 registrations,
+15 recently online, 352 legacy listing records/83 active, 21 completed trades,
+$0.92 recorded volume, $0.02 fees and zero recorded volume over 24 hours. There
+are 23 total trade records, which differs from completed trades. These legacy
+production fields are not the local cohort/executable-service terminology, and
+cannot establish independent ownership or customer demand. Public JSON and
+recent CI records are saved under `evidence/reviewed-listing-2026-10-14/`.
+Latest main payment monitor is
+[38666090566](https://github.com/trillskillz/clawdmarket/actions/runs/38666090566),
+created `2026-10-15T01:31:12Z`, successful on the same production SHA. Inspection of its public log confirms a GET of `/api/health/ready` and
+checks of enabled rails and Base/Tempo RPC health only. This monitor
+readiness must not be presented as a new successful paid canary. No fresh live
+paid journey was run by this work.
 
 ## Release, rollback and external actions
 
@@ -107,8 +147,23 @@ checks on the exact reviewed source; back up the database; migrate runtime schem
 **before** deploying the matching application; verify the same deployed SHA,
 contract 1.119 and scoped live read-only smoke. Do not dispatch workflows, push,
 change repository metadata, deploy or enable global execution automatically.
-Rollback to the previous application only after reviewing original pending claims,
-receipts and settlement outboxes. Retain all additive authority/use/claim tables,
+Before rollback, inspect original pending claims, receipts and settlement
+outboxes. A pre-listing application is compatible only when every listing ledger
+below is empty. A pending/revoked grant still blocks review bypass, and even a
+completed original use must retain consumed-listing exclusion. Once a grant/use
+exists, retain the listing financial handlers and recovery APIs; roll back only
+presentation/admission or prepare a compatible recovery release. This read-only
+check establishes compatibility; it does not authorize clearing any records:
+
+```sql
+SELECT 'listing_reviews' AS ledger, COUNT(*) AS rows FROM organization_listing_authorizations
+UNION ALL SELECT 'listing_uses', COUNT(*) FROM organization_listing_uses
+UNION ALL SELECT 'listing_evm_claims', COUNT(*) FROM organization_listing_payment_claims
+UNION ALL SELECT 'listing_tempo_intents', COUNT(*) FROM organization_listing_mpp_intents
+UNION ALL SELECT 'listing_tempo_claims', COUNT(*) FROM organization_listing_mpp_claims;
+```
+
+Retain all additive authority/use/claim tables,
 financial references, immutable evidence and attribution. Do not reactivate a
 consumed reviewed listing, clear a wallet hold or replace an original operation.
 

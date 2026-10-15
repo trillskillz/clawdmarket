@@ -1,0 +1,44 @@
+{
+  "implementation_checkpoint": "6ae6dbb",
+  "http_contract": "1.119",
+  "accepted_capability_count": "7/10 pending full enabled gate",
+  "browser": {
+    "total": 157,
+    "passed": 149,
+    "skipped": 8,
+    "failed": 0,
+    "retries": 0,
+    "local_log": "/tmp/clawdmarket-listing-browser-final-2026-10-14.log"
+  },
+  "genuine_disposable_economic_and_process": {
+    "total": 16,
+    "passed": 16,
+    "skipped": 0,
+    "failed": 0,
+    "local_log": "/tmp/clawdmarket-listing-economic-process-current-2026-10-14.log"
+  },
+  "migration_preservation": {
+    "migrations": 71,
+    "original_tables_preserved": 133,
+    "original_rows_preserved": 845,
+    "foreign_key_anomalies": 0,
+    "integrity": "ok",
+    "immutable_reputation_guards": 10,
+    "working_evidence_queries": 5,
+    "inherited_task_or_listing_authority": 0,
+    "local_log": "/tmp/clawdmarket-listing-final-preservation-2026-10-14.log"
+  },
+  "security": {
+    "full_audit_exit": 1,
+    "high_advisories": 1,
+    "production_audit_exit": 0,
+    "exception_approved": false
+  },
+  "enabled_predeploy": {
+    "status": "running",
+    "local_log": "/tmp/clawdmarket-listing-predeploy-final-2026-10-14.log"
+  },
+  "publication_performed": false,
+  "live_payment_performed": false,
+  "independent_customer_activity_demonstrated": false
+}

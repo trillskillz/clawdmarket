@@ -94,7 +94,12 @@ For release, follow the preserved pilot policy plus the final listing audit when
 complete: protected exact-source gates, migration before application deployment,
 same-SHA smoke and scoped admission. No push, metadata publication, deployment,
 live canary, live funding, global flag, custody change or recruitment action is
-authorized by this local candidate. Rollback application code only after checking
-original signed/payment outboxes; retain all grants, uses, claims, receipts,
-artifacts and immutable historical attribution. Do not drop additive tables or
+authorized by this local candidate. Rollback must preserve the listing financial guards and original recovery APIs.
+A pre-listing application is compatible only while all listing grant/use/claim
+ledgers are empty. Even a pending or revoked grant prevents its original buyer
+from bypassing review; even a terminal use must retain consumed-listing exclusion.
+Once any listing authority exists, roll back presentation/admission separately or
+prepare a compatible recovery release retaining these handlers, rather than
+reverting to code that ignores them. Inspect original signed/payment outboxes;
+retain all grants, uses, claims, receipts, artifacts and immutable attribution. Do not drop additive tables or
 recycle listings/wallet nonces to recover an interrupted purchase.
