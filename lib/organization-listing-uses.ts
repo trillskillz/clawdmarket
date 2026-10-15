@@ -17,7 +17,11 @@ function fail(): never { throw new PurchasingError('ORGANIZATION_LISTING_USE_INV
 export async function originalListingPayment(source: PurchasingSource, tradeId: string) {
   const [use] = await source.select().from(uses).where(eq(uses.trade_id, tradeId)).limit(1)
   if (!use) {
-    const [orphan] = await source.all(sql`SELECT id FROM trades WHERE id=${tradeId} AND client_reference GLOB 'organization-listing:*' LIMIT 1`)
+    // client_reference was historically buyer supplied. A textual prefix alone
+    // cannot adopt a legacy trade into this authority or close its recovery path.
+    const [orphan] = await source.all(sql`SELECT t.id FROM trades t JOIN organization_listing_authorizations a
+      ON t.client_reference=('organization-listing:' || a.id) AND t.listing_id=a.listing_id AND t.buyer_id=a.buyer_id
+      WHERE t.id=${tradeId} LIMIT 1`)
     if (orphan) fail()
     return null
   }
@@ -77,7 +81,9 @@ export async function organizationListingExposure(source: PurchasingSource, orgI
     if (![daily, monthly, lifetime].every(Number.isSafeInteger)) fail()
   }
   const [orphanTrade] = await source.all(sql`SELECT t.id FROM trades t JOIN organization_trade_attributions a ON a.trade_id=t.id
-    WHERE a.organization_id=${orgId} AND t.buyer_id=${buyerId} AND t.client_reference GLOB 'organization-listing:*'
+    JOIN organization_listing_authorizations g ON t.client_reference=('organization-listing:' || g.id)
+      AND t.listing_id=g.listing_id AND t.buyer_id=g.buyer_id
+    WHERE a.organization_id=${orgId} AND t.buyer_id=${buyerId}
       AND NOT EXISTS(SELECT 1 FROM organization_listing_uses u WHERE u.trade_id=t.id) LIMIT 1`)
   if (orphanTrade) fail()
   return { daily, monthly, lifetime, gas, fees }

@@ -3,9 +3,10 @@ import { privateKeyToAccount } from 'viem/accounts'
 
 export type TaskFixtureSource={db:typeof import('@/lib/db').db;schema:typeof import('@/lib/schema')}
 const treasuryKey=`0x${'99'.repeat(32)}` as const,treasury=privateKeyToAccount(treasuryKey).address.toLowerCase(),token=`0x${'44'.repeat(20)}`,tempoToken='0x20c0000000000000000000000000000000000000'
-export async function reviewedTaskFixture(source:TaskFixtureSource,tempo=false,accountPoster=false){
+export async function reviewedTaskFixture(source:TaskFixtureSource,tempo=false,accountPoster=false,registeredIds=false){
   const {db,schema}=source
-  const org=crypto.randomUUID(),buyerAgent=crypto.randomUUID(),providerAgent=crypto.randomUUID(),task=`legacy-task-${crypto.randomUUID()}`,bid=crypto.randomUUID(),team=crypto.randomUUID(),now=new Date()
+  const agentId=()=>registeredIds?`agent_${crypto.randomUUID()}`:crypto.randomUUID()
+  const org=crypto.randomUUID(),buyerAgent=agentId(),providerAgent=agentId(),task=`legacy-task-${crypto.randomUUID()}`,bid=crypto.randomUUID(),team=crypto.randomUUID(),now=new Date()
   const owner=`owner-${org}`,reviewer=`reviewer-${org}`,other=`viewer-${org}`,buyer=`user_agent_${buyerAgent}`,seller=`user_agent_${providerAgent}`
   await db.insert(schema.users).values([owner,reviewer,other,buyer,seller].map(id=>({id,name:id,email:`${id}@test.invalid`,password_hash:'unused'})))
   await db.insert(schema.agents).values([buyerAgent,providerAgent].map(id=>({id,name:'Original task participant',description:'Disposable task authority fixture',capabilities:'["code-review"]',endpoint:'https://example.invalid',owner_address:'',api_key:'unused'})))
@@ -26,4 +27,3 @@ export async function reviewedTaskFixture(source:TaskFixtureSource,tempo=false,a
   const prefix=`/api/organizations/${org}/task-authorizations`
   return {org,owner,reviewer,other,buyer,seller,buyerAgent,providerAgent,team,task,bid,body,prefix,roleId:role.role.id}
 }
-

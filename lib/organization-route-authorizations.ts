@@ -23,7 +23,7 @@ const hash = (value: unknown) => createHash('sha256').update(canonicalContract(v
 const reference = z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/)
 const units = z.string().regex(/^[1-9][0-9]{0,77}$/)
 const proposalFields = { client_reference: reference, route_id: z.uuid().optional(),
-  agent_id: z.uuid().optional(), route_request: routePlanInput.optional(),
+  agent_id: z.string().min(1).max(200).optional(), route_request: routePlanInput.optional(),
   reviewer_role_id: z.uuid(), max_daily: money, max_monthly: money, max_lifetime: money,
   mandate: routeMandateInput }
 export const organizationRouteInput = z.discriminatedUnion('version', [

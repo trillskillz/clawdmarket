@@ -24,7 +24,7 @@ const units = z.string().regex(/^[1-9][0-9]{0,77}$/)
 const fail = (code: string, status = 409): never => { throw new PurchasingError(code, status) }
 export const organizationListingInput = z.object({
   version: z.union([z.literal(1), z.literal(2)]), client_reference: reference,
-  listing_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{2,199}$/), buyer_agent_id: z.uuid(), reviewer_role_id: z.uuid(),
+  listing_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{2,199}$/), buyer_agent_id: z.string().min(1).max(200), reviewer_role_id: z.uuid(),
   delivery: requirementsSchema.strict(), expected_total: money, max_daily: money, max_monthly: money, max_lifetime: money,
   max_lifetime_chain_fee_units: units, expires_at: z.iso.datetime({ offset: true }),
   expected_token_decimals: z.number().int().min(0).max(36), expected_token_usd_price: z.number().finite().positive(),
@@ -92,11 +92,13 @@ async function access(row: Grant, actor: string, source: PurchasingSource) {
   if (actor !== row.reviewer_account_id) fail('ORGANIZATION_LISTING_NOT_FOUND', 404)
   await validateOrganizationApprover(source, row.organization_id, row.reviewer_role_id, actor, row.team_id, frozen(row).total_minor)
 }
-async function current(row: Grant, source: PurchasingSource) {
+async function current(row: Grant, source: PurchasingSource, options: { originalTradeId?: string; requireApproval?: boolean } = {}) {
   const terms = frozen(row)
   if (!enterpriseFoundationEnabled() || !routeExecutionEnabled(row.buyer_id)) fail('ORGANIZATION_LISTING_DISABLED', 503)
   if ((await organization(row.organization_id, source)).owner_account_id !== row.owner_account_id) fail('ORGANIZATION_LISTING_OWNER_CHANGED')
   if (!['pending', 'approved'].includes(row.state)) fail('ORGANIZATION_LISTING_REVOKED')
+  if (options.requireApproval && (row.state !== 'approved' || !row.approved_at || !row.decision_reference
+    || row.decision_hash !== hash({ version: terms.version, client_reference: row.decision_reference, authority_hash: row.authority_hash, approve: true }))) fail('ORGANIZATION_LISTING_APPROVAL_REQUIRED')
   if (Date.parse(terms.expires_at) <= Date.now()) fail('ORGANIZATION_LISTING_EXPIRED')
   const [assignment] = await source.select().from(organization_agent_assignments).where(eq(organization_agent_assignments.agent_id, row.agent_id)).limit(1)
   const [owner] = await source.select().from(agent_owners).where(and(eq(agent_owners.agentId, row.agent_id), eq(agent_owners.userId, row.owner_account_id))).limit(1)
@@ -117,16 +119,16 @@ async function current(row: Grant, source: PurchasingSource) {
   }
   await validateOrganizationApprover(source, row.organization_id, row.reviewer_role_id, row.reviewer_account_id, row.team_id, terms.total_minor)
   const [listing] = await source.select().from(listings).where(eq(listings.id, row.listing_id)).limit(1)
-  if (!listing || listing.status !== 'active' || hash(listingContract(listing)) !== hash(terms.listing)) fail('ORGANIZATION_LISTING_SCOPE_CHANGED')
+  if (!listing || listing.status !== (options.originalTradeId ? 'sold' : 'active') || hash(listingContract(listing)) !== hash(terms.listing)) fail('ORGANIZATION_LISTING_SCOPE_CHANGED')
   const [trade] = await source.select({ id: trades.id }).from(trades).where(eq(trades.listing_id, row.listing_id)).limit(1)
-  if (trade) fail('ORGANIZATION_LISTING_ALREADY_RESERVED')
+  if (trade && trade.id !== options.originalTradeId || options.originalTradeId && !trade) fail('ORGANIZATION_LISTING_ALREADY_RESERVED')
   if (!await isPublicMarketplaceSeller(row.seller_id, source) || await originalPrivateServiceListing(row.listing_id, source)
     || await originalReviewedTaskListing(row.listing_id, source)) fail('ORGANIZATION_LISTING_NOT_AVAILABLE')
   const metadata = paymentContract(terms.payment)
   if (metadata.token_decimals !== terms.token_decimals || metadata.token_usd_price !== terms.token_usd_price
     || metadata.fee_token_decimals !== terms.fee_token_decimals) fail('ORGANIZATION_LISTING_PAYMENT_CHANGED')
   if (!await payoutAddressForUser(row.seller_id, source)) fail('SELLER_PAYOUT_REQUIRED')
-  if (!(await sellerPaymentRails(row.seller_id, source)).supported_payment_rails.includes(terms.payment.rail)) fail('SELLER_PAYMENT_RAIL_UNSUPPORTED')
+  if (!options.originalTradeId && !(await sellerPaymentRails(row.seller_id, source)).supported_payment_rails.includes(terms.payment.rail)) fail('SELLER_PAYMENT_RAIL_UNSUPPORTED')
   return terms
 }
 function dto(row: Grant, actor: string) {
@@ -219,3 +221,4 @@ export async function genericListingFundingGuard(source: PurchasingSource, listi
   if (row) fail('LISTING_REVIEWED_CHECKOUT_REQUIRED')
 }
 export { frozen as validatedListingTerms }
+export { current as currentListingReview }

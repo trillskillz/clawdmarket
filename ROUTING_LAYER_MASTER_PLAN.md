@@ -16,6 +16,12 @@ cancelled obligations. This is read-only stored-evidence validation; reviewed
 listing checkout/payment remains unavailable and acceptance is still 7/10.
 Continue original checkout creation and full claim/delivery/settlement acceptance.
 
+Internal original unpaid checkout is now implemented and passes 82 focused cases,
+types/SDK parity/build/lint. No public checkout exists. Current scope/compatibility
+details are in `docs/ORGANIZATION_LISTING_REVIEW_DRAFT_CHECKPOINT.md`. Next finish
+separate both-rail claims/shared wallet exclusion and explicit delivery, then
+complete all economic/client/SDK/UI/release gates before counting 8/10.
+
 ## Superseding user priority — dependable product and paid pilot (2026-10-14)
 
 Complete [the new plan](docs/DEPENDABLE_PURCHASING_AND_INDEPENDENT_PILOT_PLAN_2026-10-14.md)

@@ -41,8 +41,8 @@ function request(path: string, actor: string, method = 'GET', body?: unknown) {
   return new NextRequest(`http://localhost${path}`, { method, headers: { Authorization: `Bearer ${jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })}`,
     'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
 }
-async function fixture(tempo = false) {
-  const f = await reviewedTaskFixture({ db, schema }, tempo)
+async function fixture(tempo = false, registeredIds = false) {
+  const f = await reviewedTaskFixture({ db, schema }, tempo, false, registeredIds)
   const [listing] = await db.insert(schema.listings).values({ seller_id: f.seller, category: 'code', title: 'Original public code listing',
     description: 'Deliver the original reviewed code findings.', price_bankr: 1 }).returning()
   const { task_id: _task, winning_bid_id: _bid, ...payment } = f.body
@@ -229,3 +229,102 @@ test('reviewed route reads expose local contention as retryable without retrying
   await assert.rejects(readFailure(unrelated), error => error === unrelated)
   await assert.rejects(readFailure(new PurchasingError('REVIEWER_REQUIRED', 403)), error => (error as { code: string; status: number }).code === 'REVIEWER_REQUIRED' && (error as { status: number }).status === 403)
 })
+
+for (const tempo of [false, true]) test(`${tempo ? 'Tempo' : 'L1'} internal listing checkout consumes one exact original trade and replays after all fresh permissions close`, async () => {
+  const f = await fixture(tempo), a = await propose(f)
+  const domain = await import('@/lib/organization-listing-checkout')
+  const body = { version: a.version, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash }
+  await assert.rejects(domain.checkoutOrganizationListing(f.org, a.id, f.buyer, body), /ORGANIZATION_LISTING_APPROVAL_REQUIRED/)
+  await assert.rejects(domain.inspectOrganizationListingCheckout(f.org, a.id, f.owner), /ORGANIZATION_LISTING_NOT_FOUND/)
+  assert.equal((await domain.inspectOrganizationListingCheckout(f.org, a.id, f.buyer)).trade, null)
+  assert.equal((await approval.POST(request(`${f.prefix}/${a.id}/approval`, f.reviewer, 'POST', decision(a)), context(f.org, a.id))).status, 201)
+  const results = await Promise.all([domain.checkoutOrganizationListing(f.org, a.id, f.buyer, body), domain.checkoutOrganizationListing(f.org, a.id, f.buyer, body)])
+  assert.deepEqual(results.map(value => value.created).sort(), [false, true])
+  const trade = results[0].trade!
+  assert.equal(results[1].trade?.id, trade.id)
+  assert.equal(trade.listing_id, f.listing.id)
+  assert.equal(trade.total_cost, 1.05)
+  assert.equal(results[0].payment_authority.kind, tempo ? 'organization_listing_v2' : 'organization_listing_v1')
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.trade_id, trade.id))).length, 0)
+  assert.equal((await db.select().from(schema.organization_listing_uses).where(eq(schema.organization_listing_uses.listing_id, f.listing.id))).length, 1)
+  await assert.rejects(domain.checkoutOrganizationListing(f.org, a.id, f.buyer, { ...body, client_reference: crypto.randomUUID() }), /ORGANIZATION_LISTING_CHECKOUT_CONFLICT/)
+  await db.update(schema.listings).set({ status: 'active', title: 'Edited after original checkout', price_bankr: 5 }).where(eq(schema.listings.id, f.listing.id))
+  await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, trade.id))
+  await db.insert(schema.seller_payment_preferences).values({ seller_id: f.seller, supported_rails: '[]', confirmed_by: 'test-seller', confirmed_at: new Date().toISOString() })
+  assert.equal((await item.DELETE(request(`${f.prefix}/${a.id}`, f.owner, 'DELETE'), context(f.org, a.id))).status, 200)
+  process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED = 'true'
+  try {
+    const replay = await domain.checkoutOrganizationListing(f.org, a.id, f.buyer, body)
+    assert.equal(replay.created, false); assert.equal(replay.trade?.id, trade.id); assert.equal(replay.trade?.status, 'cancelled')
+    assert.equal((await domain.inspectOrganizationListingCheckout(f.org, a.id, f.buyer)).trade?.id, trade.id)
+  } finally { delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED }
+})
+
+test('a legacy buyer-supplied reference prefix does not acquire reviewed scope or block original financial recovery', async () => {
+  const f = await fixture()
+  const [trade] = await db.insert(schema.trades).values({ listing_id: f.listing.id, buyer_id: f.buyer, seller_id: f.seller,
+    amount: 1, fee: 0.05, total_cost: 1.05, payment_rail: 'evm', client_reference: 'organization-listing:legacy-customer-reference', status: 'pending' }).returning()
+  await db.insert(schema.organization_trade_attributions).values({ trade_id: trade.id, organization_id: f.org, agent_id: f.buyerAgent,
+    team_id: f.team, cost_center: 'TASK', total_minor: 105, created_at: new Date() })
+  const { originalListingPayment, organizationListingExposure } = await import('@/lib/organization-listing-uses')
+  assert.equal(await originalListingPayment(db, trade.id), null)
+  assert.equal((await organizationListingExposure(db, f.org, f.buyer, f.body.payment as Parameters<typeof organizationListingExposure>[3])).lifetime, 0)
+  assert.equal((await db.select().from(schema.organization_listing_uses).where(eq(schema.organization_listing_uses.trade_id, trade.id))).length, 0)
+})
+
+for (const tempo of [false, true]) test(`${tempo ? 'Tempo' : 'L1'} reviewed task, route, workflow and internal listing checkout preserve registry-format agent identifiers`, async () => {
+  const f = await fixture(tempo, true)
+  assert.match(f.buyerAgent, /^agent_[a-f0-9-]{36}$/)
+  const tasks = await import('@/lib/organization-task-authorizations')
+  const { listing_id: _listing, buyer_agent_id: _buyer, delivery: _delivery, ...terms } = f.body
+  const task = (await tasks.proposeOrganizationTask(f.org, f.owner, tasks.organizationTaskInput.parse({ ...terms,
+    task_id: f.task, winning_bid_id: f.bid }))).authorization
+  await tasks.approveOrganizationTask(f.org, task.id, f.reviewer, { version: task.version, client_reference: crypto.randomUUID(), authority_hash: task.authority_hash, approve: true })
+  const taskTrade = (await tasks.checkoutOrganizationTask(f.org, task.id, f.buyer, { version: task.version, client_reference: crypto.randomUUID(), authority_hash: task.authority_hash })).trade!
+  assert.equal(taskTrade.buyer_id, `user_agent_${f.buyerAgent}`)
+  const a = await propose(f)
+  assert.equal((await approval.POST(request(`${f.prefix}/${a.id}/approval`, f.reviewer, 'POST', decision(a)), context(f.org, a.id))).status, 201)
+  const { checkoutOrganizationListing } = await import('@/lib/organization-listing-checkout')
+  const original = await checkoutOrganizationListing(f.org, a.id, f.buyer, { version: a.version, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash })
+  assert.equal(original.trade?.buyer_id, `user_agent_${f.buyerAgent}`)
+  assert.equal(original.trade?.seller_id, `user_agent_${f.providerAgent}`)
+  assert.notEqual(original.trade?.id, taskTrade.id)
+  for (const family of ['route', 'workflow'] as const) {
+    const execute = await reviewedSharedService({ db, schema }, (path, actor, body) => request(path, actor, 'POST', body), f, family, '10.00', f.body.max_lifetime_chain_fee_units)
+    const result = await execute()
+    assert.equal(result.status, 201, JSON.stringify(result))
+    assert.equal(result.trade.buyer_id, f.buyer)
+    assert.equal(result.trade.seller_id, f.seller)
+  }
+})
+
+for (const tempo of [false, true]) for (const family of ['task', 'route', 'workflow'] as const) for (const ceiling of ['gross', 'fee'] as const)
+  test(`${tempo ? 'Tempo' : 'L1'} internal listing reservation cannot bypass prior ${family} ${ceiling} exposure or recycle its cancelled obligation`, async () => {
+    const f = await fixture(tempo), perFee = tempo ? '5000' : '100000000000000'
+    const gross = ceiling === 'gross' ? '1.05' : '10.00', fee = ceiling === 'fee' ? perFee : (BigInt(perFee) * 10n).toString()
+    f.body.max_daily = gross; f.body.max_monthly = gross; f.body.max_lifetime = gross; f.body.max_lifetime_chain_fee_units = fee
+    const a = await propose(f)
+    assert.equal((await approval.POST(request(`${f.prefix}/${a.id}/approval`, f.reviewer, 'POST', decision(a)), context(f.org, a.id))).status, 201)
+    let originalTrade: string
+    if (family === 'task') {
+      const tasks = await import('@/lib/organization-task-authorizations')
+      const { listing_id: _listing, buyer_agent_id: _buyer, delivery: _delivery, ...terms } = f.body
+      const task = (await tasks.proposeOrganizationTask(f.org, f.owner, tasks.organizationTaskInput.parse({ ...terms, client_reference: crypto.randomUUID(),
+        task_id: f.task, winning_bid_id: f.bid, max_daily: '10.00', max_monthly: '10.00', max_lifetime: '10.00', max_lifetime_chain_fee_units: (BigInt(perFee) * 10n).toString() }))).authorization
+      await tasks.approveOrganizationTask(f.org, task.id, f.reviewer, { version: task.version, client_reference: crypto.randomUUID(), authority_hash: task.authority_hash, approve: true })
+      originalTrade = (await tasks.checkoutOrganizationTask(f.org, task.id, f.buyer, { version: task.version, client_reference: crypto.randomUUID(), authority_hash: task.authority_hash })).trade!.id
+    } else {
+      const execute = await reviewedSharedService({ db, schema }, (path, actor, body) => request(path, actor, 'POST', body), f, family, '10.00', (BigInt(perFee) * 10n).toString())
+      const original = await execute(); assert.equal(original.status, 201, JSON.stringify(original)); originalTrade = original.trade.id
+    }
+    const { checkoutOrganizationListing } = await import('@/lib/organization-listing-checkout')
+    const checkout = { version: a.version, client_reference: crypto.randomUUID(), authority_hash: a.authority_hash }
+    const expected = ceiling === 'gross' ? /ORGANIZATION_LISTING_DAILY_EXPOSURE/ : /ORGANIZATION_LISTING_FEE_EXPOSURE/
+    await assert.rejects(checkoutOrganizationListing(f.org, a.id, f.buyer, checkout), expected)
+    const cancel = await (await import('@/app/api/trades/[id]/cancel/route')).POST(request(`/api/trades/${originalTrade}/cancel`, f.buyer, 'POST', {}), { params: Promise.resolve({ id: originalTrade }) })
+    assert.equal(cancel.status, 200, JSON.stringify(await cancel.clone().json()))
+    await assert.rejects(checkoutOrganizationListing(f.org, a.id, f.buyer, checkout), expected)
+    assert.equal((await db.select().from(schema.organization_listing_uses).where(eq(schema.organization_listing_uses.listing_id, f.listing.id))).length, 0)
+    assert.equal((await db.select().from(schema.listings).where(eq(schema.listings.id, f.listing.id)))[0].status, 'active')
+    assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.buyer_id, f.buyer))).length, 1)
+  })

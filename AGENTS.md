@@ -11,7 +11,7 @@ Active worktree `/home/void/Work/clawdmarket-reviewed-listings-current`, branch
 `work/local-reviewed-listings-after-pilot-2026-10-14`, integrates saved draft
 `e876e58` atop `bee652c`. Both migrations are retained: transparency is 68 and
 listing review foundation is 69. Seller rail settings remain authoritative during
-listing proposal/approval. This foundation has no checkout/use/payment authority,
+listing proposal/approval. Public listing checkout and payment authority remain unavailable,
 HTTP stays 1.118 and routing acceptance stays 7/10. Continue the complete
 `docs/ORGANIZATION_REVIEWED_LISTING_PURCHASING_PLAN.md` outcome locally. Do not
 publish, move funds, enable global flags or infer independent demand.
@@ -27,6 +27,16 @@ and unrelated storage errors. See the current draft checkpoint for exact logs.
 Next implement original checkout creation, both separate claim families/shared
 wallet exclusion and explicit delivery acceptance before any public checkout API;
 do not advertise or count 8/10 before complete genuine both-rail acceptance.
+
+Internal pending checkout now exists in `lib/organization-listing-checkout.ts`
+with atomic exact listing/trade/use identity and original replay after permission
+closes. It has no public route; review DTO remains `checkout_available:false`.
+Current focused 82/82 and types/SDK parity/build/lint pass. Registry-format IDs
+(`agent_<uuid>`) work across task/route/workflow/internal listing reservations;
+the old UUID-only route/listing restriction is fixed without changing ownership
+checks. Legacy customer reference text cannot confer reviewed scope or close old
+recovery. Continue EVM/Tempo claims, wallet exclusion and explicit delivery before
+exposing checkout; full real economics/UI/SDK/release acceptance remains required.
 
 ## User priority — dependable purchasing and independent pilot (2026-10-14)
 

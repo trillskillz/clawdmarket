@@ -2,6 +2,43 @@
 
 ## Current integration after the priority candidate
 
+### Internal checkout layer — current, not publicly exposed
+
+`lib/organization-listing-checkout.ts` now creates one internal unpaid original
+listing trade/use atomically after current independent approval, exact frozen
+listing comparison, seller rail checks, pause/budget/policy checks and shared
+task/route/workflow/listing exposure. Quantity remains one. Exact repeated checkout
+recovers the original trade after cancellation, revocation, changed listing text,
+closed rails or payment pause; a different request reference cannot replace it.
+Only the original buyer can inspect this checkout scope. The owner/reviewer APIs
+still report `checkout_available:false`; there is no public checkout endpoint.
+
+Current focused tests pass **82/82** in
+`/tmp/clawdmarket-listing-internal-checkout-accepted-2026-10-14.log`. They cover
+concurrent exact replay and both reservation orders across all three existing
+reviewed families, gross/fee ceilings after cancellation, existing independent
+process races, authority/privacy, legacy reference prefixes, transparency and
+migration 70. Static gate passes types, SDK parity/build and lint in
+`/tmp/clawdmarket-listing-internal-checkout-accepted-static-2026-10-14.log`.
+
+Compatibility corrections: agent registration creates `agent_<uuid>`, not bare
+UUIDs. Listing and embedded reviewed-route agent fields now accept bounded exact
+IDs, retaining all current owner/assignment checks. Public route schemas match;
+L1 and Tempo tests exercise task, route, workflow and internal listing reservations
+with registry-format IDs. Old bare UUIDs remain supported. Also, a historically
+buyer-supplied `organization-listing:` text prefix cannot create reviewed scope
+or invalidate a legacy recovery path. Orphan detection requires the actual bound
+grant/listing/buyer; real missing-use and cross-scope records still fail closed.
+
+No funded listing journey is accepted yet. Next integrate separate EVM and Tempo
+intents/claims, original proof/refund recovery and shared wallet/nonce exclusion;
+enforce frozen delivery requirements and explicit exact-hash acceptance before
+exposing checkout. Then complete finite clients, both SDKs, private review UI,
+genuine both-rail economics/crash/race/storage/build/browser acceptance. HTTP stays
+1.118, capability stays 7/10, and all work remains local.
+
+### Original-use checkpoint `eed099a`
+
 The subsequent original-use layer adds migration **70** and read-only validation
 of a consumed listing obligation. No reviewed checkout API or payment authority
 is exposed. It checks the original grant/decision, request hash, listing/trade,
@@ -44,6 +81,8 @@ original column and all 66 original migration rows; current migration count is
 70, integrity is ok, foreign-key anomalies are zero, new listing grant/use tables
 remain empty, and ten immutable evidence triggers remain. Report:
 `/tmp/clawdmarket-workspace-test-listing-preservation-2026-10-14/preservation.json`.
+
+### Integrated review foundation `528c4ef`
 
 The authorized local priority work is saved at `bee652c` (HTTP 1.118) in its own
 clean worktree; production/security/admission dependencies remain as recorded
