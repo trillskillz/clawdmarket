@@ -73,7 +73,9 @@ export async function POST(req: NextRequest) {
         updated_at: contract_milestones.updated_at,
       })
       .from(contract_milestones)
-      .where(eq(contract_milestones.state, 'AWAITING_BUYER_REVIEW'));
+      .where(and(eq(contract_milestones.state, 'AWAITING_BUYER_REVIEW'),
+        sql`NOT EXISTS (SELECT 1 FROM organization_contract_authorizations reviewed
+          WHERE reviewed.contract_id = ${contract_milestones.contract_id})`));
 
     for (const m of reviewMilestones) {
       const reviewedAt = new Date(m.updated_at as any).getTime();
@@ -82,7 +84,9 @@ export async function POST(req: NextRequest) {
         const approved = await tx
           .update(contract_milestones)
           .set({ state: 'APPROVED', updated_at: now })
-          .where(and(eq(contract_milestones.id, m.id), eq(contract_milestones.state, 'AWAITING_BUYER_REVIEW')))
+          .where(and(eq(contract_milestones.id, m.id), eq(contract_milestones.state, 'AWAITING_BUYER_REVIEW'),
+            sql`NOT EXISTS (SELECT 1 FROM organization_contract_authorizations reviewed
+              WHERE reviewed.contract_id = ${contract_milestones.contract_id})`))
           .returning({ id: contract_milestones.id });
         autoApprovedMilestones += approved.length;
       }

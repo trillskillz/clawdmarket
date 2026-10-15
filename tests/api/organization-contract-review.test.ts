@@ -122,3 +122,31 @@ test('contract review refuses reviewer ownership of provider, changed original p
   assert.equal(forbidden.status, 403)
   assert.equal((await db.select().from(schema.organization_contract_authorizations).where(eq(schema.organization_contract_authorizations.contract_id, controlled.original.contract.id))).length, 0)
 })
+test('elapsed review windows cannot invent acceptance for any companion state while ordinary historical policy stays unchanged', async () => {
+  const reviewed: string[] = []
+  for (const state of ['pending', 'approved', 'revoked']) {
+    const f = await fixture(), a = await propose(f), saved = decision(a)
+    if (state !== 'pending') await approval.POST(request(`${f.prefix}/${a.id}/approval`, f.reviewer, 'POST', saved), context(f.org, a.id))
+    if (state === 'revoked') await item.DELETE(request(`${f.prefix}/${a.id}`, f.owner, 'DELETE'), context(f.org, a.id))
+    // State-only maintenance control; no funding or delivery is fabricated as economic proof.
+    await db.update(schema.contracts).set({ state: 'AWAITING_REVIEW' }).where(eq(schema.contracts.id, f.original.contract.id))
+    await db.update(schema.contract_milestones).set({ state: 'AWAITING_BUYER_REVIEW', updated_at: new Date(Date.now() - 3 * 86400000) })
+      .where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+    reviewed.push(f.original.milestones[0].id)
+  }
+  const legacy = await fixture(false)
+  await db.update(schema.contracts).set({ state: 'AWAITING_REVIEW' }).where(eq(schema.contracts.id, legacy.original.contract.id))
+  await db.update(schema.contract_milestones).set({ state: 'AWAITING_BUYER_REVIEW', updated_at: new Date(Date.now() - 3 * 86400000) })
+    .where(eq(schema.contract_milestones.id, legacy.original.milestones[0].id))
+  const previous = process.env.MAINTENANCE_SECRET; process.env.MAINTENANCE_SECRET = 'contract-review-maintenance-fixture-only'
+  try {
+    const { POST } = await import('@/app/api/contracts/maintenance/route')
+    const response = await POST(new NextRequest('http://localhost/api/contracts/maintenance', {
+      method: 'POST', headers: { 'x-maintenance-secret': process.env.MAINTENANCE_SECRET },
+    }))
+    assert.equal(response.status, 200); assert.equal((await response.json()).auto_approved_milestones, 1)
+    for (const id of reviewed) assert.equal((await db.select().from(schema.contract_milestones).where(eq(schema.contract_milestones.id, id)))[0].state, 'AWAITING_BUYER_REVIEW')
+    assert.equal((await db.select().from(schema.contract_milestones).where(eq(schema.contract_milestones.id, legacy.original.milestones[0].id)))[0].state, 'APPROVED')
+    assert.equal(Number((await db.$client.execute('SELECT COUNT(*) AS n FROM credit_entries')).rows[0].n), 0)
+  } finally { if (previous === undefined) delete process.env.MAINTENANCE_SECRET; else process.env.MAINTENANCE_SECRET = previous }
+})

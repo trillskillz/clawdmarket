@@ -1,3 +1,31 @@
+## Contract backing and maintenance controls — 2026-10-15
+
+The separate local foundation now proves one actual token deposit on an unforked
+Base-ID 8453 Anvil node using public dummy keys: 105 minor units credit from one
+original 1,050,000-unit token transfer, two exact confirmation API requests and
+one credit posting. The approved companion still cannot fund. This is deposited
+credit backing/guard acceptance, not a completed reviewed contract, paid live
+canary or independent activity. Current evidence:
+`/tmp/clawdmarket-contract-credit-backing-final-2026-10-15.log` (1/1, zero skips).
+
+Maintenance now excludes any reviewed contract companion from time-based approval,
+including revoked grants, while preserving ordinary historical review-window
+policy. A state-only negative control passes time past all review windows without
+reviewed approval, credit entries or release. It is not economic proof. The
+complete focused original-creation/review/process/credit/migration run passes
+**54/54**, zero failures/skips, in
+`/tmp/clawdmarket-contract-review-maintenance-focused-2026-10-15.log`; current
+maintenance types/lint pass. The earlier production build binds ae3a004 before
+this small maintenance correction; current build must be rechecked before any
+complete reviewed-contract acceptance. No new capability or funding is enabled.
+
+The listing repair is now fully accepted separately as candidate **e55e151**,
+tested source 9d48c39, HTTP 1.119/migration 71: 1,071 Node passes/five skips, 24 Python,
+149 Chromium passes/eight skips/zero retries. Security remains blocked. Carry
+that repaired history into this continuation while preserving its source-bound
+release candidate. Current unfinished contract foundation remains migration 73
+and must not be confused with the accepted listing source manifest.
+
 ## Private contract review foundation — 2026-10-15
 
 Current separate contract worktree now has migration **73** and credit-only

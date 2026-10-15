@@ -36,6 +36,9 @@ approved and revoked companions all block generic funding of that exact contract
 Prepaid credit cannot be withdrawn as cash or tokens. Sellers receive account
 credit. The original upfront fee and refundable held principal are shown separately;
 unstarted refunds retain that original fee treatment. No new custody or withdrawal
-mechanism is introduced. Explicit exact-submission acceptance, original reviewed
+mechanism is introduced. Reviewed companions are excluded from automatic elapsed-window approval in all
+states. This restriction alone cannot accept or pay a milestone.
+
+Explicit exact-submission acceptance, original reviewed
 funding/use accounting, milestone release/refunds, finite clients/SDK review/UI and
 genuine economic/full release acceptance remain future implementation work.
