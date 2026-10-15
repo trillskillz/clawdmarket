@@ -1,7 +1,7 @@
 import test, { before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -35,6 +35,7 @@ before(async () => {
     EVM_ACCEPTED_TOKENS: JSON.stringify([{ chainId: 8453, address: chain.token, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: chain.url }]) })
   wallet = createWalletClient({ chain: { ...mainnet, id: 8453 }, transport: http(chain.url), account: payer })
   db = (await import('@/lib/db')).db; schema = await import('@/lib/schema'); await createLocalTestSchema(db.$client, schema)
+  await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-submissions-v1.sql', 'utf8'))
   domain = await import('@/lib/organization-contract-authorizations'); reader = await import('@/lib/organization-contract-uses')
 })
 after(async () => { db?.$client.close(); if (chain) await chain.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })
@@ -203,4 +204,63 @@ test('prior original route, workflow, task and listing gross blocks a fresh cred
     assert.equal((await reader.reviewedOrganizationCreditGross(db, f.org, f.buyer)).lifetime, 105, 'cancellation cannot recycle original gross')
     assert.equal((await db.select().from(schema.credit_entries).where(eq(schema.credit_entries.user_id, f.buyer))).length, 0, 'this is an unpaid reservation control, not funded credit')
   }
+})
+async function startOriginal(f: Awaited<ReturnType<typeof fixture>>) {
+  const { generateJWT } = await import('@/lib/auth'), { PATCH } = await import('@/app/api/contracts/[id]/route')
+  const response = await PATCH(new NextRequest(`http://localhost/api/contracts/${f.original.contract.id}`, { method: 'PATCH', headers: {
+    'Content-Type': 'application/json', Authorization: `Bearer ${generateJWT({ userId: f.seller, email: `${f.seller}@test.invalid`, role: 'human' })}` }, body: JSON.stringify({ action: 'start' }) }),
+  { params: Promise.resolve({ id: f.original.contract.id }) })
+  assert.equal(response.status, 200)
+}
+test('internal original seller submission replays one immutable output and finite report without accepting or moving credit', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f)
+  const { submitOriginalReviewedContract: submit } = await import('@/lib/contract-original-submissions')
+  const input = { version: 1 as const, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'Original finite output' } }
+  const replies = await Promise.all([submit(f.original.contract.id, f.original.milestones[0].id, f.seller, input), submit(f.original.contract.id, f.original.milestones[0].id, f.seller, input)])
+  assert.equal(replies.filter(r => r.idempotent).length, 1); assert.equal(replies[0].submission.id, replies[1].submission.id)
+  const original = replies[0]
+  assert.equal(original.submission.auto_check_result, 'pass'); assert.equal(original.submission.authorizes_payment, false)
+  assert.equal(original.submission.semantic_accuracy, 'unmeasured'); assert.equal(original.submission.remote_execution_observed, false)
+  assert.equal(original.credit_remaining_principal_minor, 100); assert.equal(original.milestone_state, 'AWAITING_BUYER_REVIEW')
+  const { generateJWT } = await import('@/lib/auth'), milestoneApi = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route')
+  for (const [action, actor] of [['submit', f.seller], ['approve', f.buyer], ['mark_paid', f.buyer]]) {
+    const path = `/api/contracts/${f.original.contract.id}/milestones/${f.original.milestones[0].id}`
+    const response = await milestoneApi.PATCH(new NextRequest(`http://localhost${path}`, { method: 'PATCH', headers: {
+      'Content-Type': 'application/json', Authorization: `Bearer ${generateJWT({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })}` }, body: JSON.stringify({ action }) }),
+    { params: Promise.resolve({ id: f.original.contract.id, milestoneId: f.original.milestones[0].id }) })
+    assert.equal(response.status, 409); assert.equal((await response.json()).code, 'CONTRACT_REVIEWED_FULFILLMENT_UNAVAILABLE')
+  }
+  await assert.rejects(submit(f.original.contract.id, f.original.milestones[0].id, f.buyer, input), (error: unknown) => (error as { code: string }).code === 'CONTRACT_SUBMISSION_SELLER_REQUIRED')
+  await assert.rejects(submit(f.original.contract.id, f.original.milestones[1].id, f.seller, input), (error: unknown) => (error as { code: string }).code === 'CONTRACT_SUBMISSION_REFERENCE_CONFLICT')
+  await assert.rejects(submit(f.original.contract.id, f.original.milestones[0].id, f.seller, { ...input, artifact_bundle: { report: 'Changed output' } }),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_SUBMISSION_REFERENCE_CONFLICT')
+  for (const statement of [
+    'UPDATE contract_submissions SET artifact_bundle=\'{}\' WHERE id=?', 'DELETE FROM contract_submissions WHERE id=?',
+    'UPDATE contract_submission_operations SET content_hash=\'changed\' WHERE submission_id=?', 'DELETE FROM contract_submission_operations WHERE submission_id=?',
+  ]) await assert.rejects(db.$client.execute({ sql: statement, args: [original.submission.id] }), /immutable/)
+  await domain.revokeOrganizationContract(f.org, f.a.id, f.owner)
+  await db.update(schema.contract_milestones).set({ state: 'CHANGES_REQUESTED', acceptance_spec: '{"required_artifacts":["MUTATED_CATALOG_KEY"]}' })
+    .where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+  const next = await submit(f.original.contract.id, f.original.milestones[0].id, f.seller, { ...input, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'Second original operation' } })
+  assert.notEqual(next.submission.id, original.submission.id); assert.equal(next.submission.auto_check_result, 'pass', 'paid original frozen requirements govern delivery')
+  const replay = await submit(f.original.contract.id, f.original.milestones[0].id, f.seller, input)
+  assert.equal(replay.submission.id, original.submission.id); assert.equal(replay.superseded, true); assert.equal(replay.selected_submission_id, next.submission.id)
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+})
+test('missing finite keys and unbounded original submission data cannot create acceptance or output records', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f)
+  const { submitOriginalReviewedContract: submit } = await import('@/lib/contract-original-submissions')
+  const input = { version: 1 as const, client_reference: crypto.randomUUID(), artifact_bundle: {} }
+  const failed = await submit(f.original.contract.id, f.original.milestones[0].id, f.seller, input)
+  assert.equal(failed.submission.auto_check_result, 'fail'); assert.equal(failed.milestone_state, 'AUTO_FAILED')
+  assert.equal(failed.submission.authorizes_payment, false)
+  await assert.rejects(submit(f.original.contract.id, f.original.milestones[0].id, f.seller,
+    { ...input, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'x'.repeat(65537) } }),
+  (error: unknown) => (error as { code: string }).code === 'CONTRACT_SUBMISSION_INPUT_LIMIT')
+  let nested: unknown = 1; for (let i = 0; i < 30; i++) nested = { nested }
+  await assert.rejects(submit(f.original.contract.id, f.original.milestones[0].id, f.seller,
+    { ...input, client_reference: crypto.randomUUID(), artifact_bundle: { report: nested } }),
+  (error: unknown) => (error as { code: string }).code === 'CONTRACT_SUBMISSION_INPUT_LIMIT')
+  assert.equal((await db.select().from(schema.contract_submissions).where(eq(schema.contract_submissions.milestone_id, f.original.milestones[0].id))).length, 1)
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
 })

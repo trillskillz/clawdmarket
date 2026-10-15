@@ -1,0 +1,18 @@
+✔ original credit gross blocks new reviewed route, workflow, task, listing and contract budgets without consuming chain fee headroom (4741.805084ms)
+✔ prior original route, workflow, task and listing gross blocks a fresh credit contract ceiling in the reverse reservation order (742.112427ms)
+✔ internal original seller submission replays one immutable output and finite report without accepting or moving credit (4267.335713ms)
+✔ missing finite keys and unbounded original submission data cannot create acceptance or output records (4104.190917ms)
+✔ private contract review freezes original ordered milestones, credit fee/refund terms and an independent organizational reviewer without funding (800.899927ms)
+✔ every contract companion state blocks generic funding and exact proposal/decision replay never reopens revocation (121.747316ms)
+✔ contract decision rejects current ownership, assignment, reviewer, amount, milestone, acceptance, deadline, seller rail and ban drift (743.665413ms)
+✔ contract review refuses reviewer ownership of provider, changed original proposal, unreferenced legacy drafts, CSRF and oversized input (117.094468ms)
+✔ elapsed review windows cannot invent acceptance for any companion state while ordinary historical policy stays unchanged (170.758302ms)
+✔ runtime schema migration upgrades a legacy database and is idempotent (382.155781ms)
+ℹ tests 64
+ℹ suites 0
+ℹ pass 64
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 83602.722995

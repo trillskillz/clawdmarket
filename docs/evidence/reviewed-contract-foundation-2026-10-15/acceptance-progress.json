@@ -1,8 +1,8 @@
 {
-  "stage": "original-use validation and shared gross foundation; no reviewed contract funding",
+  "stage": "internal immutable original submission foundation and public legacy-path exclusion; no reviewed funding or buyer acceptance",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
-  "migrations": 74,
+  "migrations": 75,
   "accepted_capability_count": "8/10; no contract capability yet",
   "original_use_cases": {
     "passed": 30,
@@ -13,11 +13,12 @@
   "preservation": {
     "local_baseline_business_rows": 845,
     "local_baseline_tables": 133,
-    "migrations": 74,
+    "migrations": 75,
     "integrity": "ok",
     "foreign_key_anomalies": 0,
     "immutable_guards": 10,
-    "actual_queries": 5
+    "actual_queries": 5,
+    "reviewed_submission_immutable_guards": 4
   },
   "limits": {
     "public_reviewed_contract_funding": false,
@@ -25,7 +26,9 @@
     "reviewed_milestone_acceptance": false,
     "full_new_contract_release_gates": false,
     "live_funding_performed": false,
-    "independent_customer_activity_demonstrated": false
+    "independent_customer_activity_demonstrated": false,
+    "public_reviewed_contract_submission": false,
+    "internal_original_submission": true
   },
   "records": {
     "original_use": {
@@ -55,6 +58,18 @@
     "shared-build": {
       "local_log": "/tmp/clawdmarket-contract-shared-gross-build-2026-10-15.log",
       "log_sha256": "a0a3c88eebb141a25bdd988fa9de869ba211f41c4d4a553f19b1638441f27d32"
+    },
+    "submission": {
+      "local_log": "/tmp/clawdmarket-contract-submission-interlock-focused-2026-10-15.log",
+      "log_sha256": "098391364fadd6e339d2f405e404d48ec88d6fc88238253339361a3b74e48941"
+    },
+    "submission-build": {
+      "local_log": "/tmp/clawdmarket-contract-submission-interlock-build-2026-10-15.log",
+      "log_sha256": "ffcabe31e7257b4d6f687e3e1f6452577ff1716a096c81f032058e2072e7508e"
+    },
+    "submission-preservation": {
+      "local_log": "/tmp/clawdmarket-contract-original-submissions-preservation-2026-10-15.log",
+      "log_sha256": "37674fcae3d96feb03a18adeeddd21e97d7fb241c4e6ca47200c45954430bdc3"
     }
   },
   "compatibility_cases": {
@@ -73,5 +88,15 @@
     "failed": 0,
     "skipped": 0,
     "scope": "integration before the additional helper exclusion check; that check is included in current32"
+  },
+  "current_submission_cases": {
+    "passed": 64,
+    "failed": 0,
+    "skipped": 0
+  },
+  "source_manifest": {
+    "files": 43,
+    "sha256": "d73cfc314a61cbd7b204b0c767cf0fc589c46fdefe27662eb0abfd2ddd748dba",
+    "baseline": "e55e151"
   }
 }

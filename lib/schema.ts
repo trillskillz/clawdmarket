@@ -1968,6 +1968,18 @@ export const contract_submissions = sqliteTable('contract_submissions', {
   index('contract_submissions_milestone_idx').on(table.milestone_id),
 ]);
 
+/** Append-only references for reviewed submissions; legacy output is never adopted. */
+export const contract_submission_operations = sqliteTable('contract_submission_operations', {
+  submission_id: text('submission_id').primaryKey().references(() => contract_submissions.id, { onDelete: 'restrict' }),
+  authorization_id: text('authorization_id').notNull().references(() => organization_contract_uses.authorization_id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(),
+  contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'restrict' }),
+  milestone_id: text('milestone_id').notNull().references(() => contract_milestones.id, { onDelete: 'restrict' }),
+  submitter_id: text('submitter_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(), content_hash: text('content_hash').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, table => [uniqueIndex('contract_submission_submitter_reference_idx').on(table.submitter_id, table.client_reference)]);
+
 export const contract_disputes = sqliteTable('contract_disputes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),

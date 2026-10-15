@@ -1,3 +1,49 @@
+## Current original submission checkpoint — migration 75
+
+The local contract continuation now has an INTERNAL original seller submission
+append/replay helper and four SQL immutability guards. Exact concurrent references
+recover one original submission, changed/cross-milestone requests conflict, and
+revocation or a newer selected output cannot rewrite an older submission. Frozen
+original requirements govern paid work; current catalog edits do not replace them.
+Output metadata explicitly distinguishes finite key presence from semantic accuracy,
+observed remote execution, buyer acceptance and financial release. Principal stays
+held after submission, including a passing finite report.
+
+The public generic milestone path blocks submit/approve/mark_paid for reviewed
+contracts until the scoped operations are integrated. It cannot bypass the original
+reference or exact buyer decision through older hashless actions. Ordinary
+historical credit contracts retain their behavior. Other reviewed milestone actions
+validate original use inside their transaction. No reviewed funding, public work
+interface, exact buyer acceptance or release is enabled. HTTP 1.119/count 8 remain;
+no capability 9 or independently demonstrated demand.
+
+Complete current focused checks: **64/64**, no skips/failures, in
+`/tmp/clawdmarket-contract-submission-interlock-focused-2026-10-15.log`. Types/lint
+and current production build pass. Migration 75/replay preserves the original local
+845-row/133-table baseline, zero FK anomalies, ten existing immutable reputation
+guards, four new output guards and five actual evidence queries. Raw log hashes
+and summaries are saved under the contract evidence directory. The source manifest
+binds **43** changed files relative to e55e151; SHA-256
+`d73cfc314a61cbd7b204b0c767cf0fc589c46fdefe27662eb0abfd2ddd748dba`. It does not replace the accepted listing manifest.
+
+Initial typecheck caught nullable values after a never-returning arrow helper; an
+explicit function declaration fixes narrowing. Both focused runtime submission
+cases passed initially; all 64 current cases pass after the correction and public
+interlock. Tests construct controlled future-use records over actual disposable
+local deposits; they do not establish a public reviewed purchase, genuinely lost
+submission HTTP reply, real customer activity or a live paid canary. New submission
+process/HTTP/SDK/UI and complete outcome acceptance remain required.
+
+Next implement participant-only original submission inspection/recovery and
+immutable exact submission-ID/content-hash buyer decisions, preserving separate
+admin adjudication and redo history. Then one reviewed credit funding/use transaction,
+consumed inventory exclusions, exact original release/refunds, finite clients/both
+SDKs/private UI, real multi-milestone process economics and full release gates.
+Keep e55e151 listing and bee652c pilot candidates unchanged. No publication, real
+funds, global production flags, custody changes, user mail or outreach authorized.
+
+## Historical contract checkpoints
+
 ## Shared original gross integrated — local continuation
 
 Current contract source now includes original credit uses in reviewed route,

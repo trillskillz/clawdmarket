@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { contract_disputes, contract_milestones, contract_submissions, contracts } from '@/lib/schema';
+import { contract_disputes, contract_milestones, contract_submissions, contracts, organization_contract_authorizations } from '@/lib/schema';
+import { originalReviewedContractUse } from '@/lib/organization-contract-uses';
+import { PurchasingError } from '@/lib/organization-purchasing-transaction';
 import { milestoneActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionMilestone, nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
@@ -65,6 +67,12 @@ export async function PATCH(
     if (contract.buyer_id !== auth.userId && contract.seller_id !== auth.userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const [review] = await db.select({ id: organization_contract_authorizations.id }).from(organization_contract_authorizations)
+      .where(eq(organization_contract_authorizations.contract_id, contract.id)).limit(1);
+    if (review && ['submit', 'approve', 'mark_paid'].includes(validated.action)) {
+      return NextResponse.json({ error: 'Original reviewed submission and acceptance operations are not enabled on this public path yet.',
+        code: 'CONTRACT_REVIEWED_FULFILLMENT_UNAVAILABLE' }, { status: 409 });
+    }
     if (['DRAFT', 'FUNDED', 'COMPLETED', 'CANCELED', 'EXPIRED', 'REFUNDED'].includes(contract.state)) {
       return NextResponse.json({ error: 'Contract is not accepting milestone actions' }, { status: 409 });
     }
@@ -88,6 +96,7 @@ export async function PATCH(
 
     await db.transaction(async (tx) => {
       const now = new Date();
+      if (review && !await originalReviewedContractUse(tx, contract.id)) throw new PurchasingError('CONTRACT_REVIEWED_USE_REQUIRED');
 
       if (validated.action === 'submit') {
         const acceptanceSpec = JSON.parse(milestone.acceptance_spec || '{}');
@@ -193,6 +202,7 @@ export async function PATCH(
       .orderBy(asc(contract_milestones.milestone_index));
     return NextResponse.json({ contract: updatedContract, milestones });
   } catch (error: any) {
+    if (error instanceof PurchasingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error?.issues || error?.errors) {
       return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });
     }

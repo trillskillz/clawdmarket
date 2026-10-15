@@ -48,3 +48,13 @@ history checks. They do not authorize funding or release. Both credit-first and
 external-first reservation controls pass for route, workflow, task and listing;
 credit contributes zero external fee units. New funding remains unavailable until
 exact original submission/acceptance, paid recovery and complete release acceptance.
+
+Internal original submission storage is now implemented (migration 75), with bounded
+finite JSON, stable references, exact content hashes and SQL-pinned immutable
+output/operation rows. It is not exposed through a public work route or SDK worker.
+The public generic submit/approve/mark_paid path explicitly blocks reviewed
+contracts. Passing key-presence checks keeps credit held and cannot accept/pay.
+Buyer exact-hash decisions, original financial release, participant work inspection
+and complete outcome acceptance remain unfinished. Preserve all linked operation,
+submission, use, review and financial rows across any rollback; an older generic
+milestone handler is incompatible with these new obligations.
