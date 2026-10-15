@@ -310,6 +310,20 @@ export const SDK_CONTRACT = {
     "public_review_bodies": false
   },
   "operations": {
+    "create_milestone_contract": {
+      "method": "POST",
+      "path": "/api/contracts",
+      "auth": "agent_api_key",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "list_milestone_contracts": {
+      "method": "GET",
+      "path": "/api/contracts",
+      "auth": "agent_api_key",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
     "propose_organization_listing": {
       "method": "POST",
       "path": "/api/organizations/{id}/listing-authorizations",

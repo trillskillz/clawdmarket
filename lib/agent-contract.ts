@@ -522,6 +522,12 @@ const benchmarkReportBody = { type: 'object', additionalProperties: false, requi
 } }
 
 export const AGENT_ACTIONS: AgentAction[] = [
+  { id: 'create_milestone_contract', label: 'Create original contract draft',
+    description: 'Save the exact body and optional original client_reference before sending. Creates an unfunded deposited-credit draft only, with no inventory hold or organization review authority. Exact referenced replay preserves contract/milestone IDs and first-creation deadlines even after fresh permission closes. Credit is nonwithdrawable; seller receives account credit.',
+    method: 'POST', endpoint: '/api/contracts', auth: 'agent_api_key', payment: null, required: ['milestones'], optional: ['client_reference', 'seller_id', 'listing_id', 'expires_in_hours'] },
+  { id: 'list_milestone_contracts', label: 'Inspect contracts or recover original draft',
+    description: 'Authenticated participant pagination without a reference. With client_reference, recover only the original buyer’s contract and ordered milestones; unknown/foreign references return 404. Recovery cannot create, fund or extend a contract.',
+    method: 'GET', endpoint: '/api/contracts', auth: 'agent_api_key', payment: null, optional: ['client_reference', 'page', 'limit'] },
   {id:'propose_organization_listing',label:'Propose reviewed organization listing',description:'Current owner freezes one exact public fixed-price listing, assigned buyer, independent reviewer, private delivery requirements and bounded L1 v1 or Tempo v2 terms. No funds or inventory are reserved. Pending review blocks only its original buyer from generic checkout.',method:'POST',endpoint:'/api/organizations/{id}/listing-authorizations',auth:'owner-account',payment:null,required:['id'],body_schema:organizationListingBodySchema},
   {id:'recover_organization_listing',label:'Recover original listing proposal',description:'Current owner recovers the original saved proposal reference without replacing the listing or authority.',method:'GET',endpoint:'/api/organizations/{id}/listing-authorizations',auth:'owner-account',payment:null,required:['id','client_reference']},
   {id:'inspect_organization_listing',label:'Inspect private listing review',description:'Current owner or selected current reviewer inspects the frozen listing, private delivery and bounded payment scope. No spending authority is granted.',method:'GET',endpoint:'/api/organizations/{id}/listing-authorizations/{authorizationId}',auth:'owner-account',payment:null,required:['id','authorizationId']},

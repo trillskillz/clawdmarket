@@ -9,6 +9,7 @@ import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { privateKeyToAccount } from 'viem/accounts'
 import { createLocalTestSchema } from '../helpers/local-schema'
+import { ClawdMarketClient, ClawdMarketTransportError } from '../../sdk/typescript/src/index'
 
 let directory: string, db: typeof import('@/lib/db').db, schema: typeof import('@/lib/schema')
 let api: typeof import('@/app/api/contracts/route'), jwt: typeof import('@/lib/auth').generateJWT
@@ -67,22 +68,39 @@ function child(buyer: string, body: unknown, barrier: string, boundary?: string)
 test('lost committed HTTP creation reply recovers exact original draft, milestone IDs and fixed deadlines', async () => {
   const f = await fixture()
   let committed: any
+  const calls: Array<{ method: string; path: string }> = []
   const server = createServer(async (incoming, outgoing) => {
-    let body = ''; for await (const chunk of incoming) body += chunk
-    const response = await api.POST(request(f.buyer, JSON.parse(body)))
-    assert.equal(response.status, 201); committed = await response.json()
-    outgoing.destroy() // Actual lost transport response after the transaction committed.
+    try {
+      let body = ''; for await (const chunk of incoming) body += chunk
+      calls.push({ method: incoming.method!, path: incoming.url! })
+      const req = new NextRequest(`http://localhost${incoming.url}`, { method: incoming.method,
+        headers: { Authorization: incoming.headers.authorization!, 'Content-Type': 'application/json' },
+        ...(incoming.method === 'POST' ? { body } : {}),
+      })
+      const response = await (incoming.method === 'POST' ? api.POST(req) : api.GET(req))
+      const result = await response.json()
+      if (!committed && incoming.method === 'POST') {
+        assert.equal(response.status, 201); committed = result
+        outgoing.destroy() // Actual lost transport response after the transaction committed.
+      } else {
+        outgoing.statusCode = response.status
+        outgoing.setHeader('Content-Type', 'application/json'); outgoing.end(JSON.stringify(result))
+      }
+    } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   try {
     const port = (server.address() as { port: number }).port
-    await assert.rejects(fetch(`http://127.0.0.1:${port}`, { method: 'POST', body: JSON.stringify(f.body) }))
+    const client = new ClawdMarketClient({ apiKey: jwt({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' }), baseUrl: `http://127.0.0.1:${port}` })
+    await assert.rejects(client.createMilestoneContractDraft(f.body), ClawdMarketTransportError)
+    assert.equal(calls.length, 1, 'the SDK cannot retry an uncertain mutation automatically')
     const read = await api.GET(request(f.buyer, undefined, f.body.client_reference))
     assert.equal(read.status, 200); assert.equal(read.headers.get('Cache-Control'), 'no-store')
     const original = await read.json()
     assert.deepEqual(original, { ...committed, idempotent: true })
-    const replay = await post(f); assert.equal(replay.status, 200)
-    assert.deepEqual(await replay.json(), original)
+    assert.deepEqual(await client.recoverMilestoneContractCreation(f.body.client_reference), original)
+    assert.deepEqual(await client.createMilestoneContractDraft(f.body), original)
+    assert.deepEqual(calls.map(c => c.method), ['POST', 'GET', 'POST'])
     assert.equal(original.contract.total_amount, 1); assert.equal(original.contract.fee_amount, .05); assert.equal(original.contract.escrow_amount, 1.05)
     const createdAt = Date.parse(original.contract.created_at)
     assert.equal(Date.parse(original.contract.expires_at) - createdAt, 72 * 3600000)

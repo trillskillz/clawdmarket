@@ -1,3 +1,18 @@
+## Original draft clients — next local checkpoint
+
+TypeScript and Python now expose explicit create/recover original contract draft
+commands with mandatory saved references in their client input types. They never
+fund, grant organization review, retry an uncertain mutation or extend dates.
+Generated metadata uses canonical existing contract operations. TypeScript's
+lost-response check reaches the actual local API/database, then performs GET and
+explicit exact POST replay; **29/29** focused API/SDK/contract cases pass. Python
+has a real local dropped-response fixture (transport only), distinct from actual
+application or chain evidence. One initial Python fixture expected the wrong
+existing dummy key; the corrected complete Python run passes **26/26** in
+`/tmp/clawdmarket-contract-draft-python-final-2026-10-15.log`. Current types,
+lint, SDK build and generated parity pass. Complete reviewed-contract authority,
+payment, clients/UI and full gates remain unfinished; no capability 9/10.
+
 ## Contract inventory defect reproduced and fixed locally — 2026-10-15
 
 The fresh contract audit found a cross-scope defect in the previously tested

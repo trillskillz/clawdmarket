@@ -1,4 +1,6 @@
 import { SDK_CONTRACT } from './contract.js'
+import { originalContractCreationReference, type MilestoneContractDraftInput, type OriginalContractCreation } from './milestone-contract.js'
+export type { MilestoneContractDraftInput, OriginalContractCreation } from './milestone-contract.js'
 import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, originalListingReference, scopedSpendingClient } from './enterprise.js'
 import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'
@@ -414,6 +416,17 @@ export class ClawdMarketClient {
 
   private enterpriseRequest<T>(operation: EnterpriseOperation, params: { id: string; tradeId?: string; authorizationId?: string }, body?: unknown, options?: RequestOptions, query?: Record<string, string>, paymentCredential?: string): Promise<T> {
     return this.request<T>(SDK_CONTRACT.operations[operation].method, enterprisePath(operation, params, query), body, options, paymentCredential)
+  }
+
+  /** Persist the exact command first. On uncertainty inspect by its saved reference; never retry automatically. */
+  createMilestoneContractDraft(input: MilestoneContractDraftInput, options?: RequestOptions) {
+    originalContractCreationReference(input.client_reference)
+    const operation = SDK_CONTRACT.operations.create_milestone_contract
+    return this.request<OriginalContractCreation>(operation.method, operation.path, input, options)
+  }
+  recoverMilestoneContractCreation(clientReference: string, options?: RequestOptions) {
+    const reference = originalContractCreationReference(clientReference), operation = SDK_CONTRACT.operations.list_milestone_contracts
+    return this.request<OriginalContractCreation>(operation.method, `${operation.path}?${new URLSearchParams({ client_reference: reference })}`, undefined, options)
   }
 
   /** Public evidence only; all three scope fields must be supplied together. */

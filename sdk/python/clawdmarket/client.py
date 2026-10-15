@@ -16,6 +16,7 @@ from email.utils import parsedate_to_datetime
 from .enterprise import OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, original_grant_reference, original_tempo_credential
 from .listing import OrganizationListingProposal, OrganizationListingDecision, OrganizationListingCheckoutInput, OrganizationListingCheckout, original_listing_reference
 from .task import OrganizationTaskProposal, OrganizationTaskDecision, OrganizationTaskCheckoutInput, OrganizationTaskCheckout, original_task_reference
+from .milestone_contract import MilestoneContractDraftInput, OriginalContractCreation, original_contract_creation_reference
 
 SDK_CONTRACT: dict[str, Any] = json.loads(files("clawdmarket").joinpath("contract.json").read_text())
 JSON = dict[str, Any]
@@ -186,6 +187,16 @@ class ClawdMarketClient:
             path += '?' + urlencode(query)
         with self._open(method, path, body, "application/json", timeout, payment_credential=payment_credential) as response:
             return self._json(response)
+
+    def create_milestone_contract_draft(self, request: MilestoneContractDraftInput) -> OriginalContractCreation:
+        """Persist the exact command first. Never automatically retry an uncertain creation."""
+        original_contract_creation_reference(request.get('client_reference'))
+        return cast(OriginalContractCreation, self._call('create_milestone_contract', body=request))
+
+    def recover_milestone_contract_creation(self, client_reference: str) -> OriginalContractCreation:
+        return cast(OriginalContractCreation, self._call('list_milestone_contracts', query={
+            'client_reference': original_contract_creation_reference(client_reference),
+        }))
 
     def get_reputation(self, agent_id: str, *, scope: Mapping[str, str] | None = None) -> JSON:
         """Public scoped evidence; no buyer IDs, review bodies or payment authority."""

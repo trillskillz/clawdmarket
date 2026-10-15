@@ -467,6 +467,44 @@ class ClientTests(unittest.TestCase):
         self.assertEqual([call['body'] for call in self.state['calls']], [{'content_hash': content_hash}] * 2)
         self.assertTrue(all(call['path'] == '/api/trades/' + ID + '/confirm' for call in self.state['calls']))
 
+    def test_original_contract_draft_recovers_lost_http_reply_with_exact_reference_without_funding(self):
+        from urllib.parse import parse_qs, urlsplit
+        body = {'client_reference': 'saved-original-contract', 'seller_id': 'original-seller',
+                'milestones': [{'title': 'Finite first report', 'amount': 0.4}, {'title': 'Finite second report', 'amount': 0.6}]}
+        original = {'contract': {'id': ID, 'state': 'DRAFT', 'payment_rail': 'credit', 'expires_at': '2026-10-18T00:00:00.000Z'},
+                    'milestones': [{'id': 'original-first'}, {'id': 'original-second'}],
+                    'creation': {'client_reference': body['client_reference'], 'request_hash': 'a' * 64}, 'idempotent': True}
+        saved = []
+
+        def reply(call):
+            self.assertEqual(call['headers']['Authorization'], 'Bearer dummy-python-key')
+            url = urlsplit(call['path']); self.assertEqual(url.path, '/api/contracts')
+            if call['method'] == 'POST':
+                self.assertEqual(call['body'], body)
+                if not saved:
+                    saved.append(call['body']); return None
+            else:
+                self.assertEqual(call['method'], 'GET')
+                self.assertEqual(parse_qs(url.query), {'client_reference': [body['client_reference']]})
+            return 200, original, {'Content-Type': 'application/json'}
+
+        self.state['reply'] = reply
+        with self.assertRaises(ClawdMarketTransportError):
+            self.client.create_milestone_contract_draft(body)
+        self.assertEqual(len(self.state['calls']), 1)
+        self.assertEqual(self.client.recover_milestone_contract_creation(body['client_reference']), original)
+        self.assertEqual(self.client.create_milestone_contract_draft(body), original)
+        self.assertEqual([call['method'] for call in self.state['calls']], ['POST', 'GET', 'POST'])
+        self.assertEqual(len(saved), 1)
+
+    def test_original_contract_draft_rejects_malformed_references_before_http(self):
+        for reference in ['', 'short', 'invalid/reference', ' padded-ref ', 'a' * 129]:
+            with self.assertRaises(ValueError):
+                self.client.recover_milestone_contract_creation(reference)
+            with self.assertRaises(ValueError):
+                self.client.create_milestone_contract_draft({'client_reference': reference, 'seller_id': 'seller', 'milestones': []})
+        self.assertEqual(self.state['calls'], [])
+
     def test_every_client_operation_exists_in_generated_contract(self):
         # Prevent a wrapper silently referring to a stale/renamed canonical operation.
         source = Path(__file__).resolve().parents[1] / "clawdmarket/client.py"
