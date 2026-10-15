@@ -67,7 +67,7 @@ function request(path: string, actor: string, method = 'POST', body?: unknown) {
     Authorization: `Bearer ${jwt({ userId: actor, email: `${actor}@test.invalid`, role: 'human' })}` },
   ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
 }
-async function fixture(rail: 'evm' | 'mpp', sharedSigner?: any) {
+async function fixture(rail: 'evm' | 'mpp', sharedSigner?: any, checkout = true) {
   const organization = crypto.randomUUID(), agent = `agent_${crypto.randomUUID()}`, sellerAgent = `agent_${crypto.randomUUID()}`
   const owner = `owner-${organization}`, reviewer = `reviewer-${organization}`, other = `other-${organization}`, buyer = `user_agent_${agent}`, seller = `user_agent_${sellerAgent}`
   const team = crypto.randomUUID(), now = new Date(), operationId = crypto.randomUUID()
@@ -100,9 +100,9 @@ async function fixture(rail: 'evm' | 'mpp', sharedSigner?: any) {
     expected_token_decimals: 6, expected_token_usd_price: 1, payment }))
   const authorization = proposed.authorization
   await domain.approveOrganizationListing(organization, authorization.id, reviewer, domain.organizationListingDecision.parse({ version, client_reference: crypto.randomUUID(), authority_hash: authorization.authority_hash, approve: true }))
-  await domain.checkoutOrganizationListing(organization, authorization.id, buyer, { version, client_reference: crypto.randomUUID(), authority_hash: authorization.authority_hash })
+  if (checkout) await domain.checkoutOrganizationListing(organization, authorization.id, buyer, { version, client_reference: crypto.randomUUID(), authority_hash: authorization.authority_hash })
   const [use] = await db.select().from(schema.organization_listing_uses).where(eq(schema.organization_listing_uses.authorization_id, authorization.id))
-  const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, use.trade_id))
+  const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, use?.trade_id ?? ''))
   return { organization, agent, sellerAgent, owner, reviewer, reviewerRole: role.role.id, other, buyer, seller, team, rail, signer, payment, authorization, trade, operationId }
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>
@@ -427,6 +427,22 @@ for (const rail of ['evm', 'mpp'] as const) {
     const delivered = await send(f.seller, { result: 'A structurally valid result still needs explicit buyer review' })
     assert.equal(delivered.status, 201, JSON.stringify(await delivered.clone().json()))
     const receipt = await delivered.json(), hash = receipt.delivery.content_hash
+    const workApi = await import('@/app/api/trades/[id]/listing-work/route')
+    for (const actor of [f.buyer, f.seller]) {
+      const snapshot = await workApi.GET(request(`/api/trades/${f.trade.id}/listing-work`, actor, 'GET'), context(f.trade.id))
+      assert.equal(snapshot.status, 200)
+      const value = await snapshot.json()
+      assert.equal(value.workspace.delivery.content_hash, hash)
+      assert.equal(value.workspace.delivery.artifact.result, 'A structurally valid result still needs explicit buyer review')
+      assert.equal(value.workspace.reviewed_listing.title, 'Original reviewed public listing', 'Editable catalog text cannot replace private frozen work')
+      assert.match(snapshot.headers.get('Cache-Control') || '', /no-store/)
+    }
+    for (const actor of [f.owner, f.reviewer, f.other]) {
+      const snapshot = await workApi.GET(request(`/api/trades/${f.trade.id}/listing-work`, actor, 'GET'), context(f.trade.id))
+      assert.equal(snapshot.status, 404); assert.doesNotMatch(await snapshot.text(), /structurally valid result|Original reviewed public listing/)
+    }
+    const history = await (await import('@/app/api/trades/route')).GET(request(`/api/trades?trade_id=${f.trade.id}`, f.buyer, 'GET'))
+    assert.equal(history.status, 200); assert.equal((await history.json()).trades[0].reviewed_listing_work_url, `/trades/${f.trade.id}/listing-work`)
     assert.equal((await send(f.seller, { result: 'A structurally valid result still needs explicit buyer review' })).status, 200)
     assert.equal((await send(f.seller, { result: 'Changed private result' })).status, 409)
     const [trade] = await db.select().from(schema.trades).where(eq(schema.trades.id, f.trade.id))
@@ -443,3 +459,63 @@ for (const rail of ['evm', 'mpp'] as const) {
     assert.equal((await db.select().from(schema.task_workspaces).where(eq(schema.task_workspaces.trade_id, trade.id))).length, 0)
   })
 }
+
+for (const rail of ['evm', 'mpp'] as const) test(`reviewed listing ${rail} private checkout API and funded work access preserve principals and original references`, async () => {
+  const f = await fixture(rail, undefined, false), api = await import('@/app/api/organizations/[id]/listing-authorizations/[authorizationId]/checkout/route')
+  const path = `/api/organizations/${f.organization}/listing-authorizations/${f.authorization.id}/checkout`
+  const ctx = { params: Promise.resolve({ id: f.organization, authorizationId: f.authorization.id }) }
+  for (const actor of [f.owner, f.reviewer, f.other, f.seller]) {
+    assert.equal((await api.GET(request(path, actor, 'GET'), ctx)).status, 404)
+  }
+  const pending = await api.GET(request(path, f.buyer, 'GET'), ctx)
+  assert.equal(pending.status, 200); assert.match(pending.headers.get('Cache-Control') || '', /no-store/)
+  assert.equal((await pending.json()).trade, null)
+  const input = { version: f.authorization.version, client_reference: crypto.randomUUID(), authority_hash: f.authorization.authority_hash }
+  const reserved = await api.POST(request(path, f.buyer, 'POST', input), ctx)
+  assert.equal(reserved.status, 201, JSON.stringify(await reserved.clone().json()))
+  const result = await reserved.json(); f.trade = result.trade
+  const work = await import('@/app/api/trades/[id]/listing-work/route'), workPath = `/api/trades/${f.trade.id}/listing-work`
+  for (const actor of [f.owner, f.reviewer, f.other]) assert.equal((await work.GET(request(workPath, actor, 'GET'), context(f.trade.id))).status, 404)
+  assert.equal((await work.GET(request(workPath, f.seller, 'GET'), context(f.trade.id))).status, 409)
+  assert.equal((await work.GET(request(workPath, f.buyer, 'GET'), context(f.trade.id))).status, 200)
+  const intent = (await (await create(f)).json()).intent, body = await signed(f, intent)
+  assert.equal((await claim(f, body)).status, 200)
+  await confirmFixtureReceipt(f, keccak256(body.serialized_transaction))
+  await domain.revokeOrganizationListing(f.organization, f.authorization.id, f.owner)
+  const sellerWork = await work.GET(request(workPath, f.seller, 'GET'), context(f.trade.id))
+  assert.equal(sellerWork.status, 200)
+  const snapshot = await sellerWork.json()
+  assert.equal(snapshot.viewer.is_seller, true); assert.equal(snapshot.workspace.reviewed_listing.listing_id, f.trade.listing_id)
+  assert.equal(JSON.stringify(snapshot).includes(f.signer.address.toLowerCase()), false)
+  assert.equal(snapshot.workspace.reviewed_listing.requirements.output_format, 'json')
+  const recovered = await api.POST(request(path, f.buyer, 'POST', input), ctx)
+  assert.equal(recovered.status, 200); assert.equal((await recovered.json()).trade.id, f.trade.id)
+  assert.equal((await api.POST(request(path, f.buyer, 'POST', { ...input, client_reference: crypto.randomUUID() }), ctx)).status, 409)
+})
+
+for (const rail of ['evm', 'mpp'] as const) test(`reviewed listing ${rail} checkout rejects read credentials and unprotected cookie mutations`, async () => {
+  const f = await fixture(rail, undefined, false), api = await import('@/app/api/organizations/[id]/listing-authorizations/[authorizationId]/checkout/route')
+  const named = await import('@/lib/agent-named-credentials')
+  const read = await named.createNamedAgentCredential({ agentId: f.agent, name: 'Listing read fixture', scopes: ['agent:read'], actorCredentialId: null })
+  const payment = await named.createNamedAgentCredential({ agentId: f.agent, name: 'Listing payment fixture', scopes: ['payments:write'], actorCredentialId: null })
+  assert.equal(read.kind, 'created'); assert.equal(payment.kind, 'created')
+  if (read.kind !== 'created' || payment.kind !== 'created') throw Error('Credential fixture unavailable')
+  const path = `/api/organizations/${f.organization}/listing-authorizations/${f.authorization.id}/checkout`
+  const ctx = { params: Promise.resolve({ id: f.organization, authorizationId: f.authorization.id }) }
+  const body = { version: f.authorization.version, client_reference: crypto.randomUUID(), authority_hash: f.authorization.authority_hash }
+  const bearer = (key: string, method = 'GET') => new NextRequest('http://localhost'+path, { method,
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, ...(method === 'POST' ? { body: JSON.stringify(body) } : {}) })
+  for (const method of ['GET','POST'] as const) {
+    const rejected: Response = await api[method](bearer(read.api_key, method), ctx)
+    assert.equal(rejected.status, 401); assert.doesNotMatch(await rejected.text(), /payer_address|delivery_contract/)
+  }
+  const token = jwt({ userId: f.buyer, email: `${f.buyer}@test.invalid`, role: 'human' })
+  const cookie = new NextRequest('http://localhost'+path, { method: 'POST', headers: { Authorization: 'Bearer invalid', Cookie: `auth-token=${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  assert.equal((await api.POST(cookie, ctx)).status, 403)
+  const denied = await api.POST(new NextRequest('http://localhost'+path, { method: 'POST', headers: { Authorization: `Bearer ${payment.api_key}`, 'Content-Type': 'application/json' }, body: ' '.repeat(16385) }), ctx)
+  assert.equal(denied.status, 413)
+  assert.equal((await db.select().from(schema.organization_listing_uses).where(eq(schema.organization_listing_uses.authorization_id, f.authorization.id))).length, 0)
+  const accepted = await api.POST(bearer(payment.api_key, 'POST'), ctx)
+  assert.equal(accepted.status, 201, JSON.stringify(await accepted.clone().json()))
+  assert.equal((await accepted.json()).trade.buyer_id, f.buyer)
+})

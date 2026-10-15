@@ -2,6 +2,17 @@
 set -euo pipefail
 
 required_files=(
+  "scripts/buyer-listing-worker.mjs"
+  "scripts/provider-listing-worker.mjs"
+  "lib/organization-listing-payment.ts"
+  "lib/organization-listing-tempo-payment.ts"
+  "sdk/python/clawdmarket/listing.py"
+  "docs/ORGANIZATION_REVIEWED_LISTING_PURCHASING.md"
+  "tests/api/organization-listing-economic.test.ts"
+  "tests/api/organization-listing-races.test.ts"
+  "tests/api/organization-listing-shared-exposure.test.ts"
+  "e2e/organization-listing-review.spec.ts"
+  "e2e/organization-listing-work.spec.ts"
   "scripts/buyer-task-worker.mjs"
   "scripts/provider-task-worker.mjs"
   "sdk/python/clawdmarket/task.py"
@@ -366,9 +377,9 @@ if ! grep -Fqx '!/scripts/buyer-workflow-worker.mjs' .vercelignore; then
   exit 1
 fi
 
-for task_worker in buyer-task-worker provider-task-worker; do
+for task_worker in buyer-task-worker provider-task-worker buyer-listing-worker provider-listing-worker; do
   if ! grep -Fqx "!/scripts/${task_worker}.mjs" .vercelignore; then
-    echo "Vercel build excludes the task worker imported by acceptance tests: ${task_worker}" >&2
+    echo "Vercel build excludes the purchasing worker imported by acceptance tests: ${task_worker}" >&2
     exit 1
   fi
 done

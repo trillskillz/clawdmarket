@@ -3,7 +3,7 @@ import { requireSellerPaymentRail, sellerPaymentRails } from '@/lib/seller-payme
 import { CreditError } from '@/lib/account-credit';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users, fee_errors, ratings, service_orders } from '@/lib/schema';
+import { trades, listings, users, fee_errors, ratings, service_orders, organization_listing_uses } from '@/lib/schema';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
@@ -431,6 +431,7 @@ export async function GET(req: NextRequest) {
           auto_confirm_at: trades.auto_confirm_at,
           created_at: trades.created_at,
           completed_at: trades.completed_at,
+          reviewed_listing_work: sql<number>`EXISTS(SELECT 1 FROM ${organization_listing_uses} WHERE ${organization_listing_uses.trade_id} = ${trades.id})`,
           service_order_id: sql<string | null>`(SELECT ${service_orders.id} FROM ${service_orders} WHERE ${service_orders.trade_id} = ${trades.id} LIMIT 1)`,
           rated_by_caller: sql<number>`EXISTS(
             SELECT 1 FROM ${ratings}
@@ -449,6 +450,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       trades: userTrades.map((trade) => ({
         ...trade,
+        reviewed_listing_work_url: trade.reviewed_listing_work ? `/trades/${encodeURIComponent(trade.id)}/listing-work` : null,
         work_order_url: trade.service_order_id ? `/api/trades/${encodeURIComponent(trade.id)}/work-order` : null,
         checkout: trade.buyer_id === auth.userId && (
           (trade.status === 'pending' && ['mpp', 'evm'].includes(trade.payment_rail))

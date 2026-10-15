@@ -66,7 +66,7 @@ async function buy(f: Fixture, actor: string) {
 }
 for (const tempo of [false, true]) test(`${tempo ? 'Tempo' : 'L1'} listing review freezes private terms, denies unrelated readers and recovers original decisions without any checkout`, async () => {
   const f = await fixture(tempo), a = await propose(f), saved = decision(a), ctx = context(f.org, a.id), path = `${f.prefix}/${a.id}`
-  assert.equal(a.checkout_available, false); assert.equal(a.terms.explicit_acceptance, true); assert.equal(a.terms.total_minor, 105)
+  assert.equal(a.checkout_available, true); assert.equal(a.terms.explicit_acceptance, true); assert.equal(a.terms.total_minor, 105)
   const recovered = await collection.GET(request(`${f.prefix}?client_reference=${f.body.client_reference}`, f.owner), context(f.org))
   assert.equal(recovered.status, 200); assert.equal((await recovered.json()).authorization.id, a.id)
   const replay = await collection.POST(request(f.prefix, f.owner, 'POST', f.body), context(f.org)); assert.equal(replay.status, 200)

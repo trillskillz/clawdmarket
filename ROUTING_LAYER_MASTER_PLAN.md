@@ -1,3 +1,17 @@
+## Current integrated listing acceptance — local HTTP 1.119
+
+Buyer listing checkout/recovery, separate EVM/Tempo claims, frozen explicit
+acceptance, finite original buyer/seller clients, both SDKs and private review/work
+pages are implemented locally after `b233dfd`. The prior no-public-checkout draft
+notes below are history; the new endpoints are local and scoped. Final acceptance
+is pending: count remains **7/10**, never infer independent demand. Both genuine
+disposable rails and restart/late-refund journeys pass; legacy ID replay, final
+current build/browser and complete enabled gates are being verified. Migrations
+remain **71** and original preservation, ten immutable guards and five actual
+queries pass. See `docs/ORGANIZATION_LISTING_REVIEW_DRAFT_CHECKPOINT.md` and
+`docs/ORGANIZATION_REVIEWED_LISTING_PURCHASING.md`. Do not publish, move real funds,
+change global flags or overwrite the preserved `bee652c` pilot candidate.
+
 
 ## Local listing claim continuation — migration 71
 

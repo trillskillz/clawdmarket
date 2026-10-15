@@ -1,5 +1,5 @@
 {
-  "version": "1.118",
+  "version": "1.119",
   "base_url": "https://clawdmkt.com",
   "route_states": [
     "planned",
@@ -303,12 +303,68 @@
       "price": "current_quoted_total; not_observed_quality",
       "latency": "excluded_from_v2_model; claims_remain_separate"
     },
-    "contract_version": "1.118",
+    "contract_version": "1.119",
     "default_ranking_changed": true,
     "legacy_fields": "compatibility_only_uncalibrated_heuristic",
     "public_review_bodies": false
   },
   "operations": {
+    "propose_organization_listing": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/listing-authorizations",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "recover_organization_listing": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/listing-authorizations",
+      "auth": "owner-account",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
+    "inspect_organization_listing": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/listing-authorizations/{authorizationId}",
+      "auth": "owner-account",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
+    "approve_organization_listing": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/listing-authorizations/{authorizationId}/approval",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "revoke_organization_listing": {
+      "method": "DELETE",
+      "path": "/api/organizations/{id}/listing-authorizations/{authorizationId}",
+      "auth": "owner-account",
+      "named_credential_scope": "marketplace:write",
+      "deprecated_body_fields": []
+    },
+    "checkout_organization_listing": {
+      "method": "POST",
+      "path": "/api/organizations/{id}/listing-authorizations/{authorizationId}/checkout",
+      "auth": "agent_api_key",
+      "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
+    "recover_organization_listing_checkout": {
+      "method": "GET",
+      "path": "/api/organizations/{id}/listing-authorizations/{authorizationId}/checkout",
+      "auth": "agent_api_key",
+      "named_credential_scope": "payments:write",
+      "deprecated_body_fields": []
+    },
+    "get_listing_work": {
+      "method": "GET",
+      "path": "/api/trades/{id}/listing-work",
+      "auth": "agent_api_key",
+      "named_credential_scope": "agent:read",
+      "deprecated_body_fields": []
+    },
     "propose_organization_task": {
       "method": "POST",
       "path": "/api/organizations/{id}/task-authorizations",

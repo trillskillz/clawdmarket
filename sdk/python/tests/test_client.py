@@ -383,6 +383,90 @@ class ClientTests(unittest.TestCase):
         self.assertEqual([call['body'] for call in self.state['calls']], [{'content_hash': content_hash}] * 2)
         self.assertTrue(all(call['path'] == '/api/trades/' + ID + '/confirm' for call in self.state['calls']))
 
+    def test_reviewed_listing_original_references_recover_lost_http_replies_without_replacement(self):
+        for version in (1, 2):
+            with self.subTest(version=version):
+                self.state['calls'] = []
+                proposal = {'version': version, 'client_reference': 'saved-listing-proposal', 'task_id': 'legacy-task-id', 'winning_bid_id': 'original-bid',
+                            'reviewer_role_id': ID, 'expected_total': '1.05', 'max_daily': '1.05', 'max_monthly': '1.05', 'max_lifetime': '1.05',
+                            'max_lifetime_chain_fee_units': '10000', 'expires_at': '2026-10-14T00:00:00.000Z', 'expected_token_decimals': 6, 'expected_token_usd_price': 1,
+                            'payment': {'rail': 'mpp' if version == 2 else 'evm', 'chain_id': 4217 if version == 2 else 1,
+                                        'token_address': '0x' + '44' * 20, 'payer_address': '0x' + '11' * 20, 'treasury_address': '0x' + '99' * 20, 'minimum_token_reserve_units': '5000000',
+                                        **({'fee_token_address': '0x' + '44' * 20, 'minimum_fee_token_reserve_units': '100000', 'max_fee_token_cost_units': '10000'} if version == 2 else
+                                           {'minimum_native_reserve_wei': '1000000', 'max_gas_cost_wei': '10000'})}}
+                decision = {'version': version, 'client_reference': 'saved-listing-decision', 'authority_hash': 'a' * 64, 'approve': True}
+                checkout = {'version': version, 'client_reference': 'saved-listing-checkout', 'authority_hash': decision['authority_hash']}
+                saved = {}
+                current = {'state': 'pending', 'trade': None}
+
+                def reply(call):
+                    phase = 'decision' if call['path'].endswith('/approval') else 'checkout' if call['path'].endswith('/checkout') else 'proposal'
+                    if call['method'] == 'POST':
+                        self.assertEqual(call['body'], {'proposal': proposal, 'decision': decision, 'checkout': checkout}[phase])
+                        if phase not in saved:
+                            saved[phase] = call['body']
+                            if phase == 'decision':
+                                current['state'] = 'approved'
+                            if phase == 'checkout':
+                                current['trade'] = {'id': ID, 'status': 'pending'}
+                            return None
+                        self.assertEqual(call['body'], saved[phase])
+                    if call['method'] == 'DELETE':
+                        current['state'] = 'revoked'
+                    if phase == 'checkout':
+                        return (200, {'ok': True, 'authorization_id': ID, 'task_id': proposal['task_id'], 'trade': current['trade'], 'created': False}, {})
+                    return (200, {'authorization': {'id': ID, 'state': current['state'], 'decision': saved.get('decision')}, 'idempotent': True}, {})
+
+                self.state['reply'] = reply
+                with self.assertRaises(ClawdMarketTransportError):
+                    self.client.propose_organization_listing(ID, proposal)
+                self.assertEqual(len(self.state['calls']), 1)
+                self.assertEqual(self.client.recover_organization_listing(ID, proposal['client_reference'])['authorization']['id'], ID)
+                self.assertTrue(self.client.propose_organization_listing(ID, proposal)['idempotent'])
+                with self.assertRaises(ClawdMarketTransportError):
+                    self.client.approve_organization_listing(ID, ID, decision)
+                self.assertEqual(len(self.state['calls']), 4)
+                self.assertEqual(self.client.inspect_organization_listing(ID, ID)['authorization']['state'], 'approved')
+                self.assertEqual(self.client.approve_organization_listing(ID, ID, decision)['authorization']['decision'], decision)
+                self.assertIsNone(self.client.recover_organization_listing_checkout(ID, ID)['trade'])
+                with self.assertRaises(ClawdMarketTransportError):
+                    self.client.checkout_organization_listing(ID, ID, checkout)
+                self.assertEqual(len(self.state['calls']), 8)
+                self.assertEqual(self.client.recover_organization_listing_checkout(ID, ID)['trade']['id'], ID)
+                self.assertEqual(self.client.checkout_organization_listing(ID, ID, checkout)['trade']['id'], ID)
+                self.assertEqual(self.client.revoke_organization_listing(ID, ID)['authorization']['state'], 'revoked')
+                current['trade']['status'] = 'cancelled'
+                self.assertEqual(self.client.approve_organization_listing(ID, ID, decision)['authorization']['state'], 'revoked')
+                self.assertEqual(self.client.recover_organization_listing_checkout(ID, ID)['trade']['status'], 'cancelled')
+                self.assertEqual(self.client.checkout_organization_listing(ID, ID, checkout)['trade']['id'], ID)
+                self.assertEqual(len(saved), 3)
+                self.assertEqual(len([call for call in self.state['calls'] if call['method'] == 'POST']), 8)
+                self.assertEqual(self.state['calls'][1]['path'], '/api/organizations/' + ID + '/listing-authorizations?client_reference=saved-listing-proposal')
+
+    def test_reviewed_listing_rejects_scope_substitution_and_bad_recovery_reference_before_http(self):
+        with self.assertRaises(ValueError):
+            self.client.inspect_organization_listing('../foreign', ID)
+        with self.assertRaises(ValueError):
+            self.client.recover_organization_listing_checkout(ID, '../foreign')
+        for reference in (' short ', 'original/?foreign', 'a' * 129, 'missing'):
+            with self.assertRaises(ValueError):
+                self.client.recover_organization_listing(ID, reference)
+        self.assertEqual(len(self.state['calls']), 0)
+
+    def test_listing_acceptance_is_explicit_exact_delivery_hash_without_automatic_retry(self):
+        content_hash = 'd' * 64
+        with self.assertRaises(ValueError):
+            self.client.confirm_listing_delivery(ID, 'foreign-delivery')
+        self.assertEqual(len(self.state['calls']), 0)
+        self.state['reply'] = lambda _call: None
+        with self.assertRaises(ClawdMarketTransportError):
+            self.client.confirm_listing_delivery(ID, content_hash)
+        self.assertEqual(len(self.state['calls']), 1)
+        self.state['reply'] = lambda _call: (200, {'ok': True, 'trade': {'id': ID, 'status': 'completed'}}, {})
+        self.client.confirm_listing_delivery(ID, content_hash)
+        self.assertEqual([call['body'] for call in self.state['calls']], [{'content_hash': content_hash}] * 2)
+        self.assertTrue(all(call['path'] == '/api/trades/' + ID + '/confirm' for call in self.state['calls']))
+
     def test_every_client_operation_exists_in_generated_contract(self):
         # Prevent a wrapper silently referring to a stale/renamed canonical operation.
         source = Path(__file__).resolve().parents[1] / "clawdmarket/client.py"

@@ -1,3 +1,45 @@
+# Current integrated local listing candidate — acceptance pending
+
+The continuation now implements local HTTP **1.119**, with buyer checkout and
+original recovery, separate EVM/Tempo claims, frozen explicit delivery, finite
+buyer/seller clients, TypeScript/Python commands and private review/work pages.
+Migrations remain **71**. This supersedes the earlier foundation-only status
+below; the older entries are checkpoint history. No publication or production
+execution has occurred. Accepted capability count remains **7/10** pending final
+enabled gates, current build/browser and source-manifest acceptance.
+
+Current genuine disposable L1/Tempo evidence passes original funding, buyer and
+seller restarts, explicit exact-hash acceptance, confirmed payout, actual revoked
+late refunds and final-send revocation. The current legacy-listing-ID replay is
+running. Separate-process proposal/approval/checkout and real before/after-commit
+SIGKILL pass. Twenty-four sequential shared ledger cases and twelve separate
+process listing/task/route/workflow gross/fee races pass; cancelled original
+obligations never replenish exposure. Unrelated generic versus reviewed checkout
+now races actual inventory after the real admission counter commits and retains
+exactly one trade; no rate limit is disabled. TypeScript/Python lost HTTP replies
+recover exact proposal/decision/checkout references; 24 Python cases and eight
+listing/task TypeScript SDK cases pass. Current private checkout/delivery and
+canonical contract focused run passes **51/51**.
+
+Initial integrated checks caught and corrected a permissive TypeScript recovery
+reference helper, missing operation types, a post-race fixture query against a
+nonexistent task-use buyer column, and a test response inference annotation.
+The first unrelated-buyer inventory attempt correctly hit fail-closed local
+admission contention (429), which did not establish inventory CAS coverage;
+its barrier now lets that unchanged admission counter commit before the race.
+The first browser run passes 13/15; two mobile output overflows are fixed and
+await the rebuilt browser run. The first build reached page collection but its
+temporary database parent directory was absent; the persistent disposable browser
+database is initialized and the rebuild passes. A setup eval namespace issue was
+also corrected without application changes. No failures are relabeled success.
+
+The parent dependable-pilot candidate stays preserved at `bee652c`; its security,
+email-provider, real-participant admission, canary/publication and recruitment
+external dependencies remain. The unapproved braces risk is still unresolved.
+See [the current listing contract](ORGANIZATION_REVIEWED_LISTING_PURCHASING.md).
+
+---
+
 # Local listing review checkpoint — parked for the dependable-product plan
 
 ## Current integration after the priority candidate

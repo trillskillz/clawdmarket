@@ -98,8 +98,7 @@ export async function inspectOrganizationListingCheckout(orgId: string, id: stri
   return dto(row, validatedListingTerms(row), original?.trade ?? null)
 }
 
-/** Internal pending checkout only. No public route is exposed until claim and
- * explicit delivery/settlement integration have their complete acceptance. */
+/** Atomically create or recover the original reviewed listing checkout. */
 export async function checkoutOrganizationListing(orgId: string, id: string, buyerId: string, input: z.output<typeof organizationListingCheckoutInput>) {
   return purchasingTransaction(async source => {
     const row = await grant(source, orgId, id, buyerId)

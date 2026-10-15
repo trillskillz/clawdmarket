@@ -1,5 +1,5 @@
 import { SDK_CONTRACT } from './contract.js'
-import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, scopedSpendingClient } from './enterprise.js'
+import { enterpriseId, enterprisePath, originalGrantReference, originalTaskReference, originalListingReference, scopedSpendingClient } from './enterprise.js'
 import type { EnterpriseOperation, OrganizationSpendingClient, SpendingGrantInput, SpendingGrantResult, SpendingHistory } from './enterprise.js'
 export { SDK_CONTRACT } from './contract.js'
 export type { OrganizationSpendingClient, SpendingAccount, SpendingGrantInput, SpendingGrantResult, SpendingHistory, SpendingEvmPayment, SpendingTempoPayment, SpendingOrderInput, SpendingOrderResult, SpendingEvmIntentInput, SpendingEvmClaimInput, SpendingEvmFundingProof } from './enterprise.js'
@@ -76,6 +76,16 @@ export type OrganizationTaskAuthorization = {id:string;organization_id:string;ta
 export type OrganizationTaskCheckout = {ok:true;authorization_id:string;authority_hash:string;task_id:string;trade:{id:string;status:string;payment_rail:'evm'|'mpp';[key:string]:unknown}|null;
   checkout:Record<string,unknown>|null;workspace_url:string;created?:boolean;
   payment_authority:{id:string;kind:'organization_task_v1'|'organization_task_v2';authority_hash:string;terms:Pick<OrganizationTaskTerms,'payment'|'token_decimals'|'token_usd_price'|'fee_token_decimals'|'expires_at'>}}
+export type OrganizationListingRequirements = OrganizationTaskRequirements
+export type OrganizationListingProposal = Omit<OrganizationTaskProposalBase,'task_id'|'winning_bid_id'> & {listing_id:string;buyer_agent_id:string;delivery:OrganizationListingRequirements} & (
+  {version:1;payment:Extract<RouteMandatePayment,{rail:'evm'}>&{chain_id:1}} | {version:2;payment:Extract<RouteMandatePayment,{rail:'mpp'}>&{chain_id:4217}})
+export type OrganizationListingDecision = OrganizationTaskDecision
+export type OrganizationListingCheckoutInput = Omit<OrganizationListingDecision,'approve'>
+export type OrganizationListingTerms = Omit<OrganizationTaskTerms,'task'|'bid'|'workspace'> & {listing:{id:string;seller_id:string;title:string;description:string;category:string;item_price_usd:number};delivery:OrganizationListingRequirements}
+export type OrganizationListingAuthorization = {id:string;organization_id:string;listing_id:string;buyer_id:string;team_id:string|null;cost_center:string;client_reference:string;authority_hash:string;
+  version:1|2;terms:OrganizationListingTerms;state:'pending'|'approved'|'revoked';viewer_role:'owner'|'reviewer';approved_at:string|null;revoked_at:string|null;decision:OrganizationListingDecision|null;review_url:string;checkout_available:boolean}
+export type OrganizationListingCheckout = Omit<OrganizationTaskCheckout,'task_id'|'workspace_url'|'payment_authority'> & {listing_id:string;delivery_contract:OrganizationListingRequirements;
+  payment_authority:{id:string;kind:'organization_listing_v1'|'organization_listing_v2';authority_hash:string;terms:Pick<OrganizationListingTerms,'payment'|'token_decimals'|'token_usd_price'|'fee_token_decimals'|'expires_at'>}}
 export type OrganizationRouteAuthorization = {id:string;version:1|2|3|4;organization_id:string;route_id:string;buyer_id:string;team_id:string|null;cost_center:string;reviewer_account_id:string;
   viewer_role:'owner'|'reviewer';review_url:string;client_reference:string;authority_hash:string;state:'pending'|'approved'|'revoked';approved_at:string|null;revoked_at:string|null;
   decision:{version:1|2|3|4;client_reference:string;authority_hash:string;approve:true}|null;
@@ -416,6 +426,39 @@ export class ClawdMarketClient {
   getReputationDecisions(tradeId:string,options?:RequestOptions){return this.request<{decisions:Record<string,unknown>[]}>('GET',`${tradePath(tradeId)}/reputation`,undefined,options)}
   /** Persist this exact body/reference before sending; inspect on transport uncertainty. */
   appealReputationFinding(tradeId:string,input:{version:1;client_reference:string;finding_id:string},options?:RequestOptions){return this.request<Record<string,unknown>>('PATCH',`${tradePath(tradeId)}/reputation`,input,options)}
+
+  /** Save the exact listing and agreed delivery, proposal and reference before submission. No automatic retries. */
+  proposeOrganizationListing(organizationId:string,input:OrganizationListingProposal,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationListingAuthorization;idempotent:boolean}>('propose_organization_listing',{id:organizationId},input,options)
+  }
+  recoverOrganizationListing(organizationId:string,clientReference:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationListingAuthorization}>('recover_organization_listing',{id:organizationId},undefined,options,{client_reference:originalListingReference(clientReference)})
+  }
+  inspectOrganizationListing(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationListingAuthorization}>('inspect_organization_listing',{id:organizationId,authorizationId},undefined,options)
+  }
+  approveOrganizationListing(organizationId:string,authorizationId:string,input:OrganizationListingDecision,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationListingAuthorization;idempotent:boolean}>('approve_organization_listing',{id:organizationId,authorizationId},input,options)
+  }
+  revokeOrganizationListing(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<{authorization:OrganizationListingAuthorization;idempotent:boolean}>('revoke_organization_listing',{id:organizationId,authorizationId},undefined,options)
+  }
+  /** Original assigned buyer only. This creates the original unpaid listing trade; it does not sign or send funds. */
+  checkoutOrganizationListing(organizationId:string,authorizationId:string,input:OrganizationListingCheckoutInput,options?:RequestOptions){
+    return this.enterpriseRequest<OrganizationListingCheckout>('checkout_organization_listing',{id:organizationId,authorizationId},input,options)
+  }
+  recoverOrganizationListingCheckout(organizationId:string,authorizationId:string,options?:RequestOptions){
+    return this.enterpriseRequest<OrganizationListingCheckout>('recover_organization_listing_checkout',{id:organizationId,authorizationId},undefined,options)
+  }
+  /** Explicit original buyer decision for the exact delivered content. Never accepts automatically. */
+  confirmListingDelivery(tradeId:string,contentHash:string,options?:RequestOptions){
+    if(!/^[a-f0-9]{64}$/.test(contentHash))throw new TypeError('original delivery content_hash must be a SHA-256 hash')
+    return this.request<{ok:boolean;status?:string;trade:Record<string,unknown>}>('POST',`${tradePath(tradeId)}/confirm`,{content_hash:contentHash},options)
+  }
+
+  getListingWork(tradeId:string,options?:RequestOptions){
+    return this.enterpriseRequest<Record<string,unknown>>('get_listing_work',{id:tradeId},undefined,options)
+  }
 
   /** Save the exact accepted bid, proposal and reference before submission. No automatic retries. */
   proposeOrganizationTask(organizationId:string,input:OrganizationTaskProposal,options?:RequestOptions){

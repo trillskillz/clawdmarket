@@ -139,7 +139,7 @@ function dto(row: Grant, actor: string) {
     approved_at: row.approved_at, revoked_at: row.revoked_at,
     decision: row.decision_reference ? { version: frozen(row).version, client_reference: row.decision_reference,
       authority_hash: row.authority_hash, approve: true as const } : null,
-    checkout_available: false as const }
+    review_url: `/organizations/${row.organization_id}/listing-authorizations/${row.id}`, checkout_available: true as const }
 }
 export async function proposeOrganizationListing(orgId: string, actor: string, input: z.output<typeof organizationListingInput>) {
   return purchasingTransaction(async source => {

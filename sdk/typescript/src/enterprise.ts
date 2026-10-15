@@ -51,6 +51,7 @@ export interface OrganizationSpendingClient {
 }
 
 export type EnterpriseOperation = 'inspect_spending_accounts' | 'create_spending_account' | 'revoke_spending_account'
+  | 'propose_organization_listing' | 'recover_organization_listing' | 'inspect_organization_listing' | 'approve_organization_listing' | 'revoke_organization_listing' | 'checkout_organization_listing' | 'recover_organization_listing_checkout' | 'get_listing_work'
   | 'propose_organization_task' | 'recover_organization_task' | 'inspect_organization_task' | 'approve_organization_task' | 'revoke_organization_task' | 'checkout_organization_task' | 'recover_organization_task_checkout'
   | 'propose_organization_workflow' | 'recover_organization_workflow' | 'inspect_organization_workflow' | 'approve_organization_workflow' | 'revoke_organization_workflow'
   | 'propose_organization_route' | 'recover_organization_route' | 'inspect_organization_route' | 'approve_organization_route' | 'revoke_organization_route'
@@ -64,6 +65,10 @@ export function enterpriseId(value: string): string {
 }
 export function originalGrantReference(value: string): string {
   if (typeof value !== 'string' || value !== value.trim() || value.length < 8 || value.length > 200) throw new TypeError('original client_reference must be 8 to 200 characters without surrounding whitespace')
+  return value
+}
+export function originalListingReference(value: string): string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(value)) throw new TypeError('original listing client_reference must be 8 to 128 allowed characters')
   return value
 }
 export function originalTaskReference(value: string): string {
