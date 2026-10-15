@@ -1,3 +1,35 @@
+## Finite original buyer/provider command recovery verified — local only
+
+One exact-command worker durably journals explicit FUND, seller OUTPUT, buyer
+ACCEPT and buyer RELEASE separately. It checks original reference before sending;
+uncertain absence requires explicit same-command resume. Private kernel-locked
+journals preserve original inputs/receipt identities, never credentials. Changed
+scope/body fails locally; unavailable reads never become missing records. Output
+is not executed. Credit nonwithdrawability requires explicit acknowledgment.
+
+Current **33/33** named cases pass, zero failures/skips: all10 scoped fund/process/
+CLI cases,3 worker safety cases,18 canonical API and2 SDK cases. Actual buyer and
+seller CLI processes are SIGKILLed after each committed command through BOTH
+milestones and restarted from saved private journals. Restarts issue only original
+GETs, with no second mutation. Explicit acceptance alone posts no credit. Final
+buyer principal0/seller100/fee5 TEST cents, even after review revocation and fresh
+funding closure. No private artifact is printed. Initial test-only fetch typing
+and optional-chain lint failures were corrected; final types/lint pass. Existing
+9b9f9b7 app build applies; no app/runtime API/schema changed here. Migration79 and
+prior local preservation unchanged/not rerun. No live or independent activity.
+
+Manifest **71** files versus e55e151, SHA-256 `e5906b8d6882155eef870419f9ae1d9efee5b8ac35fd65200a8d667577cfae51`.
+Worker setup/recovery: `docs/ORIGINAL_CONTRACT_COMMAND_WORKER.md`.
+Evidence: `docs/evidence/reviewed-contract-foundation-2026-10-15/finite-worker.json`.
+Fresh funding defaults DISABLED; HTTP1.119/count8 stay local. This is finite exact
+command recovery, not a completed autonomous lifecycle or capability9. Next add
+private human review/work UI, remaining economic/shared-reservation scenarios and
+complete predeploy/build/browser/preservation gates. Keep prior accepted candidates
+unchanged and retain original financial references/recovery/interlocks on rollback.
+Publication, flags, real funds/mail/outreach and independent demand remain separate.
+
+## Historical checkpoints (superseded where stated above)
+
 ## Original funding process recovery verified — local only
 
 All **9** actual scoped-funding API cases pass with zero failures/skips, including

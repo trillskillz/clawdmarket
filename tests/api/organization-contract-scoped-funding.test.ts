@@ -1,6 +1,6 @@
 import test, { before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile, access } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile, access, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
@@ -326,5 +326,108 @@ for (const boundary of ['before', 'after'] as const) test(`actual ${boundary}-co
   } finally {
     if (worker.child.exitCode === null && worker.child.signalCode === null) worker.child.kill('SIGKILL')
     await exited; process.env.CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED = 'true'; delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED
+  }
+})
+
+test('finite buyer and seller CLI journals recover actual committed fund/output/accept/release after SIGKILL without repeating writes or leaking private output', { skip: !enabled }, async () => {
+  const f = await fixture(), credit = await import('@/lib/account-credit')
+  const feesBefore = (await credit.creditBalance('system_marketplace_fees')).available_minor
+  const root = await import('@/app/api/contracts/[id]/route'), work = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/route')
+  const output = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/submissions/route'), release = await import('@/app/api/contracts/[id]/milestones/[milestoneId]/release/route')
+  let committed: (value: any) => void = () => {}, dropAction = '', writes = 0
+  const server = createServer(async (incoming, outgoing) => {
+    try {
+      let body = ''; for await (const chunk of incoming) body += chunk
+      const req = new NextRequest(`http://localhost${incoming.url}`, { method: incoming.method,
+        headers: { Authorization: incoming.headers.authorization!, 'Content-Type': 'application/json' }, ...(body ? { body } : {}) })
+      let response: Response, action = ''
+      if (req.nextUrl.pathname === f.path) { response = await (incoming.method === 'POST' ? fund.POST(req, f.context) : fund.GET(req, f.context)); action = 'fund' }
+      else if (req.nextUrl.pathname === `/api/contracts/${f.original.contract.id}`) response = await root.GET(req, { params: Promise.resolve({ id: f.original.contract.id }) })
+      else {
+        const parts = req.nextUrl.pathname.split('/'), context = { params: Promise.resolve({ id: parts[3], milestoneId: parts[5] }) }
+        if (incoming.method === 'GET') response = await work.GET(req, context)
+        else if (parts[6] === 'submissions') { response = await output.POST(req, context); action = 'submit' }
+        else if (parts[6] === 'release') { response = await release.POST(req, context); action = 'release' }
+        else { response = await work.PATCH(req, context); action = 'accept' }
+      }
+      const result = await response.json()
+      if (incoming.method !== 'GET') writes++
+      if (incoming.method !== 'GET' && dropAction === action && response.status === 201) {
+        dropAction = ''; committed(result); return // Leave the actual committed reply unacknowledged until its worker is killed.
+      }
+      outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(JSON.stringify(result))
+    } catch (error) { outgoing.statusCode = 500; outgoing.end(JSON.stringify({ error: String(error) })) }
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+  const buyerState = join(directory, `buyer-${crypto.randomUUID()}`), sellerState = join(directory, `seller-${crypto.randomUUID()}`)
+  const common = { version: 1, origin: base, buyer_id: f.buyer, seller_id: f.seller, contract_id: f.original.contract.id, credit_terms_acknowledged: true }
+  const launch = (path: string, action: string) => {
+    const child = spawn(process.execPath, ['scripts/contract-command-worker.mjs', '--command', path, '--state-dir', action === 'submit' ? sellerState : buyerState], {
+      env: { ...process.env, CLAWDMARKET_BUYER_API_KEY: token(f.buyer), CLAWDMARKET_PROVIDER_API_KEY: token(f.seller) }, stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = '', stderr = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes)
+    const result = new Promise<any>((resolve, reject) => {
+      child.on('error', reject); child.on('exit', (code, signal) => {
+        if (code || signal) reject(new Error(`${signal ?? code}: ${stderr}`)); else { try { resolve(JSON.parse(stdout)) } catch (error) { reject(error) } }
+      })
+    })
+    void result.catch(() => {})
+    return { child, result, stdout: () => stdout }
+  }
+  const command = async (plan: Record<string, any>, kill = true) => {
+    const path = join(directory, `command-${crypto.randomUUID()}.json`)
+    await writeFile(path, JSON.stringify(plan), { mode: 0o600 })
+    const written = writes
+    let killed: ReturnType<typeof launch> | undefined
+    try {
+      if (kill) {
+        let timer: ReturnType<typeof setTimeout>
+        const observed = new Promise<any>((resolve, reject) => { committed = resolve; timer = setTimeout(() => reject(new Error('CLI never reached original committed write')), 20000) })
+        dropAction = plan.action; killed = launch(path, plan.action)
+        let original: any
+        try { original = await Promise.race([observed, killed.result.then(() => { throw new Error('Expected actual lost committed reply') })]) } finally { clearTimeout(timer!) }
+        assert.ok(original); killed.child.kill('SIGKILL'); await assert.rejects(killed.result, /SIGKILL/)
+        assert.equal(killed.stdout(), '')
+      }
+      const restart = launch(path, plan.action)
+      const result = await restart.result
+      assert.equal(result.state, 'recorded'); assert.equal(result.action, plan.action)
+      assert.equal(writes, written + 1, 'restart recovers by original reference without another financial/output/decision POST')
+      assert.equal(JSON.stringify(result).includes('PRIVATE_WORKER_OUTPUT'), false)
+      const replay = await launch(path, plan.action).result
+      assert.deepEqual(replay.receipt, result.receipt); assert.equal(writes, written + 1)
+      return result
+    } finally { if (killed && killed.child.exitCode === null && killed.child.signalCode === null) killed.child.kill('SIGKILL') }
+  }
+  try {
+    const funding = await command({ ...common, action: 'fund', actor_id: f.buyer, organization_id: f.org, authorization_id: f.a.id,
+      gross_minor: 105, principal_minor: 100, upfront_fee_minor: 5, milestone_ids: f.original.milestones.map((m: any) => m.id), body: f.funding })
+    assert.equal(funding.receipt.gross_minor, 105)
+    const revoked = await (await import('@/app/api/organizations/[id]/contract-authorizations/[authorizationId]/route')).DELETE(request(`${f.prefix}/${f.a.id}`, f.owner, 'DELETE'), f.context)
+    assert.equal(revoked.status, 200)
+    process.env.CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED = 'false'; process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED = 'true'
+    assert.equal((await root.PATCH(request(`/api/contracts/${f.original.contract.id}`, f.seller, 'PATCH', { action: 'start' }), { params: Promise.resolve({ id: f.original.contract.id }) })).status, 200)
+    for (const [index, m] of f.original.milestones.entries()) {
+      const scope = { ...common, milestone_id: m.id }
+      const submitted = await command({ ...scope, action: 'submit', actor_id: f.seller, body: { version: 1, client_reference: crypto.randomUUID(), artifact_bundle: { report: `PRIVATE_WORKER_OUTPUT_${index}` } } })
+      assert.equal(submitted.receipt.authorizes_payment, false)
+      const accepted = await command({ ...scope, action: 'accept', actor_id: f.buyer, body: { version: 1, client_reference: crypto.randomUUID(), submission_id: submitted.receipt.id, content_hash: submitted.receipt.content_hash, approve: true } })
+      assert.equal(accepted.receipt.financial_release_performed, false)
+      assert.equal((await credit.creditBalance(f.seller)).available_minor, index === 0 ? 0 : 40, 'explicit acceptance alone never releases funds')
+      const paid = await command({ ...scope, action: 'release', actor_id: f.buyer, body: { version: 1, client_reference: crypto.randomUUID(), acceptance_id: accepted.receipt.id, submission_id: submitted.receipt.id, content_hash: submitted.receipt.content_hash } })
+      assert.equal(paid.receipt.financial_posting_confirmed, true)
+    }
+    assert.equal((await credit.creditBalance(f.buyer)).available_minor, 0); assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 0)
+    assert.equal((await credit.creditBalance(f.seller)).available_minor, 100)
+    assert.equal((await credit.creditBalance('system_marketplace_fees')).available_minor, feesBefore + 5)
+    assert.equal((await db.select().from(schema.contracts).where(eq(schema.contracts.id, f.original.contract.id)))[0].state, 'COMPLETED')
+    for (const state of [buyerState, sellerState]) for (const file of (await readdir(state)).filter(f => f.endsWith('.json'))) {
+      const text = await readFile(join(state, file), 'utf8'), journal = JSON.parse(text)
+      assert.equal(journal.phase, 'recorded'); assert.equal(text.includes(token(f.buyer)), false); assert.equal(text.includes(token(f.seller)), false)
+    }
+  } finally {
+    server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
+    process.env.CLAWDMARKET_REVIEWED_CONTRACT_FUNDING_ENABLED = 'true'; delete process.env.CLAWDMARKET_NEW_PAYMENTS_PAUSED
   }
 })

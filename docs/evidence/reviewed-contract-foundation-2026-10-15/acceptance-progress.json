@@ -1,5 +1,5 @@
 {
-  "stage": "Default-disabled scoped funding and independent process/commit-boundary recovery; durable workers and full contract capability incomplete",
+  "stage": "Finite exact command buyer/provider journals and actual CLI kills/restarts; private human UI and full release gates incomplete",
   "accepted_listing_candidate": "e55e151",
   "http_contract": "1.119",
   "migrations": 79,
@@ -46,7 +46,9 @@
     "original_funding_reference_boundary": true,
     "fresh_reviewed_contract_funding_enabled_by_default": false,
     "disposable_public_funding_and_fulfillment": true,
-    "independent_funding_process_recovery": true
+    "independent_funding_process_recovery": true,
+    "finite_exact_command_journals": true,
+    "actual_fulfillment_cli_kill_restart_recovery": true
   },
   "records": {
     "original_use": {
@@ -388,6 +390,10 @@
     "funding-process": {
       "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/funding-process.json",
       "source_manifest_sha256": "b33e7fc41c966356d9a5847bdcd73642dbb571c3380b0ba5e4bca3cc104e3928"
+    },
+    "finite-worker": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/finite-worker.json",
+      "source_manifest_sha256": "e5906b8d6882155eef870419f9ae1d9efee5b8ac35fd65200a8d667577cfae51"
     }
   },
   "compatibility_cases": {

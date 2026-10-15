@@ -188,3 +188,5 @@ implied. Preserve all original operation, decision, submission, use, review and
 financial rows across rollback. An older generic milestone handler must not serve
 new reviewed obligations; retain scoped recovery and the payment/submission
 interlocks. Existing ordinary historical contract policy stays unchanged.
+
+Finite buyer/provider exact-command journals, recovery and reviewable local CLI instructions: [original contract command worker](ORIGINAL_CONTRACT_COMMAND_WORKER.md). This does not complete the overall contract capability.

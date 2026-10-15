@@ -1,6 +1,6 @@
 {
   "baseline_listing_candidate": "e55e151",
-  "scope": "Unfinished contract foundation; default-disabled scoped funding API/SDK, actual public funding/fulfillment and independent-process same/conflicting/shared-budget races and before/after-commit SIGKILL recovery verified. Durable workers/private UI and full economic/release gates remain incomplete. Not capability9 or publication/live execution permission.",
+  "scope": "Unfinished contract foundation. Default-disabled scoped funding, exact finite buyer/provider command journals and actual committed fund/output/accept/release CLI kill/restart recovery verified. Private human UI, remaining economic scenarios and complete release gates remain incomplete. Not capability9, publication or live execution permission.",
   "http_contract": "1.119",
   "migrations": 79,
   "files": {
@@ -51,6 +51,7 @@
     "migrations/2026-10-15-contract-original-submissions-v1.sql": "4eaa16058712b949b07e9a28e517853010e187d16a31668e13820897d42c7796",
     "migrations/2026-10-15-organization-contract-original-uses-v1.sql": "3b7e4dd550f396e57b5b812468187dbf41a80bc091976a95900561e441a85d32",
     "migrations/2026-10-15-organization-contract-review-draft-v1.sql": "5c5be14bd41d9e76f2ac9be31ffaa762afe065510c60fb0838ccc04fb6d8d383",
+    "scripts/contract-command-worker.mjs": "15ac05ecb6dbad845d908f316ddf9eb88dad890324183aa3531f8164e7ad222e",
     "scripts/migrate-runtime-schema.ts": "d1273d316faab3a0d51c1c255cc57510f7bc1c6ed81ea6f35d16f49be98cbd58",
     "sdk/python/clawdmarket/__init__.py": "12cbd9e14f3bdfa3cbcc7d1656a1d39870628de6423018d9cb5163c9af5d7fa6",
     "sdk/python/clawdmarket/client.py": "5b0b625d192fbf39bd1e43b779d9a136acd1ba6e8e43b8db09132e6f1f60a10c",
@@ -67,10 +68,11 @@
     "tests/api/organization-contract-refund-recovery.test.ts": "a2b97d95c4a110faade8b96ea5c972dca912cf69fdfbe2fc781d3bbe245b4973",
     "tests/api/organization-contract-review-races.test.ts": "3a6f3f7a93073506896681174b9bec111dc798a01e61b435ea547d856798c57a",
     "tests/api/organization-contract-review.test.ts": "209f4762fc1e2863aa5f1179aae3a777cdcf64329df4d5b000476b9b753b573a",
-    "tests/api/organization-contract-scoped-funding.test.ts": "89a7021bdb11c3bf2a3f2ea6260af367f19106bcb92712c25d6c6c712af730d3",
+    "tests/api/organization-contract-scoped-funding.test.ts": "d2b0cd150fb1f97781b006fd227b8b212feb8e24e0760a351560e333a9562e99",
     "tests/helpers/contract-creation-process.ts": "81e4856400491dfba47ba36ec1955db3d6ffa1130d535c188a58495aba1c989f",
     "tests/helpers/contract-scoped-funding-process.ts": "b0ab841c91acc337439acffaffb1806ee557ee5e10b028982127de612203c594",
     "tests/helpers/reviewed-contract-fixture.ts": "bc7c488d4880041568fd10794b0c3ba3ec2354e8fd3052e4be8e4766a0f71a6c",
+    "tests/logic/contract-command-worker.test.ts": "44e1b8c138e395f523eb63b398a23b354e57e4654868ea29be7e7a4b7c205304",
     "tests/logic/runtime-schema-migration.test.ts": "0412a07b0fde5b1df14868fe096acf79d6de5f61a34453a43709f3ad27b09416",
     "tests/sdk/milestone-contract.test.ts": "885f12cc4251d0659351d40f8331ffaa75e07949c62141a4e41d083130747711"
   }
