@@ -16,6 +16,18 @@ HTTP stays 1.118 and routing acceptance stays 7/10. Continue the complete
 `docs/ORGANIZATION_REVIEWED_LISTING_PURCHASING_PLAN.md` outcome locally. Do not
 publish, move funds, enable global flags or infer independent demand.
 
+Subsequent read-only original-use validation/exposure now adds migration **70**:
+`lib/organization-listing-uses.ts` binds historical listing/trade/approval/fee and
+organization attribution; task/route/workflow gates include those uses. This is
+not checkout or payment authority. Final focused 65/65, typecheck/lint, migration
+replay, original 845-row preservation/133 tables, ten immutable guards and all five
+compiler queries pass. One reproduced local contention 500 is now retryable 503
+without retrying financial callbacks; deterministic regression preserves policy
+and unrelated storage errors. See the current draft checkpoint for exact logs.
+Next implement original checkout creation, both separate claim families/shared
+wallet exclusion and explicit delivery acceptance before any public checkout API;
+do not advertise or count 8/10 before complete genuine both-rail acceptance.
+
 ## User priority — dependable purchasing and independent pilot (2026-10-14)
 
 Complete [the user's new ten-part plan](docs/DEPENDABLE_PURCHASING_AND_INDEPENDENT_PILOT_PLAN_2026-10-14.md)

@@ -4,7 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from './db'
 import { agents, agent_owners, listings, organizations, organization_agent_assignments,
-  organization_listing_authorizations as grants, organization_purchasing_roles, organization_teams, trades, users } from './schema'
+  organization_listing_authorizations as grants, organization_listing_uses, organization_purchasing_roles, organization_teams, trades, users } from './schema'
 import { PurchasingError, purchasingTransaction, type PurchasingSource } from './organization-purchasing-transaction'
 import { validateOrganizationApprover } from './organization-purchasing'
 import { canonicalContract } from './structured-verification'
@@ -42,6 +42,7 @@ export const organizationListingInput = z.object({
 })
 export const organizationListingDecision = z.object({ version: z.union([z.literal(1), z.literal(2)]),
   client_reference: reference, authority_hash: z.string().regex(/^[a-f0-9]{64}$/), approve: z.literal(true) }).strict()
+export const organizationListingCheckoutInput = organizationListingDecision.omit({ approve: true })
 type Grant = typeof grants.$inferSelect
 function listingContract(listing: typeof listings.$inferSelect) {
   return { id: listing.id, seller_id: listing.seller_id, category: listing.category,
@@ -212,6 +213,9 @@ export async function revokeOrganizationListing(orgId: string, id: string, actor
 }
 /** A free review can restrict its original buyer, never hold inventory against unrelated buyers. */
 export async function genericListingFundingGuard(source: PurchasingSource, listingId: string, buyerId: string) {
+  const [used] = await source.select({ id: organization_listing_uses.authorization_id }).from(organization_listing_uses).where(eq(organization_listing_uses.listing_id, listingId)).limit(1)
+  if (used) fail('LISTING_ORIGINAL_CHECKOUT_REQUIRED')
   const [row] = await source.select({ id: grants.id }).from(grants).where(and(eq(grants.listing_id, listingId), eq(grants.buyer_id, buyerId))).limit(1)
   if (row) fail('LISTING_REVIEWED_CHECKOUT_REQUIRED')
 }
+export { frozen as validatedListingTerms }

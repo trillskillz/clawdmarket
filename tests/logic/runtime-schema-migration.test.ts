@@ -194,7 +194,9 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       const originalRead = (await migrated.execute("SELECT * FROM organization_service_accounts WHERE id='legacy-read-account'")).rows[0]
       assert.equal(originalRead.credential_hash, 'original-read-hmac'); assert.equal(originalRead.credential_prefix, 'cmo_original')
       assert.equal(originalRead.status, 'active'); assert.equal(originalRead.expires_at, 2000); assert.equal(originalRead.created_at, 1000)
-      assert.equal(migrationRows.rows.length, 69)
+      assert.equal(migrationRows.rows.length, 70)
+      assert.equal(tableNames.has('organization_listing_uses'), true)
+      assert.equal((await migrated.execute('SELECT COUNT(*) AS count FROM organization_listing_uses')).rows[0].count, 0)
       assert.ok(migrationRows.rows.some(row=>row.id==='2026-10-14-marketplace-transparency-v1'))
       for (const table of ['seller_payment_preferences', 'marketplace_cohort_attributions']) {
         assert.equal(tableNames.has(table), true)

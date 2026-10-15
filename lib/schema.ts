@@ -910,6 +910,17 @@ export const organization_listing_authorizations = sqliteTable('organization_lis
   uniqueIndex('organization_listing_active_buyer_scope_idx').on(table.buyer_id, table.listing_id)
     .where(sql`${table.state} IN ('pending','approved')`)]);
 
+/** Original listing obligation; no cancellation or refund can recycle this identity. */
+export const organization_listing_uses = sqliteTable('organization_listing_uses', {
+  authorization_id: text('authorization_id').primaryKey().references(() => organization_listing_authorizations.id, { onDelete: 'restrict' }),
+  listing_id: text('listing_id').notNull().unique().references(() => listings.id, { onDelete: 'restrict' }),
+  trade_id: text('trade_id').notNull().unique().references(() => trades.id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(), client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(),
+  amount_minor: integer('amount_minor').notNull(), chain_id: integer('chain_id').notNull(), fee_token_address: text('fee_token_address'),
+  fee_token_decimals: integer('fee_token_decimals').notNull(), maximum_chain_fee_units: text('maximum_chain_fee_units').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+}, table => [check('organization_listing_use_amount_positive', sql`${table.amount_minor} > 0`)]);
+
 export const organization_task_authorizations = sqliteTable('organization_task_authorizations', {
   id: text('id').primaryKey(),
   organization_id: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'restrict' }),

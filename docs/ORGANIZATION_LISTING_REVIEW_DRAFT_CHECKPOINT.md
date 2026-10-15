@@ -2,6 +2,49 @@
 
 ## Current integration after the priority candidate
 
+The subsequent original-use layer adds migration **70** and read-only validation
+of a consumed listing obligation. No reviewed checkout API or payment authority
+is exposed. It checks the original grant/decision, request hash, listing/trade,
+organization attribution, price/fees and correct chain units; mutable current
+listing text or ownership does not rewrite historical economics. Cross-scope,
+orphaned and substituted records fail closed. Consumed listing history joins
+existing reviewed task, route and workflow gross/same-currency fee ceilings,
+including after cancellation/refund. Any generic replacement of a consumed
+listing is blocked for all buyers; an unconsumed pending review still blocks only
+its original buyer and takes no inventory.
+
+Current focused validation:
+`/tmp/clawdmarket-listing-shared-uses-final-2026-10-14.log` passes **65/65** cases,
+including new L1/Tempo historical identity and all-family exposure checks, existing
+eight independent task/route/workflow races, prior task authority, transparency
+and migration/replay. `tests/helpers/reviewed-shared-service.ts` extracts the
+existing service setup so both matrices exercise the same actual reservation APIs.
+
+The first matrix run correctly stopped workflow fixtures at a closed test flag;
+the fixture now explicitly enables only its disposable workflow environment.
+It also reproduced one real local preflight contention failure as HTTP 500.
+Local SQLite contention is now normalized to retryable `PURCHASING_STORAGE_BUSY`
+without retrying a financial callback. A deterministic regression preserves
+403 policy denial and unrelated storage errors. The subsequent 64-case and final
+65-case runs pass. No initial failed run is accepted or counted as live economics.
+
+This tests existing stored obligations with controlled disposable records. It is
+not a reviewed-listing payment journey, independent adoption, 8/10 acceptance or
+a deployment claim. Next implement the original checkout/use creation and both
+separate payment-claim families, wallet exclusion, exact delivery acceptance,
+finite clients/SDK/UI, genuine settlement/refund/race/death acceptance and full
+release gates before exposing or counting this capability.
+
+Current typecheck/lint pass in
+`/tmp/clawdmarket-listing-shared-uses-final-static-2026-10-14.log`. Migration/replay
+and all five compiler queries pass in
+`/tmp/clawdmarket-listing-uses-preservation-2026-10-14.log`. A fresh read-only
+snapshot comparison preserves **845 original business rows/133 tables** in every
+original column and all 66 original migration rows; current migration count is
+70, integrity is ok, foreign-key anomalies are zero, new listing grant/use tables
+remain empty, and ten immutable evidence triggers remain. Report:
+`/tmp/clawdmarket-workspace-test-listing-preservation-2026-10-14/preservation.json`.
+
 The authorized local priority work is saved at `bee652c` (HTTP 1.118) in its own
 clean worktree; production/security/admission dependencies remain as recorded
 there. This draft is now integrated separately in

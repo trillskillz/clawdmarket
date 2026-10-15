@@ -288,7 +288,8 @@ export async function originalTaskPayment(source: PurchasingSource, tradeId: str
     || use.fee_token_address !== (terms.payment.rail === 'mpp' ? terms.payment.fee_token_address : null)) fail('ORGANIZATION_TASK_USE_INVALID')
   const [duplicate] = await source.all(sql`SELECT id FROM service_orders WHERE trade_id=${tradeId}
     UNION ALL SELECT approval_id FROM organization_purchase_uses WHERE trade_id=${tradeId}
-    UNION ALL SELECT account_id FROM organization_spending_uses WHERE trade_id=${tradeId} LIMIT 1`)
+    UNION ALL SELECT account_id FROM organization_spending_uses WHERE trade_id=${tradeId}
+    UNION ALL SELECT authorization_id FROM organization_listing_uses WHERE trade_id=${tradeId} LIMIT 1`)
   if (duplicate) fail('ORGANIZATION_TASK_USE_INVALID')
   return { authorization, terms, use, trade }
 }
@@ -321,10 +322,12 @@ async function exposure(row: Grant, terms: TaskTerms, source: PurchasingSource, 
   const route = await readOriginalOrganizationRouteExposure(source, row.organization_id, row.buyer_id, terms.payment)
   const workflow = await organizationWorkflowExposure(source, row.organization_id, row.buyer_id, terms.payment)
   const task = await organizationTaskExposure(source, row.organization_id, row.buyer_id, terms.payment, excludeTradeId)
-  if (route.daily + workflow.daily + task.daily + terms.total_minor > terms.max_daily_minor) fail('ORGANIZATION_TASK_DAILY_EXPOSURE')
-  if (route.monthly + workflow.monthly + task.monthly + terms.total_minor > terms.max_monthly_minor) fail('ORGANIZATION_TASK_MONTHLY_EXPOSURE')
-  if (route.lifetime + workflow.lifetime + task.lifetime + terms.total_minor > terms.max_lifetime_minor) fail('ORGANIZATION_TASK_LIFETIME_EXPOSURE')
-  const priorFees = terms.payment.rail === 'evm' ? route.gas + workflow.gas + task.gas : route.fees + workflow.fees + task.fees
+  const { organizationListingExposure } = await import('./organization-listing-uses')
+  const listing = await organizationListingExposure(source, row.organization_id, row.buyer_id, terms.payment)
+  if (route.daily + workflow.daily + task.daily + listing.daily + terms.total_minor > terms.max_daily_minor) fail('ORGANIZATION_TASK_DAILY_EXPOSURE')
+  if (route.monthly + workflow.monthly + task.monthly + listing.monthly + terms.total_minor > terms.max_monthly_minor) fail('ORGANIZATION_TASK_MONTHLY_EXPOSURE')
+  if (route.lifetime + workflow.lifetime + task.lifetime + listing.lifetime + terms.total_minor > terms.max_lifetime_minor) fail('ORGANIZATION_TASK_LIFETIME_EXPOSURE')
+  const priorFees = terms.payment.rail === 'evm' ? route.gas + workflow.gas + task.gas + listing.gas : route.fees + workflow.fees + task.fees + listing.fees
   if (priorFees + BigInt(feeCeiling(terms)) > BigInt(terms.max_lifetime_chain_fee_units)) fail('ORGANIZATION_TASK_FEE_EXPOSURE')
 }
 function evidence(row: Grant, terms: TaskTerms) {

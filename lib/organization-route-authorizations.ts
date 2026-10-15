@@ -1,4 +1,5 @@
 import 'server-only'
+import { isLocalSqliteContention } from './local-sqlite-read'
 import { createHash, randomUUID } from 'node:crypto'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -266,6 +267,7 @@ export async function revokeOrganizationRoute(orgId: string, id: string, actor: 
 async function routeGuard<T>(run: () => Promise<T>): Promise<T> {
   try { return await run() } catch (error) {
     if (error instanceof PurchasingError) throw new RouteMandateError(error.code,error.status)
+    if (process.env.TURSO_DATABASE_URL?.startsWith('file:') && isLocalSqliteContention(error)) throw new RouteMandateError('PURCHASING_STORAGE_BUSY',503)
     throw error
   }
 }
@@ -326,8 +328,10 @@ export async function consumeOrganizationRouteExposure(source: PurchasingSource,
     const workflow = await organizationWorkflowExposure(source,row.organization_id,row.buyer_id,payment)
     const { organizationTaskExposure } = await import('./organization-task-authorizations')
     const task = await organizationTaskExposure(source, row.organization_id, row.buyer_id, payment)
-    const daily=route.daily+workflow.daily+task.daily, monthly=route.monthly+workflow.monthly+task.monthly, lifetime=route.lifetime+workflow.lifetime+task.lifetime,
-      gas=route.gas+workflow.gas+task.gas, fees=route.fees+workflow.fees+task.fees
+    const { organizationListingExposure } = await import('./organization-listing-uses')
+    const listing = await organizationListingExposure(source, row.organization_id, row.buyer_id, payment)
+    const daily=route.daily+workflow.daily+task.daily+listing.daily, monthly=route.monthly+workflow.monthly+task.monthly+listing.monthly, lifetime=route.lifetime+workflow.lifetime+task.lifetime+listing.lifetime,
+      gas=route.gas+workflow.gas+task.gas+listing.gas, fees=route.fees+workflow.fees+task.fees+listing.fees
     for (const [spent,limit] of [[daily,terms.max_daily_minor],[monthly,terms.max_monthly_minor],[lifetime,terms.max_lifetime_minor]])
       if (!Number.isSafeInteger(spent) || spent < 0 || spent + input.totalMinor > limit) fail('ORGANIZATION_ROUTE_GROSS_LIMIT')
     if (isTempo(terms)) {

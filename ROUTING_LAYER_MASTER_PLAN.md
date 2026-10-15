@@ -9,6 +9,13 @@ controls; listing review foundation becomes migration 69. No checkout/payment is
 implemented yet, HTTP remains 1.118, acceptance stays 7/10. Continue the listing
 plan below; the parent candidate's source manifest is historical for this draft.
 
+Original-use validation/exposure adds migration 70 and passes 65 focused cases,
+types/lint, migration/replay, five compiler queries and unchanged original rows.
+Task, route and workflow gates now count validated listing history, including
+cancelled obligations. This is read-only stored-evidence validation; reviewed
+listing checkout/payment remains unavailable and acceptance is still 7/10.
+Continue original checkout creation and full claim/delivery/settlement acceptance.
+
 ## Superseding user priority — dependable product and paid pilot (2026-10-14)
 
 Complete [the new plan](docs/DEPENDABLE_PURCHASING_AND_INDEPENDENT_PILOT_PLAN_2026-10-14.md)

@@ -8,6 +8,9 @@ import { NextRequest } from 'next/server'
 import { privateKeyToAccount } from 'viem/accounts'
 import { createLocalTestSchema } from '../helpers/local-schema'
 import { reviewedTaskFixture } from '../helpers/reviewed-task-fixture'
+import { reviewedSharedService } from '../helpers/reviewed-shared-service'
+import { createHash } from 'node:crypto'
+import { canonicalContract } from '@/lib/structured-verification'
 
 let directory: string, db: typeof import('@/lib/db').db, schema: typeof import('@/lib/schema')
 let jwt: typeof import('@/lib/auth').generateJWT
@@ -22,6 +25,7 @@ before(async () => {
     TREASURY_ADDRESS: treasury, EVM_SETTLEMENT_PRIVATE_KEY: treasuryKey, MPP_RECIPIENT_ADDRESS: treasury,
     MPP_SECRET_KEY_CURRENT: 'listing-review-mpp-fixture-only-secret', TEMPO_RPC_URL: 'https://rpc.example.invalid',
     CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED: 'true', CLAWDMARKET_ROUTE_EXECUTION_ENABLED: 'true', CLAWDMARKET_REUSABLE_SERVICES_ENABLED: 'true',
+    CLAWDMARKET_ROUTE_PLANNING_ENABLED: 'true', CLAWDMARKET_WORKFLOW_PLANNING_ENABLED: 'true', CLAWDMARKET_WORKFLOW_EXECUTION_ENABLED: 'true',
     EVM_ACCEPTED_TOKENS: JSON.stringify([{ chainId: 1, chainName: 'Listing review fixture', address: `0x${'44'.repeat(20)}`,
       symbol: 'TEST', decimals: 6, fixedUsdPrice: 1, confirmations: 1, rpcUrl: 'https://rpc.example.invalid' }]) })
   for (const name of ['VERCEL', 'VERCEL_ENV', 'CLAWDMARKET_NEW_PAYMENTS_PAUSED', 'DEV_WALLET_ADDRESS', 'DEV_FEE_WALLET_ADDRESS']) delete process.env[name]
@@ -122,4 +126,106 @@ test('listing review refuses conflicting original references, overlarge bodies a
   const cookie = new NextRequest(`http://localhost${f.prefix}`, { method: 'POST', headers: { Cookie: `auth-token=${jwt({ userId: f.owner, email: `${f.owner}@test.invalid`, role: 'human' })}`,
     'Content-Type': 'application/json' }, body: JSON.stringify(f.body) })
   assert.equal((await collection.POST(cookie, context(f.org))).status, 403)
+})
+
+async function originalUseFixture(tempo: boolean) {
+  // Stored-evidence fixtures only. No reviewed checkout API or live payment exists yet.
+  const f = await fixture(tempo), a = await propose(f), input = decision(a)
+  assert.equal((await approval.POST(request(`${f.prefix}/${a.id}/approval`, f.reviewer, 'POST', input), context(f.org, a.id))).status, 201)
+  const originalReference = crypto.randomUUID()
+  const digest = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
+  const trade = await db.transaction(async tx => {
+    await tx.update(schema.listings).set({ status: 'sold' }).where(eq(schema.listings.id, f.listing.id))
+    const [trade] = await tx.insert(schema.trades).values({ listing_id: f.listing.id, buyer_id: f.buyer, seller_id: f.seller,
+      amount: 1, fee: 0.05, item_price: 1, platform_fee: 0.05, total_cost: 1.05, seller_amount: 1, dev_amount: 0.05,
+      payment_rail: f.body.payment.rail as 'evm' | 'mpp', client_reference: `organization-listing:${a.id}`, status: 'pending' }).returning()
+    await tx.insert(schema.organization_trade_attributions).values({ trade_id: trade.id, organization_id: f.org, agent_id: f.buyerAgent,
+      team_id: f.team, cost_center: 'TASK', total_minor: 105, created_at: new Date() })
+    await tx.insert(schema.organization_listing_uses).values({ authorization_id: a.id, listing_id: f.listing.id, trade_id: trade.id,
+      authority_hash: a.authority_hash, client_reference: originalReference,
+      request_hash: digest({ version: a.version, client_reference: originalReference, authority_hash: a.authority_hash }),
+      amount_minor: 105, chain_id: f.body.payment.chain_id,
+      fee_token_address: tempo ? f.body.payment.token_address : null, fee_token_decimals: tempo ? 6 : 18,
+      maximum_chain_fee_units: tempo ? '5000' : '100000000000000', created_at: new Date() })
+    return trade
+  })
+  return { ...f, a, trade }
+}
+
+for (const tempo of [false, true]) test(`${tempo ? 'Tempo' : 'L1'} original listing use retains frozen economics after cancellation, revocation and editable listing changes`, async () => {
+  const f = await originalUseFixture(tempo)
+  const { originalListingPayment, organizationListingExposure } = await import('@/lib/organization-listing-uses')
+  const { genericListingFundingGuard } = await import('@/lib/organization-listing-authorizations')
+  const original = await originalListingPayment(db, f.trade.id)
+  assert.equal(original?.trade.id, f.trade.id)
+  assert.equal(original?.terms.listing.item_price_usd, 1)
+  const expectedFee = tempo ? 5000n : 100000000000000n
+  const before = await organizationListingExposure(db, f.org, f.buyer, f.body.payment as Parameters<typeof organizationListingExposure>[3])
+  assert.equal(before.lifetime, 105); assert.equal(tempo ? before.fees : before.gas, expectedFee)
+  await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, f.trade.id))
+  await db.update(schema.listings).set({ status: 'active', price_bankr: 9, title: 'Edited listing', seller_id: f.owner }).where(eq(schema.listings.id, f.listing.id))
+  assert.equal((await item.DELETE(request(`${f.prefix}/${f.a.id}`, f.owner, 'DELETE'), context(f.org, f.a.id))).status, 200)
+  assert.equal((await originalListingPayment(db, f.trade.id))?.terms.listing.seller_id, f.seller)
+  assert.deepEqual(await organizationListingExposure(db, f.org, f.buyer, f.body.payment as Parameters<typeof organizationListingExposure>[3]), before)
+  for (const buyer of [f.buyer, f.other]) await assert.rejects(genericListingFundingGuard(db, f.listing.id, buyer), /LISTING_ORIGINAL_CHECKOUT_REQUIRED/)
+  await db.update(schema.organization_listing_uses).set({ maximum_chain_fee_units: '0' }).where(eq(schema.organization_listing_uses.trade_id, f.trade.id))
+  await assert.rejects(originalListingPayment(db, f.trade.id), /ORGANIZATION_LISTING_USE_INVALID/)
+  await assert.rejects(organizationListingExposure(db, f.org, f.buyer, f.body.payment as Parameters<typeof organizationListingExposure>[3]), /ORGANIZATION_LISTING_USE_INVALID/)
+})
+
+for (const tempo of [false, true]) test(`${tempo ? 'Tempo' : 'L1'} consumed listing exposure blocks another reviewed task and cross-scope/orphan records fail closed`, async () => {
+  const f = await originalUseFixture(tempo), tasks = await import('@/lib/organization-task-authorizations')
+  const { listing_id: _listing, buyer_agent_id: _buyer, delivery: _delivery, ...body } = f.body
+  const task = (await tasks.proposeOrganizationTask(f.org, f.owner, tasks.organizationTaskInput.parse({ ...body,
+    task_id: f.task, winning_bid_id: f.bid, max_daily: '1.05', max_monthly: '1.05', max_lifetime: '1.05' }))).authorization
+  await tasks.approveOrganizationTask(f.org, task.id, f.reviewer, { version: task.version, client_reference: crypto.randomUUID(), authority_hash: task.authority_hash, approve: true })
+  await assert.rejects(tasks.checkoutOrganizationTask(f.org, task.id, f.buyer, { version: task.version, client_reference: crypto.randomUUID(), authority_hash: task.authority_hash }), /ORGANIZATION_TASK_DAILY_EXPOSURE/)
+  assert.equal((await db.select().from(schema.organization_task_uses).where(eq(schema.organization_task_uses.task_id, f.task))).length, 0)
+  const { originalListingPayment, organizationListingExposure } = await import('@/lib/organization-listing-uses')
+  await db.update(schema.task_workspaces).set({ trade_id: f.trade.id }).where(eq(schema.task_workspaces.task_id, f.task))
+  await assert.rejects(originalListingPayment(db, f.trade.id), /ORGANIZATION_LISTING_USE_INVALID/)
+  await db.update(schema.task_workspaces).set({ trade_id: null }).where(eq(schema.task_workspaces.task_id, f.task))
+  await db.delete(schema.organization_listing_uses).where(eq(schema.organization_listing_uses.trade_id, f.trade.id))
+  await assert.rejects(originalListingPayment(db, f.trade.id), /ORGANIZATION_LISTING_USE_INVALID/)
+  await assert.rejects(organizationListingExposure(db, f.org, f.buyer, f.body.payment as Parameters<typeof organizationListingExposure>[3]), /ORGANIZATION_LISTING_USE_INVALID/)
+})
+
+for (const tempo of [false, true]) for (const family of ['route', 'workflow'] as const) for (const ceiling of ['gross', 'fee'] as const)
+  test(`${tempo ? 'Tempo' : 'L1'} consumed listing ${ceiling} exposure blocks ${family} reservation and remains charged after cancellation`, async () => {
+    const f = await originalUseFixture(tempo), perFee = tempo ? '5000' : '100000000000000'
+    const gross = ceiling === 'gross' ? '1.05' : '10.00', fee = ceiling === 'fee' ? perFee : (BigInt(perFee) * 10n).toString()
+    const attempt = async () => {
+      try {
+        const execute = await reviewedSharedService({ db, schema }, (path, actor, body) => request(path, actor, 'POST', body), f, family, gross, fee)
+        return await execute()
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error)) throw error
+        return { status: 'status' in error ? error.status : 409, code: String(error.code), trade: undefined }
+      }
+    }
+    for (const cancelled of [false, true]) {
+      if (cancelled) {
+        await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, f.trade.id))
+        await db.update(schema.listings).set({ status: 'active' }).where(eq(schema.listings.id, f.listing.id))
+      }
+      const denied = await attempt()
+      assert.equal(denied.status, 409, JSON.stringify(denied))
+      assert.match(denied.code, ceiling === 'gross' ? /GROSS_LIMIT/ : /(?:GAS|FEE(?:_TOKEN)?)_LIMIT/)
+      assert.equal((await db.select().from(schema.trades).where(eq(schema.trades.buyer_id, f.buyer))).length, 1)
+      assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.buyer_id, f.buyer))).length, 0)
+    }
+  })
+
+test('reviewed route reads expose local contention as retryable without retrying writes or hiding policy and other storage errors', async () => {
+  const { validateOrganizationRouteAuthority } = await import('@/lib/organization-route-authorizations')
+  const { PurchasingError } = await import('@/lib/organization-purchasing-transaction')
+  type Args = Parameters<typeof validateOrganizationRouteAuthority>
+  let attempts = 0
+  const readFailure = (error: Error) => validateOrganizationRouteAuthority({ select: () => { attempts++; throw error } } as unknown as Args[0], {} as Args[1], {} as Args[2])
+  const busy = new Error('Failed query', { cause: new Error('SQLITE_BUSY: database is locked') })
+  await assert.rejects(readFailure(busy), error => (error as { code: string; status: number }).code === 'PURCHASING_STORAGE_BUSY' && (error as { status: number }).status === 503)
+  assert.equal(attempts, 1, 'the caller recovers the same original operation; this guard does not retry a financial callback')
+  const unrelated = new Error('SQLITE_CORRUPT: malformed database')
+  await assert.rejects(readFailure(unrelated), error => error === unrelated)
+  await assert.rejects(readFailure(new PurchasingError('REVIEWER_REQUIRED', 403)), error => (error as { code: string; status: number }).code === 'REVIEWER_REQUIRED' && (error as { status: number }).status === 403)
 })
