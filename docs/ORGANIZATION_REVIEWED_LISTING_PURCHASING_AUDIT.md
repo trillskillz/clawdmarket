@@ -112,6 +112,44 @@ mobile preformatted output overflow, and a build database parent directory/setup
 namespace issue. Corrections preserve policy/rate limiting and original payment
 semantics. No retry changes a saved financial reference or signs new bytes.
 
+## Final enabled gate findings and narrow corrections
+
+The complete initialized run at
+`/tmp/clawdmarket-listing-predeploy-final-2026-10-14.log` exits **1** after
+**1,066 cases: 1,059 pass, five expected skips, two failures**, 1,295,606 ms.
+All listing-specific economic, claim, private delivery, shared-exposure and
+process cases pass. The two remaining findings were investigated:
+
+- An existing spending-key process failed a current banned-account read while
+  another process committed its original order. A new separate Python exclusive
+  SQLite lock reproduces the credential inspection failure with an actual
+  `SQLITE_BUSY` cause before the fix. `resolveSpendingAccount` now uses the existing
+  bounded fresh-client **read-only** contention recovery for all credential and
+  current-owner/assignment/ban checks. Exhaustion maps only local SQLite contention
+  to private retryable `PURCHASING_STORAGE_BUSY` 503. Financial callbacks are not
+  retried here; financial reservation still rechecks current authority. Three
+  actual-lock cases prove recovery, bounded exhaustion and revocation observed
+  after commit, with zero trade/order/credit/use writes. Before/after controls:
+  `/tmp/clawdmarket-spending-read-before-fix-2026-10-14.log` fails as expected;
+  `/tmp/clawdmarket-spending-read-after-fix-2026-10-14.log` passes **3/3**.
+- The workflow/standalone race safely recovered its committed original trade with
+  canonical HTTP 200 and the other request failed its gross limit. The old test
+  counted only HTTP 201 as success. It now verifies one success, its original
+  trade distinct from the prior root, exactly two retained buyer trades, ledger
+  gross/fee totals, capacity and the losing exact retry. The current four-ceiling
+  process matrix passes in
+  `/tmp/clawdmarket-workflow-original-trade-race-final-2026-10-14.log`.
+  The first edit used the helper's wrong response-property name; typecheck and the
+  targeted test caught it, and the corrected `data` property passes.
+
+The original spending-key race also passes after the read fix in
+`/tmp/clawdmarket-listing-spending-race-fixed-2026-10-14.log`. Current types/lint
+pass, and the current production build passes in
+`/tmp/clawdmarket-listing-read-recovery-build-final-2026-10-14.log`. Source changes
+require a refreshed manifest and complete enabled/build/browser reacceptance;
+capability count remains **7/10** until those exact final gates pass. The earlier
+149-case browser acceptance binds the previous source, not this read correction.
+
 ## Fresh public baseline recheck
 
 Read-only recheck at `2026-10-15T03:23:29.701Z` still finds main

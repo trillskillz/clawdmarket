@@ -1,7 +1,7 @@
 {
   "baseline": "96a017b6019920f47af32d86a7e476c9b9c07808",
   "preserved_local_pilot": "bee652c",
-  "previous_listing_checkpoint": "b233dfd",
+  "previous_listing_checkpoint": "6ae6dbb",
   "http_contract": "1.119",
   "scope": "Changed implementation, SDK, migrations, workflows, packaging and acceptance tests relative to inspected production. Documentation excluded. Acceptance remains pending in the listing audit until final gates finish.",
   "files": {
@@ -93,6 +93,7 @@
     "lib/organization-listing-uses.ts": "11a00ef80aa27cb78a7791cd924df812891480ad0dfebf1af87cdaa30a57a8fe",
     "lib/organization-purchasing-transaction.ts": "f231b745f2a6cc0fdd821f618efaa51d69dc30013a9d21f4841e421b110b4656",
     "lib/organization-route-authorizations.ts": "cda36624af3a2e718157e640ff0f0a2b5243122bb9af05c7642b10ac0d7a4318",
+    "lib/organization-spending-accounts.ts": "5d6e07d1f7d091a3c8b35abb5f123fb81aeb4dd6d5065ff2a923474423880b6a",
     "lib/organization-spending-payment.ts": "b9aaca75ef69182578be92b7f80004739438c643a665e7497ef27cd14279e58c",
     "lib/organization-spending-tempo-payment.ts": "b542fcadb9ec462f913778ae57d3e16098464378515051f758149400acff82c5",
     "lib/organization-task-api.ts": "8efcc0993887274877ade5259daedae984d31ca79c61adf80d0c5d0614fdaf51",
@@ -158,11 +159,13 @@
     "tests/api/organization-listing-review.test.ts": "2d2aac363b1cf6746c1cf510d1a370dd726af8470fab9a5f17689c4f90955dbe",
     "tests/api/organization-listing-shared-exposure.test.ts": "16f119fc7a3b13629acc3ea28d99f70f7b429e4a6a630c2f033c105db42a5ee6",
     "tests/api/organization-purchasing.test.ts": "241539a0292c5e72f139091f7209b18f1482abece0885485b7d6fc67bc082c05",
+    "tests/api/organization-spending-read-recovery.test.ts": "0534514a6744e8395eaa24bfcaaf418c4a291dfe9ec8814a085b8cd07ea4dc38",
     "tests/api/organization-task-authority.test.ts": "b3c10069efc6450d900388f9b012b14e569fc5ba01c0d57493fa698028a73df9",
     "tests/api/organization-task-economic.test.ts": "afda8dfd0c42258bc24db1a01ed364253cba63534bbaba136c942777500e2474",
     "tests/api/organization-task-payment.test.ts": "60a65698554415a283605d1e2aa00d6beb7bf92c67b11d6c0ad418c1b12252fc",
     "tests/api/organization-task-races.test.ts": "448c4b094923c6032417f59cc66ed566a113077aad65d55fc775bc5a221b54cd",
     "tests/api/organization-task-shared-exposure.test.ts": "e004cd5f17fb72951a45ca4e92ca33ce43a897e53ac3341147a6077d4e08eb34",
+    "tests/api/organization-workflow-authorizations.test.ts": "bfcada5a7185832c858e311d2bf9692f32b291cbc1bcd6d727e0ddc4d83def3f",
     "tests/helpers/reviewed-listing-fixture.ts": "88963df566f8f6a2c8eda1e288a53557ae755e3a9e5101a7014b81ab185d821b",
     "tests/helpers/reviewed-shared-service.ts": "86caf3a583b27076e549e1b36011d997a06fdf66040a554cc70d7f775cf76639",
     "tests/helpers/reviewed-shared-task.ts": "0230f8e6a8c3b854d1c53a2157dd9d9ce536567ed89907aed4739832954d9d2b",
@@ -172,5 +175,6 @@
     "tests/logic/runtime-schema-migration.test.ts": "20c3fe17860f6eb749ead597f97737523b08f0a39a534ea97624185254129046",
     "tests/sdk/organization-listing.test.ts": "410d03d3e14a8f85bf3060f1d80f32b87f7899a60954c04f692b855082a5c425",
     "tests/sdk/organization-task.test.ts": "888ef8eadab5e80708405bfe251d2c2bd6d6f685b810f1a740655874ddf3c40f"
-  }
+  },
+  "previous_source_manifest_sha256": "3b7a359f75629c9fd9d1bccb6d030a45d27913950a01e9a43be419024141a88f"
 }

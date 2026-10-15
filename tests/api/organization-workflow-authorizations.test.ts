@@ -133,14 +133,22 @@ test('standalone reviewed routes and independently reviewed workflow children ra
    catch(e){console.log(JSON.stringify({status:e.status||409,body:{error_code:e.code||'unknown'}}))}finally{db.$client.close()}})()`
  const worker=async(workflow:boolean)=>{const env:NodeJS.ProcessEnv={...process.env};delete env.NODE_TEST_CONTEXT
   const out=await promisify(execFile)(process.execPath,['--conditions=react-server','--import','tsx','-e',code,JSON.stringify({workflow,f:secondF,grant:second,routeId:standalone.route_id,mandateId:standalone.mandate.id})],{cwd:process.cwd(),env,timeout:20000})
-  const result=JSON.parse(out.stdout.trim().split('\n').at(-1)!) as {status:number;body:{error_code?:string};diagnostics?:string}
+  const result=JSON.parse(out.stdout.trim().split('\n').at(-1)!) as {status:number;body:{error_code?:string;trade?:{id:string}};diagnostics?:string}
   if(result.status>=500)result.diagnostics=out.stderr.trim()
   return result
  }
  const results=await Promise.all([worker(true),worker(false)])
- assert.equal(results.filter(r=>r.status===201).length,1,ceiling+JSON.stringify(results))
+ // A committed reservation can recover through the canonical 200 replay
+ // response if its final response read races another writer. The economic
+ // invariant is one new original trade, not the first-response HTTP status.
+ const successful=results.filter(r=>[200,201].includes(r.status)&&r.body.trade)
+ assert.equal(successful.length,1,ceiling+JSON.stringify(results))
+ assert.notEqual(successful[0].body.trade!.id,root.data.trade.id)
+ const buyerTrades=await db.select().from(schema.trades).where(eq(schema.trades.buyer_id,f.buyer))
+ assert.equal(buyerTrades.length,2)
+ assert.deepEqual(new Set(buyerTrades.map(row=>row.id)),new Set([root.data.trade.id,successful[0].body.trade!.id]))
  if(ceiling!=='capacity'){
-  const retried=await worker(results[0].status!==201);assert.equal(retried.status,409,ceiling+JSON.stringify(retried))
+  const retried=await worker(![200,201].includes(results[0].status));assert.equal(retried.status,409,ceiling+JSON.stringify(retried))
   if(ceiling==='gross')assert.match(retried.body.error_code!,/ORGANIZATION_(?:WORKFLOW|ROUTE)_GROSS_LIMIT/)
   if(ceiling==='fee')assert.match(retried.body.error_code!,/ORGANIZATION_(?:WORKFLOW_FEE|ROUTE_GAS)_LIMIT/)
   if(ceiling==='department')assert.match(retried.body.error_code!,/TEAM_(?:DAILY|MONTHLY)_LIMIT/)
