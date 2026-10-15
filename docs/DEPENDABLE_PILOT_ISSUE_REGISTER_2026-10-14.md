@@ -1,3 +1,14 @@
+## Security-first publication authorized — 2026-10-15
+
+The latest user explicitly authorizes GitHub/Vercel publication after fixing
+security. The braces dependency path is now removed locally; full and production
+audits are clean. The comprehensive cumulative release gates and remote results
+remain pending. All prior local-only policy/status statements below are historical.
+No live funds, rollout enablement, real-user email, recruitment or independent
+customer evidence is authorized or established. Current schema is79, HTTP1.119.
+The original-party workspace and fresh-funding drift regressions are now complete
+locally; full release acceptance has not yet been claimed.
+
 ## Local contract dashboard follow-up — 2026-10-15
 
 The ordinary contract dashboard lacked the prepaid-credit disclosure. The current
@@ -53,7 +64,7 @@ The unfinished reviewed-listing draft remains parked on a separate branch.
 | Plan | Finding | Disposition / required evidence |
 |---|---|---|
 | 1 | Profiles, registrations, fixtures and independence are conflated | Baseline rechecked using live GETs, main/release/CI records. Local HTTP 1.118 adds authoritative ID-based cohorts and explicit unknown ownership. Production remains inspected HTTP 1.116; local accepted task parent is 1.117. Public names alone cannot reestablish whether all 15 online agents are controlled. |
-| 2 | High development-only braces advisory | Full audit still exits 1 with GHSA-vfj7-8cjw-p6xm; production-only audit exits 0. No published compatible remediation identified. Exact path, reachability, controls, maintainer owner and October 28 reevaluation recorded in the risk treatment. Raw finding remains visible and security gate remains failing; no exception approved or unrelated finding suppressed. |
+| 2 | High development-only braces advisory | Remediated locally: scoped Next16.3.8 code patch replaces its sole fast-glob use with bounded Node24 native globbing; exact-version hook removes the unused path. Lockfile contains no braces/micromatch/fast-glob. Full and production audits exit0, zero advisories/mutes; three actual lint/root-discovery/drift regressions pass. Frozen install passes. Remote security workflow/deployment remain pending the newly authorized release. |
 | 3 | services_listed/online count listings; assigned tasks called routed; errors become zero | Implemented locally: explicit profile/agent/cohort/online/inventory/economic fields, backward-compatible aliases, current-owner and expiry checks, shared evidence panel across four surfaces and 503/stale timestamps. Schema/query/expiry/transfer/privacy and browser cases verify distinctions. Operator persistent attribution coverage still requires actual reviewed identity records; no unknown principal is promoted. |
 | 4 | Nonredeemable credit enabled, no seller rail preference in central selection | Implemented locally: owner/owned-agent settings, payments:write and CSRF boundaries, seller-supported selection and transactional checks across listing/task/service/routing/instant/contract. Unconfirmed sellers do not accept new credit. Browser and API disclose nonwithdrawability and external settlement. Original orders replay and settle under their frozen terms after preferences change. No withdrawal/custody change. Existing prose-only rules are flagged for owner review, never parsed into binding settings. |
 | 5 | Password email unconfigured in production | Existing Resend path repaired with timeout, accurate scoped readiness, token revocation on failure and removal of HTTP/debug reset-token disclosure. Local transport sandbox proves emitted-link/password/replay/expiry/rate/generic/failure behavior. Production sender configuration and an approved real-provider inbox test remain external; neither delivery nor a global auth outage is claimed. Existing session/agent ownership policies are preserved. |

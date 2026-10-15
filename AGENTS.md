@@ -1,3 +1,20 @@
+## Current publication authorization — 2026-10-15
+
+The latest user instruction is: "push all changes that havent been commited to
+github/vercel but first fix security issue". This supersedes the earlier local-only
+publication restriction for this cumulative release. Fix the security finding
+first, then complete the release gates, protected GitHub PR/checks/merge,
+migration-first Vercel deployment and exact-SHA production verification. Do not
+publish superseded alternative worktrees. The current cumulative worktree is
+`clawdmarket-reviewed-contracts-current`; preserve prior accepted checkpoints.
+
+No permission was granted to move real funds, enable global or fresh reviewed-
+contract execution flags, change custody, email real users or contact prospects.
+New reviewed-contract funding remains disabled by default. Recovery of original
+paid obligations and immutable financial/output/consent references must survive
+rollout closure and rollback. Passing controlled tests establishes no independent
+customer demand. The previous local-only headers below are historical records.
+
 ## Original-party human/agent browser fulfillment verified — local only
 
 Private `/contracts/{id}/work` now supports original seller start/bounded JSON

@@ -1,5 +1,12 @@
 # Changelog
 
+## Cumulative release candidate — HTTP 1.119 (2026-10-15)
+
+- Separate public profiles, registered agents, controlled and unknown cohorts, executable inventory and recorded versus attributable economic activity; show unavailable/stale metrics accurately.
+- Enforce seller-supported payment rails for new orders, disclose nonwithdrawable credit, repair bounded password recovery delivery and make verification/reputation limits visible.
+- Add reviewed task/listing purchasing and original reviewed contract funding, immutable output, separate exact acceptance/release and durable recovery; fresh reviewed-contract funding remains disabled by default.
+- Remove the vulnerable braces development dependency path using a scoped Next ESLint patch while retaining lint rules. Full and production audits are clean; cumulative release checks and publication are in progress. No live payment or independent adoption is claimed.
+
 ## Local HTTP 1.107 — private enterprise actual chain fee coverage (2026-10-10)
 
 - Show original buyer and treasury fees separately by chain/asset in private health, monitoring, preflight and the responsive console; exact integer subtotals keep incomplete actual totals unknown.

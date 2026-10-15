@@ -1,4 +1,42 @@
-# Open development dependency risk: braces
+# Development dependency remediation: braces
+
+## Current disposition — dependency path removed locally, 2026-10-15
+
+The original high finding GHSA-vfj7-8cjw-p6xm / CVE-2026-93687 reproduced before
+this change. Stable16.4.2 and canary16.5.0-canary.14 still depend on fast-glob3.3.1;
+braces still has no published patched version. Rather than force an incompatible
+transitive version, the committed patch replaces the Next16.3.8 plugin's SOLE
+fast-glob use (`get-root-dirs.js`) with Node24 `fs.globSync` plus directory filtering.
+Patterns are limited to4096 characters and16 nesting levels before native parsing.
+Literal directories, braces, extglobs, arrays, missing paths and directory symlinks
+are regression tested. This repository configures no custom rootDir patterns.
+All existing Next, React, hooks, accessibility and TypeScript lint rules remain;
+actual violating source still produces their expected diagnostics.
+
+`patches/@next__eslint-plugin-next@16.3.8.patch` records the code change.
+`.pnpmfile.cjs` removes ONLY that now-unused fast-glob dependency from this exact
+plugin/version before resolution, and fails closed on unexpected plugin/version/
+dependency drift. It does not mute an audit advisory or alter unrelated packages.
+The existing libsql patch remains. eslint-config-next is pinned16.3.8 while this
+scoped patch is needed. The regenerated lockfile contains no braces, micromatch or
+fast-glob path. Frozen-lockfile installation succeeds in an isolated dependency
+tree; earlier accepted worktrees' shared modules were not modified.
+
+Fresh full AND production `pnpm audit --audit-level=high --json` return exit0,
+zero advisories of any severity and empty muted lists. Three named security
+regressions pass, zero skips/failures. This remediates this project's installed
+path; it does not claim that upstream braces is patched or the entire app secure.
+The unchanged security-maintenance audit still fails on future high findings and
+retains raw JSON. Deployment and remote audit results remain pending release gates.
+
+Owner: trillskillz. Reevaluate by2026-10-28 and on any Next ESLint/Node upgrade or
+upstream path removal. Remove BOTH scoped patch and dependency hook together only
+after a clean frozen install, full audit and equivalent lint regressions. Raw local
+evidence: `/tmp/clawdmarket-security-remediation-{full,production}-2026-10-15.json`,
+`/tmp/clawdmarket-security-remediation-tests-2026-10-15.log` and
+`/tmp/clawdmarket-security-frozen-install-2026-10-15.log`.
+
+## Historical risk treatment before remediation
 
 ## Reevaluated 2026-10-15 22:00 UTC — still open
 

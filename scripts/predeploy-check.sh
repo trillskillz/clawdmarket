@@ -2,6 +2,9 @@
 set -euo pipefail
 
 required_files=(
+  ".pnpmfile.cjs"
+  "patches/@next__eslint-plugin-next@16.3.8.patch"
+  "tests/security/next-eslint-dependency.test.ts"
   "scripts/buyer-listing-worker.mjs"
   "scripts/provider-listing-worker.mjs"
   "lib/organization-listing-payment.ts"
