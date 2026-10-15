@@ -1896,6 +1896,15 @@ export const contracts = sqliteTable('contracts', {
   index('contracts_seller_idx').on(table.seller_id),
 ]);
 
+// Opt-in original DRAFT identity only; no inferred references or review authority.
+export const contract_creation_requests = sqliteTable('contract_creation_requests', {
+  contract_id: text('contract_id').primaryKey().references(() => contracts.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(),
+  request_hash: text('request_hash').notNull(),
+  created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, table => [uniqueIndex('contract_creation_buyer_reference_idx').on(table.buyer_id, table.client_reference)]);
+
 export const contract_milestones = sqliteTable('contract_milestones', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),

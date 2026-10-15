@@ -1,3 +1,29 @@
+## Active reviewed contract foundation — 2026-10-15
+
+Worktree `/home/void/Work/clawdmarket-reviewed-contracts-current`, branch
+`work/local-reviewed-contracts-2026-10-15`, is based on accepted listing candidate
+**6ed0a09** (tested source 4cc00d4). That listing and preserved `bee652c` pilot
+candidate remain unchanged. Continue the saved separate reviewed credit-contract
+plan locally. Current foundation adds only recoverable original DRAFT creation:
+optional buyer-scoped reference, exact normalized command hash, atomic original
+contract/milestones, fixed first-creation deadlines, bounded metadata and private
+lookup. Migration **72** invents no historical references or review authority.
+Public contract remains **1.119**, accepted count **8/10**, not 9/10.
+
+Focused acceptance is **57/57**, zero skips/failures, including lost real HTTP
+response, both separate-process reference races and real before/after-commit
+SIGKILL, existing backed credit/pause regressions, canonical contract checks and
+migration/replay. Types/lint and original 845-row/133-table preservation pass, with
+ten immutable guards and five actual evidence queries. See
+`docs/ORGANIZATION_REVIEWED_CONTRACT_PURCHASING_AUDIT.md` for exact limits/failures.
+No complete new contract release gates or reviewed contract payment journey have
+run. Next close linked-inventory cross-scope funding, then implement separately
+frozen owner/reviewer authority and original credit use, explicit submission-hash
+acceptance, finite clients/SDKs/UI and complete economic/process/release gates.
+Do not count a foundation, fabricate independent demand, publish, move real funds,
+enable global production flags, change custody, email users or contact prospects.
+The unresolved high dependency advisory and pilot external dependencies remain.
+
 ## Accepted local listing outcome — 2026-10-15
 
 Source **4cc00d4** is functionally accepted locally as HTTP **1.119**, **71**
