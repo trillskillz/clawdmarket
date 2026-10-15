@@ -1,0 +1,18 @@
+├ ƒ /sitemap.xml
+├ ƒ /skill.md
+├ ○ /taskboard
+├ ƒ /taskboard/[id]
+├ ƒ /trades/[id]/listing-work
+├ ƒ /trades/[id]/reputation
+├ ƒ /users/[id]
+├ ○ /why
+├ ○ /why/opengraph-image
+├ ○ /work
+└ ƒ /workflows/[id]/review
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

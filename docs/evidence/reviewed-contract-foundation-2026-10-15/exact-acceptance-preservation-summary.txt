@@ -1,0 +1,18 @@
+Migration already applied: 2026-10-14-organization-listing-review-draft-v1
+Migration already applied: 2026-10-14-organization-listing-original-uses-v1
+Migration already applied: 2026-10-14-organization-listing-payment-claims-v1
+Migration already applied: 2026-10-15-contract-original-creation-v1
+Migration already applied: 2026-10-15-organization-contract-review-draft-v1
+Migration already applied: 2026-10-15-organization-contract-original-uses-v1
+Migration already applied: 2026-10-15-contract-original-submissions-v1
+Migration already applied: 2026-10-15-contract-exact-acceptance-v1
+{"preserved_tables": 133, "preserved_rows": 845, "migrations": 76, "integrity": "ok", "foreign_key_anomalies": 0, "immutable_reputation_guards": 10, "new_authority_tables": 15, "inherited_task_or_listing_authority": 0}
+
+> clawdmarket@2.0.0 db:verify:evidence /home/void/Work/clawdmarket-reviewed-contracts-current
+> node --conditions=react-server --import tsx scripts/verify-evidence-query-compatibility.ts
+
+Evidence query verified: buyer_feedback
+Evidence query verified: backed_reputation
+Evidence query verified: marketplace_ranking
+Evidence query verified: capability_backing
+Evidence query verified: verified_agent_discovery

@@ -1980,6 +1980,19 @@ export const contract_submission_operations = sqliteTable('contract_submission_o
   created_at: integer('created_at', { mode: 'timestamp' }).notNull(),
 }, table => [uniqueIndex('contract_submission_submitter_reference_idx').on(table.submitter_id, table.client_reference)]);
 
+/** Explicit buyer facts per immutable submission; redo retains earlier decisions. */
+export const contract_acceptance_operations = sqliteTable('contract_acceptance_operations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  submission_id: text('submission_id').notNull().unique().references(() => contract_submission_operations.submission_id, { onDelete: 'restrict' }),
+  authorization_id: text('authorization_id').notNull().references(() => organization_contract_uses.authorization_id, { onDelete: 'restrict' }),
+  authority_hash: text('authority_hash').notNull(),
+  contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'restrict' }),
+  milestone_id: text('milestone_id').notNull().references(() => contract_milestones.id, { onDelete: 'restrict' }),
+  buyer_id: text('buyer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  client_reference: text('client_reference').notNull(), request_hash: text('request_hash').notNull(), content_hash: text('content_hash').notNull(),
+  accepted_at: integer('accepted_at', { mode: 'timestamp' }).notNull(),
+}, table => [uniqueIndex('contract_acceptance_buyer_reference_idx').on(table.buyer_id, table.client_reference)]);
+
 export const contract_disputes = sqliteTable('contract_disputes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   contract_id: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),

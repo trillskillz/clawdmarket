@@ -1,3 +1,36 @@
+## Internal exact buyer decisions verified — migration 76
+
+The separate contract foundation now persists immutable explicit buyer decisions
+for exact original submission ID AND content hash, with a saved original reference.
+Only the original buyer can issue the internal command; owner/reviewer/seller and
+wrong milestone/hash or failed finite output are rejected. Concurrent exact replay
+retains one original decision. Redo can retain distinct immutable decisions for
+successive submissions of the same milestone; an old decision replay cannot approve
+a replacement selection. No money moves on acceptance and original principal stays
+held. Public approve/pay remains blocked pending the complete scoped adapter.
+
+Focused acceptance passes **65/65**, zero skips/failures; current types/lint and
+production build pass. A strengthened targeted redo control uses IDENTICAL bytes
+with a new submission ID, to ensure hash equality alone cannot replay consent;
+the final strengthened case passes 1/1, zero skips/failures, in
+`/tmp/clawdmarket-contract-exact-acceptance-identical-redo-2026-10-15.log`. Migration 76/replay preserves
+845 local baseline rows/133 tables, integrity ok, zero FK anomalies, ten existing
+immutable reputation guards, four output guards, two new decision guards and all
+five actual evidence queries. These are controlled internal record/decision tests
+over genuine disposable local deposits, not public acceptance/funding, an actual
+admin redo ruling, a live paid canary or independent adoption. No capability 9.
+
+Source manifest: **45** changed files relative to accepted listing e55e151;
+SHA-256 `c93c6eb54c6a0c1f183fad70329ded71bf736ff643ef48a77f36a36a171ca970`. It is not a full release manifest.
+Next add authenticated versioned public buyer acceptance and private original-
+reference decision recovery, retaining the existing fulfillment interlock for
+unsupported actions. Then original credit release/refunds/admin adjudication,
+reviewed funding/use, consumed inventory, finite clients/both SDKs/private work UI,
+actual multi-milestone process economics and complete release gates. Keep all work
+local; no real funds, global production flags, custody changes, mail or outreach.
+
+## Earlier checkpoint evidence
+
 ## Private original submission inspection verified
 
 GET `/api/contracts/{id}/milestones/{milestoneId}` now exposes only original

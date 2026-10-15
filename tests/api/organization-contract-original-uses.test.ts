@@ -36,6 +36,7 @@ before(async () => {
   wallet = createWalletClient({ chain: { ...mainnet, id: 8453 }, transport: http(chain.url), account: payer })
   db = (await import('@/lib/db')).db; schema = await import('@/lib/schema'); await createLocalTestSchema(db.$client, schema)
   await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-original-submissions-v1.sql', 'utf8'))
+  await db.$client.executeMultiple(await readFile('migrations/2026-10-15-contract-exact-acceptance-v1.sql', 'utf8'))
   domain = await import('@/lib/organization-contract-authorizations'); reader = await import('@/lib/organization-contract-uses')
 })
 after(async () => { db?.$client.close(); if (chain) await chain.stop(); if (directory) await rm(directory, { recursive: true, force: true }) })
@@ -275,6 +276,10 @@ test('missing finite keys and unbounded original submission data cannot create a
   const failed = await submit(f.original.contract.id, f.original.milestones[0].id, f.seller, input)
   assert.equal(failed.submission.auto_check_result, 'fail'); assert.equal(failed.milestone_state, 'AUTO_FAILED')
   assert.equal(failed.submission.authorizes_payment, false)
+  await assert.rejects((await import('@/lib/contract-exact-acceptance')).acceptOriginalReviewedContract(f.original.contract.id,
+    f.original.milestones[0].id, f.buyer, { version: 1, client_reference: crypto.randomUUID(), submission_id: failed.submission.id,
+      content_hash: failed.submission.content_hash, approve: true }),
+  (error: unknown) => (error as { code: string }).code === 'CONTRACT_ACCEPTANCE_STATE_CHANGED')
   await assert.rejects(submit(f.original.contract.id, f.original.milestones[0].id, f.seller,
     { ...input, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'x'.repeat(65537) } }),
   (error: unknown) => (error as { code: string }).code === 'CONTRACT_SUBMISSION_INPUT_LIMIT')
@@ -283,5 +288,42 @@ test('missing finite keys and unbounded original submission data cannot create a
     { ...input, client_reference: crypto.randomUUID(), artifact_bundle: { report: nested } }),
   (error: unknown) => (error as { code: string }).code === 'CONTRACT_SUBMISSION_INPUT_LIMIT')
   assert.equal((await db.select().from(schema.contract_submissions).where(eq(schema.contract_submissions.milestone_id, f.original.milestones[0].id))).length, 1)
+  assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
+})
+test('internal exact buyer decisions persist once, require the selected immutable submission and cannot accept replacement output after redo', { skip: !enabled }, async () => {
+  const f = await fixture(); await startOriginal(f)
+  const { submitOriginalReviewedContract: submit } = await import('@/lib/contract-original-submissions')
+  const { acceptOriginalReviewedContract: accept } = await import('@/lib/contract-exact-acceptance')
+  const first = await submit(f.original.contract.id, f.original.milestones[0].id, f.seller, {
+    version: 1, client_reference: crypto.randomUUID(), artifact_bundle: { report: 'Buyer must accept this exact original output' } })
+  const input = { version: 1 as const, client_reference: crypto.randomUUID(), submission_id: first.submission.id, content_hash: first.submission.content_hash, approve: true as const }
+  for (const actor of [f.owner, f.reviewer, f.seller, f.other]) await assert.rejects(accept(f.original.contract.id, f.original.milestones[0].id, actor, input),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_ACCEPTANCE_BUYER_REQUIRED')
+  await assert.rejects(accept(f.original.contract.id, f.original.milestones[0].id, f.buyer, { ...input, content_hash: '0'.repeat(64) }),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_ACCEPTANCE_SUBMISSION_CHANGED')
+  await assert.rejects(accept(f.original.contract.id, f.original.milestones[1].id, f.buyer, input),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_ACCEPTANCE_SUBMISSION_CHANGED')
+  const replies = await Promise.all([accept(f.original.contract.id, f.original.milestones[0].id, f.buyer, input), accept(f.original.contract.id, f.original.milestones[0].id, f.buyer, input)])
+  assert.equal(replies.filter(r => r.idempotent).length, 1); assert.equal(replies[0].decision.id, replies[1].decision.id)
+  assert.equal(replies[0].current_milestone_state, 'APPROVED'); assert.equal(replies[0].financial_release_performed, false)
+  assert.equal(replies[0].credit_remaining_principal_minor, 100)
+  await assert.rejects(accept(f.original.contract.id, f.original.milestones[0].id, f.buyer, { ...input, client_reference: crypto.randomUUID() }),
+    (error: unknown) => (error as { code: string }).code === 'CONTRACT_ACCEPTANCE_REFERENCE_CONFLICT')
+  for (const sql of ['UPDATE contract_acceptance_operations SET content_hash=\'changed\' WHERE id=?', 'DELETE FROM contract_acceptance_operations WHERE id=?']) {
+    await assert.rejects(db.$client.execute({ sql, args: [replies[0].decision.id] }), /immutable/)
+  }
+  // Redo-state control only; no admin ruling or completed public economic journey is claimed.
+  await db.update(schema.contract_milestones).set({ state: 'ACTIVE' }).where(eq(schema.contract_milestones.id, f.original.milestones[0].id))
+  const second = await submit(f.original.contract.id, f.original.milestones[0].id, f.seller, {
+    version: 1, client_reference: crypto.randomUUID(), artifact_bundle: first.submission.artifact_bundle })
+  assert.notEqual(second.submission.id, first.submission.id)
+  assert.equal(second.submission.content_hash, first.submission.content_hash, 'identical output bytes after redo still need the new submission identity')
+  const old = await accept(f.original.contract.id, f.original.milestones[0].id, f.buyer, input)
+  assert.equal(old.decision.id, replies[0].decision.id); assert.equal(old.applies_to_current_submission, false)
+  assert.equal(old.current_milestone_state, 'AWAITING_BUYER_REVIEW')
+  const fresh = await accept(f.original.contract.id, f.original.milestones[0].id, f.buyer, { ...input, client_reference: crypto.randomUUID(),
+    submission_id: second.submission.id, content_hash: second.submission.content_hash })
+  assert.notEqual(fresh.decision.id, old.decision.id); assert.equal(fresh.applies_to_current_submission, true)
+  assert.equal((await db.select().from(schema.contract_acceptance_operations).where(eq(schema.contract_acceptance_operations.milestone_id, f.original.milestones[0].id))).length, 2)
   assert.equal((await (await import('@/lib/account-credit')).creditBalance(f.buyer)).escrow_minor, 100)
 })

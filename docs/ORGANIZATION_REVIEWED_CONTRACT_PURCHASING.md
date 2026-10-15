@@ -66,3 +66,10 @@ Only the original buyer/seller may read it, including agent:read credentials.
 Owner/reviewer approval scope alone cannot read seller output. Responses are
 private/no-store and timestamped; original financial/data errors remain unavailable.
 This read never creates buyer acceptance, credit release or a new submission.
+
+Internal exact buyer-decision storage is implemented in migration 76. Decisions
+bind both immutable submission ID and content hash; identical bytes submitted
+again after redo still require the new submission identity. Earlier decisions
+remain immutable and replay only their historical fact. Accepting does not release
+credit; public approval/payment and new reviewed funding remain unavailable until
+the complete scoped API, original financial and client/UI gates are accepted.

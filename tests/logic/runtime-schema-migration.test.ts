@@ -194,7 +194,11 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       const originalRead = (await migrated.execute("SELECT * FROM organization_service_accounts WHERE id='legacy-read-account'")).rows[0]
       assert.equal(originalRead.credential_hash, 'original-read-hmac'); assert.equal(originalRead.credential_prefix, 'cmo_original')
       assert.equal(originalRead.status, 'active'); assert.equal(originalRead.expires_at, 2000); assert.equal(originalRead.created_at, 1000)
-      assert.equal(migrationRows.rows.length, 75)
+      assert.equal(migrationRows.rows.length, 76)
+      assert.ok(migrationRows.rows.some(row => row.id === '2026-10-15-contract-exact-acceptance-v1'))
+      assert.equal(tableNames.has('contract_acceptance_operations'), true)
+      assert.equal((await migrated.execute('SELECT COUNT(*) AS n FROM contract_acceptance_operations')).rows[0].n, 0, 'historical output gains no inferred buyer acceptance')
+      assert.equal((await migrated.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'reviewed_contract_acceptance_immutable_%'")).rows.length, 2)
       assert.ok(migrationRows.rows.some(row => row.id === '2026-10-15-contract-original-submissions-v1'))
       assert.equal(tableNames.has('contract_submission_operations'), true)
       assert.equal((await migrated.execute('SELECT COUNT(*) AS n FROM contract_submission_operations')).rows[0].n, 0, 'historical output gains no invented submission reference')
