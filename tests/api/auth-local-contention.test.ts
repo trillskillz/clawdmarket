@@ -148,3 +148,37 @@ contentionTest('workflow preparation reports contended reads as recoverable with
     assert.equal(Number(count.rows[0].total), 0, 'storage status cannot create a workflow, child or payment authority')
   } finally { await lock.stop() }
 })
+
+contentionTest('funded retry inspection recovers a real exclusive lock without creating a route or financial reference', async () => {
+  const { reserveFundedRouteRetry, inspectFundedRouteRetry } = await import('@/lib/route-funded-retry')
+  const { RouteRetryError } = await import('@/lib/route-retry-reconciliation')
+  const route = crypto.randomUUID()
+  const principal = { userId: 'controlled-absent-buyer', agentId: null, kind: 'account' as const, usesCookieAuth: false }
+  const command = { version: 1 as const, mandate_id: crypto.randomUUID(), previous_trade_id: crypto.randomUUID(), retry_operation_id: crypto.randomUUID() }
+  const lock = await exclusiveLock(0.35)
+  try {
+    await assert.rejects(db.$client.execute('SELECT id FROM route_plans LIMIT 1'), /SQLITE_BUSY|database is locked/)
+    await assert.rejects(reserveFundedRouteRetry(route, principal, command), error => error instanceof RouteRetryError && error.code === 'ROUTE_NOT_FOUND' && error.status === 404)
+    await lock.exited
+    await assert.rejects(inspectFundedRouteRetry(route, principal.userId), error => error instanceof RouteRetryError && error.code === 'ROUTE_NOT_FOUND')
+    for (const table of ['route_plans', 'route_retry_funding_steps', 'settlement_transfers']) {
+      const count = await db.$client.execute(`SELECT COUNT(*) AS total FROM ${table}`)
+      assert.equal(Number(count.rows[0].total), 0, 'read recovery cannot create retry or payment authority')
+    }
+  } finally { await lock.stop() }
+})
+
+contentionTest('exhausted funded retry inspection stays unavailable and creates no original or replacement obligation', async () => {
+  const { reserveFundedRouteRetry } = await import('@/lib/route-funded-retry')
+  const { isLocalSqliteContention } = await import('@/lib/local-sqlite-read')
+  const lock = await exclusiveLock(2)
+  try {
+    await assert.rejects(reserveFundedRouteRetry(crypto.randomUUID(),
+      { userId: 'controlled-absent-buyer', agentId: null, kind: 'account', usesCookieAuth: false },
+      { version: 1, mandate_id: crypto.randomUUID(), previous_trade_id: crypto.randomUUID(), retry_operation_id: crypto.randomUUID() }),
+    error => error instanceof Error && isLocalSqliteContention(error))
+    await lock.exited
+    const count = await db.$client.execute('SELECT COUNT(*) AS total FROM route_retry_funding_steps')
+    assert.equal(Number(count.rows[0].total), 0)
+  } finally { await lock.stop() }
+})
