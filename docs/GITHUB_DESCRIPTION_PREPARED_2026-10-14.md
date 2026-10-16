@@ -1,3 +1,11 @@
+## Published correction — 2026-10-15
+
+The latest user explicitly authorized GitHub/Vercel publication after security
+remediation. The prepared description was applied with `gh repo edit` and read
+back successfully at 2026-10-15T22:40:12.266629+00:00. This is a remote metadata correction, not
+proof that the cumulative application is deployed or independently adopted.
+The previous preparation-only status below is historical.
+
 # Prepared repository-description correction
 
 Current read-only GitHub metadata still advertises a live recursive-improvement

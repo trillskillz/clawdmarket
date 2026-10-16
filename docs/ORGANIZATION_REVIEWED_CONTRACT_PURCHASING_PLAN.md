@@ -1,3 +1,15 @@
+## Current security-first cumulative release — 2026-10-15
+
+The user has explicitly authorized GitHub/Vercel publication after security
+remediation and separately approved private production backup/local restore and
+encrypted artifact transfer/deletion. The braces path is removed locally; audits
+are clean. PR275 prepares security and the protected-main backup procedure;
+PR274 carries the cumulative marketplace candidate. Final source-frozen gates,
+production recovery rehearsal and exact-SHA deployment verification are still
+running/pending. See [current release evidence](SECURITY_FIRST_CUMULATIVE_RELEASE_2026-10-15.md).
+No live funds, global rollout, real-user email, customer creation or outreach.
+The previous local-only/checkpoint status below is historical.
+
 ## Original-party human/agent browser fulfillment verified — local only
 
 Private `/contracts/{id}/work` now supports original seller start/bounded JSON
