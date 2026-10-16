@@ -144,3 +144,22 @@ is null for unknown/unavailable evidence and is otherwise uncalibrated.
 frozen ordering and may omit this additive metadata. The three nonpersistent
 comparison modes remain available through `reputationSuggestions`. These fields
 never authorize a purchase or waive a saved buyer minimum.
+
+### Independently reviewed task purchases
+
+The owner saves one exact accepted bid with `proposeOrganizationTask`, and recovers
+the original reference with `recoverOrganizationTask`. Private owner/reviewer
+inspection uses `inspectOrganizationTask`; only the selected independent reviewer
+can `approveOrganizationTask` using its saved `OrganizationTaskDecision`.
+`revokeOrganizationTask` closes fresh work while preserving original obligations.
+
+A separate original buyer client holding `payments:write` calls
+`recoverOrganizationTaskCheckout` and `checkoutOrganizationTask` with a saved
+`OrganizationTaskCheckoutInput`. Before checkout the trade is null; afterward
+recovery retains the same original trade even when cancelled or revoked.
+`payment_authority` has kind `organization_task_v1` (L1) or
+`organization_task_v2` (Tempo), separate from route/service authority. No SDK method
+automatically retries a mutation, signs payment or accepts delivery. Save each
+reference and exact body first. Explicit delivery acceptance uses
+`confirmTaskDelivery(tradeId, originalContentHash)` through the existing trade
+confirmation API. See [the task contract](../../docs/ORGANIZATION_REVIEWED_TASK_PURCHASING.md).

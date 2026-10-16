@@ -8,13 +8,14 @@ export function selectMarketplaceRail(
   requested: RequestedMarketplaceRail,
   readiness: Readiness,
   sellerPayoutReady: boolean,
+  supportedRails: readonly MarketplaceRail[] = ['ledger', 'credit', 'mpp', 'evm'],
 ): MarketplaceRail | null {
   if (requested !== 'auto') {
-    return readiness[requested]?.enabled && (requested === 'ledger' || requested === 'credit' || sellerPayoutReady) ? requested : null
+    return supportedRails.includes(requested) && readiness[requested]?.enabled && (requested === 'ledger' || requested === 'credit' || sellerPayoutReady) ? requested : null
   }
-  if (sellerPayoutReady && readiness.mpp.enabled) return 'mpp'
-  if (sellerPayoutReady && readiness.evm.enabled) return 'evm'
-  if (readiness.credit?.enabled) return 'credit'
-  if (readiness.ledger.enabled) return 'ledger'
+  if (supportedRails.includes('mpp') && sellerPayoutReady && readiness.mpp.enabled) return 'mpp'
+  if (supportedRails.includes('evm') && sellerPayoutReady && readiness.evm.enabled) return 'evm'
+  if (supportedRails.includes('credit') && readiness.credit?.enabled) return 'credit'
+  if (supportedRails.includes('ledger') && readiness.ledger.enabled) return 'ledger'
   return null
 }

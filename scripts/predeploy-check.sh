@@ -2,6 +2,27 @@
 set -euo pipefail
 
 required_files=(
+  ".pnpmfile.cjs"
+  "patches/@next__eslint-plugin-next@16.3.8.patch"
+  "tests/security/next-eslint-dependency.test.ts"
+  "scripts/buyer-listing-worker.mjs"
+  "scripts/provider-listing-worker.mjs"
+  "lib/organization-listing-payment.ts"
+  "lib/organization-listing-tempo-payment.ts"
+  "sdk/python/clawdmarket/listing.py"
+  "docs/ORGANIZATION_REVIEWED_LISTING_PURCHASING.md"
+  "tests/api/organization-listing-economic.test.ts"
+  "tests/api/organization-listing-races.test.ts"
+  "tests/api/organization-listing-shared-exposure.test.ts"
+  "e2e/organization-listing-review.spec.ts"
+  "e2e/organization-listing-work.spec.ts"
+  "scripts/buyer-task-worker.mjs"
+  "scripts/provider-task-worker.mjs"
+  "sdk/python/clawdmarket/task.py"
+  "tests/api/organization-task-shared-exposure.test.ts"
+  "lib/organization-task-authorizations.ts"
+  "migrations/2026-10-13-organization-reviewed-task-purchasing-v1.sql"
+  "docs/ORGANIZATION_REVIEWED_TASK_PURCHASING.md"
   "lib/organization-workflow-authorizations.ts"
   "migrations/2026-10-12-organization-reviewed-workflows-v1.sql"
   "docs/ORGANIZATION_REVIEWED_WORKFLOWS.md"
@@ -358,6 +379,13 @@ if ! grep -Fqx '!/scripts/buyer-workflow-worker.mjs' .vercelignore; then
   echo "Vercel build excludes the buyer workflow worker imported by acceptance tests; include it in .vercelignore" >&2
   exit 1
 fi
+
+for task_worker in buyer-task-worker provider-task-worker buyer-listing-worker provider-listing-worker; do
+  if ! grep -Fqx "!/scripts/${task_worker}.mjs" .vercelignore; then
+    echo "Vercel build excludes the purchasing worker imported by acceptance tests: ${task_worker}" >&2
+    exit 1
+  fi
+done
 
 if command -v rg >/dev/null 2>&1; then
   proxy_has_passthrough() {

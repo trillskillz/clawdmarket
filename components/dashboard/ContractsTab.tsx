@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useToast } from '@/components/Toast';
 
 type ContractState = 'DRAFT' | 'FUNDED' | 'IN_PROGRESS' | 'AWAITING_REVIEW' | 'DISPUTED' | 'COMPLETED' | 'CANCELED' | 'EXPIRED' | 'REFUNDED';
@@ -16,6 +17,8 @@ interface Contract {
   escrow_amount: number;
   state: ContractState;
   created_at: string;
+  payment_rail?: 'credit' | 'ledger';
+  reviewed_contract?: boolean;
 }
 
 interface Milestone {
@@ -53,6 +56,7 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
   const [milestonesByContract, setMilestonesByContract] = useState<Record<string, Milestone[]>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [creditEnabled, setCreditEnabled] = useState<boolean | null>(null);
+  const [reviewedByContract, setReviewedByContract] = useState<Record<string, boolean>>({});
   const [submissionTarget, setSubmissionTarget] = useState('');
   const [submissionSummary, setSubmissionSummary] = useState('');
   const [disputeTarget, setDisputeTarget] = useState('');
@@ -62,8 +66,8 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
     const controller = new AbortController();
     fetch('/api/payments/config', { cache: 'no-store', signal: controller.signal })
       .then((response) => response.ok ? response.json() : null)
-      .then((config) => setCreditEnabled(Boolean(config?.account_credit_enabled)))
-      .catch(() => undefined);
+      .then((config) => setCreditEnabled(typeof config?.account_credit_enabled === 'boolean' ? config.account_credit_enabled : null))
+      .catch(() => setCreditEnabled(null));
     return () => controller.abort();
   }, []);
 
@@ -73,13 +77,14 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
   );
 
   const loadMilestones = async (contractId: string) => {
-    if (milestonesByContract[contractId]) return;
     try {
       const res = await fetch(`/api/contracts/${contractId}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load contract details');
       const data = await res.json();
+      if (data.contract?.reviewed_contract === true) setReviewedByContract((prev) => ({ ...prev, [contractId]: true }));
       setMilestonesByContract((prev) => ({ ...prev, [contractId]: data.milestones || [] }));
     } catch (e: any) {
+      setMilestonesByContract((prev) => { const next = { ...prev }; delete next[contractId]; return next; });
       toast(e?.message || 'Failed to load milestones', 'error');
     }
   };
@@ -162,6 +167,7 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
       {sortedContracts.map((c) => {
         const isBuyer = c.buyer_id === currentUserId;
         const isSeller = c.seller_id === currentUserId;
+        const reviewed = c.reviewed_contract === true || reviewedByContract[c.id] === true;
         const milestones = milestonesByContract[c.id] || [];
 
         return (
@@ -177,11 +183,19 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
               <span className={`text-xs px-2 py-1 rounded-full border ${badgeClass(c.state)}`}>{c.state}</span>
             </div>
 
+            {c.payment_rail === 'credit' && <p className="text-sm text-text-dim mt-3">
+              Prepaid credit is nonwithdrawable. Sellers receive nonwithdrawable account credit, not external tokens.
+              Unstarted refunds return the held work amount and retain the original upfront fee of ${Number(c.fee_amount).toFixed(2)} USD.
+            </p>}
+            {reviewed && <p className="text-sm text-text-dim mt-3">Reviewed agreement: funding, exact output acceptance and credit release use its original reviewed workflow. Approval alone cannot release credit.</p>}
+            {reviewed && <Link href={`/contracts/${encodeURIComponent(c.id)}/work`} className="btn-secondary text-xs mt-3">Open original work</Link>}
+            {!reviewed && c.state === 'DRAFT' && creditEnabled === null && <p className="text-sm text-text-dim mt-3">Account-balance readiness is unavailable. Funding is disabled until it can be checked.</p>}
+
             <div className="flex flex-wrap gap-2 mt-4">
               <button onClick={() => loadMilestones(c.id)} className="btn-secondary text-xs py-1.5" disabled={busy[c.id]}>
                 {milestones.length ? 'Refresh Milestones' : 'Load Milestones'}
               </button>
-              {isBuyer && c.state === 'DRAFT' && (
+              {isBuyer && c.state === 'DRAFT' && !reviewed && (
                 <button title={creditEnabled === false ? 'Account-balance contract funding is unavailable' : undefined} onClick={() => runContractAction(c.id, 'fund')} className="btn-primary text-xs py-1.5" disabled={busy[c.id] || creditEnabled !== true}>Fund with account balance</button>
               )}
               {isSeller && c.state === 'FUNDED' && (
@@ -205,7 +219,7 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
                     </div>
 
                     <div className="flex flex-wrap gap-2 mt-3">
-                      {isSeller && (m.state === 'ACTIVE' || m.state === 'CHANGES_REQUESTED') && (
+                      {isSeller && !reviewed && (m.state === 'ACTIVE' || m.state === 'CHANGES_REQUESTED') && (
                         <button className="btn-primary text-xs py-1.5" disabled={busy[m.id]} onClick={() => { setSubmissionTarget(m.id); setSubmissionSummary(''); }}>
                           Submit
                         </button>
@@ -213,9 +227,9 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
 
                       {isBuyer && m.state === 'AWAITING_BUYER_REVIEW' && (
                         <>
-                          <button className="btn-primary text-xs py-1.5" disabled={busy[m.id]} onClick={() => runMilestoneAction(c.id, m.id, 'approve')}>
+                          {!reviewed && <button className="btn-primary text-xs py-1.5" disabled={busy[m.id]} onClick={() => runMilestoneAction(c.id, m.id, 'approve')}>
                             Approve
-                          </button>
+                          </button>}
                           <button className="btn-secondary text-xs py-1.5" disabled={busy[m.id]} onClick={() => runMilestoneAction(c.id, m.id, 'request_changes')}>
                             Request Changes
                           </button>
@@ -225,7 +239,7 @@ export default function ContractsTab({ contracts, total, loading, loadingMore, o
                         </>
                       )}
 
-                      {isBuyer && m.state === 'APPROVED' && (
+                      {isBuyer && !reviewed && m.state === 'APPROVED' && (
                         <button className="btn-primary text-xs py-1.5" disabled={busy[m.id]} onClick={() => runMilestoneAction(c.id, m.id, 'mark_paid')}>
                           Release Payment
                         </button>

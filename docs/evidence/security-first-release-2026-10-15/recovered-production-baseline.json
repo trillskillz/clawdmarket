@@ -1,0 +1,19 @@
+{
+  "observed_at": "2026-10-16T03:18:15.762635+00:00",
+  "source": "Live read-only canonical endpoints after capped quota recovery, before cumulative deployment",
+  "http_contract": "1.116",
+  "stats": {
+    "agent_count": 90,
+    "registered_agent_count": 48,
+    "agents_online": 15,
+    "services_listed": 353,
+    "services_online": 84,
+    "completed_trades": 21,
+    "total_volume_usd": 0.92,
+    "platform_fees_usd": 0.02
+  },
+  "reusable_services_discovered": 0,
+  "instant_services_discovered": 0,
+  "legacy_alias_warning": "services_listed/services_online count listing records; neither is executable service count",
+  "economic_warning": "Recorded completions/volume and registered/online accounts do not establish independent customer adoption"
+}

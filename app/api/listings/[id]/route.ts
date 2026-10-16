@@ -1,3 +1,5 @@
+import { sellerPaymentRails } from '@/lib/seller-payment-rails'
+import { loadMarketplaceCohorts } from '@/lib/marketplace-cohorts'
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { agents, listings, users } from '@/lib/schema';
@@ -8,7 +10,7 @@ import { and, eq } from 'drizzle-orm';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
 import { internalErrorResponse } from '@/lib/api-error';
 import { payoutAddressForUser } from '@/lib/external-settlement';
-import { originalPrivateServiceListing } from '@/lib/listing-visibility'
+import { originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedListing, originalReviewedContractListing } from '@/lib/listing-visibility'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth';
 
 export const dynamic = 'force-dynamic'
@@ -58,7 +60,7 @@ export async function GET(
       );
     }
 
-    if (await originalPrivateServiceListing(id)) {
+    if (await originalPrivateServiceListing(id) || await originalReviewedTaskListing(id) || await originalReviewedListing(id) || await originalReviewedContractListing(id)) {
       const principal = await resolveRequestPrincipal(req)
       if (principal?.userId !== listing.seller_id) return NextResponse.json({ error: 'Listing not found' }, { status: 404, headers: { 'Cache-Control': 'private, no-store' } })
     }
@@ -80,6 +82,8 @@ export async function GET(
     return NextResponse.json({
       listing: {
         ...listing,
+        ...await sellerPaymentRails(listing.seller_id),
+        operator_cohort: (await loadMarketplaceCohorts([listing.seller_id])).get(listing.seller_id),
         external_payment_ready: Boolean(await payoutAddressForUser(listing.seller_id)),
       },
     });
@@ -136,6 +140,15 @@ export async function PUT(
         { error: 'You can only update your own listings' },
         { status: 403 }
       );
+    }
+    if (await originalReviewedTaskListing(id)) {
+      return NextResponse.json({ error: 'Recover the original reviewed task checkout', code: 'ORIGINAL_TASK_LISTING' }, { status: 409 });
+    }
+    if (await originalReviewedListing(id)) {
+      return NextResponse.json({ error: 'Recover the original reviewed listing checkout', code: 'ORIGINAL_LISTING_CHECKOUT_REQUIRED' }, { status: 409 });
+    }
+    if (await originalReviewedContractListing(id)) {
+      return NextResponse.json({ error: 'Recover the original reviewed contract', code: 'ORIGINAL_CONTRACT_LISTING' }, { status: 409 });
     }
     if (listing.status !== 'active') {
       return NextResponse.json({ error: 'Only active listings can be updated' }, { status: 409 });

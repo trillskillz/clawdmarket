@@ -1,0 +1,99 @@
+{
+  "observed_at": "2026-10-15T22:00:05Z",
+  "full_audit_exit": 1,
+  "production_audit_exit": 0,
+  "remediated": false,
+  "exception_approved": false,
+  "owner": "trillskillz",
+  "reevaluate_by": "2026-10-28",
+  "primary_sources": [
+    "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    "https://github.com/micromatch/braces/issues/70"
+  ],
+  "records": {
+    "full": {
+      "local_log": "/tmp/clawdmarket-contract-security-full-2026-10-15.json",
+      "sha256": "fe40a8170497313356d3df5ad48adb2794b002dcf6156df4d6277a88faf80b28",
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 1,
+        "critical": 0
+      },
+      "advisories": [
+        {
+          "github_advisory_id": "GHSA-vfj7-8cjw-p6xm",
+          "module_name": "braces",
+          "severity": "high",
+          "vulnerable_versions": "<=3.0.3",
+          "patched_versions": "<0.0.0",
+          "findings": [
+            {
+              "version": "3.0.3",
+              "paths": [
+                ".>eslint-config-next>@next/eslint-plugin-next>fast-glob>micromatch>braces"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "production": {
+      "local_log": "/tmp/clawdmarket-contract-security-production-2026-10-15.json",
+      "sha256": "e5afd492ebdf3996f7a47503ad496e74ffad1788a685fb30f0b43d8daa6d0ca0",
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0
+      },
+      "advisories": []
+    },
+    "braces-registry": {
+      "local_log": "/tmp/clawdmarket-contract-braces-upstream-2026-10-15.json",
+      "sha256": "1f2b742ee3c45e8d752162d2bcc31554f87a1b0ec28003e5e3f9c7a9eaa959b1",
+      "metadata": "3.0.3"
+    },
+    "config-version": {
+      "local_log": "/tmp/clawdmarket-contract-eslint-next-upstream-2026-10-15.json",
+      "sha256": "65a5a9bc8322e2d4971e20ab6ffb1c5e2955fc3cd38d96c5797ea7a97910815e",
+      "metadata": "16.4.2"
+    },
+    "config-dependencies": {
+      "local_log": "/tmp/clawdmarket-contract-eslint-next-16.4.2-dependencies-2026-10-15.json",
+      "sha256": "094d3148fb2023d7bab0a2cdf38836f9f7ea4965e9ec395fd416030e7af79132",
+      "metadata": {
+        "dependencies": {
+          "globals": "16.4.0",
+          "typescript-eslint": "^8.56.0",
+          "eslint-plugin-react": "^7.37.0",
+          "eslint-plugin-import": "^2.32.0",
+          "eslint-plugin-jsx-a11y": "^6.10.0",
+          "@next/eslint-plugin-next": "16.4.2",
+          "eslint-plugin-react-hooks": "^7.1.0",
+          "eslint-import-resolver-node": "^0.3.6",
+          "eslint-import-resolver-typescript": "^3.5.2"
+        },
+        "peerDependencies": {
+          "eslint": ">=9.0.0",
+          "typescript": ">=3.3.1"
+        }
+      }
+    },
+    "plugin-version": {
+      "local_log": "/tmp/clawdmarket-contract-next-plugin-version-2026-10-15.json",
+      "sha256": "65a5a9bc8322e2d4971e20ab6ffb1c5e2955fc3cd38d96c5797ea7a97910815e",
+      "metadata": "16.4.2"
+    },
+    "plugin-dependencies": {
+      "local_log": "/tmp/clawdmarket-contract-next-plugin-upstream-2026-10-15.json",
+      "sha256": "58532dbb647d4bffbaab26ed4e12dde5f4e59a91be8d732fabd7daf9236eb5f2",
+      "metadata": {
+        "fast-glob": "3.3.1",
+        "@eslint-community/eslint-utils": "4.9.1"
+      }
+    }
+  }
+}

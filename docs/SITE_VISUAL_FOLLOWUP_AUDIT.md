@@ -82,7 +82,7 @@ include dialog padding/gutters, backdrop and toast stacking, internal scrolling,
 visible actions and a bounded long-name agent selector. Every account API
 response, failed-rating submission and transfer credential in these cases is a
 guarded public dummy fixture; no deployed account, key or financial mutation is
-involved. Publication follows local acceptance and required CI;
+involved. Publication was gated by local acceptance and required CI;
 all unrelated or later changes remain local until new explicit permission.
 
 Final evidence: `/tmp/clawdmarket-visual-followup-build-accepted.log`,
@@ -93,4 +93,58 @@ Final evidence: `/tmp/clawdmarket-visual-followup-build-accepted.log`,
 `/tmp/clawdmarket-visual-followup-browser-accepted-v2.log` and the final
 Playwright report. Claim, ownership, chat, wallet, delivery, rating and failed
 review screenshots at 320px were visually inspected. Required CI and exact-SHA
-production verification remain the release gates; later work stays local.
+production verification also pass below; later work stays local.
+
+## Final production verification and local continuation
+
+[PR #263](https://github.com/trillskillz/clawdmarket/pull/263) merged as
+`96a017b6019920f47af32d86a7e476c9b9c07808`; its tree equals accepted head `fd8cee5`.
+All four protected checks passed, plus Python CodeQL and the Vercel preview.
+[PR CI 38475718937](https://github.com/trillskillz/clawdmarket/actions/runs/38475718937)
+passes 854 Node cases (792 passed, 62 expected environment skips, zero failures)
+and complete Chromium acceptance (112 passed, nine expected skips, no retries).
+The complete workflow archive confirms the browser results despite lagging step
+metadata. No release check was removed or bypassed.
+
+[Deployment 38477948102](https://github.com/trillskillz/clawdmarket/actions/runs/38477948102)
+passes the isolated release gate, including the same 854-case Node totals,
+18 Python cases, SDK parity/build, types and lint. Readiness/reserve preflight,
+additive migration replay, release-monitor synchronization and production
+query compatibility pass before artifact publication. Both domains point to
+`clawdmarket-1i25ng5dq-jacob-millers-projects-09998dbb.vercel.app`.
+[Production smoke 38479332306](https://github.com/trillskillz/clawdmarket/actions/runs/38479332306)
+passes 22 workflow checks on the same merged SHA: liveness/readiness,
+authenticated diagnostics,
+agent activity, discovery/payment challenge, signed-wallet/authentication,
+private activity, and guarded listing/key creation and cleanup. Its nested
+agent lifecycle JSON reports 14 passing checks. No paid production canary or
+routing-rollout change is included.
+
+Independent live audit passes fifteen routes at 1440, 1024, 768, 390 and 320px
+on each domain: 150 HTTP-200 renders, zero document overflow, zero text outside
+the viewport and zero meaningful text below 12px. Every render loads all three
+bundled font families while external Google fonts are blocked; no font requests
+fail. All 13 served WOFF2 files per alias match signature, byte count and SHA-256
+(26 checks). Both readiness endpoints return 200 and both contract surfaces
+retain HTTP 1.116 and reviewed workflow paths. Independent screenshot inspection
+covers tablet home, mobile claim/ownership/login and tablet Observe; the account,
+wallet and dialog fixtures were inspected locally with the final compiled CSS.
+Navigation-aborted non-font requests are not counted as font/layout failures.
+
+Evidence: `/tmp/clawdmarket-visual-followup-ci-complete-logs.txt`,
+`/tmp/clawdmarket-visual-followup-deploy-success.log`,
+`/tmp/clawdmarket-visual-followup-smoke-success.log`,
+`/tmp/clawdmarket-visual-followup-production-acceptance.json`, and
+`/tmp/clawdmarket-visual-audit/followup-final-{apex,www}/audit.json` and PNGs.
+
+Publication permission is consumed. Completion/policy records remain local on
+`work/local-after-visual-followup-2026-10-13`, based on the verified merged SHA,
+with no upstream. All subsequent work stays local until explicit new permission;
+no further GitHub/Vercel writes follow this verification.
+
+[Same-SHA main CI 38477948085](https://github.com/trillskillz/clawdmarket/actions/runs/38477948085)
+also passes, along with main contract/security checks. Its complete archive
+confirms the same 854-case Node totals and 112 Chromium passes, nine expected
+skips and no retries. Evidence:
+`/tmp/clawdmarket-visual-followup-main-ci-success.log`. These final records and
+publication guards remain local; no additional GitHub/Vercel write was made.

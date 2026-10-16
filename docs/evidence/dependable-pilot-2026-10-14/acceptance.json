@@ -1,0 +1,89 @@
+{
+  "scope": "Local acceptance only; not deployment, live funding, email-provider deliverability or independent demand.",
+  "implementation_checkpoint": "ba28cd6",
+  "source_files": 134,
+  "source_files_digest_sha256": "a40c0106b05a370ae5bd3232197fbd323a3ea0928d2132055db92c9e75c3cfc5",
+  "broad_node": {
+    "cases": 942,
+    "passed": 937,
+    "failed": 0,
+    "skipped": 5
+  },
+  "current_focused": {
+    "cases": 57,
+    "passed": 57,
+    "failed": 0,
+    "skipped": 0
+  },
+  "python": {
+    "passed": 21
+  },
+  "chromium": {
+    "cases": 142,
+    "passed": 134,
+    "skipped": 8,
+    "failed": 0,
+    "retries": 0
+  },
+  "logs": [
+    {
+      "check": "predeploy",
+      "local_path": "/tmp/clawdmarket-pilot-predeploy-accepted-2026-10-14.log",
+      "exit_code": 0,
+      "sha256": "93baaab88b980f47a23b7ddde3c05e2b5c99d39e4dac4d9f73634d9224b60a64"
+    },
+    {
+      "check": "focused_current",
+      "local_path": "/tmp/clawdmarket-pilot-focused-current-accepted-2026-10-14.log",
+      "exit_code": 0,
+      "sha256": "783107cb9eb0ee979bb1430ab4f6ef038359d2ff6cef6f1c61c14acda5d6cbbf"
+    },
+    {
+      "check": "static_sdk",
+      "local_path": "/tmp/clawdmarket-pilot-static-sdk-accepted-2026-10-14.log",
+      "exit_code": 0,
+      "sha256": "755509286b7a969b9485b71ddd2d888ef554530a91451af8ec73e72381f4b6c0"
+    },
+    {
+      "check": "current_lint",
+      "local_path": "/tmp/clawdmarket-pilot-lint-accepted-2026-10-14.log",
+      "exit_code": 0,
+      "sha256": "6f49343e311e22a39daf7376d634fa3631c57b8436961579ae7123964761b6b4"
+    },
+    {
+      "check": "production_build",
+      "local_path": "/tmp/clawdmarket-pilot-build-accepted-2026-10-14.log",
+      "exit_code": 0,
+      "sha256": "5040e0c2d02cbb2f8a8e2546bff4eca50665f2c7103d4f3b0effaab00d2afe50"
+    },
+    {
+      "check": "chromium",
+      "local_path": "/tmp/clawdmarket-pilot-browser-accepted-2026-10-14.log",
+      "exit_code": 0,
+      "sha256": "54d45d3edf6f663f6fabbb3f8a8a8b2cae7300afb5a0bfd88997b21362247061"
+    },
+    {
+      "check": "migration_replay_evidence_compiler",
+      "local_path": "/tmp/clawdmarket-pilot-preservation-final-2026-10-14.log",
+      "exit_code": 0,
+      "sha256": "899b582835e904da12c9f364a4d51d4b3aaafe782db4df70ba6147a3eacdbfff"
+    },
+    {
+      "check": "full_audit",
+      "local_path": "/tmp/clawdmarket-dependency-audit-final-2026-10-14.json",
+      "exit_code": 1,
+      "sha256": "fe40a8170497313356d3df5ad48adb2794b002dcf6156df4d6277a88faf80b28"
+    },
+    {
+      "check": "production_audit",
+      "local_path": "/tmp/clawdmarket-dependency-production-audit-final-2026-10-14.json",
+      "exit_code": 0,
+      "sha256": "e5afd492ebdf3996f7a47503ad496e74ffad1788a685fb30f0b43d8daa6d0ca0"
+    }
+  ],
+  "remaining_security_findings": {
+    "high": 1,
+    "approved_exception": false,
+    "remediated": false
+  }
+}

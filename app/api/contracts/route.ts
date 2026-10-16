@@ -1,21 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { asc, eq, or, sql } from 'drizzle-orm';
+import { eq, or, sql, getTableColumns } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { contract_milestones, contracts, listings, users } from '@/lib/schema';
+import { contracts, organization_contract_authorizations } from '@/lib/schema';
 import { createContractSchema } from '@/lib/validation';
 import { validateCsrf } from '@/lib/csrf';
 import { resolveRequestPrincipal } from '@/lib/request-principal';
-import { DEV_FEE_PERCENT } from '@/lib/settlement';
-import { isPublicMarketplaceSeller } from '@/lib/listing-visibility';
 import { getPaymentReadiness } from '@/lib/payment-config';
 import { requireNewPaymentsOpen, NewPaymentsPausedError } from '@/lib/payment-control';
+
+import { ContractCreationError, createContractDraft, findOriginalContractCreation } from '@/lib/contract-creation';
+import { PurchasingError } from '@/lib/organization-purchasing-transaction';
+import { ArtifactError, readBoundedJson } from '@/lib/private-artifacts';
 
 export const dynamic = 'force-dynamic'
 
 const CONTRACTS_V1_ENABLED = process.env.CONTRACTS_V1 !== 'false';
 
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
+function creationError(error: any) {
+  if (error instanceof ContractCreationError || error instanceof PurchasingError || error instanceof NewPaymentsPausedError || error instanceof ArtifactError) {
+    return NextResponse.json({ error: error.message, code: error.code }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });
+  }
+  if (error?.issues || error?.errors || error instanceof SyntaxError) {
+    return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+  }
+  console.error('Contract creation error:', error);
+  return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function GET(req: NextRequest) {
@@ -23,6 +32,14 @@ export async function GET(req: NextRequest) {
 
   if (!CONTRACTS_V1_ENABLED) return NextResponse.json({ error: 'Contracts feature disabled' }, { status: 404 });
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (req.nextUrl.searchParams.has('client_reference')) {
+    try {
+      const original = await findOriginalContractCreation(auth.userId, req.nextUrl.searchParams.get('client_reference')!);
+      return NextResponse.json(original ?? { error: 'Original creation not found', code: 'CONTRACT_CREATION_NOT_FOUND' }, {
+        status: original ? 200 : 404, headers: { 'Cache-Control': 'no-store' },
+      });
+    } catch (error) { return creationError(error); }
+  }
   const requestedPage = Number(req.nextUrl.searchParams.get('page') || 1);
   const requestedLimit = Number(req.nextUrl.searchParams.get('limit') || 50);
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
@@ -34,15 +51,16 @@ export async function GET(req: NextRequest) {
     .where(participantWhere);
   const total = Number(countRow?.count || 0);
   const rows = await db
-    .select()
+    .select({ ...getTableColumns(contracts), review_id: organization_contract_authorizations.id })
     .from(contracts)
+    .leftJoin(organization_contract_authorizations, eq(organization_contract_authorizations.contract_id, contracts.id))
     .where(participantWhere)
     .orderBy(sql`${contracts.created_at} desc`)
     .limit(limit)
     .offset((page - 1) * limit);
 
   return NextResponse.json({
-    contracts: rows,
+    contracts: rows.map(({ review_id, ...contract }) => ({ ...contract, reviewed_contract: review_id !== null })),
     page,
     limit,
     total,
@@ -59,96 +77,23 @@ export async function POST(req: NextRequest) {
   if (auth.usesCookieAuth && !validateCsrf(req)) {
     return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });
   }
-  if (!getPaymentReadiness().credit.enabled) {
-    return NextResponse.json({
-      error: 'Deposited account-balance funding is unavailable on this deployment.',
-      code: 'CONTRACT_FUNDING_UNAVAILABLE',
-    }, { status: 503 });
-  }
-
   try {
+    const body = await readBoundedJson(req, 65_536);
+    // Exact referenced replay precedes fresh readiness/pause/catalog checks. It
+    // returns original records only; it never funds or extends an obligation.
+    let validated: ReturnType<typeof createContractSchema.parse> | undefined;
+    if (body && typeof body === 'object' && Object.hasOwn(body, 'client_reference')) {
+      validated = createContractSchema.parse(body);
+      const prior = await findOriginalContractCreation(auth.userId, validated.client_reference!, validated);
+      if (prior) return NextResponse.json(prior, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+    }
+    if (!getPaymentReadiness().credit.enabled) {
+      return NextResponse.json({ error: 'Deposited account-balance funding is unavailable on this deployment.',
+        code: 'CONTRACT_FUNDING_UNAVAILABLE' }, { status: 503 });
+    }
     await requireNewPaymentsOpen();
-    const body = await req.json();
-    const validated = createContractSchema.parse(body);
-
-    let sellerId = validated.seller_id || null;
-
-    if (validated.listing_id) {
-      const [listing] = await db
-        .select({ id: listings.id, seller_id: listings.seller_id, status: listings.status })
-        .from(listings)
-        .where(eq(listings.id, validated.listing_id))
-        .limit(1);
-      if (!listing) return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
-      if (listing.status !== 'active') return NextResponse.json({ error: 'Listing is not active' }, { status: 409 });
-      if (!await isPublicMarketplaceSeller(listing.seller_id)) return NextResponse.json({ error: 'Listing is not available' }, { status: 409 });
-      sellerId = listing.seller_id;
-    }
-
-    if (!sellerId) {
-      return NextResponse.json({ error: 'seller_id or listing_id is required' }, { status: 400 });
-    }
-    if (!await isPublicMarketplaceSeller(sellerId)) {
-      return NextResponse.json({ error: 'Seller is not available' }, { status: 409 });
-    }
-
-    if (sellerId === auth.userId) {
-      return NextResponse.json({ error: 'Cannot open contract with yourself' }, { status: 400 });
-    }
-
-    const [seller] = await db.select({ id: users.id }).from(users).where(eq(users.id, sellerId)).limit(1);
-    if (!seller) return NextResponse.json({ error: 'Seller not found' }, { status: 404 });
-
-    const sellerTotal = validated.milestones.reduce((sum, m) => sum + Math.round(m.amount * 100), 0) / 100;
-    const feeAmount = round2(sellerTotal * DEV_FEE_PERCENT);
-    const escrowAmount = round2(sellerTotal + feeAmount);
-    const expiresAt = new Date(Date.now() + validated.expires_in_hours * 60 * 60 * 1000);
-
-    const created = await db.transaction(async (tx) => {
-      const [contract] = await tx
-        .insert(contracts)
-        .values({
-          buyer_id: auth.userId,
-          seller_id: sellerId!,
-          listing_id: validated.listing_id ?? null,
-          total_amount: sellerTotal,
-          fee_amount: feeAmount,
-          escrow_amount: escrowAmount,
-          payment_rail: 'credit',
-          state: 'DRAFT',
-          expires_at: expiresAt,
-        })
-        .returning();
-
-      const milestoneRows = validated.milestones.map((m, i) => ({
-        contract_id: contract.id,
-        milestone_index: i,
-        title: m.title,
-        amount: round2(m.amount),
-        acceptance_spec: JSON.stringify(m.acceptance_spec || { required_artifacts: [] }),
-        deadline_at: m.deadline_in_hours ? new Date(Date.now() + m.deadline_in_hours * 60 * 60 * 1000) : null,
-        review_window_hours: m.review_window_hours ?? 24,
-        state: 'PENDING' as const,
-      }));
-
-      await tx.insert(contract_milestones).values(milestoneRows);
-
-      return contract;
-    });
-
-    const milestones = await db
-      .select()
-      .from(contract_milestones)
-      .where(eq(contract_milestones.contract_id, created.id))
-      .orderBy(asc(contract_milestones.milestone_index));
-
-    return NextResponse.json({ contract: created, milestones }, { status: 201 });
-  } catch (error: any) {
-    if (error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
-    if (error?.issues || error?.errors) {
-      return NextResponse.json({ error: 'Validation failed', details: error.issues || error.errors }, { status: 400 });
-    }
-    console.error('Create contract error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
+    validated ??= createContractSchema.parse(body);
+    const result = await createContractDraft(auth.userId, validated);
+    return NextResponse.json(result, { status: result.idempotent ? 200 : 201, headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) { return creationError(error); }
 }

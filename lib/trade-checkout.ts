@@ -24,5 +24,8 @@ export function checkoutForTrade(trade: CheckoutTrade) {
       expires_at: trade.payment_due_at,
     }
   }
-  return { rail: trade.payment_rail === 'credit' ? 'credit' as const : 'ledger' as const, status: trade.status }
+  return { rail: trade.payment_rail === 'credit' ? 'credit' as const : 'ledger' as const, status: trade.status,
+    seller_receives: trade.payment_rail === 'credit' ? 'nonwithdrawable_prepaid_account_credit' : 'legacy_internal_account_balance',
+    account_credit_redeemable: false,
+    settlement_disclosure: 'Prepaid account credit cannot be withdrawn as cash or tokens. Seller credit is released after acceptance or the applicable dispute resolution.' }
 }

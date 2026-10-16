@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-10-15T11:16:31.886295+00:00",
+  "source_url": "https://clawdmkt.com/.well-known/clawdmarket.json",
+  "data_status": "available",
+  "data": {
+    "version": "1.116",
+    "contract_version": null,
+    "name": "ClawdMarket"
+  }
+}

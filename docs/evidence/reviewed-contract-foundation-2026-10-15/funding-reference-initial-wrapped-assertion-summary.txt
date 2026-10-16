@@ -1,0 +1,75 @@
+    rawCode: 1811,
+    [cause]: SqliteError: injected_adjudication_append_failure
+        at convertError (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js:59:12)
+        at Object.next (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js:385:17)
+        at Statement.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js:403:18)
+        at executeStmt (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:570:34)
+        at Sqlite3Transaction.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:449:16)
+        at <anonymous> (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:288:30)
+        at LibSQLPreparedQuery.queryWithCache (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/session.ts:78:18)
+        at LibSQLPreparedQuery.values (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:286:21)
+        at LibSQLPreparedQuery.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:214:27)
+        at QueryPromise.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/query-builders/insert.ts:402:26) {
+      code: 'SQLITE_CONSTRAINT_TRIGGER',
+      rawCode: 1811
+    }
+  }
+}
+✔ a failed immutable admin journal append rolls back ruling, state and original credit distribution (337.626062ms)
+✔ a genuinely lost committed admin resolution reply recovers its original split through both participant SDKs without repeating resolution (4636.015712ms)
+✔ ordinary unreviewed contracts retain all four existing admin rulings without inferred reviewed operations or consent (900.850622ms)
+✔ dedicated original seller POST enforces actor, payment scope, CSRF and bounded finite output while legacy hashless submit stays blocked (462.754377ms)
+✔ both provider SDKs recover actual lost committed original submission replies without recomputation, new output or credit release (972.500833ms)
+✔ exact public credit release enforces buyer/payment scope and original proof; generic hashless mark_paid remains blocked (753.381958ms)
+✔ inconsistent held-credit account cannot request more funding or commit a partial release through the public adapter (409.172178ms)
+✔ both buyer SDKs recover actual lost committed release replies and original posting after full completion without double payment (1836.281849ms)
+✔ original buyer funding reference pins one controlled original reservation and recovers frozen terms after current permission closes (4305.542168ms)
+✖ funding references reject changed and cross-contract reuse and private actors without reclassifying earlier unreferenced reservations (404.896696ms)
+✔ a saved funding reference cannot turn contradictory ledger evidence into original financial success (321.25808ms)
+✔ runtime schema migration upgrades a legacy database and is idempotent (1408.66761ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 39
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 86700.429445
+
+✖ failing tests:
+
+test at tests/api/organization-contract-original-uses.test.ts:40:5522
+✖ funding references reject changed and cross-contract reuse and private actors without reclassifying earlier unreferenced reservations (404.896696ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /UNIQUE/. Input:
+  
+  'Error: Failed query: insert into "organization_contract_funding_requests" ("id", "buyer_id", "organization_id", "authorization_id", "contract_id", "client_reference", "request_hash", "authority_hash", "created_at") values (?, ?, ?, ?, ?, ?, ?, ?, ?)\n' +
+    'params: 3386192b-b499-46e8-b4b7-66d3cc90f18c,user_agent_agent_c775bb64-1de2-481b-b3ab-e29e843fcff8,e2781464-3d04-4165-bd8e-419a8e3b7068,49e0e311-256f-4183-96d9-c966cca01c87,463e789a-7520-4639-9219-29bfffdf559e,376fadd3-8c19-494d-b8e6-ad02ba345009,a9a924921b15a7e7b4f98584a03f9e955e018a1e61945845a0b929dcab336cd8,e7a7f1b47f0450454d3f7c947476a72742a2419aabc74310dc0c6a3578e7e4e9,1792085590'
+  
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:1050:3)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: Failed query: insert into "organization_contract_funding_requests" ("id", "buyer_id", "organization_id", "authorization_id", "contract_id", "client_reference", "request_hash", "authority_hash", "created_at") values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    params: 3386192b-b499-46e8-b4b7-66d3cc90f18c,user_agent_agent_c775bb64-1de2-481b-b3ab-e29e843fcff8,e2781464-3d04-4165-bd8e-419a8e3b7068,49e0e311-256f-4183-96d9-c966cca01c87,463e789a-7520-4639-9219-29bfffdf559e,376fadd3-8c19-494d-b8e6-ad02ba345009,a9a924921b15a7e7b4f98584a03f9e955e018a1e61945845a0b929dcab336cd8,e7a7f1b47f0450454d3f7c947476a72742a2419aabc74310dc0c6a3578e7e4e9,1792085590
+        at LibSQLPreparedQuery.queryWithCache (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/session.ts:80:11)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async LibSQLPreparedQuery.run (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:197:10)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:1050:3)
+        at async Test.run (node:internal/test_runner/test:1409:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+      [cause]: LibsqlError: SQLITE_CONSTRAINT: UNIQUE constraint failed: organization_contract_funding_requests.buyer_id, organization_contract_funding_requests.client_reference
+          at mapSqliteError (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:683:16)
+          at executeStmt (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:586:15)
+          at Sqlite3Client.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:268:20)
+          at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+        [cause]: [Object]
+      }
+    },
+    expected: /UNIQUE/,
+    operator: 'rejects',
+    diff: 'simple'
+  }

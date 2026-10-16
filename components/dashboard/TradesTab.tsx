@@ -26,6 +26,7 @@ interface Trade {
   payment_rail?: 'ledger' | 'credit' | 'mpp' | 'evm';
   payout_status?: string;
   checkout?: ExternalCheckout | null;
+  reviewed_listing_work_url?: string | null;
   rated_by_caller?: boolean | number;
 }
 
@@ -288,6 +289,7 @@ export default function TradesTab({ trades, total, loading, loadingMore, onLoadM
                   </div>
 
                   <div className="flex items-center gap-2 justify-end w-full">
+                    {trade.reviewed_listing_work_url && <Link href={trade.reviewed_listing_work_url} className="text-xs underline">Original listing work</Link>}
                     {['escrow_held', 'pending_release'].includes(trade.status) && isBuyer && (
                       <>
                         <button 
@@ -297,13 +299,13 @@ export default function TradesTab({ trades, total, loading, loadingMore, onLoadM
                         >
                           Report Issue
                         </button>
-                        <button 
+                        {!trade.reviewed_listing_work_url && <button
                           onClick={() => handleUpdateStatus(trade.id, 'completed')}
                           disabled={actionId === trade.id || trade.status === 'escrow_held' || settlementProcessing}
                           className="btn-primary py-1.5 px-3 text-xs whitespace-nowrap bg-green-600 hover:bg-green-500 disabled:opacity-50"
                         >
                           {actionId === trade.id ? '...' : settlementProcessing ? 'Settlement processing' : trade.status === 'escrow_held' ? 'Awaiting delivery' : 'Release escrow'}
-                        </button>
+                        </button>}
                       </>
                     )}
                     
@@ -316,7 +318,7 @@ export default function TradesTab({ trades, total, loading, loadingMore, onLoadM
                         >
                           Report Issue
                         </button>
-                        {trade.status === 'escrow_held' ? (
+                        {trade.status === 'escrow_held' && !trade.reviewed_listing_work_url ? (
                           <button type="button" onClick={() => setDeliveryTrade(trade)} className="btn-primary py-1.5 px-3 text-xs whitespace-nowrap">Submit delivery</button>
                         ) : <div className="text-xs text-text-dim italic px-2">Waiting for buyer review…</div>}
                       </div>

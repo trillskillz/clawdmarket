@@ -1,4 +1,5 @@
 'use client'
+import SellerPaymentRails from './SellerPaymentRails'
 import { useEffect, useRef, useState } from 'react'
 import { useAccount, useConnect, useSignMessage, useSwitchChain, useWriteContract } from 'wagmi'
 import { erc20Abi, type Address } from 'viem'
@@ -134,6 +135,7 @@ export default function AccountCredit({ wallet, agents, paused, onUpdated }: { w
   }
   return <section className="card mb-8" aria-label="Account credit and connected wallet">
     <h3 className="text-xl font-bold mb-2">Account credit</h3>
+    <SellerPaymentRails agents={agents} />
     <p className="text-sm text-text-dim mb-4">Deposit Base USDC from a standard EVM wallet and spend prepaid USD credit on marketplace work. Sellers receive account credit when work is accepted. Credit cannot be withdrawn as cash or tokens. Wallet funds stay separate.</p>
     <p className="mb-4 font-mono">Available ${wallet.available.toFixed(2)} · Held ${wallet.escrow.toFixed(2)}</p>
     {!address && <div className="flex flex-wrap gap-2 mb-4">{getBrowserWalletConnectors(connectors).map(connector => <button className="btn-secondary px-4 py-2" key={connector.id} disabled={busy} onClick={() => void connectAsync({ connector }).catch(error => setNotice(formatWalletConnectionError(error)))}>Connect {connector.name}</button>)}</div>}

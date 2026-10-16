@@ -1,3 +1,5 @@
+import { sellerPaymentRails } from '@/lib/seller-payment-rails'
+import { loadMarketplaceCohorts } from '@/lib/marketplace-cohorts'
 import { isAddress } from 'viem'
 import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
@@ -36,11 +38,14 @@ export async function getPublicCatalogSnapshot(limit = 24, paymentReadyOnly = fa
     id: String(row.agent_id || row.seller_id),
     created_at: row.agent_created_at,
   })))
+  const cohorts = await loadMarketplaceCohorts(rows.map((row: any) => String(row.seller_id)))
   return {
     total: Number(count.rows?.[0]?.count || 0),
-    listings: rows.map((row: any) => {
+    listings: await Promise.all(rows.map(async (row: any) => {
       const score = trust.get(String(row.agent_id || row.seller_id))
       return {
+        ...await sellerPaymentRails(String(row.seller_id)),
+        operator_cohort: cohorts.get(String(row.seller_id)),
         id: row.id,
         seller_id: row.seller_id,
         seller_name: row.seller_name,
@@ -65,6 +70,6 @@ export async function getPublicCatalogSnapshot(limit = 24, paymentReadyOnly = fa
         reputation_v2: score?.reputation_v2,
         external_payment_ready: Boolean(row.seller_payout_address && isAddress(String(row.seller_payout_address))),
       }
-    }),
+    })),
   }
 }

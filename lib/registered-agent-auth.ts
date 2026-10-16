@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { sql } from 'drizzle-orm'
 import { AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS } from '@/lib/agent-presence'
 import {
   AGENT_CREDENTIAL_SCOPES,
@@ -225,24 +226,12 @@ export async function ensureSyntheticAgentUser(agent: {
   agentId: string
   name: string
   syntheticUserId: string
-}) {
-  const client = (db as any).$client
+}, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) {
   const nowIso = new Date().toISOString()
 
-  await client.execute({
-    sql: `INSERT OR IGNORE INTO users (id, email, password_hash, name, role, created_at)
-          VALUES (?, ?, ?, ?, 'agent', ?)`,
-    args: [
-      agent.syntheticUserId,
-      `${agent.agentId}@agent.clawdmkt.com`,
-      crypto.randomBytes(32).toString('hex'),
-      agent.name,
-      nowIso,
-    ],
-  })
-  await client.execute({
-    sql: `INSERT OR IGNORE INTO wallets (user_id, balance, escrow, created_at)
-          VALUES (?, 0, 0, ?)`,
-    args: [agent.syntheticUserId, nowIso],
-  })
+  await source.run(sql`INSERT OR IGNORE INTO users (id, email, password_hash, name, role, created_at)
+    VALUES (${agent.syntheticUserId}, ${`${agent.agentId}@agent.clawdmkt.com`},
+      ${crypto.randomBytes(32).toString('hex')}, ${agent.name}, 'agent', ${nowIso})`)
+  await source.run(sql`INSERT OR IGNORE INTO wallets (user_id, balance, escrow, created_at)
+    VALUES (${agent.syntheticUserId}, 0, 0, ${nowIso})`)
 }

@@ -1,4 +1,5 @@
 'use client'
+import MarketplaceEvidence from '@/components/MarketplaceEvidence'
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -193,11 +194,11 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
   const settlementLabel = settlementRails.length > 0 ? settlementRails.join(' + ') : 'UNAVAILABLE'
 
   const headlineStats = [
-    ['Network profiles', stats.network_profile_count ?? 0],
-    ['Online now', stats.agents_online ?? 0],
-    ['Tasks routed', stats.tasks_routed ?? 0],
-    ['Completed trades', completedTrades],
-    ['Recorded volume', `$${totalVolume.toFixed(2)}`],
+    ['Network profiles', stats.network_profile_count ?? '—'],
+    ['Online now', stats.agents_online ?? '—'],
+    ['Tasks assigned', stats.tasks_assigned ?? '—'],
+    ['Completed trades', stats.completed_trades == null ? '—' : completedTrades],
+    ['Recorded volume', stats.recorded_volume_usd == null ? '—' : `$${totalVolume.toFixed(2)}`],
   ]
 
   return (
@@ -221,6 +222,8 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
         ))}
         <div><span>06 / Top agent</span><strong className={styles.agentStat}>{topAgent ? <Link href={`/registry/${topAgent.id}`}>{topAgent.name}</Link> : '—'}</strong></div>
       </section>
+
+      <MarketplaceEvidence initialStats={initialStats} />
 
       <section className={styles.networkGrid}>
         <div className={styles.activityPanel} aria-label="Recent market activity">

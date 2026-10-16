@@ -1,4 +1,5 @@
 'use client'
+import MarketplaceEvidence from '@/components/MarketplaceEvidence'
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -29,7 +30,7 @@ function availabilityLabel(agent: any) {
   return 'not checked in'
 }
 
-export default function RegistryClient({ initialAgents, initialAgentTotal, initialProfileTotal }: { initialAgents: any[]; initialAgentTotal: number; initialProfileTotal: number | null }) {
+export default function RegistryClient({ initialStats = null, initialDirectoryUnavailable = false, initialAgents, initialAgentTotal, initialProfileTotal }: { initialStats?: Record<string, any> | null; initialDirectoryUnavailable?: boolean; initialAgents: any[]; initialAgentTotal: number; initialProfileTotal: number | null }) {
   const [agents, setAgents] = useState<any[]>(initialAgents)
   const [agentTotal, setAgentTotal] = useState(initialAgentTotal)
   const [directoryTotal, setDirectoryTotal] = useState(initialAgentTotal)
@@ -39,7 +40,7 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
   const [loadingMore, setLoadingMore] = useState(false)
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(initialDirectoryUnavailable ? 'The registry could not be reached.' : null)
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [family, setFamily] = useState('')
   const [lookupDomain, setLookupDomain] = useState('')
@@ -250,6 +251,8 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
         </div>
       </header>
 
+      <MarketplaceEvidence initialStats={initialStats} />
+
       <section className={styles.discoveryPanel}>
         <div className={styles.searchPanel}>
           <div className={styles.panelHeader}>
@@ -358,7 +361,7 @@ export default function RegistryClient({ initialAgents, initialAgentTotal, initi
                 <div className={styles.identity}>
                   <span className={styles.avatar}>{initials(agent.name)}</span>
                   <div>
-                    <h3>{agent.name || 'Unnamed agent'}{agent.moltbook_handle && <small title={`@${agent.moltbook_handle} on Moltbook`}>M</small>}</h3>
+                    <p>{agent.operator_cohort?.cohort?.startsWith('platform_') ? 'Platform-operated reference / demo / canary' : agent.operator_cohort?.cohort === 'independence_verified' ? 'Ownership reviewed · evidence has an expiry' : 'Ownership unverified'}</p><h3>{agent.name || 'Unnamed agent'}{agent.moltbook_handle && <small title={`@${agent.moltbook_handle} on Moltbook`}>M</small>}</h3>
                     <span>version {agent.version ?? 1}</span>
                   </div>
                   {semanticMode && agent.match_score != null && <strong className={styles.matchScore}>{agent.match_score}/{agent.max_score}<small>match</small></strong>}

@@ -1,0 +1,26 @@
+✔ independent workflow commands preserve account scope and advertise usable exact-dollar ceilings (4.426426ms)
+✔ department budget operations remain owner-only and do not delegate purchasing authority (13.650659ms)
+✔ marketplace reputation advertises bounded owner feedback and history confidence without independent quality claims (18.080723ms)
+✔ Python verifier discovery and report schemas agree on finite external checks with mandatory buyer acceptance (2.378531ms)
+✔ completion proof advertises the exact bounded cycle scope without claiming buyer independence (2.803162ms)
+✔ versioned observations advertise finite grading and scopes without measured quality or inherited authority (1.916358ms)
+✔ family discovery advertises explicit navigation IDs without granting purchase or evidence inheritance (5.669433ms)
+✔ every advertised agent action has one matching OpenAPI operation (4.312331ms)
+✔ every OpenAPI path template declares each path parameter (4.988738ms)
+✔ the OpenAPI document reports the serving origin and current contract version (27.04753ms)
+✔ machine manifest advertises the subscribed provider work event (0.590134ms)
+✔ request origin prefers reverse-proxy headers over an internal bind address (0.872096ms)
+✔ agent skill documents the complete production task and settlement lifecycle (2.108741ms)
+✔ instant contract separates metered prepaid authority, asynchronous calls and atomic result receipts (4.739567ms)
+✔ purchasing contract separates exact participant approvals from owner grants and buyer payment credentials (5.263035ms)
+✔ private-provider contract freezes exact two-owner service shares without extending public routing authority (6.977222ms)
+✔ organization spending contract separates credit and reviewed external authority without general buyer impersonation (7.0186ms)
+✔ reputation v2 contracts retain separate policy versions, frozen scopes and production ordering without spending authority (5.406216ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 866.678353

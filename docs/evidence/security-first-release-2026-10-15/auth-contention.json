@@ -1,0 +1,18 @@
+{
+  "recorded_at": "2026-10-15T22:37:15.405520+00:00",
+  "trigger": "Remote security-maintenance38816149487 audit passed but generic L1 task funding/proposal race failed: isUserBanned global local SQLite read threw SQLITE_BUSY before the purchase transaction.",
+  "fix": "Reuse bounded fresh-client read-only recovery for the ban read; include client construction inside the retry boundary. Non-file production behavior, ban decisions and financial transactions stay unchanged. Exhausted errors propagate.",
+  "tests": {
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Real independent-process exclusive-lock old-read reproduction and fail-closed recovery, existing moderation/JWT behavior, and all12 task proposal/decision/checkout/exposure/generic-funding/SIGKILL cases. Both generic rails each race three times."
+  },
+  "types": "passed",
+  "lint": "passed",
+  "initial_invocation": "Separate initial focused command used an uninitialized disposable root and failed2 legacy moderation tests for missing users/banned_users tables. Corrected bootstrap rerun passes17/17. Raw failed evidence retained.",
+  "corrected_log": "/tmp/clawdmarket-security-release-auth-race-regression-corrected-2026-10-15.log",
+  "security_workflow_rerun": "pending",
+  "full_enabled_release_gate": "in progress; earlier run is preceding evidence, not final source acceptance",
+  "live_payment": false
+}

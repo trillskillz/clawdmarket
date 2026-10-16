@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { requestJson } from '@/lib/client-request'
+import { trackClientEvent } from '@/lib/client-analytics'
 import ExternalTradeCheckout from '@/components/ExternalTradeCheckout'
 import { fundingNotice } from '@/lib/evm-payment-proof'
 import styles from './workspace.module.css'
@@ -13,6 +14,7 @@ type TaskDetail = {
   bids: { id: string; agent_name: string | null; bidderAgentId: string; priceUsd: number; message: string | null; etaSeconds: number | null; status: string }[]
   viewer: { authenticated: boolean; is_poster: boolean; is_seller: boolean }
   workspace: {
+    seller_payment_preferences?: { supported_payment_rails: string[]; payment_rails_confirmed: boolean; settlement_disclosure: string } | null
     output_format: string; acceptance_criteria: string[]; required_json_keys: string[]; minimum_sources: number
     quote: { sellerAmount: number; platformFee: number; totalCost: number } | null
     funded: boolean; proof_url: string | null; checkout: Checkout | null
@@ -46,6 +48,9 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null)
   const [checkout, setCheckout] = useState<Checkout | null>(null)
   const base = `/api/tasks/${encodeURIComponent(taskId)}`
+  useEffect(() => {
+    if (task?.id) trackClientEvent('task_discovery', { task_id: task.id })
+  }, [task?.id])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -120,7 +125,8 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
     if (!trade) return
     setBusy(true); setError(''); setNotice('')
     try {
-      const result = await requestJson<{ status?: string }>(`/api/trades/${trade.id}/confirm`, { method: 'POST', body: {}, apiKey })
+      const result = await requestJson<{ status?: string }>(`/api/trades/${trade.id}/confirm`, { method: 'POST',
+        body: workspace?.delivery ? { content_hash: workspace.delivery.content_hash } : {}, apiKey })
       setNotice(result.status === 'settlement_processing'
         ? 'Delivery accepted. The blockchain payout is processing and the trade will complete after network confirmation.'
         : 'Delivery accepted and settlement released.')
@@ -130,6 +136,10 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
   }
 
   const workspace = task?.workspace
+  const railAvailable = (rail: 'credit' | 'ledger' | 'mpp' | 'evm') => Boolean(
+    workspace?.seller_payment_preferences?.supported_payment_rails.includes(rail)
+    && paymentConfig && !paymentConfig.new_payments_paused
+    && (rail === 'evm' ? paymentConfig.erc20_configured : rail === 'mpp' ? paymentConfig.mpp_configured : rail === 'credit' ? paymentConfig.account_credit_enabled : paymentConfig.ledger_enabled))
   const trade = workspace?.trade
   const stage = task?.status === 'completed' ? 'Completed' : task?.status === 'expired' ? 'Expired' : trade?.payout_status === 'processing' ? 'Settlement processing' : trade?.status === 'pending' ? 'Awaiting payment' : trade?.status === 'pending_release' ? 'Buyer review' : trade?.status === 'disputed' ? 'Disputed' : workspace?.funded ? 'Work in progress' : task?.status === 'assigned' ? 'Awaiting funding' : task?.status === 'cancelled' ? 'Cancelled' : 'Collecting bids'
 
@@ -224,11 +234,12 @@ export default function TaskWorkspace({ taskId }: { taskId: string }) {
         <aside>
           <section className={styles.panel}>
             <span className={styles.eyebrow}>PRODUCTION SETTLEMENT</span><h2>{stage}</h2>
-            <p>Choose account balance, MPP on Tempo, or an enabled ERC-20 token. External settlement includes verified seller payouts and dispute refunds.</p>
+            <p>New orders use the assigned seller&apos;s supported payment rails. MPP and ERC-20 settle to the seller&apos;s configured external wallet. Prepaid credit cannot be withdrawn; sellers receive nonwithdrawable account credit on that rail. Existing orders retain their original settlement terms.</p>
             {workspace.quote && <dl><dt>Seller amount</dt><dd>${workspace.quote.sellerAmount.toFixed(2)}</dd><dt>Platform fee · 5%</dt><dd>${workspace.quote.platformFee.toFixed(2)}</dd><dt>Total</dt><dd>${workspace.quote.totalCost.toFixed(2)}</dd></dl>}
             {task.viewer.is_poster && task.status === 'assigned' && !trade && workspace.quote && <form onSubmit={(event) => { event.preventDefault(); void fundTask() }}>
-              <label htmlFor="task-payment-rail">Payment method</label><select id="task-payment-rail" value={paymentRail} onChange={(event) => setPaymentRail(event.target.value as typeof paymentRail)}><option value="evm" disabled={!paymentConfig?.erc20_configured}>ERC-20 wallet</option><option value="mpp" disabled={!paymentConfig?.mpp_configured}>MPP on Tempo</option><option value="credit" disabled={!paymentConfig?.account_credit_enabled}>Account balance</option></select>
-              <label className={styles.check}><input type="checkbox" required />I confirm the server-calculated total and authorize this payment.</label><button disabled={busy || !paymentConfig || (paymentRail === 'evm' ? !paymentConfig.erc20_configured : paymentRail === 'mpp' ? !paymentConfig.mpp_configured : !paymentConfig.account_credit_enabled)}>Continue with ${workspace.quote.totalCost.toFixed(2)}</button>
+              <label htmlFor="task-payment-rail">Payment method</label><select id="task-payment-rail" value={paymentRail} onChange={(event) => setPaymentRail(event.target.value as typeof paymentRail)}><option value="evm" disabled={!railAvailable('evm')}>ERC-20 wallet</option><option value="mpp" disabled={!railAvailable('mpp')}>MPP on Tempo</option><option value="credit" disabled={!railAvailable('credit')}>Nonwithdrawable prepaid credit</option></select>
+              {!workspace.seller_payment_preferences ? <p role="status">Seller payment preferences unavailable. Reload before funding.</p> : !workspace.seller_payment_preferences.payment_rails_confirmed && <p>Seller settings need owner review. New prepaid-credit funding requires explicit seller opt-in.</p>}
+              <label className={styles.check}><input type="checkbox" required />I confirm the server-calculated total and authorize this payment.</label><button disabled={busy || !railAvailable(paymentRail)}>Continue with ${workspace.quote.totalCost.toFixed(2)}</button>
               {!paymentConfig && <p role="status">Checking available payment rails…</p>}
               {paymentConfig?.new_payments_paused && <p role="alert">New marketplace payments are temporarily paused. {paymentConfig.payment_pause_reason || 'Please try again later.'} Existing payments and refunds can still be recovered.</p>}
               {paymentConfig && !paymentConfig.new_payments_paused && !paymentConfig.erc20_configured && !paymentConfig.mpp_configured && !paymentConfig.account_credit_enabled && <p role="alert">No payment rail is currently available.</p>}

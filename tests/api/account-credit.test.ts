@@ -10,6 +10,7 @@ import { encodeAbiParameters, encodeEventTopics, erc20Abi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { createLocalTestSchema } from '../helpers/local-schema'
 import { creditDepositMessage } from '@/lib/credit-proof'
+import { reviewedListingFixture } from '../helpers/reviewed-listing-fixture'
 
 const payer = privateKeyToAccount(`0x${'11'.repeat(32)}`)
 const treasury = privateKeyToAccount(`0x${'22'.repeat(32)}`)
@@ -64,7 +65,7 @@ before(async () => {
   complete = (await import('@/lib/trade-escrow')).finalizeTradeCompletion; dispute = (await import('@/lib/trade-dispute')).finalizeTradeDispute
 })
 after(async () => { db?.$client.close(); if (server) await new Promise<void>(resolve => server.close(() => resolve())); if (directory) rmSync(directory, { recursive: true, force: true }) })
-async function user() { const id = crypto.randomUUID(); await db.insert(schema.users).values({ id, name: id, email: `${id}@test.invalid`, password_hash: 'unused', role: 'human' }); return id }
+async function user() { const id = crypto.randomUUID(); await db.insert(schema.users).values({ id, name: id, email: `${id}@test.invalid`, password_hash: 'unused', role: 'human' }); await db.insert(schema.seller_payment_preferences).values({ seller_id: id, supported_rails: '["credit","ledger","mpp","evm"]', confirmed_by: 'disposable-test-fixture', confirmed_at: new Date().toISOString() }); return id }
 function request(path: string, userId: string, method = 'GET', body?: unknown) { return new NextRequest(`http://localhost${path}`, { method, headers: { 'Content-Type': 'application/json', authorization: `Bearer ${jwt({ userId, email: `${userId}@test.invalid`, role: 'human' })}` }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }) }
 async function intent(userId: string, minor = 100) {
   const response = await deposits.POST(request('/api/wallet/deposits', userId, 'POST', { amount_minor: minor, payer: payer.address, client_reference: crypto.randomUUID() }))
@@ -340,6 +341,8 @@ test('historical balances cannot buy; backed credit purchases reserve cents and 
   const response = await buyCredit(buyer, item, reference); assert.equal(response.status, 201, JSON.stringify(await response.clone().json()))
   const trade = (await response.json()).trade; assert.equal(trade.payment_rail, 'credit'); assert.equal(trade.status, 'escrow_held')
   assert.deepEqual(await credit.creditBalance(buyer), { available_minor: 0, escrow_minor: 100, currency: 'USD', rail: 'credit' }); assert.equal(await liability(), total)
+  // Changed preferences cannot strand an already-funded original obligation.
+  await db.delete(schema.seller_payment_preferences).where(eq(schema.seller_payment_preferences.seller_id, seller))
   assert.equal((await buyCredit(buyer, item, reference)).status, 200)
   const held = (await wallet(request('/api/wallet', buyer))).json(); assert.equal((await held).available, 0)
   const [ready] = await db.update(schema.trades).set({ status: 'pending_release' }).where(eq(schema.trades.id, trade.id)).returning()
@@ -436,6 +439,7 @@ test('credit-funded reusable orders dispatch immediately, replay without new exp
 test('task credit funding accepts a seller without external payout setup and enforces the exact quote', async () => {
   const buyer = await user(), agentId = crypto.randomUUID(), taskId = `task_${crypto.randomUUID()}`, bidId = `bid_${crypto.randomUUID()}`
   await db.insert(schema.agents).values({ id: agentId, name: 'Task credit seller', description: 'Task fixture', capabilities: '["code-review"]', endpoint: 'https://example.invalid', owner_address: '', api_key: 'unused', status: 'active' })
+  await db.insert(schema.seller_payment_preferences).values({ seller_id: `user_agent_${agentId}`, supported_rails: '["credit"]', confirmed_by: 'disposable-test-fixture', confirmed_at: new Date().toISOString() })
   await db.insert(schema.tasks).values({ id: taskId, posterAgentId: buyer, title: 'Credit-funded task', description: 'Review a code change', budgetUsd: 1, requiredCapabilities: '["code-review"]' })
   await db.insert(schema.bids).values({ id: bidId, taskId, bidderAgentId: agentId, priceUsd: 1 })
   const accept = (await import('@/app/api/tasks/[id]/accept/[bid_id]/route')).POST
@@ -458,4 +462,119 @@ test('credit audit reconciles deposits, account deltas, escrow and shared receip
   const bad = await inspectCreditHealth(db.$client); assert.equal(bad.healthy, false); assert.equal(bad.account_anomalies, 1)
   await db.delete(schema.credit_accounts).where(eq(schema.credit_accounts.user_id, id))
   assert.equal((await inspectCreditHealth(db.$client)).healthy, true)
+})
+
+async function reviewedListingForContract() {
+  const names = ['CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED', 'CLAWDMARKET_ROUTE_EXECUTION_ENABLED', 'EVM_ACCEPTED_TOKENS'] as const
+  const saved = new Map(names.map(name => [name, process.env[name]]))
+  Object.assign(process.env, { CLAWDMARKET_ENTERPRISE_FOUNDATION_ENABLED: 'true', CLAWDMARKET_ROUTE_EXECUTION_ENABLED: 'true',
+    EVM_ACCEPTED_TOKENS: JSON.stringify([...JSON.parse(process.env.EVM_ACCEPTED_TOKENS!), { chainId: 1, address: token, symbol: 'USDC', decimals: 6, fixedUsdPrice: 1, rpcUrl: 'http://127.0.0.1:1' }]),
+  })
+  const restore = () => { for (const name of names) { const value = saved.get(name); if (value === undefined) delete process.env[name]; else process.env[name] = value } }
+  try {
+    const f = await reviewedListingFixture({ db, schema })
+    // Isolate the original-listing boundary from the separate optional threshold policy.
+    await db.update(schema.buyer_spend_policies).set({ policy_json: '{"max_per_execution":500}' }).where(eq(schema.buyer_spend_policies.buyer_id, f.buyer))
+    f.body.payment.treasury_address = treasury.address.toLowerCase()
+    await db.insert(schema.seller_payment_preferences).values({ seller_id: f.seller, supported_rails: '["credit","evm"]', confirmed_by: 'disposable-test-fixture', confirmed_at: new Date().toISOString() })
+    const domain = await import('@/lib/organization-listing-authorizations')
+    const grant = await domain.proposeOrganizationListing(f.org, f.owner, domain.organizationListingInput.parse(f.body))
+    return { ...f, grant: grant.authorization, domain, restore }
+  } catch (error) { restore(); throw error }
+}
+async function linkedContract(buyer: string, listingId: string) {
+  const { POST } = await import('@/app/api/contracts/route')
+  return POST(request('/api/contracts', buyer, 'POST', { client_reference: crypto.randomUUID(), listing_id: listingId,
+    milestones: [{ title: 'Finite linked work', amount: 1 }] }))
+}
+for (const revoked of [false, true]) test(`original ${revoked ? 'revoked' : 'pending'} listing review cannot be bypassed by a backed-credit contract; unrelated public buyer keeps access`, async () => {
+  const f = await reviewedListingForContract()
+  try {
+    const draft = await linkedContract(f.buyer, f.listing.id); assert.equal(draft.status, 201)
+    const original = await draft.json()
+    if (revoked) await f.domain.revokeOrganizationListing(f.org, f.grant.id, f.owner)
+    await deposit(f.buyer, 105)
+    const blocked = await contractAction(original.contract.id, f.buyer, 'fund')
+    assert.equal(blocked.status, 409, JSON.stringify(await blocked.clone().json()))
+    assert.equal((await blocked.json()).code, 'LISTING_REVIEWED_CHECKOUT_REQUIRED')
+    assert.equal((await credit.creditBalance(f.buyer)).available_minor, 105)
+    assert.equal((await credit.creditBalance(f.buyer)).escrow_minor, 0)
+    assert.equal((await db.select().from(schema.organization_contract_attributions).where(eq(schema.organization_contract_attributions.contract_id, original.contract.id))).length, 0)
+    const unrelated = await linkedContract(f.other, f.listing.id); assert.equal(unrelated.status, 201)
+    await deposit(f.other, 105)
+    assert.equal((await contractAction((await unrelated.json()).contract.id, f.other, 'fund')).status, 200)
+  } finally { f.restore() }
+})
+test('a consumed reviewed listing cannot be adopted by a new credit contract after cancel and manual reactivation', async () => {
+  const f = await reviewedListingForContract()
+  try {
+    // The unrelated draft predates consumption; eligibility must be rechecked at funding.
+    const draft = await linkedContract(f.other, f.listing.id); assert.equal(draft.status, 201)
+    const original = await draft.json()
+    const input = { version: 1 as const, client_reference: crypto.randomUUID(), authority_hash: f.grant.authority_hash, approve: true as const }
+    await f.domain.approveOrganizationListing(f.org, f.grant.id, f.reviewer, input)
+    const checkout = await (await import('@/lib/organization-listing-checkout')).checkoutOrganizationListing(f.org, f.grant.id, f.buyer,
+      { version: 1, client_reference: crypto.randomUUID(), authority_hash: f.grant.authority_hash })
+    assert.ok(checkout.trade)
+    await db.update(schema.trades).set({ status: 'cancelled' }).where(eq(schema.trades.id, checkout.trade!.id))
+    await db.update(schema.listings).set({ status: 'active' }).where(eq(schema.listings.id, f.listing.id))
+    await deposit(f.other, 105)
+    const blocked = await contractAction(original.contract.id, f.other, 'fund')
+    assert.equal(blocked.status, 409, JSON.stringify(await blocked.clone().json()))
+    assert.equal((await credit.creditBalance(f.other)).available_minor, 105)
+    assert.equal((await linkedContract(f.other, f.listing.id)).status, 409)
+    assert.equal((await db.select().from(schema.organization_listing_uses).where(eq(schema.organization_listing_uses.listing_id, f.listing.id))).length, 1)
+  } finally { f.restore() }
+})
+test('linked contract funding rechecks current listing seller without changing historical funded settlement terms', async () => {
+  const buyer = await user(), seller = await user(), newSeller = await user(), item = await listing(seller)
+  const draft = await linkedContract(buyer, item.id); assert.equal(draft.status, 201)
+  const original = await draft.json(); await deposit(buyer, 105)
+  await db.update(schema.listings).set({ seller_id: newSeller }).where(eq(schema.listings.id, item.id))
+  const blocked = await contractAction(original.contract.id, buyer, 'fund')
+  assert.equal(blocked.status, 409, JSON.stringify(await blocked.clone().json()))
+  assert.equal((await credit.creditBalance(buyer)).available_minor, 105)
+  await db.update(schema.listings).set({ seller_id: seller }).where(eq(schema.listings.id, item.id))
+  assert.equal((await contractAction(original.contract.id, buyer, 'fund')).status, 200)
+  await db.update(schema.listings).set({ seller_id: newSeller }).where(eq(schema.listings.id, item.id))
+  assert.equal((await contractAction(original.contract.id, buyer, 'cancel')).status, 200)
+  assert.equal((await credit.creditBalance(buyer)).available_minor, 100, 'original principal refund retains original upfront fee')
+})
+for (const kind of ['task', 'private-service']) test(`contract draft and funding cannot adopt an original ${kind} listing after status reactivation`, async () => {
+  const buyer = await user(), seller = await user(), item = await listing(seller)
+  const draft = await linkedContract(buyer, item.id); assert.equal(draft.status, 201)
+  const original = await draft.json()
+  const [trade] = await db.insert(schema.trades).values({ listing_id: item.id, buyer_id: buyer, seller_id: seller,
+    amount: 1, fee: .05, payment_rail: 'credit', status: 'cancelled' }).returning()
+  if (kind === 'task') {
+    const id = crypto.randomUUID()
+    await db.insert(schema.tasks).values({ id, posterAgentId: buyer, title: 'Original task fixture', description: 'Original work', budgetUsd: 1 })
+    await db.insert(schema.task_workspaces).values({ task_id: id, trade_id: trade.id, agreed_price: 1 })
+  } else {
+    const id = crypto.randomUUID()
+    await db.insert(schema.service_definitions).values({ id, seller_id: seller, title: 'Original private service', description: 'Private work', visibility: 'organization', price_minor: 100 })
+    await db.insert(schema.service_orders).values({ id: crypto.randomUUID(), service_id: id, listing_id: item.id, trade_id: trade.id,
+      buyer_id: buyer, client_reference: crypto.randomUUID(), objective: 'Original private contract', price_minor: 100, payment_rail: 'credit', state: 'cancelled' })
+  }
+  await deposit(buyer, 105)
+  const response = await contractAction(original.contract.id, buyer, 'fund')
+  assert.equal(response.status, 409); assert.equal((await response.json()).code, 'CONTRACT_LISTING_UNAVAILABLE')
+  assert.equal((await linkedContract(buyer, item.id)).status, 409)
+  assert.equal((await credit.creditBalance(buyer)).available_minor, 105)
+  const { GET } = await import('@/app/api/contracts/route')
+  const recovered = await GET(request(`/api/contracts?client_reference=${original.creation.client_reference}`, buyer))
+  assert.equal(recovered.status, 200); assert.equal((await recovered.json()).contract.id, original.contract.id)
+})
+test('a current private provider closes fresh contract draft and funding without rewriting original records', async () => {
+  const f = await reviewedListingForContract()
+  try {
+    const draft = await linkedContract(f.other, f.listing.id); assert.equal(draft.status, 201)
+    const original = await draft.json(); await deposit(f.other, 105)
+    await db.update(schema.agents).set({ visibility: 'private' }).where(eq(schema.agents.id, f.providerAgent))
+    const response = await contractAction(original.contract.id, f.other, 'fund')
+    assert.equal(response.status, 409); assert.equal((await response.json()).code, 'CONTRACT_LISTING_UNAVAILABLE')
+    assert.equal((await linkedContract(f.other, f.listing.id)).status, 409)
+    assert.equal((await credit.creditBalance(f.other)).available_minor, 105)
+    assert.equal((await db.select().from(schema.contracts).where(eq(schema.contracts.id, original.contract.id)))[0].state, 'DRAFT')
+  } finally { f.restore() }
 })

@@ -1,0 +1,72 @@
+{
+  "scope": "Independent operational evidence slots; no live funding or paid-canary execution",
+  "configuration": {
+    "kind": "configuration",
+    "status": "observed",
+    "checked_at": "2026-10-16T03:08:00.027Z",
+    "source": "Live canonical /api/health/ready",
+    "configuration_ready": true,
+    "database_ready": true,
+    "password_reset_email_configured": false
+  },
+  "rpc": {
+    "kind": "rpc",
+    "status": "observed",
+    "checked_at": "2026-10-16T03:08:00.027Z",
+    "source": "Live canonical /api/health/ready",
+    "chains": [
+      {
+        "chain_id": 8453,
+        "healthy": true
+      },
+      {
+        "chain_id": 4217,
+        "healthy": true
+      }
+    ]
+  },
+  "treasury_reserves": {
+    "kind": "treasury_reserves",
+    "status": "observed",
+    "checked_at": "2026-10-16T03:10:24.346048+00:00",
+    "source": "Read-only scripts/prod-payment-rails-preflight.mjs",
+    "tempo_pathusd": "8.56529",
+    "base_eth": "0.000100205551108468",
+    "minimum_reserve_checks_passed": true,
+    "liabilities_reconciled": false
+  },
+  "payout_refund_anomalies": {
+    "kind": "payout_refund_anomalies",
+    "status": "observed",
+    "checked_at": "2026-10-16T03:08:40.008Z",
+    "source": "Approved read-only production recovery point38843991825",
+    "counts": {
+      "failed_count": 0,
+      "stuck_count": 0,
+      "stuck_after_minutes": 15,
+      "oldest_stuck_at": null
+    }
+  },
+  "settlement_worker": {
+    "kind": "settlement_worker",
+    "status": "unavailable",
+    "checked_at": "2026-10-16T03:21:21.746960+00:00",
+    "source": "Release evidence review",
+    "reason": "No fresh authenticated worker-heartbeat observation collected"
+  },
+  "paid_canary": {
+    "kind": "paid_canary",
+    "status": "not_demonstrated",
+    "checked_at": "2026-10-16T03:21:21.746960+00:00",
+    "source": "Release actions; historical dedicated paid run38153085972 stopped before execution",
+    "last_successful_end_to_end_at": null,
+    "reason": "No live funding or paid-canary execution authorized; readiness and controlled tests do not supply paid proof"
+  },
+  "independent_customer_activity": {
+    "kind": "independent_customer_activity",
+    "status": "not_demonstrated",
+    "checked_at": "2026-10-16T03:18:15.762635+00:00",
+    "source": "Live legacy aggregate stats and reviewed release evidence",
+    "reason": "Public aggregate counts and controlled fixtures do not establish independent customers or autonomous economic adoption"
+  }
+}

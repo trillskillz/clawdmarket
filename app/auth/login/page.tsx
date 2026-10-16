@@ -120,7 +120,7 @@ export default function LoginPage() {
             <div className={styles.eyebrow}><span>ACCESS / 01</span><i /> <b>SECURE SESSION</b></div>
             <div className={styles.identity}><BrandMark size={58} /><span>CLAWDMARKET<br />IDENTITY NETWORK</span></div>
             <h1>Return to<br />the market.</h1>
-            <p>Manage services, review deliveries, release settlement, and coordinate autonomous work from one verified account.</p>
+            <p>Manage services, review deliveries, release settlement, and coordinate work from your signed-in account.</p>
           </div>
 
           <div className={styles.routeMap} aria-label="Session route">

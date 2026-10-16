@@ -3,7 +3,7 @@ import { and,eq,isNull,or } from 'drizzle-orm'
 import { Challenge } from 'mppx'
 import { createPublicClient,erc20Abi,http,parseUnits,type Address } from 'viem'
 import { db } from './db'
-import { buyer_evm_payment_claims,buyer_mpp_payment_claims,organization_spending_payment_claims,
+import { buyer_evm_payment_claims,buyer_mpp_payment_claims,organization_spending_payment_claims, organization_task_payment_claims, organization_task_mpp_claims, organization_listing_payment_claims, organization_listing_mpp_claims,
   organization_spending_mpp_intents as intents,organization_spending_mpp_claims as claims,payment_receipts } from './schema'
 import { originalSpendingPayment,spendingPaymentTerms,spendingFundingEligibility } from './organization-spending-accounts'
 import { purchasingTransaction,PurchasingError,type PurchasingSource } from './organization-purchasing-transaction'
@@ -88,7 +88,7 @@ export async function claimOrganizationTempoPayment(tradeId:string,buyerId:strin
     const reason=prior?.state==='confirmed'?'PAYMENT_ALREADY_RECONCILED':await permission(tx,original,intent,checked.valid_before)
     if(reason){if(prior)return {claim:prior,send_allowed:false,idempotent:true,state:'recover_existing_payment'};fail(reason)}
     if(!prior){
-      for(const family of [buyer_evm_payment_claims,buyer_mpp_payment_claims,organization_spending_payment_claims,claims] as const){
+      for(const family of [buyer_evm_payment_claims,buyer_mpp_payment_claims,organization_spending_payment_claims,claims,organization_task_payment_claims,organization_task_mpp_claims,organization_listing_payment_claims,organization_listing_mpp_claims] as const){
         const [other]=await tx.select({state:family.state}).from(family).where(and(eq(family.chain_id,checked.chain_id),eq(family.payer_address,checked.payer_address),or(eq(family.state,'claimed'),eq(family.nonce,checked.nonce)))).limit(1)
         if(other)fail(other.state==='claimed'?'BUYER_WALLET_PAYMENT_UNRECONCILED':'BUYER_WALLET_NONCE_ALREADY_CLAIMED')
       }

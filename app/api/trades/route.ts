@@ -1,7 +1,9 @@
+import { SellerRailError } from '@/lib/seller-payment-rails'
+import { requireSellerPaymentRail, sellerPaymentRails } from '@/lib/seller-payment-rails'
 import { CreditError } from '@/lib/account-credit';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trades, listings, users, fee_errors, ratings, service_orders } from '@/lib/schema';
+import { trades, listings, users, fee_errors, ratings, service_orders, organization_listing_uses } from '@/lib/schema';
 import { createTradeSchema } from '@/lib/validation';
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import { validateCsrf } from '@/lib/csrf';
@@ -25,9 +27,11 @@ import { getPaymentReadiness } from '@/lib/payment-config';
 import { payoutAddressForUser } from '@/lib/external-settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
 import { NewPaymentsPausedError, requireNewPaymentsOpen } from '@/lib/payment-control';
-import { isPublicMarketplaceSeller, originalPrivateServiceListing } from '@/lib/listing-visibility';
+import { isPublicMarketplaceSeller, originalPrivateServiceListing, originalReviewedTaskListing, originalReviewedListing, originalReviewedContractListing } from '@/lib/listing-visibility';
 import { selectMarketplaceRail } from '@/lib/payment-rail-selection';
 import { attributeOrganizationTrade, withOrganizationBuyerLock } from '@/lib/organization-budgets';
+import { genericListingFundingGuard } from '@/lib/organization-listing-authorizations';
+import { PurchasingError } from '@/lib/organization-purchasing-transaction';
 
 export const dynamic = 'force-dynamic'
 
@@ -135,7 +139,7 @@ async function createTradePost(req: NextRequest) {
       );
     }
 
-    if (await originalPrivateServiceListing(listing.id) || !await isPublicMarketplaceSeller(String(listing.seller_id))) {
+    if (await originalPrivateServiceListing(listing.id) || await originalReviewedTaskListing(listing.id) || await originalReviewedListing(listing.id) || await originalReviewedContractListing(listing.id) || !await isPublicMarketplaceSeller(String(listing.seller_id))) {
       return NextResponse.json({
         ...paymentError('LISTING_NOT_AVAILABLE', 'Listing is not available for purchase'),
         ...envMeta('clawdmarket/api/trades'),
@@ -184,7 +188,9 @@ async function createTradePost(req: NextRequest) {
     const { totalCost, sellerAmount, devAmount } = calculateTradeFinancials(itemPrice);
     const readiness = getPaymentReadiness();
     const sellerPayout = await payoutAddressForUser(listing.seller_id);
-    const selectedRail = selectMarketplaceRail(validated.payment_rail, readiness, Boolean(sellerPayout));
+    const sellerRails = await sellerPaymentRails(listing.seller_id);
+    if (validated.payment_rail !== 'auto' && !sellerRails.supported_payment_rails.includes(validated.payment_rail)) throw new SellerRailError();
+    const selectedRail = selectMarketplaceRail(validated.payment_rail, readiness, Boolean(sellerPayout), sellerRails.supported_payment_rails);
     if (!selectedRail) {
       return NextResponse.json({
         error: sellerPayout || validated.payment_rail === 'ledger'
@@ -198,10 +204,14 @@ async function createTradePost(req: NextRequest) {
 
     if (selectedRail === 'mpp' || selectedRail === 'evm') {
       const [newTrade] = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction(async (tx) => {
+        await genericListingFundingGuard(tx, listing.id, auth.userId);
+        if (await originalReviewedTaskListing(listing.id, tx)) throw new TradeRaceError('ORIGINAL_TASK_LISTING', 'Recover the original reviewed task checkout');
+        if (await originalReviewedContractListing(listing.id, tx)) throw new TradeRaceError('ORIGINAL_CONTRACT_LISTING', 'Recover the original reviewed contract');
         if (auth.agentId) await enforceAgentSpendPolicy(tx, { agentId: auth.agentId, buyerId: auth.userId, totalCost, sellerId: listing.seller_id, paymentRail: selectedRail });
         const claimed = await tx.update(listings).set({ status: 'sold' })
           .where(and(eq(listings.id, listing.id), eq(listings.status, 'active'), sql`NOT EXISTS (SELECT 1 FROM service_orders private_order JOIN service_definitions private_service ON private_service.id = private_order.service_id WHERE private_order.listing_id = ${listings.id} AND (private_order.private_provider_share_id IS NOT NULL OR private_service.visibility = 'organization'))`)).returning({ id: listings.id });
         if (!claimed.length) throw new TradeRaceError('LISTING_ALREADY_CLAIMED', 'Listing was claimed by another buyer.');
+        await requireSellerPaymentRail(listing.seller_id, selectedRail, tx);
         const [trade] = await tx.insert(trades).values({
           listing_id: listing.id,
           buyer_id: auth.userId,
@@ -247,8 +257,10 @@ async function createTradePost(req: NextRequest) {
 
     const adminFeeRecipientUserId = await ensureAdminFeeRecipient();
 
-    const newTrade = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction((tx) =>
-      createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { rail: selectedRail, agentId: auth.agentId, clientReference })));
+    const newTrade = await withTradeReservationRetry(auth.agentId, auth.userId, () => db.transaction(async (tx) => {
+      await genericListingFundingGuard(tx, listing.id, auth.userId);
+      return createLedgerTrade(tx, listing, auth.userId, adminFeeRecipientUserId, { rail: selectedRail, agentId: auth.agentId, clientReference });
+    }));
     // ─── ESCROW LOGIC END ───
 
     // Queue webhook records durably before returning the trade response.
@@ -281,6 +293,8 @@ async function createTradePost(req: NextRequest) {
       }
     );
   } catch (error: any) {
+    if (error instanceof PurchasingError) return NextResponse.json({ error: error.message, error_code: error.code,
+      retryable: error.status === 503, state: 'no_funds_moved' }, { status: error.status, headers: { 'Cache-Control': 'private, no-store' } });
     if (error instanceof NewPaymentsPausedError) {
       return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });
     }
@@ -300,6 +314,7 @@ async function createTradePost(req: NextRequest) {
       );
     }
 
+    if (error instanceof SellerRailError) return NextResponse.json({ error: error.message, code: error.code, error_code: error.code, state: 'no_funds_moved' }, { status: error.status })
     if (error instanceof CreditError) return NextResponse.json({ error: error.message, code: error.code, state: 'no_funds_moved' }, { status: error.status });
     if (error instanceof TradeRaceError) {
       const status = error.code === 'INSUFFICIENT_FUNDS_AT_COMMIT' ? 402 : 409;
@@ -417,6 +432,7 @@ export async function GET(req: NextRequest) {
           auto_confirm_at: trades.auto_confirm_at,
           created_at: trades.created_at,
           completed_at: trades.completed_at,
+          reviewed_listing_work: sql<number>`EXISTS(SELECT 1 FROM ${organization_listing_uses} WHERE ${organization_listing_uses.trade_id} = ${trades.id})`,
           service_order_id: sql<string | null>`(SELECT ${service_orders.id} FROM ${service_orders} WHERE ${service_orders.trade_id} = ${trades.id} LIMIT 1)`,
           rated_by_caller: sql<number>`EXISTS(
             SELECT 1 FROM ${ratings}
@@ -435,6 +451,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       trades: userTrades.map((trade) => ({
         ...trade,
+        reviewed_listing_work_url: trade.reviewed_listing_work ? `/trades/${encodeURIComponent(trade.id)}/listing-work` : null,
         work_order_url: trade.service_order_id ? `/api/trades/${encodeURIComponent(trade.id)}/work-order` : null,
         checkout: trade.buyer_id === auth.userId && (
           (trade.status === 'pending' && ['mpp', 'evm'].includes(trade.payment_rail))

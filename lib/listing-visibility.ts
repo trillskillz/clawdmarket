@@ -1,9 +1,14 @@
-import { and, eq, isNotNull, or } from 'drizzle-orm'
+import { and, eq, isNotNull, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agents, service_orders, service_definitions } from '@/lib/schema'
+import { agents, service_orders, service_definitions, organization_task_uses, organization_listing_uses, organization_contract_uses, organization_contract_authorizations, trades } from '@/lib/schema'
 
 // Match the seller rule used by checkout, the public catalog, and live stats.
-export const PUBLIC_LISTING_SELLER_WHERE_SQL = `(NOT EXISTS (SELECT 1 FROM service_orders private_listing_order
+export const PUBLIC_LISTING_SELLER_WHERE_SQL = `(NOT EXISTS (SELECT 1 FROM organization_contract_uses original_contract_use
+  JOIN organization_contract_authorizations original_contract_review ON original_contract_review.id = original_contract_use.authorization_id
+  WHERE json_extract(original_contract_review.terms_json, '$.original.listing_id') = listings.id)
+  AND NOT EXISTS (SELECT 1 FROM organization_listing_uses original_listing_use WHERE original_listing_use.listing_id = listings.id) AND NOT EXISTS (SELECT 1 FROM organization_task_uses original_task_use
+  JOIN trades original_task_trade ON original_task_trade.id = original_task_use.trade_id
+  WHERE original_task_trade.listing_id = listings.id) AND NOT EXISTS (SELECT 1 FROM service_orders private_listing_order
   JOIN service_definitions private_listing_service ON private_listing_service.id = private_listing_order.service_id
   WHERE private_listing_order.listing_id = listings.id
     AND (private_listing_order.private_provider_share_id IS NOT NULL OR private_listing_service.visibility = 'organization')) AND (
@@ -17,7 +22,7 @@ export const PUBLIC_LISTING_SELLER_WHERE_SQL = `(NOT EXISTS (SELECT 1 FROM servi
   )
 ))`
 
-export async function isPublicMarketplaceSeller(sellerId: string, source: typeof db = db): Promise<boolean> {
+export async function isPublicMarketplaceSeller(sellerId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db): Promise<boolean> {
   if (!sellerId.startsWith('user_agent_')) return true
   const agentId = sellerId.slice('user_agent_'.length)
   const [agent] = await source.select({
@@ -33,4 +38,26 @@ export async function originalPrivateServiceListing(listingId: string, source: t
   const [row] = await source.select({ share: service_orders.private_provider_share_id, visibility: service_definitions.visibility }).from(service_orders)
     .innerJoin(service_definitions, eq(service_definitions.id, service_orders.service_id)).where(and(eq(service_orders.listing_id, listingId),or(isNotNull(service_orders.private_provider_share_id),eq(service_definitions.visibility,'organization')))).limit(1)
   return !!row && (row.share !== null || row.visibility === 'organization')
+}
+
+/** A task's bounty listing is the original obligation, never an independent catalog offer. */
+export async function originalReviewedTaskListing(listingId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) {
+  const [row] = await source.select({ id: organization_task_uses.authorization_id }).from(organization_task_uses)
+    .innerJoin(trades, eq(trades.id, organization_task_uses.trade_id)).where(eq(trades.listing_id, listingId)).limit(1)
+  return !!row
+}
+
+/** A consumed listing remains bound to its original trade after cancellation. */
+export async function originalReviewedListing(listingId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) {
+  const [row] = await source.select({ id: organization_listing_uses.authorization_id }).from(organization_listing_uses)
+    .where(eq(organization_listing_uses.listing_id, listingId)).limit(1)
+  return !!row
+}
+
+/** Paid original inventory stays consumed across refunds and mutable status/link edits. */
+export async function originalReviewedContractListing(listingId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db) {
+  const [row] = await source.select({ id: organization_contract_uses.authorization_id }).from(organization_contract_uses)
+    .innerJoin(organization_contract_authorizations, eq(organization_contract_authorizations.id, organization_contract_uses.authorization_id))
+    .where(sql`json_extract(${organization_contract_authorizations.terms_json}, '$.original.listing_id') = ${listingId}`).limit(1)
+  return !!row
 }

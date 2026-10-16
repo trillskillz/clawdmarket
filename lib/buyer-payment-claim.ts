@@ -1,4 +1,8 @@
 import { originalSpendingPayment } from './organization-spending-accounts'
+import { originalTaskPayment } from './organization-task-authorizations'
+import { claimTaskEvmPayment } from './organization-task-payment'
+import { originalListingPayment } from './organization-listing-uses'
+import { claimListingEvmPayment } from './organization-listing-payment'
 import { claimSpendingEvmPayment, spendingWalletConflict } from './organization-spending-payment'
 import { PurchasingError } from './organization-purchasing-transaction'
 import { findTradeFundingStep } from './route-funding-steps'
@@ -21,6 +25,10 @@ function fail(code: string, status = 409): never { throw new BuyerPaymentClaimEr
 
 /** This records permission for exact bytes. It never signs, submits or reads the buyer wallet. */
 export async function claimBuyerEvmPayment(tradeId: string, buyerId: string, input: BuyerPaymentClaimInput) {
+  try { if (await originalListingPayment(db, tradeId)) return await claimListingEvmPayment(tradeId, buyerId, input) }
+  catch (error) { if (error instanceof PurchasingError) throw new BuyerPaymentClaimError(error.code, error.status); throw error }
+  try { if (await originalTaskPayment(db, tradeId)) return await claimTaskEvmPayment(tradeId, buyerId, input) }
+  catch (error) { if (error instanceof PurchasingError) throw new BuyerPaymentClaimError(error.code, error.status); throw error }
   if(await originalSpendingPayment(db,tradeId)){try{return await claimSpendingEvmPayment(tradeId,buyerId,input)}catch(error){if(error instanceof PurchasingError)throw new BuyerPaymentClaimError(error.code,error.status);throw error}}
   return withKeyedWriteLock(`buyer-payment-claim:${tradeId}`, async () => {
     for (let attempt = 0; ; attempt += 1) {

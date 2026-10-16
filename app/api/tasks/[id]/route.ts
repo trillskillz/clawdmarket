@@ -10,6 +10,8 @@ import { requirementsSchema } from '@/lib/delivery-validation';
 import { calculateTradeFinancials } from '@/lib/settlement';
 import { checkoutForTrade } from '@/lib/trade-checkout';
 import { effectiveTaskStatus } from '@/lib/task-lifecycle';
+import { originalTaskPayment } from '@/lib/organization-task-authorizations';
+import { sellerPaymentRails } from '@/lib/seller-payment-rails';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,11 +26,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const principal = await resolveRequestPrincipal(request);
   const callerAgentId = principal?.agentId || principal?.userId || null;
   const callerIds = [principal?.userId, principal?.agentId].filter(Boolean);
-  const isPoster = callerIds.includes(task.posterAgentId);
-  const isSeller = Boolean(task.assignedAgentId && callerIds.includes(task.assignedAgentId));
   const [workspace] = await db.select().from(task_workspaces).where(eq(task_workspaces.task_id, id)).limit(1);
   const [trade] = workspace?.trade_id ? await db.select().from(trades).where(eq(trades.id, workspace.trade_id)).limit(1) : [];
-  const activeTrade = trade?.status === 'cancelled' ? null : trade;
+  const reviewed = trade ? await originalTaskPayment(db, trade.id) : null;
+  const isPoster = reviewed ? principal?.userId === reviewed.authorization.buyer_id : callerIds.includes(task.posterAgentId);
+  const isSeller = reviewed ? principal?.userId === reviewed.authorization.seller_id : Boolean(task.assignedAgentId && callerIds.includes(task.assignedAgentId));
+  const visibleReviewed = reviewed && (isPoster || isSeller) ? reviewed : null;
+  const activeTrade = reviewed ? trade : trade?.status === 'cancelled' ? null : trade;
   const [delivery] = activeTrade && (isPoster || isSeller)
     ? await db.select().from(trade_deliveries).where(eq(trade_deliveries.trade_id, activeTrade.id)).limit(1) : [];
   const winningBid = enrichedBids.find((bid) => bid.id === task.winningBidId);
@@ -43,14 +47,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     bid_count: enrichedBids.length,
     viewer: { authenticated: Boolean(principal), is_poster: isPoster, is_seller: isSeller },
     workspace: {
-      output_format: workspace?.output_format ?? 'text',
-      acceptance_criteria: JSON.parse(workspace?.acceptance_criteria || '[]'),
-      required_json_keys: JSON.parse(workspace?.required_json_keys || '[]'),
-      minimum_sources: workspace?.minimum_sources ?? 0,
-      quote: winningBid ? calculateTradeFinancials(workspace?.agreed_price ?? winningBid.priceUsd) : null,
+      seller_payment_preferences: task.assignedAgentId ? await sellerPaymentRails(activeTrade?.seller_id ?? `user_agent_${task.assignedAgentId}`) : null,
+      ...(visibleReviewed ? visibleReviewed.terms.workspace.requirements : {
+        output_format: workspace?.output_format ?? 'text',
+        acceptance_criteria: JSON.parse(workspace?.acceptance_criteria || '[]'),
+        required_json_keys: JSON.parse(workspace?.required_json_keys || '[]'),
+        minimum_sources: workspace?.minimum_sources ?? 0,
+      }),
+      reviewed_task: reviewed && (isPoster || isSeller) ? {
+        authorization_id: reviewed.authorization.id, authority_hash: reviewed.authorization.authority_hash,
+        task_id: reviewed.authorization.task_id, bid_id: reviewed.authorization.winning_bid_id,
+        buyer_id: reviewed.authorization.buyer_id, seller_id: reviewed.authorization.seller_id,
+        title: reviewed.terms.task.title, description: reviewed.terms.task.description,
+        requirements: reviewed.terms.workspace.requirements,
+      } : null,
+      quote: visibleReviewed ? calculateTradeFinancials(visibleReviewed.terms.workspace.agreed_price ?? visibleReviewed.terms.bid.price_usd)
+        : winningBid ? calculateTradeFinancials(workspace?.agreed_price ?? winningBid.priceUsd) : null,
       trade: (isPoster || isSeller) ? activeTrade : null,
       checkout: (isPoster && activeTrade?.status === 'pending') ? checkoutForTrade(activeTrade) : null,
-      funded: Boolean(activeTrade && activeTrade.status !== 'pending'),
+      funded: Boolean(activeTrade && activeTrade.status !== 'pending' && activeTrade.status !== 'cancelled'),
       delivery: delivery ? { ...delivery, artifact: delivery.artifact_json ? JSON.parse(delivery.artifact_json) : null, verification: JSON.parse(delivery.verification) } : null,
       proof_url: activeTrade?.status === 'completed' ? `/proof/${activeTrade.id}` : null,
     },

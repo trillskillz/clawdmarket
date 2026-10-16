@@ -5,6 +5,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { db } from './db'
+import { isLocalSqliteContention, readWithLocalContentionRecovery } from './local-sqlite-read'
 import { agents, agent_owners, organizations, organization_agent_assignments, organization_teams,
   organization_spending_accounts as accounts, organization_spending_uses as uses, organization_audit_events, service_definitions, service_orders, trades } from './schema'
 import { money, serviceOrderInput } from './service-order-input'
@@ -115,10 +116,19 @@ export async function inspectSpendingAccounts(orgId:string,actor:string,clientRe
 export async function resolveSpendingAccount(request:NextRequest,orgId:string){
   const match=/^Bearer (cmos_[a-f0-9]{64})$/.exec(request.headers.get('authorization')||'')
   if(!match)return null
-  const [row]=await db.select().from(accounts).where(and(eq(accounts.credential_hash,credentialHash(match[1])),eq(accounts.organization_id,orgId))).limit(1)
-  if(!row)return null
-  await currentSpendingAccount(row,db)
-  return issueOrganizationSpendingEvidence({accountId:row.id,organizationId:orgId,buyerId:`user_agent_${row.buyer_agent_id}`,agentId:row.buyer_agent_id,credentialHash:row.credential_hash})
+  try {
+    // Credential inspection only; financial reservation still rechecks current
+    // authority inside its own transaction. Never retry that callback here.
+    return await readWithLocalContentionRecovery(async source=>{
+      const [row]=await source.select().from(accounts).where(and(eq(accounts.credential_hash,credentialHash(match[1])),eq(accounts.organization_id,orgId))).limit(1)
+      if(!row)return null
+      await currentSpendingAccount(row,source)
+      return issueOrganizationSpendingEvidence({accountId:row.id,organizationId:orgId,buyerId:`user_agent_${row.buyer_agent_id}`,agentId:row.buyer_agent_id,credentialHash:row.credential_hash})
+    })
+  } catch(error) {
+    if(process.env.TURSO_DATABASE_URL?.trim().startsWith('file:')&&isLocalSqliteContention(error))throw new PurchasingError('PURCHASING_STORAGE_BUSY',503)
+    throw error
+  }
 }
 export async function validateSpendingPurchase(source:PurchasingSource,evidence:OrganizationSpendingEvidence,serviceId:string,buyerId:string,order:Pick<z.output<typeof serviceOrderInput>,'payment_rail'|'purchasing_approval_id'|'provider_share_id'>,totalMinor:number,alreadyReserved=false){
   if(!validOrganizationSpendingEvidence(evidence))throw new PurchasingError('SPENDING_CREDENTIAL_REQUIRED',401)

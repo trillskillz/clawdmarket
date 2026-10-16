@@ -1,0 +1,18 @@
+✔ funded companion without its original use cannot silently disappear from gross history (4075.065945ms)
+✔ an old reservation cannot be reclassified as a new reviewed draft by resetting its state (35.773725ms)
+✔ original credit gross blocks new reviewed route, workflow, task, listing and contract budgets without consuming chain fee headroom (4671.60424ms)
+✔ prior original route, workflow, task and listing gross blocks a fresh credit contract ceiling in the reverse reservation order (662.930067ms)
+✔ private contract review freezes original ordered milestones, credit fee/refund terms and an independent organizational reviewer without funding (780.343895ms)
+✔ every contract companion state blocks generic funding and exact proposal/decision replay never reopens revocation (116.755503ms)
+✔ contract decision rejects current ownership, assignment, reviewer, amount, milestone, acceptance, deadline, seller rail and ban drift (713.882593ms)
+✔ contract review refuses reviewer ownership of provider, changed original proposal, unreferenced legacy drafts, CSRF and oversized input (117.458737ms)
+✔ elapsed review windows cannot invent acceptance for any companion state while ordinary historical policy stays unchanged (170.654064ms)
+✔ runtime schema migration upgrades a legacy database and is idempotent (368.03166ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 79243.81874

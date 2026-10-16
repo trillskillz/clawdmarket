@@ -1,0 +1,75 @@
+    at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:711:23) {
+  query: 'insert into "contract_adjudication_operations" ("dispute_id", "contract_id", "milestone_id", "authorization_id", "authority_hash", "buyer_id", "seller_id", "decided_by_account_id", "ruling", "split_percent_to_seller", "amount_minor", "buyer_refund_minor", "seller_credit_minor", "settlement_entry_id", "sale_entry_id", "decision_hash", "resolved_at") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning "dispute_id", "contract_id", "milestone_id", "authorization_id", "authority_hash", "buyer_id", "seller_id", "decided_by_account_id", "ruling", "split_percent_to_seller", "amount_minor", "buyer_refund_minor", "seller_credit_minor", "settlement_entry_id", "sale_entry_id", "decision_hash", "resolved_at"',
+  params: [
+    '1ca28a86-c9eb-4a2c-8bb6-21763267031c',
+    '17f3e7f2-1bec-49b1-b4cc-cecf2975684b',
+    '3dc4151d-b004-4c77-a8df-5b6983f6a50a',
+    '8a792a51-18ea-42d1-be1b-f371e8f79767',
+    'dffc1453166166da747004895fe44e632775d3a083b3b65061417a4197d7c6f0',
+    'user_agent_agent_fcd2f970-879d-4753-b0f9-521aba5e7419',
+    'user_agent_agent_f944b255-19b7-4fce-987f-1f54a71797f2',
+    'owner-7e58e468-a312-455f-b7cf-681bfb6c56dd',
+    'seller_win',
+    null,
+    40,
+    0,
+    40,
+    '6470a199-25f1-40ce-bc39-97232c07fb5e',
+    '1b2aee68-2b3a-4d53-9ca3-623ba8db385f',
+    '088fa98abde870d459a8dc402b665d501eb7382a86e706493fbc57150112d079',
+    1792085702
+  ],
+  cause: LibsqlError: SQLITE_CONSTRAINT: injected_adjudication_append_failure
+      at mapSqliteError (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:683:16)
+      at executeStmt (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:586:15)
+      at Sqlite3Transaction.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:449:16)
+      ... 4 lines matching cause stack trace ...
+      at QueryPromise.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/query-builders/insert.ts:402:26)
+      at QueryPromise.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/query-builders/insert.ts:414:40)
+      at QueryPromise.then (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/query-promise.ts:31:15) {
+    code: 'SQLITE_CONSTRAINT',
+    extendedCode: 'SQLITE_CONSTRAINT_TRIGGER',
+    rawCode: 1811,
+    [cause]: SqliteError: injected_adjudication_append_failure
+        at convertError (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js:59:12)
+        at Object.next (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js:385:17)
+        at Statement.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js:403:18)
+        at executeStmt (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:570:34)
+        at Sqlite3Transaction.execute (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d40ea4da6ed8ab338d12_3d5f1b12e809d5fa95ac61dc54a80fca/node_modules/@libsql/client/lib-cjs/sqlite3.js:449:16)
+        at <anonymous> (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:288:30)
+        at LibSQLPreparedQuery.queryWithCache (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/session.ts:78:18)
+        at LibSQLPreparedQuery.values (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:286:21)
+        at LibSQLPreparedQuery.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/libsql/session.ts:214:27)
+        at QueryPromise.all (/home/void/Work/clawdmarket-visual-reliability/node_modules/.pnpm/drizzle-orm@0.45.2_@libsql+client@0.18.0_patch_hash=3e8c2cc543ebc0bd3ddc59ed7e7bed3344d_70fb2da7e6ad25d5ae96b6277f1a16a5/node_modules/src/sqlite-core/query-builders/insert.ts:402:26) {
+      code: 'SQLITE_CONSTRAINT_TRIGGER',
+      rawCode: 1811
+    }
+  }
+}
+✔ a failed immutable admin journal append rolls back ruling, state and original credit distribution (336.703707ms)
+✔ a genuinely lost committed admin resolution reply recovers its original split through both participant SDKs without repeating resolution (585.211669ms)
+✔ ordinary unreviewed contracts retain all four existing admin rulings without inferred reviewed operations or consent (4919.87946ms)
+✔ dedicated original seller POST enforces actor, payment scope, CSRF and bounded finite output while legacy hashless submit stays blocked (488.563365ms)
+✔ both provider SDKs recover actual lost committed original submission replies without recomputation, new output or credit release (1057.347039ms)
+✔ exact public credit release enforces buyer/payment scope and original proof; generic hashless mark_paid remains blocked (696.302356ms)
+✔ inconsistent held-credit account cannot request more funding or commit a partial release through the public adapter (392.673901ms)
+✔ both buyer SDKs recover actual lost committed release replies and original posting after full completion without double payment (5909.844945ms)
+✔ original buyer funding reference pins one controlled original reservation and recovers frozen terms after current permission closes (247.815016ms)
+✔ funding references reject changed and cross-contract reuse and private actors without reclassifying earlier unreferenced reservations (8489.69834ms)
+✔ a saved funding reference cannot turn contradictory ledger evidence into original financial success (220.126066ms)
+✔ original reviewed cancellation preserves consumed listing, principal/fee terms and gross after current permission closes (1965.110118ms)
+✔ mutable expired metadata cannot expire or refund a reviewed obligation before its frozen original deadline (359.064603ms)
+✔ manual expiration uses frozen original deadline even if current metadata extends or removes it, and never recycles consumed inventory (345.289674ms)
+✔ maintenance expiration uses frozen original deadline even if current metadata extends or removes it, and never recycles consumed inventory (244.600893ms)
+✔ free contract review does not consume listing inventory before original funding use exists (210.32524ms)
+✔ consumed original reviewed contract listing cannot reenter catalog, fresh trade, review or contract scopes after refund and manual reactivation (500.554633ms)
+✔ contradictory original credit amounts block start, cancel and maintenance before state, listing or financial changes (284.43394ms)
+✔ runtime schema migration upgrades a legacy database and is idempotent (1232.851886ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 47
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 96148.652936

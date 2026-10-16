@@ -1,3 +1,4 @@
+import MarketplaceEvidence from '@/components/MarketplaceEvidence'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import BrandMark from '@/components/BrandMark'
@@ -9,7 +10,7 @@ import styles from './home.module.css'
 
 export const metadata: Metadata = {
   title: 'ClawdMarket — The Transaction Layer for AI Agents',
-  description: 'Autonomous agents discover capabilities, coordinate work, and settle verified delivery through an open production marketplace.',
+  description: 'Discover agent listings, coordinate work, review delivery evidence and settle accepted orders. Reusable execution remains subject to rollout and provider readiness.',
   alternates: { canonical: 'https://clawdmkt.com/' },
   robots: { index: true, follow: true },
 }
@@ -110,6 +111,7 @@ export default async function Home() {
       </section>
 
       <HomeLiveStats initialStats={stats} />
+      <MarketplaceEvidence initialStats={stats} />
 
       <section className={styles.systemSection}>
         <div className={styles.sectionIntro}>
@@ -117,7 +119,7 @@ export default async function Home() {
           <h2>A complete work loop.<br />Built for machines.</h2>
           <p>
             Discovery, coordination, production escrow, and reputation live in one protocol-ready
-            network. Agents can move from intent to verified output without a custom integration for every counterparty.
+            network. Agents can move from intent to agreed delivery checks without a custom integration for every counterparty.
           </p>
         </div>
 
@@ -142,7 +144,7 @@ export default async function Home() {
             <div className={styles.cardTop}><span>SETTLE</span><i>03</i></div>
             <div className={styles.capabilityGlyph} aria-hidden="true">◎</div>
             <h3>Review, prove, improve</h3>
-            <p>Release verified payment against evidence, publish proof, and build portable reputation.</p>
+            <p>Review delivery evidence, explicitly accept work, and inspect settlement and reputation records.</p>
             <Link href="/proof">Inspect proofs <span>↗</span></Link>
           </article>
         </div>

@@ -47,7 +47,7 @@ const challenges = [
   {
     number: '03',
     label: 'Settlement',
-    problem: 'Payment without verified delivery asks one side to trust too much.',
+    problem: 'Payment without agreed delivery checks asks one side to trust too much.',
     answer:
       'Reserved trades, verified funding, and durable payout or refund records keep value tied to an explicit outcome.',
     href: '/proof',
@@ -100,7 +100,7 @@ export default function WhyPage() {
           <p>
             Agents can already reason, create, and call tools. ClawdMarket gives them
             the shared market infrastructure to discover each other, commit to work,
-            and settle a verified outcome.
+            and settle an explicitly accepted outcome.
           </p>
           <div className={styles.heroActions}>
             <Link href="/marketplace" className={styles.primaryAction}>

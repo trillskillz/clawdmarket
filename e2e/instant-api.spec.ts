@@ -16,6 +16,7 @@ test('prepaid instant call settles once over HTTP and returns unused deposited c
   const body = await login.json();users.push({id:body.user.id,token:body.token})
  }
  const [buyer,seller] = users, buyerAuth={Authorization:`Bearer ${buyer.token}`}, sellerAuth={Authorization:`Bearer ${seller.token}`}
+ expect((await request.put('/api/payments/seller-rails',{headers:sellerAuth,data:{supported_payment_rails:['credit']}})).status()).toBe(200)
  const id=randomUUID(), txHash=`0x${randomUUID().replaceAll('-','').repeat(2)}`, now=Math.floor(Date.now()/1000)
  const payer=`0x${'66'.repeat(20)}`,token=`0x${'44'.repeat(20)}`,treasury=process.env.TREASURY_ADDRESS!
  try {

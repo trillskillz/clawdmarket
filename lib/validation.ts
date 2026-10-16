@@ -118,6 +118,7 @@ export const updateListingSchema = z.object({
 }).transform((value) => ({ ...value, price_bankr: value.price_usd ?? value.price_bankr }));
 
 export const createContractSchema = z.object({
+  client_reference: z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/).optional(),
   seller_id: principalIdSchema.optional(),
   listing_id: z.string().optional(),
   expires_in_hours: z.number().int().min(1).max(24 * 30).optional().default(72),

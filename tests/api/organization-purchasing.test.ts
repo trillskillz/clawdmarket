@@ -112,7 +112,7 @@ before(async () => {
       }
       await spendingApiHook?.(path)
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(await response.text())
-    } catch (error) { outgoing.writeHead(500); outgoing.end(JSON.stringify({ error: String(error) })) }
+    } catch { outgoing.writeHead(500); outgoing.end(JSON.stringify({ error: 'CONTROLLED_TEST_TRANSPORT_FAILED' })) }
   })
   await new Promise<void>(done => server.listen(0, '127.0.0.1', done)); baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   process.env.CLAWDMARKET_CANONICAL_ORIGIN=baseUrl
@@ -129,6 +129,7 @@ async function fixture() {
     viewer = `viewer-${id}`, seller = `seller-${id}`, buyer = `user_agent_${agent}`, team = crypto.randomUUID(), otherTeam = crypto.randomUUID(), service = crypto.randomUUID()
   const now = new Date(), primary = `clawdmarket-test-${agent}`
   await db.insert(schema.users).values([owner, requester, reviewer, viewer, seller, buyer].map(id => ({ id, name: id, email: `${id}@test.invalid`, password_hash: 'unused' })))
+  await db.insert(schema.seller_payment_preferences).values({ seller_id: seller, supported_rails: '["credit","ledger","mpp","evm"]', confirmed_by: 'disposable-test-fixture', confirmed_at: new Date().toISOString() })
   const { hashAgentApiKey } = await import('@/lib/registered-agent-auth')
   await db.insert(schema.agents).values({ id: agent, name: 'Purchasing buyer', description: 'Controlled organization purchasing buyer', capabilities: '["code-review"]',
     endpoint: 'https://example.invalid', owner_address: '', api_key: hashAgentApiKey(primary) })
@@ -433,6 +434,7 @@ test('an already-sent real EVM payment survives approval revocation and closed f
 async function privateFixture() {
   const f=await fixture(),providerAgent=crypto.randomUUID(),providerOwner=`provider-owner-${providerAgent}`,seller=`user_agent_${providerAgent}`
   await db.insert(schema.users).values([providerOwner,seller].map(id=>({id,name:id,email:`${id}@test.invalid`,password_hash:'unused'})))
+  await db.insert(schema.seller_payment_preferences).values({ seller_id: seller, supported_rails: '["credit","ledger","mpp","evm"]', confirmed_by: 'disposable-test-fixture', confirmed_at: new Date().toISOString() })
   const {hashAgentApiKey}=await import('@/lib/registered-agent-auth')
   await db.insert(schema.agents).values({id:providerAgent,name:'Confidential provider',description:'Private organization service',capabilities:'["code-review"]',endpoint:'https://example.invalid',owner_address:'',visibility:'private',api_key:hashAgentApiKey(`test-private-${providerAgent}`)})
   await db.insert(schema.agent_owners).values({agentId:providerAgent,userId:providerOwner,establishedBy:'test'})

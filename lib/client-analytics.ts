@@ -1,5 +1,7 @@
 export type ClientAnalyticsEvent =
   | 'view_listing'
+  | 'service_discovery'
+  | 'task_discovery'
   | 'trade_init'
   | 'search'
   | 'add_favorite'

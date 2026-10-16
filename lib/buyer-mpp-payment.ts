@@ -1,4 +1,8 @@
 import { originalSpendingPayment } from './organization-spending-accounts'
+import { originalTaskPayment } from './organization-task-authorizations'
+import { originalListingPayment } from './organization-listing-uses'
+import { inspectListingTempoIntent, createListingTempoIntent, claimListingTempoPayment, assertListingTempoPull } from './organization-listing-tempo-payment'
+import { inspectTaskTempoIntent, createTaskTempoIntent, claimTaskTempoPayment, assertTaskTempoPull } from './organization-task-tempo-payment'
 import { PurchasingError } from './organization-purchasing-transaction'
 import { inspectOrganizationTempoIntent,createOrganizationTempoIntent,claimOrganizationTempoPayment,assertOrganizationTempoPull } from './organization-spending-tempo-payment'
 import { spendingWalletConflict } from './organization-spending-payment'
@@ -73,6 +77,8 @@ async function permission(source: Source, trade: Trade, intent?: Intent, validBe
 }
 
 export async function inspectBuyerMppIntent(tradeId: string, buyerId: string) {
+  if (await enterprise(() => originalListingPayment(db, tradeId))) return enterprise(() => inspectListingTempoIntent(tradeId, buyerId))
+  if (await enterprise(() => originalTaskPayment(db, tradeId))) return enterprise(() => inspectTaskTempoIntent(tradeId, buyerId))
   if(await originalSpendingPayment(db,tradeId))return enterprise(()=>inspectOrganizationTempoIntent(tradeId,buyerId))
   const trade = await ownedTrade(db, tradeId, buyerId)
   const [intent] = await db.select().from(buyer_mpp_payment_intents).where(eq(buyer_mpp_payment_intents.trade_id, tradeId)).limit(1)
@@ -82,6 +88,8 @@ export async function inspectBuyerMppIntent(tradeId: string, buyerId: string) {
 
 /** Stable operation creates one original challenge; no key, signature, simulation or broadcast. */
 export async function createBuyerMppIntent(tradeId: string, buyerId: string, operationId: string, origin: string) {
+  if (await enterprise(() => originalListingPayment(db, tradeId))) return enterprise(() => createListingTempoIntent(tradeId, buyerId, operationId, origin))
+  if (await enterprise(() => originalTaskPayment(db, tradeId))) return enterprise(() => createTaskTempoIntent(tradeId, buyerId, operationId, origin))
   if(await originalSpendingPayment(db,tradeId))return enterprise(()=>createOrganizationTempoIntent(tradeId,buyerId,operationId,origin))
   return write(tradeId, async (tx) => {
     const trade = await ownedTrade(tx, tradeId, buyerId)
@@ -117,6 +125,8 @@ export async function createBuyerMppIntent(tradeId: string, buyerId: string, ope
 }
 
 export async function claimBuyerMppPayment(tradeId: string, buyerId: string, input: ClaimInput) {
+  if (await enterprise(() => originalListingPayment(db, tradeId))) return enterprise(() => claimListingTempoPayment(tradeId, buyerId, input))
+  if (await enterprise(() => originalTaskPayment(db, tradeId))) return enterprise(() => claimTaskTempoPayment(tradeId, buyerId, input))
   if(await originalSpendingPayment(db,tradeId))return enterprise(()=>claimOrganizationTempoPayment(tradeId,buyerId,input))
   return write(tradeId, async (tx) => {
     const trade = await ownedTrade(tx, tradeId, buyerId)
@@ -160,6 +170,8 @@ export async function claimBuyerMppPayment(tradeId: string, buyerId: string, inp
 /** Called at the actual SDK broadcast boundary, after authenticated credential validation. */
 export async function assertBuyerMppPull(tradeId: string, payer: string | undefined,
   pull: { serialized_transaction: string; challenge: unknown }, markSubmission: boolean) {
+  if (await enterprise(() => originalListingPayment(db, tradeId))) return enterprise(() => assertListingTempoPull(tradeId, payer, pull, markSubmission))
+  if (await enterprise(() => originalTaskPayment(db, tradeId))) return enterprise(() => assertTaskTempoPull(tradeId, payer, pull, markSubmission))
   if(await originalSpendingPayment(db,tradeId))return enterprise(()=>assertOrganizationTempoPull(tradeId,payer,pull,markSubmission))
   return write(tradeId, async (tx) => {
     const [intent] = await tx.select().from(buyer_mpp_payment_intents).where(eq(buyer_mpp_payment_intents.trade_id, tradeId)).limit(1)

@@ -1,0 +1,75 @@
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/organizations/[id]/route-authorizations/[authorizationId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/organizations/[id]/spending-accounts/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/organizations/[id]/task-authorizations/[authorizationId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/organizations/[id]/workflow-authorizations/[authorizationId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/ownership/accept/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/proof/[trade_id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/proof/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/registry/[id]/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/registry/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/registry/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/routes/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/routes/[id]/review/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/skill.md/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/taskboard/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/taskboard/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/taskboard/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/trades/[id]/listing-work/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/trades/[id]/reputation/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/users/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/why/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/work/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/work/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+error TS6053: File '/home/void/Work/clawdmarket-reviewed-contracts-current/.next/types/app/workflows/[id]/review/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in '/home/void/Work/clawdmarket-reviewed-contracts-current/tsconfig.json'
+ ELIFECYCLE  Command failed with exit code 2.

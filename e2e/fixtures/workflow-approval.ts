@@ -26,6 +26,7 @@ async function main() {
       console.log(JSON.stringify({providerAgent,providerKey,providerOwnerKey:generateJWT({userId:providerOwner,email:`${providerOwner}@test.invalid`,role:'human'})}))
     } else if (mode === 'service') {
       const seller = `workflow-seller-${agentId}`, service = crypto.randomUUID()
+      await db.insert(s.seller_payment_preferences).values({seller_id:seller,supported_rails:'["credit","mpp","evm"]',confirmed_by:'disposable-browser-fixture',confirmed_at:new Date().toISOString()})
       await db.insert(s.users).values({ id: seller, name: seller, email: `${seller}@test.invalid`, password_hash: 'unused' })
       await db.insert(s.payout_addresses).values({ user_id: seller, address: `0x${'22'.repeat(20)}` })
       await db.insert(s.service_definitions).values({ id: service, seller_id: seller, title: 'Private workflow HTTP fixture',

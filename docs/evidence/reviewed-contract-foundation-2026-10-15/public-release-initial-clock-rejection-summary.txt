@@ -1,0 +1,75 @@
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'PAYMENT_PREDATES_INTENT',
+    retryable: false
+  }
+
+test at tests/api/organization-contract-original-uses.test.ts:18:4343
+✖ dedicated original seller POST enforces actor, payment scope, CSRF and bounded finite output while legacy hashless submit stays blocked (161.04491ms)
+  Error [SettlementError]: Payment predates this payment intent
+      at verifyIncomingErc20Payment (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/external-settlement.ts:88:11)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Object.confirmDeposit (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/account-credit.ts:83:19)
+      at async fixture (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:56:3)
+      at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:781:13)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'PAYMENT_PREDATES_INTENT',
+    retryable: false
+  }
+
+test at tests/api/organization-contract-original-uses.test.ts:18:7979
+✖ both provider SDKs recover actual lost committed original submission replies without recomputation, new output or credit release (148.576298ms)
+  Error [SettlementError]: Payment predates this payment intent
+      at verifyIncomingErc20Payment (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/external-settlement.ts:88:11)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Object.confirmDeposit (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/account-credit.ts:83:19)
+      at async fixture (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:56:3)
+      at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:813:15)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'PAYMENT_PREDATES_INTENT',
+    retryable: false
+  }
+
+test at tests/api/organization-contract-original-uses.test.ts:29:1517
+✖ exact public credit release enforces buyer/payment scope and original proof; generic hashless mark_paid remains blocked (113.741623ms)
+  Error [SettlementError]: Payment predates this payment intent
+      at verifyIncomingErc20Payment (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/external-settlement.ts:88:11)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Object.confirmDeposit (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/account-credit.ts:83:19)
+      at async fixture (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:56:3)
+      at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:871:13)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'PAYMENT_PREDATES_INTENT',
+    retryable: false
+  }
+
+test at tests/api/organization-contract-original-uses.test.ts:29:6097
+✖ inconsistent held-credit account cannot request more funding or commit a partial release through the public adapter (142.280621ms)
+  Error [SettlementError]: Payment predates this payment intent
+      at verifyIncomingErc20Payment (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/external-settlement.ts:88:11)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Object.confirmDeposit (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/account-credit.ts:83:19)
+      at async fixture (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:56:3)
+      at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:909:13)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'PAYMENT_PREDATES_INTENT',
+    retryable: false
+  }
+
+test at tests/api/organization-contract-original-uses.test.ts:29:8173
+✖ both buyer SDKs recover actual lost committed release replies and original posting after full completion without double payment (130.920666ms)
+  Error [SettlementError]: Payment predates this payment intent
+      at verifyIncomingErc20Payment (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/external-settlement.ts:88:11)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Object.confirmDeposit (/home/void/Work/clawdmarket-reviewed-contracts-current/lib/account-credit.ts:83:19)
+      at async fixture (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:56:3)
+      at async TestContext.<anonymous> (/home/void/Work/clawdmarket-reviewed-contracts-current/tests/api/organization-contract-original-uses.test.ts:926:15)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'PAYMENT_PREDATES_INTENT',
+    retryable: false
+  }

@@ -1,3 +1,4 @@
+import { loadMarketplaceCohorts } from '@/lib/marketplace-cohorts'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
@@ -75,6 +76,7 @@ export async function GET(request: NextRequest) {
       rating_count: row.rating_count,
     })))
 
+    const cohorts = await loadMarketplaceCohorts(rows.map((row: any) => `user_agent_${row.id}`))
     const agents = rows.map((row: any) => {
       const benchmarkScore = row.benchmark_score ? Number(row.benchmark_score) : null
       const trust = trustMap.get(String(row.id))!
@@ -85,6 +87,7 @@ export async function GET(request: NextRequest) {
         || String(row.owner_address || '').toLowerCase() === 'clawdmarket-system'
 
       return {
+        operator_cohort: cohorts.get(`user_agent_${row.id}`),
         id: row.id,
         name: row.name,
         description: row.description,
@@ -133,8 +136,8 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     const errorId = reportInternalError('Agent directory query failed', err)
     return NextResponse.json(
-      { agents: [], total: 0, error: 'temporarily_unavailable', error_id: errorId },
-      { status: 200 }
+      { data_status: 'unavailable', observed_at: null, error: 'temporarily_unavailable', error_id: errorId },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
     )
   }
 }

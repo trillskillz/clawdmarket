@@ -1,0 +1,12 @@
+  ✓  149 [chromium] › e2e/visual-reliability.spec.ts:59:34 › mobile navigation stays readable and within the viewport at 320px (550ms)
+  ✓  150 [chromium] › e2e/visual-reliability.spec.ts:80:5 › login fields retain a visible keyboard focus indicator (330ms)
+  ✓  151 [chromium] › e2e/wallet.spec.ts:7:7 › Wallet auth flow › nonce + signature verify logs user in (512ms)
+  ✓  152 [chromium] › e2e/wallet.spec.ts:51:7 › Wallet auth flow › discovered browser wallet signs in through the login page (815ms)
+  ✓  153 [chromium] › e2e/wallet.spec.ts:139:7 › Wallet auth flow › MetaMask prefers its EIP-6963 provider over a conflicting legacy provider (496ms)
+  ✓  154 [chromium] › e2e/workflow-approval.spec.ts:6:5 › HTTP owner review freezes a private DAG, preserves identity and cannot authorize route payment (1.9s)
+  ✓  155 [chromium] › e2e/workflow-approval.spec.ts:73:5 › built application privately activates stable workflow children and retains original unpaid obligations after cancellation (1.7s)
+  ✓  156 [chromium] › e2e/workflow-owner-review.spec.ts:31:5 › human reviews exact private DAG terms and recovers lost decisions while revocation preserves original child obligations (6.7s)
+  ✓  157 [chromium] › e2e/workflow-owner-review.spec.ts:99:5 › competing exact decision and plan drift preserve original review; stale and unavailable inspection cannot issue commands (8.5s)
+
+  8 skipped
+  149 passed (4.8m)

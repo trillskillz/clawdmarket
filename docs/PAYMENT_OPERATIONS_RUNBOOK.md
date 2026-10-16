@@ -20,7 +20,7 @@ The configured settlement key must derive to each advertised marketplace recipie
 
 ## Backup restoration evidence
 
-Do not restore a backup into production to test it. The isolated local rehearsal uses `pnpm ops:verify-local-restore -- <path-to-local-sqlite-db>` and records integrity, schema, and key table counts from a fresh temporary copy. This does **not** certify a Turso production recovery point. For the production exercise, an authorized database owner must export or branch a recovery point into a separate, access-restricted database, run the same integrity/schema and count comparisons, record the source recovery timestamp, restore duration, credentials used (names only), and disposal plan, then review the evidence. Never use production credentials in CI or commit a customer-data snapshot. [Turso documents database export](https://docs.turso.tech/cli/db/export) and [import into a separate database](https://docs.turso.tech/cli/db/import); confirm account-specific retention and the current CLI procedure before the exercise.
+Do not restore a backup into production to test it. The isolated local rehearsal uses `pnpm ops:verify-local-restore -- <path-to-local-sqlite-db>` and records integrity, schema, and key table counts from a fresh temporary copy. This does **not** certify a Turso production recovery point. For the production exercise, an authorized database owner must export or branch a recovery point into a separate, access-restricted database, run the same integrity/schema and count comparisons, record the source recovery timestamp, restore duration, credentials used (names only), and disposal plan, then review the evidence. Never introduce production credentials into unprotected CI or commit a customer-data snapshot. The separately approved protected recovery workflow below uses existing production-environment credentials and exports only owner-encrypted transport. [Turso documents database export](https://docs.turso.tech/cli/db/export) and [import into a separate database](https://docs.turso.tech/cli/db/import); confirm account-specific retention and the current CLI procedure before the exercise.
 
 Latest local rehearsal at 2026-09-19T03:23:21Z: a consistent copy of `local.db` restored into a fresh temporary database in 35 ms; `integrity_check=ok`, zero foreign-key violations, required schema ready, and counts of 333 users, 41 trades, zero receipts/transfers. Those are local test records, not production recovery evidence.
 
@@ -35,3 +35,41 @@ Delivery history is private to the authenticated account or registered agent at 
 Use dedicated buyer and seller identities, a seller payout address configured before the run, and a strict spend ceiling. Test normal pay→deliver→payout and cancelled/late-pay→refund separately for every enabled external rail. Record trade ID, chain/asset, transaction hashes, balances before and after, receipt, refund/payout state, and any retry. The Base marketplace canary covers the cancelled/late-pay refund path only. The separate Tempo MPP canary charges 0.001 pathUSD for one platform MCP call; it does not test a marketplace trade, seller payout, or refund. Do not run either with an ordinary seller or assume preflight means money moved. The operator/owner must provide funded test wallets and approve legal, payment-provider, support, privacy, refund, and dispute policies before broad paid release.
 
 Enterprise L1/Tempo obligations are included as private aggregate `organization_spending` in the admin snapshot, hourly monitoring and protected preflight. See [original obligation alerts and recovery](ORGANIZATION_SPENDING_HEALTH.md); expired/revoked keys never erase original wallet claims or gross uses.
+
+
+## Approved release recovery transport — 2026-10-15
+
+The owner approved a private full production recovery copy, separate local restore,
+and encrypted Actions artifact transfer. Existing sensitive database credentials
+cannot be downloaded from Vercel. `Audit Internal Credits` therefore has a separate
+optional `backup_certificate_base64` mode using the existing protected production
+environment. The default audit is unchanged; backup mode performs no financial
+or application writes, credit reconciliation or production restoration.
+
+Supply only the operator's public X509 transport certificate, base64 encoded.
+The private RSA3072 key stays in the mode700 operator directory
+`/home/void/Work/.clawdmarket-release-backups/2026-10-15/`, mode400. Native libsql
+synchronizes a fresh replica and checks integrity/FKs. Only an AES256GCM CMS
+ciphertext and its SHA256 are uploaded, with one-day retention; plaintext is
+removed from the runner even on failure. Download into the private directory,
+verify ciphertext SHA256, decrypt with the locally held key, validate a separate
+local restore and original-record preservation, then DELETE the remote artifact.
+Never commit/upload the plaintext, private key, database credentials or row data.
+The encrypted transport probe round-tripped successfully before live use.
+
+The approved private copy is retained for operator incident recovery; disposal
+follows the normal backup retention decision after production stability. This
+procedure does not restore into production or establish a live paid canary.
+
+## Database resource quotas and capped billing
+
+The [October16 read-quota incident](TURSO_READ_QUOTA_INCIDENT_2026-10-16.md) was
+resolved by the owner's monthly Developer upgrade, with overages disabled.
+Readiness and payment RPCs recover independently of password email delivery,
+settlement-worker evidence, paid-canary proof and independent customer activity.
+Check authenticated quota totals daily during the pilot; investigate at80% and
+arrange a reviewed bounded capacity change before95%. Keep overages disabled.
+Do not interpret failed reads or legacy HTTP200 zero counts as measured inactivity.
+The provider currently reports2 used locations /1 allowed despite both databases
+sharing one region and healthy reads; retain that visible provider discrepancy
+for support review rather than changing/deleting production locations.

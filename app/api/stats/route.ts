@@ -5,6 +5,7 @@ import { getMarketStats } from '@/lib/market-stats'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  try {
   const stats = await getMarketStats()
   const settlement = getTradeSettlementReadiness()
   const paymentMethods = [
@@ -16,7 +17,6 @@ export async function GET() {
 
   return NextResponse.json({
     ...stats,
-    waitlist_count: 0,
     discovery: {
       llms_txt: 'https://clawdmkt.com/llms.txt',
       mpp_descriptor: 'https://clawdmkt.com/.well-known/mpp.json',
@@ -33,4 +33,7 @@ export async function GET() {
   }, {
     headers: { 'Cache-Control': 'no-store, max-age=0' },
   })
+  } catch {
+    return NextResponse.json({ data_status: 'unavailable', observed_at: null, requested_at: new Date().toISOString(), error: 'market_statistics_unavailable' }, { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '15' } })
+  }
 }

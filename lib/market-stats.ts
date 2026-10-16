@@ -1,3 +1,9 @@
+import { getIndependentEconomicEvidence } from './independent-economic-evidence'
+import { getRouteMetrics } from './route-metrics'
+import { loadMarketplaceCohorts, MARKETPLACE_COHORTS } from './marketplace-cohorts'
+import { PAYMENT_READY_LISTING_SQL } from './listing-payment-readiness'
+import { getAgentAvailability } from './agent-presence'
+import { getExecutablePublicServiceCount } from './marketplace-inventory'
 import { rankedBuyerFeedbackSql } from './reputation-evidence-sql'
 import { and, eq, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
@@ -18,28 +24,27 @@ function roundCurrency(value: unknown) {
   return Number(Number(value || 0).toFixed(2))
 }
 
-async function getPublicProfileCount(): Promise<number> {
+async function getPublicProfilePrincipals(): Promise<string[]> {
   // An account has a profile as soon as it joins. Synthetic agent accounts
   // count through their public registration or visible active listing instead.
   const result = await (db as any).$client.execute({
-    sql: `SELECT COUNT(*) AS count FROM (
+    sql: `SELECT principal_id FROM (
       SELECT id AS principal_id FROM users WHERE substr(id, 1, 11) <> 'user_agent_'
       UNION
       SELECT seller_id AS principal_id FROM listings
       WHERE status = 'active' AND ${PUBLIC_LISTING_SELLER_WHERE_SQL}
       UNION
       SELECT 'user_agent_' || id AS principal_id FROM agents
-      WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
+      WHERE visibility = 'public' AND archived_at IS NULL
     )`,
     args: [],
   })
-  return Number(result.rows?.[0]?.count || 0)
+  return result.rows.map((row: any) => String(row.principal_id))
 }
 
 async function getVolumeByRail(): Promise<VolumeByRail> {
   const volume: VolumeByRail = { ledger: 0, credit: 0, mpp: 0, evm: 0 }
-  try {
-    const rows = await db
+  const rows = await db
       .select({
         rail: trades.payment_rail,
         amount: sql<number>`COALESCE(SUM(${trades.amount}), 0)`,
@@ -54,9 +59,6 @@ async function getVolumeByRail(): Promise<VolumeByRail> {
         volume[rail] = roundCurrency(row.amount)
       }
     }
-  } catch {
-    // Older databases may not have the payment_rail column yet.
-  }
   return volume
 }
 
@@ -69,21 +71,19 @@ export async function getMarketStats() {
     ratingRows,
     taskRows,
     listingRows,
-    queriedProfileCount,
+    queriedProfilePrincipals,
     volumeByRail,
   ] = await Promise.all([
     db.select({ registered_agent_count: sql<number>`COALESCE(COUNT(*), 0)` })
       .from(agents)
-      .where(sql.raw(PUBLIC_AGENT_DIRECTORY_WHERE_SQL))
-      .catch(() => [{ registered_agent_count: 0 }]),
+      .where(sql.raw(PUBLIC_AGENT_DIRECTORY_WHERE_SQL)),
     db.select({
       agents_online: sql<number>`COALESCE(SUM(CASE
         WHEN ${agents.status} = 'active'
           AND ${agents.lastSeenAt} >= unixepoch() - ${AGENT_ONLINE_WINDOW_SECONDS}
         THEN 1 ELSE 0 END), 0)`,
     }).from(agents)
-      .where(sql.raw(PUBLIC_AGENT_DIRECTORY_WHERE_SQL))
-      .catch(() => [{ agents_online: 0 }]),
+      .where(sql.raw(PUBLIC_AGENT_DIRECTORY_WHERE_SQL)),
     db.select({
       total_trades: sql<number>`COALESCE(COUNT(*), 0)`,
       completed_trades: sql<number>`COALESCE(SUM(CASE WHEN ${trades.status} IN ('completed', 'complete') THEN 1 ELSE 0 END), 0)`,
@@ -112,14 +112,7 @@ export async function getMarketStats() {
           'unixepoch'
         ) >= datetime('now', '-1 day')
         THEN ${trades.amount} ELSE 0 END), 0)`,
-    }).from(trades).where(sql.raw(publicTradeWhereSql('trades'))).catch(() => [{
-      total_trades: 0,
-      completed_trades: 0,
-      trade_volume_usd: 0,
-      platform_fees_usd: 0,
-      trades_today: 0,
-      volume_last_24h: 0,
-    }]),
+    }).from(trades).where(sql.raw(publicTradeWhereSql('trades'))),
     db.select({
       receipt_volume_usd: sql<number>`COALESCE(SUM(${payment_receipts.usd_value_at_payment}), 0)`,
     }).from(payment_receipts)
@@ -127,11 +120,9 @@ export async function getMarketStats() {
       .where(and(
         or(eq(trades.status, 'completed'), eq(trades.status, 'complete')),
         sql`${payment_receipts.usd_value_at_payment} IS NOT NULL`, sql.raw(publicTradeWhereSql('trades')),
-      ))
-      .catch(() => [{ receipt_volume_usd: 0 }]),
+      )),
     db.select({ avg_rating: sql<number | null>`AVG(${ratings.score})` })
-      .from(ratings).where(sql.raw(`ratings.id IN (SELECT id FROM (${rankedBuyerFeedbackSql('1=1')}) WHERE feedback_rank=1)`))
-      .catch(() => [{ avg_rating: null }]),
+      .from(ratings).where(sql.raw(`ratings.id IN (SELECT id FROM (${rankedBuyerFeedbackSql('1=1')}) WHERE feedback_rank=1)`)),
     db.select({
       tasks_total: sql<number>`COALESCE(COUNT(*), 0)`,
       tasks_routed: sql<number>`COALESCE(SUM(CASE
@@ -142,26 +133,58 @@ export async function getMarketStats() {
         AND datetime(${tasks.expiresAt}) > datetime('now')
         AND (${tasks.deadlineAt} IS NULL OR datetime(${tasks.deadlineAt}) > datetime('now'))
         THEN 1 ELSE 0 END), 0)`,
-    }).from(tasks).catch(() => [{ tasks_total: 0, tasks_routed: 0, tasks_completed: 0, tasks_open: 0 }]),
+    }).from(tasks),
     db.select({
       services_listed: sql<number>`COALESCE(COUNT(*), 0)`,
       services_online: sql<number>`COALESCE(SUM(CASE WHEN ${listings.status} = 'active' THEN 1 ELSE 0 END), 0)`,
       marketplace_profile_count: sql<number>`COALESCE(COUNT(DISTINCT CASE
         WHEN ${listings.status} = 'active' THEN ${listings.seller_id} END), 0)`,
-    }).from(listings).where(sql.raw(PUBLIC_LISTING_SELLER_WHERE_SQL))
-      .catch(() => [{ services_listed: 0, services_online: 0, marketplace_profile_count: 0 }]),
-    getPublicProfileCount().catch(() => null),
+    }).from(listings).where(sql.raw(PUBLIC_LISTING_SELLER_WHERE_SQL)),
+    getPublicProfilePrincipals(),
     getVolumeByRail(),
   ])
 
+  const [publicAgents, executableServices, paymentReady, independentEconomics, routeMetrics] = await Promise.all([
+    db.select({ id: agents.id, status: agents.status, last_seen_at: agents.lastSeenAt }).from(agents).where(and(eq(agents.visibility, 'public'), sql`${agents.archivedAt} IS NULL`)),
+    getExecutablePublicServiceCount(),
+    db.select({ count: sql<number>`COUNT(*)` }).from(listings).where(and(eq(listings.status, 'active'), sql.raw(PUBLIC_LISTING_SELLER_WHERE_SQL), sql.raw(PAYMENT_READY_LISTING_SQL))),
+    getIndependentEconomicEvidence(),
+    getRouteMetrics(),
+  ])
+  const cohorts = await loadMarketplaceCohorts([...new Set([...queriedProfilePrincipals, ...publicAgents.map(agent => `user_agent_${agent.id}`)])])
+  const profileCohorts = Object.fromEntries(MARKETPLACE_COHORTS.map(cohort => [cohort, 0]))
+  for (const id of queriedProfilePrincipals) profileCohorts[cohorts.get(id)!.cohort]++
+  const cohortCounts = Object.fromEntries(MARKETPLACE_COHORTS.map(cohort => [cohort, { registered: 0, recently_online: 0 }]))
+  for (const agent of publicAgents) {
+    const attribution = cohorts.get(`user_agent_${agent.id}`)!
+    cohortCounts[attribution.cohort].registered++
+    if (getAgentAvailability(agent.status, agent.last_seen_at) === 'online') cohortCounts[attribution.cohort].recently_online++
+  }
   const registeredAgentCount = Number(registeredRows[0]?.registered_agent_count || 0)
   const marketplaceProfileCount = Number(listingRows[0]?.marketplace_profile_count || 0)
-  const publicProfileCount = queriedProfileCount ?? Math.max(registeredAgentCount, marketplaceProfileCount)
+  const publicProfileCount = queriedProfilePrincipals.length
   const tradeVolume = roundCurrency(tradeRows[0]?.trade_volume_usd)
   const receiptVolume = roundCurrency(receiptRows[0]?.receipt_volume_usd)
   const recordedVolume = tradeVolume > 0 ? tradeVolume : receiptVolume
 
   return {
+    data_status: 'available' as const,
+    observed_at: new Date().toISOString(),
+    cohort_counts: cohortCounts,
+    profile_cohort_counts: profileCohorts,
+    public_registered_agent_count: publicAgents.length,
+    active_public_registered_agent_count: registeredAgentCount,
+    cohort_attribution: 'operator_records_only',
+    independence_status: 'Only explicitly reviewed, unexpired ownership evidence qualifies; unrecognized ownership remains unverified.',
+    listings_total: Number(listingRows[0]?.services_listed || 0),
+    listings_active: Number(listingRows[0]?.services_online || 0),
+    listings_external_payment_ready: Number(paymentReady[0]?.count || 0),
+    executable_reusable_services: executableServices,
+    tasks_assigned: Number(taskRows[0]?.tasks_routed || 0),
+    economic_adoption: { independently_attributed_volume_usd: independentEconomics.volume_usd, independently_attributed_completed_trades: independentEconomics.completed_trades, qualifying_independent_autonomous_volume_usd: Number(routeMetrics.independently_attributed_autonomously_routed_gmv),
+      recorded_completed_volume_by_ownership: independentEconomics.recorded_volume_by_ownership,
+      status: 'measured' as const, coverage: 'Only current reviewed ownership attributions qualify; unknown and expired cohorts are excluded, not treated as independent.', explanation: 'Recorded transactions include controlled and unknown cohorts. They are not proof of independent adoption.' },
+    legacy_aliases: { services_listed: 'listings_total', services_online: 'listings_active', tasks_routed: 'tasks_assigned', transactions_settled: 'completed_trades; completion status alone does not confirm external settlement' },
     // Public headline metrics share one deduplicated account/agent profile count.
     agent_count: publicProfileCount,
     marketplace_profile_count: publicProfileCount,

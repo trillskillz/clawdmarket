@@ -1,4 +1,5 @@
 import 'server-only'
+import { isLocalSqliteContention } from './local-sqlite-read'
 import { createHash, randomUUID } from 'node:crypto'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -22,7 +23,7 @@ const hash = (value: unknown) => createHash('sha256').update(canonicalContract(v
 const reference = z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/)
 const units = z.string().regex(/^[1-9][0-9]{0,77}$/)
 const proposalFields = { client_reference: reference, route_id: z.uuid().optional(),
-  agent_id: z.uuid().optional(), route_request: routePlanInput.optional(),
+  agent_id: z.string().min(1).max(200).optional(), route_request: routePlanInput.optional(),
   reviewer_role_id: z.uuid(), max_daily: money, max_monthly: money, max_lifetime: money,
   mandate: routeMandateInput }
 export const organizationRouteInput = z.discriminatedUnion('version', [
@@ -266,6 +267,7 @@ export async function revokeOrganizationRoute(orgId: string, id: string, actor: 
 async function routeGuard<T>(run: () => Promise<T>): Promise<T> {
   try { return await run() } catch (error) {
     if (error instanceof PurchasingError) throw new RouteMandateError(error.code,error.status)
+    if (process.env.TURSO_DATABASE_URL?.startsWith('file:') && isLocalSqliteContention(error)) throw new RouteMandateError('PURCHASING_STORAGE_BUSY',503)
     throw error
   }
 }
@@ -324,8 +326,14 @@ export async function consumeOrganizationRouteExposure(source: PurchasingSource,
     const route = await readOriginalOrganizationRouteExposure(source,row.organization_id,row.buyer_id,payment,row.id)
     const { organizationWorkflowExposure } = await import('./organization-workflow-authorizations')
     const workflow = await organizationWorkflowExposure(source,row.organization_id,row.buyer_id,payment)
-    const daily=route.daily+workflow.daily, monthly=route.monthly+workflow.monthly, lifetime=route.lifetime+workflow.lifetime,
-      gas=route.gas+workflow.gas, fees=route.fees+workflow.fees
+    const { organizationTaskExposure } = await import('./organization-task-authorizations')
+    const task = await organizationTaskExposure(source, row.organization_id, row.buyer_id, payment)
+    const { organizationListingExposure } = await import('./organization-listing-uses')
+    const listing = await organizationListingExposure(source, row.organization_id, row.buyer_id, payment)
+    const { organizationContractExposure } = await import('./organization-contract-uses')
+    const contract = await organizationContractExposure(source, row.organization_id, row.buyer_id)
+    const daily=route.daily+workflow.daily+task.daily+listing.daily+contract.daily, monthly=route.monthly+workflow.monthly+task.monthly+listing.monthly+contract.monthly, lifetime=route.lifetime+workflow.lifetime+task.lifetime+listing.lifetime+contract.lifetime,
+      gas=route.gas+workflow.gas+task.gas+listing.gas, fees=route.fees+workflow.fees+task.fees+listing.fees
     for (const [spent,limit] of [[daily,terms.max_daily_minor],[monthly,terms.max_monthly_minor],[lifetime,terms.max_lifetime_minor]])
       if (!Number.isSafeInteger(spent) || spent < 0 || spent + input.totalMinor > limit) fail('ORGANIZATION_ROUTE_GROSS_LIMIT')
     if (isTempo(terms)) {
@@ -366,7 +374,7 @@ export async function isPrivateOrganizationRoute(routeId:string) {
   return !!row && isPrivate(frozen(row))
 }
 
-export async function readOriginalOrganizationRouteExposure(source:PurchasingSource,orgId:string,buyerId:string,payment:ReturnType<typeof mandateDto>['terms']['payment'],currentId='') {
+export async function readOriginalOrganizationRouteExposure(source:PurchasingSource,orgId:string,buyerId:string,payment:ReturnType<typeof mandateDto>['terms']['payment'] | { rail: 'credit' },currentId='') {
     const history = await source.select({ use: uses, grant: grants }).from(uses).innerJoin(grants,eq(grants.id,uses.authorization_id))
       .where(and(eq(grants.organization_id,orgId),eq(grants.buyer_id,buyerId))).limit(10001)
     if (history.length > 10000) fail('ORGANIZATION_ROUTE_HISTORY_UNAVAILABLE',503)

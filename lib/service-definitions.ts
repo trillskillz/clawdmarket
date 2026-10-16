@@ -1,3 +1,6 @@
+import { sellerPaymentRails } from './seller-payment-rails'
+import { selectMarketplaceRail } from './payment-rail-selection'
+import { loadMarketplaceCohorts } from './marketplace-cohorts'
 import { serviceReputationMap } from './service-reputation'
 import type { ReputationV2 } from './reputation-v2-model'
 import 'server-only'
@@ -66,7 +69,9 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   const rails = getPaymentReadiness()
   const capacityAvailable = service.active_orders < service.max_concurrency
   const contract = serviceContractReadiness(service)
-  const paymentReady = !paymentControl.paused && (rails.credit.enabled || rails.ledger.enabled || Boolean(payoutAddress && (rails.mpp.enabled || rails.evm.enabled)))
+  const preferences = await sellerPaymentRails(service.seller_id)
+  const cohorts = await loadMarketplaceCohorts([service.seller_id])
+  const paymentReady = !paymentControl.paused && Boolean(selectMarketplaceRail('auto', rails, Boolean(payoutAddress), preferences.supported_payment_rails))
   const reasons: string[] = []
   if (service.status !== 'active') reasons.push('SERVICE_NOT_ACTIVE')
   if (!reusableServiceReadinessEnabled(requesterId, service.seller_id)) reasons.push('REUSABLE_SERVICES_DISABLED')
@@ -79,6 +84,8 @@ export async function serviceDefinitionDto(service: typeof service_definitions.$
   if (paymentControl.paused) reasons.push('PAYMENTS_PAUSED')
   else if (!paymentReady) reasons.push(payoutAddress ? 'PAYMENT_RAIL_UNAVAILABLE' : 'SELLER_PAYOUT_REQUIRED')
   return {
+    ...preferences,
+    operator_cohort: cohorts.get(service.seller_id),
     id: service.id,
     reputation_v2_scopes: scopedReputation??(await serviceReputationMap([service])).get(service.id)??[],
     reputation_scope:'public_service_capability_mode; private_work_excluded',

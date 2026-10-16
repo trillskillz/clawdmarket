@@ -18,5 +18,5 @@ export default async function RegistryPage() {
       .then((response) => response.json()).catch(() => ({ agents: [], total: 0 })),
     getMarketStats().catch(() => null),
   ])
-  return <RegistryClient initialAgents={directory.agents || []} initialAgentTotal={Number(directory.total || 0)} initialProfileTotal={stats?.network_profile_count ?? null} />
+  return <RegistryClient initialDirectoryUnavailable={directory.data_status === 'unavailable' || typeof directory.total !== 'number'} initialStats={stats} initialAgents={directory.agents || []} initialAgentTotal={Number(directory.total || 0)} initialProfileTotal={stats?.network_profile_count ?? null} />
 }

@@ -1,4 +1,5 @@
 'use client'
+import MarketplaceEvidence from '@/components/MarketplaceEvidence'
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -26,6 +27,9 @@ type AgentService = {
   status: 'listed' | 'inactive'
   avg_response_ms: number | null
   completed_trades: number
+  supported_payment_rails: string[]
+  payment_rail_review_required: boolean
+  operator_cohort: string
   external_payment_ready: boolean
   seller_online: boolean | null
   seller_availability: 'online' | 'offline' | 'unknown' | null
@@ -45,7 +49,7 @@ type HireIntent = {
 type AcceptedToken = { chain_id: number; chain_name: string; token_address: `0x${string}`; symbol: string; decimals: number; fixed_usd_price: number }
 type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; treasury?: `0x${string}`; tokens?: AcceptedToken[]; expires_at?: string }
 type PaymentConfig = { account_credit_enabled: boolean; ledger_enabled: boolean; ledger_redeemable: boolean; mpp_configured: boolean; erc20_configured: boolean; new_payments_paused: boolean; payment_pause_reason: string | null; accepted_tokens: AcceptedToken[] }
-type MarketStats = { network_profile_count?: number; completed_trades?: number; recorded_volume_usd?: number; total_volume_usd?: number }
+type MarketStats = { executable_reusable_services?: number; network_profile_count?: number; completed_trades?: number; recorded_volume_usd?: number; total_volume_usd?: number }
 
 const CATEGORIES = [
   { id: 'all', label: 'All services' },
@@ -73,12 +77,17 @@ function catalogUrl(page: number, category: string, query: string, sort: string,
   return `/api/listings?${params.toString()}`
 }
 
+function sellerRailAvailable(service: AgentService, config: PaymentConfig | null) {
+  return Boolean(config && (service.supported_payment_rails.includes('credit') && config.account_credit_enabled
+    || service.external_payment_ready && (service.supported_payment_rails.includes('evm') && config.erc20_configured || service.supported_payment_rails.includes('mpp') && config.mpp_configured)))
+}
+
 function listingToService(listing: any, fallback = false): AgentService {
   let capabilities: string[] = Array.isArray(listing.agent_capabilities)
     ? listing.agent_capabilities.filter((item: unknown): item is string => typeof item === 'string')
     : []
   if (capabilities.length === 0) capabilities = [listing.category || 'general']
-  const name = String(listing.seller_name || 'Independent agent')
+  const name = String(listing.seller_name || 'Marketplace seller')
   return {
     id: String(listing.id),
     agent_id: String(listing.agent_id || listing.seller_id),
@@ -98,6 +107,9 @@ function listingToService(listing: any, fallback = false): AgentService {
     status: listing.status === 'active' ? 'listed' : 'inactive',
     avg_response_ms: null,
     completed_trades: Number(listing.agent_trust_completed_trades ?? listing.completed_trades ?? 0),
+    supported_payment_rails: listing.supported_payment_rails || ['ledger', 'mpp', 'evm'],
+    payment_rail_review_required: listing.payment_rail_review_required !== false,
+    operator_cohort: listing.operator_cohort?.cohort || 'ownership_unverified',
     external_payment_ready: listing.external_payment_ready === true,
     seller_online: typeof listing.seller_online === 'boolean' ? listing.seller_online : null,
     seller_availability: ['online', 'offline', 'unknown'].includes(listing.seller_availability)
@@ -134,8 +146,8 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
     const controller = new AbortController()
     const refresh = () => {
       fetch('/api/stats', { signal: controller.signal, cache: 'no-store' })
-        .then((response) => response.ok ? response.json() : {})
-        .then(setStats)
+        .then((response) => response.ok ? response.json() : null)
+        .then(data => { if (data) setStats(data) })
         .catch(() => undefined)
     }
     refresh()
@@ -166,7 +178,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
     const service = services.find((item) => item.id === listingId)
     if (service && !service.is_demo) {
       setListingQueryHandled(true)
-      if (!service.external_payment_ready && !paymentConfig.account_credit_enabled) {
+      if (!sellerRailAvailable(service, paymentConfig)) {
         setDirectListingNotice('This seller must set a payout wallet before accepting payments. Browse the ready-to-hire services below.')
         return
       }
@@ -183,7 +195,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
           return
         }
         const requestedService = listingToService(data.listing)
-        if (requestedService.status !== 'listed' || requestedService.is_demo || (!requestedService.external_payment_ready && !paymentConfig.account_credit_enabled)) {
+        if (requestedService.status !== 'listed' || requestedService.is_demo || (!sellerRailAvailable(requestedService, paymentConfig))) {
           setDirectListingNotice('This seller must have an active listing and payout wallet before accepting payments. Browse the ready-to-hire services below.')
           return
         }
@@ -339,14 +351,16 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
 
       <section className={styles.stats} aria-label="Marketplace statistics">
         {[
-          [String(stats.network_profile_count ?? 0).padStart(2, '0'), 'Network profiles'],
-          [String(stats.completed_trades ?? 0).padStart(2, '0'), 'Completed trades'],
-          [`$${Number(stats.recorded_volume_usd ?? stats.total_volume_usd ?? 0).toFixed(2)}`, 'Recorded volume'],
-          ['∞', 'Service capacity'],
+          [String(stats.network_profile_count ?? '—').padStart(2, '0'), 'Network profiles'],
+          [String(stats.completed_trades ?? '—').padStart(2, '0'), 'Completed trades'],
+          [typeof (stats.recorded_volume_usd ?? stats.total_volume_usd) === 'number' ? `$${Number(stats.recorded_volume_usd ?? stats.total_volume_usd).toFixed(2)}` : '—', 'Recorded volume'],
+          [String(stats.executable_reusable_services ?? '—'), 'Executable services'],
         ].map(([value, label]) => (
           <div key={label}><strong>{value}</strong><span>{label}</span></div>
         ))}
       </section>
+
+      <MarketplaceEvidence initialStats={initialStats} />
 
       <section className={styles.journey} aria-label="How a ClawdMarket trade works">
         {[
@@ -416,7 +430,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
               <div className={styles.agentRow}>
                 <div className={styles.avatar}>{service.initials}</div>
                 <div className={styles.agentIdentity}>
-                  <Link href={`/registry/${service.agent_id}`}>{service.agent_name}</Link>
+                  <Link href={`/registry/${service.agent_id}`}>{service.agent_name}</Link><small>{service.operator_cohort.startsWith('platform_') ? 'Platform-operated' : service.operator_cohort === 'independence_verified' ? 'Ownership reviewed' : 'Ownership unverified'}</small>
                   <span>evidence {publicTrustLabel(service.agent_trust, service.completed_trades, service.rating_count, service.reputation_v2)}<i style={{ background: '#7f857d' }} /></span>
                 </div>
                 <span className={service.seller_availability === 'offline' ? styles.unavailable : service.seller_availability === 'unknown' ? styles.unknown : styles.available}>
@@ -443,13 +457,13 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
                 <div><strong>${service.price_usd.toFixed(2)}</strong><span>per request</span></div>
                 <button
                   type="button"
-                  disabled={service.status !== 'listed' || service.is_demo || !paymentConfig || (!paymentConfig.account_credit_enabled && (!service.external_payment_ready || (!paymentConfig.erc20_configured && !paymentConfig.mpp_configured)))}
+                  disabled={service.status !== 'listed' || service.is_demo || !sellerRailAvailable(service, paymentConfig)}
                   onClick={() => {
                     trackClientEvent('hire_started', { listing_id: service.id, category: service.category, source: 'catalog' })
                     setHireIntent({ service, step: 'confirm', clientReference: crypto.randomUUID() })
                   }}
                 >
-                  {service.is_demo ? 'Preview only' : !service.external_payment_ready && !paymentConfig?.account_credit_enabled ? 'Payout setup pending' : 'Hire agent'} <span>↗</span>
+                  {service.is_demo ? 'Preview only' : !sellerRailAvailable(service, paymentConfig) ? 'Seller rail unavailable' : 'Hire agent'} <span>↗</span>
                 </button>
               </div>
             </article>
@@ -532,14 +546,15 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
                 <span className={styles.modalStep}>02 / SETTLEMENT</span>
                 <h3 id="hire-dialog-title">Choose how to fund escrow.</h3>
                 <p className={styles.settlementNotice}>The quoted total and 5% platform fee are fixed by the server. Pay directly from your wallet into this trade’s escrow; no email or account-credit deposit is required. External funds remain held until delivery is accepted or a dispute is resolved.</p>
+                <p>Seller-supported rails: {hireIntent.service.supported_payment_rails.join(', ') || 'none'}. {hireIntent.service.payment_rail_review_required ? 'Legacy preferences await owner confirmation; prose restrictions need owner review.' : 'Confirmed by the seller.'}</p>
                 <div className={styles.protocols}>
-                  {paymentConfig?.account_credit_enabled && <button type="button" disabled={submitting} onClick={() => void createTrade('credit').catch(() => undefined)}>
-                    <span>01</span><div><strong>Account balance</strong><small>Spend deposited USDC account credit. Work begins after the server reserves the total.</small></div><i>→</i>
+                  {paymentConfig?.account_credit_enabled && hireIntent.service.supported_payment_rails.includes('credit') && <button type="button" disabled={submitting} onClick={() => void createTrade('credit').catch(() => undefined)}>
+                    <span>01</span><div><strong>Account balance</strong><small>Prepaid credit cannot be withdrawn. The seller receives nonwithdrawable account credit after acceptance.</small></div><i>→</i>
                   </button>}
-                  <button type="button" disabled={submitting || !paymentConfig?.erc20_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('evm').catch(() => undefined)}>
+                  <button type="button" disabled={submitting || !hireIntent.service.supported_payment_rails.includes('evm') || !paymentConfig?.erc20_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('evm').catch(() => undefined)}>
                     <span>{paymentConfig?.account_credit_enabled ? '02' : '01'}</span><div><strong>ERC-20 wallet</strong><small>Pay with {acceptedTokenLabel}.</small></div><i>→</i>
                   </button>
-                  <button type="button" disabled={submitting || !paymentConfig?.mpp_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('mpp').catch(() => undefined)}>
+                  <button type="button" disabled={submitting || !hireIntent.service.supported_payment_rails.includes('mpp') || !paymentConfig?.mpp_configured || !hireIntent.service.external_payment_ready} onClick={() => void createTrade('mpp').catch(() => undefined)}>
                     <span>{paymentConfig?.account_credit_enabled ? '03' : '02'}</span><div><strong>MPP on Tempo</strong><small>Let an authenticated machine client fund the trade in pathUSD.</small></div><i>→</i>
                   </button>
                 </div>

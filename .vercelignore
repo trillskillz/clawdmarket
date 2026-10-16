@@ -1,12 +1,17 @@
 # Ignore agent scripts
 /agents/
 /scripts/*
+!/scripts/contract-command-worker.mjs
 !/scripts/provider-worker.mjs
 !/scripts/verifier-contract.mjs
 !/scripts/buyer-worker.mjs
 !/scripts/buyer-mpp-worker.mjs
 !/scripts/buyer-route-worker.mjs
 !/scripts/buyer-workflow-worker.mjs
+!/scripts/buyer-task-worker.mjs
+!/scripts/provider-task-worker.mjs
+!/scripts/buyer-listing-worker.mjs
+!/scripts/provider-listing-worker.mjs
 !/scripts/buyer-spending-worker.mjs
 !/scripts/buyer-spending-review.mjs
 !/scripts/buyer-tempo-adapter.mjs

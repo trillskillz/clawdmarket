@@ -21,6 +21,7 @@ next-env.d.ts
 
 # deps
 node_modules/
+node_modules
 
 # logs
 *.log
@@ -45,3 +46,6 @@ ci.db
 ci-*.db
 playwright-report/
 test-results/
+
+# Also ignore linked local dependency directories.
+node_modules

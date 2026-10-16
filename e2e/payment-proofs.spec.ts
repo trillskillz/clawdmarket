@@ -37,6 +37,8 @@ for (const width of [1440,390]) {
       await route.fulfill({ json: data })
     })
     await page.goto('/dashboard?tab=contracts')
+    await expect(page.getByText(/Prepaid credit is nonwithdrawable/)).toBeVisible()
+    await expect(page.getByText(/Sellers receive nonwithdrawable account credit, not external tokens/)).toBeVisible()
     const fund = page.getByRole('button', { name: 'Fund with account balance' })
     await expect(fund).toBeEnabled()
     await fund.click()

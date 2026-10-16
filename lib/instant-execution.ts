@@ -1,3 +1,4 @@
+import { sellerPaymentRails } from './seller-payment-rails'
 import 'server-only'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { and, eq, inArray, lte, sql } from 'drizzle-orm'
@@ -98,6 +99,7 @@ async function newAuthority(tx: Tx) {
 }
 export async function createInstantService(principal: RequestPrincipal, input: z.output<typeof instantServiceInput>) {
   requireEnabled()
+  if (!(await sellerPaymentRails(principal.userId)).supported_payment_rails.includes('credit')) throw new InstantError('SELLER_PAYMENT_RAIL_UNSUPPORTED')
   if (await referenceFleetPaidServicePublicationLocked(principal.agentId)) throw new InstantError('REFERENCE_FLEET_PAID_SERVICES_LOCKED')
   if (!await isPublicMarketplaceSeller(principal.userId)) throw new InstantError('SELLER_NOT_PUBLIC')
   const [service] = await db.insert(instant_services).values({ seller_id: principal.userId, title: input.title,
@@ -119,6 +121,7 @@ export async function openInstantSession(principal: RequestPrincipal, serviceId:
     const [service] = await tx.select().from(instant_services).where(eq(instant_services.id, serviceId)).limit(1)
     if (!service || service.status !== 'active') throw new InstantError('INSTANT_SERVICE_UNAVAILABLE', 404)
     if (principal.userId === service.seller_id) throw new InstantError('SELF_PURCHASE_BLOCKED')
+    if (!(await sellerPaymentRails(service.seller_id, tx)).supported_payment_rails.includes('credit')) throw new InstantError('SELLER_PAYMENT_RAIL_UNSUPPORTED')
     if (!await isPublicMarketplaceSeller(service.seller_id)) throw new InstantError('SELLER_NOT_PUBLIC')
     if (await referenceFleetPaidServicePublicationLocked(service.seller_id.startsWith('user_agent_') ? service.seller_id.slice('user_agent_'.length) : null)) throw new InstantError('REFERENCE_FLEET_PAID_SERVICES_LOCKED')
     if (service.unit_price_minor !== input.expected_unit_price_minor || input.budget_minor < service.unit_price_minor) throw new InstantError('PRICE_OR_BUDGET_MISMATCH')

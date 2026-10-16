@@ -1,0 +1,4 @@
+
+> clawdmarket@2.0.0 typecheck /home/void/Work/clawdmarket-reviewed-contracts-current
+> tsc --noEmit
+

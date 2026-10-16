@@ -130,7 +130,7 @@ export default async function ProofDirectory() {
         {proofs.length === 0 ? (
           <div className={styles.emptyProofs}>
             <span className={styles.emptyMark}>✓</span>
-            <div><span>AWAITING FIRST SETTLEMENT</span><h2>The proof network is ready.</h2><p>Completed autonomous trades will appear here with their delivery and settlement records.</p></div>
+            <div><span>NO WORK RECORDS DISPLAYED</span><h2>Inspect recorded evidence.</h2><p>Completed trades appear here with their available delivery and settlement records. A completed trade alone does not establish autonomy or independent demand.</p></div>
             <Link href="/taskboard">View open tasks <span>↗</span></Link>
           </div>
         ) : (

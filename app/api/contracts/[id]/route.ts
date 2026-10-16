@@ -1,7 +1,8 @@
+import { requireSellerPaymentRail, SellerRailError } from '@/lib/seller-payment-rails'
 import { NextRequest, NextResponse } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { contract_milestones, contracts, listings } from '@/lib/schema';
+import { contract_milestones, contracts, listings, organization_contract_authorizations } from '@/lib/schema';
 import { contractActionSchema, isValidUUID } from '@/lib/validation';
 import { canTransitionMilestone } from '@/lib/contracts-state';
 import { validateCsrf } from '@/lib/csrf';
@@ -18,6 +19,10 @@ import { requireNewPaymentsOpen, NewPaymentsPausedError } from '@/lib/payment-co
 import { enforceAgentSpendPolicy, AgentSpendPolicyError } from '@/lib/agent-spend-policy';
 import { enforceBuyerSpendPolicy, BuyerSpendPolicyError } from '@/lib/buyer-spend-policy';
 import { attributeOrganizationContract, withOrganizationBuyerLock } from '@/lib/organization-budgets';
+import { requireContractListingScope } from '@/lib/contract-listing-scope';
+import { PurchasingError } from '@/lib/organization-purchasing-transaction';
+import { genericContractFundingGuard } from '@/lib/organization-contract-authorizations';
+import { originalReviewedContractUse } from '@/lib/organization-contract-uses';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +54,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .where(eq(contract_milestones.contract_id, contract.id))
     .orderBy(asc(contract_milestones.milestone_index));
 
-  return NextResponse.json({ contract, milestones });
+  const [review] = await db.select({ id: organization_contract_authorizations.id }).from(organization_contract_authorizations)
+    .where(eq(organization_contract_authorizations.contract_id, contract.id)).limit(1);
+  return NextResponse.json({ contract: { ...contract, reviewed_contract: Boolean(review) }, milestones,
+    viewer: { is_buyer: auth.userId === contract.buyer_id, is_seller: auth.userId === contract.seller_id } }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -92,8 +100,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     await withOrganizationBuyerLock(auth.agentId, contract.buyer_id, () => db.transaction(async (tx) => {
       const now = new Date();
+      const original = validated.action === 'fund' ? null : await originalReviewedContractUse(tx, contract.id);
+      const refundableAmount = original ? original.terms.original.total_minor / 100 : contract.total_amount;
 
       if (validated.action === 'fund') {
+        await genericContractFundingGuard(tx, contract.id);
+        if (contract.listing_id) await requireContractListingScope(tx, contract.listing_id, {
+          expectedSeller: contract.seller_id, fundingBuyer: contract.buyer_id,
+        });
         const milestones = await tx.select().from(contract_milestones).where(eq(contract_milestones.contract_id, contract.id));
         const wholeCents = (amount: number) => Number.isFinite(amount) && amount > 0 && Math.abs(amount * 100 - Math.round(amount * 100)) < .000001;
         if (!wholeCents(contract.total_amount) || !wholeCents(contract.escrow_amount) || !milestones.length
@@ -122,6 +136,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
         await attributeOrganizationContract(tx, auth.agentId, contract.id, Math.round(contract.escrow_amount * 100), now);
 
+        await requireSellerPaymentRail(contract.seller_id, 'credit', tx);
         await lockContractFunds(tx, {
           contractId: contract.id,
           buyerId: contract.buyer_id,
@@ -167,9 +182,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           await refundContractFunds(tx, {
             contractId: contract.id,
             buyerId: contract.buyer_id,
-            amount: contract.total_amount,
+            amount: refundableAmount,
           });
-          if (contract.listing_id) {
+          if (contract.listing_id && !original) {
             await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, contract.listing_id), eq(listings.status, 'sold')));
           }
         }
@@ -179,7 +194,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         if (contract.state !== 'FUNDED') {
           throw new ContractActionError('Only an unstarted funded contract can expire', 409);
         }
-        if (!contract.expires_at || new Date(contract.expires_at).getTime() > Date.now()) {
+        const expiry = original ? Date.parse(original.terms.original.expires_at) : contract.expires_at?.getTime();
+        if (expiry === undefined || !Number.isFinite(expiry) || expiry > Date.now()) {
           throw new ContractActionError('Contract has not expired yet');
         }
         const expired = await tx
@@ -191,18 +207,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         await refundContractFunds(tx, {
           contractId: contract.id,
           buyerId: contract.buyer_id,
-          amount: contract.total_amount,
+          amount: refundableAmount,
         });
-        if (contract.listing_id) {
+        if (contract.listing_id && !original) {
           await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, contract.listing_id), eq(listings.status, 'sold')));
         }
       }
+      if (original) await originalReviewedContractUse(tx, contract.id);
     }));
 
     const [updated] = await db.select().from(contracts).where(eq(contracts.id, contract.id)).limit(1);
     return NextResponse.json({ contract: updated });
   } catch (error: any) {
-    if (error instanceof CreditError || error instanceof NewPaymentsPausedError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    if (error instanceof CreditError || error instanceof NewPaymentsPausedError || error instanceof SellerRailError || error instanceof PurchasingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AgentSpendPolicyError) return NextResponse.json({ error: error.message, code: error.code, spending_policy: error.policy }, { status: 409 });
     if (error instanceof BuyerSpendPolicyError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error?.issues || error?.errors) {

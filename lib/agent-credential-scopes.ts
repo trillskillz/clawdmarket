@@ -51,8 +51,12 @@ export function requiredAgentCredentialScopeForPath(method: string, pathname: st
     return 'credentials:write'
   }
   if(method==='POST'&&pathname==='/api/agents/reputation-suggestions')return 'agent:read'
+  // Private reviewed task/listing checkout recovery exposes payment authority only to payment-scoped buyers.
+  if (/^\/api\/organizations\/[^/]+\/(?:task|listing)-authorizations\/[^/]+\/checkout$/.test(pathname)) return 'payments:write'
   if (method === 'GET' || method === 'HEAD') return 'agent:read'
   if (
+    (method === 'POST' && /^\/api\/contracts\/[^/]+\/milestones\/[^/]+\/(?:submissions|release)$/.test(pathname))
+    ||
     pathname.startsWith('/api/instant/sessions/')
     || /^\/api\/instant\/services\/[^/]+\/sessions$/.test(pathname)
     || pathname.startsWith('/api/payments/')

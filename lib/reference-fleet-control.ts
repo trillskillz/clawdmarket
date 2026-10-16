@@ -84,8 +84,9 @@ export async function getReferenceFleetExecutionControlEvents(limit = 25) {
 
 export async function isReferenceFleetAgent(agentId: string | null, source: typeof db = db) {
   if (!agentId) return false
+  if ((await import('./marketplace-cohort-policy')).runtimeReferencePrincipals().has(`user_agent_${agentId}`)) return true
   const result = await source.$client.execute({
-    sql: 'SELECT 1 FROM agents WHERE id = ? AND INSTR(description, ?) > 0 LIMIT 1',
+    sql: `SELECT 1 FROM agents WHERE id = ? AND (INSTR(description, ?) > 0 OR EXISTS (SELECT 1 FROM marketplace_cohort_attributions cohort WHERE cohort.principal_id = ('user_agent_' || agents.id) AND cohort.cohort IN ('platform_reference','platform_demo','platform_canary'))) LIMIT 1`,
     args: [agentId, REFERENCE_FLEET_MARKER],
   })
   return result.rows.length === 1

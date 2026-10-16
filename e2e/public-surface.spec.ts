@@ -130,8 +130,8 @@ test('marketplace presents an open-ended service catalog', async ({ page, reques
   const stats = await (await request.get('/api/stats')).json();
   await page.goto('/marketplace', { waitUntil: 'load' });
 
-  await expect(page.getByText('Service capacity', { exact: true })).toBeVisible();
-  await expect(page.getByText('∞', { exact: true })).toBeVisible();
+  await expect(page.getByText('Executable services', { exact: true })).toBeVisible();
+  await expect(page.locator('section[aria-label="Marketplace statistics"] div').filter({ hasText: 'Executable services' }).locator('strong')).toHaveText(String(stats.executable_reusable_services));
   await expect(page.getByText('CURRENT CATALOG / OPEN NETWORK', { exact: true })).toBeVisible();
   await expect(page.getByText('Network profiles', { exact: true })).toBeVisible();
   await expect(page.locator('section[aria-label="Marketplace statistics"] div').filter({ hasText: 'Network profiles' }).locator('strong')).toHaveText(String(stats.network_profile_count).padStart(2, '0'));
@@ -152,7 +152,7 @@ test('homepage uses the authoritative marketplace counters', async ({ page, requ
   const liveStats = page.locator('[aria-label="Live marketplace statistics"]');
   await expect(liveStats.getByText('Network profiles', { exact: true })).toBeVisible();
   await expect(liveStats.locator('div').filter({ hasText: 'Network profiles' }).locator('strong')).toHaveText(String(stats.network_profile_count).padStart(2, '0'));
-  await expect(liveStats.locator('div').filter({ hasText: 'Tasks routed' }).locator('strong')).toHaveText(String(stats.tasks_routed).padStart(2, '0'));
+  await expect(liveStats.locator('div').filter({ hasText: 'Tasks assigned' }).locator('strong')).toHaveText(String(stats.tasks_assigned).padStart(2, '0'));
   await expect(liveStats.locator('div').filter({ hasText: 'Completed trades' }).locator('strong')).toHaveText(String(stats.completed_trades).padStart(2, '0'));
   await expect(liveStats.locator('div').filter({ hasText: 'Recorded volume' }).locator('strong')).toHaveText(`$${Number(stats.recorded_volume_usd).toFixed(2)}`);
 });
@@ -288,7 +288,7 @@ test('observe uses current authoritative market telemetry', async ({ page, reque
   await expect(statRail.getByText('01 / Network profiles', { exact: true })).toBeVisible();
   await expect(statRail.locator('div').filter({ hasText: 'Network profiles' }).locator('strong')).toHaveText(String(stats.network_profile_count));
   await expect(statRail.locator('div').filter({ hasText: 'Online now' }).locator('strong')).toHaveText(String(stats.agents_online));
-  await expect(statRail.locator('div').filter({ hasText: 'Tasks routed' }).locator('strong')).toHaveText(String(stats.tasks_routed));
+  await expect(statRail.locator('div').filter({ hasText: 'Tasks assigned' }).locator('strong')).toHaveText(String(stats.tasks_assigned));
   await expect(statRail.locator('div').filter({ hasText: 'Completed trades' }).locator('strong')).toHaveText(String(stats.completed_trades));
   await expect(statRail.locator('div').filter({ hasText: 'Recorded volume' }).locator('strong')).toHaveText(`$${Number(stats.recorded_volume_usd).toFixed(2)}`);
   await expect(page.getByText('HTTP REFRESH / 5S', { exact: true })).toBeVisible();

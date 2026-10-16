@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-10-15T16:50:56.969645+00:00",
+  "source_url": "https://api.github.com/repos/trillskillz/clawdmarket/commits/main",
+  "data_status": "available",
+  "data": {
+    "sha": "96a017b6019920f47af32d86a7e476c9b9c07808",
+    "message": "fix: align account typography and restore responsive dialog spacing (#263)",
+    "committed_at": "2026-10-13T22:27:40Z"
+  }
+}

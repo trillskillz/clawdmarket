@@ -16,7 +16,7 @@ permissions:
 jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       TURSO_DATABASE_URL: file:/tmp/clawdmarket-workspace-test-ci/ci.db
       JWT_SECRET: ci-jwt-secret-please-change

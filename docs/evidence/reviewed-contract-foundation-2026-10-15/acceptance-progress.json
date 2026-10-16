@@ -1,0 +1,631 @@
+{
+  "stage": "Actual original-party browser fulfillment verified; final fresh-funding drift coverage/full release gates incomplete",
+  "accepted_listing_candidate": "e55e151",
+  "http_contract": "1.119",
+  "migrations": 79,
+  "accepted_capability_count": "8/10; no contract capability yet",
+  "original_use_cases": {
+    "passed": 30,
+    "failed": 0,
+    "skipped": 0
+  },
+  "production_build": "passed",
+  "preservation": {
+    "local_baseline_business_rows": 845,
+    "local_baseline_tables": 133,
+    "migrations": 79,
+    "integrity": "ok",
+    "foreign_key_anomalies": 0,
+    "immutable_guards": 10,
+    "actual_queries": 5,
+    "reviewed_submission_immutable_guards": 4,
+    "reviewed_acceptance_immutable_guards": 2,
+    "reviewed_release_immutable_guards": 2,
+    "reviewed_adjudication_and_dispute_immutable_guards": 4,
+    "reviewed_funding_reference_immutable_guards": 2
+  },
+  "limits": {
+    "public_reviewed_contract_funding": true,
+    "shared_contract_gross_wired": true,
+    "full_new_contract_release_gates": false,
+    "live_funding_performed": false,
+    "independent_customer_activity_demonstrated": false,
+    "public_reviewed_contract_submission": true,
+    "internal_original_submission": true,
+    "participant_original_submission_get": true,
+    "internal_exact_buyer_acceptance": true,
+    "public_reviewed_milestone_acceptance": true,
+    "reviewed_credit_release": true,
+    "internal_original_credit_release": true,
+    "public_reviewed_credit_release": true,
+    "original_reviewed_refund_preservation": true,
+    "durable_contract_consumed_inventory_all_paths": true,
+    "internal_original_adjudication": true,
+    "participant_original_adjudication_get": true,
+    "admin_original_adjudication_get": true,
+    "original_funding_reference_boundary": true,
+    "fresh_reviewed_contract_funding_enabled_by_default": false,
+    "disposable_public_funding_and_fulfillment": true,
+    "independent_funding_process_recovery": true,
+    "finite_exact_command_journals": true,
+    "actual_fulfillment_cli_kill_restart_recovery": true,
+    "private_organization_contract_review_ui": true,
+    "actual_scoped_funding_admin_redo_partial_outcomes": true,
+    "actual_scoped_funding_frozen_expiry_and_no_automatic_acceptance": true,
+    "contract_dashboard_credit_disclosures": true,
+    "authoritative_companion_metadata_and_dashboard_restrictions": true,
+    "actual_scoped_funding_both_shared_reservation_orders": true,
+    "private_original_party_work_ui": true,
+    "actual_named_credential_browser_paid_test_credit_journey": true
+  },
+  "records": {
+    "original_use": {
+      "local_log": "/tmp/clawdmarket-contract-original-uses-checked-2026-10-15.log",
+      "log_sha256": "ea794d00c59463d5c5ce0d003b80b3c0129fd71dd1ff7735b8c7d4f8e0c28b37"
+    },
+    "compatibility": {
+      "local_log": "/tmp/clawdmarket-contract-original-uses-compatibility-2026-10-15.log",
+      "log_sha256": "61652a1343486dd47b577143c60b92a8ea291f1172501b3629112cb837704ad5"
+    },
+    "build": {
+      "local_log": "/tmp/clawdmarket-contract-original-uses-build-2026-10-15.log",
+      "log_sha256": "0ec09635f6dc8d3c322c7bdbeea75826a635b0789c96a333b8de8d4e8d4ccbbd"
+    },
+    "preservation": {
+      "local_log": "/tmp/clawdmarket-contract-original-uses-preservation-2026-10-15.log",
+      "log_sha256": "ac4f6b8a5ab308ce737ab15703098ce20c809bd9d420cb14bcd1afbc1b817896"
+    },
+    "shared-gross": {
+      "local_log": "/tmp/clawdmarket-contract-shared-gross-full-focused-2026-10-15.log",
+      "log_sha256": "4a10c022bfeadfced112e6bf0d9d22c7d0144c66ed841812f0e6cd83f871f6e2"
+    },
+    "shared-regression": {
+      "local_log": "/tmp/clawdmarket-contract-shared-gross-regression-2026-10-15.log",
+      "log_sha256": "b6fc71a5d73f8169e1948540bcc7b6b7c2ed4c268e5b94a1f22d976cbcccbcea"
+    },
+    "shared-build": {
+      "local_log": "/tmp/clawdmarket-contract-shared-gross-build-2026-10-15.log",
+      "log_sha256": "a0a3c88eebb141a25bdd988fa9de869ba211f41c4d4a553f19b1638441f27d32"
+    },
+    "submission": {
+      "local_log": "/tmp/clawdmarket-contract-submission-interlock-focused-2026-10-15.log",
+      "log_sha256": "098391364fadd6e339d2f405e404d48ec88d6fc88238253339361a3b74e48941"
+    },
+    "submission-build": {
+      "local_log": "/tmp/clawdmarket-contract-submission-interlock-build-2026-10-15.log",
+      "log_sha256": "ffcabe31e7257b4d6f687e3e1f6452577ff1716a096c81f032058e2072e7508e"
+    },
+    "submission-preservation": {
+      "local_log": "/tmp/clawdmarket-contract-original-submissions-preservation-2026-10-15.log",
+      "log_sha256": "37674fcae3d96feb03a18adeeddd21e97d7fb241c4e6ca47200c45954430bdc3"
+    },
+    "submission-read": {
+      "local_log": "/tmp/clawdmarket-contract-submission-read-focused-2026-10-15.log",
+      "log_sha256": "f6503fa97b26a441c931fb69be8e47d9aa5cd31b679566681c2220b748311b0c"
+    },
+    "submission-read-compatibility": {
+      "local_log": "/tmp/clawdmarket-contract-submission-read-compatibility-2026-10-15.log",
+      "log_sha256": "bb2ee9dff97b0a572d5d2a3e5477db38bc7adb51b266ccb0a96952a74e19a1d6"
+    },
+    "submission-read-build": {
+      "local_log": "/tmp/clawdmarket-contract-submission-read-build-2026-10-15.log",
+      "log_sha256": "9d7cfaf026a90c07e384109c415340b52812d95709fac7eaa1012411da3cd04f"
+    },
+    "exact-acceptance": {
+      "local_log": "/tmp/clawdmarket-contract-exact-acceptance-final-2026-10-15.log",
+      "log_sha256": "f599a41636f27f5048bb1fc6936138ea808aaba91dbffc623b0ac5216cfd6888"
+    },
+    "exact-acceptance-build": {
+      "local_log": "/tmp/clawdmarket-contract-exact-acceptance-build-2026-10-15.log",
+      "log_sha256": "24dbfd19bf4e0e222e96c98de4dfe1c1df1aba52c566c7dd56503146e751fc10"
+    },
+    "exact-acceptance-preservation": {
+      "local_log": "/tmp/clawdmarket-contract-exact-acceptance-preservation-2026-10-15.log",
+      "log_sha256": "8ae707827cfaf0a5fb6a55c12cad3730a2fe76d44a2e38edd48bb822c1125cb1"
+    },
+    "identical-output-redo": {
+      "local_log": "/tmp/clawdmarket-contract-exact-acceptance-identical-redo-2026-10-15.log",
+      "log_sha256": "676ea56c8e2bdecd85b1512b1af1d3cdc819644d20efadb6f42feccf0e75948a"
+    },
+    "public-acceptance-focused": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-final-focused-2026-10-15.log",
+      "log_sha256": "35a6c919daee1b355ddd2ece87398484ac142a10fd04f715b7df163f85d96b5b"
+    },
+    "public-acceptance-build": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-build-2026-10-15.log",
+      "log_sha256": "818ec61528f8fc4361565ce968c87f9cd963012fc2e7cbcaf59328a930f1c15d"
+    },
+    "public-acceptance-types": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-final-types-after-build-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "public-acceptance-lint": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-final-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "public-acceptance-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "public-acceptance-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "public-acceptance-python": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-python-allowed-2026-10-15.log",
+      "log_sha256": "5b20cae0d8e42752cae994c6add67a9a9fd35011463af7552fe13589e933e12f"
+    },
+    "public-acceptance-types-generated-race": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-final-types-2026-10-15.log",
+      "log_sha256": "d2fc3aa6309eee9cd5ad194936535008046d16354e9decdb595843138077a81e"
+    },
+    "public-acceptance-python-sandbox-denial": {
+      "local_log": "/tmp/clawdmarket-contract-acceptance-api-python-2026-10-15.log",
+      "log_sha256": "71d10887547a5771e53fed77044404162f91268068dc7c390af60e43e01db54b"
+    },
+    "original-release-focused": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-final-focused-2026-10-15.log",
+      "log_sha256": "1f472c61c691e35095500de1f01d10e32e95b99c75ad2755e7fcf88c22c536b0"
+    },
+    "original-release-initial-assertion-failure": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-focused-2026-10-15.log",
+      "log_sha256": "c2de419e57a6d92fc083dec813e631b467e66f012ecfec92f09c57e1fe861e75"
+    },
+    "original-release-types": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-final-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "original-release-lint": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-final-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "original-release-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "original-release-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-build-2026-10-15.log",
+      "log_sha256": "e7f3f3346fcf70fb37df952a33e1917f39b856fb19955bdb6f6d1ef01382f635"
+    },
+    "original-release-preservation": {
+      "local_log": "/tmp/clawdmarket-contract-original-release-preservation-2026-10-15.log",
+      "log_sha256": "01039a2b00a48ef0088d724bd2ab19acd610600d474bba4724e82286718e5cc3"
+    },
+    "original-refunds-focused": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-final-focused-2026-10-15.log",
+      "log_sha256": "c7ce83790aae0886545a665074c84d5a7b38c9991ab6b0f3a66f7daaae981345"
+    },
+    "original-refunds-initial-epoch-regression": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-focused-2026-10-15.log",
+      "log_sha256": "86a61e02b60e4d507f3c0e274d028ef282aaca6ce2765b808872ee8de367fb06"
+    },
+    "original-refunds-types": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-final-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "original-refunds-lint": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-final-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "original-refunds-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-refunds-build-2026-10-15.log",
+      "log_sha256": "0a69160ab692015e03c2138cca2f22807d0a23ed035ccf810bf9e9a3593c8039"
+    },
+    "adjudication-focused": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-checked-focused-2026-10-15.log",
+      "log_sha256": "276053cd618f93465db31902a31f684cbe8110832b529a6d16dea62d69ae4819"
+    },
+    "adjudication-initial-ordinary-policy-fixture": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-final-focused-2026-10-15.log",
+      "log_sha256": "547dc475da06edb49ad60ab2cfa4d6d143c7feff9926b070249f4243f1a5e0cf"
+    },
+    "adjudication-types": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-checked-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "adjudication-lint": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-checked-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "adjudication-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-final-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "adjudication-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-final-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "adjudication-metadata-static": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-metadata-2026-10-15.log",
+      "log_sha256": "3021d07ec80e2a4d276b70159e149d9a70767a4c84481611a45ce717532ecb04"
+    },
+    "adjudication-metadata-actual": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-metadata-allowed-2026-10-15.log",
+      "log_sha256": "76d6b4283986b8b9c5371369bc4668606b9c7301b7540ebd48dd9d30a203a051"
+    },
+    "adjudication-metadata-unverified-file-only": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-metadata-actual-2026-10-15.log",
+      "log_sha256": "6f037ae7bcb4f3f292e34b0eaeac4490f19e47274cedf29b439433c0b8fa4783"
+    },
+    "adjudication-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-build-final-2026-10-15.log",
+      "log_sha256": "43a89e5bfb4fb83b36a7ae30fe4e2d850945d2a7706b1fa0e473f7b9179cad02"
+    },
+    "adjudication-preservation": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-preservation-2026-10-15.log",
+      "log_sha256": "75b103c024f9daaab88810753714a904e19ff91afb1ea5a5eaa4bf654b21d7b8"
+    },
+    "adjudication-python": {
+      "local_log": "/tmp/clawdmarket-contract-original-adjudication-python-2026-10-15.log",
+      "log_sha256": "1da699aea4b4a838563f9eb5f2f7ba8a2cc50e7aaa1c1ce0d86cd1bbe7696b42"
+    },
+    "output-focused": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-focused-2026-10-15.log",
+      "log_sha256": "8d41741cf278ee64b5175dc3e9e2e5a88596addf03886013ce87ce8de6e626d0"
+    },
+    "output-types": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "output-lint": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "output-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "output-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "output-python": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-python-2026-10-15.log",
+      "log_sha256": "588f8f798faa726c89639799b0cd6fe3d8451160a7998826cd3d34f05c0d0e3b"
+    },
+    "output-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-output-build-2026-10-15.log",
+      "log_sha256": "b5f5cbe55c9f6c73adcd0e821856f5662f19afbe41824a3a2ba5f518647b3b0a"
+    },
+    "public-release-focused": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-focused-2026-10-15.log",
+      "log_sha256": "bdb1b9a617f13b920cf81088f17b5ccbb61ba225556a7cac2bc3bb3e1ea285bf"
+    },
+    "public-release-initial-clock-rejection": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-focused-2026-10-15.log",
+      "log_sha256": "02f675f80a44eac7b1a616584f1a8505a846691c6cc84b46dce04088ee86cdf4"
+    },
+    "public-release-isolated-clock-control": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-diagnostic-2026-10-15.log",
+      "log_sha256": "96a1299ce0a2fc2901e25fd36da9e6b325c03a4a39e71b59686d3a3adac04862"
+    },
+    "public-release-types": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "public-release-lint": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "public-release-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "public-release-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-checked-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "public-release-python": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-python-2026-10-15.log",
+      "log_sha256": "6abb7386708b9c72713bf6fee86f3ced9c0c31c39d0ce12dddbb6e2fff22cbe0"
+    },
+    "public-release-build": {
+      "local_log": "/tmp/clawdmarket-contract-public-release-build-2026-10-15.log",
+      "log_sha256": "508b09c25e61ab5e4f417b075a8a09921bac9ea7715fb56ec2eb412df6cdbcec"
+    },
+    "inventory-focused": {
+      "local_log": "/tmp/clawdmarket-contract-original-inventory-focused-2026-10-15.log",
+      "log_sha256": "aa84ecf32b066ebce27168d6eeae5fc0f2b67bca7ab069e45fbe9165e69eed61"
+    },
+    "inventory-compatibility": {
+      "local_log": "/tmp/clawdmarket-contract-original-inventory-compatibility-2026-10-15.log",
+      "log_sha256": "8a864f2630594bea1bb09bac0f380adcc17bd5aff672d33cd5271fbad308170e"
+    },
+    "inventory-types": {
+      "local_log": "/tmp/clawdmarket-contract-original-inventory-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "inventory-lint": {
+      "local_log": "/tmp/clawdmarket-contract-original-inventory-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "inventory-build": {
+      "local_log": "/tmp/clawdmarket-contract-original-inventory-build-2026-10-15.log",
+      "log_sha256": "1396818798f94505c367d78fb38d4359483d32d32db4ccb2572f9f0ac076c8b7"
+    },
+    "funding-reference-focused": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-checked-focused-2026-10-15.log",
+      "log_sha256": "56c1dd9f04ea4f19135350b6d3289469f6248ca5fe45648762dddbf259a16715"
+    },
+    "funding-reference-initial-wrapped-assertion": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-focused-2026-10-15.log",
+      "log_sha256": "cc7f2ee903f7ff1677d8ca7e4f6da8c33b1f3ff41a2f6885f2638cf200b556d5"
+    },
+    "funding-reference-types": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-checked-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "funding-reference-lint": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-checked-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "funding-reference-build": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-build-2026-10-15.log",
+      "log_sha256": "ce86196d95f45acdd532b8214781a9633985586dca396981979e68a5bfa6e073"
+    },
+    "funding-reference-preservation": {
+      "local_log": "/tmp/clawdmarket-contract-funding-reference-preservation-2026-10-15.log",
+      "log_sha256": "1a76542c49eea876a5b54b95242e533bc8ffe1174cb685b09f8250a46bda6ef3"
+    },
+    "scoped-funding-focused": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-focused-2026-10-15.log",
+      "log_sha256": "e0f7946edc76732961c1542c1e131a7545af81bf9d7637e97d8f758485af03c0"
+    },
+    "scoped-funding-types": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-types-2026-10-15.log",
+      "log_sha256": "e33167fb6822d53ae36bd5d2f1c0e58ab52a06df2a6b0fcaabb957c0fce3a31e"
+    },
+    "scoped-funding-lint": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-lint-2026-10-15.log",
+      "log_sha256": "274defd211e21a07801bed918f6f95b9bf2b2387b024402d4a408af48be99067"
+    },
+    "scoped-funding-sdk-check": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-sdk-check-2026-10-15.log",
+      "log_sha256": "1d916296516fac0a7a1e7e4bdb76e277effbe0829cbf21e8e3ae50d4c7c96a77"
+    },
+    "scoped-funding-sdk-build": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-checked-sdk-build-2026-10-15.log",
+      "log_sha256": "144010b0f4954b94d201d3e8a087bfc453620c5e9108cc6782cd13d34c367ea9"
+    },
+    "scoped-funding-python": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-python-2026-10-15.log",
+      "log_sha256": "9bb8eb8a3fdd9d8adb289895219d80d47dfb57b110f27064418817835a46d732"
+    },
+    "scoped-funding-build": {
+      "local_log": "/tmp/clawdmarket-contract-scoped-funding-build-2026-10-15.log",
+      "log_sha256": "6fdebd8ec8ec859fe6d43264cd8f4dd7e07a3a0aa99740a7ab99976c7e680af8"
+    },
+    "funding-process": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/funding-process.json",
+      "source_manifest_sha256": "b33e7fc41c966356d9a5847bdcd73642dbb571c3380b0ba5e4bca3cc104e3928"
+    },
+    "finite-worker": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/finite-worker.json",
+      "source_manifest_sha256": "e5906b8d6882155eef870419f9ae1d9efee5b8ac35fd65200a8d667577cfae51"
+    },
+    "private-review-ui": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/private-review-ui.json",
+      "source_manifest_sha256": "2d21876f71e62fef354dc3a28f708af8297158b67c9b60d078a531b6e5e7ad2e"
+    },
+    "scoped-economic-outcomes": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/scoped-economic-outcomes.json",
+      "source_manifest_sha256": "d97af9e148517a37fe97e140d980d3ad8a69ecb3838dcd3f70cf0b481e7aceb0"
+    },
+    "dashboard-disclosure": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/dashboard-disclosure.json",
+      "source_manifest_sha256": "16c340110e20cffbd07a73a18dea1bfbbd08e6d1ce9b637e1743161608d6e9a9"
+    },
+    "shared-reservation-orders": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/shared-reservation-orders.json",
+      "source_manifest_sha256": "8da08b1718e08662fe52fe29a0bf85bb999f9d1201eec76c2e6d3af9de163755"
+    },
+    "participant-workspace": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/participant-workspace.json",
+      "source_manifest_sha256": "45f4cc366f29298030cac4074e9eee6ef496093f741fef5e8559a8b8b4758134"
+    },
+    "security-reevaluation": {
+      "evidence": "docs/evidence/reviewed-contract-foundation-2026-10-15/security-reevaluation.json",
+      "full_exit": 1,
+      "production_exit": 0
+    }
+  },
+  "compatibility_cases": {
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0
+  },
+  "current_disjoint_focused_cases_total": 68,
+  "existing_family_regression_cases": {
+    "passed": 83,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "integration before the additional helper exclusion check; that check is included in current32"
+  },
+  "source_manifest": {
+    "files": 68,
+    "sha256": "1494cc5cb35e627eb3d8f3c7efa3ca918e35256591226986d725b2ed195c41ba",
+    "baseline": "e55e151"
+  },
+  "private_inspection_cases": {
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  "readonly_compatibility_cases": {
+    "passed": 48,
+    "failed": 0,
+    "skipped": 0
+  },
+  "internal_acceptance_cases": {
+    "passed": 65,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "complete focused run before strengthening the redo fixture to identical output bytes"
+  },
+  "identical_output_redo_case": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "public_acceptance_cases": {
+    "passed": 86,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Current API/original credit/creation/review/canonical contract/TypeScript SDK regression; both real HTTP lost committed acceptance replies, including Python SDK"
+  },
+  "python_cases": {
+    "passed": 27,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Current Python SDK local HTTP/export suite; actual public application lost funding replies run in Node integration gate"
+  },
+  "limitations_public_acceptance": [
+    "Controlled future-use records over actual disposable local test-token deposits; no public reviewed funding or completed economic journey",
+    "No current contract full predeploy/browser release acceptance, no capability9",
+    "Initial parallel typecheck lost generated .next files during build; final sequential rerun passes",
+    "Initial Python suite could not open localhost sockets in sandbox; permitted local-listener rerun passes",
+    "Migration76 unchanged; prior preservation is applicable, not repeated in this adapter batch"
+  ],
+  "original_release_cases": {
+    "passed": 75,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Final current original use/output/acceptance/release, genuine HTTP recovery, ordinary credit/creation/review, SDK and migration regression"
+  },
+  "original_release_limitations": [
+    "Internal financial command only; no public reviewed fund, submission or release adapter or completed SDK/human economic journey",
+    "Actual deposits on unforked disposable local test chain; initial funding/use records are directly constructed controlled records, not public checkout",
+    "Initial run26pass1fail because injected database cause was wrapped outside regex assertion; bounded cause inspection corrected; final75pass0fail0skip",
+    "Admin routes now validate original use/amount and label separate adjudication. Saved-reference immutable admin-ruling recovery remains unfinished",
+    "Unstarted refund preservation and consumed inventory/funding still need completion before reviewed funding"
+  ],
+  "current_disjoint_focused_cases_scope": "Current68 scoped-fund/original-finance/review/canonical/SDK controls; no full contract predeploy/browser/process acceptance",
+  "historical_submission_cases": {
+    "passed": 64,
+    "failed": 0,
+    "skipped": 0
+  },
+  "historical_shared_gross_cases": {
+    "passed": 32,
+    "failed": 0,
+    "skipped": 0
+  },
+  "original_refund_cases": {
+    "passed": 67,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Final current original refund/expiry and original financial/acceptance/ordinary credit/review regression"
+  },
+  "original_refund_limitations": [
+    "Actual disposable token deposits with direct controlled reviewed-use reservation records, not public reviewed funding or customer adoption",
+    "Frozen deadline exercised with controlled test clock; no real waiting or live order expiration",
+    "Refund handlers no longer reactivate reviewed listings; durable consumed-inventory exclusion after manual status reactivation still unfinished across catalog/funding/adoption",
+    "Initial39pass1fail caught new falsy-zero timestamp regression; finite/undefined checks corrected it; final67pass0fail0skip",
+    "Migration77 unchanged; prior preservation still applies, not rerun for these handler changes"
+  ],
+  "adjudication_cases": {
+    "passed": 92,
+    "failed": 0,
+    "skipped": 0
+  },
+  "adjudication_metadata_cases": {
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0,
+    "overlaps_prior_functional_gate": true
+  },
+  "adjudication_limitations": [
+    "No public reviewed funding/submission/release or complete finite client/UI/customer journey",
+    "Reviewed future-use tests construct controlled initial reservations over actual disposable local deposits; ordinary compatibility control does use actual public unreviewed funding",
+    "Initial91pass1fail: ordinary fixture inherited 50-cent approval threshold; explicitly configured its five-dollar cap for the $1.05 positive control without changing app policy; final92pass",
+    "Non-escalated metadata-only runner reported file-level pass without executing cases; not counted. Permitted runtime executes all18 canonical cases",
+    "18 canonical cases overlap the92-case gate; do not add them as unique cases",
+    "Final OpenAPI-only description added after92 functional cases; final18 canonical/static/build validate that addition",
+    "Full new contract predeploy/browser/customer economic acceptance remains unfinished"
+  ],
+  "production_readonly_recheck": {
+    "observed_at": "2026-10-15T16:50:56Z",
+    "live_http": "1.116",
+    "main": "96a017b6019920f47af32d86a7e476c9b9c07808",
+    "profiles": 90,
+    "registered_agents": 48,
+    "online_agents": 15,
+    "independence": "not established by public legacy counts",
+    "security_run": 38761523868,
+    "security_conclusion": "failure, same one high braces advisory",
+    "payment_monitor_run": 38763126626,
+    "payment_monitor_scope": "readiness/enabled rails/Base+Tempo RPC only",
+    "remote_changes_performed": false
+  },
+  "public_output_cases": {
+    "passed": 53,
+    "failed": 0,
+    "skipped": 0
+  },
+  "public_output_limitations": [
+    "Actual provider HTTP reply loss and SDK recovery use direct controlled original reviewed funding/use records over genuine disposable token deposits; not public reviewed funding or customer demand",
+    "Migration78 unchanged; previous preservation applies and was not rerun",
+    "No public original credit-release endpoint, finite process worker/UI or full reviewed contract release acceptance",
+    "Legacy generic hashless submit remains blocked; only dedicated saved-reference operation is exposed locally"
+  ],
+  "public_release_cases": {
+    "passed": 91,
+    "failed": 0,
+    "skipped": 0
+  },
+  "public_release_limitations": [
+    "Scoped reviewed funding/use is not exposed; initial reviewed reservations in controls are direct stored records backed by genuine disposable deposits",
+    "Actual public seller/acceptance/release handlers and both buyer SDKs exercise later multi-milestone fulfillment, but this is not a full public reviewed purchasing/client/worker journey",
+    "Initial56cases22pass34fail: all34 fail PAYMENT_PREDATES_INTENT before release. Isolated first control passes. Positive fixtures now advance only the unforked test node before transfers past actual original intent/latest-block time; no intent backdating or production proof guard changes",
+    "Final91pass0fail0skip; tests include actual lost financial replies and original post-completion recovery with no duplicate debit/credit",
+    "Migration78 unchanged; prior local baseline preservation applies and was not repeated",
+    "No current full contract predeploy/browser/process-journal gates, live paid canary or independent demand demonstrated"
+  ],
+  "original_inventory_cases": {
+    "passed": 59,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "New frozen consumption/free-review controls plus ordinary credit/catalog/transparency"
+  },
+  "inventory_compatibility_cases": {
+    "passed": 44,
+    "failed": 0,
+    "skipped": 4,
+    "scope": "Existing reviewed listing authorization and task-workspace controls; four preexisting retired legacy-credit cases skipped"
+  },
+  "inventory_limitations": [
+    "Original scope derives from actual use plus frozen authorization JSON, not mutable listing status or contract listing link; no inferred historical authority",
+    "Free review reserves no inventory; original stored paid use consumes it permanently across refunds",
+    "Tests use direct future reviewed-use records with genuine disposable deposits, not public reviewed funding or customer adoption",
+    "Shared ledger/credit reservation guards cover callers trying to adopt the same listing; task/service public APIs otherwise create their own listing identities",
+    "Migration78 unchanged, prior local preservation applies; no new full contract predeploy/browser/process gates"
+  ],
+  "funding_reference_cases": {
+    "passed": 47,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Current original financial/HTTP/adjudication/reference/refund/inventory plus migration/replay controls"
+  },
+  "funding_reference_limitations": [
+    "Internal transaction-source append/read only; no scoped public funding API, SDK or financial writer",
+    "Controlled future reservations are directly constructed over genuine disposable token deposits; no complete public reviewed purchase/customer activity",
+    "Initial39pass1fail: unique buyer/reference constraint correctly rejected a direct duplicate, but Drizzle wrapped its cause outside the regex assertion; precise bounded cause inspection corrected; current47pass0fail0skip",
+    "No inferred request receipt for earlier reservations; original financial/fulfillment/refund meaning stays intact",
+    "No new complete contract predeploy/browser/process-journal acceptance or independent demand demonstrated"
+  ],
+  "scoped_funding_cases": {
+    "passed": 68,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Actual scoped owner/reviewer/buyer/fulfillment/final receipt APIs, two actual lost funding SDK replies, policy/rollback/old finance/reference/review/canonical/SDK controls"
+  },
+  "scoped_funding_limitations": [
+    "Fresh rollout gate defaultsfalse; enabled ONLY inside dedicated disposable fixture process; no production/global execution flags changed",
+    "Actual public draft/proposal/selected-reviewer/buyer fund/start/output/exact acceptance/release journey with real disposable test-token deposit proof, not direct funding/use construction in new scoped tests",
+    "Both actual lost committed funding replies recover through TypeScript/Python then complete public fulfillment despite revocation/current owner/rail changes, new-payment pause and fresh rollout closure",
+    "Controlled fixtures are not independent adoption, remote sandbox proof or a live paid canary",
+    "Current68 scope is focused; original separate-process funding races/SIGKILL, durable buyer/provider journals, human review/work UI and full release gates still required",
+    "Migration79 unchanged by the writer; preceding preservation applies, not rerun",
+    "Operator example records defaultfalse; no deployment or live rollout authorized"
+  ]
+}

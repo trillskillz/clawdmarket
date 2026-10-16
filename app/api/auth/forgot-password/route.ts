@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       try {
         const sent = await fetch('https://api.resend.com/emails', {
           method: 'POST',
+          signal: AbortSignal.timeout(10_000),
           headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from,
@@ -94,7 +95,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         message: 'If an account with that email exists, we will email a reset link.',
-        ...(resetToken && process.env.NODE_ENV !== 'production' ? { resetToken } : {}),
       },
       { status: 200, headers: getRateLimitHeaders(rateLimitResult) }
     );

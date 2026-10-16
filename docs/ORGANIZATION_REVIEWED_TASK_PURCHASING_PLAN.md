@@ -1,6 +1,9 @@
 # Next dependency: independently reviewed task-board purchasing
 
-Dependency audit only. Not implemented, accepted or counted. Follow complete
+This dependency is now implemented and accepted locally as HTTP 1.117, capability
+7/10. See [complete acceptance](ORGANIZATION_REVIEWED_TASK_PURCHASING_AUDIT.md)
+and [next listing dependency](ORGANIZATION_REVIEWED_LISTING_PURCHASING_PLAN.md).
+The original dependency requirements below remain the acceptance scope. Follow complete
 acceptance of independently reviewed enterprise workflows; existing workflow,
 service-route, direct-service and read credentials do not become task authority.
 

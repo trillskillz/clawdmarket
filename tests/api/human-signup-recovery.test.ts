@@ -92,18 +92,29 @@ test('configured recovery sends a link and revokes it if email delivery fails', 
   process.env.PASSWORD_RESET_FROM_EMAIL = 'ClawdMarket <recovery@clawdmkt.com>'
   const originalFetch = globalThis.fetch
   let sentTo = ''
+  let deliveredToken = ''
   try {
     globalThis.fetch = (async (_input, init) => {
       const body = JSON.parse(String(init?.body))
       sentTo = body.to[0]
       assert.match(body.text, /\/auth\/reset-password\?token=[a-f0-9]{64}/)
+      deliveredToken = body.text.match(/token=([a-f0-9]{64})/)[1]
       return new Response('{}', { status: 200 })
     }) as typeof fetch
     assert.equal((await (await forgot.GET()).json()).configured, true)
     const sent = await forgot.POST(request('/api/auth/forgot-password', { email: 'human-recovery@test.invalid' }, '2001:db8::306'))
     assert.equal(sent.status, 200)
+    assert.deepEqual(await sent.json(), { message: 'If an account with that email exists, we will email a reset link.' })
     assert.equal(sentTo, 'human-recovery@test.invalid')
     assert.equal((await db.select().from(schema.password_reset_tokens)).length, 1)
+    const [stored] = await db.select().from(schema.password_reset_tokens)
+    assert.notEqual(stored.token_hash, deliveredToken)
+    const completed = await reset(request('/api/auth/reset-password', { token: deliveredToken, password: 'DeliveredSandboxPassword123' }, '2001:db8::308'))
+    assert.equal(completed.status, 200)
+    const [changed] = await db.select().from(schema.users).where(eq(schema.users.id, userId))
+    assert.equal(await verifyPassword('DeliveredSandboxPassword123', changed.password_hash), true)
+    const replay = await reset(request('/api/auth/reset-password', { token: deliveredToken, password: 'WrongReplayPassword123' }, '2001:db8::309'))
+    assert.equal(replay.status, 400)
 
     globalThis.fetch = (async () => new Response('{}', { status: 503 })) as typeof fetch
     const failed = await forgot.POST(request('/api/auth/forgot-password', { email: 'human-recovery@test.invalid' }, '2001:db8::307'))
@@ -114,4 +125,25 @@ test('configured recovery sends a link and revokes it if email delivery fails', 
     delete process.env.RESEND_API_KEY
     delete process.env.PASSWORD_RESET_FROM_EMAIL
   }
+})
+
+test('expired links fail and configured requests remain generic and rate limited for unknown accounts', async () => {
+  const token = randomBytes(32).toString('hex')
+  await passwordReset.storeResetToken(token, userId)
+  await db.update(schema.password_reset_tokens).set({ expires_at: Date.now() - 1 }).where(eq(schema.password_reset_tokens.user_id, userId))
+  assert.equal((await reset(request('/api/auth/reset-password', { token, password: 'ExpiredPassword123' }, '2001:db8::310'))).status, 400)
+  process.env.RESEND_API_KEY = 'sandbox-test-only'
+  process.env.PASSWORD_RESET_FROM_EMAIL = 'recovery@test.invalid'
+  const previous = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = (async () => { calls++; throw new Error('Unexpected network request') }) as typeof fetch
+  try {
+    for (let i = 0; i < 3; i++) {
+      const response = await forgot.POST(request('/api/auth/forgot-password', { email: 'unknown-person@test.invalid' }, '2001:db8::311'))
+      assert.equal(response.status, 200)
+      assert.deepEqual(await response.json(), { message: 'If an account with that email exists, we will email a reset link.' })
+    }
+    assert.equal((await forgot.POST(request('/api/auth/forgot-password', { email: 'unknown-person@test.invalid' }, '2001:db8::311'))).status, 429)
+    assert.equal(calls, 0)
+  } finally { globalThis.fetch = previous; delete process.env.RESEND_API_KEY; delete process.env.PASSWORD_RESET_FROM_EMAIL }
 })

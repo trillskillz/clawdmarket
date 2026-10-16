@@ -1,0 +1,18 @@
+✔ original contract use fails closed on financial-family contradiction instead of adopting another financial reference (106.776301ms)
+✔ original contract use fails closed on orphan-sale contradiction instead of adopting another financial reference (4094.56736ms)
+✔ funded companion without its original use cannot silently disappear from gross history (4087.508239ms)
+✔ an old reservation cannot be reclassified as a new reviewed draft by resetting its state (33.378162ms)
+✔ private contract review freezes original ordered milestones, credit fee/refund terms and an independent organizational reviewer without funding (882.293392ms)
+✔ every contract companion state blocks generic funding and exact proposal/decision replay never reopens revocation (133.48031ms)
+✔ contract decision rejects current ownership, assignment, reviewer, amount, milestone, acceptance, deadline, seller rail and ban drift (821.406776ms)
+✔ contract review refuses reviewer ownership of provider, changed original proposal, unreferenced legacy drafts, CSRF and oversized input (133.201495ms)
+✔ elapsed review windows cannot invent acceptance for any companion state while ordinary historical policy stays unchanged (219.302896ms)
+✔ runtime schema migration upgrades a legacy database and is idempotent (531.592736ms)
+ℹ tests 30
+ℹ suites 0
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 71641.266389

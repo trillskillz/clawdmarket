@@ -1,3 +1,4 @@
+import { independentPartiesSql } from './independent-economic-evidence'
 import { parseUnits } from 'viem'
 import { db } from './db'
 import { publicTradeWhereSql } from './public-trade-visibility'
@@ -14,7 +15,7 @@ const field = (path: string) => `json_extract(${receiptJSON}, '$.${path}')`
 export async function getRouteMetrics() {
   const [totals, origins, capacity, checks, outcomes] = await Promise.all([
     db.$client.execute({ sql: `WITH route_evidence AS (
-      SELECT r.id, r.state, r.service_order_id, r.candidates_json, r.created_at AS planned_at, o.price_minor,
+      SELECT CASE WHEN ${independentPartiesSql('t')} THEN 1 ELSE 0 END AS independently_attributed, r.id, r.state, r.service_order_id, r.candidates_json, r.created_at AS planned_at, o.price_minor,
         COALESCE(origin.channel, 'legacy_unknown') AS channel, COALESCE(origin.cohort, 'legacy_unknown') AS cohort,
         unixepoch(t.funded_at) AS funded_at, unixepoch(d.created_at) AS delivered_at, t.completed_at,
         CASE WHEN r.state = 'completed' AND t.status IN ('completed','complete') AND EXISTS (
@@ -81,6 +82,7 @@ export async function getRouteMetrics() {
       SUM(accepted_settled) AS accepted_settled_routes, SUM(CASE WHEN accepted_settled = 1 THEN price_minor ELSE 0 END) AS assisted_gmv_minor,
       SUM(CASE WHEN backed_receipt = 1 AND automation_eligible = 1 AND accepted_settled = 1 THEN 1 ELSE 0 END) AS autonomous_routes,
       SUM(CASE WHEN backed_receipt = 1 AND automation_eligible = 1 AND accepted_settled = 1 THEN price_minor ELSE 0 END) AS autonomous_gmv_minor,
+      SUM(CASE WHEN backed_receipt = 1 AND automation_eligible = 1 AND accepted_settled = 1 AND independently_attributed = 1 THEN price_minor ELSE 0 END) AS independent_autonomous_gmv_minor,
       SUM(funded) AS funded, SUM(dispatch_queued) AS dispatch_queued, SUM(provider_acknowledged) AS provider_acknowledged,
       SUM(delivered) AS delivered, SUM(buyer_accepted) AS buyer_accepted, SUM(payout_confirmed) AS payout_confirmed, SUM(backed_receipt) AS backed_receipts,
       SUM(CASE WHEN backed_receipt = 1 AND EXISTS (SELECT 1 FROM route_retry_funding_steps retry WHERE retry.route_id = route_evidence.id AND retry.order_id = service_order_id) THEN 1 ELSE 0 END) AS completed_retries,
@@ -172,6 +174,8 @@ export async function getRouteMetrics() {
     contract_version: 2, currency: 'USD', plans, viable_plans: count(row.viable_plans), executions, cancelled: count(row.cancelled), failed: count(row.failed),
     accepted_settled_routes: accepted, planning_to_execution_rate: rate(executions, plans), execution_to_accepted_settlement_rate: rate(accepted, executions),
     assisted_routed_gmv: money(count(row.assisted_gmv_minor)), autonomously_routed_gmv: money(count(row.autonomous_gmv_minor)), autonomously_settled_routes: count(row.autonomous_routes),
+    independently_attributed_autonomously_routed_gmv: money(count(row.independent_autonomous_gmv_minor)),
+    independence_basis: 'Current operator-reviewed unexpired ownership evidence for both parties in distinct owner groups. Unknown ownership never qualifies.',
     autonomy_status: 'evidence_gated' as const,
     funnel: { funded: count(row.funded), dispatch_queued: count(row.dispatch_queued), provider_acknowledged: count(row.provider_acknowledged), delivered: count(row.delivered),
       buyer_accepted: count(row.buyer_accepted), payout_confirmed: count(row.payout_confirmed), backed_receipts: count(row.backed_receipts) },

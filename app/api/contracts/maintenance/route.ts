@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { contract_milestones, contracts, listings } from '@/lib/schema';
 import { nextContractStateFromMilestones } from '@/lib/contracts-state';
 import { ensureContractWallets, refundContractFunds } from '@/lib/contract-settlement';
+import { originalReviewedContractUse } from '@/lib/organization-contract-uses';
+import { PurchasingError } from '@/lib/organization-purchasing-transaction';
 
 export const dynamic = 'force-dynamic'
 
@@ -30,13 +32,13 @@ export async function POST(req: NextRequest) {
   let autoApprovedMilestones = 0;
 
   const expirable = await db
-      .select({ id: contracts.id, buyer_id: contracts.buyer_id, seller_id: contracts.seller_id, total_amount: contracts.total_amount, listing_id: contracts.listing_id })
+      .select({ id: contracts.id, buyer_id: contracts.buyer_id, seller_id: contracts.seller_id, total_amount: contracts.total_amount, listing_id: contracts.listing_id, expires_at: contracts.expires_at })
       .from(contracts)
       .where(
         and(
           eq(contracts.state, 'FUNDED'),
-          sql`${contracts.expires_at} IS NOT NULL`,
-          sql`${contracts.expires_at} <= ${now}`,
+          or(and(sql`${contracts.expires_at} IS NOT NULL`, sql`${contracts.expires_at} <= ${now}`),
+            sql`EXISTS (SELECT 1 FROM organization_contract_uses original_use WHERE original_use.contract_id = ${contracts.id})`),
         )
       );
 
@@ -44,8 +46,11 @@ export async function POST(req: NextRequest) {
     await ensureContractWallets(contract.buyer_id, contract.seller_id);
   }
 
-  await db.transaction(async (tx) => {
+  try { await db.transaction(async (tx) => {
     for (const contract of expirable) {
+      const original = await originalReviewedContractUse(tx, contract.id);
+      const expiry = original ? Date.parse(original.terms.original.expires_at) : contract.expires_at?.getTime();
+      if (expiry === undefined || !Number.isFinite(expiry) || expiry > now.getTime()) continue;
       const expired = await tx
         .update(contracts)
         .set({ state: 'REFUNDED', updated_at: now })
@@ -56,12 +61,13 @@ export async function POST(req: NextRequest) {
         await refundContractFunds(tx, {
           contractId: contract.id,
           buyerId: contract.buyer_id,
-          amount: contract.total_amount,
+          amount: original ? original.terms.original.total_minor / 100 : contract.total_amount,
         });
-        if (contract.listing_id) {
+        if (contract.listing_id && !original) {
           await tx.update(listings).set({ status: 'active' }).where(and(eq(listings.id, contract.listing_id), eq(listings.status, 'sold')));
         }
         expiredContracts += 1;
+        if (original) await originalReviewedContractUse(tx, contract.id);
       }
     }
 
@@ -73,7 +79,9 @@ export async function POST(req: NextRequest) {
         updated_at: contract_milestones.updated_at,
       })
       .from(contract_milestones)
-      .where(eq(contract_milestones.state, 'AWAITING_BUYER_REVIEW'));
+      .where(and(eq(contract_milestones.state, 'AWAITING_BUYER_REVIEW'),
+        sql`NOT EXISTS (SELECT 1 FROM organization_contract_authorizations reviewed
+          WHERE reviewed.contract_id = ${contract_milestones.contract_id})`));
 
     for (const m of reviewMilestones) {
       const reviewedAt = new Date(m.updated_at as any).getTime();
@@ -82,7 +90,9 @@ export async function POST(req: NextRequest) {
         const approved = await tx
           .update(contract_milestones)
           .set({ state: 'APPROVED', updated_at: now })
-          .where(and(eq(contract_milestones.id, m.id), eq(contract_milestones.state, 'AWAITING_BUYER_REVIEW')))
+          .where(and(eq(contract_milestones.id, m.id), eq(contract_milestones.state, 'AWAITING_BUYER_REVIEW'),
+            sql`NOT EXISTS (SELECT 1 FROM organization_contract_authorizations reviewed
+              WHERE reviewed.contract_id = ${contract_milestones.contract_id})`))
           .returning({ id: contract_milestones.id });
         autoApprovedMilestones += approved.length;
       }
@@ -102,7 +112,11 @@ export async function POST(req: NextRequest) {
       const derived = nextContractStateFromMilestones(ms.map((x) => x.state as any));
       await tx.update(contracts).set({ state: derived as any, updated_at: now }).where(eq(contracts.id, c.id));
     }
-  });
+  }); } catch (error) {
+    if (error instanceof PurchasingError) return NextResponse.json({ success: false, error: error.message,
+      code: error.code, financial_changes_committed: false, ran_at: now.toISOString() }, { status: error.status });
+    throw error;
+  }
 
   return NextResponse.json({
     success: true,

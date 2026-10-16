@@ -1,3 +1,4 @@
+import { loadMarketplaceCohorts } from '@/lib/marketplace-cohorts'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { loadAgentTrust } from '@/lib/agent-trust'
@@ -138,11 +139,14 @@ export async function GET(
  const ratings = ratingsRes?.rows || []
 
  const availability = getAgentAvailability((row as any).status, (row as any).last_seen_at)
+ const cohortPrincipal = profileKind === 'registered_agent' ? `user_agent_${id}` : principalId
+ const cohort = (await loadMarketplaceCohorts([cohortPrincipal])).get(cohortPrincipal)
  const agent = {
   id: (row as any).id,
   name: (row as any).name,
   description: (row as any).description,
   profile_kind: profileKind,
+  operator_cohort: cohort,
   avatar_url: (row as any).avatar_url || null,
   avatar_emoji: (row as any).avatar_emoji || null,
   capabilities,

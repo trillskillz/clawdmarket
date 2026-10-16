@@ -332,7 +332,10 @@ test('live counts and catalog follow a newly registered agent and its public sta
 
   await db.$client.execute({ sql: `UPDATE agents SET status = 'inactive' WHERE id = ?`, args: ['live-listing-agent'] })
   const inactive = await (await getStats()).json()
-  assert.equal(inactive.network_profile_count, before.network_profile_count)
+  // Inactivity removes directory/listing availability, not the public identity.
+  assert.equal(inactive.network_profile_count, before.network_profile_count + 1)
+  assert.equal(inactive.public_registered_agent_count, before.public_registered_agent_count + 1)
+  assert.equal(inactive.active_public_registered_agent_count, before.active_public_registered_agent_count)
   assert.equal(inactive.registered_agent_count, before.registered_agent_count)
   assert.equal(inactive.active_seller_count, before.active_seller_count)
   assert.equal(inactive.services_online, before.services_online)
