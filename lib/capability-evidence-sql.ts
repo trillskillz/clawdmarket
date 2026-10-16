@@ -61,7 +61,7 @@ export function backedCapabilityEventSql(event: 'e' | 'capability_performance_ev
   return `${backedCompletionSql(event, trade)} AND ${boundedCycleExclusionSql(trade, backedCompletionSql('cycle_event', 'cycle_trade'), true)}`
 }
 
-/** Compatibility verified=true filter means observed backed work, never measured skill. */
+/** Explicit work_proof=true filter means observed backed work, never measured skill. */
 export const PUBLIC_AGENT_WORK_PROOF_SQL = `EXISTS (SELECT 1 FROM capability_performance_events e
   JOIN trades t ON t.id = e.trade_id AND ${backedCapabilityEventSql('e', 't')}
   WHERE e.seller_agent_id = agents.id)`

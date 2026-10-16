@@ -1,0 +1,21 @@
+{
+  "failed_ci_run": "https://github.com/trillskillz/clawdmarket/actions/runs/38912475658",
+  "deployed_head": "726029f2171e5b316356528ff89768f02910091d",
+  "node": {
+    "total": 1190,
+    "passed": 1048,
+    "failed": 1,
+    "skipped": 141
+  },
+  "failure": "Real SQLite BUSY during candidate-service SELECT in funded-route retry preflight while independent root/retry children competed.",
+  "correction": "Bound only read-only inspections with existing fresh-client helper. Financial reservation and coherent workflow snapshot remain outside this read retry; remote reads run once.",
+  "focused": {
+    "total": 38,
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0
+  },
+  "security_dependency_graph_changed": false,
+  "original_financial_references_preserved": true,
+  "full_current_gates": "pending"
+}

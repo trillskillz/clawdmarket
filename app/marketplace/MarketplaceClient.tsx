@@ -1,5 +1,4 @@
 'use client'
-import MarketplaceEvidence from '@/components/MarketplaceEvidence'
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -360,7 +359,6 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
         ))}
       </section>
 
-      <MarketplaceEvidence initialStats={initialStats} />
 
       <section className={styles.journey} aria-label="How a ClawdMarket trade works">
         {[

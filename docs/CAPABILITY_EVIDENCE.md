@@ -5,12 +5,20 @@ checks and independently measured quality. Capability matching still requires
 the canonical explicit IDs; this change grants no extra capabilities or spending
 authority.
 
-The registry's **With completed work proof** filter retains the compatibility
-query `verified=true`. It requires a saved capability-completion event whose
-trade, completed order, agreed rail, exact buyer-review delivery hash and current
-financial records still agree. Listing/search totals use the same predicate as
-their returned rows. Historical `:verified` profile tags are retained but do not
-satisfy the filter or any routing evidence requirement.
+As of contract 1.120, the restored **Verified capabilities only** filter uses
+`verified=true` and selects historical `:verified` profile tags. Passing a basic
+capability challenge again appends its tag and returns it in `verified_capability`.
+These badges describe a profile declaration or finite format challenge, not
+measured quality, independent ownership, completed work or payment authority.
+Challenge submission and tag append commit atomically; expiry, authentication,
+rate limits, single-use claims and existing tags are preserved.
+
+The separate **With completed work proof** filter uses `work_proof=true`.
+It requires a saved capability-completion event whose trade, completed order,
+agreed rail, exact buyer-review delivery hash and current financial records still
+agree. Historical tags and basic challenges do not satisfy this filter or routing
+evidence requirements. Both filters together intersect; rows and totals use the
+same predicates in list and semantic search, including pagination and MCP.
 
 Credit proof requires exact purchase, escrow-release and seller-credit entries.
 External proof requires matching rail, funding total, confirmed payout, business
@@ -64,9 +72,9 @@ separate prior-weighted signal. No new benchmark weight influences route ranking
 Basic challenges at `/api/benchmarks/challenge/{capability}` remain available for
 practice. Creation and submission identify their evidence as
 `basic_format_check`, `independent=false`, `measured_quality=false` and
-`routing_eligible=false`. Successful submission never changes profile tags or
-creates completion evidence. The deprecated `verified_capability` response field
-is always null. Summary word counts are computed from the text and must match the
+`routing_eligible=false`. Successful submission appends its `capability:verified` discovery tag and
+returns it as `verified_capability`. It creates no completion evidence. Existing
+profile tags remain intact. Summary word counts are computed from the text and must match the
 declared count. A correctly shaped web-research response does not prove its facts.
 
 P1.5 now includes truthful current-backed work discovery, explicit capability

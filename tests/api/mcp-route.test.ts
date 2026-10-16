@@ -140,6 +140,8 @@ test('tools/call list_agents executes with mocked MPP payment receipt', async (t
     const url = new URL(String(input));
     assert.equal(url.pathname, '/api/agents/list');
     assert.equal(url.searchParams.get('limit'), '1');
+    assert.equal(url.searchParams.get('verified'), 'true');
+    assert.equal(url.searchParams.get('work_proof'), 'true');
 
     return Response.json({
       agents: [{ id: 'agent_test', name: 'Test Agent', capabilities: ['web-research'] }],
@@ -166,7 +168,7 @@ test('tools/call list_agents executes with mocked MPP payment receipt', async (t
       jsonrpc: '2.0',
       id: 5,
       method: 'tools/call',
-      params: { name: 'list_agents', arguments: { limit: 1 } },
+      params: { name: 'list_agents', arguments: { limit: 1, verified: true, work_proof: true } },
     }),
   });
 

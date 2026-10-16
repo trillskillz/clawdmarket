@@ -1,3 +1,10 @@
+## Public presentation update — 2026-10-16
+
+At the owner's explicit request, repeated Recorded marketplace evidence panels
+are removed from home, marketplace, registry and Observe. The API definitions and
+cohort labels below remain authoritative. Legacy tag/challenge verification is
+restored separately from completed-work proof; see [capability evidence](CAPABILITY_EVIDENCE.md).
+
 # Marketplace evidence and payment policy — local HTTP 1.118 candidate
 
 These changes are implemented locally. Production still served HTTP 1.116 in

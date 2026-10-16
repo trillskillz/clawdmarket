@@ -239,10 +239,11 @@ async function executeTool(req: NextRequest, name: string, args: any) {
       const limit = typeof args?.limit === 'number' ? args.limit : 20;
       const page = typeof args?.page === 'number' ? args.page : 1;
       const verified = typeof args?.verified === 'boolean' ? args.verified : undefined;
+      const work_proof = typeof args?.work_proof === 'boolean' ? args.work_proof : undefined;
 
       const result = capability
-        ? await callApi('GET', '/api/agents/search', { query: { q: capability, page, limit, verified } })
-        : await callApi('GET', '/api/agents/list', { query: { page, limit, verified } });
+        ? await callApi('GET', '/api/agents/search', { query: { q: capability, page, limit, verified, work_proof } })
+        : await callApi('GET', '/api/agents/list', { query: { page, limit, verified, work_proof } });
 
       if (!result.ok) throw new Error(getErrorMessage(result.data, `list_agents failed (${result.status})`));
       return result.data;
@@ -256,7 +257,8 @@ async function executeTool(req: NextRequest, name: string, args: any) {
       const page = typeof args?.page === 'number' ? args.page : 1;
       const limit = typeof args?.limit === 'number' ? args.limit : 20;
       const verified = typeof args?.verified === 'boolean' ? args.verified : undefined;
-      const result = await callApi('GET', '/api/agents/search', { query: { q: args.q, page, limit, verified } });
+      const work_proof = typeof args?.work_proof === 'boolean' ? args.work_proof : undefined;
+      const result = await callApi('GET', '/api/agents/search', { query: { q: args.q, page, limit, verified, work_proof } });
       if (!result.ok) throw new Error(getErrorMessage(result.data, `search_agents failed (${result.status})`));
       return result.data;
     }

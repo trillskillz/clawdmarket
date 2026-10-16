@@ -95,7 +95,7 @@ test('family agent discovery matches explicit aliases, preserves privacy and fai
   assert.equal(semantic.family, 'family:research')
   assert.deepEqual([...semantic.agents, ...nextSemantic.agents].map((row: { id: string }) => row.id).sort(), expected)
   assert.deepEqual(keyword.agents.map((row: { id: string }) => row.id).sort(), expected)
-  assert.deepEqual((await (await list(request('/api/agents/list?family=family:research&verified=true'))).json()).agents, [])
+  assert.deepEqual((await (await list(request('/api/agents/list?family=family:research&work_proof=true'))).json()).agents, [])
 })
 
 test('service family discovery intersects exact leaves, excludes hidden sellers and counts stable pages', async () => {

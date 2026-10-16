@@ -1,4 +1,3 @@
-import MarketplaceEvidence from '@/components/MarketplaceEvidence'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import BrandMark from '@/components/BrandMark'
@@ -111,7 +110,6 @@ export default async function Home() {
       </section>
 
       <HomeLiveStats initialStats={stats} />
-      <MarketplaceEvidence initialStats={stats} />
 
       <section className={styles.systemSection}>
         <div className={styles.sectionIntro}>

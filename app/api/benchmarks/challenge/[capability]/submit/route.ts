@@ -4,6 +4,9 @@ import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { internalErrorResponse } from '@/lib/api-error'
 import { z } from 'zod'
+import { eq, sql } from 'drizzle-orm'
+import { agents } from '@/lib/schema'
+import { purchasingTransaction, PurchasingError } from '@/lib/organization-purchasing-transaction'
 
 export const dynamic = 'force-dynamic'
 const bodySchema = z.object({ challenge_id: z.uuid(), response: z.record(z.string(), z.unknown()) }).strict()
@@ -103,21 +106,31 @@ export async function POST(
 
     const { passed, score } = validateResponse(capability, response)
 
-    // Update challenge record
-    const claimed = await client.execute({
-      sql: `UPDATE capability_challenges SET submitted_at = ?, passed = ?, score = ?
-            WHERE id = ? AND submitted_at IS NULL AND expires_at >= ?`,
-      args: [nowUnix, passed ? 1 : 0, score, challenge_id, nowUnix],
+    const verifiedCapability = passed ? `${capability}:verified` : null
+    const claimed = await purchasingTransaction(async tx => {
+      const result = await tx.run(sql`UPDATE capability_challenges SET submitted_at = ${nowUnix}, passed = ${passed ? 1 : 0}, score = ${score}
+        WHERE id = ${challenge_id} AND agent_id = ${auth.agentId} AND submitted_at IS NULL AND expires_at >= ${nowUnix}`)
+      if (!result.rowsAffected) return false
+      if (verifiedCapability) {
+        // Append to the current row inside the same transaction. Other capability
+        // tags survive concurrent challenge submissions; this badge is discovery only.
+        await tx.update(agents).set({ capabilities: sql`CASE
+          WHEN EXISTS (SELECT 1 FROM json_each(${agents.capabilities}) WHERE value = ${verifiedCapability}) THEN ${agents.capabilities}
+          ELSE json_insert(${agents.capabilities}, '$[#]', ${verifiedCapability}) END`
+        }).where(eq(agents.id, auth.agentId))
+      }
+      return true
     })
-    if (!claimed.rowsAffected) return NextResponse.json({ error: 'Challenge already submitted or expired' }, { status: 409 })
+    if (!claimed) return NextResponse.json({ error: 'Challenge already submitted or expired' }, { status: 409 })
 
     return NextResponse.json({
       passed,
       score,
-      verified_capability: null, // Deprecated compatibility field; format checks never prove skill.
+      verified_capability: verifiedCapability, // Historical discovery badge; not backed work or measured skill.
       evidence,
     }, { headers: { ...getRateLimitHeaders(limit), 'Cache-Control': 'private, no-store' } })
   } catch (err: any) {
+    if (err instanceof PurchasingError) return NextResponse.json({ error: err.code }, { status: err.status })
     return internalErrorResponse('Capability challenge submission failed', err)
   }
 }

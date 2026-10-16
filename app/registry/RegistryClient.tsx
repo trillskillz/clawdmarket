@@ -1,5 +1,4 @@
 'use client'
-import MarketplaceEvidence from '@/components/MarketplaceEvidence'
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -30,7 +29,7 @@ function availabilityLabel(agent: any) {
   return 'not checked in'
 }
 
-export default function RegistryClient({ initialStats = null, initialDirectoryUnavailable = false, initialAgents, initialAgentTotal, initialProfileTotal }: { initialStats?: Record<string, any> | null; initialDirectoryUnavailable?: boolean; initialAgents: any[]; initialAgentTotal: number; initialProfileTotal: number | null }) {
+export default function RegistryClient({ initialDirectoryUnavailable = false, initialAgents, initialAgentTotal, initialProfileTotal }: { initialDirectoryUnavailable?: boolean; initialAgents: any[]; initialAgentTotal: number; initialProfileTotal: number | null }) {
   const [agents, setAgents] = useState<any[]>(initialAgents)
   const [agentTotal, setAgentTotal] = useState(initialAgentTotal)
   const [directoryTotal, setDirectoryTotal] = useState(initialAgentTotal)
@@ -42,6 +41,7 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
   const [filter, setFilter] = useState('')
   const [error, setError] = useState<string | null>(initialDirectoryUnavailable ? 'The registry could not be reached.' : null)
   const [verifiedOnly, setVerifiedOnly] = useState(false)
+  const [workProofOnly, setWorkProofOnly] = useState(false)
   const [family, setFamily] = useState('')
   const [lookupDomain, setLookupDomain] = useState('')
   const [lookupResult, setLookupResult] = useState<any>(null)
@@ -59,7 +59,7 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
   const directoryTotalRef = useRef<number | null>(initialAgentTotal)
   const loadMoreRequestRef = useRef<AbortController | null>(null)
 
-  useEffect(() => () => loadMoreRequestRef.current?.abort(), [filter, verifiedOnly, family, semanticMode, semanticQuery])
+  useEffect(() => () => loadMoreRequestRef.current?.abort(), [filter, verifiedOnly, workProofOnly, family, semanticMode, semanticQuery])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -96,6 +96,7 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
       const params = new URLSearchParams({ page: '1', limit: String(AGENT_PAGE_SIZE) })
       if (filter.trim()) params.set('search', filter.trim())
       if (verifiedOnly) params.set('verified', 'true')
+      if (workProofOnly) params.set('work_proof', 'true')
       if (family) params.set('family', family)
       fetch(`/api/agents/list?${params.toString()}`, { signal: controller.signal })
         .then(async (response) => {
@@ -106,7 +107,7 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
           setAgents(data.agents ?? [])
           setAgentTotal(Number(data.total || 0))
           setAgentPage(1)
-          if (!filter.trim() && !verifiedOnly && !family) {
+          if (!filter.trim() && !verifiedOnly && !workProofOnly && !family) {
             directoryTotalRef.current = Number(data.total || 0)
             setDirectoryTotal(Number(data.total || 0))
           }
@@ -120,7 +121,7 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
         })
     }, delay)
     return () => { clearTimeout(debounce); clearTimeout(timeout); controller.abort() }
-  }, [fetchKey, filter, verifiedOnly, family, semanticMode])
+  }, [fetchKey, filter, verifiedOnly, workProofOnly, family, semanticMode])
 
   useEffect(() => {
     setError(null)
@@ -137,6 +138,7 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
     const timer = setTimeout(() => {
       const params = new URLSearchParams({ q: semanticQuery.trim(), page: '1', limit: String(AGENT_PAGE_SIZE) })
       if (verifiedOnly) params.set('verified', 'true')
+      if (workProofOnly) params.set('work_proof', 'true')
       if (family) params.set('family', family)
       fetch(`/api/agents/search?${params.toString()}`, { signal: controller.signal })
         .then(async (response) => {
@@ -164,7 +166,7 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
         })
     }, 500)
     return () => { clearTimeout(timer); controller.abort() }
-  }, [semanticMode, semanticQuery, verifiedOnly, family, fetchKey])
+  }, [semanticMode, semanticQuery, verifiedOnly, workProofOnly, family, fetchKey])
 
   const displayedAgents = semanticMode ? semanticResults : agents
   const resultCount = semanticMode ? semanticTotal : agentTotal
@@ -175,6 +177,7 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
     const nextPage = (semanticMode ? semanticPage : agentPage) + 1
     const params = new URLSearchParams({ page: String(nextPage), limit: String(AGENT_PAGE_SIZE) })
     if (verifiedOnly) params.set('verified', 'true')
+    if (workProofOnly) params.set('work_proof', 'true')
     if (family) params.set('family', family)
     if (semanticMode) params.set('q', semanticQuery.trim())
     else if (filter.trim()) params.set('search', filter.trim())
@@ -251,7 +254,6 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
         </div>
       </header>
 
-      <MarketplaceEvidence initialStats={initialStats} />
 
       <section className={styles.discoveryPanel}>
         <div className={styles.searchPanel}>
@@ -273,7 +275,10 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
             <span>{semanticLoading ? 'SEARCHING' : `${String(resultCount).padStart(2, '0')} RESULTS`}</span>
           </div>
           <div className={styles.searchOptions}>
-            <button type="button" className={verifiedOnly ? styles.verifiedActive : ''} onClick={() => setVerifiedOnly((value) => !value)}>
+            <button type="button" title="Profile verification tag, including basic capability challenges; not a quality or payment guarantee" aria-pressed={verifiedOnly} className={verifiedOnly ? styles.verifiedActive : ''} onClick={() => setVerifiedOnly((value) => !value)}>
+              <i /> Verified capabilities only
+            </button>
+            <button type="button" aria-pressed={workProofOnly} className={workProofOnly ? styles.verifiedActive : ''} onClick={() => setWorkProofOnly((value) => !value)}>
               <i /> With completed work proof
             </button>
             <span>{semanticMode ? 'Natural-language capability matching' : 'Exact name and capability matching'}</span>
@@ -338,11 +343,11 @@ export default function RegistryClient({ initialStats = null, initialDirectoryUn
           </div>
         )}
 
-        {!resultsLoading && !error && directoryTotal === 0 && !filter && !verifiedOnly && !family && (
+        {!resultsLoading && !error && directoryTotal === 0 && !filter && !verifiedOnly && !workProofOnly && !family && (
           <div className={styles.emptyState}><span>EMPTY NETWORK</span><h3>Be the first agent listed.</h3><p>The registry is ready for its first capability provider.</p><Link href="/docs">Read the docs →</Link></div>
         )}
 
-        {!resultsLoading && !error && (directoryTotal > 0 || filter || verifiedOnly || family || semanticMode) && displayedAgents.length === 0 && (
+        {!resultsLoading && !error && (directoryTotal > 0 || filter || verifiedOnly || workProofOnly || family || semanticMode) && displayedAgents.length === 0 && (
           <div className={styles.emptyState}><span>NO MATCH</span><h3>Try a broader capability.</h3><p>No active agents match the current search.</p></div>
         )}
 
