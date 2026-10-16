@@ -1,3 +1,29 @@
+## Current cumulative candidate — 2026-10-16
+
+Publication is authorized for this release. Final acceptance, test counts and exact
+merged/deployed identities are maintained in [PR #274](https://github.com/trillskillz/clawdmarket/pull/274),
+with the [release investigation and rollback record](SECURITY_FIRST_CUMULATIVE_RELEASE_2026-10-15.md).
+Earlier local-only/baseline sections below are timestamped history.
+
+| Finding | Current disposition |
+|---|---|
+| 1. Baseline and capability state | Fresh live reads after quota recovery confirm HTTP 1.116, 90 profiles, 48 registrations, 15 online, 21 recorded completions and $0.92 volume. Candidate HTTP 1.119/schema 79 is distinguished from production until its deployment record passes. |
+| 2. Braces security maintenance | Installed vulnerable path removed, full/production audits clean with no mutes, targeted real-lint regressions pass, complete security-maintenance38843892238 passes. Protected security prerequisite764398c deployed through38842411158 attempt2. Two independent CodeQL hash false positives remain visible and triaged. |
+| 3. Metrics | Candidate uses authoritative cohort metadata and explicit unknown ownership, precise listing/executable inventory, attributable economics, legacy aliases and unavailable/stale observations. Reusable and instant discovery still have no services; no independent adoption is claimed. |
+| 4. Credit and rail suitability | Candidate enforces seller-supported rails and owner confirmation across all new purchasing paths, discloses nonwithdrawability and seller proceeds, and preserves original funded terms. Prose-only restrictions await owner review rather than automatic binding migration. |
+| 5. Recovery | Token, rate, generic-response, expiry, single-use and provider-failure behavior repaired/tested through local transport sandbox. Production sender remains unconfigured; actual approved provider inbox test remains external. Wallet/API and database readiness are assessed separately. |
+| 6. Verification claims | Candidate labels distinguish finite structure/tests, declared metadata, integrity, authenticated reports, explicit buyer consent and financial evidence. Remote execution, semantic accuracy and independence are not inferred. |
+| 7. Reputation | Authorized production ranking policy preserved. Candidate exposes freshness, buyer breadth/concentration, unproven status, model/calibration status and pending representative review. Empirical calibration remains pending. |
+| 8. Product claims | Corrected GitHub description published/read back. Candidate active surfaces remove obsolete recursive/training claims and unsupported capacity claims; historical records and retired semantics remain. |
+| 9. Operations and canary | Quota exhaustion resolved by owner-completed $5.99 monthly Developer upgrade, overages disabled. Approved production snapshot and separate local migration79/replay preserve all original records across136 tables and66 original migration entries. Seven timestamped evidence slots remain distinct. Reserves and snapshot anomalies checked; fresh worker heartbeat, paid canary and independent economics remain unproved. |
+| 10. Pilot | Narrow API-testing materials, admission/acceptance/rail/refund/deadline criteria and private cohort-aware funnel/cost measurements prepared. Provider/customer consent, readiness, recruitment authorization and real costs/demand remain external. No outreach or synthetic customer activity created. |
+
+The [quota incident](TURSO_READ_QUOTA_INCIDENT_2026-10-16.md) and
+[sanitized recovery evidence](evidence/security-first-release-2026-10-15/production-recovery.json)
+contain no customer records, credentials or private fingerprints. Fresh reviewed-
+contract funding remains disabled by default. No live funding, custody change,
+global rollout, real-user email or outreach is authorized by publication permission.
+
 ## Security-first publication authorized — 2026-10-15
 
 The latest user explicitly authorizes GitHub/Vercel publication after fixing

@@ -1,3 +1,20 @@
+## Capped read recovery and verified security deployment — 2026-10-16
+
+Owner completed monthly Developer checkout with overages disabled. Reads and both
+canonical readiness endpoints recovered. Approved protected-main backup38843991825
+was encrypted, privately downloaded/decrypted, and its remote artifact deleted.
+Separate local restore migrated66→79/replayed while preserving original records
+across136 tables and all66 original migration entries; integrity/FK/guards/five
+queries pass. No production restore, real funding or rollout change occurred.
+Security prerequisite764398c deployed successfully through38842411158 attempt2;
+cumulative source security-maintenance38843892238 passed. Final cumulative release
+acceptance and exact CI/deploy/smoke identities are maintained in PR274 and
+`docs/SECURITY_FIRST_CUMULATIVE_RELEASE_2026-10-15.md`. The236 frozen runtime/config/
+test hashes remain72d083cd886c8d0d58afc84d495f0daa97e79a4e0caef72fa4f646484baeb9ba.
+Do not infer paid success or customer demand from controlled tests or health checks.
+No new/fresh reviewed-contract or global execution flags are enabled by this work.
+Earlier in-progress/read-block/local-only checkpoints below are historical.
+
 ## Protected security prerequisite merged — 2026-10-16
 
 PR275 passed all four protected checks and merged via required squash as

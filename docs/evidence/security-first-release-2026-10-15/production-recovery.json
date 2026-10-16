@@ -1,0 +1,69 @@
+{
+  "recovery_point_at": "2026-10-16T03:08:40.008Z",
+  "protected_main_sha": "764398c16bd020355d3c6c91153b5ac1d6a4b07c",
+  "backup_run": "https://github.com/trillskillz/clawdmarket/actions/runs/38843991825",
+  "transport": {
+    "algorithm": "AES-256-GCM CMS / RSA3072 recipient",
+    "private_key_uploaded": false,
+    "plaintext_uploaded": false,
+    "ciphertext_checksum_verified": true,
+    "remote_artifact_id": 12022281799,
+    "remote_artifact_deleted": true,
+    "remaining_run_artifacts": 0
+  },
+  "before": {
+    "scope": "Private actual-production recovery copy; separate local restore only",
+    "baseline_migrations": 66,
+    "original_tables": 136,
+    "integrity": "ok",
+    "foreign_key_anomalies": 0
+  },
+  "after": {
+    "scope": "Actual-production private recovery copy migrated locally only; no production restore",
+    "migrations": 79,
+    "original_tables": 136,
+    "original_records_unchanged": true,
+    "integrity": "ok",
+    "foreign_key_anomalies": 0,
+    "immutable_guards": {
+      "reputation": 10,
+      "funding_reference": 2,
+      "release": 2,
+      "acceptance": 2,
+      "submission": 4,
+      "adjudication_and_dispute": 4
+    },
+    "original_migration_ledger_rows_unchanged": 66
+  },
+  "evidence_queries": [
+    "buyer_feedback",
+    "backed_reputation",
+    "marketplace_ranking",
+    "capability_backing",
+    "verified_agent_discovery"
+  ],
+  "operational_snapshot": {
+    "observed_at": "2026-10-16T03:08:40.008Z",
+    "source": "Approved read-only synchronized production recovery point; not a fresh worker heartbeat",
+    "payout_refund_anomalies": {
+      "failed_count": 0,
+      "stuck_count": 0,
+      "stuck_after_minutes": 15,
+      "oldest_stuck_at": null
+    },
+    "settlement_worker": {
+      "status": "unavailable",
+      "reason": "No fresh authenticated worker-heartbeat observation collected"
+    },
+    "paid_canary": {
+      "status": "not_demonstrated",
+      "reason": "No authorized live paid canary executed in this release"
+    },
+    "independent_customer_activity": {
+      "status": "not_demonstrated",
+      "reason": "Historical records and controlled acceptance tests do not establish independent adoption"
+    }
+  },
+  "production_restore_performed": false,
+  "customer_records_or_fingerprints_published": false
+}

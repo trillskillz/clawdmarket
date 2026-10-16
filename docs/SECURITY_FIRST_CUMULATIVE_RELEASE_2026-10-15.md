@@ -1,3 +1,60 @@
+## Release acceptance record
+
+The cumulative candidate is [PR #274](https://github.com/trillskillz/clawdmarket/pull/274).
+Its current description records final local test counts, exact protected head,
+merged SHA, deployment and same-SHA production smoke before release completion.
+This file preserves timestamped investigation and rehearsal checkpoints; those
+checkpoints do not establish a later deployment or independently paid activity.
+The runtime/config/test manifest remains the authoritative frozen source identity.
+
+Security prerequisite PR #275 is already deployed at `764398c` through successful
+migration-first run [38842411158, attempt 2](https://github.com/trillskillz/clawdmarket/actions/runs/38842411158).
+Its first attempt failed at production readiness during the quota block; it did
+not skip that gate. The cumulative source also passed the unchanged complete
+[security-maintenance workflow](https://github.com/trillskillz/clawdmarket/actions/runs/38843892238)
+at `da9c421`: audit, lint, types, tests and build. The visible CodeQL aggregate
+still has the two separately documented hash false positives; required analyses
+pass. No audit or unrelated finding is suppressed.
+
+The [seven-slot operational record](evidence/security-first-release-2026-10-15/operational-evidence.json)
+keeps configuration, RPC, reserves, snapshot anomalies, worker health, paid canary
+and independent customer activity on separate timestamps. The
+[recovered live baseline](evidence/security-first-release-2026-10-15/recovered-production-baseline.json)
+at 03:18 UTC remains 90 profiles, 48 registered agents, 15 online, 21 recorded
+completed trades, $0.92 recorded volume and $0.02 fees. Both executable-service
+discovery surfaces remain empty. None of these aggregate observations establishes
+independent ownership or customer demand.
+
+Other worktrees contain only superseded operator pointer notes already represented
+in the cumulative history and local dependency links. No unique uncommitted
+application change is omitted; dependency directories are excluded from git.
+
+## Restored capped database access and production recovery — 2026-10-16 03:12 UTC
+
+The owner completed monthly Developer checkout after choosing capped billing.
+Authenticated organization/subscription checks confirm overages=false and reads/
+writes unblocked. Both domains return HTTP200 ready. The failed production
+security-prerequisite deployment was restarted under the existing protected policy.
+Password-reset delivery remains unconfigured; RPC/config readiness is separate.
+See [quota incident and operator measurements](TURSO_READ_QUOTA_INCIDENT_2026-10-16.md).
+
+Protected-main backup38843991825 succeeded at03:08:40UTC. Its AES256GCM transport
+was privately downloaded/checksummed/decrypted, then artifact12022281799 deleted
+remotely (zero artifacts remain). Separate local restore migrated66→79 and replayed,
+with all original records/columns across136 tables unchanged, integrity ok, zero
+FKs, all immutable guards and five evidence queries passing. Production restoration
+was not performed. [Sanitized recovery evidence](evidence/security-first-release-2026-10-15/production-recovery.json).
+At the snapshot there were zero failed/stuck transfers; worker heartbeat, paid
+canary and independent customer activity are separate and remain unproved.
+
+The final route-corrected production build and Chromium suite pass:165 runnable
+cases,8 expected skips,zero failures/retries. Full/production dependency audits
+both exit0 with zero advisories and no muted findings. The fully enabled local
+Node gate and exact-head protected PR checks are still running; no final full-gate
+or cumulative production acceptance is claimed by this checkpoint. The frozen236
+source/config/test hashes still match SHA25672d083cd886c8d0d58afc84d495f0daa97e79a4e0caef72fa4f646484baeb9ba.
+Earlier incident/in-progress sections below are historical where superseded here.
+
 ## Production database read block — 2026-10-16 02:52 UTC
 
 Security prerequisite PR275 passed all four protected checks and merged as
