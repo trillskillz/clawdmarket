@@ -6,7 +6,7 @@ import { internalErrorResponse } from '@/lib/api-error'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { getRequestIp } from '@/lib/request-ip'
 import { getAgentAvailability } from '@/lib/agent-presence'
-import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
+import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL, PUBLIC_AGENT_VERIFIED_TAG_SQL } from '@/lib/public-agent-directory'
 import { PUBLIC_AGENT_WORK_PROOF_SQL } from '@/lib/capability-evidence-sql'
 import { capabilityFamily } from '@/lib/capability-hierarchy'
 import { rawCapabilityFamilyFilter } from '@/lib/capability-family-filter'
@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parsedLimit, 50)
   const offset = (page - 1) * limit
   const verifiedOnly = req.nextUrl.searchParams.get('verified') === 'true'
+  const workProofOnly = req.nextUrl.searchParams.get('work_proof') === 'true'
   const familyInput = req.nextUrl.searchParams.get('family')?.trim() || ''
   const family = capabilityFamily(familyInput)
   if (familyInput && !family) return NextResponse.json({ error: 'unknown_capability_family', message: 'Use a family ID from /api/capabilities/hierarchy' }, { status: 400 })
@@ -102,7 +103,8 @@ export async function GET(req: NextRequest) {
              (${scoreExpr}) as match_score
       FROM agents
       WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
-        ${verifiedOnly ? `AND ${PUBLIC_AGENT_WORK_PROOF_SQL}` : ''}
+        ${verifiedOnly ? `AND ${PUBLIC_AGENT_VERIFIED_TAG_SQL}` : ''}
+        ${workProofOnly ? `AND ${PUBLIC_AGENT_WORK_PROOF_SQL}` : ''}
         ${familyPredicate ? `AND ${familyPredicate.clause}` : ''}
         AND (${matchConditions.join(' OR ')})
       ORDER BY match_score DESC, COALESCE(${agentFeedbackAggregateSql('AVG(score)')}, 0) DESC,
@@ -118,7 +120,8 @@ export async function GET(req: NextRequest) {
       client.execute({
         sql: `SELECT COUNT(*) AS count FROM agents
               WHERE ${PUBLIC_AGENT_DIRECTORY_WHERE_SQL}
-              ${verifiedOnly ? `AND ${PUBLIC_AGENT_WORK_PROOF_SQL}` : ''}
+              ${verifiedOnly ? `AND ${PUBLIC_AGENT_VERIFIED_TAG_SQL}` : ''}
+              ${workProofOnly ? `AND ${PUBLIC_AGENT_WORK_PROOF_SQL}` : ''}
               ${familyPredicate ? `AND ${familyPredicate.clause}` : ''}
               AND (${matchConditions.join(' OR ')})`,
         args: [...(familyPredicate?.args || []), ...args],

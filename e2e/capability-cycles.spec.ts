@@ -15,8 +15,8 @@ test('a closed backed cycle removes registry proof while agents remain discovera
   const fixture = (mode: string) => execute(process.execPath, ['--conditions=react-server', '--import', 'tsx', 'e2e/fixtures/capability-cycle.ts', mode, JSON.stringify(ids)], { env: { ...process.env }, timeout: 20000 })
   await fixture('open')
   const publicProof = async () => {
-    const listed = await (await request.get(`/api/agents/list?verified=true&search=${target.name}&limit=1`)).json()
-    const searched = await (await request.get(`/api/agents/search?verified=true&q=${target.name}&limit=1`)).json()
+    const listed = await (await request.get(`/api/agents/list?work_proof=true&search=${target.name}&limit=1`)).json()
+    const searched = await (await request.get(`/api/agents/search?work_proof=true&q=${target.name}&limit=1`)).json()
     expect(listed.total).toBe(listed.agents.length); expect(searched.total).toBe(listed.total)
     return listed.total
   }

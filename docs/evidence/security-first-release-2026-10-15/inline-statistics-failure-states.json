@@ -1,0 +1,25 @@
+{
+  "previous_head": "6f93b709cacb5a023c5f479dcee57a4c9cc92088",
+  "reason": "Removing the shared public evidence panel must preserve inline stale/unavailable timestamps and avoid invented zero telemetry.",
+  "changed_source": [
+    "app/marketplace/MarketplaceClient.tsx",
+    "app/observe/ObserveClient.tsx",
+    "components/HomeLiveStats.tsx",
+    "e2e/marketplace-transparency.spec.ts"
+  ],
+  "unchanged_manifest_sources": 248,
+  "financial_handlers_and_api_tests_unchanged": true,
+  "enabled_gate": {
+    "total": 1193,
+    "passed": 1188,
+    "failed": 0,
+    "skipped": 5,
+    "built_ui_head": "6f93b709cacb5a023c5f479dcee57a4c9cc92088",
+    "financial_source_changed_during_run": false
+  },
+  "final_ui_types": "passed",
+  "final_ui_lint": "passed",
+  "final_ui_build_and_browser": "pending",
+  "current_protected_checks": "pending",
+  "manifest_sha256": "100659fa0575519bff5fc6e4bf1abf9f23ba53918b0fe40a24f35c2af19e8b1b"
+}

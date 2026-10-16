@@ -1,5 +1,4 @@
 'use client'
-import MarketplaceEvidence from '@/components/MarketplaceEvidence'
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -49,7 +48,7 @@ type HireIntent = {
 type AcceptedToken = { chain_id: number; chain_name: string; token_address: `0x${string}`; symbol: string; decimals: number; fixed_usd_price: number }
 type Checkout = { rail: 'mpp' | 'evm'; funding_url: string; amount_usd: number; treasury?: `0x${string}`; tokens?: AcceptedToken[]; expires_at?: string }
 type PaymentConfig = { account_credit_enabled: boolean; ledger_enabled: boolean; ledger_redeemable: boolean; mpp_configured: boolean; erc20_configured: boolean; new_payments_paused: boolean; payment_pause_reason: string | null; accepted_tokens: AcceptedToken[] }
-type MarketStats = { executable_reusable_services?: number; network_profile_count?: number; completed_trades?: number; recorded_volume_usd?: number; total_volume_usd?: number }
+type MarketStats = { observed_at?: string; executable_reusable_services?: number; network_profile_count?: number; completed_trades?: number; recorded_volume_usd?: number; total_volume_usd?: number }
 
 const CATEGORIES = [
   { id: 'all', label: 'All services' },
@@ -124,6 +123,7 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
   const [category, setCategory] = useState('all')
   const [hireIntent, setHireIntent] = useState<HireIntent | null>(null)
   const [stats, setStats] = useState<MarketStats>(initialStats || {})
+  const [statsFailed, setStatsFailed] = useState(!initialStats)
   const [services, setServices] = useState<AgentService[]>((initialCatalog?.listings || []).map((listing) => listingToService(listing)))
   const [catalogTotal, setCatalogTotal] = useState(initialCatalog?.total || 0)
   const [catalogPage, setCatalogPage] = useState(1)
@@ -146,9 +146,9 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
     const controller = new AbortController()
     const refresh = () => {
       fetch('/api/stats', { signal: controller.signal, cache: 'no-store' })
-        .then((response) => response.ok ? response.json() : null)
-        .then(data => { if (data) setStats(data) })
-        .catch(() => undefined)
+        .then((response) => { if (!response.ok) throw new Error('Statistics unavailable'); return response.json() })
+        .then(data => { if (!controller.signal.aborted) { setStats(data); setStatsFailed(false) } })
+        .catch(() => { if (!controller.signal.aborted) setStatsFailed(true) })
     }
     refresh()
     const interval = window.setInterval(refresh, 15_000)
@@ -359,8 +359,10 @@ export default function MarketplaceClient({ initialStats, initialCatalog, initia
           <div key={label}><strong>{value}</strong><span>{label}</span></div>
         ))}
       </section>
+      {statsFailed && <p role="status" className="mx-auto max-w-7xl px-6 text-xs text-gray-400">{stats.observed_at ? 'Statistics stale' : 'Statistics unavailable'}
+        {stats.observed_at && <> · Last observed <time dateTime={stats.observed_at}>{stats.observed_at.replace('T', ' ').slice(0, 19)} UTC</time></>}
+      </p>}
 
-      <MarketplaceEvidence initialStats={initialStats} />
 
       <section className={styles.journey} aria-label="How a ClawdMarket trade works">
         {[

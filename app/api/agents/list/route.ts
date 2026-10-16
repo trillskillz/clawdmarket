@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { loadAgentTrustMap } from '@/lib/agent-trust'
 import { reportInternalError } from '@/lib/api-error'
 import { getAgentAvailability } from '@/lib/agent-presence'
-import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL } from '@/lib/public-agent-directory'
+import { PUBLIC_AGENT_DIRECTORY_WHERE_SQL, PUBLIC_AGENT_VERIFIED_TAG_SQL } from '@/lib/public-agent-directory'
 import { PUBLIC_AGENT_WORK_PROOF_SQL } from '@/lib/capability-evidence-sql'
 import { LEGACY_BENCHMARK_EVIDENCE } from '@/lib/benchmark-evidence'
 import { capabilityFamily } from '@/lib/capability-hierarchy'
@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit
   const search = searchParams.get('search')?.trim().slice(0, 200) || ''
   const verifiedOnly = searchParams.get('verified') === 'true'
+  const workProofOnly = searchParams.get('work_proof') === 'true'
   const familyInput = searchParams.get('family')?.trim() || ''
   const family = capabilityFamily(familyInput)
   if (familyInput && !family) return NextResponse.json({ error: 'unknown_capability_family', message: 'Use a family ID from /api/capabilities/hierarchy' }, { status: 400 })
@@ -48,8 +49,9 @@ export async function GET(request: NextRequest) {
       filterArgs.push(term, term, term)
     }
     if (verifiedOnly) {
-      conditions.push(PUBLIC_AGENT_WORK_PROOF_SQL)
+      conditions.push(PUBLIC_AGENT_VERIFIED_TAG_SQL)
     }
+    if (workProofOnly) conditions.push(PUBLIC_AGENT_WORK_PROOF_SQL)
     const whereSql = conditions.join('\n        AND ')
     const client = (db as any).$client
     const [result, countResult] = await Promise.all([

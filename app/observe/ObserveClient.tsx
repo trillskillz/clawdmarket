@@ -1,5 +1,4 @@
 'use client'
-import MarketplaceEvidence from '@/components/MarketplaceEvidence'
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -81,6 +80,7 @@ function ActivityDescription({ item }: { item: any }) {
 export default function ObserveClient({ initialStats, initialActivity, initialPaymentConfig, initialRenderedAt }: { initialStats: any; initialActivity: any[] | null; initialPaymentConfig: PaymentConfig; initialRenderedAt: number }) {
   const [connState, setConnState] = useState<ConnState>(initialActivity !== null ? 'live' : 'connecting')
   const [stats, setStats] = useState<any>(initialStats || {})
+  const [statsFailed, setStatsFailed] = useState(!initialStats)
   const [activity, setActivity] = useState<any[]>(activityTimeline(initialActivity || []))
   const [walletActivity, setWalletActivity] = useState<any[]>([])
   const [leaderboard, setLeaderboard] = useState<any[]>([])
@@ -135,7 +135,8 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
           fetchJson('/api/stats'), fetchJson('/api/payments/config'),
         ])
         if (cancelled) return
-        if (currentStats.status === 'fulfilled') setStats(currentStats.value || {})
+        if (currentStats.status === 'fulfilled') { setStats(currentStats.value || {}); setStatsFailed(false) }
+        else setStatsFailed(true)
         if (payments.status === 'fulfilled') setPaymentConfig(payments.value || {})
       } finally { telemetryRefreshPending = false }
     }
@@ -222,8 +223,10 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
         ))}
         <div><span>06 / Top agent</span><strong className={styles.agentStat}>{topAgent ? <Link href={`/registry/${topAgent.id}`}>{topAgent.name}</Link> : '—'}</strong></div>
       </section>
+      {statsFailed && <p role="status" className="mx-auto max-w-7xl px-6 text-xs text-gray-400">{stats.observed_at ? 'Statistics stale' : 'Statistics unavailable'}
+        {stats.observed_at && <> · Last observed <time dateTime={stats.observed_at}>{stats.observed_at.replace('T', ' ').slice(0, 19)} UTC</time></>}
+      </p>}
 
-      <MarketplaceEvidence initialStats={initialStats} />
 
       <section className={styles.networkGrid}>
         <div className={styles.activityPanel} aria-label="Recent market activity">
@@ -246,12 +249,12 @@ export default function ObserveClient({ initialStats, initialActivity, initialPa
         </div>
 
         <aside className={styles.telemetry}>
-          <div className={styles.panelHeader}><div><strong>Network health</strong></div><span>LIVE METRICS</span></div>
-          <div className={styles.healthScore}><span>COMPLETION RATE</span><strong>{completionRate}<small>%</small></strong><i><b style={{ width: `${completionRate}%` }} /></i></div>
+          <div className={styles.panelHeader}><div><strong>Network health</strong></div><span>{statsFailed ? stats.observed_at ? 'STALE METRICS' : 'METRICS UNAVAILABLE' : 'LIVE METRICS'}</span></div>
+          <div className={styles.healthScore}><span>COMPLETION RATE</span><strong>{stats.total_trades == null ? '—' : <>{completionRate}<small>%</small></>}</strong><i><b style={{ width: `${completionRate}%` }} /></i></div>
           <div className={styles.telemetryRows}>
-            <div><span>Average trade</span><strong>${averageTrade.toFixed(2)}</strong></div>
+            <div><span>Average trade</span><strong>{stats.recorded_volume_usd == null || stats.completed_trades == null ? '—' : `$${averageTrade.toFixed(2)}`}</strong></div>
             <div><span>Eligible buyer feedback</span><strong>{Number(stats.avg_rating ?? 0)>0?Number(stats.avg_rating).toFixed(1):'—'}</strong></div>
-            <div><span>Trades today</span><strong>{Number(stats.trades_today ?? 0)}</strong></div>
+            <div><span>Trades today</span><strong>{stats.trades_today ?? '—'}</strong></div>
             <div><span>Last sync</span><strong title={fullTimestamp(lastSyncedAt?.getTime())}>{lastSyncedAt ? timeAgo(lastSyncedAt.getTime(), renderedAt) : '—'}</strong></div>
           </div>
         </aside>

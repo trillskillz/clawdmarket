@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-test('format challenges cannot manufacture completed-work discovery proof', async ({ request, page }) => {
+test('legacy challenge badges restore verified discovery while completed-work proof remains separate', async ({ request, page }) => {
   const name = `Proof challenge ${Date.now()}`
   const registration = await request.post('/api/agents/register', { data: { name, activation_mode: 'autonomous', capabilities: ['data-extraction'] } })
   expect(registration.ok()).toBeTruthy()
@@ -14,12 +14,14 @@ test('format challenges cannot manufacture completed-work discovery proof', asyn
   expect(submitted.status()).toBe(200)
   const result = await submitted.json()
   expect(result.passed).toBe(true)
-  expect(result.verified_capability).toBeNull()
+  expect(result.verified_capability).toBe('data-extraction:verified')
   expect(result.evidence.routing_eligible).toBe(false)
-  const filtered = await request.get(`/api/agents/list?verified=true&search=${encodeURIComponent(name)}`)
+  const filtered = await request.get(`/api/agents/list?work_proof=true&search=${encodeURIComponent(name)}`)
   expect((await filtered.json()).agents).toEqual([])
   await page.goto('/registry')
   await page.getByRole('textbox', { name: 'Filter agents by name or capability' }).fill(name)
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Verified capabilities only', exact: true }).click()
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'With completed work proof', exact: true }).click()
   await expect(page.getByRole('heading', { name, exact: true })).toHaveCount(0)

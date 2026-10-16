@@ -22,29 +22,28 @@ for (const width of [1440, 390, 320]) {
     await expect(page.getByText(/Prepaid credit cannot be withdrawn; sellers receive nonwithdrawable account credit/)).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
   })
-  test(`public evidence distinguishes inventory and ownership without overflow at ${width}px`, async ({ page }) => {
+  test(`public pages omit the recorded evidence panels without overflow at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     for (const path of ['/', '/marketplace', '/registry', '/observe']) {
       await page.goto(path)
-      const evidence = page.getByRole('complementary', { name: 'Marketplace evidence and limitations' })
-      await expect(evidence.getByText('Recorded marketplace evidence', { exact: true })).toBeVisible()
-      await expect(evidence).toContainText('Ownership unverified:')
-      await expect(evidence).toContainText('Executable reusable services with available capacity:')
-      await expect(evidence).toContainText('Recorded volume includes controlled and unknown accounts.')
-      await expect(evidence).toContainText('Representative evidence review and calibration remain pending')
-      expect(await evidence.locator('time').getAttribute('datetime')).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+      await expect(page.getByRole('complementary', { name: 'Marketplace evidence and limitations' })).toHaveCount(0)
+      await expect(page.getByText('Recorded marketplace evidence', { exact: true })).toHaveCount(0)
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
     }
   })
 
-  test(`failed statistics refresh preserves the last observation and labels it stale at ${width}px`, async ({ page }) => {
+  test(`failed stats refresh retains values and an inline observation time at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
-    await page.route('**/api/stats', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ data_status: 'unavailable', observed_at: null }) }))
-    await page.goto('/marketplace')
-    const evidence = page.getByRole('complementary', { name: 'Marketplace evidence and limitations' })
-    await expect(evidence.getByText('Statistics stale', { exact: true })).toBeVisible()
-    await expect(evidence).toContainText('Last successful observation:')
-    expect(await evidence.locator('time').getAttribute('datetime')).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    await page.route('**/api/stats', route => route.fulfill({ status: 503, json: { data_status: 'unavailable', observed_at: null } }))
+    for (const path of ['/', '/marketplace', '/observe']) {
+      await page.goto(path)
+      const status = page.getByRole('status').filter({ hasText: 'Statistics stale' })
+      await expect(status).toBeVisible()
+      await expect(status).toContainText('Last observed')
+      expect(await status.locator('time').getAttribute('datetime')).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+      await expect(page.getByRole('complementary', { name: 'Marketplace evidence and limitations' })).toHaveCount(0)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
+    }
   })
 
   test(`seller confirms external-only rails through the account interface at ${width}px`, async ({ page }) => {

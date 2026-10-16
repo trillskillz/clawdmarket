@@ -66,7 +66,7 @@ test('a separate grader completes a private versioned benchmark over HTTP and re
     const profile = await (await request.get(`/api/agents/${target.id}`)).json()
     expect(profile.benchmark_score).toBeNull()
     expect(profile.benchmark_evidence.measured_quality_score).toBeNull()
-    expect((await (await request.get(`/api/agents/list?verified=true&search=${encodeURIComponent(target.name)}`)).json()).agents).toEqual([])
+    expect((await (await request.get(`/api/agents/list?work_proof=true&search=${encodeURIComponent(target.name)}`)).json()).agents).toEqual([])
     await page.goto('/docs')
     await expect(page.getByText(/Versioned benchmarks are separate from peer scores/)).toBeVisible()
     await page.setViewportSize({ width: 390, height: 844 })

@@ -1,3 +1,45 @@
+## Inline statistics failure-state preservation — 2026-10-16
+
+Removing the repeated evidence panel also removes its failure indicator. Preserve
+only a compact inline stale/unavailable message and last observation time in the
+existing home/marketplace/Observe statistics areas. Show no invented zero telemetry
+when no observation exists. Healthy pages add no replacement evidence section.
+All verification, financial handlers and API tests are byte-identical to6f93b70;
+only three existing client components and the browser assertions changed.
+
+Complete enabled Node gate passed1193total/1188pass/5expectedskip/0fail, plus27Python,
+SDK/types/lint. That run used the6f93b70 build; financial/API source remained unchanged
+throughout. Final client types/lint pass after these changes. New UI build/Chromium
+and protected exact-head checks remain required; do not relabel the earlier162/8
+Chromium or6f93b70 CI as final UI acceptance. The unchanged248 source hashes and
+new252-file manifest SHA256 100659fa0575519bff5fc6e4bf1abf9f23ba53918b0fe40a24f35c2af19e8b1b bind the staged verification.
+Final counts/publication identities remain in PR277. No new funds, execution flags,
+custody, customer activity, email or outreach. Earlier headers are historical.
+
+## Current public discovery restoration — 2026-10-16
+
+The owner explicitly requests sitewide removal of Recorded marketplace evidence
+sections, restoration of the older tag/challenge verification behavior (confirmed
+in the follow-up choice), and GitHub/Vercel publication. Delete the shared public
+panel and its four page imports. Restore verified=true to profile :verified tags
+and passing challenge badges; retain strict current-backed proof separately as
+work_proof=true. Challenge tags never grant ranking, independent ownership or
+financial authority. HTTP1.120 identifies this discovery change, schema79 and
+routing capability count8 remain; this is not capability nine acceptance.
+
+Main CI38912475658 on deployed726029f failed one actual SQLite retry-service
+lookup. Bound read-only funded retry recovery, preserving the financial callback
+and coherent workflow snapshot. All38 retry/lock/workflow and50 discovery/MCP/
+metrics controls pass with zero skips/failures. Full current local/protected gates,
+publication and exact-SHA verification remain required. Source manifest now binds
+252 files, SHA256 6ebb47bf993d79920702af970a024df0f32b0725bacaee3b8ddd5911f3d0b88b. Previous headers describe historical checkpoints.
+
+[Current release](PUBLIC_DISCOVERY_RESTORATION_RELEASE_2026-10-16.md) records
+scope, limits and rollback; its linked PR will hold final acceptance. User publication
+authorization covers this follow-up. No real funds, new/global flags, custody change,
+real-user mail, outreach or synthetic customer activity. Keep capped Turso overages
+disabled, original financial references and private recovery data intact.
+
 ## Final receiver-measurement correction — 2026-10-16
 
 Current runtime remains byte-identical to a1a63b3. Its CI38904889483 passed1,048

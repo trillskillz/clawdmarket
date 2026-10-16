@@ -54,9 +54,9 @@ test('actual verified search, directory and trust queries compile under a depth 
     const { GET: list } = await import('@/app/api/agents/list/route')
     const { GET: trust } = await import('@/app/api/agents/[id]/trust/route')
     for (const response of [
-      await search(new NextRequest('http://localhost/api/agents/search?q=security&verified=true&family=family:code')),
-      await search(new NextRequest('http://localhost/api/agents/search?q=security%20research%20data%20analysis%20translation%20writing%20math%20code%20review%20testing%20debugging%20auditing&verified=true&family=family:code')),
-      await list(new NextRequest('http://localhost/api/agents/list?search=security&verified=true&family=family:code')),
+      await search(new NextRequest('http://localhost/api/agents/search?q=security&work_proof=true&family=family:code')),
+      await search(new NextRequest('http://localhost/api/agents/search?q=security%20research%20data%20analysis%20translation%20writing%20math%20code%20review%20testing%20debugging%20auditing&work_proof=true&family=family:code')),
+      await list(new NextRequest('http://localhost/api/agents/list?search=security&work_proof=true&family=family:code')),
       await trust(new NextRequest('http://localhost/api/agents/performance-seller/trust'), { params: Promise.resolve({ id: 'performance-seller' }) }),
     ]) {
       assert.equal(response.status, 200)
@@ -218,11 +218,11 @@ test('public capability proof filters ignore claimed tags and recheck current fu
   const seller = await provider('filter')
   const { GET: directory } = await import('@/app/api/agents/list/route')
   const { GET: search } = await import('@/app/api/agents/search/route')
-  const filtered = () => directory(new NextRequest(`http://localhost/api/agents/list?verified=true&search=${seller}`))
+  const filtered = () => directory(new NextRequest(`http://localhost/api/agents/list?work_proof=true&search=${seller}`))
   assert.equal((await (await filtered()).json()).total, 0)
   const trade = await backed(seller)
   assert.equal((await (await filtered()).json()).total, 1)
-  const result = await search(new NextRequest(`http://localhost/api/agents/search?verified=true&q=${seller}`))
+  const result = await search(new NextRequest(`http://localhost/api/agents/search?work_proof=true&q=${seller}`))
   assert.equal(result.status, 200)
   assert.equal((await result.json()).total, 1)
   await db.update(schema.verification_results).set({ content_hash: 'wrong-delivery' }).where(eq(schema.verification_results.trade_id, trade.id))
@@ -373,8 +373,8 @@ test('cycle exclusion shares directory/search counts and retains unrelated compl
   await backed(b, `user_agent_${a}`); await backed(c, `user_agent_${b}`)
   const { GET: directory } = await import('@/app/api/agents/list/route'), { GET: search } = await import('@/app/api/agents/search/route')
   const query = async () => {
-    const list = await (await directory(new NextRequest(`http://localhost/api/agents/list?verified=true&search=${b}&limit=1`))).json()
-    const semantic = await (await search(new NextRequest(`http://localhost/api/agents/search?verified=true&q=${b}&limit=1`))).json()
+    const list = await (await directory(new NextRequest(`http://localhost/api/agents/list?work_proof=true&search=${b}&limit=1`))).json()
+    const semantic = await (await search(new NextRequest(`http://localhost/api/agents/search?work_proof=true&q=${b}&limit=1`))).json()
     assert.equal(list.total, list.agents.length); assert.equal(semantic.total, list.total)
     return list
   }
@@ -430,7 +430,7 @@ test('repeated backed work does not promote unmeasured independent quality confi
   assert.equal(row.measured_quality_score, null)
 })
 
-test('basic challenge success records a format check without adding verified tags or routing evidence', async () => {
+test('challenge success restores discovery tags without adding completed-work or routing evidence', async () => {
   const seller = await provider('challenge')
   const apiKey = `dummy-format-check-${seller}`
   const { hashAgentApiKey } = await import('@/lib/registered-agent-auth')
@@ -447,11 +447,18 @@ test('basic challenge success records a format check without adding verified tag
   assert.equal(response.status, 200)
   const result = await response.json()
   assert.equal(result.passed, true)
-  assert.equal(result.verified_capability, null)
+  assert.equal(result.verified_capability, 'data-extraction:verified')
   assert.deepEqual(result.evidence, { kind: 'basic_format_check', independent: false, measured_quality: false, routing_eligible: false })
   const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, seller))
-  assert.equal(agent.capabilities, '["data-extraction"]')
+  assert.deepEqual(JSON.parse(agent.capabilities), ["data-extraction", "data-extraction:verified"])
   assert.deepEqual(await load(seller), [])
+  const { GET: directory } = await import('@/app/api/agents/list/route')
+  const { GET: search } = await import('@/app/api/agents/search/route')
+  for (const [get, query] of [[directory, 'list?search='], [search, 'search?q=']] as const) {
+    assert.equal((await (await get(new NextRequest(`http://localhost/api/agents/${query}${seller}&verified=true`))).json()).total, 1)
+    assert.equal((await (await get(new NextRequest(`http://localhost/api/agents/${query}${seller}&work_proof=true`))).json()).total, 0)
+    assert.equal((await (await get(new NextRequest(`http://localhost/api/agents/${query}${seller}&verified=true&work_proof=true`))).json()).total, 0)
+  }
   assert.equal((await submit(req('/api/benchmarks/challenge/data-extraction/submit', { challenge_id: challenge.challenge_id, response: { names: ['Alice', 'Bob'] } }), context)).status, 400)
   for (const body of [null, {}, { challenge_id: challenge.challenge_id, response: [] }]) assert.equal((await submit(req('/api/benchmarks/challenge/data-extraction/submit', body), context)).status, 400)
 })
@@ -511,6 +518,29 @@ test('format checks reject fabricated word counts and another agent cannot submi
   const raced = await Promise.all([submit(req(seller, valid), context), submit(req(seller, valid), context)])
   assert.equal(raced.filter((response) => response.status === 200).length, 1, JSON.stringify(await Promise.all(raced.map(async response=>({status:response.status,body:await response.clone().json()})))))
   const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, seller))
-  assert.equal(agent.capabilities, '["security-analysis:verified"]') // Historical declaration is preserved, never evidence.
+  assert.deepEqual(JSON.parse(agent.capabilities), ["security-analysis:verified", "summarization:verified"]) // Discovery tags remain separate from work evidence.
+  assert.deepEqual(await load(seller), [])
+})
+
+
+test('different concurrent challenges preserve both discovery tags without granting work evidence', async () => {
+  const seller = await provider('concurrent-badges')
+  const apiKey = `dummy-badges-${seller}`
+  const { hashAgentApiKey } = await import('@/lib/registered-agent-auth')
+  await db.update(schema.agents).set({ api_key: hashAgentApiKey(apiKey), capabilities: '["code-review"]' }).where(eq(schema.agents.id, seller))
+  const { POST: create } = await import('@/app/api/benchmarks/challenge/[capability]/route')
+  const { POST: submit } = await import('@/app/api/benchmarks/challenge/[capability]/submit/route')
+  const req = (body?: unknown) => new NextRequest('http://localhost/api/benchmarks/challenge/local', { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
+  const cases = [ ['data-extraction', { names: ['Alice', 'Bob'] }], ['summarization', { summary: 'A short summary', word_count: 3 }] ] as const
+  const challenges = await Promise.all(cases.map(async ([capability, response]) => {
+    const context = { params: Promise.resolve({ capability }) }
+    const created = await create(req(), context)
+    assert.equal(created.status, 201)
+    return { context, challenge_id: (await created.json()).challenge_id, response }
+  }))
+  const submitted = await Promise.all(challenges.map(({ context, challenge_id, response }) => submit(req({ challenge_id, response }), context)))
+  assert.deepEqual(submitted.map(r => r.status), [200, 200])
+  const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, seller))
+  assert.deepEqual(JSON.parse(agent.capabilities).sort(), ['code-review', 'data-extraction:verified', 'summarization:verified'])
   assert.deepEqual(await load(seller), [])
 })

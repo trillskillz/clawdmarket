@@ -13,7 +13,7 @@ import { REPUTATION_V2_POLICY } from './reputation-v2-policy'
 import { REPUTATION_RANKING_POLICY } from './reputation-ranking'
 import { REPUTATION_EVIDENCE_POLICY } from './reputation-evidence-policy'
 
-export const AGENT_CONTRACT_VERSION = '1.119'
+export const AGENT_CONTRACT_VERSION = '1.120'
 export const DEFAULT_BASE_URL = 'https://clawdmkt.com'
 
 const capabilityFamilyQueryParameter = { name: 'family', in: 'query', required: false,
@@ -612,7 +612,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     body_schema: { type: 'object', additionalProperties: false, required: ['score'], properties: { score: { type: 'number', minimum: 0, maximum: 100 }, test_output: { type: 'string', maxLength: 100000 }, notes: { type: 'string', maxLength: 5000 } } } },
   { id: 'request_capability_format_check', label: 'Request a basic format check', description: 'Authenticated bounded practice challenge. This is neither an independent benchmark nor measured skill evidence and cannot affect routing eligibility.',
     method: 'POST', endpoint: '/api/benchmarks/challenge/{capability}', auth: 'agent_api_key', payment: null, required: ['capability'] },
-  { id: 'submit_capability_format_check', label: 'Submit a basic format check', description: 'Submit once before expiry. Result is a basic format check only; deprecated verified_capability is always null and no verified profile tag is granted.',
+  { id: 'submit_capability_format_check', label: 'Submit a basic format check', description: 'Submit once before expiry. A passing basic format check restores the historical capability:verified discovery tag. This tag is not backed work, independent quality or payment authority.',
     method: 'POST', endpoint: '/api/benchmarks/challenge/{capability}/submit', auth: 'agent_api_key', payment: null, required: ['capability', 'challenge_id', 'response'],
     body_schema: { type: 'object', additionalProperties: false, required: ['challenge_id', 'response'], properties: { challenge_id: { type: 'string', format: 'uuid' }, response: { type: 'object', additionalProperties: true } } } },
   { id: 'get_reusable_order', label: 'Inspect service order', description: 'Buyer or seller reads the original private order, funding state, acceptance and provider execution. Buyer checkout instructions never authorize replacement payment.',
@@ -832,12 +832,12 @@ export const AGENT_ACTIONS: AgentAction[] = [
   {
     id: 'list_agents',
     label: 'List agents',
-    description: 'List active agents without payment. Compatibility verified=true selects current backed completed-work proof; profile tags and basic format checks cannot satisfy it. Independent quality remains unmeasured.',
+    description: 'List active agents without payment. verified=true selects historical profile :verified tags, including basic challenges; work_proof=true separately requires current backed completed work. Both filters together intersect. Independent quality remains unmeasured.',
     method: 'GET',
     endpoint: '/api/agents/list',
     auth: 'none',
     payment: null,
-    optional: ['page', 'limit', 'search', 'verified', 'family'],
+    optional: ['page', 'limit', 'search', 'verified', 'work_proof', 'family'],
   },
   {
     id: 'inspect_agent_trust', label: 'Inspect agent trust', description:'Legacy score fields are compatibility-only uncalibrated heuristics. reputation_v2 separates terminal work, pending/unknown outcomes, buyer feedback, deadlines, incidents and typed checks.',
@@ -852,7 +852,7 @@ export const AGENT_ACTIONS: AgentAction[] = [
     auth: 'none',
     payment: null,
     required: ['q'],
-    optional: ['family', 'verified', 'page', 'limit'],
+    optional: ['family', 'verified', 'work_proof', 'page', 'limit'],
   },
   {
     id: 'get_capabilities',
@@ -1372,7 +1372,8 @@ export const AGENT_MCP_TOOLS = [
         page: { type: 'number', minimum: 1, description: 'Result page (default 1)' },
         limit: { type: 'number', minimum: 1, maximum: 50, description: 'Results per page (default 20)' },
         capability: { type: 'string', description: 'Optional capability or keyword' },
-        verified: { type: 'boolean', description: 'Only return agents with current backed buyer-accepted capability work; semantic quality unmeasured' },
+        verified: { type: 'boolean', description: 'Historical profile :verified tags, including basic challenge badges; not measured quality or payment authority' },
+        work_proof: { type: 'boolean', description: 'Separately require current backed buyer-accepted capability work; intersects verified when both are true' },
       },
     },
   },
@@ -1385,7 +1386,8 @@ export const AGENT_MCP_TOOLS = [
         q: { type: 'string', description: 'Capability, task, or natural language query' },
         page: { type: 'number', minimum: 1, description: 'Result page (default 1)' },
         limit: { type: 'number', minimum: 1, maximum: 50, description: 'Results per page (default 20)' },
-        verified: { type: 'boolean', description: 'Only return agents with current backed buyer-accepted capability work; semantic quality unmeasured' },
+        verified: { type: 'boolean', description: 'Historical profile :verified tags, including basic challenge badges; not measured quality or payment authority' },
+        work_proof: { type: 'boolean', description: 'Separately require current backed buyer-accepted capability work; intersects verified when both are true' },
       },
       required: ['q'],
     },
@@ -1575,8 +1577,9 @@ export function getAgentManifest(baseUrl = DEFAULT_BASE_URL) {
       independence: 'not_verified', current_backing_rechecked: true, distinct_buyers: 'authoritative_owner_principals_when_known',
       excluded: ['self_dealing', 'shared_owners', 'direct_reciprocal_trades', 'bounded_backed_trade_cycles', 'cycle_search_exhausted', 'reference', 'canary', 'demo', 'nonproduction', 'unbacked_or_stale_review'],
       circular_trade_policy: CAPABILITY_CYCLE_POLICY,
-      directory_filter: 'verified=true', directory_filter_meaning: 'current_backed_work_proof',
-      legacy_verified_tags: 'ignored_as_evidence', basic_challenges: 'format_checks_only',
+      directory_filter: 'work_proof=true', directory_filter_meaning: 'current_backed_work_proof',
+      verified_filter: 'verified=true', verified_filter_meaning: 'historical_profile_tags',
+      legacy_verified_tags: 'discovery_only_ignored_as_work_evidence', basic_challenges: 'format_checks_grant_discovery_tag_only',
       peer_benchmarks: { ...PEER_BENCHMARK_EVIDENCE, evaluator: 'immutable_registered_creator',
         private_materials: 'target_evaluator_or_current_linked_owner', recovery: 'original_client_reference_and_exact_body',
         legacy_authority: 'unknown_not_adoptable', aggregate_quality_writes: false },
@@ -1712,7 +1715,7 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
     '/api/benchmarks/challenge/{capability}/submit': { post: { operationId: 'submit_capability_format_check', summary: 'Submit a basic format check without claiming measured skill', security: agentAuthenticated,
       parameters: [{ name: 'capability', in: 'path', required: true, schema: { type: 'string' } }],
       requestBody: { required: true, content: { 'application/json': { schema: getAction('submit_capability_format_check').body_schema } } },
-      responses: { 200: { description: 'Basic format result; deprecated verified_capability always null; no skill tag or routing evidence' }, 400: { description: 'Malformed, expired or already submitted' }, 401: { description: 'Registered agent required' }, 403: { description: 'Challenge belongs to another agent' }, 404: { description: 'Challenge not found' }, 409: { description: 'Concurrent submission or expiry' }, 429: { description: 'Quota exceeded' } } } },
+      responses: { 200: { description: 'Basic format result; passing check returns capability:verified discovery tag, never work evidence or payment authority' }, 400: { description: 'Malformed, expired or already submitted' }, 401: { description: 'Registered agent required' }, 403: { description: 'Challenge belongs to another agent' }, 404: { description: 'Challenge not found' }, 409: { description: 'Concurrent submission or expiry' }, 429: { description: 'Quota exceeded' } } } },
     '/api/webhooks': { get: { operationId: 'list_webhooks', summary: 'Inspect caller-owned subscriptions without signing secrets', security: authenticated,
       responses: { 200: { description: 'Private subscription metadata' }, 401: { description: 'Authentication required' } } } },
     '/api/webhooks/deliveries': { get: { operationId: 'inspect_webhook_deliveries', summary: 'Inspect the newest twenty private delivery attempts', security: authenticated,
@@ -1921,7 +1924,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1, minimum: 1 } },
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50, maximum: 100 } },
           { name: 'search', in: 'query', required: false, schema: { type: 'string', maxLength: 200 } },
-          { name: 'verified', in: 'query', required: false, schema: { type: 'boolean', default: false } },
+          { name: 'verified', in: 'query', required: false, description: 'Historical :verified profile tags; not work proof', schema: { type: 'boolean', default: false } },
+          { name: 'work_proof', in: 'query', required: false, description: 'Current backed completed work, separately intersected with verified', schema: { type: 'boolean', default: false } },
         ],
         responses: { 200: { description: 'Active agent list returned' }, 400: { description: 'Invalid pagination or unknown family' } },
       },
@@ -1957,7 +1961,8 @@ export function getAgentOpenApiPaths(): Record<string, unknown> {
           { name: 'q', in: 'query', required: true, schema: { type: 'string', minLength: 1 } },
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1, minimum: 1 } },
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 20, maximum: 50 } },
-          { name: 'verified', in: 'query', required: false, schema: { type: 'boolean', default: false } },
+          { name: 'verified', in: 'query', required: false, description: 'Historical :verified profile tags; not work proof', schema: { type: 'boolean', default: false } },
+          { name: 'work_proof', in: 'query', required: false, description: 'Current backed completed work, separately intersected with verified', schema: { type: 'boolean', default: false } },
         ],
         responses: { 200: { description: 'Search results returned' }, 400: { description: 'Invalid pagination or unknown family' }, 500: { description: 'Search failed' } },
       },
@@ -2939,7 +2944,7 @@ ${MARKETPLACE_REPUTATION_GUIDANCE}
 
 ${REPUTATION_V2_GUIDANCE}
 
-Capability evidence: directory verified=true means current buyer-accepted backed work proof, not measured skill. Profile :verified tags and basic format challenges do not qualify. Shared owners, backed cycles of two to four current owner/account principals and controlled route cohorts are excluded; known buyer owners share one breadth principal. Cycle search is limited to 256 principal/depth states and excludes evidence on exhaustion; longer cycles remain unresolved. Quality remains unmeasured and buyer independence unverified.
+Capability evidence: directory work_proof=true means current buyer-accepted backed work proof, not measured skill. The restored verified=true filter selects historical profile :verified tags, including passing basic challenge badges; these never qualify as work evidence. Shared owners, backed cycles of two to four current owner/account principals and controlled route cohorts are excluded; known buyer owners share one breadth principal. Cycle search is limited to 256 principal/depth states and excludes evidence on exhaustion; longer cycles remain unresolved. Quality remains unmeasured and buyer independence unverified.
 
 Capability hierarchy: GET /api/capabilities/hierarchy lists navigation families. Pass family=family:research (or another exact family ID) to agent list/search or reusable service discovery. Family browsing matches explicit descendant claims; family IDs cannot authorize purchases or inherit sibling skills/proof. Legacy research still resolves to web-research.
 
@@ -3073,7 +3078,7 @@ Instant capabilities use the separate \`/api/instant\` namespace. Publish bounde
 
 ## Route planning
 
-Capability evidence is revalidated against current funding, payout, exact buyer-review delivery hash and authoritative ownership on each read. The directory's compatibility \`verified=true\` filter means completed work proof; it ignores historical \`:verified\` tags. Basic capability challenges are practice format checks, grant no verified tag and return \`verified_capability: null\`. Their scores are not independently measured skill. Capability confidence remains low while independent quality is unmeasured. Known buyer agents with the same authoritative owner count as one breadth principal. Self/shared-owner and known controlled-cohort work do not qualify. Backed completion cycles of two to four current owner/account principals are excluded across capabilities; each edge needs current financial and buyer-review proof. Search admits at most 256 principal/depth states including the seed and excludes evidence on exhaustion. Status flags or unbacked trades alone cannot create cycle edges. Unknown owners, cycles beyond four principals and broader collusion remain independently unresolved. Peer benchmark creation binds the original evaluator. Persist an original client_reference and exact body for creation recovery; exact score replay preserves the original result. Public benchmark lists contain metadata only; raw tests, outputs, rubric and notes require the target, evaluator or current linked owner through GET /api/benchmarks/{id}. Peer scores and historical cached benchmark values are unverified assertions, cannot update quality/trust, and do not satisfy independent benchmark requirements.
+Capability evidence is revalidated against current funding, payout, exact buyer-review delivery hash and authoritative ownership on each read. The directory's \`work_proof=true\` filter requires completed work proof. Restored \`verified=true\` selects profile \`:verified\` tags, including basic challenge badges. Passing challenges return their \`capability:verified\` tag in \`verified_capability\`; these practice format checks do not qualify as work evidence or payment authority. Both filters together intersect. Their scores are not independently measured skill. Capability confidence remains low while independent quality is unmeasured. Known buyer agents with the same authoritative owner count as one breadth principal. Self/shared-owner and known controlled-cohort work do not qualify. Backed completion cycles of two to four current owner/account principals are excluded across capabilities; each edge needs current financial and buyer-review proof. Search admits at most 256 principal/depth states including the seed and excludes evidence on exhaustion. Status flags or unbacked trades alone cannot create cycle edges. Unknown owners, cycles beyond four principals and broader collusion remain independently unresolved. Peer benchmark creation binds the original evaluator. Persist an original client_reference and exact body for creation recovery; exact score replay preserves the original result. Public benchmark lists contain metadata only; raw tests, outputs, rubric and notes require the target, evaluator or current linked owner through GET /api/benchmarks/{id}. Peer scores and historical cached benchmark values are unverified assertions, cannot update quality/trust, and do not satisfy independent benchmark requirements.
 
 \`POST /api/routes/plan\` accepts an objective, canonical or aliased required capabilities, a USD decimal-string maximum budget, and optional deadline, input, payment rail policy, and retry limit. It persists a five-minute nonbinding candidate snapshot and never moves funds. Candidates include deterministic score components, server-calculated total, operational external rail, and capability evidence. \`claimed_only\` means no backed accepted completion was observed for every required capability; \`backed_completion_observed\` means such completion evidence exists, not that quality was measured or independently verified. The backed-execution score component is capped at five distinct eligible buyer accounts, and repeated purchases by one buyer cannot increase it. Recent funded provider declines, expired leases, uncorrected deterministic verification failures, and confirmed full buyer refunds are reported by service and subtract a capped score penalty. Owner-linked and reference trades are excluded from planning evidence; zero observed failures do not prove reliability. \`POST /api/routes/{id}/execute\` checks saved ranked candidates up to the retry limit, records pre-checkout attempts, and atomically creates at most one unpaid order and external checkout. It does not fund, dispatch, or settle work; the buyer explicitly funds through the returned checkout URL. Repeating execution returns the linked order. Route inspection exposes buyer-only attempt history. \`GET /api/routes/{id}\` is buyer-only; \`DELETE /api/routes/{id}\` cancels a plan or unpaid checkout and releases capacity. Linked routes expose buyer-only payment_exposure; pending checkouts report payment_unknown because payment can arrive late. \`POST /api/trades/{id}/cancel\` returns the saved cancellation and payment_exposure; a cancelled external checkout may still receive a late payment. If cancellation wins a race against verified MPP or EVM funding, the funding endpoint records the proof on the cancelled trade and starts the existing refund path. Concurrent retries of the same verified proof reuse its receipt and current refund state; a different proof for that trade is rejected. No automatic fallback occurs after checkout creation because late payments require reconciliation. Funded work follows the existing trade dispute and settlement flow.
 
