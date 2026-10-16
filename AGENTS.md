@@ -1,3 +1,15 @@
+## Protected security prerequisite merged — 2026-10-16
+
+PR275 passed all four protected checks and merged via required squash as
+764398c16bd020355d3c6c91153b5ac1d6a4b07c. Its optional approved private backup
+runs only from protected main. The first protected-main backup was rejected by
+Turso with403/read operations blocked, so no snapshot/artifact exists yet. The
+user explicitly authorized restoring account read access and completed official
+Turso account sign-in. Diagnose and restore through that account; preserve all
+financial records, custody and rollout boundaries. Resume backup/local restore,
+then cumulative protected publication after actual read access and gates recover.
+Do not weaken the production branch policy or report zero activity from failures.
+
 ## Current publication authorization — 2026-10-15
 
 The latest user instruction is: "push all changes that havent been commited to

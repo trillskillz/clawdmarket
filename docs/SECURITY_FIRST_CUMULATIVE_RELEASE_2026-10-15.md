@@ -26,7 +26,7 @@ The earlier in-progress status below is historical where superseded here.
 Current status: validation and staged publication in progress. This record is not
 production acceptance. Cumulative source manifest:
 `SECURITY_FIRST_RELEASE_SOURCE_MANIFEST_2026-10-15.json`,236 source/config/test files,
-SHA256 `380b80f6703b59ff3ac4b704569e42fdd9bb90a70fcadbb46313390e1eecb2c7`.
+SHA256 `72d083cd886c8d0d58afc84d495f0daa97e79a4e0caef72fa4f646484baeb9ba`.
 Local HTTP1.119/schema79; fresh reviewed-contract funding defaults disabled.
 
 ## Findings and changes
