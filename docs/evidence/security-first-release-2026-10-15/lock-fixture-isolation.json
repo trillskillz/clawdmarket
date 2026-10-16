@@ -1,0 +1,49 @@
+{
+  "release_sha": "7a9e0ba382f5d7e3bcdee2469104679aa4b28b2c",
+  "failed_main_ci_run": "https://github.com/trillskillz/clawdmarket/actions/runs/38898048837",
+  "main_node": {
+    "total": 1189,
+    "passed": 1045,
+    "failed": 3,
+    "skipped": 141
+  },
+  "failure_scope": "Python fixture failed BEGIN EXCLUSIVE before three payout/workflow application assertions; shared database/process between controls",
+  "root_cause_limit": "Connection/statement lifetime interference is inferred from the shared fixture; exact native statement lifetime was not independently traced",
+  "repair": "One fresh Node process and disposable database per named control; actual Python exclusive barrier, original assertions, bounded child lifetime and strict one-test/one-pass/no-skip report remain mandatory",
+  "lock_process_failure": "Reject and reap child when it exits before LOCKED instead of waiting on an unresolved readiness promise",
+  "local_corrected_runs": [
+    {
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "initial_repair_failure": "All six outer controls rejected empty child stdout because NODE_TEST_CONTEXT was inherited; clear it for the nested runner and assert the actual TAP counts. No assertion was waived.",
+  "production_handlers_changed": false,
+  "migration_changed": false,
+  "rollout_changed": false,
+  "manifest_files": 239,
+  "manifest_sha256": "1fe3942d9214300744e313f31ba676fd587901db375691a437dcb8022ca19312",
+  "deployed_http": "1.119",
+  "deployed_schema": 79,
+  "production_deployment_run": 38898048845,
+  "production_smoke_run": 38900119277,
+  "live_api_checks_passed": 14,
+  "live_public_renders_passed": 12,
+  "reputation_audit_run": 38899933891,
+  "promotion_ready": false,
+  "final_protected_followup_checks": "pending"
+}

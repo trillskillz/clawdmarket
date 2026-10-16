@@ -203,7 +203,7 @@
     "sdk/typescript/src/index.ts": "2c4c0260a243d96327e1fc172e54a8b02f7dfea44a5ee0d52ae38f41fb17b26c",
     "sdk/typescript/src/milestone-contract.ts": "32650ce39f425164493fd75fb1e98fa3b75038cb9430ff82a19f4799633ea447",
     "tests/api/account-credit.test.ts": "17f8ebc146ea39ab855cb80ca8cdcbea3e8e995295ba20451b05db7a2debe822",
-    "tests/api/auth-local-contention.test.ts": "b8350393bf2844b652981a66d565418c38ebeea993651b051f1286f0f654c915",
+    "tests/api/auth-local-contention.test.ts": "a122962c0db72177f28051939807b9a44f936b8a9e4f5f341d1dd37bb193f061",
     "tests/api/catalog-pagination.test.ts": "5fe9edde17a2bb1539bce6356fe810aadd71f0bd4dd4c9d18665646aac856e4e",
     "tests/api/contract-creation.test.ts": "c001471c8f252c4265402717065801018fccb431c3a4efa9f95bb9307d9c38fb",
     "tests/api/human-signup-recovery.test.ts": "08b1516805a65be5cb2a60e178829bc8a5670ebcc646f360ac7c1927df935dc0",

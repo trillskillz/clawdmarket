@@ -1,3 +1,31 @@
+## Release verification fixture follow-up — 2026-10-16
+
+Cumulative release7a9e0ba is deployed as HTTP1.119/schema79 through deployment
+38898048845 and production smoke38900119277. Both canonical domains'14 read-only
+API checks and12 public desktop/mobile renders pass; Vercel metadata and aliases
+match the exact SHA. Read-only reputation audit38899933891 is healthy and retains
+promotion_ready=false, pending representative review/calibration.
+
+Separate mainCI38898048837 failed three controls BEFORE application assertions:
+Python could not acquire the fixture's EXCLUSIVE lock after earlier cases reused
+its database/process. Isolate each of the six real-lock controls in its own Node
+process/database, preserve every assertion and require an actual one-case pass
+with zero skips. Lock-process failure now rejects and reaps its readiness barrier.
+Three corrected local runs pass6/6 each; types and lint pass. Protected follow-up
+gates remain required. Exact native statement-lifetime interference is inferred, not
+independently traced. Earlier main failure and initial nested-reporter correction
+are preserved in `docs/evidence/security-first-release-2026-10-15/lock-fixture-isolation.json`.
+
+Only that test source changed among239 runtime/config/test files; manifest SHA256
+`1fe3942d9214300744e313f31ba676fd587901db375691a437dcb8022ca19312`. Production handlers, dependencies, migrations, original financial
+references and rollout remain identical to deployed7a9e0ba. The prior fully enabled
+local1,184pass/5skip gate covers those unchanged handlers; it is not relabeled as
+a new full run. This is release verification repair, not a new capability or
+later feature release. Fresh reviewed-contract funding remains disabled; no live
+funds, global flags, real-user mail or outreach are authorized. Final acceptance
+and exact follow-up publication identities remain in PR274 and its linked repair.
+Earlier239-file fingerprints/checkpoints below describe the preceding test source.
+
 ## Current contention corrections — 2026-10-16
 
 Exact-head CI38846552040 found two genuine local SQLite preflight failures after
