@@ -1,0 +1,53 @@
+{
+  "recorded_at": "2026-10-15T22:13:09.204052+00:00",
+  "advisory": "GHSA-vfj7-8cjw-p6xm",
+  "disposition": "installed dependency path removed locally; upstream braces remains unpatched",
+  "full_audit": {
+    "actions": [],
+    "advisories": {},
+    "muted": [],
+    "metadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0
+      },
+      "dependencies": 641,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 641
+    }
+  },
+  "production_audit": {
+    "actions": [],
+    "advisories": {},
+    "muted": [],
+    "metadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0
+      },
+      "dependencies": 278,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 278
+    }
+  },
+  "frozen_install_exit": 0,
+  "named_security_cases": {
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+  },
+  "remote_status": "not published yet",
+  "scope": "Exact Next16.3.8 plugin code patch plus removal of its now-unused fast-glob dependency; no advisory suppression",
+  "logs": [
+    "/tmp/clawdmarket-security-remediation-tests-2026-10-15.log",
+    "/tmp/clawdmarket-security-frozen-install-2026-10-15.log"
+  ]
+}

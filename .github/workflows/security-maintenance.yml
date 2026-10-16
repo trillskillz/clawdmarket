@@ -38,10 +38,27 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Initialize isolated security database
-        run: pnpm exec drizzle-kit push --force
+        run: |
+          pnpm exec drizzle-kit push --force
+          pnpm run db:migrate:runtime
 
       - name: Audit dependencies (high+)
-        run: pnpm audit --audit-level=high
+        run: |
+          set +e
+          pnpm audit --audit-level=high --json > security-audit.json
+          audit_status=$?
+          cat security-audit.json
+          exit "$audit_status"
+
+      - name: Retain dependency findings and open risk treatment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-maintenance-evidence
+          path: |
+            security-audit.json
+            docs/SECURITY_RISK_BRACES_2026-10-14.md
+          if-no-files-found: error
 
       - name: Lint
         run: pnpm run lint
