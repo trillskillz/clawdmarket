@@ -1,3 +1,19 @@
+## Release CI time budget — 2026-10-16
+
+The fully enabled local gate passed1,186 cases (1,181pass/5expected skips/0fail),
+27 Python tests, SDK/types/lint/build and165 Chromium cases (8expected skips,
+zero failures/retries). Its Node duration was1,856seconds. The PR job still allowed
+only20minutes for install, tests, build and browser combined; the smaller protected
+security prerequisite already took18m7s. Increase only that job's bounded timeout
+to40minutes. No assertion, test, audit, protection or rollout gate is removed.
+
+All prior236 runtime/config/test fingerprints remain unchanged. The new237-file
+manifest adds only that CI timeout file; SHA256`e3c08ccda8dceb2201c57908677a65de7af0a8bec3f0f172b8fdea6778f75d5c`. Full application
+acceptance applies to identical runtime/test content; required actions analysis
+and exact-head CI validate the timeout configuration. Final acceptance identities
+and production status remain maintained in PR274. Earlier236-file checkpoints
+below record the preceding identical application source plus older CI policy.
+
 ## Capped read recovery and verified security deployment — 2026-10-16
 
 Owner completed monthly Developer checkout with overages disabled. Reads and both

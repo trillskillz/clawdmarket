@@ -6,6 +6,7 @@
   "files": {
     ".env.example": "0c10df70fe08cc1c645f35d95fdc2475e18fb3cf4997b6c11d447d353b8c66d8",
     ".github/workflows/audit-internal-credits.yml": "d5ee687cf6256a0af0cd745f0117fad15ddf26da627b03ce621314c1db52fae1",
+    ".github/workflows/pr-build-smoke.yml": "6feccbebb6eacdd3cb7d49ae7babae37e320d8025bceac39d7755b317fbc1d66",
     ".github/workflows/security-maintenance.yml": "b57abd97fd58e885a97b619880bf9ff55ca44fafc5a886e67ddce80d0f4dfb32",
     ".gitignore": "fa2ef45baad99f00938e1893b408fe883c47ac9067e9fb22beef293676d6dc66",
     ".pnpmfile.cjs": "9f62dd9bf5315bcd5fdd36202463cee8850b45e17762d0aa913bc59fa1fb636f",
