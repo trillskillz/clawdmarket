@@ -1,0 +1,29 @@
+{
+  "failed_ci_run": "https://github.com/trillskillz/clawdmarket/actions/runs/38904889483",
+  "head": "a1a63b30affdd69beb5aa413b6452fe0c83acc93",
+  "node": {
+    "total": 1190,
+    "passed": 1048,
+    "failed": 1,
+    "skipped": 141
+  },
+  "failure": "Old buyer-policy fixture counted only transactions on the original db instance; the correct retry used a fresh client. Response already correctly rejected the competing exposure with BUYER_DAILY_LIMIT.",
+  "correction": "Count both actual transaction receivers, preserving their this binding and original real rollback/separately committed competing trade. Retain exactly two transaction attempts and every original financial assertion; additionally require distinct original/fresh receivers.",
+  "focused": {
+    "total": 85,
+    "passed": 85,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Real lock controls; four genuine two-process budget races; known rolled-back reservation; original-reference, competing-exposure, provider, rail, pause, capacity and account policies"
+  },
+  "runtime_source_changed_since_a1a63b3": false,
+  "previous_240_source_hashes_unchanged": true,
+  "interrupted_enabled_local_run": {
+    "session": 28837,
+    "exit_code": 143,
+    "reason": "Stopped before changing fixture; partial run is not acceptance"
+  },
+  "current_manifest_files": 241,
+  "current_manifest_sha256": "409848ad4ac54a787dc426f1ba800125c74b3b59601f050616b8340d8dc8b90f",
+  "full_current_gates": "pending"
+}

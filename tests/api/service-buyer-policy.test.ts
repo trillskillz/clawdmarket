@@ -194,15 +194,22 @@ test('a reservation retry includes buyer exposure committed by another worker af
   const [listing] = await db.insert(schema.listings).values({ seller_id: f.sellerId, category: 'skills', title: 'Other worker checkout',
     description: 'An independent checkout for the same buyer.', price_bankr: 1, status: 'sold' }).returning()
   const otherWorker = createClient({ url: process.env.TURSO_DATABASE_URL! })
-  const originalTransaction = db.transaction.bind(db)
   const reference = `retried-policy-${crypto.randomUUID()}`
   const competingTradeId = crypto.randomUUID()
+  const originalTransaction = db.transaction
+  const prototype = Object.getPrototypeOf(db) as typeof db
+  const originalPrototypeTransaction = prototype.transaction
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'transaction')
+  const receivers = new Set<typeof db>()
   let transactions = 0
-  Reflect.set(db, 'transaction', async (callback: Parameters<typeof db.transaction>[0]) => {
+  // Count the actual retry receiver, including the fresh local client, while
+  // retaining the same real rollback and separately committed competing trade.
+  const transaction = async function (this: typeof db, callback: Parameters<typeof db.transaction>[0]) {
     transactions += 1
-    if (transactions !== 1) return originalTransaction(callback)
+    receivers.add(this)
+    if (transactions !== 1) return originalPrototypeTransaction.call(this, callback)
     try {
-      return await originalTransaction(async (tx) => {
+      return await originalPrototypeTransaction.call(this, async (tx) => {
         await callback(tx)
         throw Object.assign(new Error('SQLITE_BUSY: injected rollback'), { code: 'SQLITE_BUSY' })
       })
@@ -212,12 +219,15 @@ test('a reservation retry includes buyer exposure committed by another worker af
       args: [competingTradeId, listing.id, f.buyerId, f.sellerId, Math.floor(Date.now() / 1000)] })
       throw error
     }
-  })
+  }
+  Reflect.set(db, 'transaction', transaction)
+  Reflect.set(prototype, 'transaction', transaction)
   try {
     const response = await order(f, reference)
     assert.equal(response.status, 409, JSON.stringify(await response.clone().json()))
     assert.equal((await response.json()).error_code, 'BUYER_DAILY_LIMIT')
     assert.equal(transactions, 2)
+    assert.equal(receivers.size, 2, 'the rolled-back original client is not reused')
     const saved = await snapshot(f)
     assert.equal(saved.services[0].active_orders, 0)
     assert.equal(saved.orders.length, 0)
@@ -227,7 +237,12 @@ test('a reservation retry includes buyer exposure committed by another worker af
     assert.equal(saved.wallet[0].balance, 10)
     assert.equal(saved.wallet[0].escrow, 0)
     assert.equal((await buyerPolicy.buyerPolicyUsage(f.buyerId)).reserved_or_spent_today_minor, 105)
-  } finally { Reflect.set(db, 'transaction', originalTransaction); otherWorker.close() }
+  } finally {
+    Reflect.set(db, 'transaction', originalTransaction)
+    if (descriptor) Object.defineProperty(prototype, 'transaction', descriptor)
+    else Reflect.deleteProperty(prototype, 'transaction')
+    otherWorker.close()
+  }
 })
 
 test('account route execution rechecks a saved policy and can recover the same plan after a permitted update', async () => {

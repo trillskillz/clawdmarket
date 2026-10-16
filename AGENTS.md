@@ -1,3 +1,79 @@
+## Final receiver-measurement correction — 2026-10-16
+
+Current runtime remains byte-identical to a1a63b3. Its CI38904889483 passed1,048
+cases but failed one old test counter that observed only the original db instance
+(141 expected skips). The actual retry already rejected competing buyer exposure.
+The fixture now counts both real transaction receivers with their correct this
+binding. Exactly two attempts and all original financial assertions remain; also
+require distinct original/fresh clients. All85 focused controls pass, zero skips
+or failures. Types/lint pass; full/protected release gates remain required.
+Evidence: `docs/evidence/security-first-release-2026-10-15/retry-receiver-measurement.json`.
+
+All preceding240 source hashes are unchanged. The new241-file manifest adds this
+modified existing buyer-policy test; SHA256`409848ad4ac54a787dc426f1ba800125c74b3b59601f050616b8340d8dc8b90f`. The prior enabled local
+run was stopped143 BEFORE fixture mutation and is not full acceptance. HTTP1.119,
+schema79, dependency graph, remote/initial/workflow transaction behavior, original
+financial references and rollout remain unchanged. Final complete gate counts and
+exact corrected publication identities remain maintained in PR274/PR276. Earlier
+headers below describe preceding source/verification checkpoints. No live funds,
+new/global execution flag, real-user email, custody change or outreach is authorized.
+
+## Current release verification correction — 2026-10-16
+
+PR276's first CI38900923901 passed all six isolated real-lock controls, but found
+one separate native SQLite failed-COMMIT error in the genuine department-agent
+race (1,047pass/1fail/141skip). Preserve the initial transaction selection. Only
+after a rolled-back configured-file SQLite contention failure, retry the same
+reservation through the existing bounded fresh-client purchasing helper. Remote
+Turso and workflow transaction paths, financial references and rollout retain
+their original behavior. No external send or new execution authority is added.
+
+All27 targeted cases pass, with four actual two-process budget races, a known
+rolled-back complete reservation that recovers exactly once on a fresh client,
+all six exclusive-lock controls and unchanged provider-drift/pause assertions.
+Types/lint pass. Earlier failed fixture instrumentation and CI are preserved in
+`docs/evidence/security-first-release-2026-10-15/local-reservation-retry.json`.
+The partial enabled local run on ba5739f was stopped143 before source mutation;
+it is not final acceptance. Current full build/predeploy and protected checks
+remain required before final publication acceptance.
+
+Current240-file manifest SHA256`895f643e5248a0dee503fc16a8ca2852d5c3fde05cb9e7b8a5bb302237699443` adds the strengthened existing team-
+budget test to the prior239-file snapshot and changes the local reservation
+source. HTTP1.119/schema79 remain. Deployed7a9e0ba, its verified aliases/live
+surfaces, original recovery snapshot and reputation audit remain the preceding
+production checkpoint. Final corrected release identities are maintained in
+PR274 and linked PR276. Fresh reviewed-contract funding stays disabled; no live
+funds, global flags, real-user email or outreach is authorized. Earlier headers
+below are superseded for current source/test acceptance.
+
+## Release verification fixture follow-up — 2026-10-16
+
+Cumulative release7a9e0ba is deployed as HTTP1.119/schema79 through deployment
+38898048845 and production smoke38900119277. Both canonical domains'14 read-only
+API checks and12 public desktop/mobile renders pass; Vercel metadata and aliases
+match the exact SHA. Read-only reputation audit38899933891 is healthy and retains
+promotion_ready=false, pending representative review/calibration.
+
+Separate mainCI38898048837 failed three controls BEFORE application assertions:
+Python could not acquire the fixture's EXCLUSIVE lock after earlier cases reused
+its database/process. Isolate each of the six real-lock controls in its own Node
+process/database, preserve every assertion and require an actual one-case pass
+with zero skips. Lock-process failure now rejects and reaps its readiness barrier.
+Three corrected local runs pass6/6 each; types and lint pass. Protected follow-up
+gates remain required. Exact native statement-lifetime interference is inferred, not
+independently traced. Earlier main failure and initial nested-reporter correction
+are preserved in `docs/evidence/security-first-release-2026-10-15/lock-fixture-isolation.json`.
+
+Only that test source changed among239 runtime/config/test files; manifest SHA256
+`1fe3942d9214300744e313f31ba676fd587901db375691a437dcb8022ca19312`. Production handlers, dependencies, migrations, original financial
+references and rollout remain identical to deployed7a9e0ba. The prior fully enabled
+local1,184pass/5skip gate covers those unchanged handlers; it is not relabeled as
+a new full run. This is release verification repair, not a new capability or
+later feature release. Fresh reviewed-contract funding remains disabled; no live
+funds, global flags, real-user mail or outreach are authorized. Final acceptance
+and exact follow-up publication identities remain in PR274 and its linked repair.
+Earlier239-file fingerprints/checkpoints below describe the preceding test source.
+
 ## Current contention corrections — 2026-10-16
 
 Exact-head CI38846552040 found two genuine local SQLite preflight failures after
