@@ -14,7 +14,10 @@ before(async () => {
   db = (await import('@/lib/db')).db
   await db.$client.execute('PRAGMA journal_mode=DELETE')
   await db.$client.execute('PRAGMA busy_timeout=0')
-  await db.$client.execute('CREATE TABLE banned_users (user_id TEXT PRIMARY KEY, reason TEXT, created_at INTEGER)')
+  const { createLocalTestSchema } = await import('../helpers/local-schema')
+  const schema = await import('@/lib/schema')
+  await createLocalTestSchema(db.$client, schema)
+  await db.insert(schema.users).values({ id: 'banned-fixture', email: 'banned-fixture@test.invalid', password_hash: 'controlled-unused-no-login', name: 'Controlled banned fixture', role: 'human' })
   await db.$client.execute("INSERT INTO banned_users VALUES ('banned-fixture', 'controlled', 1)")
   auth = await import('@/lib/auth'); moderation = await import('@/lib/agent-moderation')
 })
@@ -58,5 +61,19 @@ test('exhausted ban-read contention stays unavailable and never authenticates or
     assert.equal(await moderation.isUserBanned('banned-fixture'), true)
     const count = await db.$client.execute('SELECT COUNT(*) AS total FROM banned_users')
     assert.equal(Number(count.rows[0].total), 1, 'read recovery performs no moderation or financial writes')
+  } finally { await lock.stop() }
+})
+
+test('route-mandate preflight recovers a real exclusive lock without minting missing authority', async () => {
+  const { validateRouteMandate, RouteMandateError } = await import('@/lib/route-payment-mandate')
+  const plan = { id: crypto.randomUUID(), buyer_id: 'controlled-absent-buyer' } as Parameters<typeof validateRouteMandate>[1]
+  const lock = await exclusiveLock(0.35)
+  try {
+    await assert.rejects(db.$client.execute('SELECT id FROM route_payment_mandates LIMIT 1'), /SQLITE_BUSY|database is locked/)
+    await assert.rejects(validateRouteMandate(crypto.randomUUID(), plan),
+      error => error instanceof RouteMandateError && error.code === 'MANDATE_NOT_FOUND' && error.status === 404)
+    await lock.exited
+    const count = await db.$client.execute('SELECT COUNT(*) AS total FROM route_payment_mandates')
+    assert.equal(Number(count.rows[0].total), 0, 'read recovery creates no mandate, reservation or payment authority')
   } finally { await lock.stop() }
 })

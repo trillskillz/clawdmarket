@@ -4,6 +4,7 @@ import { and, eq, gt, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { isAddress } from 'viem'
 import { db } from './db'
+import { readWithLocalContentionRecovery } from './local-sqlite-read'
 import { agent_owners, buyer_evm_payment_claims, buyer_mpp_payment_claims, buyer_mpp_payment_intents, evm_payment_intents, payment_receipts, route_funding_steps, route_retry_funding_steps, route_payment_mandates, route_plans, service_definitions, trades } from './schema'
 import { findTradeFundingStep, listRouteFundingSteps, updateTradeFundingStep } from './route-funding-steps'
 import { getPaymentReadiness, findAcceptedToken } from './payment-config'
@@ -184,16 +185,20 @@ async function activeMandate(source: Source, row: Mandate, plan: Plan) {
   return terms
 }
 
-export async function validateRouteMandate(mandateId: string, plan: Plan, source: Source = db) {
-  const [row] = await source.select().from(route_payment_mandates).where(and(eq(route_payment_mandates.id, mandateId), eq(route_payment_mandates.route_id, plan.id),
-    eq(route_payment_mandates.buyer_id, plan.buyer_id))).limit(1)
-  if (!row) throw new RouteMandateError('MANDATE_NOT_FOUND', 404)
-  if (plan.service_order_id) {
-    const step = (await listRouteFundingSteps(source, plan.id)).find((value) => value.order_id === plan.service_order_id)
-    if (!step || step.mandate_id !== row.id || step.order_id !== plan.service_order_id) throw new RouteMandateError('MANDATE_ORDER_CONFLICT')
-    return termsOf(row) // Receipt recovery never grants fresh payment permission.
+export async function validateRouteMandate(mandateId: string, plan: Plan, source?: Source) {
+  // Preflight is read-only; explicit transaction sources retain their original boundary.
+  const inspect = async (source: Source) => {
+    const [row] = await source.select().from(route_payment_mandates).where(and(eq(route_payment_mandates.id, mandateId), eq(route_payment_mandates.route_id, plan.id),
+      eq(route_payment_mandates.buyer_id, plan.buyer_id))).limit(1)
+    if (!row) throw new RouteMandateError('MANDATE_NOT_FOUND', 404)
+    if (plan.service_order_id) {
+      const step = (await listRouteFundingSteps(source, plan.id)).find((value) => value.order_id === plan.service_order_id)
+      if (!step || step.mandate_id !== row.id || step.order_id !== plan.service_order_id) throw new RouteMandateError('MANDATE_ORDER_CONFLICT')
+      return termsOf(row) // Receipt recovery never grants fresh payment permission.
+    }
+    return activeMandate(source, row, plan)
   }
-  return activeMandate(source, row, plan)
+  return source ? inspect(source) : readWithLocalContentionRecovery(inspect)
 }
 
 export async function freshRouteRetryTerms(mandateId: string, plan: Plan, source: Source = db) {

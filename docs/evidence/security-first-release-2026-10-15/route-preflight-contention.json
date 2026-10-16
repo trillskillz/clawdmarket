@@ -1,0 +1,17 @@
+{
+  "recorded_at": "2026-10-16T02:58:58.958345+00:00",
+  "trigger": "Final frozen1185-case run:1179pass/1fail/5expected skips. A separate-process L1 listing/workflow fee-exposure race hit an unguarded route mandate SELECT outside the financial transaction.",
+  "fix": "Default preflight validation now uses bounded read-only local SQLite recovery. Explicit caller-provided transaction sources retain their existing boundary; no financial callback is retried.",
+  "tests": {
+    "passed": 39,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Three real independent-process SQLite lock controls and all36 original listing/shared gross/fee and separate-process race cases across L1/Tempo with route/workflow/task families."
+  },
+  "types": "passed",
+  "lint": "passed",
+  "initial_test_setup_failure": "The expanded full schema required the banned fixture parent user; seeded the actual parent without disabling foreign keys. Original failed log retained.",
+  "log": "/tmp/clawdmarket-security-release-route-preflight-regression-corrected-2026-10-16.log",
+  "full_release_rerun": "required",
+  "live_funds": false
+}
