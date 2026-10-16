@@ -1,3 +1,31 @@
+## Current release verification correction — 2026-10-16
+
+PR276's first CI38900923901 passed all six isolated real-lock controls, but found
+one separate native SQLite failed-COMMIT error in the genuine department-agent
+race (1,047pass/1fail/141skip). Preserve the initial transaction selection. Only
+after a rolled-back configured-file SQLite contention failure, retry the same
+reservation through the existing bounded fresh-client purchasing helper. Remote
+Turso and workflow transaction paths, financial references and rollout retain
+their original behavior. No external send or new execution authority is added.
+
+All27 targeted cases pass, with four actual two-process budget races, a known
+rolled-back complete reservation that recovers exactly once on a fresh client,
+all six exclusive-lock controls and unchanged provider-drift/pause assertions.
+Types/lint pass. Earlier failed fixture instrumentation and CI are preserved in
+`docs/evidence/security-first-release-2026-10-15/local-reservation-retry.json`.
+The partial enabled local run on ba5739f was stopped143 before source mutation;
+it is not final acceptance. Current full build/predeploy and protected checks
+remain required before final publication acceptance.
+
+Current240-file manifest SHA256`895f643e5248a0dee503fc16a8ca2852d5c3fde05cb9e7b8a5bb302237699443` adds the strengthened existing team-
+budget test to the prior239-file snapshot and changes the local reservation
+source. HTTP1.119/schema79 remain. Deployed7a9e0ba, its verified aliases/live
+surfaces, original recovery snapshot and reputation audit remain the preceding
+production checkpoint. Final corrected release identities are maintained in
+PR274 and linked PR276. Fresh reviewed-contract funding stays disabled; no live
+funds, global flags, real-user email or outreach is authorized. Earlier headers
+below are superseded for current source/test acceptance.
+
 ## Release verification fixture follow-up — 2026-10-16
 
 Cumulative release7a9e0ba is deployed as HTTP1.119/schema79 through deployment

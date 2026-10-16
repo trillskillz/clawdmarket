@@ -1,0 +1,39 @@
+{
+  "failed_ci_run": "https://github.com/trillskillz/clawdmarket/actions/runs/38900923901",
+  "failed_head": "ba5739f3ba8343f314371ed7b245e66008e62104",
+  "node": {
+    "total": 1189,
+    "passed": 1047,
+    "failed": 1,
+    "skipped": 141
+  },
+  "failure": "Independent department agent processes: SQLITE_BUSY cannot commit transaction - SQL statements in progress, after retries reused the ordinary local reservation pool",
+  "isolated_lock_controls": "All six passed on this failed CI; its remaining failure is separate",
+  "repair": "Keep initial/remote/workflow transaction selection; after a rolled-back configured-file SQLite contention error, use existing bounded fresh-client purchasingTransaction helper for the same original reservation",
+  "financial_safeguards": "Existing callback/transaction boundaries, gross budget, current provider/rail checks, immutable references and exact replay remain; no external send added",
+  "targeted": {
+    "total": 27,
+    "passed": 27,
+    "failed": 0,
+    "skipped": 0,
+    "independent_two_process_budget_race_rounds": 4,
+    "known_rolled_back_financial_write_control": true,
+    "provider_drift_and_routing_pause_controls": "original assertions unchanged"
+  },
+  "types": "passed",
+  "lint": "passed",
+  "discarded_attempt": "Selecting a fresh transaction before the initial attempt bypassed three fixture injections on the original db transaction; a prototype interception then fired too early. Both failed targeted results are retained. Final correction preserves initial selection and leaves those fixtures unchanged.",
+  "interrupted_local_run": {
+    "session": 90006,
+    "exit_code": 143,
+    "source": "ba5739f",
+    "reason": "Stopped before source mutation; partial run is not final acceptance"
+  },
+  "full_current_release_gates": "pending",
+  "production_schema": 79,
+  "http_contract": "1.119",
+  "global_flags_changed": false,
+  "real_funds_moved": false,
+  "manifest_files": 240,
+  "manifest_sha256": "895f643e5248a0dee503fc16a8ca2852d5c3fde05cb9e7b8a5bb302237699443"
+}

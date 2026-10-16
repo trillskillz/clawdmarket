@@ -177,6 +177,11 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     if (workflowChild && (!workflowChild.mandate_id || workflowChild.mandate_id !== args.mandateId)) {
       throw new ServiceOrderReservationError('WORKFLOW_MANDATE_REQUIRED', 'A workflow child requires its inherited mandate')
     }
+    // Local failed COMMIT statements must not poison the pool reused by a retry.
+    // Reuse the existing bounded helper only after a local rolled-back failure;
+    // initial, remote and workflow transactions retain their original selection.
+    const databaseUrl = process.env.TURSO_DATABASE_URL?.trim()
+    const localFile = databaseUrl?.startsWith('file:') && !databaseUrl.startsWith('file::memory:')
     const transaction: typeof db.transaction = workflowChild ? async (run) => {
       try { return await workflowTransaction(run) }
       catch (error) {
@@ -184,7 +189,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
         throw error
       }
     } : args.mandateId || request.purchasing_approval_id || request.provider_share_id || args.organizationSpendingEvidence ? purchasingTransaction : db.transaction.bind(db)
-    const reserveOnce = () => transaction(async (tx) => {
+    const reserveOnce = (recoverLocal = false) => (recoverLocal && localFile && !workflowChild ? purchasingTransaction : transaction)(async (tx) => {
       await requireSellerPaymentRail(service.seller_id, rail, tx)
       const now = new Date()
       const privateShare = await resolvePrivateShare(tx)
@@ -308,7 +313,7 @@ export async function reserveServiceOrder(args: ReservationArgs) {
     })
     return await withServiceReservationLock(id, () => withOrganizationBuyerLock(principal.agentId, principal.userId, async () => {
       for (let attempt = 0; attempt < 6; attempt += 1) {
-        try { return await reserveOnce() }
+        try { return await reserveOnce(attempt > 0) }
         catch (error) {
           if (!sqliteBusy(error) || attempt === 5) throw error
           await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt))

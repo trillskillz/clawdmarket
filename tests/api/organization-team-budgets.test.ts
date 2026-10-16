@@ -152,18 +152,50 @@ test('department caps apply to attributed listing fresh-send authority without c
 })
 
 test('independent agent processes cannot overspend one department or duplicate its capacity', async () => {
+  for (let round = 0; round < 4; round++) {
+    const f = await fixture(); await set(f)
+    const references = [crypto.randomUUID(), crypto.randomUUID()]
+    const results = await Promise.allSettled([0, 1].map((index) => {
+      const script = `const {db}=require('./lib/db.ts');const {reserveServiceOrder}=require('./lib/service-order-reservation.ts');
+        (async()=>{try{const r=await reserveServiceOrder({serviceId:${JSON.stringify(f.serviceId)},principal:${JSON.stringify(f.principal(index))},externalOnly:true,
+        request:{client_reference:${JSON.stringify(references[index])},objective:'Review private code within the department allowance',input:{},provider_requirements:{},payment_rail:'evm',max_total:105}});
+        console.log(JSON.stringify({trade:r.trade.id}));}catch(e){if(e.code!=='TEAM_DAILY_LIMIT')throw e;console.log(JSON.stringify({error:e.code}));}})().finally(()=>db.$client.close());`
+      return promisify(execFile)(process.execPath, ['--conditions=react-server', '--import', 'tsx', '-e', script], { cwd: process.cwd(), env: { ...process.env }, timeout: 30_000 })
+    }))
+    const outcomes = results.map((result) => { if (result.status === 'rejected') throw result.reason; return JSON.parse(result.value.stdout.trim().split('\n').at(-1)!) })
+    assert.equal(outcomes.filter((row) => row.trade).length, 1); assert.equal(outcomes.filter((row) => row.error === 'TEAM_DAILY_LIMIT').length, 1)
+    assert.equal((await budgets.teamBudgetUsage(f.id, f.teams[0])).reserved_or_spent_today_minor, 105)
+    const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)); assert.equal(service.active_orders, 1)
+    assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, f.serviceId))).length, 1)
+    assert.equal((await db.select().from(schema.organization_trade_attributions).where(eq(schema.organization_trade_attributions.organization_id, f.id))).length, 1)
+    const winner = outcomes.findIndex(row => row.trade)
+    assert.equal((await buy(f, winner, references[winner])).trade.id, outcomes[winner].trade, 'full budget still recovers the exact original order')
+    await rejectsCode(() => buy(f, 1 - winner, references[1 - winner]), 'TEAM_DAILY_LIMIT')
+  }
+})
+
+test('a rolled-back local reservation recovers its original reference without reusing the failed transaction client', async () => {
   const f = await fixture(); await set(f)
-  const results = await Promise.allSettled([0, 1].map((index) => {
-    const script = `const {db}=require('./lib/db.ts');const {reserveServiceOrder}=require('./lib/service-order-reservation.ts');
-      (async()=>{try{const r=await reserveServiceOrder({serviceId:${JSON.stringify(f.serviceId)},principal:${JSON.stringify(f.principal(index))},externalOnly:true,
-      request:{client_reference:${JSON.stringify(crypto.randomUUID())},objective:'Review private code within department allowance',input:{},provider_requirements:{},payment_rail:'evm',max_total:105}});
-      console.log(JSON.stringify({trade:r.trade.id}));}catch(e){if(e.code!=='TEAM_DAILY_LIMIT')throw e;console.log(JSON.stringify({error:e.code}));}})().finally(()=>db.$client.close());`
-    return promisify(execFile)(process.execPath, ['--conditions=react-server', '--import', 'tsx', '-e', script], { cwd: process.cwd(), env: { ...process.env }, timeout: 30_000 })
+  const reference = crypto.randomUUID()
+  const original = db.transaction.bind(db)
+  let failedAttempts = 0
+  Reflect.set(db, 'transaction', (callback: Parameters<typeof db.transaction>[0]) => original(async tx => {
+    failedAttempts++
+    await callback(tx)
+    // All real reservation writes occurred, but this failure makes the real
+    // transaction roll them back before any COMMIT. No external send occurs.
+    throw Error('SQLITE_BUSY: controlled local pre-commit failure')
   }))
-  const outcomes = results.map((result) => { if (result.status === 'rejected') throw result.reason; return JSON.parse(result.value.stdout.trim().split('\n').at(-1)!) })
-  assert.equal(outcomes.filter((row) => row.trade).length, 1); assert.equal(outcomes.filter((row) => row.error === 'TEAM_DAILY_LIMIT').length, 1)
+  let order: Awaited<ReturnType<typeof reserve>>
+  try { order = await buy(f, 0, reference) }
+  finally { Reflect.set(db, 'transaction', original) }
+  assert.equal(failedAttempts, 1, 'the failed local transaction client is not replayed')
+  assert.equal((await buy(f, 0, reference)).trade.id, order.trade.id)
   assert.equal((await budgets.teamBudgetUsage(f.id, f.teams[0])).reserved_or_spent_today_minor, 105)
-  const [service] = await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)); assert.equal(service.active_orders, 1)
+  assert.equal((await db.select().from(schema.service_orders).where(eq(schema.service_orders.service_id, f.serviceId))).length, 1)
+  assert.equal((await db.select().from(schema.organization_trade_attributions).where(eq(schema.organization_trade_attributions.organization_id, f.id))).length, 1)
+  assert.equal((await db.select().from(schema.service_definitions).where(eq(schema.service_definitions.id, f.serviceId)))[0].active_orders, 1)
+  await rejectsCode(() => buy(f, 1), 'TEAM_DAILY_LIMIT')
 })
 
 test('department lock inspection releases failed SQLite reads and never invokes the financial operation before inspection succeeds',async()=>{
