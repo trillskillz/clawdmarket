@@ -9,7 +9,9 @@ requirement for those repeated panels. The security-first purchasing work remain
 
 - Delete the shared evidence panel and all four public render sites: home,
   marketplace, registry and Observe. Keep accurate API metrics, cohort metadata,
-  unavailable states, seller rail restrictions and nonwithdrawable-credit disclosures.
+  seller rail restrictions and nonwithdrawable-credit disclosures. Preserve only
+  compact inline stale/unavailable labels and last observation times in existing
+  statistics areas when a refresh fails; no replacement evidence section.
 - Restore `verified=true` to the historical profile `:verified` tag predicate in
   registry list and search. Successful authenticated, rate-limited, expiring,
   single-use challenges again return and append `capability:verified` atomically.
@@ -37,9 +39,15 @@ process retry/root checkout preserving refunds, gross exposure and BigInt fee ca
 Discovery, capability backing, hierarchy, metrics, MCP and agent-self-test group:
 **50 passed**, zero failed/skipped. The new concurrent different-challenge control
 requires both tags to survive without creating work evidence. Prior 28-case and
-38-case groups also passed. Current TypeScript and lint pass. Full enabled local gate, Chromium,
-protected checks, migration-first deployment and exact-SHA verification are required;
-final outcomes and publication identities are maintained in the linked release PR.
+38-case groups also passed. Complete enabled Node gate passes **1193 total / 1188 passed / 5 expected skips /
+0 failures**, plus27 Python, SDK, types and lint. It used the6f93b70 app build;
+all financial/API source and tests remained unchanged. A final availability-only
+UI correction changes three client components and the browser controls, preserving
+248 other frozen source hashes. Final client types/lint pass. The prior162/8
+Chromium and prior protected CI passed on6f93b70 and are not relabeled as current
+UI acceptance. New UI build, Chromium, exact-head protected checks, migration-first
+deployment and exact-SHA verification are required;
+final outcomes and publication identities are maintained in [PR277](https://github.com/trillskillz/clawdmarket/pull/277).
 Old main CI failure remains recorded; earlier passing gates describe earlier source.
 
 Current source fingerprints are in

@@ -1,3 +1,21 @@
+## Inline statistics failure-state preservation — 2026-10-16
+
+Removing the repeated evidence panel also removes its failure indicator. Preserve
+only a compact inline stale/unavailable message and last observation time in the
+existing home/marketplace/Observe statistics areas. Show no invented zero telemetry
+when no observation exists. Healthy pages add no replacement evidence section.
+All verification, financial handlers and API tests are byte-identical to6f93b70;
+only three existing client components and the browser assertions changed.
+
+Complete enabled Node gate passed1193total/1188pass/5expectedskip/0fail, plus27Python,
+SDK/types/lint. That run used the6f93b70 build; financial/API source remained unchanged
+throughout. Final client types/lint pass after these changes. New UI build/Chromium
+and protected exact-head checks remain required; do not relabel the earlier162/8
+Chromium or6f93b70 CI as final UI acceptance. The unchanged248 source hashes and
+new252-file manifest SHA256 100659fa0575519bff5fc6e4bf1abf9f23ba53918b0fe40a24f35c2af19e8b1b bind the staged verification.
+Final counts/publication identities remain in PR277. No new funds, execution flags,
+custody, customer activity, email or outreach. Earlier headers are historical.
+
 ## Current public discovery restoration — 2026-10-16
 
 The owner explicitly requests sitewide removal of Recorded marketplace evidence

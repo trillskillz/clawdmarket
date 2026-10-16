@@ -32,6 +32,20 @@ for (const width of [1440, 390, 320]) {
     }
   })
 
+  test(`failed stats refresh retains values and an inline observation time at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.route('**/api/stats', route => route.fulfill({ status: 503, json: { data_status: 'unavailable', observed_at: null } }))
+    for (const path of ['/', '/marketplace', '/observe']) {
+      await page.goto(path)
+      const status = page.getByRole('status').filter({ hasText: 'Statistics stale' })
+      await expect(status).toBeVisible()
+      await expect(status).toContainText('Last observed')
+      expect(await status.locator('time').getAttribute('datetime')).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+      await expect(page.getByRole('complementary', { name: 'Marketplace evidence and limitations' })).toHaveCount(0)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
+    }
+  })
+
   test(`seller confirms external-only rails through the account interface at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     const suffix = crypto.randomUUID()
