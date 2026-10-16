@@ -1,3 +1,20 @@
+## Current contention corrections — 2026-10-16
+
+Exact-head CI38846552040 found two genuine local SQLite preflight failures after
+the preceding fully enabled local run passed. Default seller payout lookup now
+uses bounded fresh read-only recovery; explicit transaction sources stay unchanged.
+Workflow preparation maps contended file-SQLite reads to its existing503 storage
+status, without replaying the command or any financial callback. Six actual
+exclusive-lock controls pass, including exhausted payout availability and unchanged
+original seller address. The corrected50-case targeted group and new full gates
+remain required; earlier1186-case acceptance describes preceding source only.
+
+No schema, dependency, custody, authorization, rollout or financial-reference
+change. Current239-file source manifest SHA256`007be9b13b58193d13e822329557f90e2a1e908d0e0f24368d20cbac9ef14dfa`. Final acceptance and
+publication identities remain maintained in PR274. Details:
+`docs/evidence/security-first-release-2026-10-15/final-read-contention.json`.
+Earlier CI-only/fully-passed checkpoints below are superseded for current acceptance.
+
 ## Release CI time budget — 2026-10-16
 
 The fully enabled local gate passed1,186 cases (1,181pass/5expected skips/0fail),

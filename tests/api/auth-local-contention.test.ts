@@ -77,3 +77,44 @@ test('route-mandate preflight recovers a real exclusive lock without minting mis
     assert.equal(Number(count.rows[0].total), 0, 'read recovery creates no mandate, reservation or payment authority')
   } finally { await lock.stop() }
 })
+
+
+test('payout lookup recovers a real exclusive lock without treating a configured seller as missing', async () => {
+  const { payoutAddressForUser } = await import('@/lib/external-settlement')
+  const schema = await import('@/lib/schema')
+  const address = `0x${'11'.repeat(20)}`
+  await db.insert(schema.payout_addresses).values({ user_id: 'banned-fixture', address })
+  const lock = await exclusiveLock(0.35)
+  try {
+    await assert.rejects(db.$client.execute('SELECT address FROM payout_addresses LIMIT 1'), /SQLITE_BUSY|database is locked/)
+    assert.equal(await payoutAddressForUser('banned-fixture'), address)
+    await lock.exited
+  } finally { await lock.stop() }
+})
+
+test('exhausted payout lookup stays unavailable and preserves the original seller address', async () => {
+  const { payoutAddressForUser } = await import('@/lib/external-settlement')
+  const { isLocalSqliteContention } = await import('@/lib/local-sqlite-read')
+  const lock = await exclusiveLock(2)
+  try {
+    await assert.rejects(payoutAddressForUser('banned-fixture'), error => error instanceof Error && isLocalSqliteContention(error))
+    await lock.exited
+    assert.equal(await payoutAddressForUser('banned-fixture'), `0x${'11'.repeat(20)}`)
+  } finally { await lock.stop() }
+})
+
+test('workflow preparation reports contended reads as recoverable without replaying the command or creating authority', async () => {
+  const { prepareWorkflowNode } = await import('@/lib/workflow-execution-budget')
+  const { WorkflowApprovalError } = await import('@/lib/workflow-approval')
+  const run = crypto.randomUUID()
+  const lock = await exclusiveLock(0.35)
+  try {
+    await assert.rejects(prepareWorkflowNode(run, 'controlled-absent-node', 'controlled-absent-buyer'),
+      error => error instanceof WorkflowApprovalError && error.code === 'WORKFLOW_APPROVAL_STORAGE_BUSY' && error.status === 503)
+    await lock.exited
+    await assert.rejects(prepareWorkflowNode(run, 'controlled-absent-node', 'controlled-absent-buyer'),
+      error => error instanceof Error && 'code' in error && error.code === 'WORKFLOW_NOT_FOUND')
+    const count = await db.$client.execute('SELECT COUNT(*) AS total FROM workflow_runs')
+    assert.equal(Number(count.rows[0].total), 0, 'storage status cannot create a workflow, child or payment authority')
+  } finally { await lock.stop() }
+})

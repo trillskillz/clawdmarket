@@ -7,7 +7,8 @@ import { z } from 'zod'
 import { db } from './db'
 import { workflow_approvals, workflow_nodes, workflows, workflow_runs, workflow_node_runs, workflow_reservations,
   route_plans, route_payment_mandates, route_origins, service_definitions, service_orders, trades } from './schema'
-import { storedWorkflowContract, workflowOwnerControlsBuyer, workflowTransaction } from './workflow-approval'
+import { storedWorkflowContract, workflowOwnerControlsBuyer, workflowTransaction, WorkflowApprovalError } from './workflow-approval'
+import { isLocalSqliteContention } from './local-sqlite-read'
 import { workflowPlanHash } from './workflow-planning'
 import { canonicalContract } from './structured-verification'
 import { paymentContract, RouteMandateError, routeAuthorityHash, routeMandateInput } from './route-payment-mandate'
@@ -116,6 +117,18 @@ async function ownedNode(source: Source, runId: string, key: string, userId: str
   return { run, node }
 }
 export async function prepareWorkflowNode(runId: string, key: string, userId: string) {
+  try { return await prepareWorkflowNodeOnce(runId, key, userId) }
+  catch (error) {
+    // Nonbinding reads outside the existing transactions can also be contended.
+    // Report the established recoverable status; never replay the whole command.
+    if (process.env.TURSO_DATABASE_URL?.trim().startsWith('file:') && isLocalSqliteContention(error)) {
+      throw new WorkflowApprovalError('WORKFLOW_APPROVAL_STORAGE_BUSY', 503)
+    }
+    throw error
+  }
+}
+
+async function prepareWorkflowNodeOnce(runId: string, key: string, userId: string) {
   const saved = await ownedNode(db, runId, key, userId)
   if (saved.node.route_id) return { node: saved.node, idempotent: true }
   const initial = await workflowTransaction(async (tx) => {

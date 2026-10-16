@@ -23,6 +23,7 @@ import { PATHUSD_ADDRESS, TEMPO_CHAIN_ID } from '@/lib/constants'
 import { reportInternalError } from '@/lib/api-error'
 import { settlementAccount, settlementChain } from '@/lib/settlement-transaction'
 import { assertTradeReleaseAllowed } from '@/lib/trade-acceptance'
+import { readWithLocalContentionRecovery } from './local-sqlite-read'
 
 const TRANSFER_EVENT = erc20Abi.find((entry) => entry.type === 'event' && entry.name === 'Transfer')!
 
@@ -33,18 +34,22 @@ export class SettlementError extends Error {
   }
 }
 
-export async function payoutAddressForUser(userId: string, source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db): Promise<Address | null> {
-  const [configured] = await source.select().from(payout_addresses).where(eq(payout_addresses.user_id, userId)).limit(1)
-  if (configured && isAddress(configured.address)) return configured.address as Address
+export async function payoutAddressForUser(userId: string, source?: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]): Promise<Address | null> {
+  const inspect = async (source: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]): Promise<Address | null> => {
+    const [configured] = await source.select().from(payout_addresses).where(eq(payout_addresses.user_id, userId)).limit(1)
+    if (configured && isAddress(configured.address)) return configured.address as Address
 
-  const [user] = await source.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1)
-  const walletMatch = user?.email?.match(/^wallet_(0x[a-fA-F0-9]{40})@wallet\.local$/)
-  if (walletMatch && isAddress(walletMatch[1])) return walletMatch[1] as Address
+    const [user] = await source.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1)
+    const walletMatch = user?.email?.match(/^wallet_(0x[a-fA-F0-9]{40})@wallet\.local$/)
+    if (walletMatch && isAddress(walletMatch[1])) return walletMatch[1] as Address
 
-  const agentId = userId.startsWith('user_agent_') ? userId.slice('user_agent_'.length) : ''
-  if (!agentId) return null
-  const [agent] = await source.select({ address: agents.owner_address }).from(agents).where(eq(agents.id, agentId)).limit(1)
-  return agent?.address && isAddress(agent.address) ? agent.address as Address : null
+    const agentId = userId.startsWith('user_agent_') ? userId.slice('user_agent_'.length) : ''
+    if (!agentId) return null
+    const [agent] = await source.select({ address: agents.owner_address }).from(agents).where(eq(agents.id, agentId)).limit(1)
+    return agent?.address && isAddress(agent.address) ? agent.address as Address : null
+  }
+  // Transaction callers retain their original snapshot and are never retried here.
+  return source ? inspect(source) : readWithLocalContentionRecovery(inspect)
 }
 
 export async function recordPayoutAddress(userId: string, address: Address) {

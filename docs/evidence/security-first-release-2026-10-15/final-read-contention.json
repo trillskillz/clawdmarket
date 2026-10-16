@@ -1,0 +1,29 @@
+{
+  "failed_ci_run": "https://github.com/trillskillz/clawdmarket/actions/runs/38846552040",
+  "failed_head": "e476e6c",
+  "node": {
+    "tests": 1186,
+    "passed": 1043,
+    "failed": 2,
+    "skipped": 141
+  },
+  "failures": [
+    "generic Tempo funding versus pending review proposal: contended payout address SELECT",
+    "independent workflow child preparation: contended nonbinding candidate SELECT"
+  ],
+  "fixes": {
+    "payout": "Bounded fresh read-only inspection for default source; explicit transaction sources unchanged; exhausted error never becomes missing address",
+    "workflow": "Existing WorkflowApprovalError503 for file-SQLite contention across preparation reads; no whole-command or financial replay"
+  },
+  "controls": {
+    "real_exclusive_sqlite_lock_cases": 6,
+    "passed": 6,
+    "skipped": 0,
+    "initial_assertion_failure": "Drizzle wraps SQLITE_BUSY in cause; corrected test checks actual cause rather than expecting the top-level query message"
+  },
+  "targeted_full_group": "Running50 cases; do not claim final source full acceptance until it passes",
+  "schema_changed": false,
+  "real_funds": false,
+  "current_manifest_files": 239,
+  "current_manifest_sha256": "007be9b13b58193d13e822329557f90e2a1e908d0e0f24368d20cbac9ef14dfa"
+}
