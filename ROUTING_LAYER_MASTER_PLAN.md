@@ -1,3 +1,23 @@
+## Final receiver-measurement correction — 2026-10-16
+
+Current runtime remains byte-identical to a1a63b3. Its CI38904889483 passed1,048
+cases but failed one old test counter that observed only the original db instance
+(141 expected skips). The actual retry already rejected competing buyer exposure.
+The fixture now counts both real transaction receivers with their correct this
+binding. Exactly two attempts and all original financial assertions remain; also
+require distinct original/fresh clients. All85 focused controls pass, zero skips
+or failures. Types/lint pass; full/protected release gates remain required.
+Evidence: `docs/evidence/security-first-release-2026-10-15/retry-receiver-measurement.json`.
+
+All preceding240 source hashes are unchanged. The new241-file manifest adds this
+modified existing buyer-policy test; SHA256`409848ad4ac54a787dc426f1ba800125c74b3b59601f050616b8340d8dc8b90f`. The prior enabled local
+run was stopped143 BEFORE fixture mutation and is not full acceptance. HTTP1.119,
+schema79, dependency graph, remote/initial/workflow transaction behavior, original
+financial references and rollout remain unchanged. Final complete gate counts and
+exact corrected publication identities remain maintained in PR274/PR276. Earlier
+headers below describe preceding source/verification checkpoints. No live funds,
+new/global execution flag, real-user email, custody change or outreach is authorized.
+
 ## Current release verification correction — 2026-10-16
 
 PR276's first CI38900923901 passed all six isolated real-lock controls, but found

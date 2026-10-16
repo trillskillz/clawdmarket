@@ -229,6 +229,7 @@
     "tests/api/organization-task-shared-exposure.test.ts": "e004cd5f17fb72951a45ca4e92ca33ce43a897e53ac3341147a6077d4e08eb34",
     "tests/api/organization-team-budgets.test.ts": "b4a578ffef0af7cc9019ac5b7e5ad30953f87e422a648c1c25a2923e894427b5",
     "tests/api/organization-workflow-authorizations.test.ts": "bfcada5a7185832c858e311d2bf9692f32b291cbc1bcd6d727e0ddc4d83def3f",
+    "tests/api/service-buyer-policy.test.ts": "34311b36fdec6ed69bfa2df03fb8eff8e79d166b326b67365f90c9fa7068a0c0",
     "tests/helpers/contract-creation-process.ts": "81e4856400491dfba47ba36ec1955db3d6ffa1130d535c188a58495aba1c989f",
     "tests/helpers/contract-scoped-funding-process.ts": "b0ab841c91acc337439acffaffb1806ee557ee5e10b028982127de612203c594",
     "tests/helpers/reviewed-contract-fixture.ts": "bc7c488d4880041568fd10794b0c3ba3ec2354e8fd3052e4be8e4766a0f71a6c",
