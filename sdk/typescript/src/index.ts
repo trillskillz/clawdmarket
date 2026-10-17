@@ -375,6 +375,51 @@ function delay(ms: number, signal?: AbortSignal) {
 }
 
 /** Route execution reserves an unpaid checkout; explicit instant funding spends deposited credit. The client never broadcasts wallet transfers. */
+export type WorkerState = 'available' | 'busy' | 'stopped'
+export type OnboardingBlocker = { code: string; scope: 'activation' | 'worker' | 'seller' | 'buyer'; action: string }
+export type AgentStatus = Record<string, unknown> & {
+  agent_id: string; status: string; registered?: true; activation_state?: 'active' | 'pending_claim' | 'inactive'
+  ownership_state?: 'linked' | 'unverified'; worker_available?: boolean | null
+  readiness_state?: 'observed' | 'unavailable'; next_action?: string | null; blockers?: OnboardingBlocker[] | null
+}
+export type AgentRegistrationInput = { name: string; description?: string; capabilities?: string | string[]; endpoint?: string; activation_mode?: 'autonomous' | 'owner_claim'; profile_visibility?: 'public' | 'private'; [field: string]: unknown }
+export type AgentRegistration = { ok: true; idempotent: boolean; agent_id: string; agent: Record<string, unknown> & { id: string; api_key: string; status: string }; next_actions: unknown[] }
+
+/** 32 random bytes as 64 lowercase hex. Persist it BEFORE calling registerAgent. */
+export function createRegistrationSecret(): string {
+  const bytes = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(bytes)
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+/** Registers once. After a lost reply, call again with the SAME saved secret and identical input:
+ * the server returns the original identity (idempotent=true), never a duplicate. Never retries itself. */
+export async function registerAgent(input: AgentRegistrationInput, options: { registrationSecret: string; baseUrl?: string; fetch?: typeof fetch; signal?: AbortSignal }): Promise<AgentRegistration> {
+  if (!/^[a-f0-9]{64}$/.test(options.registrationSecret)) throw new TypeError('registrationSecret must be 64 lowercase hex characters from createRegistrationSecret()')
+  const fetcher = options.fetch || fetch
+  let response: Response
+  try {
+    response = await fetcher(new URL(SDK_CONTRACT.operations.register_agent.path, originUrl(options.baseUrl || 'https://clawdmkt.com')), {
+      method: 'POST', redirect: 'error', credentials: 'omit', signal: options.signal,
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': options.registrationSecret },
+      body: JSON.stringify(input),
+    })
+  } catch (cause) {
+    throw new ClawdMarketTransportError('Registration did not complete; repeat the identical request with the same registrationSecret', cause)
+  }
+  const payload = await response.json().catch(() => null)
+  const data = object(payload)
+  if (!response.ok) throw new ClawdMarketApiError(response.status, text(data.code ?? data.error, 'HTTP_ERROR'), text(data.message ?? data.error, `ClawdMarket returned ${response.status}`), false, 'unknown', data.details, data, retryAfter(response))
+  if (!payload || typeof data.agent_id !== 'string') throw new ClawdMarketTransportError('ClawdMarket returned an invalid registration response', null)
+  return payload as AgentRegistration
+}
+
+/** The first permitted onboarding action in dependency order, or null when nothing blocks. */
+export function nextOnboardingAction(status: Pick<AgentStatus, 'readiness_state' | 'blockers'>): OnboardingBlocker | null | 'unknown' {
+  if (status.readiness_state !== 'observed' || !Array.isArray(status.blockers)) return 'unknown'
+  return status.blockers[0] ?? null
+}
+
 export class ClawdMarketClient {
   private readonly base: URL
   private readonly fetcher: typeof fetch
@@ -417,6 +462,16 @@ export class ClawdMarketClient {
 
   private enterpriseRequest<T>(operation: EnterpriseOperation, params: { id: string; tradeId?: string; authorizationId?: string }, body?: unknown, options?: RequestOptions, query?: Record<string, string>, paymentCredential?: string): Promise<T> {
     return this.request<T>(SDK_CONTRACT.operations[operation].method, enterprisePath(operation, params, query), body, options, paymentCredential)
+  }
+
+  /** Read-only: never refreshes API activity or a worker lease. */
+  getAgentStatus(options?: RequestOptions) { return this.request<AgentStatus>('GET', '/api/agents/status', undefined, options) }
+
+  /** Explicit worker lease report. Send every 60s while running and 'stopped' on graceful shutdown. */
+  reportWorkerHeartbeat(agentId: string, workerState: WorkerState = 'available', options?: RequestOptions) {
+    if (!/^agent_[A-Za-z0-9_-]{1,100}$/.test(agentId)) throw new TypeError('agentId must be an agent_ identifier')
+    if (!['available', 'busy', 'stopped'].includes(workerState)) throw new TypeError('workerState must be available, busy or stopped')
+    return this.request<{ ok: true; agent_id: string; timestamp: number; pending_tasks: number; worker_state: WorkerState; lease_seconds: number; lease_expires_at: string | null }>('POST', SDK_CONTRACT.operations.heartbeat_agent.path.replace('{id}', agentId), { worker_state: workerState }, options)
   }
 
   /** Persist the exact command first. On uncertainty inspect by its saved reference; never retry automatically. */

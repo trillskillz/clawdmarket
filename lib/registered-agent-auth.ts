@@ -54,10 +54,22 @@ export function hashAgentApiKey(apiKey: string): string {
 }
 
 function legacyAgentApiKeyDigest(apiKey: string): string {
-  // Compatibility only: old releases stored SHA-256 digests of random 128-bit
-  // API keys. A successful legacy lookup is immediately upgraded to keyed HMAC.
+  // Compatibility only: releases between 2026-09-12 and 2026-09-19 stored
+  // unkeyed SHA-256 digests of random API keys. That form cannot be converted
+  // offline (the key is needed), so a successful lookup upgrades it to keyed
+  // HMAC (audited as credential_storage_upgraded). Plaintext storage is no
+  // longer accepted: scripts/upgrade-legacy-agent-api-keys.ts converts it at
+  // deploy. Remove this branch once the deploy report shows no unprefixed
+  // digests remain.
   // codeql[js/insufficient-password-hash]
   return crypto.createHash('sha256').update(apiKey).digest('hex')
+}
+
+/** Constant-time string equality (length is not secret: all formats are fixed-width per kind). */
+function constantTimeEqual(stored: unknown, candidate: string): boolean {
+  if (typeof stored !== 'string') return false
+  const a = Buffer.from(stored), b = Buffer.from(candidate)
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
 
 export function agentApiKeyPrefix(apiKey: string): string {
@@ -80,7 +92,7 @@ export function registeredAgentApiKeyFromRequest(request: NextRequest): string {
 
 export async function lookupRegisteredAgentApiKey(
   apiKey: string,
-  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope } = {},
+  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope; recordPresence?: boolean } = {},
 ): Promise<RegisteredAgentAuth> {
   return resolveRegisteredAgentApiKey(apiKey, Boolean(apiKey), options)
 }
@@ -88,7 +100,7 @@ export async function lookupRegisteredAgentApiKey(
 async function resolveRegisteredAgentApiKey(
   apiKey: string,
   hasCredential: boolean,
-  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope } = {},
+  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope; recordPresence?: boolean } = {},
 ): Promise<RegisteredAgentAuth> {
   if (!hasCredential) return { kind: 'none' }
   if (!apiKey) return { kind: 'invalid' }
@@ -100,10 +112,10 @@ async function resolveRegisteredAgentApiKey(
     sql: `SELECT id, name, status, api_key, api_key_prefix, api_key_revoked_at, archived_at,
                  previous_api_key, previous_api_key_prefix, previous_api_key_expires_at
           FROM agents
-          WHERE api_key IN (?, ?, ?)
+          WHERE api_key IN (?, ?)
              OR (previous_api_key = ? AND previous_api_key_expires_at > unixepoch())
           LIMIT 1`,
-    args: [hashed, legacyHashed, apiKey, hashed],
+    args: [hashed, legacyHashed, hashed],
   })
   let agent = primaryResult?.rows?.[0]
   let namedCredential: Record<string, unknown> | null = null
@@ -129,9 +141,12 @@ async function resolveRegisteredAgentApiKey(
   const status = agent.status === 'active' ? 'active' : 'inactive'
   if (!options.allowInactive && status !== 'active') return { kind: 'invalid' }
 
+  const storedFormat: 'hmac' | 'unkeyed_sha256' | null = namedCredential ? null
+    : constantTimeEqual(agent.api_key, hashed) ? 'hmac'
+      : constantTimeEqual(agent.api_key, legacyHashed) ? 'unkeyed_sha256' : null
   const credential = namedCredential
     ? 'named'
-    : [hashed, legacyHashed, apiKey].includes(String(agent.api_key))
+    : storedFormat
       ? 'current'
       : 'previous'
   const scopes = namedCredential
@@ -142,14 +157,22 @@ async function resolveRegisteredAgentApiKey(
     return { kind: 'forbidden', agentId, requiredScope: options.requiredScope }
   }
 
-  // Transparently upgrade API keys created by older releases from plaintext or
-  // unkeyed SHA-256 digests.
-  if (credential === 'current' && agent.api_key !== hashed) {
-    await client.execute({
+  // Transparently upgrade API keys stored as unkeyed SHA-256 by older releases.
+  if (credential === 'current' && storedFormat !== 'hmac') {
+    // Conditional on the exact stored legacy value, so a concurrent rotation is
+    // never overwritten; the audit event records only the format, never key material.
+    const upgraded = await client.execute({
       sql: `UPDATE agents SET api_key = ?, api_key_prefix = COALESCE(api_key_prefix, ?)
             WHERE id = ? AND api_key = ?`,
       args: [hashed, agentApiKeyPrefix(apiKey), String(agent.id), String(agent.api_key)],
     })
+    if (Number(upgraded?.rowsAffected || 0) === 1) {
+      await client.execute({
+        sql: `INSERT INTO agent_lifecycle_events (id, agent_id, action, actor_type, actor_id, reason, metadata, created_at)
+              VALUES (?, ?, 'credential_storage_upgraded', 'system', NULL, 'Legacy API key storage upgraded to keyed HMAC on successful use', ?, unixepoch())`,
+        args: [`ale_${crypto.randomUUID()}`, String(agent.id), JSON.stringify({ from: storedFormat, to: 'hmac' })],
+      }).catch(() => undefined)
+    }
   }
 
   if (credential === 'named') {
@@ -165,7 +188,7 @@ async function resolveRegisteredAgentApiKey(
       args: [agentId, AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS],
     }).catch(() => undefined)
   }
-  if (status === 'active') {
+  if (status === 'active' && options.recordPresence !== false) {
     // Authenticated API activity is a presence signal. Coalescing updates keeps
     // ordinary polling from turning into a write on every request.
     await client.execute({
@@ -206,7 +229,7 @@ export async function resolveRegisteredAgentBearer(authHeader: string | null): P
 
 export async function resolveRegisteredAgentRequest(
   request: NextRequest,
-  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope | null } = {},
+  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope | null; recordPresence?: boolean } = {},
 ): Promise<RegisteredAgentAuth> {
   const apiKey = registeredAgentApiKeyFromRequest(request)
   const hasCredential = Boolean(
@@ -216,6 +239,7 @@ export async function resolveRegisteredAgentRequest(
   )
   return resolveRegisteredAgentApiKey(apiKey, hasCredential, {
     allowInactive: options.allowInactive,
+    recordPresence: options.recordPresence,
     requiredScope: options.requiredScope === null
       ? undefined
       : options.requiredScope || requiredAgentCredentialScope(request),

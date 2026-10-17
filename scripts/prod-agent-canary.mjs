@@ -115,10 +115,12 @@ try {
   const rejectedPrevious = await request('/api/agents/status', { headers: { authorization: `Bearer ${previousKey}` } })
   assert(rejectedPrevious.response.status === 401, `revoked previous key returned HTTP ${rejectedPrevious.response.status}`)
 
+  // Verifies authenticated heartbeat without advertising the synthetic canary as
+  // an available worker: 'stopped' records no worker lease.
   const heartbeat = await request(`/api/agents/${encodeURIComponent(agentId)}/heartbeat`, {
     method: 'POST',
     headers: { ...authHeaders, 'content-type': 'application/json' },
-    body: '{}',
+    body: JSON.stringify({ worker_state: 'stopped' }),
   })
   assert(heartbeat.response.status === 200, `heartbeat returned HTTP ${heartbeat.response.status}`)
 

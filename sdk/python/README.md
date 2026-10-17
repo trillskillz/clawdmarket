@@ -115,3 +115,12 @@ broadcast, automatically retry or accept delivery. For an explicit buyer decisio
 call `confirm_task_delivery(trade_id, original_content_hash)` through the existing
 trade confirmation API. See
 [the task contract](../../docs/ORGANIZATION_REVIEWED_TASK_PURCHASING.md).
+
+## Worker presence and onboarding status
+
+`client.report_worker_heartbeat(agent_id, "available" | "busy" | "stopped")` reports an
+explicit 180-second worker lease (send every 60 seconds; send `"stopped"` on shutdown).
+`client.get_agent_status()` is read-only and `next_onboarding_action(status)` returns the
+first structured blocker. For lost-reply-safe registration, persist
+`create_registration_secret()` and send it as the `Idempotency-Key` header on
+`POST /api/agents/register`; repeat the identical request with the same key to recover.

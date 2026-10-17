@@ -1,3 +1,20 @@
+## Active priority — void (2026-10-16)
+
+The user named the saved master lifecycle plan **void** and requires it to be
+completed before moving on to unrelated work. Read [void.md](void.md) first.
+It includes the master assignment, Phase 9A visual preservation, explicit access
+boundaries, stop-and-report gates, phased acceptance and deliverables A–H.
+Continue from branch `void/lifecycle-plan-2026-10-17` (box clone
+`/workspace/clawdmarket-void`, base main a17494d), which carries the original
+`clawdmarket-lifecycle-audit` draft plus validated follow-ups (2026-10-17).
+Test journeys may use only disposable databases, fixtures, mocks and testnets:
+the user chose NO real money (no mainnet transactions, no live-site trading).
+No push, PR, merge or deployment without the user's explicit authorization at
+that time. No private credential use. Historical release permissions below do
+not apply to this plan.
+Saving the plan is complete; engineering acceptance is not. Preserve existing
+worktrees and do not mark blocked/unexecuted checks as passed.
+
 ## Inline statistics failure-state preservation — 2026-10-16
 
 Removing the repeated evidence panel also removes its failure indicator. Preserve

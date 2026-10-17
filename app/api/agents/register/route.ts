@@ -8,6 +8,7 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { generateAgentApiKey, hashAgentApiKey, resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { getRequestIp } from '@/lib/request-ip'
 import { internalErrorResponse } from '@/lib/api-error'
+import { registrationReplay } from '@/lib/agent-registration-replay'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +50,11 @@ export async function POST(request: NextRequest) {
  const parsed = agentRegistrationSchema.safeParse(submitted)
  if (!parsed.success) return NextResponse.json({ error: 'invalid_body', details: parsed.error.issues }, { status: 400, headers: getRateLimitHeaders(rl) })
  const body = parsed.data
+ const replaySecret = request.headers.get('idempotency-key')
+ if (replaySecret !== null && !/^[a-f0-9]{64}$/.test(replaySecret)) {
+  return NextResponse.json({ error: 'invalid_registration_reference', code: 'invalid_registration_reference', message: 'Idempotency-Key must be a saved 32-byte random secret encoded as 64 lowercase hexadecimal characters.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
+ }
+ const replay = replaySecret === null ? null : registrationReplay(replaySecret, body)
  const {
  name, description, capabilities, endpoint, owner_address,
  system_prompt,
@@ -77,20 +83,48 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ error: 'invalid_body', message: 'owner_address must be a valid EVM address' }, { status: 400 })
  }
 
- const id = `agent_${crypto.randomUUID()}`
+ const id = replay?.id || `agent_${crypto.randomUUID()}`
  const caps = capabilities
  ? (Array.isArray(capabilities) ? JSON.stringify(capabilities) : JSON.stringify([capabilities]))
  : null
 
- const apiKey = generateAgentApiKey()
- const claimCode = activation_mode === 'owner_claim' ? `claim_${crypto.randomBytes(16).toString('hex')}` : null
+ const apiKey = replay?.apiKey || generateAgentApiKey()
+ let claimCode = activation_mode === 'owner_claim' ? `claim_${crypto.randomBytes(16).toString('hex')}` : null
+ let currentStatus = activation_mode === 'autonomous' ? 'active' : 'inactive'
+ let idempotent = false
  const nowIso = new Date().toISOString()
  const syntheticUserId = `user_agent_${id}`
  const capabilitiesJson = caps || '[]'
  const visibility = lifecycle_mode === 'ephemeral' ? 'private' : profile_visibility
 
- await db.transaction(async (tx) => {
-  await tx.insert(agents).values({
+ const inspectOriginal = async () => {
+  if (!replay) return null
+  const result = await db.$client.execute({ sql: `SELECT a.status, a.api_key, a.api_key_rotated_at, a.api_key_revoked_at, a.archived_at,
+    a.claim_code, a.claimed_at, e.metadata, e.actor_type, e.actor_id FROM agents a
+    LEFT JOIN agent_lifecycle_events e ON e.agent_id=a.id AND e.action='registered'
+    WHERE a.id=? LIMIT 1`, args: [id] })
+  const original = result.rows[0]
+  if (!original) return null
+  let metadata: Record<string, unknown> = {}
+  try { metadata = JSON.parse(String(original.metadata || '{}')) } catch { /* Fail closed below. */ }
+  const sameActor = sponsored
+   ? original.actor_type === 'sponsor_agent' && original.actor_id === sponsor.agentId
+   : original.actor_type === 'self' && original.actor_id === id
+  if (metadata.registration_request_hash !== replay.requestHash || !sameActor) return NextResponse.json({ error: 'registration_reference_conflict', code: 'registration_reference_conflict', message: 'This registration secret is already bound to a different command. Recover the original identity; do not register a replacement.' }, { status: 409, headers: { 'Cache-Control': 'no-store' } })
+  if (original.archived_at != null || original.api_key_revoked_at != null || original.api_key_rotated_at != null || original.api_key !== hashAgentApiKey(apiKey)) {
+   return NextResponse.json({ error: 'registration_replay_closed', code: 'registration_replay_closed', agent_id: id, message: 'This identity already exists and its original credential cannot be replayed. Use the current credential or authenticated owner recovery.' }, { status: 409, headers: { 'Cache-Control': 'no-store' } })
+  }
+  idempotent = true
+  currentStatus = String(original.status)
+  claimCode = original.claimed_at ? null : original.claim_code ? String(original.claim_code) : null
+  return null
+ }
+ const originalError = await inspectOriginal()
+ if (originalError) return originalError
+ if (!idempotent) {
+ try {
+ await db.batch([
+  db.insert(agents).values({
    id,
    name,
    description: description || '',
@@ -111,42 +145,51 @@ export async function POST(request: NextRequest) {
    claimCode,
    moltbookHandle: moltbook_handle || null,
    created_at: new Date(nowIso),
-  })
+  }),
 
-  await tx.insert(users).values({
+  db.insert(users).values({
    id: syntheticUserId,
    email: `${id}@agent.clawdmkt.com`,
    password_hash: crypto.randomBytes(32).toString('hex'),
    name,
    role: 'agent',
    created_at: new Date(nowIso),
-  })
-  await tx.insert(wallets).values({ user_id: syntheticUserId, balance: 0, escrow: 0 })
-  await tx.insert(agent_lifecycle_events).values({
+  }),
+  db.insert(wallets).values({ user_id: syntheticUserId, balance: 0, escrow: 0 }),
+  db.insert(agent_lifecycle_events).values({
    id: `ale_${crypto.randomUUID()}`,
    agent_id: id,
    action: 'registered',
    actor_type: sponsored ? 'sponsor_agent' : 'self',
    actor_id: sponsored ? sponsor.agentId : id,
    reason: lifecycle_mode === 'ephemeral' ? 'Sponsored production canary registration' : null,
-   metadata: JSON.stringify({ activation_mode, lifecycle_mode, visibility }),
+   metadata: JSON.stringify({ activation_mode, lifecycle_mode, visibility, ...(replay ? { registration_request_hash: replay.requestHash } : {}) }),
    created_at: new Date(nowIso),
-  })
- })
+  }),
+ ])
+ } catch (error) {
+  // Concurrent registration can win the primary-key race. Recover only that
+  // committed command; never retry a creation under a fresh random identity.
+  const conflict = await inspectOriginal()
+  if (conflict) return conflict
+  if (!idempotent) throw error
+ }
+ }
 
  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
 
  return NextResponse.json({
   ok: true,
+  idempotent,
   agent_id: id,
   version: 1,
   agent: {
    id,
    name,
    api_key: apiKey,
-   status: activation_mode === 'autonomous' ? 'active' : 'pending_claim',
+   status: currentStatus === 'active' ? 'active' : claimCode ? 'pending_claim' : 'inactive',
    activation_mode,
-   human_approval_required: activation_mode === 'owner_claim',
+   human_approval_required: currentStatus !== 'active' && Boolean(claimCode),
    lifecycle_mode,
    profile_visibility: visibility,
    sponsor_agent_id: sponsored ? sponsor.agentId : null,
@@ -155,7 +198,7 @@ export async function POST(request: NextRequest) {
   },
   next_actions: [
    { action: 'check_status', method: 'GET', endpoint: '/api/agents/status', auth: 'agent_api_key' },
-   ...(activation_mode === 'owner_claim'
+   ...(currentStatus !== 'active' && claimCode
     ? [{ action: 'request_owner_claim', method: 'GET', endpoint: `${baseUrl}/claim/${claimCode}`, auth: 'claim_link' }]
     : [
       { action: 'set_payout_address', method: 'PUT', endpoint: '/api/payments/payout-address', auth: 'agent_api_key' },
@@ -167,7 +210,7 @@ export async function POST(request: NextRequest) {
        : []),
     ]),
   ],
- }, { status: 201 })
+ }, { status: idempotent ? 200 : 201, headers: { 'Cache-Control': 'no-store' } })
  } catch (err: any) {
  return internalErrorResponse('Agent registration failed', err, {
   code: 'registration_failed',

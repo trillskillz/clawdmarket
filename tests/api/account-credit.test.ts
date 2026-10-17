@@ -578,3 +578,59 @@ test('a current private provider closes fresh contract draft and funding without
     assert.equal((await db.select().from(schema.contracts).where(eq(schema.contracts.id, original.contract.id)))[0].state, 'DRAFT')
   } finally { f.restore() }
 })
+
+test('reference lifecycle (disposable, test credit only): replay-safe registration, worker lease, publication, discovery, purchase, acceptance and exactly-once settlement', async () => {
+  const { randomBytes } = await import('node:crypto')
+  const { POST: register } = await import('@/app/api/agents/register/route')
+  const { GET: status } = await import('@/app/api/agents/status/route')
+  const { POST: heartbeat } = await import('@/app/api/agents/[id]/heartbeat/route')
+  const { POST: publish, GET: discover } = await import('@/app/api/listings/route')
+  const agentRequest = (path: string, key: string | null, method = 'GET', body?: unknown, extra: Record<string, string> = {}) => new NextRequest(`http://localhost${path}`, { method, headers: { 'Content-Type': 'application/json', ...(key ? { 'X-ClawdMarket-Agent-Key': key } : {}), ...extra }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
+  const enroll = async (name: string) => {
+    const secret = randomBytes(32).toString('hex'), command = { name, activation_mode: 'autonomous', capabilities: ['reference-lifecycle'] }
+    const first = await register(agentRequest('/api/agents/register', null, 'POST', command, { 'Idempotency-Key': secret }))
+    assert.equal(first.status, 201, JSON.stringify(await first.clone().json()))
+    const replay = await register(agentRequest('/api/agents/register', null, 'POST', command, { 'Idempotency-Key': secret }))
+    assert.equal(replay.status, 200, 'lost-reply recovery returns the original identity')
+    const [a, b] = [await first.json(), await replay.json()]
+    assert.equal(a.agent_id, b.agent_id); assert.equal(a.agent.api_key, b.agent.api_key)
+    return { id: a.agent_id as string, key: a.agent.api_key as string, principal: `user_agent_${a.agent_id}` }
+  }
+  const inspect = async (key: string) => { const response = await status(agentRequest('/api/agents/status', key)); assert.equal(response.status, 200); return response.json() }
+  const seller = await enroll('Reference lifecycle seller'), buyer = await enroll('Reference lifecycle buyer')
+  // Synthetic, labeled test identities only; this is not organic demand.
+  const initial = await inspect(seller.key)
+  assert.equal(initial.activation_state, 'active'); assert.equal(initial.worker_available, null)
+  assert.ok(initial.blockers.some((row: { code: string }) => row.code === 'NO_PUBLISHED_SERVICE'))
+  const lease = await heartbeat(agentRequest(`/api/agents/${seller.id}/heartbeat`, seller.key, 'POST', { worker_state: 'available' }), { params: Promise.resolve({ id: seller.id }) })
+  assert.equal(lease.status, 200)
+  await db.insert(schema.seller_payment_preferences).values({ seller_id: seller.principal, supported_rails: '["credit"]', confirmed_by: 'disposable-test-fixture', confirmed_at: new Date().toISOString() })
+  const published = await publish(agentRequest('/api/listings', seller.key, 'POST', { category: 'analysis', title: 'Reference lifecycle review', description: 'Disposable reference workflow listing for lifecycle validation only.', price_bankr: 1 }))
+  assert.equal(published.status, 201, JSON.stringify(await published.clone().json()))
+  const listingId = (await published.json()).listing.id as string
+  const ready = await inspect(seller.key)
+  assert.equal(ready.worker_presence.state, 'available'); assert.equal(ready.seller.published_listings, 1)
+  assert.equal(ready.blockers.some((row: { code: string }) => row.code === 'NO_PUBLISHED_SERVICE' || row.code === 'NO_ACTIVE_WORKER'), false)
+  const found = await (await discover(agentRequest('/api/listings?limit=100', buyer.key))).json()
+  assert.ok(found.listings.some((row: { id: string }) => row.id === listingId), 'buyer discovers the listing through the machine API')
+  const deposited = await deposits.POST(agentRequest('/api/wallet/deposits', buyer.key, 'POST', { amount_minor: 105, payer: payer.address, client_reference: crypto.randomUUID() }))
+  assert.equal(deposited.status, 200, JSON.stringify(await deposited.clone().json()))
+  const signed = await proof((await deposited.json()).deposit, { amount: 1050000n })
+  assert.equal((await deposits.PUT(agentRequest('/api/wallet/deposits', buyer.key, 'PUT', signed))).status, 200)
+  const total = await liability(), order = { listing_id: listingId, amount: 1, payment_rail: 'credit', client_reference: crypto.randomUUID() }
+  const purchase = await buy(agentRequest('/api/trades', buyer.key, 'POST', order))
+  assert.equal(purchase.status, 201, JSON.stringify(await purchase.clone().json()))
+  const trade = (await purchase.json()).trade
+  assert.equal(trade.status, 'escrow_held')
+  assert.equal((await buy(agentRequest('/api/trades', buyer.key, 'POST', order))).status, 200, 'lost purchase reply replays the original trade')
+  assert.deepEqual(await credit.creditBalance(buyer.principal), { available_minor: 0, escrow_minor: 100, currency: 'USD', rail: 'credit' }, 'buyer pays price plus the unchanged 5% platform fee')
+  const [pending] = await db.update(schema.trades).set({ status: 'pending_release' }).where(eq(schema.trades.id, trade.id)).returning()
+  await complete(pending, 'buyer_confirm')
+  await assert.rejects(complete(pending, 'buyer_confirm'), /TRADE_NOT_PENDING_RELEASE/)
+  assert.equal((await credit.creditBalance(buyer.principal)).escrow_minor, 0)
+  assert.equal((await credit.creditBalance(seller.principal)).available_minor, 100)
+  assert.equal(await liability(), total, 'test credit is conserved; no value is created or destroyed')
+  const stopped = await heartbeat(agentRequest(`/api/agents/${seller.id}/heartbeat`, seller.key, 'POST', { worker_state: 'stopped' }), { params: Promise.resolve({ id: seller.id }) })
+  assert.equal(stopped.status, 200)
+  assert.equal((await inspect(seller.key)).worker_available, false)
+})
