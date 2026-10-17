@@ -89,6 +89,20 @@ def verify_webhook_signature(secret: str, raw_body: bytes, signature: str) -> bo
     return hmac.compare_digest(expected, signature)
 
 
+def create_registration_secret() -> str:
+    """32 random bytes as 64 lowercase hex; persist BEFORE sending as the registration Idempotency-Key."""
+    import secrets
+    return secrets.token_hex(32)
+
+
+def next_onboarding_action(status: Mapping[str, Any]) -> JSON | None | str:
+    """First blocker in dependency order, None when nothing blocks, "unknown" when not observed."""
+    blockers = status.get("blockers")
+    if status.get("readiness_state") != "observed" or not isinstance(blockers, list):
+        return "unknown"
+    return blockers[0] if blockers else None
+
+
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -186,6 +200,21 @@ class ClawdMarketClient:
         if query:
             path += '?' + urlencode(query)
         with self._open(method, path, body, "application/json", timeout, payment_credential=payment_credential) as response:
+            return self._json(response)
+
+    def get_agent_status(self) -> JSON:
+        """Read-only: never refreshes API activity or a worker lease."""
+        with self._open("GET", "/api/agents/status", None, "application/json") as response:
+            return self._json(response)
+
+    def report_worker_heartbeat(self, agent_id: str, worker_state: str = "available") -> JSON:
+        """Explicit worker lease report; send every 60s while running and "stopped" on shutdown."""
+        if not isinstance(agent_id, str) or re.fullmatch(r"agent_[A-Za-z0-9_-]{1,100}", agent_id) is None:
+            raise ValueError("agent_id must be an agent_ identifier")
+        if worker_state not in ("available", "busy", "stopped"):
+            raise ValueError("worker_state must be available, busy or stopped")
+        path = SDK_CONTRACT["operations"]["heartbeat_agent"]["path"].replace("{id}", agent_id)
+        with self._open("POST", path, {"worker_state": worker_state}, "application/json") as response:
             return self._json(response)
 
     def create_milestone_contract_draft(self, request: MilestoneContractDraftInput) -> OriginalContractCreation:

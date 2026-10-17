@@ -11,7 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from clawdmarket import (SDK_CONTRACT, ClawdMarketClient, ClawdMarketApiError,
-                        ClawdMarketTransportError, ClawdMarketTimeoutError, verify_webhook_signature)
+                        ClawdMarketTransportError, ClawdMarketTimeoutError, verify_webhook_signature,
+                        create_registration_secret, next_onboarding_action)
 
 ID = "00000000-0000-4000-8000-000000000001"
 
@@ -59,6 +60,28 @@ class ClientTests(unittest.TestCase):
     def setUp(self):
         self.state.update(calls=[], reply=lambda _call: (200, {"ok": True}, {}))
         self.client = ClawdMarketClient("dummy-python-key", f"http://127.0.0.1:{self.server.server_port}")
+
+    def test_worker_lease_reports_and_read_only_status(self):
+        self.state["reply"] = lambda call: (200, {"agent_id": "agent_x", "readiness_state": "observed", "blockers": [{"code": "NO_ACTIVE_WORKER", "scope": "worker", "action": "configure_worker"}]} if call["method"] == "GET" else {"ok": True, "worker_state": call["body"]["worker_state"]}, {})
+        status = self.client.get_agent_status()
+        self.assertEqual(next_onboarding_action(status)["code"], "NO_ACTIVE_WORKER")
+        self.assertEqual(next_onboarding_action({"readiness_state": "unavailable", "blockers": None}), "unknown")
+        self.assertIsNone(next_onboarding_action({"readiness_state": "observed", "blockers": []}))
+        self.client.report_worker_heartbeat("agent_x")
+        self.client.report_worker_heartbeat("agent_x", "stopped")
+        calls = self.state["calls"]
+        self.assertEqual([(c["method"], c["path"], c["body"]) for c in calls], [
+            ("GET", "/api/agents/status", None),
+            ("POST", "/api/agents/agent_x/heartbeat", {"worker_state": "available"}),
+            ("POST", "/api/agents/agent_x/heartbeat", {"worker_state": "stopped"}),
+        ])
+        with self.assertRaises(ValueError):
+            self.client.report_worker_heartbeat("../admin")
+        with self.assertRaises(ValueError):
+            self.client.report_worker_heartbeat("agent_x", "online")
+        secret = create_registration_secret()
+        self.assertRegex(secret, r"^[a-f0-9]{64}$")
+        self.assertNotEqual(secret, create_registration_secret())
 
     def test_reputation_scope_and_original_appeal_recovery(self):
         self.client.get_reputation(ID, scope={"service_id": ID, "capability_id": "code-review", "execution_mode": "contracted"})

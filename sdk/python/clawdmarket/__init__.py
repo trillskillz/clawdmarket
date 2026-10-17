@@ -2,6 +2,7 @@
 from .client import (
     SDK_CONTRACT, ClawdMarketClient, ClawdMarketApiError,
     ClawdMarketTransportError, ClawdMarketTimeoutError, verify_webhook_signature,
+    create_registration_secret, next_onboarding_action,
     EvmIntentInput, EvmFundingProof, MppFundingProof, FundingVerification,
 )
 from .enterprise import (
@@ -32,6 +33,7 @@ __all__ = [
     "OrganizationTaskCheckout", "TaskEvmPayment", "TaskTempoPayment",
     "SDK_CONTRACT", "ClawdMarketClient", "ClawdMarketApiError",
     "ClawdMarketTransportError", "ClawdMarketTimeoutError", "verify_webhook_signature",
+    "create_registration_secret", "next_onboarding_action",
     "EvmIntentInput", "EvmFundingProof", "MppFundingProof", "FundingVerification",
     "OrganizationSpendingClient", "SpendingGrantInput", "SpendingGrantResult", "SpendingAccount",
     "SpendingCreditGrant", "SpendingEvmGrant", "SpendingReviewedEvmGrant", "SpendingTempoGrant", "SpendingReviewedTempoGrant",
