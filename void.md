@@ -533,21 +533,55 @@ requirement; a final report must not falsely declare the entire plan complete.
 
 ## Current handoff
 
-Active isolated worktree: `/home/void/Work/clawdmarket-lifecycle-audit`.
-
-Baseline main: `a17494d5392631c882b1c37fc130421ea6b8a4bb` (fetch again before
-eventual integration; do not overwrite other worktrees).
+Updated 2026-10-17 (CT). Active work moved to a box clone:
+`/workspace/clawdmarket-void`, branch `void/lifecycle-plan-2026-10-17`, based on
+main `a17494d`. It contains the omarchy `clawdmarket-lifecycle-audit` draft
+(imported verbatim, verified identical file list/diffstat) plus follow-up
+commits. The omarchy worktree is untouched. **Not pushed**: the user requires
+explicit authorization before any push, PR, merge or deployment (G1).
 
 Investigation/access report: [lifecycle audit](docs/LIFECYCLE_AUDIT_2026-10-16.md).
-Production baseline artifacts:
-`docs/evidence/lifecycle-2026-10-16/production-baseline/`.
+Baselines: 16 Oct on omarchy `docs/evidence/lifecycle-2026-10-16/production-baseline/`;
+17 Oct on the box `/workspace/evidence-2026-10-17/production-baseline/` (PNGs not
+committed; `public-api.json` for 16 Oct is committed).
 
-Registration replay changes are an unaccepted local draft. No complete regression,
-security, SDK, build or browser acceptance has been established for that draft.
-The first visual capture blocked apex-domain assets after the www redirect and
-was rejected as a baseline; corrected captures allow both official domains.
-Do not interpret that capture failure as a production styling defect.
+### Validation log (disposable DB `file:/tmp/clawdmarket-workspace-test-ci/ci.db`, dummy secrets, no production credentials on the box)
 
-Next: finish validating the corrected baseline, reproduce registration retry
-behavior in disposable tests, review replay/credential-recovery safety, and
-continue P0/P1. All phases remain incomplete unless their evidence is recorded.
+Mirrors `.github/workflows/pr-build-smoke.yml` (`/workspace/ci-local.sh`):
+drizzle push + runtime migrations (80) OK; evidence query compilation OK; lint OK;
+typecheck OK; `sdk:check` OK; `pnpm test` 1,201 tests — 1,060 pass / 141 skipped
+(expected env-gated skips, same count as prior CI) / 0 fail; Python SDK 28/28;
+production build OK; MCP contract 9/9; Playwright (Chromium, CI mode, built app)
+164 passed / 9 skipped / 0 failed / 0 flaky; `pnpm audit` (full and prod): no known
+vulnerabilities. Reference lifecycle test 3/3 consecutive isolated passes.
+Final rerun on the final commit is recorded in the publication report.
+
+### Deployment plan (G — requires user approval)
+
+1. Push branch, open PR to main linking `void.md`; wait for PR Build + Smoke.
+2. Merge (squash) → Deploy workflow: release gate on an isolated DB, production
+   readiness preflight, **additive** `db:migrate:runtime`
+   (`2026-10-16-agent-worker-presence-v1`: two nullable `agents` columns, no
+   backfill), build, deploy, alias, alias health checks.
+3. Production Smoke (includes `prod-agent-canary`, now heartbeating `stopped`).
+4. Post-deploy checks: `/api/health`, `/api/health/ready` (new columns present),
+   key pages, `GET /api/agents/status` shape via the smoke canary.
+5. Rollback: revert the merge commit and redeploy; the two columns are inert for
+   old code and remain (no destructive down-migration). Registrations created via
+   `Idempotency-Key` are ordinary agents and remain valid.
+
+### Remaining (not complete)
+
+- Worker lease / identity state on public registry & profile UI (needs a Phase 9A
+  capture-compare cycle).
+- Private evidence (G3): publication failures (H1), checkout abandonment,
+  funnel (Deliverable C/D) — needs a named production read scope.
+- Live/testnet transactions: blocked: user chose no real money; testnet signer
+  and test tokens not configured (needs user).
+- Phase 12 demand validation: needs authorized outreach/pilot (not granted).
+- Known compatibility notes: a non-JSON heartbeat body now returns 400; a
+  malformed `Idempotency-Key` on registration returns 400; rotating
+  `AGENT_API_KEY_PEPPER` changes replay-derived ids (old replays would mint a new
+  identity), so pepper rotation must close outstanding registration replays.
+
+All phases remain incomplete unless their evidence is recorded above.

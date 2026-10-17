@@ -4,11 +4,14 @@ The user named the saved master lifecycle plan **void** and requires it to be
 completed before moving on to unrelated work. Read [void.md](void.md) first.
 It includes the master assignment, Phase 9A visual preservation, explicit access
 boundaries, stop-and-report gates, phased acceptance and deliverables A–H.
-Continue in `/home/void/Work/clawdmarket-lifecycle-audit`, branch
-`audit/agent-economic-lifecycle-2026-10-16`, based on fetched current main a17494d.
-Keep all work local. No deployment, publication, real funds, live mutations,
-production security/configuration changes or private credential use is authorized
-by this task. Historical release permissions below do not apply to this plan.
+Continue from branch `void/lifecycle-plan-2026-10-17` (box clone
+`/workspace/clawdmarket-void`, base main a17494d), which carries the original
+`clawdmarket-lifecycle-audit` draft plus validated follow-ups (2026-10-17).
+Test journeys may use only disposable databases, fixtures, mocks and testnets:
+the user chose NO real money (no mainnet transactions, no live-site trading).
+No push, PR, merge or deployment without the user's explicit authorization at
+that time. No private credential use. Historical release permissions below do
+not apply to this plan.
 Saving the plan is complete; engineering acceptance is not. Preserve existing
 worktrees and do not mark blocked/unexecuted checks as passed.
 
