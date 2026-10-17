@@ -178,3 +178,24 @@ non-KDF hash of a key as insecure, keyed HMAC included (the same pattern was
 dismissed as #13). So this alert cannot clear while the lockout-free legacy SHA-256
 lookup exists. Clearing it needs a user decision: sunset the legacy branch once
 upgrade events stop, run an approved one-time upgrade, or dismiss it.
+
+**#12 follow-up — user chose a one-time upgrade at deploy (2026-10-17).**
+Storage history from git: plaintext before 2026-09-12 (ef29361), unkeyed SHA-256
+2026-09-12..19 (ef29361 → 6164754), and peppered HMAC with `api_key_prefix` since
+then. Plaintext can be converted offline. SHA-256 cannot be, because the key is
+needed.
+- `lib/agent-key-storage-migration.ts` plus `pnpm run db:upgrade:agent-key-storage`
+  is a new Deploy step after the additive migration and before the
+  release-monitor sync. It converts plaintext rows to HMAC row by row, each with a
+  conditional UPDATE and its audit event in one atomic batch. It is idempotent. It
+  aborts the deploy with no writes if the pepper is missing, or if the
+  release-monitor row does not prove the pepper is the one production already
+  uses. It logs counts only.
+- Runtime no longer accepts plaintext storage.
+- **The SHA-256 path is kept.** There is no safe read-only way from the box to
+  count SHA-256 rows in production: no DB credentials, and no public or admin
+  path that exposes key-storage formats. A SHA-256 digest also looks like an HMAC.
+  The migration reports `unprefixed_digest` (64-hex, no prefix, release monitor
+  excluded) as the candidate count on the next deploy, and `--report-only` reads
+  without writing. Remove the runtime SHA-256 branch, and #12 with it, only once
+  that count is 0 or the user accepts locking those keys out.

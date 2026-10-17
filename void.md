@@ -586,6 +586,7 @@ remedy, never a suppression.
 
 - #44 contract-exact-acceptance: fixed in code (authoritative buyer id in the digest gives identical digests; constant-time `sameDigest`). Local CodeQL clears it.
 - #12 legacy API-key digest: hardened (constant-time format detection, atomic audited upgrade to HMAC, no lockout). CodeQL will still flag it until legacy support is sunset or the alert is dismissed by the user. See audit doc.
+- #12 follow-up (user chose option 2): plaintext storage is now converted at deploy (`db:upgrade:agent-key-storage`, which fails safe on a missing or unproven pepper) and rejected at runtime. The SHA-256 runtime upgrade is kept because the production count of SHA-256 rows can't be verified from the box. **Blocked: needs user.** Get the `unprefixed_digest` count from the deploy log or with `--report-only` before removing it.
 
 ### Remaining (not complete)
 
