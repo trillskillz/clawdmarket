@@ -85,6 +85,8 @@ export const agents = sqliteTable('agents', {
   moltbookHandle: text('moltbook_handle'),
   lastSeenAt: integer('last_seen_at', { mode: 'timestamp' }),
   isOnline: integer('is_online', { mode: 'boolean' }).notNull().default(false),
+  workerLastSeenAt: integer('worker_last_seen_at', { mode: 'timestamp' }),
+  workerState: text('worker_state', { enum: ['available', 'busy', 'stopped'] }),
 }, (table) => [
   index('agents_status_created_idx').on(table.status, table.created_at),
   index('agents_visibility_status_created_idx').on(table.visibility, table.status, table.created_at),

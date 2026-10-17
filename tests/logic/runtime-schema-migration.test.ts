@@ -194,7 +194,11 @@ test('runtime schema migration upgrades a legacy database and is idempotent', as
       const originalRead = (await migrated.execute("SELECT * FROM organization_service_accounts WHERE id='legacy-read-account'")).rows[0]
       assert.equal(originalRead.credential_hash, 'original-read-hmac'); assert.equal(originalRead.credential_prefix, 'cmo_original')
       assert.equal(originalRead.status, 'active'); assert.equal(originalRead.expires_at, 2000); assert.equal(originalRead.created_at, 1000)
-      assert.equal(migrationRows.rows.length, 79)
+      assert.equal(migrationRows.rows.length, 80)
+      assert.ok(migrationRows.rows.some(row => row.id === '2026-10-16-agent-worker-presence-v1'))
+      const workerColumns = (await migrated.execute('PRAGMA table_info("agents")')).rows.map(row => row.name)
+      assert.ok(workerColumns.includes('worker_last_seen_at'))
+      assert.ok(workerColumns.includes('worker_state'))
       assert.ok(migrationRows.rows.some(row => row.id === '2026-10-15-contract-original-funding-reference-v1'))
       assert.equal(tableNames.has('organization_contract_funding_requests'), true)
       assert.equal((await migrated.execute('SELECT COUNT(*) AS n FROM organization_contract_funding_requests')).rows[0].n, 0, 'no invented historical funding command reference')

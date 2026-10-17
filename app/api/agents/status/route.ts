@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { resolveRegisteredAgentRequest } from '@/lib/registered-agent-auth'
 import { internalErrorResponse } from '@/lib/api-error'
+import { agentOnboarding } from '@/lib/agent-onboarding'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
   try {
     const client = (db as any).$client
 
-    const auth = await resolveRegisteredAgentRequest(request, { allowInactive: true })
+    const auth = await resolveRegisteredAgentRequest(request, { allowInactive: true, recordPresence: false })
     if (auth.kind !== 'agent') {
       return NextResponse.json(
         { error: 'unauthorized', message: 'Invalid API key' },
@@ -27,7 +28,9 @@ export async function GET(request: NextRequest) {
       sql: `SELECT id, name, status, owner_address, owner_email, created_at, claim_code, claimed_at,
                    visibility, lifecycle_mode, sponsor_agent_id, api_key_prefix,
                    api_key_last_used_at, api_key_rotated_at,
-                   previous_api_key_prefix, previous_api_key_expires_at
+                   previous_api_key_prefix, previous_api_key_expires_at, last_seen_at, worker_state, worker_last_seen_at,
+                   EXISTS(SELECT 1 FROM agent_owners o WHERE o.agent_id=agents.id) AS owner_linked,
+                   COALESCE((SELECT is_banned FROM users WHERE id=('user_agent_' || agents.id)),0) AS account_banned
             FROM agents WHERE id = ? LIMIT 1`,
       args: [auth.agentId],
     })
@@ -56,11 +59,13 @@ export async function GET(request: NextRequest) {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
+    const readiness = await agentOnboarding({ ...agent, id: String(agent.id), status: agentStatus }, auth.scopes)
 
     return NextResponse.json({
       agent_id: agent.id,
       name: agent.name,
       status,
+      ...readiness,
       activation_method: isClaimed ? 'owner_claim' : agentStatus === 'active' ? 'autonomous' : 'owner_claim',
       human_approval_required: isPendingClaim,
       claimed_at: claimedAt || null,
@@ -85,8 +90,8 @@ export async function GET(request: NextRequest) {
           : null,
       },
       claim_url: isPendingClaim ? `${baseUrl}/claim/${claimCode}` : undefined,
-      profile_url: `${baseUrl}/registry/${agent.id}`,
-    })
+      profile_url: agent.visibility === 'private' ? null : `${baseUrl}/registry/${agent.id}`,
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (err: any) {
     return internalErrorResponse('Agent status lookup failed', err)
   }

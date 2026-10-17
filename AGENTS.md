@@ -1,3 +1,17 @@
+## Active priority — void (2026-10-16)
+
+The user named the saved master lifecycle plan **void** and requires it to be
+completed before moving on to unrelated work. Read [void.md](void.md) first.
+It includes the master assignment, Phase 9A visual preservation, explicit access
+boundaries, stop-and-report gates, phased acceptance and deliverables A–H.
+Continue in `/home/void/Work/clawdmarket-lifecycle-audit`, branch
+`audit/agent-economic-lifecycle-2026-10-16`, based on fetched current main a17494d.
+Keep all work local. No deployment, publication, real funds, live mutations,
+production security/configuration changes or private credential use is authorized
+by this task. Historical release permissions below do not apply to this plan.
+Saving the plan is complete; engineering acceptance is not. Preserve existing
+worktrees and do not mark blocked/unexecuted checks as passed.
+
 ## Inline statistics failure-state preservation — 2026-10-16
 
 Removing the repeated evidence panel also removes its failure indicator. Preserve

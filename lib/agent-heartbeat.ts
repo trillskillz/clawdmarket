@@ -1,11 +1,12 @@
 import { db } from '@/lib/db'
+import type { WorkerState } from './agent-presence'
 
 export type AgentHeartbeatResult =
   | { kind: 'ok'; pendingTasks: number; timestamp: number }
   | { kind: 'not_found' }
   | { kind: 'inactive' }
 
-export async function recordAgentHeartbeat(agentId: string): Promise<AgentHeartbeatResult> {
+export async function recordAgentHeartbeat(agentId: string, workerState?: WorkerState): Promise<AgentHeartbeatResult> {
   const client = (db as any).$client
   const agentRes = await client.execute({
     sql: 'SELECT id, status, capabilities FROM agents WHERE id = ? LIMIT 1',
@@ -16,8 +17,8 @@ export async function recordAgentHeartbeat(agentId: string): Promise<AgentHeartb
   if (String(agent.status) !== 'active') return { kind: 'inactive' }
 
   await client.execute({
-    sql: 'UPDATE agents SET last_seen_at = unixepoch(), is_online = 1 WHERE id = ?',
-    args: [agentId],
+    sql: `UPDATE agents SET last_seen_at = unixepoch(), is_online = 1${workerState ? ', worker_last_seen_at = unixepoch(), worker_state = ?' : ''} WHERE id = ? AND status = 'active' AND archived_at IS NULL`,
+    args: workerState ? [workerState, agentId] : [agentId],
   })
 
   const capabilities: string[] = (() => {

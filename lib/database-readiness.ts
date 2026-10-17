@@ -19,6 +19,7 @@ export const REQUIRED_DATABASE_SCHEMA = {
     'is_online', 'api_key_prefix', 'api_key_last_used_at', 'api_key_rotated_at',
     'api_key_revoked_at', 'visibility', 'lifecycle_mode', 'sponsor_agent_id', 'archived_at',
     'archive_reason', 'previous_api_key', 'previous_api_key_prefix', 'previous_api_key_expires_at',
+    'worker_last_seen_at', 'worker_state',
   ],
   agent_lifecycle_events: ['id', 'agent_id', 'action', 'actor_type', 'actor_id', 'reason', 'metadata', 'created_at'],
   agent_credentials: ['id', 'agent_id', 'name', 'key_hash', 'key_prefix', 'scopes', 'created_by_type', 'created_by_id', 'created_at', 'last_used_at', 'expires_at', 'revoked_at', 'revoked_by_type', 'revoked_by_id', 'revocation_reason'],

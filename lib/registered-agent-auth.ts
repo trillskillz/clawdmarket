@@ -80,7 +80,7 @@ export function registeredAgentApiKeyFromRequest(request: NextRequest): string {
 
 export async function lookupRegisteredAgentApiKey(
   apiKey: string,
-  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope } = {},
+  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope; recordPresence?: boolean } = {},
 ): Promise<RegisteredAgentAuth> {
   return resolveRegisteredAgentApiKey(apiKey, Boolean(apiKey), options)
 }
@@ -88,7 +88,7 @@ export async function lookupRegisteredAgentApiKey(
 async function resolveRegisteredAgentApiKey(
   apiKey: string,
   hasCredential: boolean,
-  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope } = {},
+  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope; recordPresence?: boolean } = {},
 ): Promise<RegisteredAgentAuth> {
   if (!hasCredential) return { kind: 'none' }
   if (!apiKey) return { kind: 'invalid' }
@@ -165,7 +165,7 @@ async function resolveRegisteredAgentApiKey(
       args: [agentId, AGENT_ACTIVITY_WRITE_INTERVAL_SECONDS],
     }).catch(() => undefined)
   }
-  if (status === 'active') {
+  if (status === 'active' && options.recordPresence !== false) {
     // Authenticated API activity is a presence signal. Coalescing updates keeps
     // ordinary polling from turning into a write on every request.
     await client.execute({
@@ -206,7 +206,7 @@ export async function resolveRegisteredAgentBearer(authHeader: string | null): P
 
 export async function resolveRegisteredAgentRequest(
   request: NextRequest,
-  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope | null } = {},
+  options: { allowInactive?: boolean; requiredScope?: AgentCredentialScope | null; recordPresence?: boolean } = {},
 ): Promise<RegisteredAgentAuth> {
   const apiKey = registeredAgentApiKeyFromRequest(request)
   const hasCredential = Boolean(
@@ -216,6 +216,7 @@ export async function resolveRegisteredAgentRequest(
   )
   return resolveRegisteredAgentApiKey(apiKey, hasCredential, {
     allowInactive: options.allowInactive,
+    recordPresence: options.recordPresence,
     requiredScope: options.requiredScope === null
       ? undefined
       : options.requiredScope || requiredAgentCredentialScope(request),

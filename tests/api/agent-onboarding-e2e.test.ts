@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { createLocalTestSchema } from '../helpers/local-schema'
@@ -151,6 +151,122 @@ async function registerAgent(name: string, activationMode?: 'autonomous' | 'owne
   assert.equal(response.status, 201)
   return response.json()
 }
+
+function replayRegistration(secret: string, body: unknown) {
+  const req = request('/api/agents/register', 'POST', body)
+  req.headers.set('idempotency-key', secret)
+  return register(req)
+}
+
+test('a lost registration reply recovers the original identity, claim link and credential without storing the recovery secret', async () => {
+  const secret = randomBytes(32).toString('hex')
+  const command = { name: 'Replay owner claim', tools_config: [{ z: 1, a: { y: 2, x: 3 } }] }
+  const first = await replayRegistration(secret, command)
+  assert.equal(first.status, 201)
+  const original = await first.json() // Simulate discarding the committed response.
+  const second = await replayRegistration(secret, { tools_config: [{ a: { x: 3, y: 2 }, z: 1 }], name: command.name })
+  assert.equal(second.status, 200)
+  assert.equal(second.headers.get('cache-control'), 'no-store')
+  const recovered = await second.json()
+  assert.equal(recovered.idempotent, true)
+  assert.deepEqual(recovered.agent, original.agent)
+  assert.equal(recovered.agent.status, 'pending_claim', 'retry must never opt an owner-claim identity into autonomous activation')
+  const agentRows = await db.$client.execute({ sql: 'SELECT * FROM agents WHERE id=?', args: [original.agent_id] })
+  const eventRows = await db.$client.execute({ sql: 'SELECT * FROM agent_lifecycle_events WHERE agent_id=?', args: [original.agent_id] })
+  assert.equal(agentRows.rows.length, 1)
+  assert.equal(eventRows.rows.length, 1)
+  assert.equal(JSON.stringify([agentRows.rows, eventRows.rows]).includes(secret), false)
+  assert.equal(JSON.stringify([agentRows.rows, eventRows.rows]).includes(original.agent.api_key), false)
+  for (const table of ['users', 'wallets']) {
+    const column = table === 'users' ? 'id' : 'user_id'
+    const rows = await db.$client.execute({ sql: `SELECT COUNT(*) AS n FROM ${table} WHERE ${column}=?`, args: [`user_agent_${original.agent_id}`] })
+    assert.equal(Number(rows.rows[0].n), 1)
+  }
+})
+
+test('simultaneous registration retries create exactly one economic identity', async () => {
+  const secret = randomBytes(32).toString('hex')
+  const command = { name: 'Concurrent replay', activation_mode: 'autonomous' }
+  const replies = await Promise.all(Array.from({ length: 4 }, () => replayRegistration(secret, command)))
+  assert.equal(replies.filter(reply => reply.status === 201).length, 1)
+  assert.equal(replies.filter(reply => reply.status === 200).length, 3)
+  const bodies = await Promise.all(replies.map(reply => reply.json()))
+  assert.equal(new Set(bodies.map(body => body.agent_id)).size, 1)
+  assert.equal(new Set(bodies.map(body => body.agent.api_key)).size, 1)
+  const rows = await db.$client.execute({ sql: 'SELECT COUNT(*) AS n FROM agents WHERE id=?', args: [bodies[0].agent_id] })
+  assert.equal(Number(rows.rows[0].n), 1)
+})
+
+test('registration references bind the original command; names and credential rotation never merge or recreate identities', async () => {
+  const secret = randomBytes(32).toString('hex')
+  const command = { name: 'Same public display name', activation_mode: 'autonomous' }
+  const original = await (await replayRegistration(secret, command)).json()
+  const conflict = await replayRegistration(secret, { ...command, description: 'Changed command' })
+  assert.equal(conflict.status, 409)
+  assert.equal((await conflict.json()).code, 'registration_reference_conflict')
+  const distinct = await (await replayRegistration(randomBytes(32).toString('hex'), command)).json()
+  assert.notEqual(distinct.agent_id, original.agent_id)
+  const rotated = await rotateCredential(request('/api/agents/credentials/rotate', 'POST', undefined, original.agent.api_key))
+  assert.equal(rotated.status, 200)
+  const closed = await replayRegistration(secret, command)
+  assert.equal(closed.status, 409)
+  const failure = await closed.json()
+  assert.equal(failure.code, 'registration_replay_closed')
+  assert.equal(failure.agent_id, original.agent_id)
+  assert.equal(failure.agent, undefined)
+  const currentKey = (await rotated.json()).credential.api_key
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, currentKey))).status, 200)
+})
+
+test('malformed registration secrets fail without enrolling an identity', async () => {
+  for (const secret of ['not-a-secret', randomUUID(), 'a'.repeat(63), 'A'.repeat(64), '']) {
+    const response = await replayRegistration(secret, { name: 'Must not enroll' })
+    assert.equal(response.status, 400)
+    assert.equal((await response.json()).code, 'invalid_registration_reference')
+  }
+})
+
+test('readiness separates registration, activation, API activity, worker leases and seller checkout requirements', async () => {
+  const created = await registerAgent('Readiness worker', 'autonomous')
+  const id = created.agent_id, key = created.agent.api_key
+  const inspect = async () => {
+    const response = await status(request('/api/agents/status', 'GET', undefined, key))
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('cache-control'), 'private, no-store')
+    return response.json()
+  }
+  const first = await inspect()
+  assert.equal(first.registered, true)
+  assert.equal(first.activation_state, 'active')
+  assert.equal(first.ownership_state, 'unverified')
+  assert.equal(first.worker_available, null)
+  assert.equal(first.api_availability, 'unknown', 'status inspection must not create presence')
+  assert.equal(first.seller_ready, false)
+  assert.ok(first.blockers.some((row: any) => row.code === 'NO_PUBLISHED_SERVICE'))
+  assert.ok(first.blockers.some((row: any) => row.code === 'NO_ACTIVE_WORKER'))
+  const stored = (await db.$client.execute({ sql: 'SELECT last_seen_at,worker_last_seen_at FROM agents WHERE id=?', args: [id] })).rows[0]
+  assert.equal(stored.last_seen_at, null)
+  assert.equal(stored.worker_last_seen_at, null)
+  const path = `/api/agents/${id}/heartbeat`, params = { params: Promise.resolve({ id }) }
+  for (const state of ['available', 'busy', 'stopped'] as const) {
+    const response = await heartbeat(request(path, 'POST', { worker_state: state }, key), params)
+    assert.equal(response.status, 200)
+    const body = await response.json()
+    assert.equal(body.worker_state, state)
+    assert.equal(body.lease_seconds, 180)
+    const observed = await inspect()
+    assert.equal(observed.worker_presence.state, state)
+    assert.equal(observed.worker_available, state === 'available')
+  }
+  assert.equal((await heartbeat(request(path, 'POST', { worker_state: 'fake' }, key), params)).status, 400)
+  assert.equal((await inspect()).worker_presence.state, 'stopped')
+  assert.equal((await heartbeat(request(path, 'POST', {}, key), params)).status, 200, 'legacy heartbeat body still works')
+  await db.$client.execute({ sql: 'UPDATE agents SET worker_last_seen_at=unixepoch()-180 WHERE id=?', args: [id] })
+  const expired = await inspect()
+  assert.equal(expired.worker_available, false)
+  assert.equal(expired.worker_presence.state, 'offline')
+  assert.equal(expired.api_availability, 'online', 'recent API activity must not renew a worker lease')
+})
 
 test('an autonomous agent can activate, authenticate with either key header, and use the core work APIs', async () => {
   const buyer = await registerAgent('Autonomous Buyer', 'autonomous')
