@@ -582,6 +582,11 @@ remedy, never a suppression.
    old code and remain (no destructive down-migration). Registrations created via
    `Idempotency-Key` are ordinary agents and remain valid.
 
+### Security alerts (2026-10-17, local only; push/merge held for user approval)
+
+- #44 contract-exact-acceptance: fixed in code (authoritative buyer id in the digest gives identical digests; constant-time `sameDigest`). Local CodeQL clears it.
+- #12 legacy API-key digest: hardened (constant-time format detection, atomic audited upgrade to HMAC, no lockout). CodeQL will still flag it until legacy support is sunset or the alert is dismissed by the user. See audit doc.
+
 ### Remaining (not complete)
 
 - Worker lease / identity state on public registry & profile UI (needs a Phase 9A

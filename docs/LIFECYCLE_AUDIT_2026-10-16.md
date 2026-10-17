@@ -151,3 +151,30 @@ ready"). SDK helpers added in TypeScript and Python.
 nullable columns to `agents` (no backfill, rewrite or index). Idempotent;
 covered by `tests/logic/runtime-schema-migration.test.ts` (80 migrations).
 Old code tolerates the columns, so migrate-then-deploy and code rollback are safe.
+
+### Code-scanning security fixes (2026-10-17, local; merge held by user)
+
+**#44 `js/insufficient-password-hash` — lib/contract-exact-acceptance.ts.**
+The SHA-256 is a request fingerprint over public contract fields (ids, terms,
+review digests). It is not a credential store, and the stored `request_hash`
+values are on an immutable table (update and delete triggers), so a KDF would
+break every existing replay. CodeQL had tainted the digest through the caller's
+authenticated buyer id. Fix: the digest is built from the authoritative stored
+`authorization.buyer_id`, which equals the caller's id after the 403 check, so the
+digest is byte-identical to the old one and existing replays stay valid. Both
+replay comparisons now use `sameDigest` (64-hex format check plus
+`crypto.timingSafeEqual`) instead of `!==`. Local CodeQL no longer reports this
+file.
+
+**#12 `js/insufficient-password-hash` — lib/registered-agent-auth.ts
+`legacyAgentApiKeyDigest`.** API keys are random 192-bit bearer tokens stored as a
+peppered HMAC. Rows from before the HMAC change can still hold plaintext or an
+unkeyed SHA-256. Hardening: stored-format detection with constant-time compares
+(no `.includes`). After a successful legacy auth, an atomic conditional upgrade
+(`WHERE api_key = <old>`) rewrites the row to HMAC and writes an audited
+`credential_storage_upgraded` lifecycle event (format only, never key material),
+so remaining legacy use can be measured. Nobody is locked out. CodeQL treats any
+non-KDF hash of a key as insecure, keyed HMAC included (the same pattern was
+dismissed as #13). So this alert cannot clear while the lockout-free legacy SHA-256
+lookup exists. Clearing it needs a user decision: sunset the legacy branch once
+upgrade events stop, run an approved one-time upgrade, or dismiss it.
