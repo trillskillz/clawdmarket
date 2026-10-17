@@ -63,4 +63,14 @@ test('dependency hook is scoped to the patched version and rejects upstream drif
   assert.equal(unrelated.dependencies['fast-glob'], '3.3.1')
   assert.throws(() => hooks.readPackage({ name: '@next/eslint-plugin-next', version: '16.4.2', dependencies: { 'fast-glob': '3.3.1' } }), /Reevaluate/)
   assert.throws(() => hooks.readPackage({ name: '@next/eslint-plugin-next', version: '16.3.8', dependencies: { 'fast-glob': 'changed' } }), /Reevaluate/)
+  assert.throws(() => hooks.readPackage({ name: '@next/eslint-plugin-next', version: '16.4.1', dependencies: { keep: '1' } }), /Reevaluate/)
+})
+
+test('dependency hook is idempotent on a manifest already rebuilt from the lockfile (pnpm update -r / Dependabot)', () => {
+  const { hooks } = require('../../.pnpmfile.cjs')
+  const rebuilt = { name: '@next/eslint-plugin-next', version: '16.3.8', dependencies: { '@eslint-community/eslint-utils': '4.9.1' } }
+  assert.deepEqual(hooks.readPackage(rebuilt).dependencies, { '@eslint-community/eslint-utils': '4.9.1' })
+  const once = hooks.readPackage({ name: '@next/eslint-plugin-next', version: '16.3.8', dependencies: { 'fast-glob': '3.3.1', keep: '1' } })
+  assert.deepEqual(hooks.readPackage(once).dependencies, { keep: '1' })
+  assert.deepEqual(hooks.readPackage({ name: '@next/eslint-plugin-next', version: '16.3.8' }).dependencies, undefined)
 })

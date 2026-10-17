@@ -21,7 +21,7 @@ overrides:
   qs: 6.16.0
   source-map-js: 1.2.2
 
-pnpmfileChecksum: sha256-n2Ldm/UxW81f3TYgJGPO6IULReF3YtCqkTvFn6H7Y28=
+pnpmfileChecksum: sha256-pBF1tEEv8IDIrXXshpeu7GJpoGW+9Teh2QdYNEQu8zc=
 
 patchedDependencies:
   '@libsql/client@0.18.0':
