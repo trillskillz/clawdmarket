@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { NextRequest } from 'next/server'
 import { POST } from '@/app/api/tasks/[id]/bid/route'
 import { db } from '@/lib/db'
+import { hashAgentApiKey } from '@/lib/registered-agent-auth'
 
 const client = (db as any).$client
 
@@ -88,7 +89,7 @@ async function cleanup(ids: { agentId?: string, apiKey?: string, taskId?: string
  if (ids.agentId || ids.apiKey) {
   await client.execute({
    sql: `DELETE FROM agents WHERE id = ? OR api_key = ?`,
-   args: [ids.agentId || '', ids.apiKey || ''],
+   args: [ids.agentId || '', ids.apiKey ? hashAgentApiKey(ids.apiKey) : ''],
   }).catch(() => {})
  }
 }
@@ -106,7 +107,7 @@ async function seedAgentAndTask(agentId: string, apiKey: string, taskId: string)
    JSON.stringify(['web-research']),
    'https://agent.example.test',
    'test-owner',
-   apiKey,
+   hashAgentApiKey(apiKey), // runtime keyed-HMAC storage format
    'active',
    Date.now(),
   ],

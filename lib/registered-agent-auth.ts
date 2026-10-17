@@ -54,10 +54,13 @@ export function hashAgentApiKey(apiKey: string): string {
 }
 
 function legacyAgentApiKeyDigest(apiKey: string): string {
-  // Compatibility only: old releases stored SHA-256 digests of random 128-bit
-  // API keys. A successful legacy lookup is immediately upgraded to keyed HMAC
-  // (audited as credential_storage_upgraded) so the unkeyed form stops existing
-  // at rest after first use. Removing this branch requires a sunset decision.
+  // Compatibility only: releases between 2026-09-12 and 2026-09-19 stored
+  // unkeyed SHA-256 digests of random API keys. That form cannot be converted
+  // offline (the key is needed), so a successful lookup upgrades it to keyed
+  // HMAC (audited as credential_storage_upgraded). Plaintext storage is no
+  // longer accepted: scripts/upgrade-legacy-agent-api-keys.ts converts it at
+  // deploy. Remove this branch once the deploy report shows no unprefixed
+  // digests remain.
   // codeql[js/insufficient-password-hash]
   return crypto.createHash('sha256').update(apiKey).digest('hex')
 }
@@ -109,10 +112,10 @@ async function resolveRegisteredAgentApiKey(
     sql: `SELECT id, name, status, api_key, api_key_prefix, api_key_revoked_at, archived_at,
                  previous_api_key, previous_api_key_prefix, previous_api_key_expires_at
           FROM agents
-          WHERE api_key IN (?, ?, ?)
+          WHERE api_key IN (?, ?)
              OR (previous_api_key = ? AND previous_api_key_expires_at > unixepoch())
           LIMIT 1`,
-    args: [hashed, legacyHashed, apiKey, hashed],
+    args: [hashed, legacyHashed, hashed],
   })
   let agent = primaryResult?.rows?.[0]
   let namedCredential: Record<string, unknown> | null = null
@@ -138,10 +141,9 @@ async function resolveRegisteredAgentApiKey(
   const status = agent.status === 'active' ? 'active' : 'inactive'
   if (!options.allowInactive && status !== 'active') return { kind: 'invalid' }
 
-  const storedFormat: 'hmac' | 'unkeyed_sha256' | 'plaintext' | null = namedCredential ? null
+  const storedFormat: 'hmac' | 'unkeyed_sha256' | null = namedCredential ? null
     : constantTimeEqual(agent.api_key, hashed) ? 'hmac'
-      : constantTimeEqual(agent.api_key, legacyHashed) ? 'unkeyed_sha256'
-        : constantTimeEqual(agent.api_key, apiKey) ? 'plaintext' : null
+      : constantTimeEqual(agent.api_key, legacyHashed) ? 'unkeyed_sha256' : null
   const credential = namedCredential
     ? 'named'
     : storedFormat
@@ -155,8 +157,7 @@ async function resolveRegisteredAgentApiKey(
     return { kind: 'forbidden', agentId, requiredScope: options.requiredScope }
   }
 
-  // Transparently upgrade API keys created by older releases from plaintext or
-  // unkeyed SHA-256 digests.
+  // Transparently upgrade API keys stored as unkeyed SHA-256 by older releases.
   if (credential === 'current' && storedFormat !== 'hmac') {
     // Conditional on the exact stored legacy value, so a concurrent rotation is
     // never overwritten; the audit event records only the format, never key material.

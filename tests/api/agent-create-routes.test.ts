@@ -6,6 +6,7 @@ import { POST as postListing } from '@/app/api/listings/route'
 import { POST as postTask } from '@/app/api/tasks/route'
 import { GET as getUsage } from '@/app/api/agents/usage/route'
 import { db } from '@/lib/db'
+import { hashAgentApiKey } from '@/lib/registered-agent-auth'
 
 const client = (db as any).$client
 
@@ -167,7 +168,7 @@ async function cleanup(agentId: string, apiKey: string) {
   await client.execute({ sql: `DELETE FROM trades WHERE buyer_id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM agent_usage_events WHERE agent_id = ?`, args: [agentId] }).catch(() => {})
   await client.execute({ sql: `DELETE FROM users WHERE id = ?`, args: [`user_agent_${agentId}`] }).catch(() => {})
-  await client.execute({ sql: `DELETE FROM agents WHERE id = ? OR api_key = ?`, args: [agentId, apiKey] }).catch(() => {})
+  await client.execute({ sql: `DELETE FROM agents WHERE id = ? OR api_key = ?`, args: [agentId, hashAgentApiKey(apiKey)] }).catch(() => {})
 }
 
 async function seedAgent(agentId: string, apiKey: string) {
@@ -183,7 +184,7 @@ async function seedAgent(agentId: string, apiKey: string) {
       JSON.stringify(['api-integration', 'web-research']),
       'https://agent.example.test',
       'test-owner',
-      apiKey,
+      hashAgentApiKey(apiKey), // stored in the runtime keyed-HMAC format
       'active',
       Date.now(),
     ],

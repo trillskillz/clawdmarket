@@ -285,31 +285,82 @@ test('readiness separates registration, activation, API activity, worker leases 
   assert.equal(expired.api_availability, 'online', 'recent API activity must not renew a worker lease')
 })
 
-test('legacy plaintext and unkeyed SHA-256 key storage still authenticates once, upgrades atomically to keyed HMAC and is audited without key material', async () => {
+test('plaintext key storage is no longer accepted at runtime and the deploy migration converts it once, atomically and audited', async () => {
   const { hashAgentApiKey } = await import('@/lib/registered-agent-auth')
-  // Fixed fixture credentials with their legacy at-rest forms precomputed
-  // (sha256 hex), so the test exercises the pre-HMAC formats without hashing
-  // a live credential at runtime.
-  const fixtures = [
-    { format: 'plaintext', key: 'clawd_' + 'a1'.repeat(24), legacy: 'clawd_' + 'a1'.repeat(24) },
-    { format: 'unkeyed_sha256', key: 'clawd_' + 'b2'.repeat(24), legacy: 'cb45195ad71ab4a503c8ca000afe3fda1792412c984a052192b7457bb814c211' },
-  ] as const
-  for (const { format, key, legacy } of fixtures) {
-    const created = await registerAgent(`Legacy ${format}`, 'autonomous')
-    const id = created.agent.id
-    await db.update(schema.agents).set({ api_key: legacy }).where(eq(schema.agents.id, id))
-    assert.equal((await status(request('/api/agents/status', 'GET', undefined, 'clawd_' + 'f'.repeat(48)))).status, 401, 'an unrelated key never matches')
-    const first = await status(request('/api/agents/status', 'GET', undefined, key))
-    assert.equal(first.status, 200, 'no lockout for a legacy stored credential')
-    assert.equal((await first.json()).credential.authenticated_with, 'current')
-    const stored = await db.select().from(schema.agents).where(eq(schema.agents.id, id)).get()
-    assert.equal(stored?.api_key, hashAgentApiKey(key), 'legacy storage is replaced by the keyed HMAC')
-    assert.equal((await status(request('/api/agents/status', 'GET', undefined, key))).status, 200, 'the upgraded credential keeps working')
-    const events = await db.$client.execute({ sql: "SELECT metadata FROM agent_lifecycle_events WHERE agent_id=? AND action='credential_storage_upgraded'", args: [id] })
-    assert.equal(events.rows.length, 1, 'exactly one audited upgrade')
-    assert.deepEqual(JSON.parse(String(events.rows[0].metadata)), { from: format, to: 'hmac' })
-    assert.equal(JSON.stringify(events.rows).includes(key), false)
+  const migration = await import('@/lib/agent-key-storage-migration')
+  const client = db.$client as any
+  const selfTestKey = 'clawd_' + 'c3'.repeat(24)
+  const key = 'clawd_' + 'a1'.repeat(24)
+  const created = await registerAgent('Legacy plaintext', 'autonomous')
+  const id = created.agent.id
+  await db.update(schema.agents).set({ api_key: key }).where(eq(schema.agents.id, id))
+  const storedKey = async () => (await db.select().from(schema.agents).where(eq(schema.agents.id, id)).get())?.api_key
+  const events = async () => (await client.execute({ sql: "SELECT metadata FROM agent_lifecycle_events WHERE agent_id=? AND action='credential_storage_upgraded'", args: [id] })).rows
+
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, key))).status, 401, 'plaintext storage no longer authenticates at runtime')
+  assert.equal(await storedKey(), key, 'a rejected runtime attempt never rewrites storage')
+
+  const report = await migration.upgradePlaintextAgentApiKeys(client, { pepperConfigured: true, selfTestApiKey: selfTestKey, reportOnly: true })
+  assert.equal(report.before.plaintext >= 1, true)
+  assert.equal(report.converted, 0)
+  assert.equal(await storedKey(), key, 'report-only makes no writes')
+
+  const rejects = async (options: { pepperConfigured: boolean; selfTestApiKey?: string }, code: string) => {
+    await assert.rejects(migration.upgradePlaintextAgentApiKeys(client, options), (error: any) => error.code === code)
+    assert.equal(await storedKey(), key, `${code} aborts without writes`)
+    assert.equal((await events()).length, 0)
   }
+  await rejects({ pepperConfigured: false, selfTestApiKey: selfTestKey }, 'pepper_missing')
+  await rejects({ pepperConfigured: true, selfTestApiKey: selfTestKey }, 'pepper_unverified')
+  await db.insert(schema.agents).values({ id: migration.RELEASE_MONITOR_AGENT_ID, name: 'Release monitor fixture', description: 'fixture', capabilities: '[]', endpoint: '', owner_address: '', api_key: hashAgentApiKey('clawd_' + 'd4'.repeat(24)) })
+  await rejects({ pepperConfigured: true, selfTestApiKey: selfTestKey }, 'pepper_mismatch')
+  await db.update(schema.agents).set({ api_key: hashAgentApiKey(selfTestKey) }).where(eq(schema.agents.id, migration.RELEASE_MONITOR_AGENT_ID))
+
+  const result = await migration.upgradePlaintextAgentApiKeys(client, { pepperConfigured: true, selfTestApiKey: selfTestKey })
+  assert.equal(result.pepper_proof, 'match')
+  assert.equal(result.converted >= 1, true)
+  assert.equal(result.after.plaintext, 0)
+  assert.equal(await storedKey(), hashAgentApiKey(key), 'plaintext is replaced by the keyed HMAC')
+  const audited = await events()
+  assert.equal(audited.length, 1, 'exactly one audited conversion')
+  assert.deepEqual(JSON.parse(String(audited[0].metadata)), { from: 'plaintext', to: 'hmac', via: 'deploy_migration' })
+  assert.equal(JSON.stringify(audited).includes(key), false, 'no key material in the audit trail')
+  const ok = await status(request('/api/agents/status', 'GET', undefined, key))
+  assert.equal(ok.status, 200, 'the converted credential authenticates')
+  assert.equal((await ok.json()).credential.authenticated_with, 'current')
+
+  const again = await migration.upgradePlaintextAgentApiKeys(client, { pepperConfigured: true, selfTestApiKey: selfTestKey })
+  assert.equal(again.converted, 0, 'idempotent')
+  assert.equal(again.pepper_proof, 'not_needed')
+  assert.equal(await storedKey(), hashAgentApiKey(key))
+  assert.equal((await events()).length, 1)
+  await db.delete(schema.agents).where(eq(schema.agents.id, migration.RELEASE_MONITOR_AGENT_ID))
+})
+
+test('unkeyed SHA-256 storage is reported, left untouched by the deploy migration and upgraded atomically on next use', async () => {
+  const { hashAgentApiKey } = await import('@/lib/registered-agent-auth')
+  const migration = await import('@/lib/agent-key-storage-migration')
+  const client = db.$client as any
+  // Fixed fixture with its legacy digest precomputed (sha256 hex of the key).
+  const key = 'clawd_' + 'b2'.repeat(24)
+  const legacy = 'cb45195ad71ab4a503c8ca000afe3fda1792412c984a052192b7457bb814c211'
+  const created = await registerAgent('Legacy digest', 'autonomous')
+  const id = created.agent.id
+  await db.update(schema.agents).set({ api_key: legacy, apiKeyPrefix: null }).where(eq(schema.agents.id, id))
+  const before = await migration.countAgentKeyStorage(client)
+  assert.equal(before.unprefixed_digest >= 1, true, 'pre-HMAC digests are counted without key material')
+  await migration.upgradePlaintextAgentApiKeys(client, { pepperConfigured: true })
+  assert.equal((await db.select().from(schema.agents).where(eq(schema.agents.id, id)).get())?.api_key, legacy, 'the migration cannot and does not touch digests')
+  assert.equal((await status(request('/api/agents/status', 'GET', undefined, 'clawd_' + 'f'.repeat(48)))).status, 401, 'an unrelated key never matches')
+  const first = await status(request('/api/agents/status', 'GET', undefined, key))
+  assert.equal(first.status, 200, 'no lockout for a stored SHA-256 digest')
+  const stored = await db.select().from(schema.agents).where(eq(schema.agents.id, id)).get()
+  assert.equal(stored?.api_key, hashAgentApiKey(key))
+  assert.equal(stored?.apiKeyPrefix, key.slice(0, 12))
+  const events = await client.execute({ sql: "SELECT metadata FROM agent_lifecycle_events WHERE agent_id=? AND action='credential_storage_upgraded'", args: [id] })
+  assert.equal(events.rows.length, 1)
+  assert.deepEqual(JSON.parse(String(events.rows[0].metadata)), { from: 'unkeyed_sha256', to: 'hmac' })
+  assert.equal((await migration.countAgentKeyStorage(client)).unprefixed_digest, before.unprefixed_digest - 1)
 })
 
 test('an autonomous agent can activate, authenticate with either key header, and use the core work APIs', async () => {
