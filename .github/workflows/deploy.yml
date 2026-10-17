@@ -83,6 +83,15 @@ jobs:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
+      - name: Convert plaintext agent API keys to keyed HMAC
+        # One-time and idempotent. Runs before the release-monitor sync so the
+        # monitor row still proves the pepper production already uses; aborts
+        # the deploy without writes if the pepper is missing or unproven.
+        run: pnpm run db:upgrade:agent-key-storage
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
       - name: Synchronize authenticated release monitor
         run: pnpm run ops:sync-release-monitor
         env:

@@ -48,6 +48,9 @@ jobs:
           pnpm exec drizzle-kit push --force
           pnpm run db:migrate:runtime
 
+      - name: Agent key storage upgrade loads and is a no-op on a fresh database
+        run: pnpm run db:upgrade:agent-key-storage
+
       - name: Verify evidence query compilation
         run: pnpm run db:verify:evidence
 
