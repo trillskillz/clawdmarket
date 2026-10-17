@@ -1,5 +1,5 @@
 import 'server-only'
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { and, asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { contract_acceptance_operations as decisions, contract_milestones, contracts, contract_submission_operations } from './schema'
@@ -18,7 +18,15 @@ export const reviewedContractAcceptanceLookup = z.object({
   acceptance_reference: reviewedContractAcceptanceInput.shape.client_reference,
 }).strict()
 function fail(code: string, status = 409): never { throw new PurchasingError(code, status) }
+// Integrity fingerprint of a public, structured acceptance command (ids, hashes,
+// reference). It contains no secret; every principal in it is read from the
+// authoritative stored record, never from request authentication material.
 const hash = (value: unknown) => createHash('sha256').update(canonicalContract(value)).digest('hex')
+/** Constant-time comparison of two hex digests; false for any malformed value. */
+export function sameDigest(stored: unknown, computed: string) {
+  if (typeof stored !== 'string' || !/^[a-f0-9]{64}$/.test(stored) || !/^[a-f0-9]{64}$/.test(computed)) return false
+  return timingSafeEqual(Buffer.from(stored, 'hex'), Buffer.from(computed, 'hex'))
+}
 function requestHash(contractId: string, milestoneId: string, buyer: string, authorityHash: string, input: Input) {
   return hash({ kind: 'reviewed-contract-buyer-acceptance-v1', contract_id: contractId, milestone_id: milestoneId,
     buyer_id: buyer, authority_hash: authorityHash, input })
@@ -34,7 +42,7 @@ async function dto(source: PurchasingSource, decision: typeof decisions.$inferSe
     || submission.content_hash !== decision.content_hash) fail('CONTRACT_ACCEPTANCE_RECORD_INVALID')
   const input = { version: 1 as const, client_reference: decision.client_reference, submission_id: decision.submission_id,
     content_hash: decision.content_hash, approve: true as const }
-  if (decision.request_hash !== requestHash(decision.contract_id, decision.milestone_id, decision.buyer_id, decision.authority_hash, input)) fail('CONTRACT_ACCEPTANCE_RECORD_INVALID')
+  if (!sameDigest(decision.request_hash, requestHash(decision.contract_id, decision.milestone_id, decision.buyer_id, decision.authority_hash, input))) fail('CONTRACT_ACCEPTANCE_RECORD_INVALID')
   return { decision: { id: decision.id, contract_id: decision.contract_id, milestone_id: decision.milestone_id,
     submission_id: decision.submission_id, content_hash: decision.content_hash, buyer_id: decision.buyer_id,
     client_reference: decision.client_reference, accepted_at: decision.accepted_at, kind: 'explicit_buyer_acceptance' as const },
@@ -65,10 +73,12 @@ export async function acceptOriginalReviewedContract(contractId: string, milesto
     const original = await originalReviewedContractUse(source, contractId)
     if (!original) fail('CONTRACT_REVIEWED_USE_REQUIRED')
     if (original.authorization.buyer_id !== buyer) fail('CONTRACT_ACCEPTANCE_BUYER_REQUIRED', 403)
-    const digest = requestHash(contractId, milestoneId, buyer, original.use.authority_hash, input)
+    // Bind the fingerprint to the authoritative stored buyer (equal to the
+    // authenticated actor after the check above), so stored digests are unchanged.
+    const digest = requestHash(contractId, milestoneId, original.authorization.buyer_id, original.use.authority_hash, input)
     const [prior] = await source.select().from(decisions).where(and(eq(decisions.buyer_id, buyer), eq(decisions.client_reference, input.client_reference))).limit(1)
     if (prior) {
-      if (prior.contract_id !== contractId || prior.milestone_id !== milestoneId || prior.request_hash !== digest) fail('CONTRACT_ACCEPTANCE_REFERENCE_CONFLICT')
+      if (prior.contract_id !== contractId || prior.milestone_id !== milestoneId || !sameDigest(prior.request_hash, digest)) fail('CONTRACT_ACCEPTANCE_REFERENCE_CONFLICT')
       return { ...await dto(source, prior), idempotent: true }
     }
     const view = await inspectOriginalReviewedContractSubmission(source, contractId, milestoneId, buyer)
