@@ -276,10 +276,15 @@ Acceptance: controlled authorized transactions complete through every enabled,
 testable rail; every failure is attributable to a lifecycle stage. An unavailable
 rail/test environment is a recorded blocker, never a claimed successful payment.
 
-**Status (2026-10-17): blocked: needs user.** Tracing real transaction
-failures needs production DB/log reads (G3) and any live canary needs real funds
-(G4). No code changes; existing repo financial tests remain unchanged and pass in
-the full suite.
+**Status (2026-10-17, updated 11:58 CT after the user granted test-journey access
+with NO real money): validated on disposable rails; live parts blocked: user chose
+no real money.** Existing fixture-RPC suites cover credit/MPP/EVM funding,
+escrow, late payment, dispute split and exactly-once settlement; the new
+reference lifecycle test (below) adds an agent-level trace. No financial
+handler changed. Blocked: live/mainnet canaries and real settlement (user chose
+no real money); testnet runs need a testnet signer and test tokens that are not
+configured on the box (needs user). Production DB/log tracing of historical
+failures still needs a named read scope (G3).
 
 ## Phase 7 — first-party automation and reference transaction
 
@@ -297,9 +302,17 @@ Acceptance: the workflow completes repeatedly in an authorized staging/disposabl
 environment with full traceability and no unauthorized spending. Label internal
 and synthetic identities and activity; never count it as organic demand.
 
-**Status (2026-10-17): blocked: needs user.** Requires an authorized
-staging environment, reference-fleet credentials and a reviewed spending limit.
-Nothing executed.
+**Status (2026-10-17, 11:58 CT): reference workflow validated in a disposable
+environment.** `tests/api/account-credit.test.ts` "reference lifecycle" runs:
+replay-safe registration (seller + buyer agents) → worker lease → listing
+publication → machine discovery via `/api/listings` → test-credit deposit
+(fixture RPC, no value) → scoped purchase with lost-reply replay → buyer
+acceptance → exactly-once settlement (5% fee unchanged, credit liability
+conserved) → graceful `stopped`. Passed 3/3 consecutive isolated runs plus the
+full file (31/31). Identities are synthetic and labeled; never organic demand.
+`prod-agent-canary` now reports `stopped`, so it never inflates worker counts.
+Blocked: production reference-fleet execution (credentials in protected Actions
+env) and anything spending real funds (user chose no real money).
 
 ## Phase 8 — autonomous discovery and authorized purchasing
 
@@ -316,9 +329,12 @@ Acceptance: an authorized buyer can discover/evaluate/purchase a suitable servic
 through documented machine APIs without manual website navigation or uncontrolled
 spending. Owner-configured limits and scopes remain enforced server-side.
 
-**Status (2026-10-17): pending.** Buyer readiness blockers
-(`PAYMENT_SCOPE_REQUIRED`, rails/pause) are exposed via status. Machine discovery
-and server-side limits exist; no new purchasing changes in this batch.
+**Status (2026-10-17, 11:58 CT): validated locally for listings + credit.**
+Buyer readiness blockers (`PAYMENT_SCOPE_REQUIRED`, rails/pause) are exposed via
+status; the reference test discovers and buys through machine APIs only.
+Server-side limits remain enforced (existing test: `CLAWDMARKET_AGENT_MAX_TRADE_USD`
+and read-only scopes cannot pay). Pending: offer comparison/provider reuse helpers
+in the SDK for reusable services (0 executable public services today, H1).
 
 ## Phase 9 — honest metrics and economic reporting
 
