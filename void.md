@@ -554,7 +554,17 @@ typecheck OK; `sdk:check` OK; `pnpm test` 1,201 tests — 1,060 pass / 141 skipp
 production build OK; MCP contract 9/9; Playwright (Chromium, CI mode, built app)
 164 passed / 9 skipped / 0 failed / 0 flaky; `pnpm audit` (full and prod): no known
 vulnerabilities. Reference lifecycle test 3/3 consecutive isolated passes.
-Final rerun on the final commit is recorded in the publication report.
+Final rerun on `bc09728` (12:10–12:26 CT): every step green except `pnpm test`
+1,202 tests — 1,059 pass / 141 skipped / **2 fail**, both in
+`tests/api/organization-listing-races.test.ts` ("generic L1/Tempo funding versus
+pending review proposal"), `SQLITE_BUSY` reading `seller_payment_preferences`
+during trade creation in a two-process file-SQLite race. **Pre-existing flake, not
+caused by this branch**: reproduced on untouched base main `a17494d` (1 of 6 runs)
+and on this branch (1 of 5 runs); the same file passed in the first full run.
+No file in that path is modified here. Not fixed in this batch (financial
+trade-creation path; needs its own bounded fresh-read recovery change like the
+2026-10-16 payout-lookup fix). It may flake in PR CI; a rerun is the expected
+remedy, never a suppression.
 
 ### Deployment plan (G — requires user approval)
 
