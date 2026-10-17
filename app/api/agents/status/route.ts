@@ -59,7 +59,10 @@ export async function GET(request: NextRequest) {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://clawdmkt.com'
+    // Readiness is a projection over several authorities. A failed observation
+    // must not hide identity/claim status or be reported as "not ready".
     const readiness = await agentOnboarding({ ...agent, id: String(agent.id), status: agentStatus }, auth.scopes)
+      .catch(() => ({ registered: true, authenticated: true, readiness_state: 'unavailable' as const, next_action: null, blockers: null }))
 
     return NextResponse.json({
       agent_id: agent.id,

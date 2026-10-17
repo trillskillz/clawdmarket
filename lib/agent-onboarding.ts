@@ -49,6 +49,9 @@ export async function agentOnboarding(agent: Agent, scopes: AgentCredentialScope
   return {
     registered: true,
     authenticated: true,
+    readiness_state: 'observed' as const,
+    // First blocker in dependency order (activation, worker, seller, buyer).
+    next_action: blockers[0]?.action ?? null,
     activation_state: active ? 'active' : agent.claim_code && !agent.claimed_at ? 'pending_claim' : 'inactive',
     ownership_state: agent.owner_linked ? 'linked' : 'unverified',
     api_availability: getAgentAvailability(agent.status, agent.last_seen_at),

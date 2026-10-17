@@ -239,6 +239,8 @@ test('readiness separates registration, activation, API activity, worker leases 
   assert.equal(first.registered, true)
   assert.equal(first.activation_state, 'active')
   assert.equal(first.ownership_state, 'unverified')
+  assert.equal(first.readiness_state, 'observed')
+  assert.equal(first.next_action, 'configure_worker', 'first blocker in dependency order for an active agent without a worker lease')
   assert.equal(first.worker_available, null)
   assert.equal(first.api_availability, 'unknown', 'status inspection must not create presence')
   assert.equal(first.seller_ready, false)
