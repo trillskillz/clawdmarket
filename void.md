@@ -97,13 +97,13 @@ the definition of done is evidenced; a completed batch is not plan completion.
 Status values: pending, investigating, implemented-awaiting-validation,
 validated, or blocked-with-evidence. Never equate a blocked requirement with a pass.
 
-| Priority | Work | Initial status |
-| --- | --- | --- |
-| P0 — establish truth | Current repository/production audit, identity reconciliation, activation, first-party execution, transaction trace, visual baselines | Investigating |
-| P1 — restore core | Registration/identity, activation, presence, reference workflow, confirmed transaction defects and regression tests | Pending |
-| P2 — economic participation | Seller onboarding/publication, machine discovery, payout feedback, purchasing reliability, lifecycle diagnostics | Pending |
-| P3 — transparency/UX | Honest metrics, status/onboarding/profile/catalog UI, internal funnel, SDKs/docs, continuous design preservation | Pending |
-| P4 — validation | Full checks, migrations/security, visual comparison, repeatable sandbox transactions, deployment/rollback report | Pending |
+| Priority | Work | Initial status | Status 2026-10-17 |
+| --- | --- | --- | --- |
+| P0 — establish truth | Current repository/production audit, identity reconciliation, activation, first-party execution, transaction trace, visual baselines | Investigating | public scope validated; private DB/log scope blocked: needs user (G3) |
+| P1 — restore core | Registration/identity, activation, presence, reference workflow, confirmed transaction defects and regression tests | Pending | registration/activation/presence validated locally; reference workflow blocked: needs user |
+| P2 — economic participation | Seller onboarding/publication, machine discovery, payout feedback, purchasing reliability, lifecycle diagnostics | Pending | seller/buyer readiness blockers implemented; publication/purchasing defects pending (need private evidence) |
+| P3 — transparency/UX | Honest metrics, status/onboarding/profile/catalog UI, internal funnel, SDKs/docs, continuous design preservation | Pending | SDK/docs done; public metrics audited; UI reflection of worker lease pending; private funnel blocked: needs user |
+| P4 — validation | Full checks, migrations/security, visual comparison, repeatable sandbox transactions, deployment/rollback report | Pending | local gates — see Phase 11 log; publication blocked: needs user (G1) |
 
 Phase 9A applies before and throughout every frontend modification in every
 priority. Start no unrelated project until this plan is complete or the user
@@ -140,6 +140,13 @@ Separate verified findings from unresolved hypotheses and evidence gaps.
 Acceptance: an evidence map covering each stage and its authority, with current
 observations distinguished from historical reports and inferred causes.
 
+**Status (2026-10-17): validated for public scope; private scope blocked: needs user.**
+Fresh read-only public audit (11:45 CT) and a stage-by-stage evidence map with
+confirmed defects F1–F4 and hypotheses H1–H3 are recorded in
+[the lifecycle audit](docs/LIFECYCLE_AUDIT_2026-10-16.md#continuation--2026-10-17-box-clone-branch-voidlifecycle-plan-2026-10-17).
+Blocked: production DB/log reads (G3) needed to trace publication, checkout
+abandonment and settlement; requires an explicit named read scope from the user.
+
 ## Phase 2 — registration and authoritative identity resolution
 
 - Distinguish discovered external profiles, registered economic identities,
@@ -158,6 +165,15 @@ observations distinguished from historical reports and inferred causes.
 Acceptance: machine-readable identity classification is accurate; registered
 counts represent marketplace identities rather than discovered profiles;
 concurrent/lost-response/recovery tests preserve the original economic identity.
+
+**Status (2026-10-17): implemented and validated locally (F1).**
+`Idempotency-Key` registration replay: lost reply, 4× concurrent retries, changed
+command (409 `registration_reference_conflict`), post-rotation replay (409
+`registration_replay_closed`), malformed secrets — all tested; display names are
+never identity keys; secret/key never stored. Count reconciliation: public stats
+already separate profiles (223) / registered (181) / active (49); the legacy
+`registered_agent_count` alias (= active) is documented, not renamed (API
+compatibility). Pending: per-profile public identity-state field on registry pages.
 
 ## Phase 3 — activation and resumable onboarding
 
@@ -178,6 +194,14 @@ and owner-managed activation modes.
 Acceptance: a legitimate agent can register, inspect its state and complete all
 permitted onboarding steps through documented APIs without weakening verification.
 
+**Status (2026-10-17): implemented and validated locally (F4).**
+`GET /api/agents/status` now returns `activation_state`, `ownership_state`,
+`api_availability`, `worker_presence`, `seller_ready`, `buyer_ready`, structured
+`blockers` and `next_action` by projecting existing authorities (no new state
+machine). Unobservable projection returns `readiness_state: 'unavailable'`, not
+"not ready". Contract/OpenAPI/llms docs updated; SDK `getAgentStatus` /
+`nextOnboardingAction` (TS) and `get_agent_status` / `next_onboarding_action` (Python).
+
 ## Phase 4 — presence and persistent availability
 
 Investigate missing heartbeat support, expiration, authentication, terminated
@@ -197,6 +221,15 @@ logic, stale records, frontend interpretation and registration without a worker.
 Acceptance: healthy workers remain accurately visible; lease expiry removes
 disconnected workers; UI and API presence agree with authoritative records.
 
+**Status (2026-10-17): implemented and validated locally (F2, F3); UI pending.**
+Explicit worker lease (`worker_state` available/busy/stopped, 180 s) separate from
+API activity; status/self-test inspection no longer creates presence; reference
+fleet cron does not create worker leases; additive migration
+`2026-10-16-agent-worker-presence-v1`. SDK `reportWorkerHeartbeat` /
+`report_worker_heartbeat`; docs specify 60 s cadence, backoff and `stopped` on
+shutdown. Pending: show worker lease on public registry/profile UI (needs Phase 9A
+visual cycle).
+
 ## Phase 5 — seller readiness and service publication
 
 Audit service creation/validation, activation, payout setup, capacity, eligibility,
@@ -212,6 +245,12 @@ discoverability and execution availability.
 
 Acceptance: a newly integrated eligible seller can publish a genuinely
 purchasable service through documented APIs and see any remaining blocker.
+
+**Status (2026-10-17): partially implemented.** Seller blockers
+(`NO_PUBLISHED_SERVICE`, `PAYOUT_NOT_CONFIGURED`, `PAYMENT_RAIL_UNAVAILABLE`,
+`PAYMENTS_PAUSED`, `REFERENCE_FLEET_PAID_SERVICES_LOCKED`, per-offer readiness
+codes) and published-vs-purchasable counts are exposed via status. Pending: root
+cause of 0 executable public services (H1) — needs private records (G3).
 
 ## Phase 6 — economic transaction failures (critical)
 
@@ -237,6 +276,11 @@ Acceptance: controlled authorized transactions complete through every enabled,
 testable rail; every failure is attributable to a lifecycle stage. An unavailable
 rail/test environment is a recorded blocker, never a claimed successful payment.
 
+**Status (2026-10-17): blocked: needs user.** Tracing real transaction
+failures needs production DB/log reads (G3) and any live canary needs real funds
+(G4). No code changes; existing repo financial tests remain unchanged and pass in
+the full suite.
+
 ## Phase 7 — first-party automation and reference transaction
 
 Investigate registration, activation, credentials, schedules, valid services,
@@ -253,6 +297,10 @@ Acceptance: the workflow completes repeatedly in an authorized staging/disposabl
 environment with full traceability and no unauthorized spending. Label internal
 and synthetic identities and activity; never count it as organic demand.
 
+**Status (2026-10-17): blocked: needs user.** Requires an authorized
+staging environment, reference-fleet credentials and a reviewed spending limit.
+Nothing executed.
+
 ## Phase 8 — autonomous discovery and authorized purchasing
 
 Inspect capability search, metadata, input/output schemas, price/execution
@@ -267,6 +315,10 @@ a reliable provider. Supply SDK examples and integration tests.
 Acceptance: an authorized buyer can discover/evaluate/purchase a suitable service
 through documented machine APIs without manual website navigation or uncontrolled
 spending. Owner-configured limits and scopes remain enforced server-side.
+
+**Status (2026-10-17): pending.** Buyer readiness blockers
+(`PAYMENT_SCOPE_REQUIRED`, rails/pause) are exposed via status. Machine discovery
+and server-side limits exist; no new purchasing changes in this batch.
 
 ## Phase 9 — honest metrics and economic reporting
 
@@ -293,6 +345,10 @@ credentials or identity details.
 Acceptance: every displayed economic metric reconciles to its stated records;
 funnel stages and cohort definitions are explicit, with missing measurements
 identified rather than invented.
+
+**Status (2026-10-17): partially done.** Public metrics audited against
+`/api/stats` (see audit table); counts are cohort-separated and unknowns stay
+unknown. Private diagnostic funnel blocked: needs user (G3 production reads).
 
 ## Phase 9A / Phase 10 — continuous visual preservation and frontend consistency
 
@@ -345,6 +401,13 @@ affected pages accurately reflect backend state; no material visual regression
 remains; layouts/navigation/controls remain responsive and accessible; intentional
 changes have evidence and documentation. Screenshot existence alone is not a pass.
 
+**Status (2026-10-17): baselines refreshed; no frontend files changed in this batch.**
+Loaded production baselines at 320/390/768/1440/1920 for home, registry, profile,
+marketplace, observe and docs (box: `/workspace/evidence-2026-10-17/`; 16 Oct set
+on omarchy). `registry-768` captured skeletons — invalid for that viewport. Since
+no UI source changed, no visual comparison is required for this batch; the UI
+work in Phases 2/4 stays pending until its own capture-compare cycle.
+
 ## Phase 11 — production reliability and security
 
 Validate auth/authorization, owner verification, idempotency, recovery, state
@@ -364,6 +427,9 @@ configuration. Expected skips, unsupported rails, external dependencies, warning
 and unexecuted checks are explicitly distinguished from passes. No deployment is
 performed under this plan without separate approval.
 
+**Status (2026-10-17): local gates — see "Validation log" under Current handoff.**
+Migration is additive (two nullable columns, idempotent, replay-tested).
+
 ## Phase 12 — actual utility and independent demand
 
 Evaluate differentiation, demand, pricing, execution reliability, buyer savings,
@@ -381,6 +447,10 @@ spending. Sustainable margin requires actual rail/provider/operator costs.
 Acceptance: independent recurring transactions are technically supportable;
 engineering readiness and measured demand remain separate. Record any customer
 validation awaiting an authorized independent pilot as an external dependency.
+
+**Status (2026-10-17): blocked: needs user.** Demand validation needs
+real outreach/pilots, which are not authorized. 0 independently attributed trades
+is recorded as unmeasured demand, not as zero demand.
 
 ## Phase 13 — autonomous execution and final deliverables
 
@@ -402,6 +472,10 @@ Deliver all of:
 | F — validation | Exact commands/source/configuration, executed results/logs, migration/security evidence, repeatable isolated end-to-end transactions and explicit skips/blockers |
 | G — deployment | Required configuration, backup prerequisites, migration order, flags, guarded rollout, monitoring, rollback and postdeployment checks; separate approval required |
 | H — business constraints | External access/operational/customer/cost constraints; engineering readiness versus demonstrated product-market fit |
+
+**Status (2026-10-17):** A partial (F1–F4 + hypotheses), B done for this
+batch, C partial (public counts only), D blocked (G3), E baseline only, F see
+validation log, G see handoff, H recorded in audit. Plan is **not** complete.
 
 ## Final definition of done
 
