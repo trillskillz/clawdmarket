@@ -55,9 +55,18 @@ export function hashAgentApiKey(apiKey: string): string {
 
 function legacyAgentApiKeyDigest(apiKey: string): string {
   // Compatibility only: old releases stored SHA-256 digests of random 128-bit
-  // API keys. A successful legacy lookup is immediately upgraded to keyed HMAC.
+  // API keys. A successful legacy lookup is immediately upgraded to keyed HMAC
+  // (audited as credential_storage_upgraded) so the unkeyed form stops existing
+  // at rest after first use. Removing this branch requires a sunset decision.
   // codeql[js/insufficient-password-hash]
   return crypto.createHash('sha256').update(apiKey).digest('hex')
+}
+
+/** Constant-time string equality (length is not secret: all formats are fixed-width per kind). */
+function constantTimeEqual(stored: unknown, candidate: string): boolean {
+  if (typeof stored !== 'string') return false
+  const a = Buffer.from(stored), b = Buffer.from(candidate)
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
 
 export function agentApiKeyPrefix(apiKey: string): string {
@@ -129,9 +138,13 @@ async function resolveRegisteredAgentApiKey(
   const status = agent.status === 'active' ? 'active' : 'inactive'
   if (!options.allowInactive && status !== 'active') return { kind: 'invalid' }
 
+  const storedFormat: 'hmac' | 'unkeyed_sha256' | 'plaintext' | null = namedCredential ? null
+    : constantTimeEqual(agent.api_key, hashed) ? 'hmac'
+      : constantTimeEqual(agent.api_key, legacyHashed) ? 'unkeyed_sha256'
+        : constantTimeEqual(agent.api_key, apiKey) ? 'plaintext' : null
   const credential = namedCredential
     ? 'named'
-    : [hashed, legacyHashed, apiKey].includes(String(agent.api_key))
+    : storedFormat
       ? 'current'
       : 'previous'
   const scopes = namedCredential
@@ -144,12 +157,21 @@ async function resolveRegisteredAgentApiKey(
 
   // Transparently upgrade API keys created by older releases from plaintext or
   // unkeyed SHA-256 digests.
-  if (credential === 'current' && agent.api_key !== hashed) {
-    await client.execute({
+  if (credential === 'current' && storedFormat !== 'hmac') {
+    // Conditional on the exact stored legacy value, so a concurrent rotation is
+    // never overwritten; the audit event records only the format, never key material.
+    const upgraded = await client.execute({
       sql: `UPDATE agents SET api_key = ?, api_key_prefix = COALESCE(api_key_prefix, ?)
             WHERE id = ? AND api_key = ?`,
       args: [hashed, agentApiKeyPrefix(apiKey), String(agent.id), String(agent.api_key)],
     })
+    if (Number(upgraded?.rowsAffected || 0) === 1) {
+      await client.execute({
+        sql: `INSERT INTO agent_lifecycle_events (id, agent_id, action, actor_type, actor_id, reason, metadata, created_at)
+              VALUES (?, ?, 'credential_storage_upgraded', 'system', NULL, 'Legacy API key storage upgraded to keyed HMAC on successful use', ?, unixepoch())`,
+        args: [`ale_${crypto.randomUUID()}`, String(agent.id), JSON.stringify({ from: storedFormat, to: 'hmac' })],
+      }).catch(() => undefined)
+    }
   }
 
   if (credential === 'named') {

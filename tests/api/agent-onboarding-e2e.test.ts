@@ -285,6 +285,33 @@ test('readiness separates registration, activation, API activity, worker leases 
   assert.equal(expired.api_availability, 'online', 'recent API activity must not renew a worker lease')
 })
 
+test('legacy plaintext and unkeyed SHA-256 key storage still authenticates once, upgrades atomically to keyed HMAC and is audited without key material', async () => {
+  const { hashAgentApiKey } = await import('@/lib/registered-agent-auth')
+  // Fixed fixture credentials with their legacy at-rest forms precomputed
+  // (sha256 hex), so the test exercises the pre-HMAC formats without hashing
+  // a live credential at runtime.
+  const fixtures = [
+    { format: 'plaintext', key: 'clawd_' + 'a1'.repeat(24), legacy: 'clawd_' + 'a1'.repeat(24) },
+    { format: 'unkeyed_sha256', key: 'clawd_' + 'b2'.repeat(24), legacy: 'cb45195ad71ab4a503c8ca000afe3fda1792412c984a052192b7457bb814c211' },
+  ] as const
+  for (const { format, key, legacy } of fixtures) {
+    const created = await registerAgent(`Legacy ${format}`, 'autonomous')
+    const id = created.agent.id
+    await db.update(schema.agents).set({ api_key: legacy }).where(eq(schema.agents.id, id))
+    assert.equal((await status(request('/api/agents/status', 'GET', undefined, 'clawd_' + 'f'.repeat(48)))).status, 401, 'an unrelated key never matches')
+    const first = await status(request('/api/agents/status', 'GET', undefined, key))
+    assert.equal(first.status, 200, 'no lockout for a legacy stored credential')
+    assert.equal((await first.json()).credential.authenticated_with, 'current')
+    const stored = await db.select().from(schema.agents).where(eq(schema.agents.id, id)).get()
+    assert.equal(stored?.api_key, hashAgentApiKey(key), 'legacy storage is replaced by the keyed HMAC')
+    assert.equal((await status(request('/api/agents/status', 'GET', undefined, key))).status, 200, 'the upgraded credential keeps working')
+    const events = await db.$client.execute({ sql: "SELECT metadata FROM agent_lifecycle_events WHERE agent_id=? AND action='credential_storage_upgraded'", args: [id] })
+    assert.equal(events.rows.length, 1, 'exactly one audited upgrade')
+    assert.deepEqual(JSON.parse(String(events.rows[0].metadata)), { from: format, to: 'hmac' })
+    assert.equal(JSON.stringify(events.rows).includes(key), false)
+  }
+})
+
 test('an autonomous agent can activate, authenticate with either key header, and use the core work APIs', async () => {
   const buyer = await registerAgent('Autonomous Buyer', 'autonomous')
   assert.equal(buyer.agent.status, 'active')
