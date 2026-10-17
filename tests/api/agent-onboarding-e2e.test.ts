@@ -218,6 +218,21 @@ test('registration references bind the original command; names and credential ro
   assert.equal((await status(request('/api/agents/status', 'GET', undefined, currentKey))).status, 200)
 })
 
+test('a registration secret stays bound to its original actor; a sponsor cannot adopt a self-registration', async () => {
+  const secret = randomBytes(32).toString('hex'), command = { name: 'Actor bound replay', activation_mode: 'autonomous' }
+  const original = await (await replayRegistration(secret, command)).json()
+  const sponsor = await registerAgent('Replay sponsor', 'autonomous')
+  const adopted = request('/api/agents/register', 'POST', command, sponsor.agent.api_key)
+  adopted.headers.set('idempotency-key', secret)
+  const response = await register(adopted)
+  assert.equal(response.status, 409)
+  const body = await response.json()
+  assert.equal(body.code, 'registration_reference_conflict')
+  assert.equal(body.agent, undefined)
+  const rows = await db.$client.execute({ sql: 'SELECT COUNT(*) AS n FROM agents WHERE id=?', args: [original.agent_id] })
+  assert.equal(Number(rows.rows[0].n), 1)
+})
+
 test('malformed registration secrets fail without enrolling an identity', async () => {
   for (const secret of ['not-a-secret', randomUUID(), 'a'.repeat(63), 'A'.repeat(64), '']) {
     const response = await replayRegistration(secret, { name: 'Must not enroll' })

@@ -170,7 +170,9 @@ concurrent/lost-response/recovery tests preserve the original economic identity.
 `Idempotency-Key` registration replay: lost reply, 4× concurrent retries, changed
 command (409 `registration_reference_conflict`), post-rotation replay (409
 `registration_replay_closed`), malformed secrets — all tested; display names are
-never identity keys; secret/key never stored. Count reconciliation: public stats
+never identity keys; secret/key never stored. 13:00 CT: actor binding moved from
+the request digest to the original lifecycle-event actor after CodeQL PR #278
+flagged a credential-derived value in a SHA-256 digest; new sponsor-adoption test. Count reconciliation: public stats
 already separate profiles (223) / registered (181) / active (49); the legacy
 `registered_agent_count` alias (= active) is documented, not renamed (API
 compatibility). Pending: per-profile public identity-state field on registry pages.

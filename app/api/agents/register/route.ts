@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
  if (replaySecret !== null && !/^[a-f0-9]{64}$/.test(replaySecret)) {
   return NextResponse.json({ error: 'invalid_registration_reference', code: 'invalid_registration_reference', message: 'Idempotency-Key must be a saved 32-byte random secret encoded as 64 lowercase hexadecimal characters.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
  }
- const replay = replaySecret === null ? null : registrationReplay(replaySecret, body, sponsored ? sponsor.agentId : null)
+ const replay = replaySecret === null ? null : registrationReplay(replaySecret, body)
  const {
  name, description, capabilities, endpoint, owner_address,
  system_prompt,
@@ -100,14 +100,17 @@ export async function POST(request: NextRequest) {
  const inspectOriginal = async () => {
   if (!replay) return null
   const result = await db.$client.execute({ sql: `SELECT a.status, a.api_key, a.api_key_rotated_at, a.api_key_revoked_at, a.archived_at,
-    a.claim_code, a.claimed_at, e.metadata FROM agents a
+    a.claim_code, a.claimed_at, e.metadata, e.actor_type, e.actor_id FROM agents a
     LEFT JOIN agent_lifecycle_events e ON e.agent_id=a.id AND e.action='registered'
     WHERE a.id=? LIMIT 1`, args: [id] })
   const original = result.rows[0]
   if (!original) return null
   let metadata: Record<string, unknown> = {}
   try { metadata = JSON.parse(String(original.metadata || '{}')) } catch { /* Fail closed below. */ }
-  if (metadata.registration_request_hash !== replay.requestHash) return NextResponse.json({ error: 'registration_reference_conflict', code: 'registration_reference_conflict', message: 'This registration secret is already bound to a different command. Recover the original identity; do not register a replacement.' }, { status: 409, headers: { 'Cache-Control': 'no-store' } })
+  const sameActor = sponsored
+   ? original.actor_type === 'sponsor_agent' && original.actor_id === sponsor.agentId
+   : original.actor_type === 'self' && original.actor_id === id
+  if (metadata.registration_request_hash !== replay.requestHash || !sameActor) return NextResponse.json({ error: 'registration_reference_conflict', code: 'registration_reference_conflict', message: 'This registration secret is already bound to a different command. Recover the original identity; do not register a replacement.' }, { status: 409, headers: { 'Cache-Control': 'no-store' } })
   if (original.archived_at != null || original.api_key_revoked_at != null || original.api_key_rotated_at != null || original.api_key !== hashAgentApiKey(apiKey)) {
    return NextResponse.json({ error: 'registration_replay_closed', code: 'registration_replay_closed', agent_id: id, message: 'This identity already exists and its original credential cannot be replayed. Use the current credential or authenticated owner recovery.' }, { status: 409, headers: { 'Cache-Control': 'no-store' } })
   }

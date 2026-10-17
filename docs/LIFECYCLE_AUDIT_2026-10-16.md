@@ -101,7 +101,10 @@ peppered HMACs; only the canonical request hash is stored, in the `registered`
 lifecycle event. Same key + identical command → 200 `idempotent: true` with the
 original identity; different command → 409 `registration_reference_conflict`;
 rotated/revoked/archived → 409 `registration_replay_closed` (no credential
-returned). Concurrent primary-key races recover the committed row only. Inserts
+returned). The original registering actor (self or sponsor) is bound via the
+`registered` event's actor, not the digest (CodeQL PR #278 follow-up, 13:00 CT);
+a sponsor replaying a self-registration secret gets 409. Concurrent primary-key
+races recover the committed row only. Inserts
 use one atomic `db.batch`. Tests: four cases in `tests/api/agent-onboarding-e2e.test.ts`
 (lost reply, 4× concurrent, conflict/rotation/no name merging, malformed secrets).
 Risk: low; the header is optional, existing clients are unchanged. Rollback:
